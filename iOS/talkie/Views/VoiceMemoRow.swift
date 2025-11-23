@@ -14,9 +14,22 @@ struct VoiceMemoRow: View {
 
     @State private var showingDetail = false
 
+    private var memoURL: URL? {
+        guard let urlString = memo.fileURL else { return nil }
+        return URL(string: urlString)
+    }
+
     private var isPlaying: Bool {
-        guard let memoURL = memo.wrappedFileURL else { return false }
-        return audioPlayer.isPlaying && audioPlayer.currentPlayingURL == memoURL
+        guard let url = memoURL else { return false }
+        return audioPlayer.isPlaying && audioPlayer.currentPlayingURL == url
+    }
+
+    private var memoTitle: String {
+        memo.title ?? "Recording"
+    }
+
+    private var memoCreatedAt: Date {
+        memo.createdAt ?? Date()
     }
 
     var body: some View {
@@ -31,10 +44,10 @@ struct VoiceMemoRow: View {
                 .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(memo.wrappedTitle)
+                    Text(memoTitle)
                         .font(.headline)
 
-                    Text(formatDate(memo.wrappedCreatedAt))
+                    Text(formatDate(memoCreatedAt))
                         .font(.caption)
                         .foregroundColor(.secondary)
 
@@ -80,7 +93,7 @@ struct VoiceMemoRow: View {
     }
 
     private func togglePlayback() {
-        guard let url = memo.wrappedFileURL else { return }
+        guard let url = memoURL else { return }
         audioPlayer.togglePlayPause(url: url)
     }
 

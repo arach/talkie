@@ -15,12 +15,13 @@ You need to manually update the Core Data model in Xcode to add the `VoiceMemo` 
 2. **Open the Core Data model**:
    - In Xcode's Project Navigator, navigate to:
      `talkie/Resources/talkie.xcdatamodeld/talkie.xcdatamodel`
-   - Click on it to open the Core Data model editor
+	1. Click on it to open the Core Data model editor
 
 3. **Add the VoiceMemo entity**:
    - Click the **"Add Entity"** button at the bottom of the editor
-   - Name it `VoiceMemo`
-   - Set **Codegen** to "Class Definition" in the Data Model Inspector (right panel)
+   - Name it `VoiceMemo` (case-sensitive!)
+   - In the Data Model Inspector (right panel), set **Codegen** to "Class Definition"
+   - This will auto-generate the VoiceMemo class with all properties
 
 4. **Add the following attributes** to the VoiceMemo entity:
 
@@ -86,10 +87,11 @@ After making these changes:
 
 ## Troubleshooting
 
-**If you see compile errors**:
-- Make sure `VoiceMemo+CoreDataProperties.swift` is added to the target
-- Clean build folder and rebuild
-- Check that the entity name exactly matches "VoiceMemo"
+**If you see compile errors about VoiceMemo**:
+- Make sure the entity name exactly matches "VoiceMemo" (case-sensitive)
+- Verify Codegen is set to "Class Definition" in the Data Model Inspector
+- Clean build folder (`Cmd + Shift + K`) and rebuild
+- Xcode will auto-generate the VoiceMemo class - you don't need to create it manually
 
 **If recordings don't save**:
 - Check that microphone permissions are granted

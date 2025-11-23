@@ -15,9 +15,22 @@ struct VoiceMemoDetailView: View {
     @State private var isEditing = false
     @State private var editedTitle = ""
 
+    private var memoURL: URL? {
+        guard let urlString = memo.fileURL else { return nil }
+        return URL(string: urlString)
+    }
+
     private var isPlaying: Bool {
-        guard let memoURL = memo.wrappedFileURL else { return false }
-        return audioPlayer.isPlaying && audioPlayer.currentPlayingURL == memoURL
+        guard let url = memoURL else { return false }
+        return audioPlayer.isPlaying && audioPlayer.currentPlayingURL == url
+    }
+
+    private var memoTitle: String {
+        memo.title ?? "Recording"
+    }
+
+    private var memoCreatedAt: Date {
+        memo.createdAt ?? Date()
     }
 
     var body: some View {
@@ -31,14 +44,14 @@ struct VoiceMemoDetailView: View {
                             .font(.title2)
                             .padding(.horizontal)
                     } else {
-                        Text(memo.wrappedTitle)
+                        Text(memoTitle)
                             .font(.title2)
                             .bold()
                     }
 
                     // Metadata
                     VStack(spacing: 8) {
-                        Text(formatDate(memo.wrappedCreatedAt))
+                        Text(formatDate(memoCreatedAt))
                             .font(.caption)
                             .foregroundColor(.secondary)
 
@@ -57,7 +70,7 @@ struct VoiceMemoDetailView: View {
                     // Playback controls
                     VStack(spacing: 15) {
                         // Progress slider
-                        if let url = memo.wrappedFileURL,
+                        if let url = memoURL,
                            audioPlayer.currentPlayingURL == url {
                             VStack(spacing: 5) {
                                 Slider(
@@ -137,7 +150,7 @@ struct VoiceMemoDetailView: View {
                         if isEditing {
                             saveTitle()
                         } else {
-                            editedTitle = memo.wrappedTitle
+                            editedTitle = memoTitle
                             isEditing = true
                         }
                     }
@@ -147,7 +160,7 @@ struct VoiceMemoDetailView: View {
     }
 
     private func togglePlayback() {
-        guard let url = memo.wrappedFileURL else { return }
+        guard let url = memoURL else { return }
         audioPlayer.togglePlayPause(url: url)
     }
 

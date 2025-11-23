@@ -29,9 +29,22 @@
 		539C694D2ED39ADF00BC034F /* talkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = talkieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		539C69922ED3B0D900BC034F /* Exceptions for "talkie" folder in "talkie" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/Info.plist,
+			);
+			target = 539C69302ED39ADE00BC034F /* talkie */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		539C69332ED39ADE00BC034F /* talkie */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				539C69922ED3B0D900BC034F /* Exceptions for "talkie" folder in "talkie" target */,
+			);
 			path = talkie;
 			sourceTree = "<group>";
 		};
@@ -395,12 +408,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = talkie/talkie.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = talkie/Info.plist;
+				INFOPLIST_FILE = talkie/Resources/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "to record voice memos";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "to transcribe your voice recordings";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -426,12 +440,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = talkie/talkie.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = talkie/Info.plist;
+				INFOPLIST_FILE = talkie/Resources/Info.plist;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "to record voice memos";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "to transcribe your voice recordings";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

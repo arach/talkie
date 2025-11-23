@@ -7,6 +7,7 @@
 
 import Foundation
 import Speech
+import CoreData
 import AVFoundation
 
 class TranscriptionService {
