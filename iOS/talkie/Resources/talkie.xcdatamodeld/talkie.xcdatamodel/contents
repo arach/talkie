@@ -11,6 +11,6 @@
         <attribute name="isTranscribing" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="title" optional="YES" attributeType="String"/>
         <attribute name="transcription" optional="YES" attributeType="String"/>
-        <attribute name="waveFormData" optional="YES" attributeType="Binary"/>
+        <attribute name="waveformData" optional="YES" attributeType="Binary"/>
     </entity>
 </model>
