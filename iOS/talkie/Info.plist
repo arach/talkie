@@ -7,9 +7,5 @@
 		<string>audio</string>
 		<string>processing</string>
 	</array>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Talkie needs access to your microphone to record voice memos.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Talkie uses speech recognition to transcribe your voice memos.</string>
 </dict>
 </plist>

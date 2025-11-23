@@ -13,7 +13,7 @@ struct talkieApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            VoiceMemoListView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
     }

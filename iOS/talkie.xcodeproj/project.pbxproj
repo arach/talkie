@@ -29,22 +29,9 @@
 		539C694D2ED39ADF00BC034F /* talkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = talkieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		539C69612ED39BE400BC034F /* Exceptions for "talkie" folder in "talkie" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 539C69302ED39ADE00BC034F /* talkie */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		539C69332ED39ADE00BC034F /* talkie */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				539C69612ED39BE400BC034F /* Exceptions for "talkie" folder in "talkie" target */,
-			);
 			path = talkie;
 			sourceTree = "<group>";
 		};
