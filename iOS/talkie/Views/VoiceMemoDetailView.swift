@@ -14,6 +14,10 @@ struct VoiceMemoDetailView: View {
 
     @State private var isEditing = false
     @State private var editedTitle = ""
+    @State private var showingSummary = false
+    @State private var showingTasks = false
+    @State private var showingReminders = false
+    @State private var showingShare = false
 
     private var memoURL: URL? {
         guard let filename = memo.fileURL else { return nil }
@@ -178,6 +182,45 @@ struct VoiceMemoDetailView: View {
                                     )
                             }
                             .padding(.horizontal, Spacing.md)
+
+                            // Workflow Actions
+                            VStack(spacing: Spacing.xs) {
+                                Text("ACTIONS")
+                                    .font(.techLabel)
+                                    .tracking(2)
+                                    .foregroundColor(.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible(), spacing: Spacing.xs),
+                                    GridItem(.flexible(), spacing: Spacing.xs)
+                                ], spacing: Spacing.xs) {
+                                    ActionButton(
+                                        icon: "list.bullet.clipboard",
+                                        title: "SUMMARIZE",
+                                        action: { showingSummary = true }
+                                    )
+
+                                    ActionButton(
+                                        icon: "checkmark.square",
+                                        title: "TASKIFY",
+                                        action: { showingTasks = true }
+                                    )
+
+                                    ActionButton(
+                                        icon: "bell",
+                                        title: "REMIND",
+                                        action: { showingReminders = true }
+                                    )
+
+                                    ActionButton(
+                                        icon: "square.and.arrow.up",
+                                        title: "SHARE",
+                                        action: { showingShare = true }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, Spacing.md)
                         }
 
                         Spacer(minLength: Spacing.xxl)
@@ -225,6 +268,33 @@ struct VoiceMemoDetailView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showingSummary) {
+                WorkflowActionSheet(
+                    title: "SUMMARY",
+                    icon: "list.bullet.clipboard",
+                    transcription: memo.transcription ?? "",
+                    actionType: .summarize
+                )
+            }
+            .sheet(isPresented: $showingTasks) {
+                WorkflowActionSheet(
+                    title: "TASKS",
+                    icon: "checkmark.square",
+                    transcription: memo.transcription ?? "",
+                    actionType: .taskify
+                )
+            }
+            .sheet(isPresented: $showingReminders) {
+                WorkflowActionSheet(
+                    title: "REMINDERS",
+                    icon: "bell",
+                    transcription: memo.transcription ?? "",
+                    actionType: .reminders
+                )
+            }
+            .sheet(isPresented: $showingShare) {
+                ShareSheet(items: [memo.transcription ?? ""])
+            }
         }
     }
 
@@ -250,5 +320,36 @@ struct VoiceMemoDetailView: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Action Button Component
+struct ActionButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: Spacing.xs) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.textPrimary)
+
+                Text(title)
+                    .font(.techLabelSmall)
+                    .tracking(1)
+                    .foregroundColor(.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.md)
+            .background(Color.surfaceSecondary)
+            .cornerRadius(CornerRadius.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
