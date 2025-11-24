@@ -40,27 +40,17 @@ enum SortOption: String, CaseIterable {
 struct VoiceMemoListView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    @State private var sortOption: SortOption = .dateNewest
-    @State private var sortDescriptors: [NSSortDescriptor] = [
-        NSSortDescriptor(keyPath: \VoiceMemo.sortOrder, ascending: true), // sortOrder is negative timestamp
-        NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
-    ]
+    @FetchRequest(
+        sortDescriptors: [
+            NSSortDescriptor(keyPath: \VoiceMemo.sortOrder, ascending: true),
+            NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
+        ],
+        animation: .default
+    )
+    private var voiceMemos: FetchedResults<VoiceMemo>
 
     @StateObject private var audioPlayer = AudioPlayerManager()
     @State private var showingRecordingView = false
-    @State private var showingSortOptions = false
-
-    private var voiceMemos: [VoiceMemo] {
-        let request: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-        request.sortDescriptors = sortDescriptors
-
-        do {
-            return try viewContext.fetch(request)
-        } catch {
-            print("Error fetching memos: \(error)")
-            return []
-        }
-    }
 
     var body: some View {
         NavigationView {
