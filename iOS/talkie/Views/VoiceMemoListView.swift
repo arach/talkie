@@ -8,16 +8,58 @@
 import SwiftUI
 import CoreData
 
+enum SortOption: String, CaseIterable {
+    case dateNewest = "Newest First"
+    case dateOldest = "Oldest First"
+    case title = "Title (A-Z)"
+    case duration = "Duration"
+
+    var descriptor: NSSortDescriptor {
+        switch self {
+        case .dateNewest:
+            return NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
+        case .dateOldest:
+            return NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: true)
+        case .title:
+            return NSSortDescriptor(keyPath: \VoiceMemo.title, ascending: true)
+        case .duration:
+            return NSSortDescriptor(keyPath: \VoiceMemo.duration, ascending: false)
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .dateNewest: return "calendar.badge.clock"
+        case .dateOldest: return "calendar"
+        case .title: return "textformat.abc"
+        case .duration: return "timer"
+        }
+    }
+}
+
 struct VoiceMemoListView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
-        animation: .default)
-    private var voiceMemos: FetchedResults<VoiceMemo>
+    @State private var sortOption: SortOption = .dateNewest
+    @State private var sortDescriptors: [NSSortDescriptor] = [
+        NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
+    ]
 
     @StateObject private var audioPlayer = AudioPlayerManager()
     @State private var showingRecordingView = false
+    @State private var showingSortOptions = false
+
+    private var voiceMemos: [VoiceMemo] {
+        let request: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+        request.sortDescriptors = sortDescriptors
+
+        do {
+            return try viewContext.fetch(request)
+        } catch {
+            print("Error fetching memos: \(error)")
+            return []
+        }
+    }
 
     var body: some View {
         NavigationView {
@@ -38,8 +80,9 @@ struct VoiceMemoListView: View {
                             )
                         }
                         .onDelete(perform: deleteMemos)
+                        .onMove(perform: moveMemos)
                     }
-                    .listStyle(.insetGrouped)
+                    .listStyle(.plain)
 
                     // Floating record button
                     VStack {
@@ -67,6 +110,34 @@ struct VoiceMemoListView: View {
                 }
             }
             .navigationTitle("Voice Memos")
+            .toolbar {
+                if !voiceMemos.isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Menu {
+                            ForEach(SortOption.allCases, id: \.self) { option in
+                                Button(action: {
+                                    sortOption = option
+                                    sortDescriptors = [option.descriptor]
+                                }) {
+                                    HStack {
+                                        Text(option.rawValue)
+                                        if sortOption == option {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: sortOption.icon)
+                                .foregroundColor(.blue)
+                        }
+                    }
+
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        EditButton()
+                    }
+                }
+            }
             .sheet(isPresented: $showingRecordingView) {
                 RecordingView()
                     .environment(\.managedObjectContext, viewContext)
@@ -100,6 +171,23 @@ struct VoiceMemoListView: View {
             offsets.map { voiceMemos[$0] }.forEach { memo in
                 deleteMemo(memo)
             }
+        }
+    }
+
+    private func moveMemos(from source: IndexSet, to destination: Int) {
+        // Get memos to move
+        var memos = voiceMemos
+        memos.move(fromOffsets: source, toOffset: destination)
+
+        // Update sortOrder for all memos
+        for (index, memo) in memos.enumerated() {
+            memo.sortOrder = Int32(index)
+        }
+
+        do {
+            try viewContext.save()
+        } catch {
+            print("Error moving memos: \(error)")
         }
     }
 }

@@ -33,63 +33,64 @@ struct VoiceMemoRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                // Play/Pause button
-                Button(action: togglePlayback) {
-                    Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.blue, Color.blue.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+        HStack(spacing: 12) {
+            // Play/Pause button
+            Button(action: togglePlayback) {
+                Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color.blue, Color.blue.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                }
-                .buttonStyle(.plain)
+                    )
+            }
+            .buttonStyle(.plain)
 
-                VStack(alignment: .leading, spacing: 4) {
+            // Waveform and info
+            VStack(alignment: .leading, spacing: 4) {
+                // Title and duration on same line
+                HStack {
                     Text(memoTitle)
-                        .font(.headline)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
 
-                    Text(formatDate(memoCreatedAt))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Spacer()
 
                     Text(formatDuration(memo.duration))
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(.secondary)
+                        .monospacedDigit()
                 }
 
-                Spacer()
-
-                if memo.isTranscribing {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                } else if memo.transcription != nil {
-                    Image(systemName: "text.alignleft")
-                        .foregroundColor(.green)
+                // Compact waveform
+                if let waveformData = memo.waveformData,
+                   let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
+                    WaveformView(levels: levels, height: 24, color: isPlaying ? .blue : .blue.opacity(0.3))
+                        .animation(.easeInOut(duration: 0.3), value: isPlaying)
                 }
-            }
 
-            // Waveform visualization (if available)
-            if let waveformData = memo.waveformData,
-               let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
-                WaveformView(levels: levels, height: 40, color: isPlaying ? .blue : .blue.opacity(0.3))
-                    .animation(.easeInOut(duration: 0.3), value: isPlaying)
-            }
+                // Date and transcription indicator
+                HStack(spacing: 6) {
+                    Text(formatDateCompact(memoCreatedAt))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
 
-            // Transcription preview
-            if let transcription = memo.transcription {
-                Text(transcription)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .padding(.top, 4)
+                    if memo.isTranscribing {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                    } else if memo.transcription != nil {
+                        Image(systemName: "text.alignleft")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
+                }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
         .contentShape(Rectangle())
         .onTapGesture {
             showingDetail = true
@@ -116,6 +117,25 @@ struct VoiceMemoRow: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    private func formatDateCompact(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        let calendar = Calendar.current
+
+        if calendar.isDateInToday(date) {
+            formatter.timeStyle = .short
+            return "Today, \(formatter.string(from: date))"
+        } else if calendar.isDateInYesterday(date) {
+            formatter.timeStyle = .short
+            return "Yesterday, \(formatter.string(from: date))"
+        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
+            formatter.dateFormat = "EEEE, h:mm a"
+            return formatter.string(from: date)
+        } else {
+            formatter.dateFormat = "MMM d, h:mm a"
+            return formatter.string(from: date)
+        }
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

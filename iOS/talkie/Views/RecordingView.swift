@@ -173,6 +173,7 @@ struct RecordingView: View {
         newMemo.duration = recorder.recordingDuration
         newMemo.fileURL = url.absoluteString
         newMemo.isTranscribing = false
+        newMemo.sortOrder = 0 // New memos appear first
 
         // Save waveform data
         if let waveformData = try? JSONEncoder().encode(recorder.audioLevels) {
