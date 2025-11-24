@@ -42,6 +42,7 @@ struct VoiceMemoListView: View {
 
     @State private var sortOption: SortOption = .dateNewest
     @State private var sortDescriptors: [NSSortDescriptor] = [
+        NSSortDescriptor(keyPath: \VoiceMemo.sortOrder, ascending: true), // sortOrder is negative timestamp
         NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
     ]
 

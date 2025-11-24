@@ -173,7 +173,7 @@ struct RecordingView: View {
         newMemo.duration = recorder.recordingDuration
         newMemo.fileURL = url.lastPathComponent // Store only filename, not full path
         newMemo.isTranscribing = false
-        newMemo.sortOrder = 0 // New memos appear first
+        newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1) // Negative timestamp for newest first
 
         // Save waveform data
         if let waveformData = try? JSONEncoder().encode(recorder.audioLevels) {

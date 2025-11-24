@@ -56,16 +56,30 @@ class TranscriptionService {
     }
 
     func transcribeVoiceMemo(_ memo: VoiceMemo, context: NSManagedObjectContext) {
-        guard let urlString = memo.fileURL,
-              let url = URL(string: urlString) else { return }
+        guard let filename = memo.fileURL else {
+            print("No filename for transcription")
+            return
+        }
+
+        // Build full path from filename
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = documentsPath.appendingPathComponent(filename)
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("Audio file doesn't exist at \(url.path)")
+            return
+        }
 
         memo.isTranscribing = true
         try? context.save()
+
+        print("Starting transcription for: \(filename)")
 
         transcribe(audioURL: url) { result in
             context.perform {
                 switch result {
                 case .success(let transcription):
+                    print("Transcription succeeded: \(transcription.prefix(50))...")
                     memo.transcription = transcription
                     memo.isTranscribing = false
 
