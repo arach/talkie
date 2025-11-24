@@ -110,39 +110,6 @@ struct VoiceMemoListView: View {
                 }
             }
             .navigationTitle("Voice Memos")
-            .toolbar {
-                if !voiceMemos.isEmpty {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Menu {
-                            ForEach(SortOption.allCases, id: \.self) { option in
-                                Button(action: {
-                                    sortOption = option
-                                    sortDescriptors = [option.descriptor]
-                                }) {
-                                    Label(option.rawValue, systemImage: option.menuIcon)
-                                    if sortOption == option {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.up.arrow.down")
-                                Text("Sort")
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
-                        }
-                    }
-
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pencil.circle")
-                            EditButton()
-                        }
-                    }
-                }
-            }
             .sheet(isPresented: $showingRecordingView) {
                 RecordingView()
                     .environment(\.managedObjectContext, viewContext)
