@@ -70,13 +70,29 @@ class TranscriptionService {
             return
         }
 
-        memo.isTranscribing = true
-        try? context.save()
+        // Store the objectID to fetch in the background context
+        let memoObjectID = memo.objectID
 
-        print("Starting transcription for: \(filename)")
+        // Set transcribing flag on main context
+        context.perform {
+            guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else { return }
+            memo.isTranscribing = true
+            try? context.save()
+            print("Starting transcription for: \(filename)")
+        }
 
-        transcribe(audioURL: url) { result in
+        // Do transcription work
+        transcribe(audioURL: url) { [weak context] result in
+            guard let context = context else { return }
+
+            // Save transcription on main context
             context.perform {
+                // Fetch the memo in this context using objectID
+                guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else {
+                    print("Failed to fetch memo in background context")
+                    return
+                }
+
                 switch result {
                 case .success(let transcription):
                     print("Transcription succeeded: \(transcription.prefix(50))...")
@@ -88,7 +104,12 @@ class TranscriptionService {
                     memo.isTranscribing = false
                 }
 
-                try? context.save()
+                do {
+                    try context.save()
+                    print("Transcription saved successfully to Core Data")
+                } catch {
+                    print("Failed to save transcription: \(error.localizedDescription)")
+                }
             }
         }
     }
