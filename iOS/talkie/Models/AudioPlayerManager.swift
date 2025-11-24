@@ -28,7 +28,8 @@ class AudioPlayerManager: NSObject, ObservableObject {
     private func setupAudioSession() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .default, options: [])
+            // Use .spokenAudio mode for better voice playback
+            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.defaultToSpeaker])
             try audioSession.setActive(true)
         } catch {
             print("Failed to setup audio session for playback: \(error.localizedDescription)")
@@ -53,6 +54,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
 
             audioPlayer = try AVAudioPlayer(contentsOf: url)
             audioPlayer?.delegate = self
+            audioPlayer?.volume = 1.0 // Maximum volume
             audioPlayer?.prepareToPlay()
             duration = audioPlayer?.duration ?? 0
             currentPlayingURL = url
