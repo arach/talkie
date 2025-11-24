@@ -15,8 +15,9 @@ struct VoiceMemoRow: View {
     @State private var showingDetail = false
 
     private var memoURL: URL? {
-        guard let path = memo.fileURL else { return nil }
-        return URL(fileURLWithPath: path)
+        guard let filename = memo.fileURL else { return nil }
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsPath.appendingPathComponent(filename)
     }
 
     private var isPlaying: Bool {

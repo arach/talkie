@@ -121,9 +121,12 @@ struct VoiceMemoListView: View {
     private func deleteMemo(_ memo: VoiceMemo) {
         withAnimation {
             // Delete audio file
-            if let path = memo.fileURL,
-               FileManager.default.fileExists(atPath: path) {
-                try? FileManager.default.removeItem(atPath: path)
+            if let filename = memo.fileURL {
+                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let filePath = documentsPath.appendingPathComponent(filename)
+                if FileManager.default.fileExists(atPath: filePath.path) {
+                    try? FileManager.default.removeItem(at: filePath)
+                }
             }
 
             viewContext.delete(memo)

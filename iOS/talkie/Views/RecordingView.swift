@@ -171,7 +171,7 @@ struct RecordingView: View {
         newMemo.title = recordingTitle.isEmpty ? "Recording \(formatDate(Date()))" : recordingTitle
         newMemo.createdAt = Date()
         newMemo.duration = recorder.recordingDuration
-        newMemo.fileURL = url.path // Store file path instead of absolute string
+        newMemo.fileURL = url.lastPathComponent // Store only filename, not full path
         newMemo.isTranscribing = false
         newMemo.sortOrder = 0 // New memos appear first
 
