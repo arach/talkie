@@ -32,24 +32,32 @@ struct PersistenceController {
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-           container = NSPersistentCloudKitContainer(name: "talkie") // Changed from NSPersistentContainer
+        container = NSPersistentCloudKitContainer(name: "talkie")
 
-           if inMemory {
-               container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
-           }
+        if inMemory {
+            container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
+        } else {
+            // Configure CloudKit sync
+            if let description = container.persistentStoreDescriptions.first {
+                // CloudKit will use the default container from entitlements
+                // Make sure both iOS and macOS targets have the same iCloud container
+                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+                description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+            }
+        }
 
-           // Enable CloudKit sync
-           if let description = container.persistentStoreDescriptions.first {
-               description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
-                   containerIdentifier: "iCloud.com.yourcompany.talkie"
-               )
-           }
+        container.loadPersistentStores { storeDescription, error in
+            if let error = error as NSError? {
+                // Log the error instead of crashing
+                print("Core Data store failed to load: \(error), \(error.userInfo)")
+                print("Store description: \(storeDescription)")
+            } else {
+                print("✅ Core Data loaded successfully")
+                print("Store: \(storeDescription)")
+            }
+        }
 
-           container.loadPersistentStores(completionHandler: { (storeDescription, error) in
-               if let error = error as NSError? {
-                   fatalError("Unresolved error \(error), \(error.userInfo)")
-               }
-           })
-           container.viewContext.automaticallyMergesChangesFromParent = true
-       }
+        container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+    }
 }
