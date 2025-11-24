@@ -71,20 +71,36 @@ struct RecordingView: View {
                 Button(action: toggleRecording) {
                     ZStack {
                         Circle()
-                            .strokeBorder(recorder.isRecording ? Color.red : Color.gray, lineWidth: 4)
+                            .strokeBorder(
+                                recorder.isRecording ? Color.red : Color.gray.opacity(0.3),
+                                lineWidth: 4
+                            )
                             .frame(width: 80, height: 80)
 
                         if recorder.isRecording {
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.red)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.red, Color.red.opacity(0.8)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                                 .frame(width: 30, height: 30)
                         } else if !hasStartedRecording {
                             Circle()
-                                .fill(Color.red)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.red, Color.red.opacity(0.8)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                                 .frame(width: 60, height: 60)
+                                .shadow(color: Color.red.opacity(0.3), radius: 8, x: 0, y: 4)
                         } else {
                             Circle()
-                                .fill(Color.gray)
+                                .fill(Color.gray.opacity(0.3))
                                 .frame(width: 60, height: 60)
                         }
                     }
@@ -92,11 +108,25 @@ struct RecordingView: View {
                 .padding(.bottom, 40)
 
                 if hasStartedRecording && !recorder.isRecording {
-                    Button("Save & Close") {
+                    Button(action: {
                         saveRecording()
                         dismiss()
+                    }) {
+                        Text("Save & Close")
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: 200)
+                            .padding(.vertical, 14)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color.blue, Color.blue.opacity(0.8)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
-                    .buttonStyle(.borderedProminent)
                     .padding(.bottom, 20)
                 }
             }

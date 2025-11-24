@@ -22,33 +22,47 @@ struct VoiceMemoListView: View {
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottom) {
-                List {
-                    ForEach(voiceMemos) { memo in
-                        VoiceMemoRow(
-                            memo: memo,
-                            audioPlayer: audioPlayer,
-                            onDelete: { deleteMemo(memo) }
-                        )
-                    }
-                    .onDelete(perform: deleteMemos)
-                }
-                .listStyle(.insetGrouped)
-
-                // Floating record button
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: { showingRecordingView = true }) {
-                            Image(systemName: "mic.fill")
-                                .font(.title)
-                                .foregroundColor(.white)
-                                .frame(width: 70, height: 70)
-                                .background(Color.red)
-                                .clipShape(Circle())
-                                .shadow(radius: 4)
+                if voiceMemos.isEmpty {
+                    // Empty state
+                    EmptyStateView(onRecordTapped: {
+                        showingRecordingView = true
+                    })
+                } else {
+                    // List of voice memos
+                    List {
+                        ForEach(voiceMemos) { memo in
+                            VoiceMemoRow(
+                                memo: memo,
+                                audioPlayer: audioPlayer,
+                                onDelete: { deleteMemo(memo) }
+                            )
                         }
-                        .padding()
+                        .onDelete(perform: deleteMemos)
+                    }
+                    .listStyle(.insetGrouped)
+
+                    // Floating record button
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button(action: { showingRecordingView = true }) {
+                                Image(systemName: "mic.fill")
+                                    .font(.title)
+                                    .foregroundColor(.white)
+                                    .frame(width: 70, height: 70)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [Color.red, Color.red.opacity(0.8)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .clipShape(Circle())
+                                    .shadow(color: Color.red.opacity(0.3), radius: 8, x: 0, y: 4)
+                            }
+                            .padding()
+                        }
                     }
                 }
             }

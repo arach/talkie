@@ -39,7 +39,13 @@ struct VoiceMemoRow: View {
                 Button(action: togglePlayback) {
                     Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: 40))
-                        .foregroundColor(.blue)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.blue, Color.blue.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 }
                 .buttonStyle(.plain)
 
@@ -70,7 +76,8 @@ struct VoiceMemoRow: View {
             // Waveform visualization (if available)
             if let waveformData = memo.waveformData,
                let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
-                WaveformView(levels: levels, height: 40)
+                WaveformView(levels: levels, height: 40, color: isPlaying ? .blue : .blue.opacity(0.3))
+                    .animation(.easeInOut(duration: 0.3), value: isPlaying)
             }
 
             // Transcription preview
@@ -89,6 +96,13 @@ struct VoiceMemoRow: View {
         }
         .sheet(isPresented: $showingDetail) {
             VoiceMemoDetailView(memo: memo, audioPlayer: audioPlayer)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
 
