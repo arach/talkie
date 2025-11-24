@@ -21,9 +21,13 @@ struct ContentView: View {
     private var voiceMemos: FetchedResults<VoiceMemo>
 
     @State private var selectedMemo: VoiceMemo?
+    @State private var lastSyncTime: Date = Date()
+    @State private var syncedMemoCount: Int = 0
+    @State private var showingSettings = false
 
     var body: some View {
-        NavigationSplitView {
+        VStack(spacing: 0) {
+            NavigationSplitView {
             // Sidebar - List of memos
             VStack(spacing: 0) {
                 // Header
@@ -41,6 +45,15 @@ struct ContentView: View {
                     }
 
                     Spacer()
+
+                    // Settings button
+                    Button(action: { showingSettings = true }) {
+                        Image(systemName: "gear")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Settings")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -100,6 +113,98 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(NSColor.textBackgroundColor))
             }
+        }
+
+        // Tactical Status Bar
+        HStack(spacing: 0) {
+            // Left side - connection status
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+
+                Text("CONNECTED")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.leading, 16)
+
+            Spacer()
+
+            // Right side - sync status with context
+            HStack(spacing: 12) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Text("SYNCED \(syncedMemoCount) \(syncedMemoCount == 1 ? "MEMO" : "MEMOS")")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Text(formatSyncTime(lastSyncTime))
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "icloud")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Text("\(voiceMemos.count)")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+            }
+            .padding(.trailing, 16)
+        }
+        .frame(height: 28)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .overlay(
+            Rectangle()
+                .fill(Color.secondary.opacity(0.1))
+                .frame(height: 0.5),
+            alignment: .top
+        )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
+            DispatchQueue.main.async {
+                lastSyncTime = Date()
+                syncedMemoCount = voiceMemos.count
+            }
+        }
+        .onAppear {
+            syncedMemoCount = voiceMemos.count
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+                .frame(minWidth: 800, minHeight: 600)
+        }
+    }
+
+    private func formatSyncTime(_ date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+
+        if seconds < 5 {
+            return "JUST NOW"
+        } else if seconds < 60 {
+            return "\(seconds)S AGO"
+        } else if seconds < 3600 {
+            let minutes = seconds / 60
+            return "\(minutes)M AGO"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: date)
         }
     }
 }

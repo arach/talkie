@@ -200,7 +200,7 @@ struct VoiceMemoDetailView: View {
                                         title: "SUMMARIZE",
                                         isProcessing: memo.isProcessingSummary,
                                         isCompleted: memo.summary != nil,
-                                        action: { showingSummary = true }
+                                        action: { if memo.summary != nil { showingSummary = true } }
                                     )
 
                                     ActionButton(
@@ -208,7 +208,7 @@ struct VoiceMemoDetailView: View {
                                         title: "TASKIFY",
                                         isProcessing: memo.isProcessingTasks,
                                         isCompleted: memo.tasks != nil,
-                                        action: { showingTasks = true }
+                                        action: { if memo.tasks != nil { showingTasks = true } }
                                     )
 
                                     ActionButton(
@@ -216,7 +216,7 @@ struct VoiceMemoDetailView: View {
                                         title: "REMIND",
                                         isProcessing: memo.isProcessingReminders,
                                         isCompleted: memo.reminders != nil,
-                                        action: { showingReminders = true }
+                                        action: { if memo.reminders != nil { showingReminders = true } }
                                     )
 
                                     ActionButton(
@@ -307,8 +307,14 @@ struct VoiceMemoDetailView: View {
     }
 
     private func togglePlayback() {
-        guard let url = memoURL else { return }
-        audioPlayer.togglePlayPause(url: url)
+        // Prefer audioData (CloudKit-synced) over local file
+        if let audioData = memo.audioData {
+            audioPlayer.togglePlayPause(data: audioData)
+        } else if let url = memoURL {
+            audioPlayer.togglePlayPause(url: url)
+        } else {
+            print("⚠️ No audio data or URL available for playback")
+        }
     }
 
     private func saveTitle() {

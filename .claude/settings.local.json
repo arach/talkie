@@ -10,7 +10,11 @@
       "Bash(xcodebuild:*)",
       "Bash(xcrun simctl:*)",
       "Bash(xcodegen:*)",
-      "Bash(ln:*)"
+      "Bash(ln:*)",
+      "Bash(system_profiler:*)",
+      "Bash(mv:*)",
+      "Bash(cat:*)",
+      "Bash(open:*)"
     ],
     "deny": [],
     "ask": []

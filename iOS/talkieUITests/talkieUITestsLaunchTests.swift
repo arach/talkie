@@ -1,13 +1,13 @@
 //
-//  talkieUITestsLaunchTests.swift
-//  talkieUITests
+//  TalkieUITestsLaunchTests.swift
+//  TalkieUITests
 //
-//  Created by Arach Tchoupani on 2025-11-23.
+//  Created by Arach Tchoupani on 2025-11-24.
 //
 
 import XCTest
 
-final class talkieUITestsLaunchTests: XCTestCase {
+final class TalkieUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

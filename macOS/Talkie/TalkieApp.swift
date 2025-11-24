@@ -13,9 +13,9 @@ struct TalkieApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TalkieNavigationView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                .frame(minWidth: 800, minHeight: 600)
+                .frame(minWidth: 900, minHeight: 600)
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)

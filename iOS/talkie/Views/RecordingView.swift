@@ -247,9 +247,18 @@ struct RecordingView: View {
         newMemo.title = recordingTitle.isEmpty ? "Recording \(formatDate(Date()))" : recordingTitle
         newMemo.createdAt = Date()
         newMemo.duration = recorder.recordingDuration
-        newMemo.fileURL = url.lastPathComponent // Store only filename, not full path
+        newMemo.fileURL = url.lastPathComponent // Keep for backward compatibility
         newMemo.isTranscribing = false
         newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1) // Negative timestamp for newest first
+
+        // Load and store audio data for CloudKit sync
+        do {
+            let audioData = try Data(contentsOf: url)
+            newMemo.audioData = audioData
+            print("✅ Audio data loaded: \(audioData.count) bytes")
+        } catch {
+            print("⚠️ Failed to load audio data: \(error)")
+        }
 
         // Save waveform data
         if let waveformData = try? JSONEncoder().encode(recorder.audioLevels) {
@@ -258,12 +267,13 @@ struct RecordingView: View {
 
         do {
             try viewContext.save()
+            print("✅ Memo saved with audio data for CloudKit sync")
 
             // Start transcription
             TranscriptionService.shared.transcribeVoiceMemo(newMemo, context: viewContext)
         } catch {
             let nsError = error as NSError
-            print("Error saving memo: \(nsError), \(nsError.userInfo)")
+            print("❌ Error saving memo: \(nsError), \(nsError.userInfo)")
         }
     }
 

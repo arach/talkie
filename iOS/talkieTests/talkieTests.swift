@@ -1,14 +1,14 @@
 //
-//  talkieTests.swift
-//  talkieTests
+//  TalkieTests.swift
+//  TalkieTests
 //
-//  Created by Arach Tchoupani on 2025-11-23.
+//  Created by Arach Tchoupani on 2025-11-24.
 //
 
 import Testing
-@testable import talkie
+@testable import Talkie
 
-struct talkieTests {
+struct TalkieTests {
 
     @Test func example() async throws {
         // Write your test here and use APIs like `#expect(...)` to check expected conditions.

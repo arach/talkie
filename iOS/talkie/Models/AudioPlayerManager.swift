@@ -44,7 +44,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
 
         // Verify file exists
         guard FileManager.default.fileExists(atPath: url.path) else {
-            print("Audio file does not exist at path: \(url.path)")
+            print("⚠️ Audio file does not exist at path: \(url.path)")
             return
         }
 
@@ -59,7 +59,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
             duration = audioPlayer?.duration ?? 0
             currentPlayingURL = url
 
-            print("Successfully loaded audio file: \(url.lastPathComponent), duration: \(duration)s")
+            print("✅ Successfully loaded audio file: \(url.lastPathComponent), duration: \(duration)s")
 
             audioPlayer?.play()
             isPlaying = true
@@ -71,8 +71,38 @@ class AudioPlayerManager: NSObject, ObservableObject {
             }
 
         } catch {
-            print("Failed to play audio at \(url.path): \(error)")
+            print("❌ Failed to play audio at \(url.path): \(error)")
             print("Error details: \(error.localizedDescription)")
+        }
+    }
+
+    // Play audio from Data (for CloudKit-synced audio)
+    func playAudio(data: Data) {
+        stopPlayback()
+
+        do {
+            // Ensure audio session is active
+            try AVAudioSession.sharedInstance().setActive(true)
+
+            audioPlayer = try AVAudioPlayer(data: data)
+            audioPlayer?.delegate = self
+            audioPlayer?.volume = 1.0
+            audioPlayer?.prepareToPlay()
+            duration = audioPlayer?.duration ?? 0
+
+            print("✅ Successfully loaded audio from data: \(data.count) bytes, duration: \(duration)s")
+
+            audioPlayer?.play()
+            isPlaying = true
+
+            // Start timer to update current time
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                self.currentTime = self.audioPlayer?.currentTime ?? 0
+            }
+
+        } catch {
+            print("❌ Failed to play audio from data: \(error)")
         }
     }
 
@@ -112,6 +142,16 @@ class AudioPlayerManager: NSObject, ObservableObject {
             resumePlayback()
         } else {
             playAudio(url: url)
+        }
+    }
+
+    func togglePlayPause(data: Data) {
+        if isPlaying {
+            pausePlayback()
+        } else if audioPlayer != nil {
+            resumePlayback()
+        } else {
+            playAudio(data: data)
         }
     }
 }
