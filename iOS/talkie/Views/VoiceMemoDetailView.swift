@@ -60,11 +60,24 @@ struct VoiceMemoDetailView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    // Waveform
+                    // Large, detailed waveform
                     if let waveformData = memo.waveformData,
                        let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
-                        WaveformView(levels: levels, height: 80)
-                            .padding(.horizontal)
+                        VStack(spacing: 8) {
+                            WaveformView(
+                                levels: levels,
+                                height: 120,
+                                color: isPlaying ? .blue : .gray.opacity(0.6)
+                            )
+                            .animation(.easeInOut(duration: 0.3), value: isPlaying)
+                            .background(Color.gray.opacity(0.05))
+                            .cornerRadius(8)
+
+                            Text("\(levels.count) samples")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
                     }
 
                     // Playback controls

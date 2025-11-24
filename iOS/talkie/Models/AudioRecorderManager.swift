@@ -82,12 +82,28 @@ class AudioRecorderManager: NSObject, ObservableObject {
 
     private func updateAudioLevels() {
         audioRecorder?.updateMeters()
-        let level = audioRecorder?.averagePower(forChannel: 0) ?? -160
-        let normalizedLevel = max(0, (level + 160) / 160) // Normalize to 0-1
+
+        // Get both average and peak power for better dynamic range
+        let averagePower = audioRecorder?.averagePower(forChannel: 0) ?? -160
+        let peakPower = audioRecorder?.peakPower(forChannel: 0) ?? -160
+
+        // Use peak power for more dynamic visualization
+        // dB range is typically -160 (silence) to 0 (max)
+        // We'll focus on the -50 to 0 range for speech
+        let normalizedLevel: Float
+        if peakPower < -50 {
+            // Very quiet - show minimal bar
+            normalizedLevel = 0.05
+        } else {
+            // Map -50 to 0 dB to 0.1 to 1.0 range
+            normalizedLevel = max(0.1, min(1.0, (peakPower + 50) / 50))
+        }
+
         audioLevels.append(normalizedLevel)
 
-        // Keep only recent levels for waveform display
-        if audioLevels.count > 100 {
+        // Keep more samples for better detail in waveform
+        // Sample every 50ms, keep 20 seconds worth (400 samples)
+        if audioLevels.count > 400 {
             audioLevels.removeFirst()
         }
     }
