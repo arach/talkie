@@ -36,137 +36,192 @@ struct VoiceMemoDetailView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Title
-                    if isEditing {
-                        TextField("Title", text: $editedTitle)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.title2)
-                            .padding(.horizontal)
-                    } else {
-                        Text(memoTitle)
-                            .font(.title2)
-                            .bold()
-                    }
+            ZStack {
+                Color.surfacePrimary
+                    .ignoresSafeArea()
 
-                    // Metadata
-                    VStack(spacing: 8) {
-                        Text(formatDate(memoCreatedAt))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                ScrollView {
+                    VStack(spacing: Spacing.lg) {
+                        // Header: Title + Metadata
+                        VStack(spacing: Spacing.sm) {
+                            // Title
+                            if isEditing {
+                                TextField("Title", text: $editedTitle)
+                                    .font(.bodyMedium)
+                                    .padding(Spacing.sm)
+                                    .background(Color.surfaceSecondary)
+                                    .cornerRadius(CornerRadius.sm)
+                                    .padding(.horizontal, Spacing.md)
+                            } else {
+                                Text(memoTitle)
+                                    .font(.bodyLarge)
+                                    .foregroundColor(.textPrimary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, Spacing.md)
+                            }
 
-                        Text(formatDuration(memo.duration))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                            // Metadata row - tactical
+                            HStack(spacing: Spacing.xs) {
+                                Text(formatDate(memoCreatedAt).uppercased())
+                                    .font(.techLabelSmall)
+                                    .tracking(1)
 
-                    // Large, detailed waveform
-                    if let waveformData = memo.waveformData,
-                       let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
-                        VStack(spacing: 8) {
-                            WaveformView(
-                                levels: levels,
-                                height: 120,
-                                color: isPlaying ? .blue : .gray.opacity(0.6)
-                            )
-                            .animation(.easeInOut(duration: 0.3), value: isPlaying)
-                            .background(Color.gray.opacity(0.05))
-                            .cornerRadius(8)
+                                Text("·")
+                                    .font(.labelSmall)
 
-                            Text("\(levels.count) samples")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                Text(formatDuration(memo.duration))
+                                    .font(.monoSmall)
+                            }
+                            .foregroundColor(.textSecondary)
                         }
-                        .padding(.horizontal)
-                    }
+                        .padding(.top, Spacing.md)
 
-                    // Playback controls
-                    VStack(spacing: 15) {
-                        // Progress slider
-                        if let url = memoURL,
-                           audioPlayer.currentPlayingURL == url {
-                            VStack(spacing: 5) {
-                                Slider(
-                                    value: Binding(
-                                        get: { audioPlayer.currentTime },
-                                        set: { audioPlayer.seek(to: $0) }
-                                    ),
-                                    in: 0...max(audioPlayer.duration, 1)
+                        // Waveform
+                        if let waveformData = memo.waveformData,
+                           let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
+                            VStack(spacing: Spacing.xs) {
+                                WaveformView(
+                                    levels: levels,
+                                    height: 100,
+                                    color: isPlaying ? .active : .textTertiary
                                 )
+                                .padding(.horizontal, Spacing.md)
+                                .background(Color.surfaceSecondary)
+                                .cornerRadius(CornerRadius.sm)
+                                .padding(.horizontal, Spacing.md)
 
-                                HStack {
-                                    Text(formatDuration(audioPlayer.currentTime))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                Text("[\(levels.count) SAMPLES]")
+                                    .font(.techLabelSmall)
+                                    .tracking(1)
+                                    .foregroundColor(.textTertiary)
+                            }
+                        }
 
-                                    Spacer()
+                        // Playback controls
+                        VStack(spacing: Spacing.md) {
+                            // Progress slider
+                            if let url = memoURL,
+                               audioPlayer.currentPlayingURL == url {
+                                VStack(spacing: Spacing.xxs) {
+                                    Slider(
+                                        value: Binding(
+                                            get: { audioPlayer.currentTime },
+                                            set: { audioPlayer.seek(to: $0) }
+                                        ),
+                                        in: 0...max(audioPlayer.duration, 1)
+                                    )
+                                    .tint(.active)
 
-                                    Text(formatDuration(audioPlayer.duration))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                    HStack {
+                                        Text(formatDuration(audioPlayer.currentTime))
+                                            .font(.monoSmall)
+                                            .foregroundColor(.textSecondary)
+
+                                        Spacer()
+
+                                        Text(formatDuration(audioPlayer.duration))
+                                            .font(.monoSmall)
+                                            .foregroundColor(.textSecondary)
+                                    }
+                                }
+                                .padding(.horizontal, Spacing.md)
+                            }
+
+                            // Play/Pause button
+                            Button(action: togglePlayback) {
+                                ZStack {
+                                    Circle()
+                                        .fill(isPlaying ? Color.active : Color.surfaceSecondary)
+                                        .frame(width: 64, height: 64)
+
+                                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(isPlaying ? .white : .textPrimary)
                                 }
                             }
-                            .padding(.horizontal)
                         }
 
-                        // Play/Pause button
-                        Button(action: togglePlayback) {
-                            Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(.blue)
+                        // Transcription section
+                        if memo.isTranscribing {
+                            HStack(spacing: Spacing.xs) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("PROCESSING TRANSCRIPT...")
+                                    .font(.techLabel)
+                                    .tracking(1)
+                                    .foregroundColor(.transcribing)
+                            }
+                            .padding(Spacing.md)
+                            .frame(maxWidth: .infinity)
+                            .background(Color.transcribing.opacity(0.08))
+                            .cornerRadius(CornerRadius.sm)
+                            .padding(.horizontal, Spacing.md)
+                        } else if let transcription = memo.transcription {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("TRANSCRIPT")
+                                    .font(.techLabel)
+                                    .tracking(2)
+                                    .foregroundColor(.textSecondary)
+
+                                Text(transcription)
+                                    .font(.bodySmall)
+                                    .foregroundColor(.textPrimary)
+                                    .textSelection(.enabled)
+                                    .lineSpacing(4)
+                                    .padding(Spacing.md)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.surfaceSecondary)
+                                    .cornerRadius(CornerRadius.sm)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                    )
+                            }
+                            .padding(.horizontal, Spacing.md)
                         }
+
+                        Spacer(minLength: Spacing.xxl)
                     }
-                    .padding(.top)
-
-                    // Transcription section
-                    if memo.isTranscribing {
-                        HStack {
-                            ProgressView()
-                            Text("Transcribing...")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-                    } else if let transcription = memo.transcription {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Transcription")
-                                .font(.headline)
-
-                            Text(transcription)
-                                .font(.body)
-                                .textSelection(.enabled)
-                                .padding()
-                                .background(Color.gray.opacity(0.1))
-                                .cornerRadius(8)
-                        }
-                        .padding(.horizontal)
-                        .padding(.top)
-                    }
-
-                    Spacer()
+                    .padding(.vertical, Spacing.md)
                 }
-                .padding(.vertical)
             }
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("MEMO DETAIL")
+                        .font(.techLabel)
+                        .tracking(2)
+                        .foregroundColor(.textPrimary)
+                }
+
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
+                    Button(action: {
                         if isEditing {
                             saveTitle()
                         }
                         dismiss()
+                    }) {
+                        Text("CLOSE")
+                            .font(.techLabel)
+                            .tracking(1)
+                            .foregroundColor(.textSecondary)
                     }
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(isEditing ? "Save" : "Edit") {
+                    Button(action: {
                         if isEditing {
                             saveTitle()
                         } else {
                             editedTitle = memoTitle
                             isEditing = true
                         }
+                    }) {
+                        Text(isEditing ? "SAVE" : "EDIT")
+                            .font(.techLabel)
+                            .tracking(1)
+                            .foregroundColor(.active)
                     }
                 }
             }
