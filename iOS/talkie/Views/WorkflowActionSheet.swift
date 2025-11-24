@@ -40,14 +40,35 @@ enum WorkflowActionType {
 
 struct WorkflowActionSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject var memo: VoiceMemo
 
     let title: String
     let icon: String
-    let transcription: String
     let actionType: WorkflowActionType
 
-    @State private var result: String = ""
     @State private var isProcessing: Bool = false
+
+    private var result: String {
+        switch actionType {
+        case .summarize:
+            return memo.summary ?? ""
+        case .taskify:
+            return memo.tasks ?? ""
+        case .reminders:
+            return memo.reminders ?? ""
+        }
+    }
+
+    private var isCurrentlyProcessing: Bool {
+        switch actionType {
+        case .summarize:
+            return memo.isProcessingSummary
+        case .taskify:
+            return memo.isProcessingTasks
+        case .reminders:
+            return memo.isProcessingReminders
+        }
+    }
 
     var body: some View {
         NavigationView {
@@ -55,8 +76,8 @@ struct WorkflowActionSheet: View {
                 Color.surfacePrimary
                     .ignoresSafeArea()
 
-                if isProcessing {
-                    // Processing state
+                if isCurrentlyProcessing {
+                    // Processing state (synced across devices)
                     VStack(spacing: Spacing.lg) {
                         Spacer()
 
@@ -174,20 +195,39 @@ struct WorkflowActionSheet: View {
     }
 
     private func processAction() {
-        isProcessing = true
+        guard let context = memo.managedObjectContext else { return }
 
-        // Simulate AI processing (in real app, this would call an API)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            // Mock results based on action type
+        // Set processing flag (syncs to iCloud and other devices)
+        context.perform {
             switch actionType {
             case .summarize:
-                result = generateMockSummary()
+                memo.isProcessingSummary = true
             case .taskify:
-                result = generateMockTasks()
+                memo.isProcessingTasks = true
             case .reminders:
-                result = generateMockReminders()
+                memo.isProcessingReminders = true
             }
-            isProcessing = false
+            try? context.save()
+        }
+
+        // Simulate async AI processing
+        // In production: this would be a background task that could complete on ANY device
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            context.perform {
+                // Store result in Core Data (syncs to all devices)
+                switch actionType {
+                case .summarize:
+                    memo.summary = generateMockSummary()
+                    memo.isProcessingSummary = false
+                case .taskify:
+                    memo.tasks = generateMockTasks()
+                    memo.isProcessingTasks = false
+                case .reminders:
+                    memo.reminders = generateMockReminders()
+                    memo.isProcessingReminders = false
+                }
+                try? context.save()
+            }
         }
     }
 

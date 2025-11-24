@@ -198,24 +198,32 @@ struct VoiceMemoDetailView: View {
                                     ActionButton(
                                         icon: "list.bullet.clipboard",
                                         title: "SUMMARIZE",
+                                        isProcessing: memo.isProcessingSummary,
+                                        isCompleted: memo.summary != nil,
                                         action: { showingSummary = true }
                                     )
 
                                     ActionButton(
                                         icon: "checkmark.square",
                                         title: "TASKIFY",
+                                        isProcessing: memo.isProcessingTasks,
+                                        isCompleted: memo.tasks != nil,
                                         action: { showingTasks = true }
                                     )
 
                                     ActionButton(
                                         icon: "bell",
                                         title: "REMIND",
+                                        isProcessing: memo.isProcessingReminders,
+                                        isCompleted: memo.reminders != nil,
                                         action: { showingReminders = true }
                                     )
 
                                     ActionButton(
                                         icon: "square.and.arrow.up",
                                         title: "SHARE",
+                                        isProcessing: false,
+                                        isCompleted: false,
                                         action: { showingShare = true }
                                     )
                                 }
@@ -270,25 +278,25 @@ struct VoiceMemoDetailView: View {
             }
             .sheet(isPresented: $showingSummary) {
                 WorkflowActionSheet(
+                    memo: memo,
                     title: "SUMMARY",
                     icon: "list.bullet.clipboard",
-                    transcription: memo.transcription ?? "",
                     actionType: .summarize
                 )
             }
             .sheet(isPresented: $showingTasks) {
                 WorkflowActionSheet(
+                    memo: memo,
                     title: "TASKS",
                     icon: "checkmark.square",
-                    transcription: memo.transcription ?? "",
                     actionType: .taskify
                 )
             }
             .sheet(isPresented: $showingReminders) {
                 WorkflowActionSheet(
+                    memo: memo,
                     title: "REMINDERS",
                     icon: "bell",
-                    transcription: memo.transcription ?? "",
                     actionType: .reminders
                 )
             }
@@ -327,29 +335,47 @@ struct VoiceMemoDetailView: View {
 struct ActionButton: View {
     let icon: String
     let title: String
+    let isProcessing: Bool
+    let isCompleted: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: Spacing.xs) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.textPrimary)
+            ZStack(alignment: .topTrailing) {
+                VStack(spacing: Spacing.xs) {
+                    if isProcessing {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(isCompleted ? .success : .textPrimary)
+                    }
 
-                Text(title)
-                    .font(.techLabelSmall)
-                    .tracking(1)
-                    .foregroundColor(.textSecondary)
+                    Text(title)
+                        .font(.techLabelSmall)
+                        .tracking(1)
+                        .foregroundColor(isProcessing ? .transcribing : .textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.md)
+                .background(isCompleted ? Color.success.opacity(0.05) : Color.surfaceSecondary)
+                .cornerRadius(CornerRadius.sm)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .strokeBorder(isCompleted ? Color.success : Color.borderPrimary, lineWidth: 0.5)
+                )
+
+                // Completed indicator
+                if isCompleted && !isProcessing {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.success)
+                        .offset(x: -4, y: 4)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Spacing.md)
-            .background(Color.surfaceSecondary)
-            .cornerRadius(CornerRadius.sm)
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-            )
         }
         .buttonStyle(PlainButtonStyle())
+        .disabled(isProcessing)
     }
 }
