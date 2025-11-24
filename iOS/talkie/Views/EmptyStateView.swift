@@ -11,26 +11,29 @@ struct EmptyStateView: View {
     let onRecordTapped: () -> Void
 
     var body: some View {
-        VStack(spacing: 30) {
+        VStack(spacing: Spacing.xl) {
             Spacer()
 
-            // Icon
+            // Icon with glow
             ZStack {
+                // Outer glow
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.red.opacity(0.1), Color.red.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.recording)
+                    .frame(width: 140, height: 140)
+                    .blur(radius: 40)
+                    .opacity(0.3)
+
+                // Background circle
+                Circle()
+                    .fill(Color.surfaceTertiary)
                     .frame(width: 120, height: 120)
 
+                // Icon
                 Image(systemName: "waveform")
-                    .font(.system(size: 50))
+                    .font(.system(size: 48, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color.red, Color.red.opacity(0.7)],
+                            colors: [Color.recording, Color.recordingGlow],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -38,45 +41,47 @@ struct EmptyStateView: View {
             }
 
             // Text
-            VStack(spacing: 12) {
-                Text("No Voice Memos Yet")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+            VStack(spacing: Spacing.sm) {
+                Text("Ready to Record")
+                    .font(.displaySmall)
+                    .foregroundColor(.textPrimary)
 
-                Text("Tap the button below to record\nyour first voice memo")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                Text("Capture your thoughts with a tap.\nTranscriptions happen automatically.")
+                    .font(.bodyMedium)
+                    .foregroundColor(.textSecondary)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(4)
             }
 
             Spacer()
 
             // CTA Button
             Button(action: onRecordTapped) {
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Image(systemName: "mic.fill")
-                        .font(.title3)
+                        .font(.system(size: 20, weight: .medium))
 
-                    Text("Start Recording")
+                    Text("Record First Memo")
+                        .font(.bodyMedium)
                         .fontWeight(.semibold)
                 }
                 .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .frame(maxWidth: 280)
+                .padding(.vertical, Spacing.md)
                 .background(
                     LinearGradient(
-                        colors: [Color.red, Color.red.opacity(0.8)],
+                        colors: [Color.recording, Color.recordingGlow],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .cornerRadius(14)
-                .shadow(color: Color.red.opacity(0.3), radius: 10, x: 0, y: 5)
+                .cornerRadius(CornerRadius.md)
+                .shadow(color: Color.recording.opacity(0.4), radius: 16, x: 0, y: 8)
             }
-            .padding(.horizontal, 40)
-            .padding(.bottom, 60)
+            .padding(.bottom, 80)
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.surfacePrimary)
     }
 }
 

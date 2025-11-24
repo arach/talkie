@@ -64,6 +64,9 @@ struct VoiceMemoListView: View {
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottom) {
+                Color.surfacePrimary
+                    .ignoresSafeArea()
+
                 if voiceMemos.isEmpty {
                     // Empty state
                     EmptyStateView(onRecordTapped: {
@@ -78,6 +81,9 @@ struct VoiceMemoListView: View {
                                 audioPlayer: audioPlayer,
                                 onDelete: { deleteMemo(memo) }
                             )
+                            .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.md, bottom: Spacing.xs, trailing: Spacing.md))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                         }
                         .onDelete(perform: deleteMemos)
                         .onMove(perform: moveMemos)
@@ -85,24 +91,37 @@ struct VoiceMemoListView: View {
                         // Load More button
                         if hasMore {
                             Button(action: {
-                                withAnimation {
+                                withAnimation(TalkieAnimation.spring) {
                                     displayLimit += 10
                                 }
                             }) {
-                                HStack {
+                                HStack(spacing: Spacing.xs) {
                                     Spacer()
-                                    Text("Load More (\(allVoiceMemos.count - displayLimit) remaining)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.blue)
+                                    Text("Load \(min(10, allVoiceMemos.count - displayLimit)) more")
+                                        .font(.labelMedium)
+                                        .foregroundColor(.textSecondary)
+                                    Image(systemName: "chevron.down")
+                                        .font(.labelSmall)
+                                        .foregroundColor(.textTertiary)
                                     Spacer()
                                 }
-                                .padding(.vertical, 12)
+                                .padding(.vertical, Spacing.sm)
+                                .background(Color.surfaceSecondary)
+                                .cornerRadius(CornerRadius.sm)
                             }
+                            .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.md, bottom: Spacing.xs, trailing: Spacing.md))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                         }
+
+                        // Bottom spacing for floating button
+                        Color.clear
+                            .frame(height: 100)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
 
                     // Floating record button
                     VStack {
@@ -110,26 +129,39 @@ struct VoiceMemoListView: View {
                         HStack {
                             Spacer()
                             Button(action: { showingRecordingView = true }) {
-                                Image(systemName: "mic.fill")
-                                    .font(.title)
-                                    .foregroundColor(.white)
-                                    .frame(width: 70, height: 70)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [Color.red, Color.red.opacity(0.8)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
+                                ZStack {
+                                    // Glow effect
+                                    Circle()
+                                        .fill(Color.recording)
+                                        .frame(width: 64, height: 64)
+                                        .blur(radius: 20)
+                                        .opacity(0.6)
+
+                                    // Main button
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [Color.recording, Color.recordingGlow],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
                                         )
-                                    )
-                                    .clipShape(Circle())
-                                    .shadow(color: Color.red.opacity(0.3), radius: 8, x: 0, y: 4)
+                                        .frame(width: 64, height: 64)
+
+                                    Image(systemName: "mic.fill")
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(.white)
+                                }
                             }
-                            .padding()
+                            .padding(Spacing.lg)
                         }
                     }
                 }
             }
-            .navigationTitle("Voice Memos")
+            .navigationTitle("Talkie")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .sheet(isPresented: $showingRecordingView) {
                 RecordingView()
                     .environment(\.managedObjectContext, viewContext)

@@ -34,51 +34,71 @@ struct VoiceMemoRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                // Title and duration on same line
-                HStack {
+        Button(action: { showingDetail = true }) {
+            HStack(spacing: Spacing.md) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    // Title
                     Text(memoTitle)
-                        .font(.subheadline)
+                        .font(.bodyMedium)
                         .fontWeight(.medium)
+                        .foregroundColor(.textPrimary)
                         .lineLimit(1)
 
-                    Spacer()
+                    // Date, duration, and status
+                    HStack(spacing: Spacing.xs) {
+                        Text(formatDateCompact(memoCreatedAt))
+                            .font(.labelSmall)
+                            .foregroundColor(.textSecondary)
 
-                    Text(formatDuration(memo.duration))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                }
+                        Text("•")
+                            .font(.labelSmall)
+                            .foregroundColor(.textTertiary)
 
-                // Date and transcription indicator
-                HStack(spacing: 6) {
-                    Text(formatDateCompact(memoCreatedAt))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        Text(formatDuration(memo.duration))
+                            .font(.monoSmall)
+                            .foregroundColor(.textSecondary)
 
-                    if memo.isTranscribing {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                    } else if memo.transcription != nil {
-                        Image(systemName: "text.alignleft")
-                            .font(.caption2)
-                            .foregroundColor(.green)
+                        if memo.isTranscribing {
+                            Text("•")
+                                .font(.labelSmall)
+                                .foregroundColor(.textTertiary)
+
+                            HStack(spacing: 4) {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                Text("Transcribing")
+                                    .font(.labelSmall)
+                                    .foregroundColor(.transcribing)
+                            }
+                        } else if memo.transcription != nil {
+                            Text("•")
+                                .font(.labelSmall)
+                                .foregroundColor(.textTertiary)
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "text.alignleft")
+                                    .font(.system(size: 10, weight: .medium))
+                                Text("Transcript")
+                                    .font(.labelSmall)
+                            }
+                            .foregroundColor(.success)
+                        }
                     }
                 }
-            }
 
-            // Chevron indicator
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.secondary.opacity(0.5))
+                Spacer()
+
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.textTertiary)
+            }
+            .padding(.vertical, Spacing.md)
+            .padding(.horizontal, Spacing.md)
+            .background(Color.surfaceSecondary)
+            .cornerRadius(CornerRadius.md)
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            showingDetail = true
-        }
+        .buttonStyle(PlainButtonStyle())
         .sheet(isPresented: $showingDetail) {
             VoiceMemoDetailView(memo: memo, audioPlayer: audioPlayer)
         }
@@ -86,8 +106,9 @@ struct VoiceMemoRow: View {
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label("Delete", systemImage: "trash.fill")
             }
+            .tint(.recording)
         }
     }
 

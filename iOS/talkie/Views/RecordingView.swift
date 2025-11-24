@@ -18,135 +18,203 @@ struct RecordingView: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 30) {
-                Spacer()
+            ZStack {
+                Color.surfacePrimary
+                    .ignoresSafeArea()
 
-                // Waveform visualization
-                if recorder.isRecording {
-                    VStack(spacing: 10) {
-                        Text("Recording...")
-                            .font(.headline)
-                            .foregroundColor(.red)
+                VStack(spacing: Spacing.xxl) {
+                    Spacer()
 
-                        WaveformView(
-                            levels: recorder.audioLevels,
-                            height: 100,
-                            color: .red
-                        )
-                        .padding(.horizontal)
+                    // Waveform visualization
+                    if recorder.isRecording {
+                        VStack(spacing: Spacing.lg) {
+                            // Recording indicator
+                            HStack(spacing: Spacing.xs) {
+                                Circle()
+                                    .fill(Color.recording)
+                                    .frame(width: 8, height: 8)
+                                    .shadow(color: Color.recording, radius: 4)
 
-                        Text(formatDuration(recorder.recordingDuration))
-                            .font(.system(.title, design: .monospaced))
-                            .foregroundColor(.primary)
-                    }
-                    .animation(.easeInOut, value: recorder.audioLevels)
-                } else if hasStartedRecording {
-                    VStack(spacing: 20) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.green)
+                                Text("REC")
+                                    .font(.labelMedium)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.recording)
+                                    .tracking(1)
+                            }
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.xs)
+                            .background(Color.recording.opacity(0.1))
+                            .cornerRadius(CornerRadius.full)
 
-                        Text("Recording Saved")
-                            .font(.title2)
-
-                        TextField("Add title (optional)", text: $recordingTitle)
-                            .textFieldStyle(.roundedBorder)
-                            .padding(.horizontal, 40)
-                    }
-                } else {
-                    VStack(spacing: 20) {
-                        Image(systemName: "waveform.circle")
-                            .font(.system(size: 80))
-                            .foregroundColor(.gray)
-
-                        Text("Tap to start recording")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                // Recording button
-                Button(action: toggleRecording) {
-                    ZStack {
-                        Circle()
-                            .strokeBorder(
-                                recorder.isRecording ? Color.red : Color.gray.opacity(0.3),
-                                lineWidth: 4
+                            // Waveform
+                            WaveformView(
+                                levels: recorder.audioLevels,
+                                height: 120,
+                                color: .recording
                             )
-                            .frame(width: 80, height: 80)
+                            .padding(.horizontal, Spacing.lg)
+                            .background(Color.surfaceSecondary)
+                            .cornerRadius(CornerRadius.md)
+                            .padding(.horizontal, Spacing.lg)
 
-                        if recorder.isRecording {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.red, Color.red.opacity(0.8)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 30, height: 30)
-                        } else if !hasStartedRecording {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.red, Color.red.opacity(0.8)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 60, height: 60)
-                                .shadow(color: Color.red.opacity(0.3), radius: 8, x: 0, y: 4)
-                        } else {
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 60, height: 60)
+                            // Duration
+                            Text(formatDuration(recorder.recordingDuration))
+                                .font(.monoLarge)
+                                .fontWeight(.medium)
+                                .foregroundColor(.textPrimary)
+                        }
+                        .animation(TalkieAnimation.fast, value: recorder.audioLevels)
+                    } else if hasStartedRecording {
+                        VStack(spacing: Spacing.lg) {
+                            // Success icon
+                            ZStack {
+                                Circle()
+                                    .fill(Color.success.opacity(0.1))
+                                    .frame(width: 80, height: 80)
+
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 32, weight: .semibold))
+                                    .foregroundColor(.success)
+                            }
+
+                            Text("Saved")
+                                .font(.displaySmall)
+                                .foregroundColor(.textPrimary)
+
+                            // Title input
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text("Title (Optional)")
+                                    .font(.labelSmall)
+                                    .foregroundColor(.textSecondary)
+                                    .padding(.leading, Spacing.sm)
+
+                                TextField("e.g., Meeting notes", text: $recordingTitle)
+                                    .font(.bodyMedium)
+                                    .padding(Spacing.md)
+                                    .background(Color.surfaceSecondary)
+                                    .cornerRadius(CornerRadius.md)
+                            }
+                            .padding(.horizontal, Spacing.xl)
+                        }
+                    } else {
+                        VStack(spacing: Spacing.lg) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.surfaceTertiary)
+                                    .frame(width: 100, height: 100)
+
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 48, weight: .medium))
+                                    .foregroundColor(.textSecondary)
+                            }
+
+                            Text("Tap to Record")
+                                .font(.headlineLarge)
+                                .foregroundColor(.textPrimary)
                         }
                     }
-                }
-                .padding(.bottom, 40)
 
-                if hasStartedRecording && !recorder.isRecording {
-                    Button(action: {
-                        saveRecording()
-                        dismiss()
-                    }) {
-                        Text("Save & Close")
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: 200)
-                            .padding(.vertical, 14)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.blue, Color.blue.opacity(0.8)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(12)
-                            .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                    Spacer()
+
+                    // Recording button
+                    Button(action: toggleRecording) {
+                        ZStack {
+                            if recorder.isRecording {
+                                // Pulsing glow when recording
+                                Circle()
+                                    .fill(Color.recording)
+                                    .frame(width: 80, height: 80)
+                                    .blur(radius: 20)
+                                    .opacity(0.6)
+
+                                // Outer ring
+                                Circle()
+                                    .strokeBorder(Color.recording, lineWidth: 3)
+                                    .frame(width: 88, height: 88)
+
+                                // Stop icon
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.recording)
+                                    .frame(width: 32, height: 32)
+                            } else if !hasStartedRecording {
+                                // Glow effect
+                                Circle()
+                                    .fill(Color.recording)
+                                    .frame(width: 72, height: 72)
+                                    .blur(radius: 20)
+                                    .opacity(0.5)
+
+                                // Main button
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.recording, Color.recordingGlow],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 72, height: 72)
+                            } else {
+                                Circle()
+                                    .fill(Color.surfaceTertiary)
+                                    .frame(width: 72, height: 72)
+                            }
+                        }
                     }
-                    .padding(.bottom, 20)
+                    .padding(.bottom, Spacing.xxl)
+
+                    if hasStartedRecording && !recorder.isRecording {
+                        Button(action: {
+                            saveRecording()
+                            dismiss()
+                        }) {
+                            Text("Done")
+                                .font(.bodyMedium)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: 200)
+                                .padding(.vertical, Spacing.md)
+                                .background(
+                                    LinearGradient(
+                                        colors: [Color.active, Color.activeGlow],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(CornerRadius.md)
+                                .shadow(color: Color.active.opacity(0.3), radius: 12, x: 0, y: 6)
+                        }
+                        .padding(.bottom, Spacing.lg)
+                    }
                 }
             }
-            .navigationTitle(recorder.isRecording ? "Recording" : "New Recording")
+            .navigationTitle(recorder.isRecording ? "Recording" : "New Memo")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button(action: {
                         if recorder.isRecording {
                             recorder.stopRecording()
                         }
                         dismiss()
+                    }) {
+                        Text("Cancel")
+                            .font(.bodyMedium)
+                            .foregroundColor(.textPrimary)
                     }
                 }
 
                 if hasStartedRecording && !recorder.isRecording {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Save") {
+                        Button(action: {
                             saveRecording()
                             dismiss()
+                        }) {
+                            Text("Done")
+                                .font(.bodyMedium)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.active)
                         }
                     }
                 }
