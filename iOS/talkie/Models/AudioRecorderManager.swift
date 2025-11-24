@@ -43,9 +43,8 @@ class AudioRecorderManager: NSObject, ObservableObject {
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
             AVSampleRateKey: 44100.0,
             AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.max.rawValue,
-            AVEncoderBitRateKey: 256000, // Higher bitrate for better quality
-            AVLinearPCMBitDepthKey: 16
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            AVEncoderBitRateKey: 128000
         ]
 
         do {
