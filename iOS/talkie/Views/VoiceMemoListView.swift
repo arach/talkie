@@ -97,17 +97,21 @@ struct VoiceMemoListView: View {
                             }) {
                                 HStack(spacing: Spacing.xs) {
                                     Spacer()
-                                    Text("Load \(min(10, allVoiceMemos.count - displayLimit)) more")
-                                        .font(.labelMedium)
-                                        .foregroundColor(.textSecondary)
-                                    Image(systemName: "chevron.down")
-                                        .font(.labelSmall)
-                                        .foregroundColor(.textTertiary)
+                                    Image(systemName: "arrow.down")
+                                        .font(.system(size: 9, weight: .bold))
+                                    Text("LOAD +\(min(10, allVoiceMemos.count - displayLimit))")
+                                        .font(.techLabel)
+                                        .tracking(1)
                                     Spacer()
                                 }
-                                .padding(.vertical, Spacing.sm)
+                                .foregroundColor(.textSecondary)
+                                .padding(.vertical, Spacing.xs)
                                 .background(Color.surfaceSecondary)
                                 .cornerRadius(CornerRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                )
                             }
                             .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.md, bottom: Spacing.xs, trailing: Spacing.md))
                             .listRowBackground(Color.clear)
@@ -158,10 +162,23 @@ struct VoiceMemoListView: View {
                     }
                 }
             }
-            .navigationTitle("Talkie")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("TALKIE")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text("TALKIE")
+                            .font(.techLabel)
+                            .tracking(2)
+                            .foregroundColor(.textPrimary)
+                        Text("\(allVoiceMemos.count) MEMOS")
+                            .font(.techLabelSmall)
+                            .tracking(1)
+                            .foregroundColor(.textTertiary)
+                    }
+                }
+            }
             .sheet(isPresented: $showingRecordingView) {
                 RecordingView()
                     .environment(\.managedObjectContext, viewContext)

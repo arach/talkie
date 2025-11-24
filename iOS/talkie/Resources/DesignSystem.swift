@@ -104,43 +104,47 @@ extension Color {
     }
 }
 
-// MARK: - Typography
+// MARK: - Typography (Tactical/Dev-Tool Oriented)
 extension Font {
-    // Display
-    static let displayLarge = Font.system(size: 34, weight: .bold, design: .rounded)
-    static let displayMedium = Font.system(size: 28, weight: .bold, design: .rounded)
-    static let displaySmall = Font.system(size: 24, weight: .semibold, design: .rounded)
+    // Display - More technical, less rounded
+    static let displayLarge = Font.system(size: 32, weight: .bold, design: .default)
+    static let displayMedium = Font.system(size: 26, weight: .bold, design: .default)
+    static let displaySmall = Font.system(size: 22, weight: .semibold, design: .default)
 
-    // Headline
-    static let headlineLarge = Font.system(size: 20, weight: .semibold, design: .default)
-    static let headlineMedium = Font.system(size: 17, weight: .semibold, design: .default)
-    static let headlineSmall = Font.system(size: 15, weight: .semibold, design: .default)
+    // Headline - Tactical
+    static let headlineLarge = Font.system(size: 18, weight: .semibold, design: .default)
+    static let headlineMedium = Font.system(size: 16, weight: .semibold, design: .default)
+    static let headlineSmall = Font.system(size: 14, weight: .semibold, design: .default)
 
-    // Body
-    static let bodyLarge = Font.system(size: 17, weight: .regular, design: .default)
-    static let bodyMedium = Font.system(size: 15, weight: .regular, design: .default)
-    static let bodySmall = Font.system(size: 13, weight: .regular, design: .default)
+    // Body - Prefer monospace for dev tool feel
+    static let bodyLarge = Font.system(size: 16, weight: .regular, design: .monospaced)
+    static let bodyMedium = Font.system(size: 14, weight: .regular, design: .monospaced)
+    static let bodySmall = Font.system(size: 12, weight: .regular, design: .monospaced)
 
-    // Label
-    static let labelLarge = Font.system(size: 15, weight: .medium, design: .default)
-    static let labelMedium = Font.system(size: 13, weight: .medium, design: .default)
-    static let labelSmall = Font.system(size: 11, weight: .medium, design: .default)
+    // Label - Compact and precise
+    static let labelLarge = Font.system(size: 13, weight: .medium, design: .default)
+    static let labelMedium = Font.system(size: 11, weight: .medium, design: .default)
+    static let labelSmall = Font.system(size: 10, weight: .medium, design: .default)
 
-    // Monospace (for durations, technical data)
-    static let monoLarge = Font.system(size: 17, weight: .regular, design: .monospaced)
-    static let monoMedium = Font.system(size: 15, weight: .regular, design: .monospaced)
-    static let monoSmall = Font.system(size: 13, weight: .regular, design: .monospaced)
+    // Monospace (for durations, technical data) - primary choice
+    static let monoLarge = Font.system(size: 16, weight: .medium, design: .monospaced)
+    static let monoMedium = Font.system(size: 14, weight: .medium, design: .monospaced)
+    static let monoSmall = Font.system(size: 12, weight: .regular, design: .monospaced)
+
+    // Technical labels - uppercase, tracked
+    static let techLabel = Font.system(size: 10, weight: .bold, design: .monospaced)
+    static let techLabelSmall = Font.system(size: 9, weight: .bold, design: .monospaced)
 }
 
-// MARK: - Spacing
+// MARK: - Spacing (Tighter, more tactical)
 enum Spacing {
-    static let xxs: CGFloat = 4
-    static let xs: CGFloat = 8
-    static let sm: CGFloat = 12
-    static let md: CGFloat = 16
-    static let lg: CGFloat = 24
-    static let xl: CGFloat = 32
-    static let xxl: CGFloat = 48
+    static let xxs: CGFloat = 2
+    static let xs: CGFloat = 6
+    static let sm: CGFloat = 10
+    static let md: CGFloat = 14
+    static let lg: CGFloat = 20
+    static let xl: CGFloat = 28
+    static let xxl: CGFloat = 40
 }
 
 // MARK: - Corner Radius

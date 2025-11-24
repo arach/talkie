@@ -14,59 +14,48 @@ struct EmptyStateView: View {
         VStack(spacing: Spacing.xl) {
             Spacer()
 
-            // Icon with glow
-            ZStack {
-                // Outer glow
-                Circle()
-                    .fill(Color.recording)
-                    .frame(width: 140, height: 140)
-                    .blur(radius: 40)
-                    .opacity(0.3)
+            // Icon - minimal, tactical
+            VStack(spacing: Spacing.lg) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .strokeBorder(Color.borderPrimary, lineWidth: 1)
+                        .frame(width: 100, height: 100)
+                        .background(Color.surfaceSecondary)
+                        .cornerRadius(CornerRadius.md)
 
-                // Background circle
-                Circle()
-                    .fill(Color.surfaceTertiary)
-                    .frame(width: 120, height: 120)
+                    Image(systemName: "waveform")
+                        .font(.system(size: 40, weight: .regular))
+                        .foregroundColor(.textTertiary)
+                }
 
-                // Icon
-                Image(systemName: "waveform")
-                    .font(.system(size: 48, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color.recording, Color.recordingGlow],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
+                // Status text
+                VStack(spacing: Spacing.xxs) {
+                    Text("NO MEMOS")
+                        .font(.techLabel)
+                        .tracking(2)
+                        .foregroundColor(.textSecondary)
 
-            // Text
-            VStack(spacing: Spacing.sm) {
-                Text("Ready to Record")
-                    .font(.displaySmall)
-                    .foregroundColor(.textPrimary)
-
-                Text("Capture your thoughts with a tap.\nTranscriptions happen automatically.")
-                    .font(.bodyMedium)
-                    .foregroundColor(.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
+                    Text("SYSTEM READY")
+                        .font(.techLabelSmall)
+                        .tracking(1.5)
+                        .foregroundColor(.textTertiary)
+                }
             }
 
             Spacer()
 
-            // CTA Button
+            // CTA Button - tactical
             Button(action: onRecordTapped) {
-                HStack(spacing: Spacing.sm) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 20, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
 
-                    Text("Record First Memo")
-                        .font(.bodyMedium)
-                        .fontWeight(.semibold)
+                    Text("START RECORDING")
+                        .font(.techLabel)
+                        .tracking(1.5)
                 }
                 .foregroundColor(.white)
-                .frame(maxWidth: 280)
+                .frame(maxWidth: 240)
                 .padding(.vertical, Spacing.md)
                 .background(
                     LinearGradient(
@@ -75,10 +64,10 @@ struct EmptyStateView: View {
                         endPoint: .trailing
                     )
                 )
-                .cornerRadius(CornerRadius.md)
-                .shadow(color: Color.recording.opacity(0.4), radius: 16, x: 0, y: 8)
+                .cornerRadius(CornerRadius.sm)
+                .shadow(color: Color.recording.opacity(0.3), radius: 12, x: 0, y: 6)
             }
-            .padding(.bottom, 80)
+            .padding(.bottom, 100)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.surfacePrimary)

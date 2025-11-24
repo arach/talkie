@@ -28,23 +28,23 @@ struct RecordingView: View {
                     // Waveform visualization
                     if recorder.isRecording {
                         VStack(spacing: Spacing.lg) {
-                            // Recording indicator
+                            // Recording indicator - tactical style
                             HStack(spacing: Spacing.xs) {
                                 Circle()
                                     .fill(Color.recording)
-                                    .frame(width: 8, height: 8)
+                                    .frame(width: 6, height: 6)
                                     .shadow(color: Color.recording, radius: 4)
 
-                                Text("REC")
-                                    .font(.labelMedium)
+                                Text("● REC")
+                                    .font(.techLabel)
                                     .fontWeight(.bold)
                                     .foregroundColor(.recording)
-                                    .tracking(1)
+                                    .tracking(2)
                             }
-                            .padding(.horizontal, Spacing.md)
-                            .padding(.vertical, Spacing.xs)
-                            .background(Color.recording.opacity(0.1))
-                            .cornerRadius(CornerRadius.full)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, Spacing.xxs)
+                            .background(Color.recording.opacity(0.08))
+                            .cornerRadius(CornerRadius.sm)
 
                             // Waveform
                             WaveformView(
@@ -188,10 +188,17 @@ struct RecordingView: View {
                     }
                 }
             }
-            .navigationTitle(recorder.isRecording ? "Recording" : "New Memo")
+            .navigationTitle(recorder.isRecording ? "REC" : "NEW")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(recorder.isRecording ? "● RECORDING" : "NEW MEMO")
+                        .font(.techLabel)
+                        .tracking(2)
+                        .foregroundColor(recorder.isRecording ? .recording : .textPrimary)
+                }
+
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
                         if recorder.isRecording {
@@ -199,9 +206,10 @@ struct RecordingView: View {
                         }
                         dismiss()
                     }) {
-                        Text("Cancel")
-                            .font(.bodyMedium)
-                            .foregroundColor(.textPrimary)
+                        Text("ESC")
+                            .font(.techLabel)
+                            .tracking(1)
+                            .foregroundColor(.textSecondary)
                     }
                 }
 
@@ -211,9 +219,9 @@ struct RecordingView: View {
                             saveRecording()
                             dismiss()
                         }) {
-                            Text("Done")
-                                .font(.bodyMedium)
-                                .fontWeight(.semibold)
+                            Text("DONE")
+                                .font(.techLabel)
+                                .tracking(1)
                                 .foregroundColor(.active)
                         }
                     }

@@ -35,68 +35,83 @@ struct VoiceMemoRow: View {
 
     var body: some View {
         Button(action: { showingDetail = true }) {
-            HStack(spacing: Spacing.md) {
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    // Title
-                    Text(memoTitle)
-                        .font(.bodyMedium)
-                        .fontWeight(.medium)
-                        .foregroundColor(.textPrimary)
-                        .lineLimit(1)
+            VStack(spacing: 0) {
+                HStack(spacing: Spacing.sm) {
+                    // Left: Title and metadata
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        // Title - monospace for dev tool feel
+                        Text(memoTitle)
+                            .font(.bodyMedium)
+                            .foregroundColor(.textPrimary)
+                            .lineLimit(1)
 
-                    // Date, duration, and status
-                    HStack(spacing: Spacing.xs) {
-                        Text(formatDateCompact(memoCreatedAt))
-                            .font(.labelSmall)
+                        // Metadata row - compact, technical
+                        HStack(spacing: Spacing.xs) {
+                            // Duration with icon
+                            HStack(spacing: 2) {
+                                Image(systemName: "clock")
+                                    .font(.system(size: 9, weight: .medium))
+                                Text(formatDuration(memo.duration))
+                                    .font(.monoSmall)
+                            }
                             .foregroundColor(.textSecondary)
 
-                        Text("•")
-                            .font(.labelSmall)
-                            .foregroundColor(.textTertiary)
-
-                        Text(formatDuration(memo.duration))
-                            .font(.monoSmall)
-                            .foregroundColor(.textSecondary)
-
-                        if memo.isTranscribing {
-                            Text("•")
+                            Text("·")
                                 .font(.labelSmall)
                                 .foregroundColor(.textTertiary)
 
-                            HStack(spacing: 4) {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                Text("Transcribing")
-                                    .font(.labelSmall)
-                                    .foregroundColor(.transcribing)
-                            }
-                        } else if memo.transcription != nil {
-                            Text("•")
+                            // Date
+                            Text(formatDateCompact(memoCreatedAt))
                                 .font(.labelSmall)
-                                .foregroundColor(.textTertiary)
+                                .foregroundColor(.textSecondary)
 
-                            HStack(spacing: 4) {
-                                Image(systemName: "text.alignleft")
-                                    .font(.system(size: 10, weight: .medium))
-                                Text("Transcript")
+                            // Status indicator
+                            if memo.isTranscribing {
+                                Text("·")
                                     .font(.labelSmall)
+                                    .foregroundColor(.textTertiary)
+
+                                HStack(spacing: 3) {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                    Text("PROC")
+                                        .font(.techLabelSmall)
+                                        .tracking(0.5)
+                                }
+                                .foregroundColor(.transcribing)
+                            } else if memo.transcription != nil {
+                                Text("·")
+                                    .font(.labelSmall)
+                                    .foregroundColor(.textTertiary)
+
+                                HStack(spacing: 2) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 9, weight: .semibold))
+                                    Text("TXT")
+                                        .font(.techLabelSmall)
+                                        .tracking(0.5)
+                                }
+                                .foregroundColor(.success)
                             }
-                            .foregroundColor(.success)
                         }
                     }
+
+                    Spacer(minLength: Spacing.xs)
+
+                    // Right: Chevron
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.textTertiary)
                 }
-
-                Spacer()
-
-                // Chevron
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.textTertiary)
+                .padding(.vertical, Spacing.sm)
+                .padding(.horizontal, Spacing.md)
             }
-            .padding(.vertical, Spacing.md)
-            .padding(.horizontal, Spacing.md)
             .background(Color.surfaceSecondary)
-            .cornerRadius(CornerRadius.md)
+            .cornerRadius(CornerRadius.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+            )
         }
         .buttonStyle(PlainButtonStyle())
         .sheet(isPresented: $showingDetail) {
@@ -106,7 +121,7 @@ struct VoiceMemoRow: View {
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("Delete", systemImage: "trash.fill")
+                Label("DEL", systemImage: "trash.fill")
             }
             .tint(.recording)
         }
