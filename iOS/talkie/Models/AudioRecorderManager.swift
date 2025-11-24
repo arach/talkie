@@ -39,37 +39,43 @@ class AudioRecorderManager: NSObject, ObservableObject {
     func startRecording() {
         let audioFilename = getDocumentsDirectory().appendingPathComponent("\(UUID().uuidString).m4a")
 
-        let settings = [
+        let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100,
+            AVSampleRateKey: 44100.0,
             AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            AVEncoderBitRateKey: 128000
         ]
 
         do {
             audioRecorder = try AVAudioRecorder(url: audioFilename, settings: settings)
             audioRecorder?.delegate = self
             audioRecorder?.isMeteringEnabled = true
-            audioRecorder?.record()
 
-            currentRecordingURL = audioFilename
-            isRecording = true
-            recordingDuration = 0
-            audioLevels = []
+            if audioRecorder?.record() == true {
+                print("Recording started at: \(audioFilename.path)")
+                currentRecordingURL = audioFilename
+                isRecording = true
+                recordingDuration = 0
+                audioLevels = []
 
-            // Start duration timer
-            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                guard let self = self else { return }
-                self.recordingDuration = self.audioRecorder?.currentTime ?? 0
-            }
+                // Start duration timer
+                timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                    guard let self = self else { return }
+                    self.recordingDuration = self.audioRecorder?.currentTime ?? 0
+                }
 
-            // Start level monitoring timer
-            levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-                self?.updateAudioLevels()
+                // Start level monitoring timer
+                levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+                    self?.updateAudioLevels()
+                }
+            } else {
+                print("Failed to start recording - record() returned false")
             }
 
         } catch {
-            print("Failed to start recording: \(error.localizedDescription)")
+            print("Failed to start recording: \(error)")
+            print("Error details: \(error.localizedDescription)")
         }
     }
 
@@ -78,6 +84,21 @@ class AudioRecorderManager: NSObject, ObservableObject {
         timer?.invalidate()
         levelTimer?.invalidate()
         isRecording = false
+
+        if let url = currentRecordingURL {
+            let fileExists = FileManager.default.fileExists(atPath: url.path)
+            print("Recording stopped. File exists: \(fileExists) at \(url.path)")
+
+            if fileExists {
+                do {
+                    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                    let fileSize = attributes[.size] as? Int64 ?? 0
+                    print("File size: \(fileSize) bytes")
+                } catch {
+                    print("Could not get file attributes: \(error)")
+                }
+            }
+        }
     }
 
     private func updateAudioLevels() {

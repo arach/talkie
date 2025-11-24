@@ -22,6 +22,17 @@ class AudioPlayerManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        setupAudioSession()
+    }
+
+    private func setupAudioSession() {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: [])
+            try audioSession.setActive(true)
+        } catch {
+            print("Failed to setup audio session for playback: \(error.localizedDescription)")
+        }
     }
 
     func playAudio(url: URL) {
@@ -30,12 +41,23 @@ class AudioPlayerManager: NSObject, ObservableObject {
             stopPlayback()
         }
 
+        // Verify file exists
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("Audio file does not exist at path: \(url.path)")
+            return
+        }
+
         do {
+            // Ensure audio session is active
+            try AVAudioSession.sharedInstance().setActive(true)
+
             audioPlayer = try AVAudioPlayer(contentsOf: url)
             audioPlayer?.delegate = self
             audioPlayer?.prepareToPlay()
             duration = audioPlayer?.duration ?? 0
             currentPlayingURL = url
+
+            print("Successfully loaded audio file: \(url.lastPathComponent), duration: \(duration)s")
 
             audioPlayer?.play()
             isPlaying = true
@@ -47,7 +69,8 @@ class AudioPlayerManager: NSObject, ObservableObject {
             }
 
         } catch {
-            print("Failed to play audio: \(error.localizedDescription)")
+            print("Failed to play audio at \(url.path): \(error)")
+            print("Error details: \(error.localizedDescription)")
         }
     }
 
