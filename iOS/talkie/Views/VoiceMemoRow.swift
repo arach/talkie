@@ -33,64 +33,51 @@ struct VoiceMemoRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Play/Pause button
-            Button(action: togglePlayback) {
-                Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color.blue, Color.blue.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+        VStack(alignment: .leading, spacing: 6) {
+            // Title and duration on same line
+            HStack {
+                Text(memoTitle)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text(formatDuration(memo.duration))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
             }
-            .buttonStyle(.plain)
 
-            // Waveform and info
-            VStack(alignment: .leading, spacing: 4) {
-                // Title and duration on same line
-                HStack {
-                    Text(memoTitle)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
+            // Date and transcription indicator
+            HStack(spacing: 6) {
+                Text(formatDateCompact(memoCreatedAt))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
 
-                    Spacer()
-
-                    Text(formatDuration(memo.duration))
+                if memo.isTranscribing {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                } else if memo.transcription != nil {
+                    Image(systemName: "text.alignleft")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
+                        .foregroundColor(.green)
                 }
+            }
 
-                // Compact waveform
-                if let waveformData = memo.waveformData,
-                   let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
-                    WaveformView(levels: levels, height: 24, color: isPlaying ? .blue : .blue.opacity(0.3))
-                        .animation(.easeInOut(duration: 0.3), value: isPlaying)
-                }
-
-                // Date and transcription indicator
-                HStack(spacing: 6) {
-                    Text(formatDateCompact(memoCreatedAt))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-
-                    if memo.isTranscribing {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                    } else if memo.transcription != nil {
-                        Image(systemName: "text.alignleft")
-                            .font(.caption2)
-                            .foregroundColor(.green)
-                    }
-                }
+            // Compact waveform with enhanced amplitude
+            if let waveformData = memo.waveformData,
+               let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
+                WaveformView(
+                    levels: enhanceAmplitude(levels),
+                    height: 28,
+                    color: isPlaying ? .blue : .gray.opacity(0.4)
+                )
+                .animation(.easeInOut(duration: 0.3), value: isPlaying)
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
         .contentShape(Rectangle())
         .onTapGesture {
             showingDetail = true
@@ -142,5 +129,15 @@ struct VoiceMemoRow: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func enhanceAmplitude(_ levels: [Float]) -> [Float] {
+        // Enhance amplitude differences for better visualization
+        return levels.map { level in
+            // Apply exponential curve to emphasize differences
+            let enhanced = pow(level, 0.6)
+            // Ensure minimum visibility
+            return max(enhanced, 0.15)
+        }
     }
 }

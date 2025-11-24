@@ -27,12 +27,12 @@ enum SortOption: String, CaseIterable {
         }
     }
 
-    var icon: String {
+    var menuIcon: String {
         switch self {
-        case .dateNewest: return "calendar.badge.clock"
-        case .dateOldest: return "calendar"
-        case .title: return "textformat.abc"
-        case .duration: return "timer"
+        case .dateNewest: return "arrow.down"
+        case .dateOldest: return "arrow.up"
+        case .title: return "textformat"
+        case .duration: return "clock"
         }
     }
 }
@@ -112,29 +112,34 @@ struct VoiceMemoListView: View {
             .navigationTitle("Voice Memos")
             .toolbar {
                 if !voiceMemos.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarItem(placement: .navigationBarLeading) {
                         Menu {
                             ForEach(SortOption.allCases, id: \.self) { option in
                                 Button(action: {
                                     sortOption = option
                                     sortDescriptors = [option.descriptor]
                                 }) {
-                                    HStack {
-                                        Text(option.rawValue)
-                                        if sortOption == option {
-                                            Image(systemName: "checkmark")
-                                        }
+                                    Label(option.rawValue, systemImage: option.menuIcon)
+                                    if sortOption == option {
+                                        Image(systemName: "checkmark")
                                     }
                                 }
                             }
                         } label: {
-                            Image(systemName: sortOption.icon)
-                                .foregroundColor(.blue)
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up.arrow.down")
+                                Text("Sort")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
                         }
                     }
 
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        EditButton()
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil.circle")
+                            EditButton()
+                        }
                     }
                 }
             }
