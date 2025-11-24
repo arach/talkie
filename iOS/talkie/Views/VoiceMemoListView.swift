@@ -47,10 +47,19 @@ struct VoiceMemoListView: View {
         ],
         animation: .default
     )
-    private var voiceMemos: FetchedResults<VoiceMemo>
+    private var allVoiceMemos: FetchedResults<VoiceMemo>
 
     @StateObject private var audioPlayer = AudioPlayerManager()
     @State private var showingRecordingView = false
+    @State private var displayLimit = 10
+
+    private var voiceMemos: [VoiceMemo] {
+        Array(allVoiceMemos.prefix(displayLimit))
+    }
+
+    private var hasMore: Bool {
+        allVoiceMemos.count > displayLimit
+    }
 
     var body: some View {
         NavigationView {
@@ -72,6 +81,26 @@ struct VoiceMemoListView: View {
                         }
                         .onDelete(perform: deleteMemos)
                         .onMove(perform: moveMemos)
+
+                        // Load More button
+                        if hasMore {
+                            Button(action: {
+                                withAnimation {
+                                    displayLimit += 10
+                                }
+                            }) {
+                                HStack {
+                                    Spacer()
+                                    Text("Load More (\(allVoiceMemos.count - displayLimit) remaining)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.blue)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 12)
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
                     }
                     .listStyle(.plain)
 
