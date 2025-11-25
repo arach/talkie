@@ -313,7 +313,7 @@ struct VoiceMemoDetailView: View {
         } else if let url = memoURL {
             audioPlayer.togglePlayPause(url: url)
         } else {
-            print("⚠️ No audio data or URL available for playback")
+            AppLogger.playback.warning("No audio data or URL available for playback")
         }
     }
 

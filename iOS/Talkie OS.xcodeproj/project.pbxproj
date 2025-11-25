@@ -23,6 +23,8 @@
 		53A921262ED5278E00BA0578 /* AnthropicProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A921232ED5278E00BA0578 /* AnthropicProvider.swift */; };
 		53A921272ED5278E00BA0578 /* OpenAIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A921242ED5278E00BA0578 /* OpenAIProvider.swift */; };
 		53A921282ED5278E00BA0578 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A921252ED5278E00BA0578 /* GroqProvider.swift */; };
+		53WF00012ED5300000BC034F /* WorkflowDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53WF00002ED5300000BC034F /* WorkflowDefinition.swift */; };
+		53WF00032ED5300100BC034F /* WorkflowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53WF00022ED5300100BC034F /* WorkflowViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,9 +59,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		539C69312ED39ADE00BC034F /* talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = talkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C69432ED39ADF00BC034F /* talkieTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = talkieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C694D2ED39ADF00BC034F /* talkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = talkieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69312ED39ADE00BC034F /* Talkie OS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie OS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C699D2ED43E5700BC034F /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Talkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C69AF2ED43E5A00BC034F /* TalkieTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C69B92ED43E5A00BC034F /* TalkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,16 +81,11 @@
 		53A921232ED5278E00BA0578 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AnthropicProvider.swift; path = ../macOS/Talkie/AnthropicProvider.swift; sourceTree = "<group>"; };
 		53A921242ED5278E00BA0578 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OpenAIProvider.swift; path = ../macOS/Talkie/OpenAIProvider.swift; sourceTree = "<group>"; };
 		53A921252ED5278E00BA0578 /* GroqProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroqProvider.swift; path = ../macOS/Talkie/GroqProvider.swift; sourceTree = "<group>"; };
+		53WF00002ED5300000BC034F /* WorkflowDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkflowDefinition.swift; path = ../macOS/Talkie/WorkflowDefinition.swift; sourceTree = "<group>"; };
+		53WF00022ED5300100BC034F /* WorkflowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkflowViews.swift; path = ../macOS/Talkie/WorkflowViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		539C69922ED3B0D900BC034F /* Exceptions for "talkie" folder in "talkie" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Resources/Info.plist,
-			);
-			target = 539C69302ED39ADE00BC034F /* talkie */;
-		};
 		539C6A0E2ED450E400BC034F /* Exceptions for "talkie" folder in "Talkie" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -120,7 +117,6 @@
 		539C69332ED39ADE00BC034F /* talkie */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				539C69922ED3B0D900BC034F /* Exceptions for "talkie" folder in "talkie" target */,
 				539C6A0E2ED450E400BC034F /* Exceptions for "talkie" folder in "Talkie" target */,
 			);
 			path = talkie;
@@ -216,6 +212,8 @@
 				539C6A222ED4C46400BC034F /* MemoRowView.swift */,
 				539C6A1E2ED4C44C00BC034F /* TalkieApp.swift */,
 				539C6A262ED4C50000BC034F /* WorkflowAction.swift */,
+				53WF00002ED5300000BC034F /* WorkflowDefinition.swift */,
+				53WF00022ED5300100BC034F /* WorkflowViews.swift */,
 				539C6A272ED4C50000BC034F /* GeminiService.swift */,
 				539C6A282ED4C50000BC034F /* WorkflowExecutor.swift */,
 				539C6A2C2ED4C60000BC034F /* SettingsManager.swift */,
@@ -234,9 +232,9 @@
 		539C69322ED39ADE00BC034F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				539C69312ED39ADE00BC034F /* talkie.app */,
-				539C69432ED39ADF00BC034F /* talkieTests.xctest */,
-				539C694D2ED39ADF00BC034F /* talkieUITests.xctest */,
+				539C69312ED39ADE00BC034F /* Talkie OS.app */,
+				539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */,
+				539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */,
 				539C699D2ED43E5700BC034F /* Talkie.app */,
 				539C69AF2ED43E5A00BC034F /* TalkieTests.xctest */,
 				539C69B92ED43E5A00BC034F /* TalkieUITests.xctest */,
@@ -247,9 +245,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		539C69302ED39ADE00BC034F /* talkie */ = {
+		539C69302ED39ADE00BC034F /* Talkie OS */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "talkie" */;
+			buildConfigurationList = 539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OS" */;
 			buildPhases = (
 				539C692D2ED39ADE00BC034F /* Sources */,
 				539C692E2ED39ADE00BC034F /* Frameworks */,
@@ -262,16 +260,16 @@
 			fileSystemSynchronizedGroups = (
 				539C69332ED39ADE00BC034F /* talkie */,
 			);
-			name = talkie;
+			name = "Talkie OS";
 			packageProductDependencies = (
 			);
 			productName = talkie;
-			productReference = 539C69312ED39ADE00BC034F /* talkie.app */;
+			productReference = 539C69312ED39ADE00BC034F /* Talkie OS.app */;
 			productType = "com.apple.product-type.application";
 		};
-		539C69422ED39ADF00BC034F /* talkieTests */ = {
+		539C69422ED39ADF00BC034F /* Talkie OSTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "talkieTests" */;
+			buildConfigurationList = 539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSTests" */;
 			buildPhases = (
 				539C693F2ED39ADF00BC034F /* Sources */,
 				539C69402ED39ADF00BC034F /* Frameworks */,
@@ -285,16 +283,16 @@
 			fileSystemSynchronizedGroups = (
 				539C69462ED39ADF00BC034F /* talkieTests */,
 			);
-			name = talkieTests;
+			name = "Talkie OSTests";
 			packageProductDependencies = (
 			);
 			productName = talkieTests;
-			productReference = 539C69432ED39ADF00BC034F /* talkieTests.xctest */;
+			productReference = 539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		539C694C2ED39ADF00BC034F /* talkieUITests */ = {
+		539C694C2ED39ADF00BC034F /* Talkie OSUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "talkieUITests" */;
+			buildConfigurationList = 539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSUITests" */;
 			buildPhases = (
 				539C69492ED39ADF00BC034F /* Sources */,
 				539C694A2ED39ADF00BC034F /* Frameworks */,
@@ -308,11 +306,11 @@
 			fileSystemSynchronizedGroups = (
 				539C69502ED39ADF00BC034F /* talkieUITests */,
 			);
-			name = talkieUITests;
+			name = "Talkie OSUITests";
 			packageProductDependencies = (
 			);
 			productName = talkieUITests;
-			productReference = 539C694D2ED39ADF00BC034F /* talkieUITests.xctest */;
+			productReference = 539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 		539C699C2ED43E5700BC034F /* Talkie */ = {
@@ -417,7 +415,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "talkie" */;
+			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie OS" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -431,9 +429,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				539C69302ED39ADE00BC034F /* talkie */,
-				539C69422ED39ADF00BC034F /* talkieTests */,
-				539C694C2ED39ADF00BC034F /* talkieUITests */,
+				539C69302ED39ADE00BC034F /* Talkie OS */,
+				539C69422ED39ADF00BC034F /* Talkie OSTests */,
+				539C694C2ED39ADF00BC034F /* Talkie OSUITests */,
 				539C699C2ED43E5700BC034F /* Talkie */,
 				539C69AE2ED43E5A00BC034F /* TalkieTests */,
 				539C69B82ED43E5A00BC034F /* TalkieUITests */,
@@ -523,6 +521,8 @@
 				539C6A252ED4C46400BC034F /* MemoRowView.swift in Sources */,
 				539C6A1F2ED4C44C00BC034F /* TalkieApp.swift in Sources */,
 				539C6A292ED4C50000BC034F /* WorkflowAction.swift in Sources */,
+				53WF00012ED5300000BC034F /* WorkflowDefinition.swift in Sources */,
+				53WF00032ED5300100BC034F /* WorkflowViews.swift in Sources */,
 				539C6A2A2ED4C50000BC034F /* GeminiService.swift in Sources */,
 				539C6A2B2ED4C50000BC034F /* WorkflowExecutor.swift in Sources */,
 				539C6A2E2ED4C60000BC034F /* SettingsManager.swift in Sources */,
@@ -550,12 +550,12 @@
 /* Begin PBXTargetDependency section */
 		539C69452ED39ADF00BC034F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 539C69302ED39ADE00BC034F /* talkie */;
+			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
 			targetProxy = 539C69442ED39ADF00BC034F /* PBXContainerItemProxy */;
 		};
 		539C694F2ED39ADF00BC034F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 539C69302ED39ADE00BC034F /* talkie */;
+			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
 			targetProxy = 539C694E2ED39ADF00BC034F /* PBXContainerItemProxy */;
 		};
 		539C69B12ED43E5A00BC034F /* PBXTargetDependency */ = {
@@ -703,20 +703,23 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = talkie/Resources/Info.plist;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs access to your microphone to record voice memos.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie uses speech recognition to transcribe your voice memos.";
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "jdi.talkie-os.refresh jdi.talkie-os.sync";
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
+				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "audio processing remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jdi.talkie;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -738,20 +741,23 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = talkie/Resources/Info.plist;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs access to your microphone to record voice memos.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie uses speech recognition to transcribe your voice memos.";
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "jdi.talkie-os.refresh jdi.talkie-os.sync";
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
+				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "audio processing remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jdi.talkie;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -772,12 +778,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkieTests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/talkie.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/talkie";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie OS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie OS";
 			};
 			name = Debug;
 		};
@@ -791,12 +797,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkieTests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/talkie.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/talkie";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie OS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie OS";
 			};
 			name = Release;
 		};
@@ -808,7 +814,7 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkieUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -825,7 +831,7 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkieUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -848,7 +854,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -856,7 +862,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jdi.talkie.mac;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -880,7 +886,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -888,7 +894,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jdi.talkie.mac;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -908,7 +914,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieTests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac-tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -927,7 +933,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieTests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac-tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -945,7 +951,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac-uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -963,7 +969,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac-uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -975,7 +981,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "talkie" */ = {
+		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie OS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C69552ED39ADF00BC034F /* Debug */,
@@ -984,7 +990,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "talkie" */ = {
+		539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C69582ED39ADF00BC034F /* Debug */,
@@ -993,7 +999,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "talkieTests" */ = {
+		539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C695B2ED39ADF00BC034F /* Debug */,
@@ -1002,7 +1008,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "talkieUITests" */ = {
+		539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C695E2ED39ADF00BC034F /* Debug */,

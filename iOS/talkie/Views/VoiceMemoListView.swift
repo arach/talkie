@@ -204,7 +204,7 @@ struct VoiceMemoListView: View {
                 try viewContext.save()
             } catch {
                 let nsError = error as NSError
-                print("Error deleting memo: \(nsError), \(nsError.userInfo)")
+                AppLogger.persistence.error("Error deleting memo: \(nsError.localizedDescription)")
             }
         }
     }
@@ -230,7 +230,7 @@ struct VoiceMemoListView: View {
         do {
             try viewContext.save()
         } catch {
-            print("Error moving memos: \(error)")
+            AppLogger.persistence.error("Error moving memos: \(error.localizedDescription)")
         }
     }
 }

@@ -255,9 +255,9 @@ struct RecordingView: View {
         do {
             let audioData = try Data(contentsOf: url)
             newMemo.audioData = audioData
-            print("✅ Audio data loaded: \(audioData.count) bytes")
+            AppLogger.recording.info("Audio data loaded: \(audioData.count) bytes")
         } catch {
-            print("⚠️ Failed to load audio data: \(error)")
+            AppLogger.recording.warning("Failed to load audio data: \(error.localizedDescription)")
         }
 
         // Save waveform data
@@ -266,14 +266,29 @@ struct RecordingView: View {
         }
 
         do {
+            // First save: persist the recording to Core Data (triggers iCloud sync)
             try viewContext.save()
-            print("✅ Memo saved with audio data for CloudKit sync")
+            AppLogger.persistence.info("Memo saved with audio data for CloudKit sync")
 
-            // Start transcription
-            TranscriptionService.shared.transcribeVoiceMemo(newMemo, context: viewContext)
+            // Get the memo's ObjectID for safe background access
+            let memoObjectID = newMemo.objectID
+
+            // Start transcription AFTER save is complete
+            // Use a slight delay to ensure the save has fully committed
+            // and iCloud sync has been initiated
+            Task { @MainActor in
+                // Small delay to ensure Core Data save is fully committed
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+                // Fetch the memo fresh to ensure we have the persisted version
+                if let savedMemo = viewContext.object(with: memoObjectID) as? VoiceMemo {
+                    AppLogger.transcription.info("Starting transcription for persisted memo")
+                    TranscriptionService.shared.transcribeVoiceMemo(savedMemo, context: viewContext)
+                }
+            }
         } catch {
             let nsError = error as NSError
-            print("❌ Error saving memo: \(nsError), \(nsError.userInfo)")
+            AppLogger.persistence.error("Error saving memo: \(nsError.localizedDescription)")
         }
     }
 

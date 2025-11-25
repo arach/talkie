@@ -32,7 +32,7 @@ class AudioRecorderManager: NSObject, ObservableObject {
             try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try audioSession.setActive(true)
         } catch {
-            print("Failed to set up audio session: \(error.localizedDescription)")
+            AppLogger.recording.error("Failed to set up audio session: \(error.localizedDescription)")
         }
     }
 
@@ -53,7 +53,7 @@ class AudioRecorderManager: NSObject, ObservableObject {
             audioRecorder?.isMeteringEnabled = true
 
             if audioRecorder?.record() == true {
-                print("Recording started at: \(audioFilename.path)")
+                AppLogger.recording.info("Recording started at: \(audioFilename.path)")
                 currentRecordingURL = audioFilename
                 isRecording = true
                 recordingDuration = 0
@@ -70,12 +70,11 @@ class AudioRecorderManager: NSObject, ObservableObject {
                     self?.updateAudioLevels()
                 }
             } else {
-                print("Failed to start recording - record() returned false")
+                AppLogger.recording.error("Failed to start recording - record() returned false")
             }
 
         } catch {
-            print("Failed to start recording: \(error)")
-            print("Error details: \(error.localizedDescription)")
+            AppLogger.recording.error("Failed to start recording: \(error.localizedDescription)")
         }
     }
 
@@ -87,15 +86,15 @@ class AudioRecorderManager: NSObject, ObservableObject {
 
         if let url = currentRecordingURL {
             let fileExists = FileManager.default.fileExists(atPath: url.path)
-            print("Recording stopped. File exists: \(fileExists) at \(url.path)")
+            AppLogger.recording.info("Recording stopped. File exists: \(fileExists) at \(url.path)")
 
             if fileExists {
                 do {
                     let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
                     let fileSize = attributes[.size] as? Int64 ?? 0
-                    print("File size: \(fileSize) bytes")
+                    AppLogger.recording.debug("File size: \(fileSize) bytes")
                 } catch {
-                    print("Could not get file attributes: \(error)")
+                    AppLogger.recording.warning("Could not get file attributes: \(error.localizedDescription)")
                 }
             }
         }
@@ -142,7 +141,7 @@ class AudioRecorderManager: NSObject, ObservableObject {
 extension AudioRecorderManager: AVAudioRecorderDelegate {
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         if !flag {
-            print("Recording failed")
+            AppLogger.recording.error("Recording failed")
         }
     }
 }

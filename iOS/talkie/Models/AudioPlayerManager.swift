@@ -32,7 +32,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
             try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.defaultToSpeaker])
             try audioSession.setActive(true)
         } catch {
-            print("Failed to setup audio session for playback: \(error.localizedDescription)")
+            AppLogger.playback.error("Failed to setup audio session for playback: \(error.localizedDescription)")
         }
     }
 
@@ -44,7 +44,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
 
         // Verify file exists
         guard FileManager.default.fileExists(atPath: url.path) else {
-            print("⚠️ Audio file does not exist at path: \(url.path)")
+            AppLogger.playback.warning("Audio file does not exist at path: \(url.path)")
             return
         }
 
@@ -59,7 +59,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
             duration = audioPlayer?.duration ?? 0
             currentPlayingURL = url
 
-            print("✅ Successfully loaded audio file: \(url.lastPathComponent), duration: \(duration)s")
+            AppLogger.playback.info("Successfully loaded audio file: \(url.lastPathComponent), duration: \(self.duration)s")
 
             audioPlayer?.play()
             isPlaying = true
@@ -71,8 +71,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
             }
 
         } catch {
-            print("❌ Failed to play audio at \(url.path): \(error)")
-            print("Error details: \(error.localizedDescription)")
+            AppLogger.playback.error("Failed to play audio at \(url.path): \(error.localizedDescription)")
         }
     }
 
@@ -90,7 +89,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
             audioPlayer?.prepareToPlay()
             duration = audioPlayer?.duration ?? 0
 
-            print("✅ Successfully loaded audio from data: \(data.count) bytes, duration: \(duration)s")
+            AppLogger.playback.info("Successfully loaded audio from data: \(data.count) bytes, duration: \(self.duration)s")
 
             audioPlayer?.play()
             isPlaying = true
@@ -102,7 +101,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
             }
 
         } catch {
-            print("❌ Failed to play audio from data: \(error)")
+            AppLogger.playback.error("Failed to play audio from data: \(error.localizedDescription)")
         }
     }
 

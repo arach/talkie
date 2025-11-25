@@ -57,7 +57,7 @@ class TranscriptionService {
 
     func transcribeVoiceMemo(_ memo: VoiceMemo, context: NSManagedObjectContext) {
         guard let filename = memo.fileURL else {
-            print("No filename for transcription")
+            AppLogger.transcription.warning("No filename for transcription")
             return
         }
 
@@ -66,7 +66,7 @@ class TranscriptionService {
         let url = documentsPath.appendingPathComponent(filename)
 
         guard FileManager.default.fileExists(atPath: url.path) else {
-            print("Audio file doesn't exist at \(url.path)")
+            AppLogger.transcription.warning("Audio file doesn't exist at \(url.path)")
             return
         }
 
@@ -78,7 +78,7 @@ class TranscriptionService {
             guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else { return }
             memo.isTranscribing = true
             try? context.save()
-            print("Starting transcription for: \(filename)")
+            AppLogger.transcription.info("Starting transcription for: \(filename)")
         }
 
         // Do transcription work
@@ -89,26 +89,26 @@ class TranscriptionService {
             context.perform {
                 // Fetch the memo in this context using objectID
                 guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else {
-                    print("Failed to fetch memo in background context")
+                    AppLogger.transcription.error("Failed to fetch memo in background context")
                     return
                 }
 
                 switch result {
                 case .success(let transcription):
-                    print("Transcription succeeded: \(transcription.prefix(50))...")
+                    AppLogger.transcription.info("Transcription succeeded: \(transcription.prefix(50))...")
                     memo.transcription = transcription
                     memo.isTranscribing = false
 
                 case .failure(let error):
-                    print("Transcription failed: \(error.localizedDescription)")
+                    AppLogger.transcription.error("Transcription failed: \(error.localizedDescription)")
                     memo.isTranscribing = false
                 }
 
                 do {
                     try context.save()
-                    print("Transcription saved successfully to Core Data")
+                    AppLogger.persistence.info("Transcription saved successfully to Core Data")
                 } catch {
-                    print("Failed to save transcription: \(error.localizedDescription)")
+                    AppLogger.persistence.error("Failed to save transcription: \(error.localizedDescription)")
                 }
             }
         }

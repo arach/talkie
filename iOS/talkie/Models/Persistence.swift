@@ -59,11 +59,11 @@ struct PersistenceController {
         container.loadPersistentStores { storeDescription, error in
             if let error = error as NSError? {
                 // Log the error instead of crashing
-                print("Core Data store failed to load: \(error), \(error.userInfo)")
-                print("Store description: \(storeDescription)")
+                AppLogger.persistence.error("Core Data store failed to load: \(error.localizedDescription)")
+                AppLogger.persistence.debug("Store description: \(storeDescription)")
             } else {
-                print("✅ Core Data loaded successfully")
-                print("Store: \(storeDescription)")
+                AppLogger.persistence.info("Core Data loaded successfully")
+                AppLogger.persistence.debug("Store: \(storeDescription)")
             }
         }
 
