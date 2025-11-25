@@ -2,6 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- CloudKit & iCloud -->
 	<key>com.apple.developer.aps-environment</key>
 	<string>development</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
@@ -12,13 +13,25 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
+
+	<!-- App Sandbox -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<key>com.apple.security.files.user-selected.read-only</key>
-	<true/>
+
+	<!-- Network Access (required for downloading models from HuggingFace) -->
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>com.apple.security.network.server</key>
+
+	<!-- File Access -->
+	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
+	<!-- Application Support Directory Access (for model storage) -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.jdi.talkie</string>
+	</array>
 </dict>
 </plist>

@@ -12,6 +12,9 @@ class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
     @Published var geminiApiKey: String = ""
+    @Published var openaiApiKey: String?
+    @Published var anthropicApiKey: String?
+    @Published var groqApiKey: String?
     @Published var selectedModel: String = "gemini-1.5-flash-latest"
 
     private var context: NSManagedObjectContext {

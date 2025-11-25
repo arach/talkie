@@ -14,7 +14,10 @@
       "Bash(system_profiler:*)",
       "Bash(mv:*)",
       "Bash(cat:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(swift package:*)",
+      "Bash(codesign:*)",
+      "Bash(killall:*)"
     ],
     "deny": [],
     "ask": []

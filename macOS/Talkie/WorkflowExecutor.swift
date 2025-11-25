@@ -8,10 +8,12 @@
 import Foundation
 import CoreData
 
+// GenerationOptions is imported from LLMProvider.swift
+
 class WorkflowExecutor {
     static let shared = WorkflowExecutor()
 
-    private let geminiService = GeminiService.shared
+    private let geminiService = GeminiProvider.shared
 
     private init() {}
 
@@ -34,7 +36,21 @@ class WorkflowExecutor {
 
         do {
             let config = WorkflowConfig(actionType: action, model: model)
-            let result = try await geminiService.executeWorkflow(config: config, transcript: transcript)
+            let prompt = config.prompt(with: transcript)
+
+            // Generate using new provider interface
+            let options = GenerationOptions() // Use default options
+            let output = try await geminiService.generate(
+                prompt: prompt,
+                model: model.rawValue,
+                options: options
+            )
+
+            let result = WorkflowResult(
+                actionType: action,
+                output: output,
+                model: model
+            )
 
             // Save result to Core Data
             await MainActor.run {

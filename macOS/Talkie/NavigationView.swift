@@ -553,43 +553,4 @@ struct ActivityLogContentView: View {
     }
 }
 
-struct ModelsContentView: View {
-    @ObservedObject var settingsManager = SettingsManager.shared
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "brain")
-                            .font(.system(size: 16))
-                        Text("MODELS")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                    }
-                    .foregroundColor(.primary)
-
-                    Text("Configure AI models and API settings.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-
-                Divider()
-
-                // API Settings
-                APISettingsView(settingsManager: settingsManager)
-
-                Divider()
-
-                // Model Library
-                ModelLibraryView()
-
-                Spacer()
-            }
-            .padding(32)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
-    }
-}
+// ModelsContentView is now in its own file: ModelsContentView.swift

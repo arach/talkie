@@ -17,6 +17,12 @@
 		539C6A2E2ED4C60000BC034F /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 539C6A2C2ED4C60000BC034F /* SettingsManager.swift */; };
 		539C6A2F2ED4C60000BC034F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 539C6A2D2ED4C60000BC034F /* SettingsView.swift */; };
 		539C6A312ED4C70000BC034F /* NavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 539C6A302ED4C70000BC034F /* NavigationView.swift */; };
+		53A921202ED505D100BA0578 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A9211D2ED505D100BA0578 /* LLMProvider.swift */; };
+		53A921212ED505D100BA0578 /* MLXProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A9211E2ED505D100BA0578 /* MLXProvider.swift */; };
+		53A921222ED505D100BA0578 /* ModelsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A9211F2ED505D100BA0578 /* ModelsContentView.swift */; };
+		53A921262ED5278E00BA0578 /* AnthropicProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A921232ED5278E00BA0578 /* AnthropicProvider.swift */; };
+		53A921272ED5278E00BA0578 /* OpenAIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A921242ED5278E00BA0578 /* OpenAIProvider.swift */; };
+		53A921282ED5278E00BA0578 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A921252ED5278E00BA0578 /* GroqProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +73,12 @@
 		539C6A2C2ED4C60000BC034F /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsManager.swift; path = ../macOS/Talkie/SettingsManager.swift; sourceTree = "<group>"; };
 		539C6A2D2ED4C60000BC034F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsView.swift; path = ../macOS/Talkie/SettingsView.swift; sourceTree = "<group>"; };
 		539C6A302ED4C70000BC034F /* NavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NavigationView.swift; path = ../macOS/Talkie/NavigationView.swift; sourceTree = "<group>"; };
+		53A9211D2ED505D100BA0578 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LLMProvider.swift; path = ../macOS/Talkie/LLMProvider.swift; sourceTree = "<group>"; };
+		53A9211E2ED505D100BA0578 /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MLXProvider.swift; path = ../macOS/Talkie/MLXProvider.swift; sourceTree = "<group>"; };
+		53A9211F2ED505D100BA0578 /* ModelsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ModelsContentView.swift; path = ../macOS/Talkie/ModelsContentView.swift; sourceTree = "<group>"; };
+		53A921232ED5278E00BA0578 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AnthropicProvider.swift; path = ../macOS/Talkie/AnthropicProvider.swift; sourceTree = "<group>"; };
+		53A921242ED5278E00BA0578 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OpenAIProvider.swift; path = ../macOS/Talkie/OpenAIProvider.swift; sourceTree = "<group>"; };
+		53A921252ED5278E00BA0578 /* GroqProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroqProvider.swift; path = ../macOS/Talkie/GroqProvider.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -193,6 +205,12 @@
 		539C69282ED39ADE00BC034F = {
 			isa = PBXGroup;
 			children = (
+				53A921232ED5278E00BA0578 /* AnthropicProvider.swift */,
+				53A921252ED5278E00BA0578 /* GroqProvider.swift */,
+				53A921242ED5278E00BA0578 /* OpenAIProvider.swift */,
+				53A9211D2ED505D100BA0578 /* LLMProvider.swift */,
+				53A9211E2ED505D100BA0578 /* MLXProvider.swift */,
+				53A9211F2ED505D100BA0578 /* ModelsContentView.swift */,
 				539C6A202ED4C46400BC034F /* ContentView.swift */,
 				539C6A212ED4C46400BC034F /* MemoDetailView.swift */,
 				539C6A222ED4C46400BC034F /* MemoRowView.swift */,
@@ -494,6 +512,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				53A921262ED5278E00BA0578 /* AnthropicProvider.swift in Sources */,
+				53A921272ED5278E00BA0578 /* OpenAIProvider.swift in Sources */,
+				53A921282ED5278E00BA0578 /* GroqProvider.swift in Sources */,
+				53A921202ED505D100BA0578 /* LLMProvider.swift in Sources */,
+				53A921212ED505D100BA0578 /* MLXProvider.swift in Sources */,
+				53A921222ED505D100BA0578 /* ModelsContentView.swift in Sources */,
 				539C6A232ED4C46400BC034F /* ContentView.swift in Sources */,
 				539C6A242ED4C46400BC034F /* MemoDetailView.swift in Sources */,
 				539C6A252ED4C46400BC034F /* MemoRowView.swift in Sources */,
