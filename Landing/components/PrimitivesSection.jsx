@@ -17,10 +17,9 @@ export default function PrimitivesSection() {
           </p>
         </div>
 
-        <div className="mt-8 md:mt-10 grid gap-5 md:gap-6 xl:gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 md:mt-10 grid gap-5 md:gap-6 xl:gap-8 md:[grid-template-columns:1fr_1fr] lg:[grid-template-columns:2fr_1.25fr_1fr]">
           {/* Big left card (spans 2 cols) */}
-          <Reveal className="relative md:col-span-2 overflow-hidden panel panel-hover p-6 xl:p-7 bg-zinc-950/80">
-            <div className="inner-frame" />
+          <Reveal className="relative md:col-span-2 lg:col-span-1 overflow-hidden panel panel-hover p-6 xl:p-7 bg-zinc-950/80">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-100">
                 <Zap className="w-4 h-4" />
@@ -34,11 +33,12 @@ export default function PrimitivesSection() {
 
             {/* inner panel ring for code-like pipeline */}
             <div className="mt-6 rounded-[6px] border border-zinc-800/60 p-4 bg-zinc-950/30">
-              <div className="pl-4 border-l border-zinc-800/80">
+              <div className="pl-4">
                 <Row dotClass="bg-zinc-500" connector>Input: Audio Recording (RAW)</Row>
                 <Row dotClass="bg-zinc-500" connector>Process: Whisper (Quantized)</Row>
+                <Row dotClass="bg-sky-400" connector>LLM: Summarize & Extract Tasks</Row>
                 <Row dotClass="bg-emerald-500">
-                  Output: <span className="font-semibold">Notion Page</span> / PDF
+                  Output: <span className="font-semibold">Draft Email</span> / Notion Page
                 </Row>
               </div>
             </div>
@@ -53,7 +53,7 @@ export default function PrimitivesSection() {
           </Reveal>
 
           {/* On‑device card (tall) */}
-          <Reveal delay={80} className="row-span-2 min-h-[280px] xl:min-h-[320px] panel panel-hover p-5 md:p-6 xl:p-7 bg-zinc-950/70">
+          <Reveal delay={80} className="row-span-2 lg:row-span-2 min-h-[280px] xl:min-h-[320px] panel panel-hover p-5 md:p-6 xl:p-7 bg-zinc-950/70">
             <div className="flex items-center gap-3">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-zinc-100">
                 <Lock className="w-3.5 h-3.5" />

@@ -18,6 +18,7 @@ import PrimitivesSection from './PrimitivesSection'
 import Container from './Container'
 import HeroBadge from './HeroBadge'
 import PricingSection from './PricingSection'
+import ThemeToggle from './ThemeToggle'
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
@@ -70,7 +71,7 @@ export default function LandingPage() {
             </div>
             <span className="font-bold text-base tracking-tight font-mono uppercase">Talkie_OS</span>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-[10px] font-mono font-bold uppercase tracking-[0.22em]">
+          <div className="hidden md:flex items-center gap-6 text-[10px] font-mono font-bold uppercase tracking-[0.22em]">
             <a
               href="#get"
               className={`relative cursor-pointer transition-colors ${
@@ -197,6 +198,8 @@ export default function LandingPage() {
           <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-zinc-400">© {new Date().getFullYear()} Talkie Systems Inc.</p>
         </Container>
       </footer>
+      {/* Floating, understated theme toggle */}
+      <ThemeToggle />
     </div>
   )
 }

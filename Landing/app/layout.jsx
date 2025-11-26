@@ -48,8 +48,19 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetmono.variable}`}>
+    <html lang="en" className={`${inter.variable} ${jetmono.variable} dark`}>
       <head>
+        {/* Apply saved/system theme before paint to prevent FOUC */}
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`
+            try {
+              const stored = localStorage.getItem('theme');
+              const useDark = stored ? stored === 'dark' : true; // default to dark first
+              const root = document.documentElement;
+              if (useDark) root.classList.add('dark'); else root.classList.remove('dark');
+            } catch (e) {}
+          `}
+        </Script>
         {/* Google Analytics */}
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-EP7F8TC801"
