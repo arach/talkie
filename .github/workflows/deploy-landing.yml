@@ -32,7 +32,7 @@ jobs:
           node-version: '20'
       - name: Install deps
         run: npm install
-      - name: Build
+      - name: Build (static export)
         run: npm run build
         env:
           GITHUB_ACTIONS: true
@@ -40,14 +40,7 @@ jobs:
           NEXT_PUBLIC_FORMSPREE_ID: ${{ secrets.FORMSPREE_ID }}
           NEXT_PUBLIC_REGULAR_PRICE: ${{ vars.REGULAR_PRICE }}
           NEXT_PUBLIC_LAUNCH_PRICE: ${{ vars.LAUNCH_PRICE }}
-      - name: Export static site
-        run: npm run export
-        env:
-          GITHUB_ACTIONS: true
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          NEXT_PUBLIC_FORMSPREE_ID: ${{ secrets.FORMSPREE_ID }}
-          NEXT_PUBLIC_REGULAR_PRICE: ${{ vars.REGULAR_PRICE }}
-          NEXT_PUBLIC_LAUNCH_PRICE: ${{ vars.LAUNCH_PRICE }}
+      # next build with output: 'export' emits static site to ./out — no separate export step needed
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
