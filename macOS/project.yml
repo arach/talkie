@@ -1,0 +1,32 @@
+name: Talkie
+options:
+  bundleIdPrefix: jdi
+  deploymentTarget:
+    macOS: "13.0"
+  developmentLanguage: en
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: 2U83JFPW66
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+
+targets:
+  Talkie:
+    type: application
+    platform: macOS
+    sources:
+      - path: Talkie
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie-os-mac
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        CODE_SIGN_ENTITLEMENTS: Talkie/Talkie.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
+        INFOPLIST_KEY_NSAppleEventsUsageDescription: "Talkie needs to communicate with Notes, Reminders, and Calendar to save your voice memo content."

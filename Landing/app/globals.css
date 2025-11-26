@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base tweaks */
+html, body { height: 100%; }
+html { scroll-behavior: smooth; }
+
+/* Utilities */
+.btn-primary { @apply rounded-md bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-soft hover:bg-primary-700; }
+.btn-outline { @apply rounded-md border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50; }
+.btn-ghost { @apply rounded-md border border-zinc-200/50 dark:border-zinc-700/60 bg-white/70 dark:bg-zinc-950/60 backdrop-blur px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 hover:bg-white/90 dark:hover:bg-zinc-900/80; }
+.pill { @apply rounded-full border border-zinc-300/70 dark:border-zinc-700/70 bg-white/70 dark:bg-zinc-950/60 backdrop-blur px-4 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100 hover:bg-white/90 dark:hover:bg-zinc-900/80 transition-colors; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 20px -12px rgba(2,6,23,0.25); }
+.pill:focus-visible { outline: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 0 2px rgba(2,6,23,0.15), 0 10px 28px -14px rgba(2,6,23,0.35); }
+
+/* Tactical grid backgrounds for design */
+.bg-tactical-grid {
+  background-image:
+    linear-gradient(to right, rgba(2,6,23,0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(2,6,23,0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.dark .bg-tactical-grid,
+.bg-tactical-grid-dark {
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Subtle film grain */
+.bg-noise { background-image: url('/noise.svg'); background-repeat: repeat; background-size: 200px 200px; opacity: .03; }
+
+/* Hero gradient vignette */
+.bg-hero-gradient { background: radial-gradient(120% 80% at 50% 0%, rgba(0,0,0,.08), transparent 60%); }
+
+/* Subtle focus rings */
+.focus-visible:outline-none:focus-visible {
+  box-shadow: 0 0 0 2px rgba(250,250,250,0.08);
+}
+
+/* Map mono font to GA-loaded JetBrains Mono variable */
+.font-mono { font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+/* Reveal animations */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal { opacity: 0; transform: translateY(12px); transition: opacity .35s ease, transform .35s ease; }
+  .reveal-in { opacity: 1; transform: translateY(0); }
+}
+
+/* Design tokens for radii/spacing - applied via utilities in code */
+:root {
+  --radius: 8px;
+}
+
+/* Panel surface (cards) */
+.panel { @apply rounded-md border border-zinc-800 bg-zinc-900; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
+.panel-hover { transition: transform .2s ease-out, box-shadow .2s ease-out; }
+.panel-hover:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03); }
+
+/* Divider hairline */
+.hairline { background: linear-gradient(to right, rgba(255,255,255,0.0), rgba(255,255,255,0.08), rgba(255,255,255,0.0)); height: 1px; opacity: .6; }
+
+/* Bracket corners for pricing card */
+.bracket { position: relative; }
+.bracket:before,
+.bracket:after,
+.bracket > .br:before,
+.bracket > .br:after { content: ""; position: absolute; width: 10px; height: 10px; border-color: rgba(255,255,255,0.3); }
+.bracket:before { left: 0; top: 0; border-left: 1px solid; border-top: 1px solid; }
+.bracket:after { right: 0; top: 0; border-right: 1px solid; border-top: 1px solid; }
+.bracket > .br:before { left: 0; bottom: 0; border-left: 1px solid; border-bottom: 1px solid; }
+.bracket > .br:after { right: 0; bottom: 0; border-right: 1px solid; border-bottom: 1px solid; }
+
+/* Inner frame for large cards */
+.inner-frame { position: absolute; inset: 12px; border: 1px solid rgba(255,255,255,0.06); pointer-events: none; border-radius: 4px; }

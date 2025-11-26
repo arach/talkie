@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b0b0b"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#g)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <text x="80" y="310" font-family="Inter, ui-sans-serif, system-ui" font-size="84" font-weight="800" fill="#fff">Talkie</text>
+  <text x="80" y="380" font-family="JetBrains Mono, ui-monospace, SFMono-Regular" font-size="22" fill="rgba(255,255,255,0.7)">Voice memos that think with you</text>
+</svg>
+

@@ -1,0 +1,454 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		08DE6F8EECE2C98D49F6D7B7 /* ModelsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */; };
+		107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */; };
+		123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96107EE13719761E10A69B43 /* TalkieApp.swift */; };
+		14A7C2FC561959C8A828FDDC /* WorkflowExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */; };
+		30586490648C90923277B31B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2BABB2A599587B53D1C8F8E6 /* Assets.xcassets */; };
+		4C81B1B6F7050791F5B8BC2C /* GeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC57A7E03EC8CAD3BA267D1 /* GeminiService.swift */; };
+		5A5438F817916C90E382D61D /* MLXProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ADA028D69ADAFECFB2C122C /* MLXProvider.swift */; };
+		5BD3C063C7AA17132AD940A3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 888D73AFBB1C2ECD155F2455 /* ContentView.swift */; };
+		5C8D73C95973BEDB0418F46A /* AnthropicProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7DBC6AC45B5F36375DA880 /* AnthropicProvider.swift */; };
+		616C1BAAF1AA835E650A9FE0 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36E93046E4E6FE29C1208DB2 /* LLMProvider.swift */; };
+		694FB95D3C8FBDE6C5468854 /* WorkflowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D622DF99A06064E75BE6360 /* WorkflowViews.swift */; };
+		6EAEE8C2BDB5B9031E6830FA /* OpenAIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98D56A7AE26D6931EB54118 /* OpenAIProvider.swift */; };
+		80FD41650E34CD7245D7C1CD /* NavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA047104B464861CD52728B0 /* NavigationView.swift */; };
+		A07ED69ED8E7F9AE9BD61FEC /* WorkflowAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F55812343FAF92F60D28E19 /* WorkflowAction.swift */; };
+		A8C87460310157A80C6A3B4A /* MemoRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6919ADEAE61E04AD110C560F /* MemoRowView.swift */; };
+		BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */; };
+		C34996CAF5EB3C4F21F1B559 /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A5E5501D5B93090C1EE4CFC /* Persistence.swift */; };
+		CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D422F2CF033DE6FEF9728A4A /* SettingsView.swift */; };
+		DED75650BF9B89BF7DE94F06 /* MemoDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE81C0FD66EBEFF8002D848 /* MemoDetailView.swift */; };
+		F5F06E5237A90BC70DCA3D04 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E576665EAA2E96350EBB048A /* GroqProvider.swift */; };
+		FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 221F1F73B64929D9AA318F9E /* talkie.xcdatamodeld */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutor.swift; sourceTree = "<group>"; };
+		188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsContentView.swift; sourceTree = "<group>"; };
+		1A5E5501D5B93090C1EE4CFC /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
+		1ADA028D69ADAFECFB2C122C /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
+		2BABB2A599587B53D1C8F8E6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		36E93046E4E6FE29C1208DB2 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
+		6919ADEAE61E04AD110C560F /* MemoRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoRowView.swift; sourceTree = "<group>"; };
+		6B228E4044C6AFC31BBDE3C6 /* Talkie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Talkie.entitlements; sourceTree = "<group>"; };
+		7D622DF99A06064E75BE6360 /* WorkflowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowViews.swift; sourceTree = "<group>"; };
+		7F55812343FAF92F60D28E19 /* WorkflowAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowAction.swift; sourceTree = "<group>"; };
+		86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		888D73AFBB1C2ECD155F2455 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		8DE81C0FD66EBEFF8002D848 /* MemoDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoDetailView.swift; sourceTree = "<group>"; };
+		92173E2C177853E5ADD8A345 /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Talkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		95658B54C871F5DB7FC1429E /* talkie.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = talkie.xcdatamodel; sourceTree = "<group>"; };
+		96107EE13719761E10A69B43 /* TalkieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieApp.swift; sourceTree = "<group>"; };
+		AF7DBC6AC45B5F36375DA880 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProvider.swift; sourceTree = "<group>"; };
+		B98D56A7AE26D6931EB54118 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
+		D422F2CF033DE6FEF9728A4A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		DBC57A7E03EC8CAD3BA267D1 /* GeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiService.swift; sourceTree = "<group>"; };
+		E576665EAA2E96350EBB048A /* GroqProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqProvider.swift; sourceTree = "<group>"; };
+		EA047104B464861CD52728B0 /* NavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationView.swift; sourceTree = "<group>"; };
+		FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowDefinition.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1984160F4CDC0703A74ABA82 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				888D73AFBB1C2ECD155F2455 /* ContentView.swift */,
+				8DE81C0FD66EBEFF8002D848 /* MemoDetailView.swift */,
+				6919ADEAE61E04AD110C560F /* MemoRowView.swift */,
+				188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */,
+				EA047104B464861CD52728B0 /* NavigationView.swift */,
+				D422F2CF033DE6FEF9728A4A /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		28D24438172D1EDE9F6C188D /* LLM */ = {
+			isa = PBXGroup;
+			children = (
+				AF7DBC6AC45B5F36375DA880 /* AnthropicProvider.swift */,
+				DBC57A7E03EC8CAD3BA267D1 /* GeminiService.swift */,
+				E576665EAA2E96350EBB048A /* GroqProvider.swift */,
+				36E93046E4E6FE29C1208DB2 /* LLMProvider.swift */,
+				1ADA028D69ADAFECFB2C122C /* MLXProvider.swift */,
+				B98D56A7AE26D6931EB54118 /* OpenAIProvider.swift */,
+			);
+			path = LLM;
+			sourceTree = "<group>";
+		};
+		3C6A910C9E66A64213122BE1 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				96107EE13719761E10A69B43 /* TalkieApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		6567D7B64FADBC03115A6088 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				1A5E5501D5B93090C1EE4CFC /* Persistence.swift */,
+				221F1F73B64929D9AA318F9E /* talkie.xcdatamodeld */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		6B1BD9F1258C9847A6B79B56 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */,
+				28D24438172D1EDE9F6C188D /* LLM */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		BBEF53A431CD4D10F1B0ABF4 = {
+			isa = PBXGroup;
+			children = (
+				C706A4014175EC99A868519B /* Talkie */,
+				EC3EE94DAAE074F1D0B4D2E1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BCE703377263E0FF67BFB409 /* Workflow */ = {
+			isa = PBXGroup;
+			children = (
+				7F55812343FAF92F60D28E19 /* WorkflowAction.swift */,
+				FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */,
+				16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */,
+				7D622DF99A06064E75BE6360 /* WorkflowViews.swift */,
+			);
+			path = Workflow;
+			sourceTree = "<group>";
+		};
+		C706A4014175EC99A868519B /* Talkie */ = {
+			isa = PBXGroup;
+			children = (
+				2BABB2A599587B53D1C8F8E6 /* Assets.xcassets */,
+				6B228E4044C6AFC31BBDE3C6 /* Talkie.entitlements */,
+				3C6A910C9E66A64213122BE1 /* App */,
+				6567D7B64FADBC03115A6088 /* Models */,
+				6B1BD9F1258C9847A6B79B56 /* Services */,
+				1984160F4CDC0703A74ABA82 /* Views */,
+				BCE703377263E0FF67BFB409 /* Workflow */,
+			);
+			path = Talkie;
+			sourceTree = "<group>";
+		};
+		EC3EE94DAAE074F1D0B4D2E1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				92173E2C177853E5ADD8A345 /* Talkie.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1EB6D14809D2E04C6D77B8BC /* Talkie */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5B858D37600594C5F58FDB22 /* Build configuration list for PBXNativeTarget "Talkie" */;
+			buildPhases = (
+				EA194AA771EAE7B4558378F9 /* Sources */,
+				50E43F8F207F190E1D0EBDAD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Talkie;
+			packageProductDependencies = (
+			);
+			productName = Talkie;
+			productReference = 92173E2C177853E5ADD8A345 /* Talkie.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1DA5ACDD0A68FC39CAEAE97F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					1EB6D14809D2E04C6D77B8BC = {
+						DevelopmentTeam = 2U83JFPW66;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 585B82EC452E00A8B77B93CB /* Build configuration list for PBXProject "Talkie" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = BBEF53A431CD4D10F1B0ABF4;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1EB6D14809D2E04C6D77B8BC /* Talkie */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		50E43F8F207F190E1D0EBDAD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				30586490648C90923277B31B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		EA194AA771EAE7B4558378F9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C8D73C95973BEDB0418F46A /* AnthropicProvider.swift in Sources */,
+				5BD3C063C7AA17132AD940A3 /* ContentView.swift in Sources */,
+				4C81B1B6F7050791F5B8BC2C /* GeminiService.swift in Sources */,
+				F5F06E5237A90BC70DCA3D04 /* GroqProvider.swift in Sources */,
+				616C1BAAF1AA835E650A9FE0 /* LLMProvider.swift in Sources */,
+				5A5438F817916C90E382D61D /* MLXProvider.swift in Sources */,
+				DED75650BF9B89BF7DE94F06 /* MemoDetailView.swift in Sources */,
+				A8C87460310157A80C6A3B4A /* MemoRowView.swift in Sources */,
+				08DE6F8EECE2C98D49F6D7B7 /* ModelsContentView.swift in Sources */,
+				80FD41650E34CD7245D7C1CD /* NavigationView.swift in Sources */,
+				6EAEE8C2BDB5B9031E6830FA /* OpenAIProvider.swift in Sources */,
+				C34996CAF5EB3C4F21F1B559 /* Persistence.swift in Sources */,
+				107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */,
+				CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */,
+				123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */,
+				A07ED69ED8E7F9AE9BD61FEC /* WorkflowAction.swift in Sources */,
+				BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */,
+				14A7C2FC561959C8A828FDDC /* WorkflowExecutor.swift in Sources */,
+				694FB95D3C8FBDE6C5468854 /* WorkflowViews.swift in Sources */,
+				FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2FF144DA7AD84F12E3A3078D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		7AB8853241868424A718C541 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Talkie/Talkie.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie needs to communicate with Notes, Reminders, and Calendar to save your voice memo content.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		85DD8245F46E2472FE2DCF47 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		B34B41DB1BD03F89BC5E4A4D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Talkie/Talkie.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie needs to communicate with Notes, Reminders, and Calendar to save your voice memo content.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		585B82EC452E00A8B77B93CB /* Build configuration list for PBXProject "Talkie" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2FF144DA7AD84F12E3A3078D /* Debug */,
+				85DD8245F46E2472FE2DCF47 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5B858D37600594C5F58FDB22 /* Build configuration list for PBXNativeTarget "Talkie" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B34B41DB1BD03F89BC5E4A4D /* Debug */,
+				7AB8853241868424A718C541 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCVersionGroup section */
+		221F1F73B64929D9AA318F9E /* talkie.xcdatamodeld */ = {
+			isa = XCVersionGroup;
+			children = (
+				95658B54C871F5DB7FC1429E /* talkie.xcdatamodel */,
+			);
+			currentVersion = 95658B54C871F5DB7FC1429E /* talkie.xcdatamodel */;
+			path = talkie.xcdatamodeld;
+			sourceTree = "<group>";
+			versionGroupType = wrapper.xcdatamodel;
+		};
+/* End XCVersionGroup section */
+	};
+	rootObject = 1DA5ACDD0A68FC39CAEAE97F /* Project object */;
+}
