@@ -196,49 +196,6 @@ struct TalkieNavigationView: View {
 
             // Navigation sections
             List(selection: $selectedSection) {
-                Section("TOOLS") {
-                    NavigationLink(value: NavigationSection.aiResults) {
-                        Label {
-                            Text("AI Results")
-                                .font(.system(size: 11, design: .monospaced))
-                        } icon: {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 10))
-                        }
-                    }
-
-                    NavigationLink(value: NavigationSection.workflows) {
-                        Label {
-                            Text("Workflows")
-                                .font(.system(size: 11, design: .monospaced))
-                        } icon: {
-                            Image(systemName: "wand.and.stars")
-                                .font(.system(size: 10))
-                        }
-                    }
-
-                    NavigationLink(value: NavigationSection.models) {
-                        Label {
-                            Text("Models")
-                                .font(.system(size: 11, design: .monospaced))
-                        } icon: {
-                            Image(systemName: "brain")
-                                .font(.system(size: 10))
-                        }
-                    }
-
-                    NavigationLink(value: NavigationSection.systemConsole) {
-                        Label {
-                            Text("Console")
-                                .font(.system(size: 11, design: .monospaced))
-                        } icon: {
-                            Image(systemName: "terminal")
-                                .font(.system(size: 10))
-                        }
-                    }
-                }
-                .collapsible(false)
-
                 Section("LIBRARY") {
                     NavigationLink(value: NavigationSection.allMemos) {
                         Label {
@@ -294,37 +251,44 @@ struct TalkieNavigationView: View {
                 }
                 .collapsible(false)
 
-                Section("SMART FOLDERS") {
-                    NavigationLink(value: NavigationSection.smartFolder("Work")) {
+                Section("TOOLS") {
+                    NavigationLink(value: NavigationSection.aiResults) {
                         Label {
-                            Text("Work")
+                            Text("Activity Log")
                                 .font(.system(size: 11, design: .monospaced))
                         } icon: {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 8, height: 8)
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 10))
                         }
                     }
 
-                    NavigationLink(value: NavigationSection.smartFolder("Ideas")) {
+                    NavigationLink(value: NavigationSection.workflows) {
                         Label {
-                            Text("Ideas")
+                            Text("Workflows")
                                 .font(.system(size: 11, design: .monospaced))
                         } icon: {
-                            Circle()
-                                .fill(Color.orange)
-                                .frame(width: 8, height: 8)
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 10))
                         }
                     }
 
-                    NavigationLink(value: NavigationSection.smartFolder("Personal")) {
+                    NavigationLink(value: NavigationSection.models) {
                         Label {
-                            Text("Personal")
+                            Text("Models")
                                 .font(.system(size: 11, design: .monospaced))
                         } icon: {
-                            Circle()
-                                .fill(Color.purple)
-                                .frame(width: 8, height: 8)
+                            Image(systemName: "brain")
+                                .font(.system(size: 10))
+                        }
+                    }
+
+                    NavigationLink(value: NavigationSection.systemConsole) {
+                        Label {
+                            Text("Console")
+                                .font(.system(size: 11, design: .monospaced))
+                        } icon: {
+                            Image(systemName: "terminal")
+                                .font(.system(size: 10))
                         }
                     }
                 }
@@ -447,7 +411,7 @@ struct TalkieNavigationView: View {
         case .recent: return "RECENT"
         case .processed: return "PROCESSED"
         case .archived: return "ARCHIVED"
-        case .aiResults: return "AI RESULTS"
+        case .aiResults: return "ACTIVITY LOG"
         case .workflows: return "WORKFLOWS"
         case .activityLog: return "ACTIVITY LOG"
         case .systemConsole: return "CONSOLE"
@@ -780,7 +744,7 @@ struct WorkflowDetailColumn: View {
     }
 }
 
-// MARK: - AI Results Column Views (Activity Log Table)
+// MARK: - Activity Log Column Views (Activity Log Table)
 
 enum ActivitySortField: String, CaseIterable {
     case status = "STATUS"
@@ -2176,7 +2140,7 @@ struct MemoSelectorSheet: View {
     }
 }
 
-// MARK: - AI Results View
+// MARK: - Activity Log View
 
 struct AIResultsContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -2208,7 +2172,7 @@ struct AIResultsContentView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 14))
-                        Text("AI RESULTS")
+                        Text("ACTIVITY LOG")
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .tracking(2)
                     }
@@ -2300,7 +2264,7 @@ struct AIResultsContentView: View {
     }
 }
 
-// MARK: - Memo Header in AI Results
+// MARK: - Memo Header in Activity Log
 struct AIMemoHeaderView: View {
     let memo: VoiceMemo
     let runCount: Int
@@ -2332,7 +2296,7 @@ struct AIMemoHeaderView: View {
     }
 }
 
-// MARK: - Run Row in AI Results List
+// MARK: - Run Row in Activity Log List
 struct AIRunRowView: View {
     let run: WorkflowRun
     let isSelected: Bool
@@ -2398,7 +2362,7 @@ struct AIRunRowView: View {
     }
 }
 
-// MARK: - Run Detail View in AI Results
+// MARK: - Run Detail View in Activity Log
 struct AIRunDetailView: View {
     let run: WorkflowRun
     let onDelete: () -> Void
@@ -2533,7 +2497,7 @@ struct AIRunDetailView: View {
     }
 }
 
-// MARK: - Step Card in AI Results
+// MARK: - Step Card in Activity Log
 struct AIStepCard: View {
     let step: WorkflowExecutor.StepExecution
     let isLast: Bool
