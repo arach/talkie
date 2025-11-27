@@ -27,7 +27,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        // This is expected in debug builds without Push Notification entitlement
+        // Sync still works via 5-minute timer; push is only for instant sync in production
+        #if DEBUG
+        logger.info("Push notifications unavailable (debug build) - using timer sync")
+        #else
         logger.error("❌ Failed to register for remote notifications: \(error.localizedDescription)")
+        #endif
     }
 
     func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
