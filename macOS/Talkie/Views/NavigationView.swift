@@ -16,7 +16,9 @@ enum NavigationSection: Hashable {
     case aiResults
     case workflows
     case activityLog
+    case systemConsole
     case models
+    case allowedCommands
     case smartFolder(String)
 }
 
@@ -37,30 +39,127 @@ struct TalkieNavigationView: View {
     @State private var searchText = ""
 
     var body: some View {
-        Group {
-            if isTwoColumnSection {
-                // 2-column layout for Models, etc.
-                NavigationSplitView {
-                    sidebarView
-                } detail: {
-                    twoColumnDetailView
+        VStack(spacing: 0) {
+            // Main content area
+            Group {
+                if isTwoColumnSection {
+                    // 2-column layout for Models, etc.
+                    NavigationSplitView {
+                        sidebarView
+                    } detail: {
+                        twoColumnDetailView
+                    }
+                    .toolbar(.hidden)
+                } else {
+                    // 3-column layout for Memos, Workflows, AI Results
+                    NavigationSplitView {
+                        sidebarView
+                    } content: {
+                        contentColumnView
+                            .frame(minWidth: 280, idealWidth: 320)
+                    } detail: {
+                        detailColumnView
+                    }
+                    .navigationSplitViewStyle(.prominentDetail)
+                    .toolbar(.hidden)
                 }
-            } else {
-                // 3-column layout for Memos, Workflows, AI Results
-                NavigationSplitView {
-                    sidebarView
-                } content: {
-                    contentColumnView
-                        .frame(minWidth: 280, idealWidth: 320)
-                } detail: {
-                    detailColumnView
-                }
-                .navigationSplitViewStyle(.prominentDetail)
             }
+
+            // Full-width status bar (like VS Code/Cursor)
+            statusBarView
+        }
+    }
+
+    // MARK: - Status Bar View
+
+    @StateObject private var syncManager = SyncStatusManager.shared
+
+    private var statusBarView: some View {
+        HStack(spacing: 12) {
+            // Left side - iCloud sync status
+            HStack(spacing: 6) {
+                syncStatusIcon
+                syncStatusText
+            }
+
+            Divider()
+                .frame(height: 12)
+
+            // Memo count
+            HStack(spacing: 4) {
+                Image(systemName: "square.stack")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                Text("\(allMemos.count) memos")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // Right side - could add more status items here
+            Text("Talkie")
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.5))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(NSColor.windowBackgroundColor))
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color(NSColor.separatorColor)),
+            alignment: .top
+        )
+    }
+
+    @ViewBuilder
+    private var syncStatusIcon: some View {
+        switch syncManager.state {
+        case .synced:
+            Image(systemName: "checkmark.icloud")
+                .font(.system(size: 9))
+                .foregroundColor(.green)
+        case .syncing:
+            Image(systemName: "arrow.triangle.2.circlepath.icloud")
+                .font(.system(size: 9))
+                .foregroundColor(.blue)
+        case .error:
+            Image(systemName: "exclamationmark.icloud")
+                .font(.system(size: 9))
+                .foregroundColor(.orange)
+        case .idle:
+            Image(systemName: "icloud")
+                .font(.system(size: 9))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var syncStatusText: some View {
+        switch syncManager.state {
+        case .synced:
+            Text("Synced \(syncManager.lastSyncAgo)")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary)
+        case .syncing:
+            Text("Syncing...")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.blue)
+        case .error(let message):
+            Text(message)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.orange)
+        case .idle:
+            Text("iCloud")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary)
         }
     }
 
     // MARK: - Sidebar View
+
+    @State private var showingSettings = false
 
     private var sidebarView: some View {
         VStack(spacing: 0) {
@@ -124,6 +223,16 @@ struct TalkieNavigationView: View {
                                 .font(.system(size: 11, design: .monospaced))
                         } icon: {
                             Image(systemName: "brain")
+                                .font(.system(size: 10))
+                        }
+                    }
+
+                    NavigationLink(value: NavigationSection.systemConsole) {
+                        Label {
+                            Text("Console")
+                                .font(.system(size: 11, design: .monospaced))
+                        } icon: {
+                            Image(systemName: "terminal")
                                 .font(.system(size: 10))
                         }
                     }
@@ -224,22 +333,28 @@ struct TalkieNavigationView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
 
-            // Footer - iCloud sync status
+            // Footer - Settings button at bottom of sidebar
             Divider()
 
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.icloud")
-                    .font(.system(size: 9))
-                    .foregroundColor(.green)
-
-                Text("Synced with iCloud")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+            Button(action: { showingSettings = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gear")
+                        .font(.system(size: 10))
+                    Text("Settings")
+                        .font(.system(size: 11, design: .monospaced))
+                    Spacer()
+                }
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .buttonStyle(.plain)
         }
         .frame(minWidth: 200, idealWidth: 220)
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+                .frame(minWidth: 800, minHeight: 600)
+        }
     }
 
     // MARK: - 2-Column Detail View
@@ -249,6 +364,14 @@ struct TalkieNavigationView: View {
         switch selectedSection {
         case .models:
             ModelsContentView()
+        case .allowedCommands:
+            AllowedCommandsView()
+        case .aiResults:
+            ActivityLogFullView()
+        case .allMemos:
+            MemoTableFullView()
+        case .systemConsole:
+            SystemConsoleView()
         default:
             EmptyView()
         }
@@ -260,7 +383,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models:
+        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole:
             return true
         default:
             return false
@@ -327,7 +450,9 @@ struct TalkieNavigationView: View {
         case .aiResults: return "AI RESULTS"
         case .workflows: return "WORKFLOWS"
         case .activityLog: return "ACTIVITY LOG"
+        case .systemConsole: return "CONSOLE"
         case .models: return "MODELS"
+        case .allowedCommands: return "ALLOWED COMMANDS"
         case .smartFolder(let name): return name.uppercased()
         case .none: return "MEMOS"
         }
@@ -381,7 +506,7 @@ struct TalkieNavigationView: View {
 
     private var isToolSection: Bool {
         switch selectedSection {
-        case .aiResults, .workflows, .activityLog, .models:
+        case .aiResults, .workflows, .activityLog, .models, .allowedCommands:
             return true
         default:
             return false
@@ -410,22 +535,21 @@ struct TalkieNavigationView: View {
     private var memoListView: some View {
         VStack(spacing: 0) {
             // Section header
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(sectionTitle)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(2)
+            HStack(spacing: 6) {
+                Text(sectionTitle)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.primary)
 
-                    if let subtitle = sectionSubtitle {
-                        Text(subtitle)
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.secondary)
-                    }
+                if let subtitle = sectionSubtitle {
+                    Text(subtitle)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
                 }
+
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(Color(NSColor.controlBackgroundColor))
 
             Divider()
@@ -656,7 +780,15 @@ struct WorkflowDetailColumn: View {
     }
 }
 
-// MARK: - AI Results Column Views
+// MARK: - AI Results Column Views (Activity Log Table)
+
+enum ActivitySortField: String, CaseIterable {
+    case status = "STATUS"
+    case timestamp = "TIMESTAMP"
+    case workflow = "WORKFLOW"
+    case memo = "MEMO"
+    case duration = "DURATION"
+}
 
 struct AIResultsListColumn: View {
     @Binding var selectedRun: WorkflowRun?
@@ -667,45 +799,82 @@ struct AIResultsListColumn: View {
     )
     private var allRuns: FetchedResults<WorkflowRun>
 
-    private var runsByMemo: [(memo: VoiceMemo, runs: [WorkflowRun])] {
-        let grouped = Dictionary(grouping: allRuns) { $0.memo }
-        return grouped.compactMap { (memo, runs) -> (VoiceMemo, [WorkflowRun])? in
-            guard let memo = memo else { return nil }
-            return (memo, runs.sorted { ($0.runDate ?? .distantPast) > ($1.runDate ?? .distantPast) })
-        }.sorted { ($0.runs.first?.runDate ?? .distantPast) > ($1.runs.first?.runDate ?? .distantPast) }
+    // Sorting state
+    @State private var sortField: ActivitySortField = .timestamp
+    @State private var sortAscending: Bool = false
+
+    // Column widths (resizable)
+    @State private var statusWidth: CGFloat = 90
+    @State private var timestampWidth: CGFloat = 150
+    @State private var workflowWidth: CGFloat = 140
+    @State private var memoWidth: CGFloat = 180
+    @State private var durationWidth: CGFloat = 90
+
+    // Sorted runs based on current sort state
+    private var sortedRuns: [WorkflowRun] {
+        let runs = Array(allRuns)
+        return runs.sorted { a, b in
+            let result: Bool
+            switch sortField {
+            case .status:
+                let aSuccess = a.output != nil && !(a.output?.isEmpty ?? true)
+                let bSuccess = b.output != nil && !(b.output?.isEmpty ?? true)
+                result = aSuccess && !bSuccess
+            case .timestamp:
+                result = (a.runDate ?? .distantPast) > (b.runDate ?? .distantPast)
+            case .workflow:
+                result = (a.workflowName ?? "") < (b.workflowName ?? "")
+            case .memo:
+                result = (a.memo?.title ?? "") < (b.memo?.title ?? "")
+            case .duration:
+                result = estimateDuration(a) > estimateDuration(b)
+            }
+            return sortAscending ? !result : result
+        }
+    }
+
+    private func estimateDuration(_ run: WorkflowRun) -> Int {
+        guard let json = run.stepOutputsJSON,
+              let data = json.data(using: .utf8),
+              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
+              !steps.isEmpty
+        else { return 0 }
+        let totalChars = steps.reduce(0) { $0 + $1.output.count }
+        return max(100, totalChars * 2)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14))
-                    Text("AI RESULTS")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                }
-                .foregroundColor(.primary)
+            HStack(spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary)
 
-                Text("\(allRuns.count) workflow runs")
-                    .font(.system(size: 9, design: .monospaced))
+                Text("Activity Log")
+                    .font(.system(size: 13, weight: .semibold, design: .default))
+                    .foregroundColor(.primary)
+
+                Text("\(allRuns.count) events")
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
+
+                Spacer()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .background(Color(NSColor.controlBackgroundColor))
 
             Divider()
 
-            if runsByMemo.isEmpty {
+            if allRuns.isEmpty {
                 VStack(spacing: 16) {
                     Spacer()
                     Image(systemName: "wand.and.rays")
                         .font(.system(size: 32))
                         .foregroundColor(.secondary.opacity(0.3))
 
-                    Text("NO RESULTS YET")
+                    Text("NO ACTIVITY YET")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .tracking(1)
                         .foregroundColor(.secondary)
@@ -717,26 +886,785 @@ struct AIResultsListColumn: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                // Table header with sortable columns
+                ActivityTableHeader(
+                    sortField: $sortField,
+                    sortAscending: $sortAscending,
+                    statusWidth: $statusWidth,
+                    timestampWidth: $timestampWidth,
+                    workflowWidth: $workflowWidth,
+                    memoWidth: $memoWidth,
+                    durationWidth: $durationWidth
+                )
+
+                Divider()
+
+                // Table rows
                 ScrollView {
-                    LazyVStack(spacing: 2, pinnedViews: [.sectionHeaders]) {
-                        ForEach(runsByMemo, id: \.memo.id) { item in
-                            Section {
-                                ForEach(item.runs, id: \.id) { run in
-                                    AIRunRowView(
-                                        run: run,
-                                        isSelected: selectedRun?.id == run.id,
-                                        onSelect: { selectedRun = run }
-                                    )
-                                }
-                            } header: {
-                                AIMemoHeaderView(memo: item.memo, runCount: item.runs.count)
-                            }
+                    LazyVStack(spacing: 0) {
+                        ForEach(sortedRuns, id: \.id) { run in
+                            ActivityTableRow(
+                                run: run,
+                                isSelected: selectedRun?.id == run.id,
+                                onSelect: { selectedRun = run },
+                                statusWidth: statusWidth,
+                                timestampWidth: timestampWidth,
+                                workflowWidth: workflowWidth,
+                                memoWidth: memoWidth,
+                                durationWidth: durationWidth
+                            )
+
+                            Divider()
+                                .padding(.leading, 16)
                         }
                     }
-                    .padding(.vertical, 8)
                 }
             }
         }
+        .frame(minWidth: 550, idealWidth: 700)
+    }
+}
+
+// MARK: - Activity Table Header (Sortable + Resizable)
+
+struct ActivityTableHeader: View {
+    @Binding var sortField: ActivitySortField
+    @Binding var sortAscending: Bool
+    @Binding var statusWidth: CGFloat
+    @Binding var timestampWidth: CGFloat
+    @Binding var workflowWidth: CGFloat
+    @Binding var memoWidth: CGFloat
+    @Binding var durationWidth: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            SortableColumnHeader(
+                title: "STATUS",
+                field: .status,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: statusWidth
+            )
+            ColumnResizer(width: $statusWidth, minWidth: 70, maxWidth: 120)
+
+            SortableColumnHeader(
+                title: "TIMESTAMP",
+                field: .timestamp,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: timestampWidth
+            )
+            ColumnResizer(width: $timestampWidth, minWidth: 100, maxWidth: 200)
+
+            SortableColumnHeader(
+                title: "WORKFLOW",
+                field: .workflow,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: workflowWidth
+            )
+            ColumnResizer(width: $workflowWidth, minWidth: 80, maxWidth: 250)
+
+            SortableColumnHeader(
+                title: "MEMO",
+                field: .memo,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: memoWidth
+            )
+            ColumnResizer(width: $memoWidth, minWidth: 100, maxWidth: 300)
+
+            SortableColumnHeader(
+                title: "DURATION",
+                field: .duration,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: durationWidth,
+                alignment: .trailing
+            )
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .frame(height: 32)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+    }
+}
+
+// MARK: - Sortable Column Header
+
+struct SortableColumnHeader: View {
+    let title: String
+    let field: ActivitySortField
+    @Binding var currentSort: ActivitySortField
+    @Binding var ascending: Bool
+    let width: CGFloat
+    var alignment: Alignment = .leading
+
+    @State private var isHovering = false
+
+    private var isSorted: Bool { currentSort == field }
+
+    var body: some View {
+        Button(action: {
+            if currentSort == field {
+                ascending.toggle()
+            } else {
+                currentSort = field
+                ascending = false
+            }
+        }) {
+            HStack(spacing: 4) {
+                if alignment == .trailing { Spacer() }
+
+                Text(title)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(isSorted ? .primary : .secondary)
+
+                if isSorted {
+                    Image(systemName: ascending ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.blue)
+                }
+
+                if alignment == .leading { Spacer() }
+            }
+            .frame(width: width, alignment: alignment)
+            .padding(.vertical, 2)
+            .background(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+            .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in isHovering = hovering }
+    }
+}
+
+// MARK: - Column Resizer
+
+struct ColumnResizer: View {
+    @Binding var width: CGFloat
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    var body: some View {
+        Rectangle()
+            .fill(isDragging ? Color.blue : (isHovering ? Color.secondary.opacity(0.3) : Color.clear))
+            .frame(width: 4)
+            .contentShape(Rectangle().inset(by: -4))
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else if !isDragging {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        let newWidth = width + value.translation.width
+                        width = min(maxWidth, max(minWidth, newWidth))
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        NSCursor.pop()
+                    }
+            )
+    }
+}
+
+// MARK: - Activity Table Row
+
+struct ActivityTableRow: View {
+    let run: WorkflowRun
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let statusWidth: CGFloat
+    let timestampWidth: CGFloat
+    let workflowWidth: CGFloat
+    let memoWidth: CGFloat
+    let durationWidth: CGFloat
+
+    @State private var isHovering = false
+
+    private var isSuccess: Bool {
+        run.output != nil && !(run.output?.isEmpty ?? true)
+    }
+
+    private var workflowName: String { run.workflowName ?? "Workflow" }
+    private var memoTitle: String { run.memo?.title ?? "Unknown" }
+    private var runDate: Date { run.runDate ?? Date() }
+
+    // Calculate duration from step outputs if available
+    private var durationMs: Int? {
+        guard let json = run.stepOutputsJSON,
+              let data = json.data(using: .utf8),
+              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
+              !steps.isEmpty
+        else { return nil }
+
+        // Sum up estimated durations (rough estimate based on output length)
+        let totalChars = steps.reduce(0) { $0 + $1.output.count }
+        return max(100, totalChars * 2) // Rough estimate
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 0) {
+                // Status
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(isSuccess ? Color.green : Color.red)
+                        .frame(width: 6, height: 6)
+
+                    Text(isSuccess ? "Success" : "Error")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(isSuccess ? .green : .red)
+                }
+                .frame(width: statusWidth, alignment: .leading)
+
+                // Timestamp
+                Text(formatTimestamp(runDate))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: timestampWidth, alignment: .leading)
+
+                // Workflow
+                Text(workflowName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .frame(width: workflowWidth, alignment: .leading)
+
+                // Memo
+                Text(memoTitle)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .frame(width: memoWidth, alignment: .leading)
+
+                // Duration
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    if let ms = durationMs {
+                        Text("\(ms)ms")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("--")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
+                }
+                .frame(width: durationWidth, alignment: .trailing)
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                isSelected ? Color.blue.opacity(0.1) :
+                    (isHovering ? Color.primary.opacity(0.03) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in isHovering = hovering }
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, hh:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Activity Log Full View (with Inspector Panel)
+
+struct ActivityLogFullView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
+        animation: .default
+    )
+    private var allRuns: FetchedResults<WorkflowRun>
+
+    // Selection & Inspector state
+    @State private var selectedRun: WorkflowRun?
+    @State private var showInspector: Bool = false
+
+    // Sorting state
+    @State private var sortField: ActivitySortField = .timestamp
+    @State private var sortAscending: Bool = false
+
+    // Column widths (resizable)
+    @State private var statusWidth: CGFloat = 90
+    @State private var timestampWidth: CGFloat = 150
+    @State private var workflowWidth: CGFloat = 140
+    @State private var memoWidth: CGFloat = 180
+    @State private var durationWidth: CGFloat = 90
+
+    // Inspector panel width (resizable)
+    @State private var inspectorWidth: CGFloat = 380
+
+    // Sorted runs based on current sort state
+    private var sortedRuns: [WorkflowRun] {
+        let runs = Array(allRuns)
+        return runs.sorted { a, b in
+            let result: Bool
+            switch sortField {
+            case .status:
+                let aSuccess = a.output != nil && !(a.output?.isEmpty ?? true)
+                let bSuccess = b.output != nil && !(b.output?.isEmpty ?? true)
+                result = aSuccess && !bSuccess
+            case .timestamp:
+                result = (a.runDate ?? .distantPast) > (b.runDate ?? .distantPast)
+            case .workflow:
+                result = (a.workflowName ?? "") < (b.workflowName ?? "")
+            case .memo:
+                result = (a.memo?.title ?? "") < (b.memo?.title ?? "")
+            case .duration:
+                result = estimateDuration(a) > estimateDuration(b)
+            }
+            return sortAscending ? !result : result
+        }
+    }
+
+    private func estimateDuration(_ run: WorkflowRun) -> Int {
+        guard let json = run.stepOutputsJSON,
+              let data = json.data(using: .utf8),
+              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
+              !steps.isEmpty
+        else { return 0 }
+        let totalChars = steps.reduce(0) { $0 + $1.output.count }
+        return max(100, totalChars * 2)
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            // Main table content (full width, always visible)
+            VStack(spacing: 0) {
+                // Header
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary)
+
+                    Text("Activity Log")
+                        .font(.system(size: 13, weight: .semibold, design: .default))
+                        .foregroundColor(.primary)
+
+                    Text("\(allRuns.count) events")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    // Inspector toggle button
+                    if selectedRun != nil {
+                        Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
+                            Image(systemName: showInspector ? "sidebar.right" : "sidebar.right")
+                                .font(.system(size: 12))
+                                .foregroundColor(showInspector ? .blue : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(showInspector ? "Hide Details" : "Show Details")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(NSColor.controlBackgroundColor))
+
+                Divider()
+
+                if allRuns.isEmpty {
+                    VStack(spacing: 16) {
+                        Spacer()
+                        Image(systemName: "wand.and.rays")
+                            .font(.system(size: 32))
+                            .foregroundColor(.secondary.opacity(0.3))
+
+                        Text("NO ACTIVITY YET")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(.secondary)
+
+                        Text("Run workflows on your memos")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.6))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Table header with sortable columns
+                    ActivityTableHeader(
+                        sortField: $sortField,
+                        sortAscending: $sortAscending,
+                        statusWidth: $statusWidth,
+                        timestampWidth: $timestampWidth,
+                        workflowWidth: $workflowWidth,
+                        memoWidth: $memoWidth,
+                        durationWidth: $durationWidth
+                    )
+
+                    Divider()
+
+                    // Table rows
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(sortedRuns, id: \.id) { run in
+                                ActivityTableRow(
+                                    run: run,
+                                    isSelected: selectedRun?.id == run.id,
+                                    onSelect: {
+                                        selectedRun = run
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            showInspector = true
+                                        }
+                                    },
+                                    statusWidth: statusWidth,
+                                    timestampWidth: timestampWidth,
+                                    workflowWidth: workflowWidth,
+                                    memoWidth: memoWidth,
+                                    durationWidth: durationWidth
+                                )
+
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(NSColor.textBackgroundColor))
+
+            // Inspector Panel (overlays from right, anchored to right edge)
+            if showInspector, let run = selectedRun {
+                HStack(spacing: 0) {
+                    // Resizable divider (on left side of inspector)
+                    InspectorResizeHandle(width: $inspectorWidth)
+
+                    ActivityInspectorPanel(
+                        run: run,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showInspector = false
+                            }
+                        },
+                        onDelete: {
+                            deleteRun(run)
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showInspector = false
+                                selectedRun = nil
+                            }
+                        }
+                    )
+                    .frame(width: inspectorWidth)
+                }
+                .shadow(color: Color.black.opacity(0.08), radius: 3, x: -1, y: 0)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .onKeyPress(.escape) {
+            if showInspector {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showInspector = false
+                }
+                return .handled
+            }
+            return .ignored
+        }
+    }
+
+    private func deleteRun(_ run: WorkflowRun) {
+        viewContext.perform {
+            viewContext.delete(run)
+            try? viewContext.save()
+        }
+    }
+}
+
+// MARK: - Activity Inspector Panel
+
+struct ActivityInspectorPanel: View {
+    let run: WorkflowRun
+    let onClose: () -> Void
+    let onDelete: () -> Void
+
+    private var workflowName: String { run.workflowName ?? "Workflow" }
+    private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
+    private var modelId: String? { run.modelId }
+    private var runDate: Date { run.runDate ?? Date() }
+    private var memoTitle: String { run.memo?.title ?? "Unknown Memo" }
+
+    private var stepExecutions: [WorkflowExecutor.StepExecution] {
+        guard let json = run.stepOutputsJSON,
+              let data = json.data(using: .utf8),
+              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data)
+        else { return [] }
+        return steps
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Inspector Header
+            HStack(spacing: 10) {
+                Image(systemName: workflowIcon)
+                    .font(.system(size: 12))
+                    .foregroundColor(.blue)
+                    .frame(width: 24, height: 24)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(4)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(workflowName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+
+                    Text(formatFullDate(runDate))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close inspector")
+            }
+            .padding(12)
+            .background(Color(NSColor.controlBackgroundColor))
+
+            Divider()
+
+            // Memo reference
+            HStack(spacing: 6) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 9))
+                Text("From: \(memoTitle)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .lineLimit(1)
+
+                Spacer()
+
+                if let model = modelId {
+                    Text(model)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(3)
+                }
+            }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+
+            Divider()
+
+            // Step-by-step content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if stepExecutions.isEmpty {
+                        // Fallback to simple output
+                        if let output = run.output, !output.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("OUTPUT")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .tracking(1)
+                                    .foregroundColor(.secondary)
+
+                                Text(output)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.primary)
+                                    .textSelection(.enabled)
+                                    .lineSpacing(2)
+                                    .padding(10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .cornerRadius(6)
+                            }
+                        }
+                    } else {
+                        ForEach(Array(stepExecutions.enumerated()), id: \.offset) { index, step in
+                            InspectorStepCard(step: step, isLast: index == stepExecutions.count - 1)
+                        }
+                    }
+                }
+                .padding(12)
+            }
+
+            Divider()
+
+            // Delete button at bottom, far from close
+            HStack {
+                Spacer()
+                Button(action: onDelete) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 9))
+                        Text("Delete Run")
+                            .font(.system(size: 9, weight: .medium))
+                    }
+                    .foregroundColor(.red.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+                .help("Delete this run")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+        }
+        .background(Color(NSColor.textBackgroundColor))
+    }
+
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Inspector Step Card (Compact)
+
+struct InspectorStepCard: View {
+    let step: WorkflowExecutor.StepExecution
+    let isLast: Bool
+
+    @State private var showInput = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("\(step.stepNumber)")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .frame(width: 16, height: 16)
+                    .background(Color.blue)
+                    .cornerRadius(3)
+
+                Image(systemName: step.stepIcon)
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+
+                Text(step.stepType.uppercased())
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Button(action: { withAnimation { showInput.toggle() } }) {
+                    Image(systemName: showInput ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if showInput {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("INPUT")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    Text(step.input)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineSpacing(1)
+                        .lineLimit(6)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(4)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text("OUTPUT")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    Text("→ {{\(step.outputKey)}}")
+                        .font(.system(size: 7, design: .monospaced))
+                        .foregroundColor(.blue.opacity(0.7))
+                }
+
+                Text(step.output)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .textSelection(.enabled)
+                    .lineSpacing(2)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(isLast ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+            }
+        }
+        .padding(10)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+        .cornerRadius(6)
+    }
+}
+
+// MARK: - Inspector Resize Handle
+
+struct InspectorResizeHandle: View {
+    @Binding var width: CGFloat
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    private let minWidth: CGFloat = 280
+    private let maxWidth: CGFloat = 600
+
+    var body: some View {
+        Rectangle()
+            .fill(isDragging ? Color.blue.opacity(0.5) : (isHovering ? Color.secondary.opacity(0.2) : Color(NSColor.separatorColor)))
+            .frame(width: isDragging ? 3 : 1)
+            .contentShape(Rectangle().inset(by: -4))
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else if !isDragging {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        // Dragging left increases width, dragging right decreases
+                        let newWidth = width - value.translation.width
+                        width = min(maxWidth, max(minWidth, newWidth))
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        NSCursor.pop()
+                    }
+            )
     }
 }
 
@@ -1739,3 +2667,476 @@ struct ActivityLogContentView: View {
 }
 
 // ModelsContentView is now in its own file: ModelsContentView.swift
+
+// MARK: - Memo Table Sort Field
+
+enum MemoSortField: String, CaseIterable {
+    case status = "STATUS"
+    case timestamp = "TIMESTAMP"
+    case title = "TITLE"
+    case duration = "DURATION"
+    case workflows = "WORKFLOWS"
+}
+
+// MARK: - Memo Table Full View (with Inspector Panel)
+
+struct MemoTableFullView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+
+    @FetchRequest(
+        sortDescriptors: [
+            NSSortDescriptor(keyPath: \VoiceMemo.sortOrder, ascending: true),
+            NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
+        ],
+        animation: .default
+    )
+    private var allMemos: FetchedResults<VoiceMemo>
+
+    // Selection & Inspector state
+    @State private var selectedMemo: VoiceMemo?
+    @State private var showInspector: Bool = false
+
+    // Sorting state
+    @State private var sortField: MemoSortField = .timestamp
+    @State private var sortAscending: Bool = false
+
+    // Column widths (resizable)
+    @State private var statusWidth: CGFloat = 80
+    @State private var timestampWidth: CGFloat = 150
+    @State private var titleWidth: CGFloat = 220
+    @State private var durationWidth: CGFloat = 80
+    @State private var workflowsWidth: CGFloat = 100
+
+    // Inspector panel width (resizable)
+    @State private var inspectorWidth: CGFloat = 420
+
+    // Sorted memos based on current sort state
+    private var sortedMemos: [VoiceMemo] {
+        let memos = Array(allMemos)
+        return memos.sorted { a, b in
+            let result: Bool
+            switch sortField {
+            case .status:
+                let aTranscribed = a.transcription != nil && !(a.transcription?.isEmpty ?? true)
+                let bTranscribed = b.transcription != nil && !(b.transcription?.isEmpty ?? true)
+                result = aTranscribed && !bTranscribed
+            case .timestamp:
+                result = (a.createdAt ?? .distantPast) > (b.createdAt ?? .distantPast)
+            case .title:
+                result = (a.title ?? "") < (b.title ?? "")
+            case .duration:
+                result = a.duration > b.duration
+            case .workflows:
+                result = (a.workflowRuns?.count ?? 0) > (b.workflowRuns?.count ?? 0)
+            }
+            return sortAscending ? !result : result
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            // Main table content (full width, always visible)
+            VStack(spacing: 0) {
+                // Header
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+
+                    Text("All Memos")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.primary)
+
+                    Text("\(allMemos.count)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    // Inspector toggle button
+                    if selectedMemo != nil {
+                        Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
+                            Image(systemName: showInspector ? "sidebar.right" : "sidebar.right")
+                                .font(.system(size: 10))
+                                .foregroundColor(showInspector ? .blue : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(showInspector ? "Hide Details" : "Show Details")
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor))
+
+                Divider()
+
+                if allMemos.isEmpty {
+                    VStack(spacing: 16) {
+                        Spacer()
+                        Image(systemName: "waveform.slash")
+                            .font(.system(size: 32))
+                            .foregroundColor(.secondary.opacity(0.3))
+
+                        Text("NO MEMOS YET")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(.secondary)
+
+                        Text("Record your first voice memo on iOS")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.6))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Table header with sortable columns
+                    MemoTableHeader(
+                        sortField: $sortField,
+                        sortAscending: $sortAscending,
+                        statusWidth: $statusWidth,
+                        timestampWidth: $timestampWidth,
+                        titleWidth: $titleWidth,
+                        durationWidth: $durationWidth,
+                        workflowsWidth: $workflowsWidth
+                    )
+
+                    Divider()
+
+                    // Table rows
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(sortedMemos, id: \.id) { memo in
+                                MemoTableRow(
+                                    memo: memo,
+                                    isSelected: selectedMemo?.id == memo.id,
+                                    onSelect: {
+                                        selectedMemo = memo
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            showInspector = true
+                                        }
+                                    },
+                                    statusWidth: statusWidth,
+                                    timestampWidth: timestampWidth,
+                                    titleWidth: titleWidth,
+                                    durationWidth: durationWidth,
+                                    workflowsWidth: workflowsWidth
+                                )
+
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(NSColor.textBackgroundColor))
+
+            // Inspector Panel (overlays from right, anchored to right edge)
+            if showInspector, let memo = selectedMemo {
+                HStack(spacing: 0) {
+                    // Resizable divider (on left side of inspector)
+                    InspectorResizeHandle(width: $inspectorWidth)
+
+                    MemoInspectorPanel(
+                        memo: memo,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showInspector = false
+                            }
+                        }
+                    )
+                    .frame(width: inspectorWidth)
+                }
+                .shadow(color: Color.black.opacity(0.08), radius: 3, x: -1, y: 0)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .onKeyPress(.escape) {
+            if showInspector {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showInspector = false
+                }
+                return .handled
+            }
+            return .ignored
+        }
+    }
+}
+
+// MARK: - Memo Table Header
+
+struct MemoTableHeader: View {
+    @Binding var sortField: MemoSortField
+    @Binding var sortAscending: Bool
+    @Binding var statusWidth: CGFloat
+    @Binding var timestampWidth: CGFloat
+    @Binding var titleWidth: CGFloat
+    @Binding var durationWidth: CGFloat
+    @Binding var workflowsWidth: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            MemoSortableColumnHeader(
+                title: "STATUS",
+                field: .status,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: statusWidth
+            )
+            ColumnResizer(width: $statusWidth, minWidth: 60, maxWidth: 120)
+
+            MemoSortableColumnHeader(
+                title: "TIMESTAMP",
+                field: .timestamp,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: timestampWidth
+            )
+            ColumnResizer(width: $timestampWidth, minWidth: 100, maxWidth: 200)
+
+            MemoSortableColumnHeader(
+                title: "TITLE",
+                field: .title,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: titleWidth
+            )
+            ColumnResizer(width: $titleWidth, minWidth: 120, maxWidth: 400)
+
+            MemoSortableColumnHeader(
+                title: "DURATION",
+                field: .duration,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: durationWidth,
+                alignment: .trailing
+            )
+            ColumnResizer(width: $durationWidth, minWidth: 60, maxWidth: 120)
+
+            MemoSortableColumnHeader(
+                title: "WORKFLOWS",
+                field: .workflows,
+                currentSort: $sortField,
+                ascending: $sortAscending,
+                width: workflowsWidth,
+                alignment: .trailing
+            )
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .frame(height: 32)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+    }
+}
+
+// MARK: - Memo Sortable Column Header
+
+struct MemoSortableColumnHeader: View {
+    let title: String
+    let field: MemoSortField
+    @Binding var currentSort: MemoSortField
+    @Binding var ascending: Bool
+    let width: CGFloat
+    var alignment: Alignment = .leading
+
+    @State private var isHovering = false
+
+    private var isSorted: Bool { currentSort == field }
+
+    var body: some View {
+        Button(action: {
+            if currentSort == field {
+                ascending.toggle()
+            } else {
+                currentSort = field
+                ascending = false
+            }
+        }) {
+            HStack(spacing: 4) {
+                if alignment == .trailing { Spacer() }
+
+                Text(title)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(isSorted ? .primary : .secondary)
+
+                if isSorted {
+                    Image(systemName: ascending ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.blue)
+                }
+
+                if alignment == .leading { Spacer() }
+            }
+            .frame(width: width, alignment: alignment)
+            .padding(.vertical, 2)
+            .background(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+            .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in isHovering = hovering }
+    }
+}
+
+// MARK: - Memo Table Row
+
+struct MemoTableRow: View {
+    @ObservedObject var memo: VoiceMemo
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let statusWidth: CGFloat
+    let timestampWidth: CGFloat
+    let titleWidth: CGFloat
+    let durationWidth: CGFloat
+    let workflowsWidth: CGFloat
+
+    @State private var isHovering = false
+
+    private var isTranscribed: Bool {
+        memo.transcription != nil && !(memo.transcription?.isEmpty ?? true)
+    }
+
+    private var workflowCount: Int {
+        memo.workflowRuns?.count ?? 0
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 0) {
+                // Status
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isTranscribed ? Color.green : Color.secondary.opacity(0.3))
+                        .frame(width: 5, height: 5)
+
+                    Text(isTranscribed ? "Ready" : "New")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(isTranscribed ? .green : .secondary)
+                }
+                .frame(width: statusWidth, alignment: .leading)
+
+                // Timestamp
+                Text(formatTimestamp(memo.createdAt ?? Date()))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: timestampWidth, alignment: .leading)
+
+                // Title
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary.opacity(0.5))
+
+                    Text(memo.title ?? "Untitled")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                }
+                .frame(width: titleWidth, alignment: .leading)
+
+                // Duration
+                Text(formatDuration(memo.duration))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: durationWidth, alignment: .trailing)
+
+                // Workflow count
+                HStack(spacing: 3) {
+                    if workflowCount > 0 {
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 8))
+                            .foregroundColor(.blue.opacity(0.7))
+                        Text("\(workflowCount)")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.blue)
+                    } else {
+                        Text("—")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.4))
+                    }
+                }
+                .frame(width: workflowsWidth, alignment: .trailing)
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                isSelected ? Color.blue.opacity(0.08) :
+                    (isHovering ? Color.primary.opacity(0.02) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in isHovering = hovering }
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, hh:mm a"
+        return formatter.string(from: date)
+    }
+
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Memo Inspector Panel
+
+struct MemoInspectorPanel: View {
+    @ObservedObject var memo: VoiceMemo
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Inspector Header
+            HStack(spacing: 10) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 12))
+                    .foregroundColor(.blue)
+                    .frame(width: 24, height: 24)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(4)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(memo.title ?? "Untitled")
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+
+                    Text(formatFullDate(memo.createdAt ?? Date()))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close inspector")
+            }
+            .padding(12)
+            .background(Color(NSColor.controlBackgroundColor))
+
+            Divider()
+
+            // Embed the full MemoDetailView
+            MemoDetailView(memo: memo)
+        }
+        .background(Color(NSColor.textBackgroundColor))
+    }
+
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}

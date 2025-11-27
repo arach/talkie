@@ -3,10 +3,11 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		APPDELEGATE_BUILDFILE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = APPDELEGATE_FILEREF /* AppDelegate.swift */; };
 		08DE6F8EECE2C98D49F6D7B7 /* ModelsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */; };
 		107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */; };
 		123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96107EE13719761E10A69B43 /* TalkieApp.swift */; };
@@ -22,15 +23,20 @@
 		80FD41650E34CD7245D7C1CD /* NavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA047104B464861CD52728B0 /* NavigationView.swift */; };
 		A07ED69ED8E7F9AE9BD61FEC /* WorkflowAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F55812343FAF92F60D28E19 /* WorkflowAction.swift */; };
 		A8C87460310157A80C6A3B4A /* MemoRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6919ADEAE61E04AD110C560F /* MemoRowView.swift */; };
+		SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SYSCONSOLE_FILEREF /* SystemConsoleView.swift */; };
+		CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */; };
 		BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */; };
 		C34996CAF5EB3C4F21F1B559 /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A5E5501D5B93090C1EE4CFC /* Persistence.swift */; };
 		CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D422F2CF033DE6FEF9728A4A /* SettingsView.swift */; };
 		DED75650BF9B89BF7DE94F06 /* MemoDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE81C0FD66EBEFF8002D848 /* MemoDetailView.swift */; };
 		F5F06E5237A90BC70DCA3D04 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E576665EAA2E96350EBB048A /* GroqProvider.swift */; };
 		FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 221F1F73B64929D9AA318F9E /* talkie.xcdatamodeld */; };
+		MLXLLM_BUILDFILE /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = MLXLLM_PRODUCTREF /* MLXLLM */; };
+		MLXLMCOMMON_BUILDFILE /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		APPDELEGATE_FILEREF /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutor.swift; sourceTree = "<group>"; };
 		188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsContentView.swift; sourceTree = "<group>"; };
 		1A5E5501D5B93090C1EE4CFC /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
@@ -38,6 +44,8 @@
 		2BABB2A599587B53D1C8F8E6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		36E93046E4E6FE29C1208DB2 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
 		6919ADEAE61E04AD110C560F /* MemoRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoRowView.swift; sourceTree = "<group>"; };
+		SYSCONSOLE_FILEREF /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
+		CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSyncManager.swift; sourceTree = "<group>"; };
 		6B228E4044C6AFC31BBDE3C6 /* Talkie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Talkie.entitlements; sourceTree = "<group>"; };
 		7D622DF99A06064E75BE6360 /* WorkflowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowViews.swift; sourceTree = "<group>"; };
 		7F55812343FAF92F60D28E19 /* WorkflowAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowAction.swift; sourceTree = "<group>"; };
@@ -56,6 +64,18 @@
 		FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowDefinition.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		MLXLLM_FRAMEWORKS_PHASE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				MLXLLM_BUILDFILE /* MLXLLM in Frameworks */,
+				MLXLMCOMMON_BUILDFILE /* MLXLMCommon in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		1984160F4CDC0703A74ABA82 /* Views */ = {
 			isa = PBXGroup;
@@ -66,6 +86,7 @@
 				188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */,
 				EA047104B464861CD52728B0 /* NavigationView.swift */,
 				D422F2CF033DE6FEF9728A4A /* SettingsView.swift */,
+				SYSCONSOLE_FILEREF /* SystemConsoleView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -86,6 +107,7 @@
 		3C6A910C9E66A64213122BE1 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				APPDELEGATE_FILEREF /* AppDelegate.swift */,
 				96107EE13719761E10A69B43 /* TalkieApp.swift */,
 			);
 			path = App;
@@ -103,6 +125,7 @@
 		6B1BD9F1258C9847A6B79B56 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */,
 				86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */,
 				28D24438172D1EDE9F6C188D /* LLM */,
 			);
@@ -158,6 +181,7 @@
 			buildConfigurationList = 5B858D37600594C5F58FDB22 /* Build configuration list for PBXNativeTarget "Talkie" */;
 			buildPhases = (
 				EA194AA771EAE7B4558378F9 /* Sources */,
+				MLXLLM_FRAMEWORKS_PHASE /* Frameworks */,
 				50E43F8F207F190E1D0EBDAD /* Resources */,
 			);
 			buildRules = (
@@ -166,6 +190,8 @@
 			);
 			name = Talkie;
 			packageProductDependencies = (
+				MLXLLM_PRODUCTREF /* MLXLLM */,
+				MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */,
 			);
 			productName = Talkie;
 			productReference = 92173E2C177853E5ADD8A345 /* Talkie.app */;
@@ -196,7 +222,9 @@
 			);
 			mainGroup = BBEF53A431CD4D10F1B0ABF4;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
+			packageReferences = (
+				MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -221,6 +249,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				APPDELEGATE_BUILDFILE /* AppDelegate.swift in Sources */,
 				5C8D73C95973BEDB0418F46A /* AnthropicProvider.swift in Sources */,
 				5BD3C063C7AA17132AD940A3 /* ContentView.swift in Sources */,
 				4C81B1B6F7050791F5B8BC2C /* GeminiService.swift in Sources */,
@@ -235,6 +264,8 @@
 				C34996CAF5EB3C4F21F1B559 /* Persistence.swift in Sources */,
 				107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */,
 				CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */,
+				SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */,
+				CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */,
 				123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */,
 				A07ED69ED8E7F9AE9BD61FEC /* WorkflowAction.swift in Sources */,
 				BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */,
@@ -300,7 +331,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -328,6 +359,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
 				SDKROOT = macosx;
@@ -381,7 +413,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -408,6 +440,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
 				SDKROOT = macosx;
@@ -436,6 +469,30 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.29.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		MLXLLM_PRODUCTREF /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCVersionGroup section */
 		221F1F73B64929D9AA318F9E /* talkie.xcdatamodeld */ = {

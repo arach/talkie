@@ -2,14 +2,96 @@
 //  Persistence.swift
 //  Talkie macOS
 //
-//  Created by Claude Code on 2025-11-23.
+//  Clean token-based CloudKit sync without persistent history tracking bloat.
 //
 
 import CoreData
 import CloudKit
 import os
+import Combine
 
 private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "Persistence")
+
+// MARK: - Sync Status Manager
+
+@MainActor
+class SyncStatusManager: ObservableObject {
+    static let shared = SyncStatusManager()
+
+    enum SyncState: Equatable {
+        case idle
+        case syncing
+        case synced
+        case error(String)
+    }
+
+    @Published var state: SyncState = .idle
+    @Published var lastSyncDate: Date?
+    @Published var iCloudAvailable: Bool = false
+    @Published var pendingChanges: Int = 0
+
+    private var displayTimer: Timer?
+
+    private init() {
+        // Update display every 30s so "Just now" becomes "30s ago" etc.
+        displayTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.objectWillChange.send()
+            }
+        }
+    }
+
+    func setSyncing() {
+        state = .syncing
+    }
+
+    func setSynced(changes: Int = 0) {
+        lastSyncDate = Date()
+        state = .synced
+        pendingChanges = 0
+
+        if changes > 0 {
+            // Post notification for console
+            NotificationCenter.default.post(
+                name: .talkieSyncCompleted,
+                object: nil,
+                userInfo: ["changes": changes]
+            )
+        }
+    }
+
+    func setCloudAvailable(_ available: Bool) {
+        iCloudAvailable = available
+        if available && state == .idle {
+            state = .synced
+            lastSyncDate = Date()
+        }
+    }
+
+    func setError(_ message: String) {
+        state = .error(message)
+    }
+
+    var lastSyncAgo: String {
+        guard let lastSync = lastSyncDate else {
+            return "—"
+        }
+
+        let interval = Date().timeIntervalSince(lastSync)
+
+        if interval < 10 {
+            return "just now"
+        } else if interval < 60 {
+            return "\(Int(interval))s ago"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)m ago"
+        } else {
+            let hours = Int(interval / 3600)
+            return "\(hours)h ago"
+        }
+    }
+}
 
 struct PersistenceController {
     static let shared = PersistenceController()
@@ -48,22 +130,24 @@ struct PersistenceController {
     init(inMemory: Bool = false) {
         container = NSPersistentCloudKitContainer(name: "talkie")
 
-        logger.info("Initializing PersistenceController...")
+        logger.info("Initializing PersistenceController (token-based sync)...")
 
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
             logger.info("Using in-memory store")
         } else {
-            // Configure CloudKit sync
+            // Configure CloudKit sync - WITHOUT persistent history tracking
+            // This dramatically reduces WAL bloat and unnecessary disk I/O
             if let description = container.persistentStoreDescriptions.first {
-                // Set the CloudKit container identifier explicitly
                 description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
                     containerIdentifier: "iCloud.com.jdi.talkie"
                 )
-                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-                description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+                // NOTE: We intentionally DO NOT set:
+                // - NSPersistentHistoryTrackingKey (causes WAL bloat)
+                // - NSPersistentStoreRemoteChangeNotificationPostOptionKey (constant notifications)
+                // Instead, we use CloudKit's server change tokens for efficient delta sync
 
-                logger.info("CloudKit container: iCloud.com.jdi.talkie")
+                logger.info("CloudKit container: iCloud.com.jdi.talkie (token-based sync)")
                 logger.info("Store URL: \(description.url?.absoluteString ?? "nil")")
             }
         }
@@ -75,12 +159,9 @@ struct PersistenceController {
             } else {
                 logger.info("Core Data loaded successfully")
                 logger.info("Store type: \(storeDescription.type)")
-                logger.info("Store URL: \(storeDescription.url?.absoluteString ?? "nil")")
 
                 if let cloudKitOptions = storeDescription.cloudKitContainerOptions {
                     logger.info("CloudKit container ID: \(cloudKitOptions.containerIdentifier)")
-                } else {
-                    logger.warning("No CloudKit container options set!")
                 }
             }
         }
@@ -88,22 +169,15 @@ struct PersistenceController {
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
-        // Listen for remote change notifications
-        let viewContext = container.viewContext
-        NotificationCenter.default.addObserver(
-            forName: .NSPersistentStoreRemoteChange,
-            object: container.persistentStoreCoordinator,
-            queue: .main
-        ) { notification in
-            logger.info("Remote change notification received from iCloud")
-            PersistenceController.logMemoCount(context: viewContext)
-        }
-
-        // Check iCloud account status
+        // Check iCloud account status and start initial sync
         PersistenceController.checkiCloudStatus()
 
-        // Log initial memo count after a short delay
+        // Start the CloudKit sync manager
+        let viewContext = container.viewContext
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            CloudKitSyncManager.shared.configure(with: viewContext)
+            CloudKitSyncManager.shared.syncNow()
+
             PersistenceController.logMemoCount(context: viewContext)
         }
     }
@@ -127,16 +201,34 @@ struct PersistenceController {
             switch status {
             case .available:
                 logger.info("✅ iCloud account status: Available")
+                Task { @MainActor in
+                    SyncStatusManager.shared.setCloudAvailable(true)
+                }
                 // Now fetch detailed zone and database info
                 fetchCloudKitDatabaseInfo(container: container)
             case .noAccount:
                 logger.warning("⚠️ iCloud account status: No Account - user not signed into iCloud")
+                Task { @MainActor in
+                    SyncStatusManager.shared.setCloudAvailable(false)
+                    SyncStatusManager.shared.setError("No iCloud account")
+                }
             case .restricted:
                 logger.warning("⚠️ iCloud account status: Restricted")
+                Task { @MainActor in
+                    SyncStatusManager.shared.setCloudAvailable(false)
+                    SyncStatusManager.shared.setError("iCloud restricted")
+                }
             case .couldNotDetermine:
                 logger.warning("⚠️ iCloud account status: Could not determine")
+                Task { @MainActor in
+                    SyncStatusManager.shared.setCloudAvailable(false)
+                }
             case .temporarilyUnavailable:
                 logger.warning("⚠️ iCloud account status: Temporarily unavailable")
+                Task { @MainActor in
+                    SyncStatusManager.shared.setCloudAvailable(false)
+                    SyncStatusManager.shared.setError("iCloud unavailable")
+                }
             @unknown default:
                 logger.warning("⚠️ iCloud account status: Unknown")
             }
@@ -224,4 +316,13 @@ struct PersistenceController {
             logger.error("Failed to fetch memos: \(error.localizedDescription)")
         }
     }
+}
+
+// MARK: - Custom Notifications
+
+extension Notification.Name {
+    /// Posted when a sync operation completes with changes
+    static let talkieSyncCompleted = Notification.Name("talkieSyncCompleted")
+    /// Posted when sync starts
+    static let talkieSyncStarted = Notification.Name("talkieSyncStarted")
 }

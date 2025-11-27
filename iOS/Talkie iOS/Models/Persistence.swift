@@ -2,7 +2,7 @@
 //  Persistence.swift
 //  talkie
 //
-//  Created by Arach Tchoupani on 2025-11-23.
+//  Clean CloudKit sync without persistent history tracking bloat.
 //
 
 import CoreData
@@ -51,16 +51,18 @@ struct PersistenceController {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
             AppLogger.persistence.info("Using in-memory store")
         } else {
-            // Configure CloudKit sync
+            // Configure CloudKit sync - WITHOUT persistent history tracking
+            // This dramatically reduces WAL bloat and unnecessary disk I/O
             if let description = container.persistentStoreDescriptions.first {
-                // Set the CloudKit container identifier explicitly
                 description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
                     containerIdentifier: "iCloud.com.jdi.talkie"
                 )
-                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-                description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+                // NOTE: We intentionally DO NOT set:
+                // - NSPersistentHistoryTrackingKey (causes WAL bloat)
+                // - NSPersistentStoreRemoteChangeNotificationPostOptionKey (constant notifications)
+                // CloudKit will still sync automatically via NSPersistentCloudKitContainer
 
-                AppLogger.persistence.info("☁️ CloudKit container: iCloud.com.jdi.talkie")
+                AppLogger.persistence.info("☁️ CloudKit container: iCloud.com.jdi.talkie (lean sync)")
                 AppLogger.persistence.info("📂 Store URL: \(description.url?.absoluteString ?? "nil")")
             }
         }
@@ -75,35 +77,12 @@ struct PersistenceController {
 
                 if let cloudKitOptions = storeDescription.cloudKitContainerOptions {
                     AppLogger.persistence.info("☁️ CloudKit container ID: \(cloudKitOptions.containerIdentifier)")
-                } else {
-                    AppLogger.persistence.warning("⚠️ No CloudKit container options set!")
                 }
             }
         }
 
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
-
-        // Listen for remote change notifications
-        NotificationCenter.default.addObserver(
-            forName: .NSPersistentStoreRemoteChange,
-            object: container.persistentStoreCoordinator,
-            queue: .main
-        ) { _ in
-            AppLogger.persistence.info("📥 Remote change notification received from iCloud")
-        }
-
-        // Listen for Core Data save notifications to track CloudKit sync
-        NotificationCenter.default.addObserver(
-            forName: .NSManagedObjectContextDidSave,
-            object: container.viewContext,
-            queue: .main
-        ) { notification in
-            let inserted = (notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>)?.count ?? 0
-            let updated = (notification.userInfo?[NSUpdatedObjectsKey] as? Set<NSManagedObject>)?.count ?? 0
-            let deleted = (notification.userInfo?[NSDeletedObjectsKey] as? Set<NSManagedObject>)?.count ?? 0
-            AppLogger.persistence.info("💾 Core Data saved - inserted: \(inserted), updated: \(updated), deleted: \(deleted)")
-        }
 
         // Check iCloud account status
         PersistenceController.checkiCloudStatus()
