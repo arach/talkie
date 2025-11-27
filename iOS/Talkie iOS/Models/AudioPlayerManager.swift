@@ -37,10 +37,8 @@ class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func playAudio(url: URL) {
-        // Stop current playback if playing different file
-        if currentPlayingURL != url {
-            stopPlayback()
-        }
+        // Always stop and reset before playing a new file
+        stopPlayback()
 
         // Verify file exists
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -52,16 +50,20 @@ class AudioPlayerManager: NSObject, ObservableObject {
             // Ensure audio session is active
             try AVAudioSession.sharedInstance().setActive(true)
 
-            audioPlayer = try AVAudioPlayer(contentsOf: url)
-            audioPlayer?.delegate = self
-            audioPlayer?.volume = 1.0 // Maximum volume
-            audioPlayer?.prepareToPlay()
-            duration = audioPlayer?.duration ?? 0
+            // Create fresh player instance
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.volume = 1.0 // Maximum volume
+            player.prepareToPlay()
+
+            audioPlayer = player
+            duration = player.duration
             currentPlayingURL = url
+            currentTime = 0
 
             AppLogger.playback.info("Successfully loaded audio file: \(url.lastPathComponent), duration: \(self.duration)s")
 
-            audioPlayer?.play()
+            player.play()
             isPlaying = true
 
             // Start timer to update current time

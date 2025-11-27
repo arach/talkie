@@ -194,17 +194,26 @@ struct RecordingView: View {
                     .foregroundColor(.success)
             }
 
-            // Rename input - always visible
-            TextField(defaultTitle, text: $recordingTitle)
-                .font(.bodySmall)
-                .padding(Spacing.sm)
-                .background(Color.surfaceSecondary)
-                .cornerRadius(CornerRadius.sm)
-                .overlay(
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                )
-                .padding(.horizontal, Spacing.lg)
+            // Rename input - always visible with label
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("RECORDING NAME")
+                    .font(.techLabelSmall)
+                    .tracking(1)
+                    .foregroundColor(.textSecondary)
+                    .padding(.horizontal, Spacing.xs)
+
+                TextField(defaultTitle, text: $recordingTitle)
+                    .font(.bodySmall)
+                    .foregroundColor(.textPrimary)
+                    .padding(Spacing.sm)
+                    .background(Color.surfacePrimary)
+                    .cornerRadius(CornerRadius.sm)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(Color.active.opacity(0.5), lineWidth: 1)
+                    )
+            }
+            .padding(.horizontal, Spacing.lg)
 
             Spacer(minLength: Spacing.sm)
 
