@@ -2671,7 +2671,6 @@ struct ActivityLogContentView: View {
 // MARK: - Memo Table Sort Field
 
 enum MemoSortField: String, CaseIterable {
-    case status = "STATUS"
     case timestamp = "TIMESTAMP"
     case title = "TITLE"
     case duration = "DURATION"
@@ -2701,9 +2700,8 @@ struct MemoTableFullView: View {
     @State private var sortAscending: Bool = false
 
     // Column widths (resizable)
-    @State private var statusWidth: CGFloat = 80
     @State private var timestampWidth: CGFloat = 150
-    @State private var titleWidth: CGFloat = 220
+    @State private var titleWidth: CGFloat = 280
     @State private var durationWidth: CGFloat = 80
     @State private var workflowsWidth: CGFloat = 100
 
@@ -2716,10 +2714,6 @@ struct MemoTableFullView: View {
         return memos.sorted { a, b in
             let result: Bool
             switch sortField {
-            case .status:
-                let aTranscribed = a.transcription != nil && !(a.transcription?.isEmpty ?? true)
-                let bTranscribed = b.transcription != nil && !(b.transcription?.isEmpty ?? true)
-                result = aTranscribed && !bTranscribed
             case .timestamp:
                 result = (a.createdAt ?? .distantPast) > (b.createdAt ?? .distantPast)
             case .title:
@@ -2793,7 +2787,6 @@ struct MemoTableFullView: View {
                     MemoTableHeader(
                         sortField: $sortField,
                         sortAscending: $sortAscending,
-                        statusWidth: $statusWidth,
                         timestampWidth: $timestampWidth,
                         titleWidth: $titleWidth,
                         durationWidth: $durationWidth,
@@ -2815,7 +2808,6 @@ struct MemoTableFullView: View {
                                             showInspector = true
                                         }
                                     },
-                                    statusWidth: statusWidth,
                                     timestampWidth: timestampWidth,
                                     titleWidth: titleWidth,
                                     durationWidth: durationWidth,
@@ -2869,7 +2861,6 @@ struct MemoTableFullView: View {
 struct MemoTableHeader: View {
     @Binding var sortField: MemoSortField
     @Binding var sortAscending: Bool
-    @Binding var statusWidth: CGFloat
     @Binding var timestampWidth: CGFloat
     @Binding var titleWidth: CGFloat
     @Binding var durationWidth: CGFloat
@@ -2877,15 +2868,6 @@ struct MemoTableHeader: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            MemoSortableColumnHeader(
-                title: "STATUS",
-                field: .status,
-                currentSort: $sortField,
-                ascending: $sortAscending,
-                width: statusWidth
-            )
-            ColumnResizer(width: $statusWidth, minWidth: 60, maxWidth: 120)
-
             MemoSortableColumnHeader(
                 title: "TIMESTAMP",
                 field: .timestamp,
@@ -2986,17 +2968,12 @@ struct MemoTableRow: View {
     @ObservedObject var memo: VoiceMemo
     let isSelected: Bool
     let onSelect: () -> Void
-    let statusWidth: CGFloat
     let timestampWidth: CGFloat
     let titleWidth: CGFloat
     let durationWidth: CGFloat
     let workflowsWidth: CGFloat
 
     @State private var isHovering = false
-
-    private var isTranscribed: Bool {
-        memo.transcription != nil && !(memo.transcription?.isEmpty ?? true)
-    }
 
     private var workflowCount: Int {
         memo.workflowRuns?.count ?? 0
@@ -3005,18 +2982,6 @@ struct MemoTableRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 0) {
-                // Status
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(isTranscribed ? Color.green : Color.secondary.opacity(0.3))
-                        .frame(width: 5, height: 5)
-
-                    Text(isTranscribed ? "Ready" : "New")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(isTranscribed ? .green : .secondary)
-                }
-                .frame(width: statusWidth, alignment: .leading)
-
                 // Timestamp
                 Text(formatTimestamp(memo.createdAt ?? Date()))
                     .font(.system(size: 9, design: .monospaced))
