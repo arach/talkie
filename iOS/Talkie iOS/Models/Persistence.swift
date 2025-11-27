@@ -163,8 +163,9 @@ struct PersistenceController {
         // Query for CD_VoiceMemo records (Core Data prefixes with CD_)
         let query = CKQuery(recordType: "CD_VoiceMemo", predicate: NSPredicate(value: true))
 
-        database.perform(query, inZoneWith: zoneID) { records, error in
-            if let error = error {
+        database.fetch(withQuery: query, inZoneWith: zoneID, desiredKeys: nil, resultsLimit: CKQueryOperation.maximumResults) { result in
+            switch result {
+            case .failure(let error):
                 // This might fail if the record type doesn't exist in this zone
                 let ckError = error as? CKError
                 if ckError?.code == .unknownItem {
@@ -173,23 +174,25 @@ struct PersistenceController {
                     AppLogger.persistence.error("  ❌ Query failed in zone '\(zoneID.zoneName)': \(error.localizedDescription)")
                 }
                 return
-            }
 
-            guard let records = records else {
-                AppLogger.persistence.info("  📝 Zone '\(zoneID.zoneName)': No records returned")
-                return
-            }
+            case .success(let (matchResults, _)):
+                let records = matchResults.compactMap { try? $0.1.get() }
+                if records.isEmpty {
+                    AppLogger.persistence.info("  📝 Zone '\(zoneID.zoneName)': No records returned")
+                    return
+                }
 
-            AppLogger.persistence.info("  📝 Zone '\(zoneID.zoneName)': Found \(records.count) CD_VoiceMemo record(s)")
+                AppLogger.persistence.info("  📝 Zone '\(zoneID.zoneName)': Found \(records.count) CD_VoiceMemo record(s)")
 
-            // Log first few record details
-            for record in records.prefix(3) {
-                let title = record["CD_title"] as? String ?? "Untitled"
-                let createdAt = record.creationDate?.description ?? "unknown"
-                AppLogger.persistence.info("    • \(title) (created: \(createdAt), recordID: \(record.recordID.recordName.prefix(20))...)")
-            }
-            if records.count > 3 {
-                AppLogger.persistence.info("    ... and \(records.count - 3) more records")
+                // Log first few record details
+                for record in records.prefix(3) {
+                    let title = record["CD_title"] as? String ?? "Untitled"
+                    let createdAt = record.creationDate?.description ?? "unknown"
+                    AppLogger.persistence.info("    • \(title) (created: \(createdAt), recordID: \(record.recordID.recordName.prefix(20))...)")
+                }
+                if records.count > 3 {
+                    AppLogger.persistence.info("    ... and \(records.count - 3) more records")
+                }
             }
         }
     }

@@ -319,8 +319,14 @@ class AudioRecorderManager: NSObject, ObservableObject {
     }
 
     func getAudioDuration(url: URL) -> TimeInterval {
-        let asset = AVAsset(url: url)
-        return CMTimeGetSeconds(asset.duration)
+        // Use AVAudioFile for synchronous duration (local files only)
+        do {
+            let audioFile = try AVAudioFile(forReading: url)
+            let duration = Double(audioFile.length) / audioFile.fileFormat.sampleRate
+            return duration
+        } catch {
+            return 0
+        }
     }
 }
 

@@ -10,6 +10,9 @@ import BackgroundTasks
 
 @main
 struct talkieApp: App {
+    // Wire up AppDelegate for push notification handling
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     let persistenceController = PersistenceController.shared
 
     // MARK: - Background Task Identifiers
@@ -53,7 +56,7 @@ struct talkieApp: App {
             // e.g., check for updates, sync small amounts of data
             do {
                 // Trigger iCloud sync
-                try await persistenceController.container.viewContext.save()
+                try persistenceController.container.viewContext.save()
             } catch {
                 AppLogger.app.error("Background refresh failed: \(error.localizedDescription)")
             }
