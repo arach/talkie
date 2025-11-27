@@ -14,304 +14,298 @@ struct RecordingView: View {
 
     @StateObject private var recorder = AudioRecorderManager()
     @State private var recordingTitle = ""
-    @State private var hasStartedRecording = false
-    @State private var showSavedAnimation = false
-    @State private var pulseDown = false
     @State private var defaultTitle = ""
     @State private var showDeleteConfirmation = false
     @State private var recPulse = false
+    @State private var waveformStyle: WaveformStyle = .particles
+    @State private var sheetDetent: PresentationDetent = .height(280)
+    @State private var hasAppeared = false
+
+    private let compactHeight: CGFloat = 280
+    private let expandedHeight: CGFloat = 600
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.surfacePrimary
-                    .ignoresSafeArea()
+        ZStack {
+            // Clear - using presentationBackground for transparency
+            Color.clear
 
-                VStack(spacing: Spacing.xxl) {
-                    Spacer()
+            VStack(spacing: 0) {
+                // Drag indicator
+                Capsule()
+                    .fill(Color.textTertiary.opacity(0.5))
+                    .frame(width: 36, height: 4)
+                    .padding(.top, Spacing.sm)
+                    .padding(.bottom, Spacing.md)
 
-                    // Waveform visualization
-                    if recorder.isRecording {
-                        VStack(spacing: Spacing.lg) {
-                            // Recording indicator badge with pulsating animation
-                            Text("REC")
-                                .font(.techLabel)
-                                .fontWeight(.bold)
-                                .foregroundColor(.recording)
-                                .tracking(2)
-                                .padding(.horizontal, Spacing.md)
-                                .padding(.vertical, Spacing.xs)
-                                .background(Color.recording.opacity(recPulse ? 0.2 : 0.08))
-                                .cornerRadius(CornerRadius.sm)
-                                .scaleEffect(recPulse ? 1.05 : 1.0)
-                                .shadow(color: Color.recording.opacity(recPulse ? 0.5 : 0), radius: 8)
-                                .animation(
-                                    .easeInOut(duration: 0.8)
-                                    .repeatForever(autoreverses: true),
-                                    value: recPulse
-                                )
-                                .onAppear { recPulse = true }
-
-                            // Live waveform - fixed width, rolling display
-                            LiveWaveformView(
-                                levels: recorder.audioLevels,
-                                height: 120,
-                                color: .recording
-                            )
-                            .padding(.horizontal, Spacing.lg)
-                            .background(Color.surfaceSecondary)
-                            .cornerRadius(CornerRadius.md)
-                            .padding(.horizontal, Spacing.lg)
-
-                            // Duration
-                            Text(formatDuration(recorder.recordingDuration))
-                                .font(.monoLarge)
-                                .fontWeight(.medium)
-                                .foregroundColor(.textPrimary)
-                        }
-                    } else if hasStartedRecording {
-                        VStack(spacing: Spacing.lg) {
-                            // Success icon with animation
-                            ZStack {
-                                Circle()
-                                    .fill(Color.success.opacity(0.1))
-                                    .frame(width: 64, height: 64)
-                                    .scaleEffect(showSavedAnimation ? 1 : 0.5)
-
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundColor(.success)
-                                    .scaleEffect(showSavedAnimation ? 1 : 0)
-                            }
-                            .opacity(showSavedAnimation ? 1 : 0)
-
-                            // Working title display
-                            VStack(spacing: Spacing.xs) {
-                                Text(defaultTitle)
-                                    .font(.bodyLarge)
-                                    .foregroundColor(.textPrimary)
-                                    .multilineTextAlignment(.center)
-
-                                Text(formatDuration(recorder.recordingDuration))
-                                    .font(.monoSmall)
-                                    .foregroundColor(.textSecondary)
-                            }
-                            .opacity(showSavedAnimation ? 1 : 0)
-                            .offset(y: showSavedAnimation ? 0 : 10)
-
-                            // Rename input
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                Text("RENAME (OPTIONAL)")
-                                    .font(.techLabelSmall)
-                                    .tracking(1)
-                                    .foregroundColor(.textTertiary)
-                                    .padding(.leading, Spacing.sm)
-
-                                TextField("e.g., Meeting notes", text: $recordingTitle)
-                                    .font(.bodyMedium)
-                                    .padding(Spacing.md)
-                                    .background(Color.surfaceSecondary)
-                                    .cornerRadius(CornerRadius.md)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: CornerRadius.md)
-                                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                                    )
-                            }
-                            .padding(.horizontal, Spacing.xl)
-                            .opacity(showSavedAnimation ? 1 : 0)
-
-                            // Action buttons
-                            HStack(spacing: Spacing.md) {
-                                // Delete button
-                                Button(action: {
-                                    showDeleteConfirmation = true
-                                }) {
-                                    HStack(spacing: Spacing.xs) {
-                                        Image(systemName: "trash")
-                                            .font(.system(size: 14, weight: .medium))
-                                        Text("DELETE")
-                                            .font(.techLabel)
-                                            .tracking(1)
-                                    }
-                                    .foregroundColor(.recording)
-                                    .padding(.horizontal, Spacing.lg)
-                                    .padding(.vertical, Spacing.md)
-                                    .background(Color.recording.opacity(0.1))
-                                    .cornerRadius(CornerRadius.md)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: CornerRadius.md)
-                                            .strokeBorder(Color.recording.opacity(0.3), lineWidth: 1)
-                                    )
-                                }
-
-                                // Done button
-                                Button(action: {
-                                    saveRecording()
-                                    dismiss()
-                                }) {
-                                    HStack(spacing: Spacing.xs) {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
-                                        Text("SAVE")
-                                            .font(.techLabel)
-                                            .tracking(1)
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, Spacing.xl)
-                                    .padding(.vertical, Spacing.md)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [Color.active, Color.activeGlow],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .cornerRadius(CornerRadius.md)
-                                    .shadow(color: Color.active.opacity(0.3), radius: 8, x: 0, y: 4)
-                                }
-                            }
-                            .padding(.top, Spacing.md)
-                            .opacity(showSavedAnimation ? 1 : 0)
-                            .scaleEffect(showSavedAnimation ? 1 : 0.9)
-                        }
-                        .onAppear {
-                            defaultTitle = "Recording \(formatDate(Date()))"
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                                showSavedAnimation = true
-                            }
-                        }
-                        .alert("Delete Recording?", isPresented: $showDeleteConfirmation) {
-                            Button("Cancel", role: .cancel) { }
-                            Button("Delete", role: .destructive) {
-                                deleteRecording()
-                                dismiss()
-                            }
-                        } message: {
-                            Text("This recording will be permanently deleted.")
-                        }
-                    } else {
-                        // Initial state - guide user to tap the record button
-                        VStack(spacing: Spacing.md) {
-                            Text("TAP TO RECORD")
-                                .font(.techLabel)
-                                .tracking(2)
-                                .foregroundColor(.textSecondary)
-
-                            // Animated arrow pointing down
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundColor(.recording.opacity(0.7))
-                                .offset(y: pulseDown ? 8 : 0)
-                                .animation(
-                                    .easeInOut(duration: 0.8)
-                                    .repeatForever(autoreverses: true),
-                                    value: pulseDown
-                                )
-                                .onAppear { pulseDown = true }
-                        }
-                    }
-
-                    Spacer()
-
-                    // Recording button - only show when recording or ready to record
-                    if recorder.isRecording || !hasStartedRecording {
-                        Button(action: toggleRecording) {
-                            ZStack {
-                                if recorder.isRecording {
-                                    // Pulsing glow when recording
-                                    Circle()
-                                        .fill(Color.recording)
-                                        .frame(width: 80, height: 80)
-                                        .blur(radius: 20)
-                                        .opacity(0.6)
-
-                                    // Outer ring
-                                    Circle()
-                                        .strokeBorder(Color.recording, lineWidth: 3)
-                                        .frame(width: 88, height: 88)
-
-                                    // Stop icon
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.recording)
-                                        .frame(width: 32, height: 32)
-                                } else {
-                                    // Glow effect
-                                    Circle()
-                                        .fill(Color.recording)
-                                        .frame(width: 72, height: 72)
-                                        .blur(radius: 20)
-                                        .opacity(0.5)
-
-                                    // Main button
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [Color.recording, Color.recordingGlow],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 72, height: 72)
-                                }
-                            }
-                        }
-                        .padding(.bottom, Spacing.xxl)
-                    }
+                if recorder.isRecording {
+                    // RECORDING STATE
+                    recordingContent
+                } else if recorder.currentRecordingURL != nil {
+                    // STOPPED STATE - ready to save
+                    stoppedContent
+                } else {
+                    // STARTING STATE - brief moment before recording starts
+                    startingContent
                 }
             }
-            .navigationTitle(recorder.isRecording ? "REC" : "NEW")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text(recorder.isRecording ? "RECORDING" : "NEW MEMO")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(recorder.isRecording ? .recording : .textPrimary)
-                }
-
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        if recorder.isRecording {
-                            recorder.stopRecording()
-                        }
-                        dismiss()
-                    }) {
-                        Text("ESC")
-                            .font(.techLabel)
-                            .tracking(1)
-                            .foregroundColor(.textSecondary)
-                    }
-                }
-
-                if hasStartedRecording && !recorder.isRecording {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: {
-                            saveRecording()
-                            dismiss()
-                        }) {
-                            Text("DONE")
-                                .font(.techLabel)
-                                .tracking(1)
-                                .foregroundColor(.active)
-                        }
-                    }
+        }
+        .presentationDetents([.height(compactHeight), .height(expandedHeight)], selection: $sheetDetent)
+        .presentationDragIndicator(.hidden)
+        .presentationCornerRadius(CornerRadius.xl)
+        .presentationBackground(Color.surfaceSecondary.opacity(0.85))
+        .presentationBackgroundInteraction(.disabled)
+        .interactiveDismissDisabled(recorder.isRecording || recorder.currentRecordingURL != nil)
+        .onAppear {
+            if !hasAppeared {
+                hasAppeared = true
+                defaultTitle = "Recording \(formatDate(Date()))"
+                // Auto-start recording immediately
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    recorder.startRecording()
                 }
             }
+        }
+        .alert("Delete Recording?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteRecording()
+                dismiss()
+            }
+        } message: {
+            Text("This recording will be permanently deleted.")
         }
     }
 
-    private func toggleRecording() {
-        if recorder.isRecording {
-            recorder.stopRecording()
-            hasStartedRecording = true
-        } else if !hasStartedRecording {
-            recorder.startRecording()
+    // MARK: - Recording Content
+
+    private var recordingContent: some View {
+        VStack(spacing: Spacing.sm) {
+            // Top row: ESC on left, REC indicator centered
+            HStack {
+                Button(action: {
+                    cancelRecording()
+                }) {
+                    Text("ESC")
+                        .font(.techLabelSmall)
+                        .tracking(1)
+                        .foregroundColor(.textTertiary)
+                }
+
+                Spacer()
+
+                // REC indicator
+                HStack(spacing: Spacing.xs) {
+                    Circle()
+                        .fill(Color.recording)
+                        .frame(width: 6, height: 6)
+                        .scaleEffect(recPulse ? 1.2 : 0.8)
+                        .animation(
+                            .easeInOut(duration: 0.6)
+                            .repeatForever(autoreverses: true),
+                            value: recPulse
+                        )
+
+                    Text("REC")
+                        .font(.techLabelSmall)
+                        .fontWeight(.bold)
+                        .foregroundColor(.recording)
+                        .tracking(1)
+                }
+                .onAppear { recPulse = true }
+
+                Spacer()
+
+                // Placeholder for symmetry
+                Text("ESC")
+                    .font(.techLabelSmall)
+                    .tracking(1)
+                    .foregroundColor(.clear)
+            }
+            .padding(.horizontal, Spacing.lg)
+
+            // Waveform style switcher in expanded mode only
+            if sheetDetent == .height(expandedHeight) {
+                waveformStyleSwitcher
+            }
+
+            // Live waveform
+            LiveWaveformView(
+                levels: recorder.audioLevels,
+                height: sheetDetent == .height(expandedHeight) ? 120 : 60,
+                color: .recording,
+                style: waveformStyle
+            )
+            .padding(.horizontal, Spacing.sm)
+            .background(Color.surfacePrimary.opacity(0.5))
+            .cornerRadius(CornerRadius.md)
+            .padding(.horizontal, Spacing.lg)
+
+            // Duration - always below waveform
+            Text(formatDuration(recorder.recordingDuration))
+                .font(sheetDetent == .height(expandedHeight) ? .monoLarge : .monoMedium)
+                .fontWeight(.medium)
+                .foregroundColor(.textPrimary)
+
+            Spacer(minLength: Spacing.sm)
+
+            // Stop button centered - same size as list view (52pt), subtle glow while recording
+            Button(action: {
+                recorder.stopRecording()
+            }) {
+                ZStack {
+                    // Subtle glow while recording
+                    Circle()
+                        .fill(Color.recording)
+                        .frame(width: 60, height: 60)
+                        .blur(radius: 20)
+                        .opacity(0.5)
+
+                    // Outer ring
+                    Circle()
+                        .strokeBorder(Color.recording, lineWidth: 3)
+                        .frame(width: 52, height: 52)
+
+                    // Stop icon
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.recording)
+                        .frame(width: 16, height: 16)
+                }
+            }
+            .padding(.bottom, Spacing.md)
         }
+    }
+
+    // MARK: - Stopped Content (Ready to Save)
+
+    private var stoppedContent: some View {
+        VStack(spacing: Spacing.sm) {
+            // Duration display
+            HStack {
+                Text(formatDuration(recorder.recordingDuration))
+                    .font(.monoMedium)
+                    .foregroundColor(.textSecondary)
+
+                Text("•")
+                    .foregroundColor(.textTertiary)
+
+                Text("READY")
+                    .font(.techLabelSmall)
+                    .tracking(1)
+                    .foregroundColor(.success)
+            }
+
+            // Rename input - always visible
+            TextField(defaultTitle, text: $recordingTitle)
+                .font(.bodySmall)
+                .padding(Spacing.sm)
+                .background(Color.surfaceSecondary)
+                .cornerRadius(CornerRadius.sm)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                )
+                .padding(.horizontal, Spacing.lg)
+
+            Spacer(minLength: Spacing.sm)
+
+            // Action buttons
+            HStack(spacing: Spacing.md) {
+                // Delete button
+                Button(action: {
+                    showDeleteConfirmation = true
+                }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.recording)
+                        .frame(width: 48, height: 48)
+                        .background(Color.recording.opacity(0.1))
+                        .cornerRadius(CornerRadius.full)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.recording.opacity(0.3), lineWidth: 1)
+                        )
+                }
+
+                // Save button
+                Button(action: {
+                    saveRecording()
+                    dismiss()
+                }) {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("SAVE")
+                            .font(.techLabelSmall)
+                            .tracking(1)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.sm)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.active, Color.activeGlow],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(CornerRadius.full)
+                    .shadow(color: Color.active.opacity(0.3), radius: 8, x: 0, y: 4)
+                }
+            }
+            .padding(.bottom, Spacing.md)
+        }
+    }
+
+    // MARK: - Starting Content
+
+    private var startingContent: some View {
+        VStack(spacing: Spacing.lg) {
+            Spacer()
+
+            ProgressView()
+                .tint(.recording)
+
+            Text("STARTING...")
+                .font(.techLabel)
+                .tracking(2)
+                .foregroundColor(.textSecondary)
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Waveform Style Switcher
+
+    private var waveformStyleSwitcher: some View {
+        HStack(spacing: Spacing.xs) {
+            ForEach([WaveformStyle.wave, .spectrum, .particles], id: \.self) { style in
+                Button(action: { waveformStyle = style }) {
+                    Text(styleName(style))
+                        .font(.techLabelSmall)
+                        .tracking(0.5)
+                        .foregroundColor(waveformStyle == style ? .white : .textTertiary)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
+                        .background(waveformStyle == style ? Color.recording.opacity(0.8) : Color.clear)
+                        .cornerRadius(CornerRadius.sm)
+                }
+            }
+        }
+        .padding(.bottom, Spacing.xs)
+    }
+
+    // MARK: - Actions
+
+    private func cancelRecording() {
+        recorder.stopRecording()
+        if let url = recorder.currentRecordingURL {
+            try? FileManager.default.removeItem(at: url)
+            AppLogger.recording.info("Cancelled recording: \(url.lastPathComponent)")
+        }
+        dismiss()
     }
 
     private func deleteRecording() {
-        // Delete the temporary audio file
         if let url = recorder.currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
             AppLogger.recording.info("Deleted unsaved recording: \(url.lastPathComponent)")
@@ -326,9 +320,9 @@ struct RecordingView: View {
         newMemo.title = recordingTitle.isEmpty ? defaultTitle : recordingTitle
         newMemo.createdAt = Date()
         newMemo.duration = recorder.recordingDuration
-        newMemo.fileURL = url.lastPathComponent // Keep for backward compatibility
+        newMemo.fileURL = url.lastPathComponent
         newMemo.isTranscribing = false
-        newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1) // Negative timestamp for newest first
+        newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
 
         // Load and store audio data for CloudKit sync
         do {
@@ -345,21 +339,14 @@ struct RecordingView: View {
         }
 
         do {
-            // First save: persist the recording to Core Data (triggers iCloud sync)
             try viewContext.save()
             AppLogger.persistence.info("Memo saved with audio data for CloudKit sync")
 
-            // Get the memo's ObjectID for safe background access
             let memoObjectID = newMemo.objectID
 
-            // Start transcription AFTER save is complete
-            // Use a slight delay to ensure the save has fully committed
-            // and iCloud sync has been initiated
             Task { @MainActor in
-                // Small delay to ensure Core Data save is fully committed
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                try? await Task.sleep(nanoseconds: 500_000_000)
 
-                // Fetch the memo fresh to ensure we have the persisted version
                 if let savedMemo = viewContext.object(with: memoObjectID) as? VoiceMemo {
                     AppLogger.transcription.info("Starting transcription for persisted memo")
                     TranscriptionService.shared.transcribeVoiceMemo(savedMemo, context: viewContext)
@@ -370,6 +357,8 @@ struct RecordingView: View {
             AppLogger.persistence.error("Error saving memo: \(nsError.localizedDescription)")
         }
     }
+
+    // MARK: - Helpers
 
     private func formatDuration(_ duration: TimeInterval) -> String {
         let minutes = Int(duration) / 60
@@ -382,6 +371,14 @@ struct RecordingView: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    private func styleName(_ style: WaveformStyle) -> String {
+        switch style {
+        case .wave: return "WAVE"
+        case .spectrum: return "SPECTRUM"
+        case .particles: return "PARTICLES"
+        }
     }
 }
 

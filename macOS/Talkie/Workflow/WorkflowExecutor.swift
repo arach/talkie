@@ -274,6 +274,9 @@ class WorkflowExecutor: ObservableObject {
         case .llm(let config):
             return try await executeLLMStep(config, context: context)
 
+        case .shell(let config):
+            return try await executeShellStep(config, context: context)
+
         case .webhook(let config):
             return try await executeWebhookStep(config, context: context, memo: memo)
 
@@ -334,6 +337,150 @@ class WorkflowExecutor: ObservableObject {
             model: config.modelId,
             options: options
         )
+    }
+
+    // MARK: - Shell Step Execution
+    private func executeShellStep(_ config: ShellStepConfig, context: WorkflowContext) async throws -> String {
+        // Validate config (executable allowlist, etc.)
+        let validation = config.validate()
+        if !validation.valid {
+            let errorMessage = validation.errors.joined(separator: "; ")
+            print("🚫 Shell step blocked: \(errorMessage)")
+            throw WorkflowError.executionFailed("Security validation failed: \(errorMessage)")
+        }
+
+        // Verify executable exists
+        guard FileManager.default.fileExists(atPath: config.executable) else {
+            throw WorkflowError.executionFailed("Executable not found: \(config.executable)")
+        }
+
+        print("🖥️ Executing shell command: \(config.executable)")
+
+        // Resolve template variables and sanitize dynamic content
+        let resolvedArgs = config.arguments.map { arg in
+            let resolved = context.resolve(arg)
+            let sanitized = ShellStepConfig.sanitizeContent(resolved)
+
+            // Check for injection attempts (log but don't block)
+            let warnings = ShellStepConfig.detectInjectionAttempts(sanitized)
+            for warning in warnings {
+                print("⚠️ Injection warning in argument: \(warning)")
+            }
+
+            return sanitized
+        }
+
+        // Resolve stdin if provided
+        let resolvedStdin: String? = config.stdin.map { stdinTemplate in
+            let resolved = context.resolve(stdinTemplate)
+            let sanitized = ShellStepConfig.sanitizeContent(resolved)
+
+            // Check for injection attempts
+            let warnings = ShellStepConfig.detectInjectionAttempts(sanitized)
+            for warning in warnings {
+                print("⚠️ Injection warning in stdin: \(warning)")
+            }
+
+            return sanitized
+        }
+
+        print("   Arguments: \(resolvedArgs)")
+        if let stdin = resolvedStdin {
+            print("   Stdin length: \(stdin.count) chars")
+        }
+
+        // Create process
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: config.executable)
+        process.arguments = resolvedArgs
+
+        // Set working directory if specified
+        if let workDir = config.workingDirectory {
+            let resolvedWorkDir = context.resolve(workDir)
+            process.currentDirectoryURL = URL(fileURLWithPath: resolvedWorkDir)
+        }
+
+        // Set environment variables
+        var env = ProcessInfo.processInfo.environment
+        for (key, value) in config.environment {
+            env[key] = context.resolve(value)
+        }
+        // Remove potentially dangerous environment variables
+        env.removeValue(forKey: "LD_PRELOAD")
+        env.removeValue(forKey: "DYLD_INSERT_LIBRARIES")
+        process.environment = env
+
+        // Set up pipes for stdout/stderr
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        // Set up stdin if needed
+        if let stdinData = resolvedStdin?.data(using: .utf8) {
+            let stdinPipe = Pipe()
+            process.standardInput = stdinPipe
+
+            // Write to stdin in background to avoid blocking
+            Task.detached {
+                try? stdinPipe.fileHandleForWriting.write(contentsOf: stdinData)
+                try? stdinPipe.fileHandleForWriting.close()
+            }
+        }
+
+        // Execute with timeout
+        return try await withThrowingTaskGroup(of: String.self) { group in
+            // Timeout task
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(config.timeout) * 1_000_000_000)
+                throw WorkflowError.executionFailed("Command timed out after \(config.timeout) seconds")
+            }
+
+            // Execution task
+            group.addTask {
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+
+                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+
+                    let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+                    let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+
+                    // Check exit status
+                    if process.terminationStatus != 0 {
+                        print("⚠️ Command exited with status: \(process.terminationStatus)")
+                        if !stderr.isEmpty {
+                            print("   Stderr: \(stderr.prefix(500))")
+                        }
+                        // Still return output but note the error
+                        if config.captureStderr && !stderr.isEmpty {
+                            return "Exit code: \(process.terminationStatus)\n\nStdout:\n\(stdout)\n\nStderr:\n\(stderr)"
+                        }
+                    }
+
+                    // Combine output based on config
+                    if config.captureStderr && !stderr.isEmpty {
+                        return stdout + "\n" + stderr
+                    }
+
+                    return stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                } catch {
+                    throw WorkflowError.executionFailed("Failed to execute command: \(error.localizedDescription)")
+                }
+            }
+
+            // Return first result (either completion or timeout)
+            if let result = try await group.next() {
+                group.cancelAll()
+                process.terminate() // Kill process if still running
+                return result
+            }
+
+            throw WorkflowError.executionFailed("Unexpected shell execution error")
+        }
     }
 
     // MARK: - Webhook Step Execution

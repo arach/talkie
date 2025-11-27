@@ -283,6 +283,8 @@ struct WorkflowStepCard: View {
         switch step.config {
         case .llm(let config):
             LLMStepDetails(config: config)
+        case .shell(let config):
+            ShellStepDetails(config: config)
         case .webhook(let config):
             WebhookStepDetails(config: config)
         case .email(let config):
@@ -334,6 +336,57 @@ struct LLMStepDetails: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
                         .cornerRadius(6)
+                }
+            }
+        }
+    }
+}
+
+struct ShellStepDetails: View {
+    let config: ShellStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                DetailBadge(label: "CLI", color: .green)
+                DetailBadge(label: "\(config.timeout)s", color: .orange)
+                if config.stdin != nil {
+                    DetailBadge(label: "STDIN", color: .blue)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("COMMAND")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 4) {
+                    Text(config.executable)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.green)
+
+                    Text(config.arguments.joined(separator: " "))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(6)
+            }
+
+            // Security status
+            let validation = config.validate()
+            if !validation.valid {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 9))
+                    Text(validation.errors.first ?? "Validation error")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.orange)
                 }
             }
         }
@@ -1276,6 +1329,8 @@ struct WorkflowStepEditor: View {
         switch step.config {
         case .llm:
             LLMStepConfigEditor(step: $step)
+        case .shell:
+            ShellStepConfigEditor(step: $step)
         case .webhook:
             WebhookStepConfigEditor(step: $step)
         case .email:
@@ -1452,6 +1507,219 @@ struct LLMStepConfigEditor: View {
                     .foregroundColor(.secondary.opacity(0.7))
             }
         }
+    }
+}
+
+struct ShellStepConfigEditor: View {
+    @Binding var step: WorkflowStep
+    @State private var argumentsText: String = ""
+
+    private var config: ShellStepConfig {
+        if case .shell(let c) = step.config { return c }
+        return ShellStepConfig(executable: "/bin/echo", arguments: [])
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Preset selector
+            VStack(alignment: .leading, spacing: 6) {
+                Text("PRESET")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 6) {
+                    ForEach(ShellStepConfig.Preset.allCases, id: \.self) { preset in
+                        Button(action: {
+                            let newConfig = preset.exampleConfig
+                            step.config = .shell(newConfig)
+                            argumentsText = newConfig.arguments.joined(separator: " ")
+                        }) {
+                            Text(preset.rawValue)
+                                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Executable path
+            VStack(alignment: .leading, spacing: 6) {
+                Text("EXECUTABLE PATH")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    TextField("/path/to/command", text: Binding(
+                        get: { config.executable },
+                        set: { newValue in
+                            var newConfig = config
+                            newConfig.executable = newValue
+                            step.config = .shell(newConfig)
+                        }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 10, design: .monospaced))
+
+                    // Security indicator
+                    if config.isExecutableAllowed() {
+                        Image(systemName: "checkmark.shield.fill")
+                            .foregroundColor(.green)
+                            .font(.system(size: 12))
+                            .help("Executable is in allowlist")
+                    } else {
+                        Image(systemName: "exclamationmark.shield.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 12))
+                            .help("Executable not in allowlist - add via Settings")
+                    }
+                }
+            }
+
+            // Arguments
+            VStack(alignment: .leading, spacing: 6) {
+                Text("ARGUMENTS")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                TextField("arg1 arg2 {{TRANSCRIPT}}", text: $argumentsText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 10, design: .monospaced))
+                    .onChange(of: argumentsText) { newValue in
+                        var newConfig = config
+                        // Split by space but preserve quoted strings
+                        newConfig.arguments = parseArguments(newValue)
+                        step.config = .shell(newConfig)
+                    }
+                    .onAppear {
+                        argumentsText = config.arguments.joined(separator: " ")
+                    }
+
+                Text("Supports template variables. Arguments are passed directly (no shell expansion).")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+
+            // Stdin input
+            VStack(alignment: .leading, spacing: 6) {
+                Text("STDIN INPUT (OPTIONAL)")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                TextField("{{TRANSCRIPT}} or {{OUTPUT}}", text: Binding(
+                    get: { config.stdin ?? "" },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.stdin = newValue.isEmpty ? nil : newValue
+                        step.config = .shell(newConfig)
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 10, design: .monospaced))
+
+                Text("Data to pipe to the command's stdin. Use for tools like jq, python, etc.")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+
+            // Timeout
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("TIMEOUT (SECONDS)")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundColor(.secondary)
+
+                    TextField("30", value: Binding(
+                        get: { config.timeout },
+                        set: { newValue in
+                            var newConfig = config
+                            newConfig.timeout = max(1, min(300, newValue))
+                            step.config = .shell(newConfig)
+                        }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 10, design: .monospaced))
+                    .frame(width: 60)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("OPTIONS")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundColor(.secondary)
+
+                    Toggle("Capture stderr", isOn: Binding(
+                        get: { config.captureStderr },
+                        set: { newValue in
+                            var newConfig = config
+                            newConfig.captureStderr = newValue
+                            step.config = .shell(newConfig)
+                        }
+                    ))
+                    .font(.system(size: 10))
+                }
+            }
+
+            // Available variables help
+            Text("Variables: {{TRANSCRIPT}}, {{TITLE}}, {{DATE}}, {{OUTPUT}}, {{PREVIOUS_OUTPUT}}")
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.7))
+
+            // Security note
+            HStack(spacing: 4) {
+                Image(systemName: "lock.shield")
+                    .foregroundColor(.blue)
+                    .font(.system(size: 10))
+                Text("Only allowlisted executables can run. No shell expansion or command chaining.")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .padding(8)
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(6)
+        }
+    }
+
+    // Simple argument parser - splits by space, respects quotes
+    private func parseArguments(_ input: String) -> [String] {
+        var args: [String] = []
+        var current = ""
+        var inQuotes = false
+        var quoteChar: Character = "\""
+
+        for char in input {
+            if (char == "\"" || char == "'") && !inQuotes {
+                inQuotes = true
+                quoteChar = char
+            } else if char == quoteChar && inQuotes {
+                inQuotes = false
+                if !current.isEmpty {
+                    args.append(current)
+                    current = ""
+                }
+            } else if char == " " && !inQuotes {
+                if !current.isEmpty {
+                    args.append(current)
+                    current = ""
+                }
+            } else {
+                current.append(char)
+            }
+        }
+
+        if !current.isEmpty {
+            args.append(current)
+        }
+
+        return args
     }
 }
 

@@ -1,14 +1,29 @@
 # Talkie
 
-A multi-platform communication application with iOS, macOS, and backend components.
+A multi-platform voice memo application with intelligent workflow automation.
+
+**[Security Model](SECURITY.md)** | **[Implementation Notes](IMPLEMENTATION_SUMMARY.md)**
+
+## Overview
+
+Talkie transforms voice memos into actionable outputs through customizable workflows. Record a thought, and let AI-powered workflows summarize it, extract tasks, create calendar events, or pipe it through your favorite CLI tools.
+
+### Key Features
+
+- **Voice Recording**: Quick capture with push-to-talk or tap-to-record
+- **Apple Transcription**: On-device speech-to-text via Apple Speech framework
+- **Workflow Automation**: Chain together LLM processing, shell commands, and integrations
+- **CLI Integration**: Run tools like `claude`, `gh`, `jq` with full access to your configured environment
+- **Apple Ecosystem**: Native integration with Notes, Reminders, Calendar
 
 ## Project Structure
 
 ```
 talkie/
 ├── iOS/              # iOS application (SwiftUI)
-├── macOS/            # macOS companion app (future)
-├── Backend/          # Backend API services (future)
+├── macOS/            # macOS application (SwiftUI)
+├── Backend/          # Backend API services (planned)
+├── Landing/          # Marketing website
 └── Shared/           # Shared code and protocols
 ```
 
@@ -51,8 +66,25 @@ xcodebuild -scheme talkie -destination 'platform=iOS Simulator,name=iPhone 15' b
 - Core Data for local persistence
 - Follows MVC/MVVM architecture
 
-### Future Components
-- **macOS**: Native companion app for desktop
+### macOS App
+
+The macOS app includes the full workflow system:
+
+```bash
+cd macOS
+open Talkie.xcodeproj
+```
+
+**Workflow Features**:
+- Multi-step workflow builder
+- LLM integration (Gemini, OpenAI, Anthropic, Groq)
+- Shell command execution with security controls
+- Apple integrations (Notes, Reminders, Calendar)
+- Webhook support for external services
+
+See [SECURITY.md](SECURITY.md) for details on the shell execution security model.
+
+### Planned Components
 - **Backend**: API services for cross-platform sync
 - **Shared**: Common protocols and data structures
 

@@ -156,6 +156,7 @@ struct WorkflowStep: Identifiable, Codable {
 
     enum StepType: String, Codable, CaseIterable {
         case llm = "LLM Generation"
+        case shell = "Run Shell Command"
         case webhook = "Webhook"
         case email = "Send Email"
         case notification = "Send Notification"
@@ -170,6 +171,7 @@ struct WorkflowStep: Identifiable, Codable {
         var icon: String {
             switch self {
             case .llm: return "brain"
+            case .shell: return "terminal"
             case .webhook: return "arrow.up.forward.app"
             case .email: return "envelope"
             case .notification: return "bell.badge"
@@ -186,6 +188,7 @@ struct WorkflowStep: Identifiable, Codable {
         var description: String {
             switch self {
             case .llm: return "Process with AI model"
+            case .shell: return "Execute CLI command"
             case .webhook: return "Send data to URL"
             case .email: return "Compose and send email"
             case .notification: return "Show system notification"
@@ -202,6 +205,7 @@ struct WorkflowStep: Identifiable, Codable {
         var category: StepCategory {
             switch self {
             case .llm: return .ai
+            case .shell: return .integration
             case .webhook: return .integration
             case .email: return .communication
             case .notification: return .communication
@@ -241,6 +245,7 @@ struct WorkflowStep: Identifiable, Codable {
 
 enum StepConfig: Codable {
     case llm(LLMStepConfig)
+    case shell(ShellStepConfig)
     case webhook(WebhookStepConfig)
     case email(EmailStepConfig)
     case notification(NotificationStepConfig)
@@ -257,6 +262,8 @@ enum StepConfig: Codable {
         switch type {
         case .llm:
             return .llm(LLMStepConfig(provider: .gemini, prompt: ""))
+        case .shell:
+            return .shell(ShellStepConfig(executable: "/bin/echo", arguments: ["{{TRANSCRIPT}}"]))
         case .webhook:
             return .webhook(WebhookStepConfig(url: "", method: .post))
         case .email:
@@ -394,6 +401,258 @@ struct LLMStepConfig: Codable {
 
     var selectedModel: WorkflowModelOption? {
         provider.models.first { $0.id == modelId }
+    }
+}
+
+struct ShellStepConfig: Codable {
+    var executable: String              // Path to CLI tool (e.g., "/usr/local/bin/gh", "/opt/homebrew/bin/jq")
+    var arguments: [String]             // Command arguments, supports template variables
+    var workingDirectory: String?       // Optional working directory
+    var environment: [String: String]   // Additional environment variables
+    var stdin: String?                  // Optional input to pass via stdin (supports templates)
+    var timeout: Int                    // Timeout in seconds (default 30)
+    var captureStderr: Bool             // Include stderr in output
+
+    init(
+        executable: String,
+        arguments: [String] = [],
+        workingDirectory: String? = nil,
+        environment: [String: String] = [:],
+        stdin: String? = nil,
+        timeout: Int = 30,
+        captureStderr: Bool = true
+    ) {
+        self.executable = executable
+        self.arguments = arguments
+        self.workingDirectory = workingDirectory
+        self.environment = environment
+        self.stdin = stdin
+        self.timeout = timeout
+        self.captureStderr = captureStderr
+    }
+
+    // MARK: - Security
+    //
+    // Threat model:
+    // - Users are trusted (controlled environment)
+    // - Content is untrusted (LLM outputs could contain injection attempts)
+    // - Tools should have full capability (claude with MCP, gh with auth, etc.)
+    //
+    // Strategy: Sanitize data flowing between steps, allow powerful tools
+    //
+
+    /// Allowlist of permitted executables. User can extend via Settings.
+    /// We allow powerful CLIs but block destructive system commands.
+    static var allowedExecutables: Set<String> = [
+        // Text processing
+        "/bin/echo",
+        "/bin/cat",
+        "/usr/bin/head",
+        "/usr/bin/tail",
+        "/usr/bin/wc",
+        "/usr/bin/sort",
+        "/usr/bin/uniq",
+        "/usr/bin/grep",
+        "/usr/bin/sed",
+        "/usr/bin/awk",
+        "/usr/bin/tr",
+        "/usr/bin/cut",
+        "/usr/bin/paste",
+
+        // JSON/data processing
+        "/opt/homebrew/bin/jq",
+        "/usr/local/bin/jq",
+
+        // HTTP clients
+        "/usr/bin/curl",
+
+        // Developer CLIs - full access to configured auth/MCP
+        "/opt/homebrew/bin/gh",
+        "/usr/local/bin/gh",
+        "/opt/homebrew/bin/claude",
+        "/usr/local/bin/claude",
+        "/usr/local/bin/npx",
+        "/opt/homebrew/bin/npx",
+
+        // Scripting
+        "/usr/bin/python3",
+        "/opt/homebrew/bin/python3",
+        "/opt/homebrew/bin/node",
+        "/usr/local/bin/node",
+
+        // macOS automation
+        "/usr/bin/osascript",
+        "/usr/bin/open",
+        "/usr/bin/pbcopy",
+        "/usr/bin/pbpaste",
+
+        // Utilities
+        "/bin/date",
+        "/usr/bin/base64",
+        "/usr/bin/uuidgen",
+        "/usr/bin/shasum",
+        "/usr/bin/md5",
+        "/usr/bin/file",
+        "/usr/bin/which",
+    ]
+
+    /// Blocked executables - destructive or privilege escalation
+    static let blockedExecutables: Set<String> = [
+        // Destructive file operations
+        "/bin/rm", "/bin/rmdir", "/bin/mv",
+        // Privilege escalation
+        "/usr/bin/sudo", "/usr/bin/su", "/usr/bin/doas",
+        // Permission changes
+        "/bin/chmod", "/usr/sbin/chown",
+        // Process control
+        "/bin/kill", "/usr/bin/killall",
+        // Raw shells (use specific tools instead)
+        "/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/fish",
+        // Network tools that could exfiltrate
+        "/usr/bin/ssh", "/usr/bin/scp", "/usr/bin/sftp", "/usr/bin/ftp",
+        "/usr/bin/nc", "/usr/bin/netcat",
+        // Disk operations
+        "/usr/sbin/diskutil", "/sbin/mount", "/sbin/umount",
+    ]
+
+    /// Check if executable is allowed
+    func isExecutableAllowed() -> Bool {
+        if Self.blockedExecutables.contains(executable) {
+            return false
+        }
+        return Self.allowedExecutables.contains(executable)
+    }
+
+    /// Sanitize dynamic content (from LLM outputs, transcripts, etc.)
+    /// This is applied to template-resolved values, NOT to the static config
+    static func sanitizeContent(_ input: String) -> String {
+        var result = input
+
+        // Remove null bytes (can break C-based tools)
+        result = result.replacingOccurrences(of: "\0", with: "")
+
+        // Limit length to prevent DoS via massive inputs
+        let maxLength = 500_000 // 500KB reasonable for transcript + LLM output
+        if result.count > maxLength {
+            result = String(result.prefix(maxLength))
+        }
+
+        return result
+    }
+
+    /// Detect potential injection attempts in content
+    /// Returns warnings but doesn't block - logs for audit
+    static func detectInjectionAttempts(_ input: String) -> [String] {
+        var warnings: [String] = []
+
+        let suspiciousPatterns: [(pattern: String, description: String)] = [
+            ("$(", "Command substitution"),
+            ("`", "Backtick execution"),
+            ("&&", "Command chaining"),
+            ("||", "Conditional execution"),
+            ("; ", "Command separator"),
+            ("| ", "Pipe to command"),
+            ("> ", "Output redirection"),
+            ("< ", "Input redirection"),
+            ("#!/", "Shebang (script injection)"),
+            ("import os", "Python os import"),
+            ("subprocess", "Python subprocess"),
+            ("child_process", "Node child_process"),
+            ("eval(", "Eval execution"),
+            ("exec(", "Exec execution"),
+            ("__import__", "Python dynamic import"),
+            ("require('child", "Node require child_process"),
+        ]
+
+        for (pattern, description) in suspiciousPatterns {
+            if input.contains(pattern) {
+                warnings.append("Detected '\(pattern)': \(description)")
+            }
+        }
+
+        return warnings
+    }
+
+    /// Validate config (static check at workflow design time)
+    func validate() -> (valid: Bool, errors: [String]) {
+        var errors: [String] = []
+
+        if !isExecutableAllowed() {
+            if Self.blockedExecutables.contains(executable) {
+                errors.append("'\(executable)' is blocked for security reasons.")
+            } else {
+                errors.append("'\(executable)' is not in allowlist. Add it in Settings > Workflows > Allowed Commands.")
+            }
+        }
+
+        if timeout < 1 || timeout > 300 {
+            errors.append("Timeout must be between 1 and 300 seconds")
+        }
+
+        if executable.isEmpty {
+            errors.append("Executable path is required")
+        }
+
+        return (errors.isEmpty, errors)
+    }
+
+    /// Common CLI presets for quick setup
+    enum Preset: String, CaseIterable {
+        case custom = "Custom Command"
+        case jq = "jq (JSON processor)"
+        case curl = "curl (HTTP client)"
+        case gh = "gh (GitHub CLI)"
+        case claude = "claude (Claude CLI)"
+        case python = "python3"
+        case node = "node"
+        case osascript = "osascript (AppleScript)"
+
+        var defaultExecutable: String {
+            switch self {
+            case .custom: return "/bin/echo"
+            case .jq: return "/opt/homebrew/bin/jq"
+            case .curl: return "/usr/bin/curl"
+            case .gh: return "/opt/homebrew/bin/gh"
+            case .claude: return "/usr/local/bin/claude"
+            case .python: return "/usr/bin/python3"
+            case .node: return "/opt/homebrew/bin/node"
+            case .osascript: return "/usr/bin/osascript"
+            }
+        }
+
+        var description: String {
+            switch self {
+            case .custom: return "Run any allowed command-line tool"
+            case .jq: return "Process and transform JSON data"
+            case .curl: return "Make HTTP requests"
+            case .gh: return "Interact with GitHub (issues, PRs, etc.)"
+            case .claude: return "Run Claude AI from command line"
+            case .python: return "Execute Python scripts"
+            case .node: return "Execute Node.js scripts"
+            case .osascript: return "Run AppleScript commands"
+            }
+        }
+
+        var exampleConfig: ShellStepConfig {
+            switch self {
+            case .custom:
+                return ShellStepConfig(executable: "/bin/echo", arguments: ["{{TRANSCRIPT}}"])
+            case .jq:
+                return ShellStepConfig(executable: "/opt/homebrew/bin/jq", arguments: ["-r", "."], stdin: "{{OUTPUT}}")
+            case .curl:
+                return ShellStepConfig(executable: "/usr/bin/curl", arguments: ["-s", "https://api.example.com"])
+            case .gh:
+                return ShellStepConfig(executable: "/opt/homebrew/bin/gh", arguments: ["issue", "list", "--limit", "5"])
+            case .claude:
+                return ShellStepConfig(executable: "/usr/local/bin/claude", arguments: ["-p", "Summarize: {{TRANSCRIPT}}"])
+            case .python:
+                return ShellStepConfig(executable: "/usr/bin/python3", arguments: ["-c", "import sys; print(sys.stdin.read().upper())"], stdin: "{{TRANSCRIPT}}")
+            case .node:
+                return ShellStepConfig(executable: "/opt/homebrew/bin/node", arguments: ["-e", "console.log(require('fs').readFileSync(0, 'utf-8').toUpperCase())"], stdin: "{{TRANSCRIPT}}")
+            case .osascript:
+                return ShellStepConfig(executable: "/usr/bin/osascript", arguments: ["-e", "display notification \"{{TITLE}}\" with title \"Talkie\""])
+            }
+        }
     }
 }
 

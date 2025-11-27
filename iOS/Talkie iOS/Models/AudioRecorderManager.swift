@@ -21,7 +21,7 @@ class AudioRecorderManager: NSObject, ObservableObject {
     private var audioRecorder: AVAudioRecorder?
     private var timer: Timer?
     private var levelTimer: Timer?
-    private var lastDisplayLevel: Float = 0.03  // Track last level for decay
+    private var lastDisplayLevel: Float = 0.02  // Track last level for decay
     private var wasRecordingBeforeInterruption = false
 
     override init() {
@@ -212,7 +212,7 @@ class AudioRecorderManager: NSObject, ObservableObject {
                 isInterrupted = false
                 recordingDuration = 0
                 audioLevels = []
-                lastDisplayLevel = 0.03  // Reset decay tracker
+                lastDisplayLevel = 0.02  // Reset decay tracker
 
                 startTimers()
             } else {
@@ -238,8 +238,8 @@ class AudioRecorderManager: NSObject, ObservableObject {
         }
         RunLoop.current.add(timer!, forMode: .common)
 
-        // Start level monitoring timer - balanced for responsiveness and smooth scrolling
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
+        // Start level monitoring timer - faster updates for responsive visualization (~60fps)
+        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
             self?.updateAudioLevels()
         }
         RunLoop.current.add(levelTimer!, forMode: .common)
@@ -289,37 +289,27 @@ class AudioRecorderManager: NSObject, ObservableObject {
     private func updateAudioLevels() {
         audioRecorder?.updateMeters()
 
-        // Use averagePower for more responsive, real-time levels (not peakPower which holds peaks)
-        let avgPower = audioRecorder?.averagePower(forChannel: 0) ?? -160
+        let power = audioRecorder?.averagePower(forChannel: 0) ?? -160
 
-        // Convert dB to linear scale (0-1)
-        // averagePower range: -160 (silence) to 0 (max)
-        // Typical speech is around -20 to -10 dB, quiet room is -40 to -50 dB
+        // Simple linear mapping from dB to 0-1
+        // -50 dB = silence, 0 dB = max
+        let normalized = (power + 50) / 50
+        let clampedLevel = min(1.0, max(0.0, normalized))
 
-        // Simple linear mapping: -50dB = 0, 0dB = 1
-        // This gives good dynamic range for speech
-        let minDb: Float = -50
-        let maxDb: Float = 0
-        let normalizedLevel = (avgPower - minDb) / (maxDb - minDb)
-        let clampedLevel = min(1.0, max(0.03, normalizedLevel))
-
-        // Apply decay: instant rise, smooth fall
-        let decayRate: Float = 0.25  // Faster decay
+        // Smooth decay only
+        let decayRate: Float = 0.4
 
         let displayLevel: Float
-        if clampedLevel > lastDisplayLevel {
-            // Sound is louder - instant response
+        if clampedLevel >= lastDisplayLevel {
             displayLevel = clampedLevel
         } else {
-            // Sound is quieter - decay smoothly
             displayLevel = lastDisplayLevel - (lastDisplayLevel - clampedLevel) * decayRate
         }
 
-        lastDisplayLevel = max(0.03, displayLevel)
+        lastDisplayLevel = max(0.0, displayLevel)
         audioLevels.append(lastDisplayLevel)
 
-        // Keep samples for waveform display (~16ms intervals, ~900 = 15 seconds)
-        if audioLevels.count > 900 {
+        if audioLevels.count > 1200 {
             audioLevels.removeFirst()
         }
     }

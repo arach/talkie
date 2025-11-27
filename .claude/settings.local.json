@@ -35,7 +35,10 @@
       "Bash(xargs:*)",
       "Bash(brew list:*)",
       "Bash(brew install:*)",
-      "Bash(osascript:*)"
+      "Bash(osascript:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

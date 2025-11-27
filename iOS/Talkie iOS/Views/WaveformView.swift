@@ -54,59 +54,198 @@ struct WaveformView: View {
     }
 }
 
-// MARK: - Live Waveform View (for recording)
-// Shows a fixed-width oscillating waveform that doesn't accumulate
+// MARK: - Waveform Style Options
+
+enum WaveformStyle: Hashable {
+    case wave
+    case spectrum
+    case particles
+}
+
+// MARK: - Wave Style (Faked waveform using noise + amplitude)
+
+struct WaveWaveformView: View {
+    let levels: [Float]
+    let height: CGFloat
+    var color: Color = .red
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+            Canvas { context, size in
+                let midY = size.height / 2
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let pointCount = 200
+
+                // Get recent levels
+                let recentLevels: [Float]
+                if levels.count >= pointCount {
+                    recentLevels = Array(levels.suffix(pointCount))
+                } else {
+                    let padding = Array(repeating: Float(0), count: pointCount - levels.count)
+                    recentLevels = padding + levels
+                }
+
+                let sliceWidth = size.width / CGFloat(pointCount - 1)
+                var path = Path()
+
+                for i in 0..<pointCount {
+                    let level = CGFloat(recentLevels[i])
+                    let x = CGFloat(i) * sliceWidth
+
+                    // Multiple sine waves at different frequencies for organic feel
+                    let wave1 = sin(CGFloat(i) * 0.15 + CGFloat(time) * 3)
+                    let wave2 = sin(CGFloat(i) * 0.08 - CGFloat(time) * 2) * 0.5
+                    let wave3 = sin(CGFloat(i) * 0.3 + CGFloat(time) * 5) * 0.25
+                    let combinedWave = wave1 + wave2 + wave3
+
+                    // Amplitude based on audio level
+                    let amplitude = level * midY * 0.5
+                    let y = midY + combinedWave * amplitude
+
+                    if i == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+
+                // Indigo gradient like React
+                let gradient = Gradient(colors: [
+                    Color(hex: "4f46e5"),
+                    Color(hex: "818cf8"),
+                    Color(hex: "4f46e5")
+                ])
+
+                context.stroke(
+                    path,
+                    with: .linearGradient(gradient, startPoint: CGPoint(x: 0, y: midY), endPoint: CGPoint(x: size.width, y: midY)),
+                    lineWidth: 2.5
+                )
+            }
+        }
+        .frame(height: height)
+    }
+}
+
+// MARK: - Spectrum Style (Bars from React)
+
+struct SpectrumWaveformView: View {
+    let levels: [Float]
+    let height: CGFloat
+    var color: Color = .red
+
+    var body: some View {
+        Canvas { context, size in
+            let barCount = 48
+            let gap: CGFloat = 4
+            let padding: CGFloat = 20
+            let totalGapSpace = CGFloat(barCount - 1) * gap
+            let barWidth = (size.width - padding * 2 - totalGapSpace) / CGFloat(barCount)
+
+            let recentLevels: [Float]
+            if levels.count >= barCount {
+                recentLevels = Array(levels.suffix(barCount))
+            } else {
+                let pad = Array(repeating: Float(0), count: barCount - levels.count)
+                recentLevels = pad + levels
+            }
+
+            for i in 0..<barCount {
+                let level = CGFloat(recentLevels[i])
+                // Non-linear height like React version
+                let barHeight = pow(level, 1.2) * (size.height * 0.7)
+
+                if barHeight < 1 { continue }
+
+                let x = padding + CGFloat(i) * (barWidth + gap)
+                let y = size.height / 2 - barHeight / 2
+
+                let rect = CGRect(x: x, y: y, width: barWidth, height: barHeight)
+                let roundedRect = RoundedRectangle(cornerRadius: 2).path(in: rect)
+
+                // Color gradient based on position
+                let hue = 0.64 + (Double(i) / Double(barCount)) * 0.11
+                context.fill(roundedRect, with: .color(Color(hue: hue, saturation: 0.8, brightness: 0.65).opacity(0.9)))
+            }
+        }
+        .frame(height: height)
+    }
+}
+
+// MARK: - Particles Style (Our original flowing particles)
+
+struct ParticlesWaveformView: View {
+    let levels: [Float]
+    let height: CGFloat
+    var color: Color = .red
+
+    private var currentLevel: Float {
+        levels.last ?? 0
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let centerY = size.height / 2
+                let level = CGFloat(currentLevel)
+
+                // More particles - base of 40, up to 100 with loud audio
+                let baseCount = 40
+                let bonusCount = Int(level * 60)
+                let particleCount = baseCount + bonusCount
+
+                for i in 0..<particleCount {
+                    let seed = Double(i) * 1.618033988749
+
+                    // Particle position based on time and seed
+                    let speed = 0.2 + (seed.truncatingRemainder(dividingBy: 1.0)) * 0.6
+                    let xProgress = (time * speed + seed).truncatingRemainder(dividingBy: 1.0)
+                    let x = CGFloat(xProgress) * size.width
+
+                    // Y position: oscillates around center, amplitude based on level
+                    let baseY = sin(time * 2 + seed * 10) * Double(level) * Double(centerY) * 0.8
+                    let y = centerY + CGFloat(baseY)
+
+                    // Size pulses with level
+                    let baseSize: CGFloat = 2.5
+                    let levelBonus = level * 5
+                    let particleSize = baseSize + levelBonus * CGFloat(0.5 + sin(seed * 5) * 0.5)
+
+                    // Opacity varies
+                    let opacity = 0.5 + Double(level) * 0.4 * (0.5 + sin(seed * 3) * 0.5)
+
+                    let rect = CGRect(
+                        x: x - particleSize / 2,
+                        y: y - particleSize / 2,
+                        width: particleSize,
+                        height: particleSize
+                    )
+                    context.fill(Circle().path(in: rect), with: .color(color.opacity(opacity)))
+                }
+            }
+        }
+        .frame(height: height)
+    }
+}
+
+// MARK: - Unified LiveWaveformView
 
 struct LiveWaveformView: View {
     let levels: [Float]
     let height: CGFloat
     var color: Color = .red
-    var barCount: Int = 70
+    var style: WaveformStyle = .spectrum
 
     var body: some View {
-        GeometryReader { geometry in
-            let barWidth: CGFloat = 2.5
-            let spacing: CGFloat = 1.5
-            let totalBarWidth = barWidth + spacing
-            let availableBars = min(barCount, Int(geometry.size.width / totalBarWidth))
-
-            // Take only the most recent levels to fill the view
-            let displayLevels = getRecentLevels(count: availableBars)
-
-            HStack(alignment: .center, spacing: spacing) {
-                ForEach(0..<availableBars, id: \.self) { index in
-                    let level = index < displayLevels.count ? displayLevels[index] : 0.02
-
-                    RoundedRectangle(cornerRadius: barWidth / 2)
-                        .fill(color)
-                        .frame(
-                            width: barWidth,
-                            height: max(3, CGFloat(level) * height * 0.95)
-                        )
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: height, alignment: .center)
-            .animation(.easeOut(duration: 0.08), value: levels.count)
+        switch style {
+        case .wave:
+            WaveWaveformView(levels: levels, height: height, color: color)
+        case .spectrum:
+            SpectrumWaveformView(levels: levels, height: height, color: color)
+        case .particles:
+            ParticlesWaveformView(levels: levels, height: height, color: color)
         }
-        .frame(height: height)
-    }
-
-    private func getRecentLevels(count: Int) -> [Float] {
-        guard !levels.isEmpty else {
-            return Array(repeating: 0.02, count: count)
-        }
-
-        // Take the most recent 'count' levels
-        let startIndex = max(0, levels.count - count)
-        let recentLevels = Array(levels.suffix(from: startIndex))
-
-        // Pad with low values if we don't have enough
-        if recentLevels.count < count {
-            let padding = Array(repeating: Float(0.02), count: count - recentLevels.count)
-            return padding + recentLevels
-        }
-
-        return Array(recentLevels)
     }
 }
 
@@ -127,11 +266,11 @@ struct LiveWaveformView: View {
 
         LiveWaveformView(
             levels: Array(repeating: 0.0, count: 30).map { _ in Float.random(in: 0.1...1) },
-            height: 120,
+            height: 200,
             color: .red
         )
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(8)
+        .background(Color.black)
+        .cornerRadius(16)
     }
     .padding()
 }
