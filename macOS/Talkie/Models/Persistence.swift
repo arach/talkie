@@ -49,15 +49,7 @@ class SyncStatusManager: ObservableObject {
         lastSyncDate = Date()
         state = .synced
         pendingChanges = 0
-
-        if changes > 0 {
-            // Post notification for console
-            NotificationCenter.default.post(
-                name: .talkieSyncCompleted,
-                object: nil,
-                userInfo: ["changes": changes]
-            )
-        }
+        // Note: Notification is posted by CloudKitSyncManager to avoid duplicates
     }
 
     func setCloudAvailable(_ available: Bool) {

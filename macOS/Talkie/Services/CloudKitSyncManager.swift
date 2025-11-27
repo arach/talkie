@@ -84,24 +84,32 @@ class CloudKitSyncManager: ObservableObject {
     }
 
     private func performSync() async {
-        isSyncing = true
-        NotificationCenter.default.post(name: .talkieSyncStarted, object: nil)
-
-        await MainActor.run {
+        // Use DispatchQueue to defer @Published updates and avoid
+        // "Publishing changes from within view updates" warnings
+        DispatchQueue.main.async {
+            self.isSyncing = true
             SyncStatusManager.shared.setSyncing()
         }
+
+        NotificationCenter.default.post(name: .talkieSyncStarted, object: nil)
 
         logger.info("Starting CloudKit sync...")
 
         do {
             let changes = try await fetchChanges()
 
-            await MainActor.run {
-                lastSyncDate = Date()
-                lastChangeCount = changes
-                isSyncing = false
+            DispatchQueue.main.async {
+                self.lastSyncDate = Date()
+                self.lastChangeCount = changes
+                self.isSyncing = false
                 SyncStatusManager.shared.setSynced(changes: changes)
             }
+
+            NotificationCenter.default.post(
+                name: .talkieSyncCompleted,
+                object: nil,
+                userInfo: ["changes": changes]
+            )
 
             if changes > 0 {
                 logger.info("Sync completed: \(changes) change(s)")
@@ -112,8 +120,8 @@ class CloudKitSyncManager: ObservableObject {
         } catch {
             logger.error("Sync failed: \(error.localizedDescription)")
 
-            await MainActor.run {
-                isSyncing = false
+            DispatchQueue.main.async {
+                self.isSyncing = false
                 SyncStatusManager.shared.setError(error.localizedDescription)
             }
         }
