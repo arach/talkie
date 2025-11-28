@@ -8,18 +8,11 @@ import {
   Smartphone,
   Laptop,
   ArrowRight,
-  Fingerprint,
   Cpu,
   Lock,
-  Zap,
-  Layers,
-  Wand2,
   Quote,
   HardDrive,
-  Key,
-  Eye,
   Ban,
-  ExternalLink,
 } from 'lucide-react'
 import PrimitivesSection from './PrimitivesSection'
 import Container from './Container'
@@ -212,102 +205,78 @@ export default function LandingPage() {
       {/* Security Architecture Preview Section */}
       <section id="security-preview" className="py-16 md:py-24 bg-zinc-900 border-t border-b border-zinc-800 relative overflow-hidden">
         <div className="absolute inset-0 bg-tactical-grid-dark bg-[size:40px_40px] opacity-20 pointer-events-none" />
-        <div className="absolute top-0 right-0 p-24 opacity-5 pointer-events-none">
-          <ShieldCheck className="w-96 h-96 text-emerald-500" />
-        </div>
 
         <Container className="relative z-10">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-            <div className="max-w-xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-emerald-500/10 rounded border border-emerald-500/20">
-                  <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                </div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">Security Architecture</span>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+            <div className="max-w-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="w-4 h-4 text-emerald-500" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">Data Sovereignty</span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight mb-4 leading-tight">
-                Privacy is not a setting.<br/>
-                It&apos;s the architecture.
+              <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight leading-tight">
+                We can&apos;t see your data.<br/>
+                <span className="text-zinc-500">By design.</span>
               </h2>
-              <p className="text-sm text-zinc-400 leading-relaxed">
-                Talkie is built on a &quot;Local-First&quot; doctrine. We do not own servers that store your data. We do not train on your ideas. You own the keys, the database, and the AI models.
-              </p>
             </div>
             <Link
               href="/security"
               className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-500 hover:text-emerald-400 transition-colors shrink-0"
             >
-              Full Security Deep Dive <ArrowRight className="w-3 h-3" />
+              Security Deep Dive <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
 
-          {/* Security Features Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-
-            <div className="group p-6 bg-zinc-950/50 border border-zinc-800 hover:border-emerald-500/30 transition-all rounded-sm">
-              <div className="mb-4 inline-flex items-center justify-center w-10 h-10 rounded bg-zinc-800 text-white group-hover:bg-emerald-500/10 group-hover:text-emerald-400 transition-colors">
-                <HardDrive className="w-5 h-5" strokeWidth={1.5} />
-              </div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-white mb-1">Local-First Storage</h3>
-              <p className="text-[10px] font-mono text-emerald-500 uppercase tracking-wider mb-3">SQLite Database</p>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Your data lives in a local SQLite database on your device&apos;s encrypted disk. Deleting the app deletes the data.
-              </p>
-            </div>
-
-            <div className="group p-6 bg-zinc-950/50 border border-zinc-800 hover:border-emerald-500/30 transition-all rounded-sm">
-              <div className="mb-4 inline-flex items-center justify-center w-10 h-10 rounded bg-zinc-800 text-white group-hover:bg-emerald-500/10 group-hover:text-emerald-400 transition-colors">
-                <Cloud className="w-5 h-5" strokeWidth={1.5} />
-              </div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-white mb-1">Apple iCloud Sync</h3>
-              <p className="text-[10px] font-mono text-emerald-500 uppercase tracking-wider mb-3">Zero-Knowledge Architecture</p>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Data is encrypted with keys managed by your Apple ID. We have no access to these keys and cannot decrypt your data.
-              </p>
-            </div>
-
-            <div className="group p-6 bg-zinc-950/50 border border-zinc-800 hover:border-emerald-500/30 transition-all rounded-sm">
-              <div className="mb-4 inline-flex items-center justify-center w-10 h-10 rounded bg-zinc-800 text-white group-hover:bg-emerald-500/10 group-hover:text-emerald-400 transition-colors">
-                <Cpu className="w-5 h-5" strokeWidth={1.5} />
-              </div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-white mb-1">On-Device Intelligence</h3>
-              <p className="text-[10px] font-mono text-emerald-500 uppercase tracking-wider mb-3">CoreML & MLX</p>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Transcriptions occur 100% on-device. Run local LLMs without a single packet leaving your Mac.
-              </p>
-            </div>
-
-          </div>
-
-          {/* Condensed Vendor Isolation Banner */}
+          {/* Condensed 3-column stance */}
           <div className="bg-zinc-950 border border-zinc-800 rounded-sm overflow-hidden">
             <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-800">
 
-              {/* Vendor */}
-              <div className="p-6 text-center bg-red-900/5">
-                <div className="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase text-red-500 bg-red-900/20 px-2 py-1 rounded mb-3">
-                  <Ban className="w-3 h-3" /> No Access
+              {/* Local Storage */}
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <HardDrive className="w-4 h-4 text-emerald-500" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Local-First</span>
                 </div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-1">Talkie Systems</h4>
-                <p className="text-[10px] text-zinc-500">Cannot decrypt your data</p>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Data lives on your device. Delete the app, delete the data. No cloud database we control.
+                </p>
               </div>
 
-              {/* Wall */}
-              <div className="p-6 text-center bg-black/50 flex flex-col items-center justify-center">
-                <div className="text-[10px] font-mono font-bold uppercase text-red-500 mb-2">Wall of Separation</div>
-                <div className="px-3 py-1 bg-zinc-800 rounded text-[9px] font-mono uppercase text-zinc-400">App Store Binary Only</div>
-              </div>
-
-              {/* User */}
-              <div className="p-6 text-center bg-emerald-900/5">
-                <div className="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase text-emerald-500 bg-emerald-900/20 px-2 py-1 rounded mb-3">
-                  <ShieldCheck className="w-3 h-3" /> Full Custody
+              {/* iCloud */}
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <Cloud className="w-4 h-4 text-emerald-500" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Your iCloud</span>
                 </div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-1">You & Apple ID</h4>
-                <p className="text-[10px] text-zinc-500">Sole data proprietor</p>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Sync uses Apple&apos;s Private CloudKit. Keys stay with your Apple ID. We never see them.
+                </p>
               </div>
 
+              {/* On-Device AI */}
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <Cpu className="w-4 h-4 text-emerald-500" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">On-Device AI</span>
+                </div>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Transcription runs locally on Neural Engine. Use local LLMs for full offline workflows.
+                </p>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Vendor Isolation One-liner */}
+          <div className="mt-6 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-[10px] font-mono uppercase">
+            <div className="flex items-center gap-2">
+              <Ban className="w-3 h-3 text-red-500" />
+              <span className="text-red-400">Talkie: No data access</span>
+            </div>
+            <div className="hidden md:block w-px h-4 bg-zinc-700"></div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-3 h-3 text-emerald-500" />
+              <span className="text-emerald-400">You: Full ownership</span>
             </div>
           </div>
 
