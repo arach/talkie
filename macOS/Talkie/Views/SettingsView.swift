@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CloudKit
 
 struct SettingsView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
@@ -60,6 +61,32 @@ struct SettingsView: View {
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                         } icon: {
                             Image(systemName: "folder")
+                                .font(.system(size: 11))
+                                .frame(width: 16)
+                        }
+                    }
+                }
+
+                Section("DATA & FILES") {
+                    NavigationLink(destination: LocalFilesSettingsView()) {
+                        Label {
+                            Text("Local Files")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        } icon: {
+                            Image(systemName: "folder.badge.person.crop")
+                                .font(.system(size: 11))
+                                .frame(width: 16)
+                        }
+                    }
+                }
+
+                Section("DEBUG") {
+                    NavigationLink(destination: DebugInfoView()) {
+                        Label {
+                            Text("Debug Info")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        } icon: {
+                            Image(systemName: "info.circle")
                                 .font(.system(size: 11))
                                 .frame(width: 16)
                         }
@@ -1351,5 +1378,501 @@ enum QuickActionsConfig {
                 UserDefaults.standard.set(data, forKey: pinnedKey)
             }
         }
+    }
+}
+
+// MARK: - Debug Info View
+
+struct DebugInfoView: View {
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
+        animation: .default
+    )
+    private var allVoiceMemos: FetchedResults<VoiceMemo>
+
+    @State private var iCloudStatus: String = "Checking..."
+
+    private var environment: String {
+        #if DEBUG
+        return "Development"
+        #else
+        return "Production"
+        #endif
+    }
+
+    private var bundleID: String {
+        Bundle.main.bundleIdentifier ?? "Unknown"
+    }
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    private var build: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 16))
+                        Text("DEBUG INFO")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                    }
+                    .foregroundColor(.primary)
+
+                    Text("Diagnostic information about the app environment.")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Divider()
+
+                // Info rows
+                VStack(spacing: 12) {
+                    debugRow(label: "Environment", value: environment, valueColor: environment == "Development" ? .orange : .green)
+                    debugRow(label: "iCloud Status", value: iCloudStatus)
+                    debugRow(label: "CloudKit Container", value: "iCloud.com.jdi.talkie")
+                    debugRow(label: "Bundle ID", value: bundleID)
+                    debugRow(label: "Version", value: "\(version) (\(build))")
+                    debugRow(label: "Voice Memos", value: "\(allVoiceMemos.count)")
+                    debugRow(label: "Last Sync", value: SyncStatusManager.shared.lastSyncAgo)
+                }
+
+                Divider()
+
+                // Sync status section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("SYNC STATUS")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(syncStatusColor)
+                            .frame(width: 8, height: 8)
+                        Text(syncStatusText)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.primary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(8)
+                }
+
+                Spacer()
+            }
+            .padding(32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.textBackgroundColor))
+        .onAppear {
+            checkiCloudStatus()
+        }
+    }
+
+    @ViewBuilder
+    private func debugRow(label: String, value: String, valueColor: Color = .primary) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 140, alignment: .leading)
+
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(valueColor)
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(6)
+    }
+
+    private var syncStatusColor: Color {
+        switch SyncStatusManager.shared.state {
+        case .idle: return .gray
+        case .syncing: return .blue
+        case .synced: return .green
+        case .error: return .red
+        }
+    }
+
+    private var syncStatusText: String {
+        switch SyncStatusManager.shared.state {
+        case .idle: return "Idle"
+        case .syncing: return "Syncing..."
+        case .synced: return "Synced"
+        case .error(let message): return "Error: \(message)"
+        }
+    }
+
+    private func checkiCloudStatus() {
+        let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
+        container.accountStatus { status, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    iCloudStatus = "Error: \(error.localizedDescription)"
+                    return
+                }
+
+                switch status {
+                case .available:
+                    iCloudStatus = "Available"
+                case .noAccount:
+                    iCloudStatus = "No Account"
+                case .restricted:
+                    iCloudStatus = "Restricted"
+                case .couldNotDetermine:
+                    iCloudStatus = "Could Not Determine"
+                case .temporarilyUnavailable:
+                    iCloudStatus = "Temporarily Unavailable"
+                @unknown default:
+                    iCloudStatus = "Unknown"
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Local Files Settings View
+
+struct LocalFilesSettingsView: View {
+    @ObservedObject private var settingsManager = SettingsManager.shared
+    @State private var showingTranscriptsFolderPicker = false
+    @State private var showingAudioFolderPicker = false
+    @State private var statusMessage: String?
+    @State private var stats: (transcripts: Int, audioFiles: Int, totalSize: Int64) = (0, 0, 0)
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder.badge.person.crop")
+                            .font(.system(size: 16))
+                        Text("LOCAL FILES")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                    }
+                    .foregroundColor(.primary)
+
+                    Text("Store your transcripts and audio files locally on your Mac.")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                // Value proposition - always visible
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.shield")
+                            .font(.system(size: 12))
+                            .foregroundColor(.green)
+                        Text("YOUR DATA, YOUR FILES")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(.green)
+                    }
+
+                    Text("Local files are stored as plain text (Markdown) and standard audio formats. You can open, edit, backup, or move them freely. No lock-in, full portability.")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .background(Color.green.opacity(0.05))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                )
+
+                Divider()
+
+                // MARK: - Transcripts Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle(isOn: $settingsManager.saveTranscriptsLocally) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.blue)
+                                Text("Save Transcripts Locally")
+                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            }
+                            HStack(spacing: 4) {
+                                Text("Save as Markdown with YAML frontmatter.")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                Link("File format", destination: URL(string: "https://talkie.jdi.do/docs/file-format")!)
+                                    .font(.system(size: 10, design: .monospaced))
+                            }
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .onChange(of: settingsManager.saveTranscriptsLocally) { _, enabled in
+                        if enabled {
+                            TranscriptFileManager.shared.ensureFoldersExist()
+                            syncNow()
+                        }
+                    }
+
+                    if settingsManager.saveTranscriptsLocally {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("TRANSCRIPTS FOLDER")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                                .foregroundColor(.secondary)
+
+                            HStack(spacing: 8) {
+                                TextField("~/Documents/Talkie/Transcripts", text: $settingsManager.transcriptsFolderPath)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 11, design: .monospaced))
+
+                                Button(action: { showingTranscriptsFolderPicker = true }) {
+                                    Image(systemName: "folder")
+                                        .font(.system(size: 12))
+                                }
+                                .buttonStyle(.bordered)
+                                .help("Browse for folder")
+
+                                Button(action: { TranscriptFileManager.shared.openTranscriptsFolderInFinder() }) {
+                                    Image(systemName: "arrow.up.forward.square")
+                                        .font(.system(size: 12))
+                                }
+                                .buttonStyle(.bordered)
+                                .help("Open in Finder")
+                            }
+                        }
+                        .padding(.leading, 24)
+                    }
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+
+                // MARK: - Audio Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle(isOn: $settingsManager.saveAudioLocally) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.purple)
+                                Text("Save Audio Files Locally")
+                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            }
+                            Text("Copy M4A audio recordings to your local folder.")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .onChange(of: settingsManager.saveAudioLocally) { _, enabled in
+                        if enabled {
+                            TranscriptFileManager.shared.ensureFoldersExist()
+                            syncNow()
+                        }
+                    }
+
+                    if settingsManager.saveAudioLocally {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("AUDIO FOLDER")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                                .foregroundColor(.secondary)
+
+                            HStack(spacing: 8) {
+                                TextField("~/Documents/Talkie/Audio", text: $settingsManager.audioFolderPath)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 11, design: .monospaced))
+
+                                Button(action: { showingAudioFolderPicker = true }) {
+                                    Image(systemName: "folder")
+                                        .font(.system(size: 12))
+                                }
+                                .buttonStyle(.bordered)
+                                .help("Browse for folder")
+
+                                Button(action: { TranscriptFileManager.shared.openAudioFolderInFinder() }) {
+                                    Image(systemName: "arrow.up.forward.square")
+                                        .font(.system(size: 12))
+                                }
+                                .buttonStyle(.bordered)
+                                .help("Open in Finder")
+                            }
+
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.orange)
+                                Text("Audio files can take significant disk space")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.orange)
+                            }
+                            .padding(8)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                        .padding(.leading, 24)
+                    }
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+
+                // Stats and actions (only show if any local files enabled)
+                if settingsManager.localFilesEnabled {
+                    Divider()
+
+                    // Stats
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("FILE STATISTICS")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 24) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(stats.transcripts)")
+                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.blue)
+                                Text("Transcripts")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(stats.audioFiles)")
+                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.purple)
+                                Text("Audio Files")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(ByteCountFormatter.string(fromByteCount: stats.totalSize, countStyle: .file))
+                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.green)
+                                Text("Total Size")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                    }
+
+                    // Quick actions
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("QUICK ACTIONS")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 12) {
+                            Button(action: syncNow) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                    Text("Sync Now")
+                                }
+                                .font(.system(size: 10))
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button(action: refreshStats) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.clockwise")
+                                    Text("Refresh Stats")
+                                }
+                                .font(.system(size: 10))
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+
+                    // Status message
+                    if let message = statusMessage {
+                        HStack(spacing: 6) {
+                            Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
+                                .foregroundColor(message.contains("✓") ? .green : .blue)
+                            Text(message)
+                                .font(.system(size: 10, design: .monospaced))
+                        }
+                        .padding(8)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.textBackgroundColor))
+        .fileImporter(
+            isPresented: $showingTranscriptsFolderPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    settingsManager.transcriptsFolderPath = url.path
+                    TranscriptFileManager.shared.ensureFoldersExist()
+                    refreshStats()
+                }
+            case .failure(let error):
+                statusMessage = "Error: \(error.localizedDescription)"
+            }
+        }
+        .fileImporter(
+            isPresented: $showingAudioFolderPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    settingsManager.audioFolderPath = url.path
+                    TranscriptFileManager.shared.ensureFoldersExist()
+                    refreshStats()
+                }
+            case .failure(let error):
+                statusMessage = "Error: \(error.localizedDescription)"
+            }
+        }
+        .onAppear {
+            refreshStats()
+        }
+    }
+
+    private func syncNow() {
+        let context = PersistenceController.shared.container.viewContext
+        TranscriptFileManager.shared.syncAllMemos(context: context)
+        statusMessage = "✓ Synced local files"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            refreshStats()
+            if statusMessage == "✓ Synced local files" {
+                statusMessage = nil
+            }
+        }
+    }
+
+    private func refreshStats() {
+        stats = TranscriptFileManager.shared.getStats()
     }
 }

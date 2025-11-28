@@ -68,6 +68,10 @@ struct TalkieNavigationView: View {
             // Full-width status bar (like VS Code/Cursor)
             statusBarView
         }
+        .onChange(of: allMemos.count) { _ in
+            // Mark any new memos as received when they appear in the list
+            PersistenceController.markMemosAsReceivedByMac(context: viewContext)
+        }
     }
 
     // MARK: - Status Bar View
@@ -76,11 +80,31 @@ struct TalkieNavigationView: View {
 
     private var statusBarView: some View {
         HStack(spacing: 12) {
-            // Left side - iCloud sync status
-            HStack(spacing: 6) {
-                syncStatusIcon
-                syncStatusText
+            // Left side - iCloud sync status (clickable to sync)
+            Button(action: {
+                CloudKitSyncManager.shared.recordActivity() // Boost to active interval
+                CloudKitSyncManager.shared.syncNow()
+            }) {
+                HStack(spacing: 6) {
+                    syncStatusIcon
+                    syncStatusText
+                }
             }
+            .buttonStyle(.plain)
+            .help("Click to sync now")
+
+            // Manual sync button
+            Button(action: {
+                CloudKitSyncManager.shared.recordActivity()
+                CloudKitSyncManager.shared.syncNow()
+            }) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Sync now")
+            .disabled(syncManager.state == .syncing)
 
             Divider()
                 .frame(height: 12)
@@ -97,10 +121,17 @@ struct TalkieNavigationView: View {
 
             Spacer()
 
-            // Right side - could add more status items here
-            Text("Talkie")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.5))
+            // Right side - DEV indicator (only in debug builds)
+            #if DEBUG
+            Text("DEV")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(1)
+                .foregroundColor(.orange.opacity(0.7))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(3)
+            #endif
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)

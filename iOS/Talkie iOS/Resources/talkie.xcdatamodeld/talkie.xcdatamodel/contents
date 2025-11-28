@@ -11,6 +11,7 @@
     </entity>
     <entity name="VoiceMemo" representedClassName="VoiceMemo" syncable="YES" codeGenerationType="class">
         <attribute name="audioData" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <attribute name="cloudSyncedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="duration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="fileURL" optional="YES" attributeType="String"/>
@@ -19,7 +20,9 @@
         <attribute name="isProcessingSummary" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="isProcessingTasks" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="isTranscribing" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="macReceivedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="originDeviceId" optional="YES" attributeType="String"/>
         <attribute name="reminders" optional="YES" attributeType="String"/>
         <attribute name="sortOrder" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="summary" optional="YES" attributeType="String"/>

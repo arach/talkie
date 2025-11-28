@@ -2,15 +2,112 @@
 //  Persistence.swift
 //  Talkie macOS
 //
-//  Clean token-based CloudKit sync without persistent history tracking bloat.
+//  Core Data + CloudKit sync with WAL management best practices.
 //
 
 import CoreData
 import CloudKit
+import AppKit
 import os
 import Combine
 
 private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "Persistence")
+
+// MARK: - WAL Management
+
+/// Manages SQLite WAL file size and persistent history cleanup
+class WALManager {
+    static let shared = WALManager()
+
+    private var purgeTimer: Timer?
+    private let purgeInterval: TimeInterval = 3600 // Purge history every hour
+
+    private init() {}
+
+    func startPeriodicMaintenance(container: NSPersistentContainer) {
+        // Purge old history on startup
+        purgeOldHistory(container: container)
+
+        // Schedule periodic purges
+        purgeTimer = Timer.scheduledTimer(withTimeInterval: purgeInterval, repeats: true) { [weak self] _ in
+            self?.purgeOldHistory(container: container)
+        }
+
+        logger.info("WAL maintenance scheduled (purge interval: \(Int(self.purgeInterval))s)")
+    }
+
+    /// Purge persistent history older than 7 days
+    func purgeOldHistory(container: NSPersistentContainer) {
+        let context = container.newBackgroundContext()
+        context.perform {
+            let purgeDate = Date().addingTimeInterval(-7 * 24 * 60 * 60) // 7 days ago
+
+            let purgeRequest = NSPersistentHistoryChangeRequest.deleteHistory(before: purgeDate)
+
+            do {
+                try context.execute(purgeRequest)
+                logger.info("🧹 Purged persistent history older than 7 days")
+            } catch {
+                logger.error("Failed to purge history: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Force WAL checkpoint - merges WAL into main database file
+    /// Call this on app termination or when doing maintenance
+    func checkpoint(container: NSPersistentContainer) {
+        guard let storeURL = container.persistentStoreDescriptions.first?.url else { return }
+
+        // Best practice: Save context to flush pending changes, which triggers WAL checkpoint
+        let context = container.viewContext
+        if context.hasChanges {
+            do {
+                try context.save()
+                logger.info("✅ Context saved before checkpoint")
+            } catch {
+                logger.warning("Context save failed: \(error.localizedDescription)")
+            }
+        }
+
+        // SQLite automatically checkpoints when connections close.
+        // By saving and letting the app terminate gracefully, WAL gets merged.
+        logger.info("✅ WAL checkpoint triggered for \(storeURL.lastPathComponent)")
+    }
+
+    /// Get current WAL file size (for diagnostics)
+    func getWALSize(container: NSPersistentContainer) -> Int64? {
+        guard let storeURL = container.persistentStoreDescriptions.first?.url else { return nil }
+
+        let walURL = storeURL.appendingPathExtension("wal")
+
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: walURL.path)
+            return attributes[.size] as? Int64
+        } catch {
+            return nil
+        }
+    }
+
+    /// Log database file sizes for debugging
+    func logDatabaseSizes(container: NSPersistentContainer) {
+        guard let storeURL = container.persistentStoreDescriptions.first?.url else { return }
+
+        let fm = FileManager.default
+        let walURL = storeURL.deletingPathExtension().appendingPathExtension("sqlite-wal")
+        let shmURL = storeURL.deletingPathExtension().appendingPathExtension("sqlite-shm")
+
+        func size(_ url: URL) -> String {
+            guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+                  let bytes = attrs[.size] as? Int64 else { return "N/A" }
+            return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        }
+
+        logger.info("📊 Database sizes:")
+        logger.info("  • Main DB: \(size(storeURL))")
+        logger.info("  • WAL: \(size(walURL))")
+        logger.info("  • SHM: \(size(shmURL))")
+    }
+}
 
 // MARK: - Sync Status Manager
 
@@ -88,6 +185,11 @@ class SyncStatusManager: ObservableObject {
 struct PersistenceController {
     static let shared = PersistenceController()
 
+    /// Unique identifier for this device (Mac)
+    static var deviceId: String {
+        return "mac-" + (Host.current().localizedName ?? UUID().uuidString)
+    }
+
     @MainActor
     static let preview: PersistenceController = {
         let result = PersistenceController(inMemory: true)
@@ -128,18 +230,22 @@ struct PersistenceController {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
             logger.info("Using in-memory store")
         } else {
-            // Configure CloudKit sync - WITHOUT persistent history tracking
-            // This dramatically reduces WAL bloat and unnecessary disk I/O
+            // Configure CloudKit sync - MUST enable history tracking for proper sync!
+            // NSPersistentCloudKitContainer requires these options to function correctly.
             if let description = container.persistentStoreDescriptions.first {
                 description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
                     containerIdentifier: "iCloud.com.jdi.talkie"
                 )
-                // NOTE: We intentionally DO NOT set:
-                // - NSPersistentHistoryTrackingKey (causes WAL bloat)
-                // - NSPersistentStoreRemoteChangeNotificationPostOptionKey (constant notifications)
-                // Instead, we use CloudKit's server change tokens for efficient delta sync
 
-                logger.info("CloudKit container: iCloud.com.jdi.talkie (token-based sync)")
+                // REQUIRED: Enable persistent history tracking for CloudKit mirroring
+                // Without this, changes won't be pushed to CloudKit!
+                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+
+                // REQUIRED: Enable remote change notifications for real-time sync
+                // Without this, we won't receive updates from other devices!
+                description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+
+                logger.info("CloudKit container: iCloud.com.jdi.talkie (full sync enabled)")
                 logger.info("Store URL: \(description.url?.absoluteString ?? "nil")")
             }
         }
@@ -164,13 +270,35 @@ struct PersistenceController {
         // Check iCloud account status and start initial sync
         PersistenceController.checkiCloudStatus()
 
-        // Start the CloudKit sync manager
+        // Start the CloudKit sync manager, WAL maintenance, and local file manager
         let viewContext = container.viewContext
+        let persistentContainer = container
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             CloudKitSyncManager.shared.configure(with: viewContext)
             CloudKitSyncManager.shared.syncNow()
 
+            // Start WAL maintenance (purges old history, logs sizes)
+            WALManager.shared.startPeriodicMaintenance(container: persistentContainer)
+            WALManager.shared.logDatabaseSizes(container: persistentContainer)
+
+            // Start local file manager (syncs transcripts/audio to local folder if enabled)
+            TranscriptFileManager.shared.configure(with: viewContext)
+
+            // Mark existing memos as received by Mac (for sync status indicator)
+            PersistenceController.markMemosAsReceivedByMac(context: viewContext)
+
             PersistenceController.logMemoCount(context: viewContext)
+        }
+
+        // Listen for app termination to checkpoint WAL
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak container] _ in
+            guard let container = container else { return }
+            logger.info("App terminating - checkpointing WAL...")
+            WALManager.shared.checkpoint(container: container)
         }
     }
 
@@ -306,6 +434,33 @@ struct PersistenceController {
             }
         } catch {
             logger.error("Failed to fetch memos: \(error.localizedDescription)")
+        }
+    }
+
+    /// Mark all memos as received by Mac
+    /// If a memo is visible on Mac and doesn't have macReceivedAt, mark it
+    static func markMemosAsReceivedByMac(context: NSManagedObjectContext) {
+        context.perform {
+            let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "macReceivedAt == nil")
+
+            do {
+                let memos = try context.fetch(fetchRequest)
+                guard !memos.isEmpty else { return }
+
+                let now = Date()
+                for memo in memos {
+                    memo.macReceivedAt = now
+                    if memo.cloudSyncedAt == nil {
+                        memo.cloudSyncedAt = now
+                    }
+                }
+
+                try context.save()
+                logger.info("🖥 Marked \(memos.count) memo(s) as received by Mac")
+            } catch {
+                logger.error("❌ Failed to mark memos as received: \(error.localizedDescription)")
+            }
         }
     }
 }

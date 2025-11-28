@@ -11,6 +11,60 @@ import CoreData
 class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
+    // MARK: - Local File Storage Settings (UserDefaults - device-specific)
+    // Where transcript and audio files live on disk - your data, your files
+    // These are independent opt-in features for users who want local file ownership
+
+    private let saveTranscriptsLocallyKey = "saveTranscriptsLocally"
+    private let transcriptsFolderPathKey = "transcriptsFolderPath"
+    private let saveAudioLocallyKey = "saveAudioLocally"
+    private let audioFolderPathKey = "audioFolderPath"
+
+    /// Default transcripts folder: ~/Documents/Talkie/Transcripts
+    static var defaultTranscriptsFolderPath: String {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return documentsPath.appendingPathComponent("Talkie/Transcripts").path
+    }
+
+    /// Default audio folder: ~/Documents/Talkie/Audio
+    static var defaultAudioFolderPath: String {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return documentsPath.appendingPathComponent("Talkie/Audio").path
+    }
+
+    /// Whether to save transcripts as Markdown files locally (default: false)
+    @Published var saveTranscriptsLocally: Bool {
+        didSet {
+            UserDefaults.standard.set(saveTranscriptsLocally, forKey: saveTranscriptsLocallyKey)
+        }
+    }
+
+    /// Where transcript files are saved
+    @Published var transcriptsFolderPath: String {
+        didSet {
+            UserDefaults.standard.set(transcriptsFolderPath, forKey: transcriptsFolderPathKey)
+        }
+    }
+
+    /// Whether to save M4A audio files locally (default: false)
+    @Published var saveAudioLocally: Bool {
+        didSet {
+            UserDefaults.standard.set(saveAudioLocally, forKey: saveAudioLocallyKey)
+        }
+    }
+
+    /// Where audio files are saved
+    @Published var audioFolderPath: String {
+        didSet {
+            UserDefaults.standard.set(audioFolderPath, forKey: audioFolderPathKey)
+        }
+    }
+
+    // Convenience accessors
+    var localFilesEnabled: Bool { saveTranscriptsLocally || saveAudioLocally }
+    var transcriptFilesEnabled: Bool { saveTranscriptsLocally }
+    var localFilesIncludeAudio: Bool { saveAudioLocally }
+
     // Internal storage
     @Published private var _geminiApiKey: String = ""
     @Published private var _openaiApiKey: String?
@@ -51,6 +105,12 @@ class SettingsManager: ObservableObject {
     private var isInitialized = false
 
     private init() {
+        // Initialize local file storage settings from UserDefaults
+        // Default: DISABLED - these are opt-in advanced features for data ownership
+        self.saveTranscriptsLocally = UserDefaults.standard.object(forKey: saveTranscriptsLocallyKey) as? Bool ?? false
+        self.transcriptsFolderPath = UserDefaults.standard.string(forKey: transcriptsFolderPathKey) ?? SettingsManager.defaultTranscriptsFolderPath
+        self.saveAudioLocally = UserDefaults.standard.object(forKey: saveAudioLocallyKey) as? Bool ?? false
+        self.audioFolderPath = UserDefaults.standard.string(forKey: audioFolderPathKey) ?? SettingsManager.defaultAudioFolderPath
         // Defer Core Data access until first use
     }
 

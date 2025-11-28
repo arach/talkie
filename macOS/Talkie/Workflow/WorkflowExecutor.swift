@@ -18,11 +18,26 @@ struct WorkflowContext {
     var date: Date
     var outputs: [String: String] = [:]
 
+    /// Filename-safe date formatter (2025-11-26)
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    /// Filename-safe datetime formatter (2025-11-26_15-30)
+    private static let datetimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm"
+        return formatter
+    }()
+
     func resolve(_ template: String) -> String {
         var result = template
         result = result.replacingOccurrences(of: "{{TRANSCRIPT}}", with: transcript)
-        result = result.replacingOccurrences(of: "{{TITLE}}", with: title)
-        result = result.replacingOccurrences(of: "{{DATE}}", with: ISO8601DateFormatter().string(from: date))
+        result = result.replacingOccurrences(of: "{{TITLE}}", with: sanitizeForFilename(title))
+        result = result.replacingOccurrences(of: "{{DATE}}", with: Self.dateFormatter.string(from: date))
+        result = result.replacingOccurrences(of: "{{DATETIME}}", with: Self.datetimeFormatter.string(from: date))
 
         // Replace output keys
         for (key, value) in outputs {
@@ -39,6 +54,28 @@ struct WorkflowContext {
             result = result.replacingOccurrences(of: "{{OUTPUT}}", with: lastOutput)
         }
 
+        return result
+    }
+
+    /// Sanitize a string to be safe for use in filenames
+    private func sanitizeForFilename(_ input: String) -> String {
+        var result = input
+        let invalidChars: [(String, String)] = [
+            (":", "-"),
+            ("/", "-"),
+            ("\\", "-"),
+            ("*", ""),
+            ("?", ""),
+            ("\"", "'"),
+            ("<", ""),
+            (">", ""),
+            ("|", "-"),
+            ("\n", " "),
+            ("\r", ""),
+        ]
+        for (char, replacement) in invalidChars {
+            result = result.replacingOccurrences(of: char, with: replacement)
+        }
         return result
     }
 }
@@ -178,6 +215,19 @@ class WorkflowExecutor: ObservableObject {
                 usedProvider = config.provider.displayName
                 usedModel = config.modelId
                 stepInput = workflowContext.resolve(config.prompt)
+            } else if case .shell(let config) = step.config {
+                // For shell steps, show the command that will be executed
+                let resolvedArgs = config.arguments.map { workflowContext.resolve($0) }
+                let commandDisplay = ([config.executable] + resolvedArgs)
+                    .map { $0.contains(" ") ? "\"\($0)\"" : $0 }
+                    .joined(separator: " ")
+                if let stdin = config.stdin {
+                    let resolvedStdin = workflowContext.resolve(stdin)
+                    let preview = String(resolvedStdin.prefix(200))
+                    stepInput = "$ \(commandDisplay)\n\n[stdin: \(preview)\(resolvedStdin.count > 200 ? "..." : "")]"
+                } else {
+                    stepInput = "$ \(commandDisplay)"
+                }
             } else {
                 stepInput = workflowContext.transcript
             }
@@ -357,7 +407,7 @@ class WorkflowExecutor: ObservableObject {
         print("🖥️ Executing shell command: \(config.executable)")
 
         // Resolve template variables and sanitize dynamic content
-        let resolvedArgs = config.arguments.map { arg in
+        var resolvedArgs = config.arguments.map { arg in
             let resolved = context.resolve(arg)
             let sanitized = ShellStepConfig.sanitizeContent(resolved)
 
@@ -368,6 +418,23 @@ class WorkflowExecutor: ObservableObject {
             }
 
             return sanitized
+        }
+
+        // If promptTemplate is provided, resolve it and add as -p argument
+        if let promptTemplate = config.promptTemplate, !promptTemplate.isEmpty {
+            let resolvedPrompt = context.resolve(promptTemplate)
+            let sanitizedPrompt = ShellStepConfig.sanitizeContent(resolvedPrompt)
+
+            // Check for injection attempts
+            let warnings = ShellStepConfig.detectInjectionAttempts(sanitizedPrompt)
+            for warning in warnings {
+                print("⚠️ Injection warning in prompt template: \(warning)")
+            }
+
+            // Add -p flag and the prompt as arguments
+            resolvedArgs.append("-p")
+            resolvedArgs.append(sanitizedPrompt)
+            print("   Prompt template resolved (\(sanitizedPrompt.count) chars)")
         }
 
         // Resolve stdin if provided
@@ -384,7 +451,15 @@ class WorkflowExecutor: ObservableObject {
             return sanitized
         }
 
-        print("   Arguments: \(resolvedArgs)")
+        // Build the command string for display/logging
+        let commandDisplay = ([config.executable] + resolvedArgs)
+            .map { arg in
+                // Quote arguments with spaces for display
+                arg.contains(" ") ? "\"\(arg)\"" : arg
+            }
+            .joined(separator: " ")
+
+        print("   Command: \(commandDisplay)")
         if let stdin = resolvedStdin {
             print("   Stdin length: \(stdin.count) chars")
         }
@@ -405,6 +480,22 @@ class WorkflowExecutor: ObservableObject {
         for (key, value) in config.environment {
             env[key] = context.resolve(value)
         }
+
+        // Ensure PATH includes common tool locations
+        // This is needed for tools like claude that shell out to node
+        let additionalPaths = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/Users/arach/.bun/bin",
+            "/Users/arach/.nvm/versions/node/v20.11.0/bin", // Common nvm path
+            "/Users/arach/.local/bin",
+        ]
+        if let existingPath = env["PATH"] {
+            env["PATH"] = additionalPaths.joined(separator: ":") + ":" + existingPath
+        } else {
+            env["PATH"] = additionalPaths.joined(separator: ":") + ":/usr/bin:/bin"
+        }
+
         // Remove potentially dangerous environment variables
         env.removeValue(forKey: "LD_PRELOAD")
         env.removeValue(forKey: "DYLD_INSERT_LIBRARIES")
@@ -753,23 +844,57 @@ class WorkflowExecutor: ObservableObject {
 
     // MARK: - Save File Step Execution
     private func executeSaveFileStep(_ config: SaveFileStepConfig, context: WorkflowContext) throws -> String {
-        let filename = context.resolve(config.filename)
+        var resolvedFilename = context.resolve(config.filename)
         let content = context.resolve(config.content)
 
-        let directory: URL
-        if let customDir = config.directory {
-            directory = URL(fileURLWithPath: context.resolve(customDir))
+        print("📁 Save File Step:")
+        print("   Config directory: \(config.directory ?? "nil")")
+        print("   Config filename: \(config.filename)")
+        print("   Resolved filename: \(resolvedFilename)")
+
+        var directory: URL
+
+        // Check if filename contains an @alias (e.g., "@Obsidian/notes.md")
+        if resolvedFilename.hasPrefix("@") {
+            // Extract alias and path components
+            let aliasResolved = SaveFileStepConfig.resolvePathAlias(resolvedFilename)
+            print("   Filename contains @alias, resolved to: \(aliasResolved)")
+
+            // Split into directory and filename
+            let url = URL(fileURLWithPath: aliasResolved)
+            directory = url.deletingLastPathComponent()
+            resolvedFilename = url.lastPathComponent
+            print("   Split into dir: \(directory.path), file: \(resolvedFilename)")
+        } else if let customDir = config.directory, !customDir.isEmpty {
+            // Resolve template variables first, then resolve @aliases
+            let resolvedDir = context.resolve(customDir)
+            let aliasResolved = SaveFileStepConfig.resolvePathAlias(resolvedDir)
+            print("   Resolved dir: \(resolvedDir)")
+            print("   After alias resolution: \(aliasResolved)")
+            directory = URL(fileURLWithPath: aliasResolved)
         } else {
-            directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            // Use the default output directory from settings
+            print("   Using default directory: \(SaveFileStepConfig.defaultOutputDirectory)")
+            directory = URL(fileURLWithPath: SaveFileStepConfig.defaultOutputDirectory)
         }
 
-        let fileURL = directory.appendingPathComponent(filename)
+        print("   Known aliases: \(SaveFileStepConfig.pathAliases)")
+
+        // Ensure directory exists
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            print("   Created directory: \(directory.path)")
+        }
+
+        let fileURL = directory.appendingPathComponent(resolvedFilename)
 
         if config.appendIfExists && FileManager.default.fileExists(atPath: fileURL.path) {
             let existingContent = try String(contentsOf: fileURL, encoding: .utf8)
             try (existingContent + "\n" + content).write(to: fileURL, atomically: true, encoding: .utf8)
+            print("📁 Appended to file: \(fileURL.path)")
         } else {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("📁 Saved file: \(fileURL.path)")
         }
 
         return "Saved to: \(fileURL.path)"

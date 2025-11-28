@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		APPDELEGATE_BUILDFILE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = APPDELEGATE_FILEREF /* AppDelegate.swift */; };
 		08DE6F8EECE2C98D49F6D7B7 /* ModelsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */; };
 		107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */; };
 		123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96107EE13719761E10A69B43 /* TalkieApp.swift */; };
@@ -23,20 +22,21 @@
 		80FD41650E34CD7245D7C1CD /* NavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA047104B464861CD52728B0 /* NavigationView.swift */; };
 		A07ED69ED8E7F9AE9BD61FEC /* WorkflowAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F55812343FAF92F60D28E19 /* WorkflowAction.swift */; };
 		A8C87460310157A80C6A3B4A /* MemoRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6919ADEAE61E04AD110C560F /* MemoRowView.swift */; };
-		SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SYSCONSOLE_FILEREF /* SystemConsoleView.swift */; };
-		CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */; };
+		APPDELEGATE_BUILDFILE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = APPDELEGATE_FILEREF /* AppDelegate.swift */; };
 		BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */; };
 		C34996CAF5EB3C4F21F1B559 /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A5E5501D5B93090C1EE4CFC /* Persistence.swift */; };
 		CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D422F2CF033DE6FEF9728A4A /* SettingsView.swift */; };
+		CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */; };
 		DED75650BF9B89BF7DE94F06 /* MemoDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE81C0FD66EBEFF8002D848 /* MemoDetailView.swift */; };
 		F5F06E5237A90BC70DCA3D04 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E576665EAA2E96350EBB048A /* GroqProvider.swift */; };
 		FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 221F1F73B64929D9AA318F9E /* talkie.xcdatamodeld */; };
 		MLXLLM_BUILDFILE /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = MLXLLM_PRODUCTREF /* MLXLLM */; };
 		MLXLMCOMMON_BUILDFILE /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */; };
+		SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SYSCONSOLE_FILEREF /* SystemConsoleView.swift */; };
+		TFMGR_BUILDFILE /* TranscriptFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFMGR_FILEREF /* TranscriptFileManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		APPDELEGATE_FILEREF /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutor.swift; sourceTree = "<group>"; };
 		188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsContentView.swift; sourceTree = "<group>"; };
 		1A5E5501D5B93090C1EE4CFC /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
@@ -44,8 +44,6 @@
 		2BABB2A599587B53D1C8F8E6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		36E93046E4E6FE29C1208DB2 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
 		6919ADEAE61E04AD110C560F /* MemoRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoRowView.swift; sourceTree = "<group>"; };
-		SYSCONSOLE_FILEREF /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
-		CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSyncManager.swift; sourceTree = "<group>"; };
 		6B228E4044C6AFC31BBDE3C6 /* Talkie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Talkie.entitlements; sourceTree = "<group>"; };
 		7D622DF99A06064E75BE6360 /* WorkflowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowViews.swift; sourceTree = "<group>"; };
 		7F55812343FAF92F60D28E19 /* WorkflowAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowAction.swift; sourceTree = "<group>"; };
@@ -56,12 +54,16 @@
 		95658B54C871F5DB7FC1429E /* talkie.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = talkie.xcdatamodel; sourceTree = "<group>"; };
 		96107EE13719761E10A69B43 /* TalkieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieApp.swift; sourceTree = "<group>"; };
 		AF7DBC6AC45B5F36375DA880 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProvider.swift; sourceTree = "<group>"; };
+		APPDELEGATE_FILEREF /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B98D56A7AE26D6931EB54118 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
+		CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSyncManager.swift; sourceTree = "<group>"; };
 		D422F2CF033DE6FEF9728A4A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		DBC57A7E03EC8CAD3BA267D1 /* GeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiService.swift; sourceTree = "<group>"; };
 		E576665EAA2E96350EBB048A /* GroqProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqProvider.swift; sourceTree = "<group>"; };
 		EA047104B464861CD52728B0 /* NavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationView.swift; sourceTree = "<group>"; };
 		FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowDefinition.swift; sourceTree = "<group>"; };
+		SYSCONSOLE_FILEREF /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
+		TFMGR_FILEREF /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,6 +129,7 @@
 			children = (
 				CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */,
 				86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */,
+				TFMGR_FILEREF /* TranscriptFileManager.swift */,
 				28D24438172D1EDE9F6C188D /* LLM */,
 			);
 			path = Services;
@@ -205,12 +208,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-					1EB6D14809D2E04C6D77B8BC = {
-						DevelopmentTeam = 2U83JFPW66;
-						ProvisioningStyle = Automatic;
-					};
-				};
 			};
 			buildConfigurationList = 585B82EC452E00A8B77B93CB /* Build configuration list for PBXProject "Talkie" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -266,6 +263,7 @@
 				CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */,
 				SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */,
 				CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */,
+				TFMGR_BUILDFILE /* TranscriptFileManager.swift in Sources */,
 				123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */,
 				A07ED69ED8E7F9AE9BD61FEC /* WorkflowAction.swift in Sources */,
 				BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */,
@@ -348,10 +346,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Talkie/Talkie.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie needs to communicate with Notes, Reminders, and Calendar to save your voice memo content.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -362,6 +364,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -370,6 +373,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -429,10 +433,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Talkie/Talkie.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie needs to communicate with Notes, Reminders, and Calendar to save your voice memo content.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -443,6 +451,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os-mac";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 			};
 			name = Debug;

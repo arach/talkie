@@ -19,65 +19,42 @@ struct MemoRowView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Title
-            Text(memoTitle)
-                .font(.system(size: 13, weight: .regular, design: .monospaced))
-                .foregroundColor(.primary)
-                .lineLimit(1)
+        HStack(spacing: 8) {
+            // Status indicator with sync status
+            syncStatusIndicator
 
-            // Metadata
-            HStack(spacing: 6) {
-                // Duration
-                HStack(spacing: 2) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 9, weight: .medium))
+            VStack(alignment: .leading, spacing: 2) {
+                // Title
+                Text(memoTitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                // Minimal metadata: duration + relative time
+                HStack(spacing: 4) {
                     Text(formatDuration(memo.duration))
-                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .font(.system(size: 9, design: .monospaced))
+
+                    Text("·")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary.opacity(0.4))
+
+                    Text(formatDateCompact(memoCreatedAt))
+                        .font(.system(size: 9))
                 }
                 .foregroundColor(.secondary)
+            }
 
-                Text("·")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.5))
+            Spacer()
 
-                // Date
-                Text(formatDateCompact(memoCreatedAt))
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-
-                // Status
-                if memo.isTranscribing {
-                    Text("·")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.5))
-
-                    HStack(spacing: 3) {
-                        ProgressView()
-                            .scaleEffect(0.5)
-                            .frame(width: 10, height: 10)
-                        Text("PROC")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
-                    }
-                    .foregroundColor(.purple)
-                } else if memo.transcription != nil {
-                    Text("·")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.5))
-
-                    HStack(spacing: 2) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 8, weight: .semibold))
-                        Text("TXT")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
-                    }
-                    .foregroundColor(.green)
-                }
+            // Processing indicator (only when active)
+            if memo.isTranscribing {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 12, height: 12)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .padding(.horizontal, 4)
     }
 
@@ -103,6 +80,26 @@ struct MemoRowView: View {
         } else {
             formatter.dateFormat = "MMM d, h:mm a"
             return formatter.string(from: date)
+        }
+    }
+
+    // MARK: - Sync Status Indicator
+
+    /// Simple indicator: green checkmark = transcribed + synced, gray dot = not ready
+    @ViewBuilder
+    private var syncStatusIndicator: some View {
+        let isReady = memo.transcription != nil && memo.cloudSyncedAt != nil
+
+        if isReady {
+            // Green checkmark = transcribed and synced to cloud
+            Image(systemName: "checkmark")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(.green)
+        } else {
+            // Gray dot = not ready yet
+            Circle()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(width: 6, height: 6)
         }
     }
 }

@@ -984,9 +984,9 @@ struct WorkflowEditorSheet: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: editedWorkflow.icon)
                                         .font(.system(size: 16))
-                                        .foregroundColor(colorFor(editedWorkflow.color))
+                                        .foregroundColor(editedWorkflow.color.color)
                                         .frame(width: 32, height: 32)
-                                        .background(colorFor(editedWorkflow.color).opacity(0.1))
+                                        .background(editedWorkflow.color.color.opacity(0.1))
                                         .cornerRadius(6)
 
                                     TextField("SF Symbol", text: $editedWorkflow.icon)
@@ -1003,7 +1003,7 @@ struct WorkflowEditorSheet: View {
                                     ForEach(WorkflowColor.allCases, id: \.self) { color in
                                         HStack {
                                             Circle()
-                                                .fill(colorFor(color))
+                                                .fill(color.color)
                                                 .frame(width: 10, height: 10)
                                             Text(color.displayName)
                                         }
@@ -1097,22 +1097,6 @@ struct WorkflowEditorSheet: View {
     private func moveStep(from source: Int, to destination: Int) {
         let step = editedWorkflow.steps.remove(at: source)
         editedWorkflow.steps.insert(step, at: destination)
-    }
-
-    private func colorFor(_ color: WorkflowColor) -> Color {
-        switch color {
-        case .blue: return .blue
-        case .green: return .green
-        case .orange: return .orange
-        case .purple: return .purple
-        case .yellow: return .yellow
-        case .red: return .red
-        case .pink: return .pink
-        case .cyan: return .cyan
-        case .indigo: return .indigo
-        case .mint: return .mint
-        case .teal: return .teal
-        }
     }
 }
 
@@ -1383,9 +1367,54 @@ struct LLMStepConfigEditor: View {
         return LLMStepConfig(provider: .gemini, prompt: "")
     }
 
+    // Get available models for the current provider
+    // For MLX (local), only show installed models
+    private var availableModels: [WorkflowModelOption] {
+        if config.provider == .mlx {
+            // Get installed MLX models dynamically
+            let installedModels = MLXModelManager.shared.availableModels()
+                .filter { $0.isInstalled }
+                .map { model in
+                    WorkflowModelOption(
+                        id: model.id,
+                        name: model.displayName.replacingOccurrences(of: " (4-bit)", with: ""),
+                        contextWindow: 8192 // Default context for local models
+                    )
+                }
+            return installedModels
+        }
+        return config.provider.models
+    }
+
+    // Validated model ID - ensures selection is always valid
+    private var validatedModelId: String {
+        let models = availableModels
+        // If current modelId is in available models, use it
+        if models.contains(where: { $0.id == config.modelId }) {
+            return config.modelId
+        }
+        // Otherwise return first available model's ID, or empty string
+        return models.first?.id ?? ""
+    }
+
+    // Check if current provider is local
+    private var isLocalProvider: Bool {
+        config.provider == .mlx
+    }
+
+    // Local providers
+    private var localProviders: [WorkflowLLMProvider] {
+        [.mlx]
+    }
+
+    // External providers
+    private var externalProviders: [WorkflowLLMProvider] {
+        WorkflowLLMProvider.allCases.filter { $0 != .mlx }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Provider selection
+            // Provider selection with LOCAL/EXTERNAL distinction
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("PROVIDER")
@@ -1399,12 +1428,48 @@ struct LLMStepConfigEditor: View {
                             var newConfig = config
                             newConfig.provider = newProvider
                             // Reset to provider's default model when switching
-                            newConfig.modelId = newProvider.defaultModel.id
+                            if newProvider == .mlx {
+                                // For MLX, pick first installed model or empty
+                                let installed = MLXModelManager.shared.availableModels().filter { $0.isInstalled }
+                                newConfig.modelId = installed.first?.id ?? ""
+                            } else {
+                                newConfig.modelId = newProvider.defaultModel.id
+                            }
                             step.config = .llm(newConfig)
                         }
                     )) {
-                        ForEach(WorkflowLLMProvider.allCases, id: \.self) { provider in
-                            Text(provider.displayName).tag(provider)
+                        // LOCAL section
+                        Section {
+                            ForEach(localProviders, id: \.self) { provider in
+                                HStack(spacing: 4) {
+                                    Image(systemName: "lock.shield.fill")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(.green)
+                                    Text(provider.displayName)
+                                }
+                                .tag(provider)
+                            }
+                        } header: {
+                            Label("LOCAL", systemImage: "cpu")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.green)
+                        }
+
+                        // EXTERNAL section
+                        Section {
+                            ForEach(externalProviders, id: \.self) { provider in
+                                HStack(spacing: 4) {
+                                    Image(systemName: "globe")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(.orange)
+                                    Text(provider.displayName)
+                                }
+                                .tag(provider)
+                            }
+                        } header: {
+                            Label("EXTERNAL", systemImage: "globe")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.orange)
                         }
                     }
                     .labelsHidden()
@@ -1412,30 +1477,71 @@ struct LLMStepConfigEditor: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("MODEL")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 4) {
+                        Text("MODEL")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(.secondary)
 
-                    Picker("", selection: Binding(
-                        get: { config.modelId },
-                        set: { newModelId in
-                            var newConfig = config
-                            newConfig.modelId = newModelId
-                            step.config = .llm(newConfig)
-                        }
-                    )) {
-                        ForEach(config.provider.models) { model in
-                            HStack {
-                                Text(model.name)
-                                Text("(\(model.formattedContext))")
-                                    .foregroundColor(.secondary)
-                            }
-                            .tag(model.id)
+                        // Badge showing LOCAL or EXTERNAL
+                        if isLocalProvider {
+                            Text("LOCAL")
+                                .font(.system(size: 6, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.2))
+                                .foregroundColor(.green)
+                                .cornerRadius(2)
+                        } else {
+                            Text("API")
+                                .font(.system(size: 6, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.2))
+                                .foregroundColor(.orange)
+                                .cornerRadius(2)
                         }
                     }
-                    .labelsHidden()
-                    .font(.system(size: 10, design: .monospaced))
+
+                    if availableModels.isEmpty && isLocalProvider {
+                        // No models installed warning
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.yellow)
+                            Text("No models installed")
+                                .foregroundColor(.secondary)
+                        }
+                        .font(.system(size: 10, design: .monospaced))
+                        .padding(.vertical, 4)
+                    } else {
+                        Picker("", selection: Binding(
+                            get: { validatedModelId },
+                            set: { newModelId in
+                                var newConfig = config
+                                newConfig.modelId = newModelId
+                                step.config = .llm(newConfig)
+                            }
+                        )) {
+                            ForEach(availableModels) { model in
+                                HStack {
+                                    Text(model.name)
+                                    Text("(\(model.formattedContext))")
+                                        .foregroundColor(.secondary)
+                                }
+                                .tag(model.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .font(.system(size: 10, design: .monospaced))
+                        .onAppear {
+                            // Auto-fix invalid model selection
+                            if config.modelId != validatedModelId && !validatedModelId.isEmpty {
+                                var newConfig = config
+                                newConfig.modelId = validatedModelId
+                                step.config = .llm(newConfig)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1513,6 +1619,8 @@ struct LLMStepConfigEditor: View {
 struct ShellStepConfigEditor: View {
     @Binding var step: WorkflowStep
     @State private var argumentsText: String = ""
+    @State private var promptTemplate: String = ""
+    @State private var usePromptTemplate: Bool = false
 
     private var config: ShellStepConfig {
         if case .shell(let c) = step.config { return c }
@@ -1534,6 +1642,8 @@ struct ShellStepConfigEditor: View {
                             let newConfig = preset.exampleConfig
                             step.config = .shell(newConfig)
                             argumentsText = newConfig.arguments.joined(separator: " ")
+                            promptTemplate = newConfig.promptTemplate ?? ""
+                            usePromptTemplate = newConfig.promptTemplate != nil
                         }) {
                             Text(preset.rawValue)
                                 .font(.system(size: 8, weight: .medium, design: .monospaced))
@@ -1599,11 +1709,68 @@ struct ShellStepConfigEditor: View {
                     }
                     .onAppear {
                         argumentsText = config.arguments.joined(separator: " ")
+                        promptTemplate = config.promptTemplate ?? ""
+                        usePromptTemplate = config.promptTemplate != nil
                     }
 
-                Text("Supports template variables. Arguments are passed directly (no shell expansion).")
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.7))
+                if usePromptTemplate {
+                    Text("Note: Arguments are passed before -p flag. Leave empty for claude.")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange.opacity(0.8))
+                } else {
+                    Text("Supports template variables. Arguments are passed directly (no shell expansion).")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.7))
+                }
+            }
+
+            // Prompt Template toggle and editor
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $usePromptTemplate) {
+                    HStack(spacing: 4) {
+                        Text("PROMPT TEMPLATE")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(.secondary)
+                        Text("(for claude -p)")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .font(.system(size: 10))
+                .onChange(of: usePromptTemplate) { enabled in
+                    var newConfig = config
+                    newConfig.promptTemplate = enabled ? promptTemplate : nil
+                    // Clear arguments when enabling prompt template to avoid duplicate content
+                    if enabled && !config.arguments.isEmpty {
+                        newConfig.arguments = []
+                        argumentsText = ""
+                    }
+                    step.config = .shell(newConfig)
+                }
+
+                if usePromptTemplate {
+                    TextEditor(text: $promptTemplate)
+                        .font(.system(size: 10, design: .monospaced))
+                        .frame(minHeight: 100, maxHeight: 200)
+                        .padding(4)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                        .onChange(of: promptTemplate) { newValue in
+                            var newConfig = config
+                            newConfig.promptTemplate = newValue.isEmpty ? nil : newValue
+                            step.config = .shell(newConfig)
+                        }
+
+                    Text("Multi-line prompt passed via -p flag. Use {{TRANSCRIPT}}, {{PREVIOUS_OUTPUT}}, etc.")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.7))
+                }
             }
 
             // Stdin input
@@ -2218,6 +2385,28 @@ struct SaveFileStepConfigEditor: View {
         return SaveFileStepConfig(filename: "output.txt", content: "{{OUTPUT}}")
     }
 
+    /// Parse the filename to check for @alias and return status info
+    private var aliasInfo: (hasAlias: Bool, aliasName: String?, resolvedPath: String?, isValid: Bool) {
+        let filename = config.filename
+        guard filename.hasPrefix("@") else {
+            return (false, nil, nil, false)
+        }
+
+        // Extract alias name
+        let withoutAt = String(filename.dropFirst())
+        let components = withoutAt.split(separator: "/", maxSplits: 1)
+        let aliasName = String(components.first ?? "")
+
+        // Check if alias exists
+        let aliases = SaveFileStepConfig.pathAliases
+        if let resolvedBase = aliases[aliasName] {
+            let remainder = components.count > 1 ? "/" + components[1] : ""
+            return (true, aliasName, resolvedBase + remainder, true)
+        } else {
+            return (true, aliasName, nil, false)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
@@ -2225,7 +2414,7 @@ struct SaveFileStepConfigEditor: View {
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .foregroundColor(.secondary)
 
-                TextField("output.txt", text: Binding(
+                TextField("@Obsidian/{{DATE}}.md", text: Binding(
                     get: { config.filename },
                     set: { newValue in
                         var newConfig = config
@@ -2235,6 +2424,56 @@ struct SaveFileStepConfigEditor: View {
                 ))
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 10, design: .monospaced))
+
+                // Alias feedback
+                if aliasInfo.hasAlias {
+                    if aliasInfo.isValid, let resolved = aliasInfo.resolvedPath {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.system(size: 10))
+                            Text("@\(aliasInfo.aliasName ?? "")")
+                                .foregroundColor(.green)
+                                .fontWeight(.medium)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 8))
+                                .foregroundColor(.secondary)
+                            Text(resolved)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .font(.system(size: 9, design: .monospaced))
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 10))
+                            Text("@\(aliasInfo.aliasName ?? "") not found")
+                                .foregroundColor(.orange)
+                            Text("— define in Settings → Output Directory")
+                                .foregroundColor(.secondary)
+                        }
+                        .font(.system(size: 9, design: .monospaced))
+                    }
+                } else {
+                    // Show default directory hint
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 9))
+                        Text("Will save to: \(SaveFileStepConfig.defaultOutputDirectory)/...")
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .font(.system(size: 9, design: .monospaced))
+                }
+
+                // Variables hint
+                Text("Variables: {{DATE}}, {{DATETIME}}, {{TITLE}}")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
             }
 
             VStack(alignment: .leading, spacing: 6) {

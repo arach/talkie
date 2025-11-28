@@ -2,8 +2,8 @@
 //  CloudKitSyncManager.swift
 //  Talkie macOS
 //
-//  Token-based CloudKit sync - fetches only changed records since last sync.
-//  No persistent history tracking = no WAL bloat.
+//  Simple CloudKit sync manager - syncs every minute while app is open.
+//  NSPersistentCloudKitContainer handles the actual sync; this is for UI feedback.
 //
 
 import Foundation
@@ -42,27 +42,59 @@ class CloudKitSyncManager: ObservableObject {
     @Published var lastChangeCount: Int = 0
 
     private var syncTimer: Timer?
-    private let syncInterval: TimeInterval = 300 // 5 minutes
+    private var remoteChangeObserver: NSObjectProtocol?
+    private var debounceTimer: Timer?
+    private let syncInterval: TimeInterval = 60 // 1 minute - simple and predictable
+    private let debounceInterval: TimeInterval = 3.0 // Coalesce rapid notifications
 
     private init() {}
 
     func configure(with context: NSManagedObjectContext) {
         self.viewContext = context
 
-        // Start periodic sync timer
+        // Start periodic sync timer (every minute while app is open)
         syncTimer = Timer.scheduledTimer(withTimeInterval: syncInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.syncNow()
             }
         }
 
-        logger.info("CloudKitSyncManager configured (sync interval: \(Int(self.syncInterval))s)")
+        // Listen for remote store changes (real-time updates from other devices)
+        // Only sync if there are actual transactions, not just CloudKit housekeeping
+        remoteChangeObserver = NotificationCenter.default.addObserver(
+            forName: .NSPersistentStoreRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self else { return }
+
+            // Check if there are actual changes worth syncing
+            let hasRealChanges = self.checkForRealChanges(notification: notification)
+
+            #if DEBUG
+            self.logRemoteChangeNotification(notification, hasRealChanges: hasRealChanges)
+            #endif
+
+            // Only schedule sync if there are real data changes
+            if hasRealChanges {
+                Task { @MainActor in
+                    self.scheduleDebounceSync()
+                }
+            }
+        }
+
+        logger.info("CloudKitSyncManager configured (sync every \(Int(self.syncInterval))s)")
 
         if serverChangeToken != nil {
             logger.info("Existing server change token found - will fetch delta")
         } else {
             logger.info("No server change token - will perform full sync")
         }
+    }
+
+    /// Record user activity (called when user triggers manual sync)
+    func recordActivity() {
+        // No-op now, but kept for API compatibility
     }
 
     /// Trigger a sync immediately
@@ -81,6 +113,50 @@ class CloudKitSyncManager: ObservableObject {
     func forceFullSync() {
         serverChangeToken = nil
         syncNow()
+    }
+
+    /// Schedule a debounced sync - coalesces rapid CloudKit notifications
+    private func scheduleDebounceSync() {
+        // Cancel any existing debounce timer
+        debounceTimer?.invalidate()
+
+        // Schedule a new sync after the debounce interval
+        // If more notifications come in, the timer resets
+        debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.syncNow()
+            }
+        }
+    }
+
+    /// Check if a remote change notification has actual data changes (not just housekeeping)
+    private func checkForRealChanges(notification: Notification) -> Bool {
+        guard let token = notification.userInfo?[NSPersistentHistoryTokenKey] as? NSPersistentHistoryToken,
+              let context = viewContext else {
+            return false
+        }
+
+        // Query persistent history synchronously to check for real changes
+        var hasChanges = false
+        context.performAndWait {
+            let request = NSPersistentHistoryChangeRequest.fetchHistory(after: token)
+            do {
+                if let result = try context.execute(request) as? NSPersistentHistoryResult,
+                   let transactions = result.result as? [NSPersistentHistoryTransaction] {
+                    // Check if any transaction has actual changes
+                    hasChanges = transactions.contains { transaction in
+                        if let changes = transaction.changes, !changes.isEmpty {
+                            return true
+                        }
+                        return false
+                    }
+                }
+            } catch {
+                // If we can't check, assume there might be changes
+                hasChanges = true
+            }
+        }
+        return hasChanges
     }
 
     private func performSync() async {
@@ -110,6 +186,11 @@ class CloudKitSyncManager: ObservableObject {
                 object: nil,
                 userInfo: ["changes": changes]
             )
+
+            // Mark memos from other devices as received by Mac
+            if let context = self.viewContext {
+                PersistenceController.markMemosAsReceivedByMac(context: context)
+            }
 
             if changes > 0 {
                 logger.info("Sync completed: \(changes) change(s)")
@@ -218,6 +299,88 @@ class CloudKitSyncManager: ObservableObject {
         serverChangeToken = nil
         logger.info("Sync token reset - next sync will fetch all records")
     }
+
+    #if DEBUG
+    /// Log details about remote change notifications for debugging (dev builds only)
+    private func logRemoteChangeNotification(_ notification: Notification, hasRealChanges: Bool) {
+        var details: [String] = []
+
+        // Extract store URL if available
+        if let storeURL = notification.userInfo?["storeURL"] as? URL {
+            details.append("store: \(storeURL.lastPathComponent)")
+        }
+
+        // Extract store UUID
+        if let storeUUID = notification.userInfo?["NSStoreUUID"] as? String {
+            details.append("uuid: \(storeUUID.prefix(8))...")
+        }
+
+        // Show whether this will trigger a sync
+        details.append(hasRealChanges ? "→ SYNC" : "→ skip")
+
+        let detailString = details.joined(separator: " | ")
+        logger.info("📡 RemoteChange: \(detailString)")
+
+        // Now fetch actual persistent history to see what changed
+        if let token = notification.userInfo?[NSPersistentHistoryTokenKey] as? NSPersistentHistoryToken,
+           let context = viewContext {
+            fetchHistoryDetails(since: token, context: context)
+        }
+    }
+
+    /// Fetch and log persistent history details to see actual changes
+    private func fetchHistoryDetails(since token: NSPersistentHistoryToken, context: NSManagedObjectContext) {
+        context.perform {
+            let request = NSPersistentHistoryChangeRequest.fetchHistory(after: token)
+
+            do {
+                guard let result = try context.execute(request) as? NSPersistentHistoryResult,
+                      let transactions = result.result as? [NSPersistentHistoryTransaction] else {
+                    logger.info("   └─ History: no transactions")
+                    return
+                }
+
+                if transactions.isEmpty {
+                    logger.info("   └─ History: 0 transactions (housekeeping only)")
+                    return
+                }
+
+                for (i, transaction) in transactions.enumerated() {
+                    let changes = transaction.changes ?? []
+                    let author = transaction.author ?? "unknown"
+                    let contextName = transaction.contextName ?? "unnamed"
+
+                    // Group changes by entity and type
+                    var insertCount = 0
+                    var updateCount = 0
+                    var deleteCount = 0
+                    var entities: Set<String> = []
+
+                    for change in changes {
+                        entities.insert(change.changedObjectID.entity.name ?? "?")
+                        switch change.changeType {
+                        case .insert: insertCount += 1
+                        case .update: updateCount += 1
+                        case .delete: deleteCount += 1
+                        @unknown default: break
+                        }
+                    }
+
+                    let entityList = entities.joined(separator: ", ")
+                    let changesSummary = [
+                        insertCount > 0 ? "+\(insertCount)" : nil,
+                        updateCount > 0 ? "~\(updateCount)" : nil,
+                        deleteCount > 0 ? "-\(deleteCount)" : nil
+                    ].compactMap { $0 }.joined(separator: " ")
+
+                    logger.info("   └─ Tx[\(i)]: author=\(author) context=\(contextName) entities=[\(entityList)] changes=\(changesSummary.isEmpty ? "none" : changesSummary)")
+                }
+            } catch {
+                logger.error("   └─ History fetch failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    #endif
 
     /// Get sync status for display
     var statusDescription: String {

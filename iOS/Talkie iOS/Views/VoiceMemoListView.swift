@@ -227,6 +227,9 @@ struct VoiceMemoListView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    .refreshable {
+                        await refreshMemos()
+                    }
                     } // end VStack
 
                     // Record button area with distinct background
@@ -364,6 +367,24 @@ struct VoiceMemoListView: View {
             }
         }
         .navigationViewStyle(.stack)
+    }
+
+    // MARK: - Pull to Refresh
+
+    private func refreshMemos() async {
+        AppLogger.persistence.info("📲 Pull-to-refresh - refreshing all memos")
+
+        // Refresh all registered VoiceMemo objects to get latest from store
+        await MainActor.run {
+            for object in viewContext.registeredObjects {
+                if object is VoiceMemo {
+                    viewContext.refresh(object, mergeChanges: true)
+                }
+            }
+        }
+
+        // Small delay so user sees the refresh indicator
+        try? await Task.sleep(nanoseconds: 300_000_000)
     }
 
     private func deleteMemo(_ memo: VoiceMemo) {

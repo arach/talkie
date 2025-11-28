@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CloudKit
 
 struct VoiceMemoDetailView: View {
     @ObservedObject var memo: VoiceMemo
@@ -77,6 +78,24 @@ struct VoiceMemoDetailView: View {
 
                                 Text(formatDuration(memo.duration))
                                     .font(.monoSmall)
+
+                                // Sync status: cloud + mac (detailed view)
+                                if memo.cloudSyncedAt != nil {
+                                    Text("·")
+                                        .font(.labelSmall)
+
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "cloud.fill")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(.success)
+
+                                        if memo.macReceivedAt != nil {
+                                            Image(systemName: "desktopcomputer")
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundColor(.success)
+                                        }
+                                    }
+                                }
                             }
                             .foregroundColor(.textSecondary)
                         }
@@ -317,6 +336,10 @@ struct VoiceMemoDetailView: View {
             .sheet(isPresented: $showingShare) {
                 ShareSheet(items: [memo.transcription ?? ""])
             }
+            .onAppear {
+                // Fetch latest from CloudKit
+                fetchLatestFromCloudKit()
+            }
         }
     }
 
@@ -356,6 +379,45 @@ struct VoiceMemoDetailView: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    /// Fetch latest memo data from CloudKit and update local Core Data
+    private func fetchLatestFromCloudKit() {
+        guard let memoId = memo.id else { return }
+
+        let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
+        let privateDB = container.privateCloudDatabase
+        let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
+
+        // Query for this specific memo by CD_id (Core Data uses CD_ prefix)
+        let predicate = NSPredicate(format: "CD_id == %@", memoId as CVarArg)
+        let query = CKQuery(recordType: "CD_VoiceMemo", predicate: predicate)
+
+        privateDB.fetch(withQuery: query, inZoneWith: zoneID) { result in
+            switch result {
+            case .success(let (matchResults, _)):
+                guard let firstMatch = matchResults.first,
+                      case .success(let record) = firstMatch.1 else {
+                    AppLogger.persistence.info("📥 No CloudKit record found for memo")
+                    return
+                }
+
+                // Update local memo with CloudKit values
+                DispatchQueue.main.async {
+                    if let cloudSyncedAt = record["CD_cloudSyncedAt"] as? Date {
+                        memo.cloudSyncedAt = cloudSyncedAt
+                    }
+                    if let macReceivedAt = record["CD_macReceivedAt"] as? Date {
+                        memo.macReceivedAt = macReceivedAt
+                    }
+                    try? memo.managedObjectContext?.save()
+                    AppLogger.persistence.info("📥 Updated memo from CloudKit: cloud=\(memo.cloudSyncedAt != nil), mac=\(memo.macReceivedAt != nil)")
+                }
+
+            case .failure(let error):
+                AppLogger.persistence.error("📥 CloudKit fetch failed: \(error.localizedDescription)")
+            }
+        }
     }
 }
 

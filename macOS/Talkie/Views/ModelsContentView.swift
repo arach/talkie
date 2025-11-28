@@ -493,6 +493,18 @@ struct CompactModelCard: View {
         var highlights: [String] = []
 
         switch model.id {
+        case "mlx-community/Llama-3.2-1B-Instruct-4bit":
+            highlights = [
+                "1B params: Ultra-fast",
+                "Perfect for quick tasks",
+                "~700MB download"
+            ]
+        case "mlx-community/Qwen2.5-1.5B-Instruct-4bit":
+            highlights = [
+                "1.5B params: Fast & capable",
+                "Great for summaries",
+                "~1GB download"
+            ]
         case "mlx-community/Qwen2.5-3B-Instruct-4bit":
             highlights = [
                 "3B params: Fast, efficient",

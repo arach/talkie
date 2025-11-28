@@ -29,9 +29,22 @@
 		539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie OS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		539C69332ED39ADE00BC034F /* Talkie iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie OS" target */,
+			);
 			path = "Talkie iOS";
 			sourceTree = "<group>";
 		};
@@ -402,14 +415,14 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "jdi.talkie-os.refresh jdi.talkie-os.sync";
+				INFOPLIST_FILE = "Talkie iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "audio remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -442,14 +455,14 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "jdi.talkie-os.refresh jdi.talkie-os.sync";
+				INFOPLIST_FILE = "Talkie iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "audio remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

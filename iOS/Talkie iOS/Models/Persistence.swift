@@ -7,9 +7,24 @@
 
 import CoreData
 import CloudKit
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 struct PersistenceController {
     static let shared = PersistenceController()
+
+    /// Unique identifier for this device
+    static var deviceId: String {
+        #if os(iOS)
+        return UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        #else
+        // macOS device identifier
+        return "mac-" + (Host.current().localizedName ?? UUID().uuidString)
+        #endif
+    }
 
     @MainActor
     static let preview: PersistenceController = {
@@ -51,18 +66,22 @@ struct PersistenceController {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
             AppLogger.persistence.info("Using in-memory store")
         } else {
-            // Configure CloudKit sync - WITHOUT persistent history tracking
-            // This dramatically reduces WAL bloat and unnecessary disk I/O
+            // Configure CloudKit sync - MUST enable history tracking for proper sync!
+            // NSPersistentCloudKitContainer requires these options to function correctly.
             if let description = container.persistentStoreDescriptions.first {
                 description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
                     containerIdentifier: "iCloud.com.jdi.talkie"
                 )
-                // NOTE: We intentionally DO NOT set:
-                // - NSPersistentHistoryTrackingKey (causes WAL bloat)
-                // - NSPersistentStoreRemoteChangeNotificationPostOptionKey (constant notifications)
-                // CloudKit will still sync automatically via NSPersistentCloudKitContainer
 
-                AppLogger.persistence.info("☁️ CloudKit container: iCloud.com.jdi.talkie (lean sync)")
+                // REQUIRED: Enable persistent history tracking for CloudKit mirroring
+                // Without this, changes won't be pushed to CloudKit!
+                description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+
+                // REQUIRED: Enable remote change notifications for real-time sync
+                // Without this, we won't receive updates from other devices!
+                description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+
+                AppLogger.persistence.info("☁️ CloudKit container: iCloud.com.jdi.talkie (full sync enabled)")
                 AppLogger.persistence.info("📂 Store URL: \(description.url?.absoluteString ?? "nil")")
             }
         }
@@ -91,6 +110,60 @@ struct PersistenceController {
         let viewContext = container.viewContext
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             PersistenceController.logMemoCount(context: viewContext)
+        }
+
+        // Monitor CloudKit sync events to track when memos are synced
+        setupCloudKitSyncMonitoring()
+        // Note: automaticallyMergesChangesFromParent handles CloudKit updates automatically
+        // Detail view refreshes on appear to get latest state
+    }
+
+    /// Monitor CloudKit sync events to update cloudSyncedAt on memos
+    private func setupCloudKitSyncMonitoring() {
+        NotificationCenter.default.addObserver(
+            forName: NSPersistentCloudKitContainer.eventChangedNotification,
+            object: container,
+            queue: .main
+        ) { [weak container] notification in
+            guard let container = container,
+                  let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else {
+                return
+            }
+
+            // We care about successful export events (data pushed to CloudKit)
+            if event.type == .export && event.succeeded {
+                AppLogger.persistence.info("☁️ CloudKit export succeeded - marking recent memos as synced")
+                PersistenceController.markRecentMemosAsSynced(context: container.viewContext)
+            }
+
+            // Log import events (data received from CloudKit)
+            if event.type == .import && event.succeeded {
+                AppLogger.persistence.info("📥 CloudKit import succeeded")
+            }
+        }
+    }
+
+    /// Mark all memos without cloudSyncedAt as synced
+    /// Called when CloudKit export succeeds - if export worked, all local data is in CloudKit
+    static func markRecentMemosAsSynced(context: NSManagedObjectContext) {
+        context.perform {
+            let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "cloudSyncedAt == nil")
+
+            do {
+                let unsyncedMemos = try context.fetch(fetchRequest)
+                guard !unsyncedMemos.isEmpty else { return }
+
+                let now = Date()
+                for memo in unsyncedMemos {
+                    memo.cloudSyncedAt = now
+                }
+
+                try context.save()
+                AppLogger.persistence.info("☁️ Marked \(unsyncedMemos.count) memo(s) as synced to iCloud")
+            } catch {
+                AppLogger.persistence.error("❌ Failed to mark memos as synced: \(error.localizedDescription)")
+            }
         }
     }
 

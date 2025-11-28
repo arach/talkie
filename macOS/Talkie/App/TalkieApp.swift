@@ -6,9 +6,13 @@
 //
 
 import SwiftUI
+import AppKit
 
 @main
 struct TalkieApp: App {
+    // Wire up AppDelegate for push notification handling
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     let persistenceController = PersistenceController.shared
 
     var body: some Scene {
@@ -21,6 +25,11 @@ struct TalkieApp: App {
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) {}
+        }
+
+        Settings {
+            SettingsView()
+                .frame(minWidth: 800, minHeight: 600)
         }
     }
 }

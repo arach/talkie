@@ -65,20 +65,13 @@ struct VoiceMemoRow: View {
                                 .font(.labelSmall)
                                 .foregroundColor(.textSecondary)
 
-                            // Status indicator
+                            // Transcription status: PROC (pulsing) or TXT ✓
                             if memo.isTranscribing {
                                 Text("·")
                                     .font(.labelSmall)
                                     .foregroundColor(.textTertiary)
 
-                                HStack(spacing: 3) {
-                                    ProgressView()
-                                        .scaleEffect(0.6)
-                                    Text("PROC")
-                                        .font(.techLabelSmall)
-                                        .tracking(0.5)
-                                }
-                                .foregroundColor(.transcribing)
+                                PulsingText("PROC")
                             } else if memo.transcription != nil {
                                 Text("·")
                                     .font(.labelSmall)
@@ -86,12 +79,23 @@ struct VoiceMemoRow: View {
 
                                 HStack(spacing: 2) {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 9, weight: .semibold))
+                                        .font(.system(size: 10, weight: .semibold))
                                     Text("TXT")
                                         .font(.techLabelSmall)
                                         .tracking(0.5)
                                 }
                                 .foregroundColor(.success)
+                            }
+
+                            // Sync status: cloud = safely synced to iCloud
+                            if memo.cloudSyncedAt != nil {
+                                Text("·")
+                                    .font(.labelSmall)
+                                    .foregroundColor(.textTertiary)
+
+                                Image(systemName: "cloud.fill")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(.success)
                             }
                         }
                     }
@@ -162,5 +166,29 @@ struct VoiceMemoRow: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Pulsing Text for Processing State
+
+private struct PulsingText: View {
+    let text: String
+    @State private var opacity: Double = 1.0
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.techLabelSmall)
+            .tracking(0.5)
+            .foregroundColor(.transcribing)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    opacity = 0.3
+                }
+            }
     }
 }

@@ -23,6 +23,8 @@ class AudioRecorderManager: NSObject, ObservableObject {
     private var levelTimer: Timer?
     private var lastDisplayLevel: Float = 0.02  // Track last level for decay
     private var wasRecordingBeforeInterruption = false
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var recordingStartTime: Date?
 
     override init() {
         super.init()
@@ -48,6 +50,7 @@ class AudioRecorderManager: NSObject, ObservableObject {
             }
 
             // Configure options based on current audio route
+            // Use .mixWithOthers to allow background audio to continue
             var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP]
 
             if !hasExternalOutput {
@@ -59,10 +62,14 @@ class AudioRecorderManager: NSObject, ObservableObject {
 
             try audioSession.setCategory(
                 .playAndRecord,
-                mode: .spokenAudio,
+                mode: .default,  // Use default mode for better background support
                 options: options
             )
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+            // Use longer buffer for background recording stability
+            try audioSession.setPreferredIOBufferDuration(0.005)  // 5ms buffer for recording
+
+            try audioSession.setActive(true)
 
             AppLogger.recording.info("Audio session configured - external output: \(hasExternalOutput)")
         } catch {
@@ -92,6 +99,20 @@ class AudioRecorderManager: NSObject, ObservableObject {
             self,
             selector: #selector(handleAppWillResignActive),
             name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
 
@@ -156,12 +177,17 @@ class AudioRecorderManager: NSObject, ObservableObject {
         switch reason {
         case .oldDeviceUnavailable:
             // Headphones/Bluetooth unplugged - reconfigure to use speaker
-            AppLogger.recording.info("Audio route changed: device unavailable, reconfiguring...")
-            configureAudioSession()
+            // But only if we're not recording in background
+            AppLogger.recording.info("Audio route changed: device unavailable")
+            if !isRecording {
+                configureAudioSession()
+            }
         case .newDeviceAvailable:
-            // New headphones/Bluetooth connected - reconfigure to use them
-            AppLogger.recording.info("Audio route changed: new device available, reconfiguring...")
-            configureAudioSession()
+            // New headphones/Bluetooth connected
+            AppLogger.recording.info("Audio route changed: new device available")
+            if !isRecording {
+                configureAudioSession()
+            }
         case .categoryChange, .override, .routeConfigurationChange:
             AppLogger.recording.debug("Audio route changed: \(reason.rawValue)")
         default:
@@ -171,15 +197,69 @@ class AudioRecorderManager: NSObject, ObservableObject {
 
     @objc private func handleAppWillResignActive() {
         if isRecording {
-            AppLogger.recording.info("App going to background while recording - continuing...")
-            // Recording continues in background due to UIBackgroundModes audio
+            AppLogger.recording.info("App will resign active while recording")
+            // Start background task early to ensure we have time
+            startBackgroundTask()
+        }
+    }
+
+    @objc private func handleAppDidEnterBackground() {
+        if isRecording {
+            AppLogger.recording.info("App entered background while recording - ensuring audio session stays active")
+            // Re-ensure audio session is active when entering background
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                AppLogger.recording.info("Audio session confirmed active in background")
+            } catch {
+                AppLogger.recording.error("Failed to keep audio session active: \(error)")
+            }
+        }
+    }
+
+    @objc private func handleAppWillEnterForeground() {
+        if isRecording {
+            AppLogger.recording.info("App will enter foreground - checking recording status")
+            // Check if recorder is still recording
+            if let recorder = audioRecorder {
+                AppLogger.recording.info("Recorder is recording: \(recorder.isRecording), time: \(recorder.currentTime)")
+            }
         }
     }
 
     @objc private func handleAppDidBecomeActive() {
         if isRecording {
             AppLogger.recording.info("App returned to foreground - recording still active")
+            // Update duration from actual recorder time (timers may have been suspended)
+            if let recorder = audioRecorder {
+                let currentTime = recorder.currentTime
+                recordingDuration = currentTime
+                AppLogger.recording.info("Updated duration to: \(currentTime)")
+                // Restart timers if they were suspended
+                startTimers()
+            }
         }
+        // End background task when returning to foreground
+        endBackgroundTask()
+    }
+
+    private func startBackgroundTask() {
+        guard backgroundTask == .invalid else { return }
+
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "AudioRecording") { [weak self] in
+            // Expiration handler - iOS is about to suspend us
+            AppLogger.recording.warning("Background task expiring - audio recording will continue via audio mode")
+            self?.endBackgroundTask()
+        }
+
+        AppLogger.recording.info("Background task started: \(self.backgroundTask.rawValue)")
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        AppLogger.recording.info("Background task ended")
+        backgroundTask = .invalid
     }
 
     func startRecording() {
@@ -254,6 +334,9 @@ class AudioRecorderManager: NSObject, ObservableObject {
         isRecording = false
         isInterrupted = false
         wasRecordingBeforeInterruption = false
+
+        // End background task when recording stops
+        endBackgroundTask()
 
         if let url = currentRecordingURL {
             let fileExists = FileManager.default.fileExists(atPath: url.path)

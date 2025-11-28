@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 // MARK: - Workflow Definition
 
@@ -343,9 +344,11 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
             ]
         case .mlx:
             return [
+                WorkflowModelOption(id: "mlx-community/Llama-3.2-1B-Instruct-4bit", name: "Llama 3.2 1B", contextWindow: 8192),
+                WorkflowModelOption(id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit", name: "Qwen 2.5 1.5B", contextWindow: 8192),
                 WorkflowModelOption(id: "mlx-community/Llama-3.2-3B-Instruct-4bit", name: "Llama 3.2 3B", contextWindow: 8192),
+                WorkflowModelOption(id: "mlx-community/Qwen2.5-3B-Instruct-4bit", name: "Qwen 2.5 3B", contextWindow: 8192),
                 WorkflowModelOption(id: "mlx-community/Mistral-7B-Instruct-v0.3-4bit", name: "Mistral 7B", contextWindow: 32768),
-                WorkflowModelOption(id: "mlx-community/Qwen2.5-7B-Instruct-4bit", name: "Qwen 2.5 7B", contextWindow: 32768),
             ]
         }
     }
@@ -410,6 +413,7 @@ struct ShellStepConfig: Codable {
     var workingDirectory: String?       // Optional working directory
     var environment: [String: String]   // Additional environment variables
     var stdin: String?                  // Optional input to pass via stdin (supports templates)
+    var promptTemplate: String?         // Multi-line prompt template (passed via -p flag for claude)
     var timeout: Int                    // Timeout in seconds (default 30)
     var captureStderr: Bool             // Include stderr in output
 
@@ -419,6 +423,7 @@ struct ShellStepConfig: Codable {
         workingDirectory: String? = nil,
         environment: [String: String] = [:],
         stdin: String? = nil,
+        promptTemplate: String? = nil,
         timeout: Int = 30,
         captureStderr: Bool = true
     ) {
@@ -427,6 +432,7 @@ struct ShellStepConfig: Codable {
         self.workingDirectory = workingDirectory
         self.environment = environment
         self.stdin = stdin
+        self.promptTemplate = promptTemplate
         self.timeout = timeout
         self.captureStderr = captureStderr
     }
@@ -441,9 +447,8 @@ struct ShellStepConfig: Codable {
     // Strategy: Sanitize data flowing between steps, allow powerful tools
     //
 
-    /// Allowlist of permitted executables. User can extend via Settings.
-    /// We allow powerful CLIs but block destructive system commands.
-    static var allowedExecutables: Set<String> = [
+    /// Default allowed executables (built-in)
+    static let defaultAllowedExecutables: Set<String> = [
         // Text processing
         "/bin/echo",
         "/bin/cat",
@@ -495,6 +500,39 @@ struct ShellStepConfig: Codable {
         "/usr/bin/file",
         "/usr/bin/which",
     ]
+
+    /// UserDefaults key for custom allowed executables
+    private static let customAllowedKey = "ShellStepCustomAllowedExecutables"
+
+    /// Get all allowed executables (defaults + user-added)
+    static var allowedExecutables: Set<String> {
+        var allowed = defaultAllowedExecutables
+        if let custom = UserDefaults.standard.stringArray(forKey: customAllowedKey) {
+            allowed.formUnion(custom)
+        }
+        return allowed
+    }
+
+    /// Add a custom executable to the allowlist
+    static func addAllowedExecutable(_ path: String) {
+        var custom = UserDefaults.standard.stringArray(forKey: customAllowedKey) ?? []
+        if !custom.contains(path) {
+            custom.append(path)
+            UserDefaults.standard.set(custom, forKey: customAllowedKey)
+        }
+    }
+
+    /// Remove a custom executable from the allowlist
+    static func removeAllowedExecutable(_ path: String) {
+        var custom = UserDefaults.standard.stringArray(forKey: customAllowedKey) ?? []
+        custom.removeAll { $0 == path }
+        UserDefaults.standard.set(custom, forKey: customAllowedKey)
+    }
+
+    /// Get just the custom (user-added) executables
+    static var customAllowedExecutables: [String] {
+        UserDefaults.standard.stringArray(forKey: customAllowedKey) ?? []
+    }
 
     /// Blocked executables - destructive or privilege escalation
     static let blockedExecutables: Set<String> = [
@@ -644,7 +682,18 @@ struct ShellStepConfig: Codable {
             case .gh:
                 return ShellStepConfig(executable: "/opt/homebrew/bin/gh", arguments: ["issue", "list", "--limit", "5"])
             case .claude:
-                return ShellStepConfig(executable: "/usr/local/bin/claude", arguments: ["-p", "Summarize: {{TRANSCRIPT}}"])
+                return ShellStepConfig(
+                    executable: "/usr/local/bin/claude",
+                    arguments: [],
+                    promptTemplate: """
+                    You are a helpful assistant processing voice memo content.
+
+                    Here is the transcript:
+                    {{TRANSCRIPT}}
+
+                    Please provide a clear, concise summary.
+                    """
+                )
             case .python:
                 return ShellStepConfig(executable: "/usr/bin/python3", arguments: ["-c", "import sys; print(sys.stdin.read().upper())"], stdin: "{{TRANSCRIPT}}")
             case .node:
@@ -812,7 +861,7 @@ struct ClipboardStepConfig: Codable {
 
 struct SaveFileStepConfig: Codable {
     var filename: String // Can contain template variables
-    var directory: String? // nil = default Documents folder
+    var directory: String? // nil = use default output directory from settings, supports @aliases
     var content: String // Template string
     var appendIfExists: Bool
 
@@ -821,6 +870,81 @@ struct SaveFileStepConfig: Codable {
         self.directory = directory
         self.content = content
         self.appendIfExists = appendIfExists
+    }
+
+    // MARK: - Default Output Directory Setting
+
+    private static let defaultOutputDirectoryKey = "TalkieDefaultOutputDirectory"
+
+    /// Get the default output directory (user-configurable)
+    static var defaultOutputDirectory: String {
+        get {
+            if let saved = UserDefaults.standard.string(forKey: defaultOutputDirectoryKey), !saved.isEmpty {
+                return saved
+            }
+            // Default to ~/Documents/Talkie
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            return documents.appendingPathComponent("Talkie").path
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: defaultOutputDirectoryKey)
+        }
+    }
+
+    /// Ensure the default output directory exists
+    static func ensureDefaultDirectoryExists() throws {
+        let path = defaultOutputDirectory
+        if !FileManager.default.fileExists(atPath: path) {
+            try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+        }
+    }
+
+    // MARK: - Path Aliases
+
+    private static let pathAliasesKey = "TalkiePathAliases"
+
+    /// Get all defined path aliases (e.g., ["Obsidian": "/Users/x/Obsidian/Vault", "Notes": "/Users/x/Notes"])
+    static var pathAliases: [String: String] {
+        get {
+            UserDefaults.standard.dictionary(forKey: pathAliasesKey) as? [String: String] ?? [:]
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: pathAliasesKey)
+        }
+    }
+
+    /// Add or update a path alias
+    static func setPathAlias(_ name: String, path: String) {
+        var aliases = pathAliases
+        aliases[name] = path
+        pathAliases = aliases
+    }
+
+    /// Remove a path alias
+    static func removePathAlias(_ name: String) {
+        var aliases = pathAliases
+        aliases.removeValue(forKey: name)
+        pathAliases = aliases
+    }
+
+    /// Resolve a path that may contain an @alias (e.g., "@Obsidian/notes" -> "/Users/x/Vault/notes")
+    static func resolvePathAlias(_ path: String) -> String {
+        // Check if path starts with @
+        guard path.hasPrefix("@") else { return path }
+
+        // Extract alias name (everything after @ until / or end)
+        let withoutAt = String(path.dropFirst())
+        let components = withoutAt.split(separator: "/", maxSplits: 1)
+        let aliasName = String(components.first ?? "")
+        let remainder = components.count > 1 ? "/" + components[1] : ""
+
+        // Look up alias
+        if let resolvedBase = pathAliases[aliasName] {
+            return resolvedBase + remainder
+        }
+
+        // Alias not found, return original
+        return path
     }
 }
 
@@ -884,6 +1008,22 @@ enum WorkflowColor: String, Codable, CaseIterable {
     case blue, green, orange, purple, yellow, red, pink, cyan, indigo, mint, teal
 
     var displayName: String { rawValue.capitalized }
+
+    var color: Color {
+        switch self {
+        case .blue: return .blue
+        case .green: return .green
+        case .orange: return .orange
+        case .purple: return .purple
+        case .yellow: return .yellow
+        case .red: return .red
+        case .pink: return .pink
+        case .cyan: return .cyan
+        case .indigo: return .indigo
+        case .mint: return .mint
+        case .teal: return .teal
+        }
+    }
 }
 
 // MARK: - Workflow Manager
