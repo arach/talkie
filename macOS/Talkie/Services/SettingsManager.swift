@@ -7,9 +7,182 @@
 
 import Foundation
 import CoreData
+import SwiftUI
+import AppKit
+
+// MARK: - Appearance Mode
+enum AppearanceMode: String, CaseIterable {
+    case system = "system"
+    case light = "light"
+    case dark = "dark"
+
+    var displayName: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max"
+        case .dark: return "moon"
+        }
+    }
+}
+
+// MARK: - Accent Color Options
+enum AccentColorOption: String, CaseIterable {
+    case system = "system"
+    case blue = "blue"
+    case purple = "purple"
+    case pink = "pink"
+    case red = "red"
+    case orange = "orange"
+    case yellow = "yellow"
+    case green = "green"
+    case gray = "gray"
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+
+    var color: Color? {
+        switch self {
+        case .system: return nil
+        case .blue: return .blue
+        case .purple: return .purple
+        case .pink: return .pink
+        case .red: return .red
+        case .orange: return .orange
+        case .yellow: return .yellow
+        case .green: return .green
+        case .gray: return .gray
+        }
+    }
+}
+
+// MARK: - Font Style Options
+enum FontStyleOption: String, CaseIterable {
+    case system = "system"
+    case monospace = "monospace"
+    case rounded = "rounded"
+    case serif = "serif"
+
+    var displayName: String {
+        switch self {
+        case .system: return "System"
+        case .monospace: return "Monospace"
+        case .rounded: return "Rounded"
+        case .serif: return "Serif"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .system: return "textformat"
+        case .monospace: return "chevron.left.forwardslash.chevron.right"
+        case .rounded: return "a.circle"
+        case .serif: return "text.book.closed"
+        }
+    }
+
+    func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        switch self {
+        case .system:
+            return .system(size: size, weight: weight)
+        case .monospace:
+            return .system(size: size, weight: weight, design: .monospaced)
+        case .rounded:
+            return .system(size: size, weight: weight, design: .rounded)
+        case .serif:
+            return .system(size: size, weight: weight, design: .serif)
+        }
+    }
+}
+
+// MARK: - Font Size Options
+enum FontSizeOption: String, CaseIterable {
+    case small = "small"
+    case medium = "medium"
+    case large = "large"
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+
+    var scale: CGFloat {
+        switch self {
+        case .small: return 0.85
+        case .medium: return 1.0
+        case .large: return 1.15
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .small: return "textformat.size.smaller"
+        case .medium: return "textformat.size"
+        case .large: return "textformat.size.larger"
+        }
+    }
+}
 
 class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
+
+    // MARK: - Appearance Settings (UserDefaults - device-specific)
+
+    private let appearanceModeKey = "appearanceMode"
+    private let accentColorKey = "accentColor"
+    private let fontStyleKey = "fontStyle"
+    private let fontSizeKey = "fontSize"
+
+    @Published var appearanceMode: AppearanceMode {
+        didSet {
+            UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceModeKey)
+            applyAppearanceMode()
+        }
+    }
+
+    @Published var accentColor: AccentColorOption {
+        didSet {
+            UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
+        }
+    }
+
+    @Published var fontStyle: FontStyleOption {
+        didSet {
+            UserDefaults.standard.set(fontStyle.rawValue, forKey: fontStyleKey)
+        }
+    }
+
+    @Published var fontSize: FontSizeOption {
+        didSet {
+            UserDefaults.standard.set(fontSize.rawValue, forKey: fontSizeKey)
+        }
+    }
+
+    /// Get a font with the current style and size settings applied
+    func themedFont(baseSize: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let scaledSize = baseSize * fontSize.scale
+        return fontStyle.font(size: scaledSize, weight: weight)
+    }
+
+    func applyAppearanceMode() {
+        DispatchQueue.main.async {
+            switch self.appearanceMode {
+            case .system:
+                NSApp.appearance = nil
+            case .light:
+                NSApp.appearance = NSAppearance(named: .aqua)
+            case .dark:
+                NSApp.appearance = NSAppearance(named: .darkAqua)
+            }
+        }
+    }
 
     // MARK: - Local File Storage Settings (UserDefaults - device-specific)
     // Where transcript and audio files live on disk - your data, your files
@@ -105,12 +278,45 @@ class SettingsManager: ObservableObject {
     private var isInitialized = false
 
     private init() {
+        // Initialize appearance settings from UserDefaults
+        if let modeString = UserDefaults.standard.string(forKey: appearanceModeKey),
+           let mode = AppearanceMode(rawValue: modeString) {
+            self.appearanceMode = mode
+        } else {
+            self.appearanceMode = .system
+        }
+
+        if let colorString = UserDefaults.standard.string(forKey: accentColorKey),
+           let color = AccentColorOption(rawValue: colorString) {
+            self.accentColor = color
+        } else {
+            self.accentColor = .system
+        }
+
+        if let fontStyleString = UserDefaults.standard.string(forKey: fontStyleKey),
+           let style = FontStyleOption(rawValue: fontStyleString) {
+            self.fontStyle = style
+        } else {
+            self.fontStyle = .monospace  // Default to monospace for code-style UI
+        }
+
+        if let fontSizeString = UserDefaults.standard.string(forKey: fontSizeKey),
+           let size = FontSizeOption(rawValue: fontSizeString) {
+            self.fontSize = size
+        } else {
+            self.fontSize = .medium
+        }
+
         // Initialize local file storage settings from UserDefaults
         // Default: DISABLED - these are opt-in advanced features for data ownership
         self.saveTranscriptsLocally = UserDefaults.standard.object(forKey: saveTranscriptsLocallyKey) as? Bool ?? false
         self.transcriptsFolderPath = UserDefaults.standard.string(forKey: transcriptsFolderPathKey) ?? SettingsManager.defaultTranscriptsFolderPath
         self.saveAudioLocally = UserDefaults.standard.object(forKey: saveAudioLocallyKey) as? Bool ?? false
         self.audioFolderPath = UserDefaults.standard.string(forKey: audioFolderPathKey) ?? SettingsManager.defaultAudioFolderPath
+
+        // Apply appearance mode on launch
+        applyAppearanceMode()
+
         // Defer Core Data access until first use
     }
 

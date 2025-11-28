@@ -14,12 +14,14 @@ struct TalkieApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     let persistenceController = PersistenceController.shared
+    @ObservedObject private var settingsManager = SettingsManager.shared
 
     var body: some Scene {
         WindowGroup {
             TalkieNavigationView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .frame(minWidth: 900, minHeight: 600)
+                .tint(settingsManager.accentColor.color)
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
@@ -30,6 +32,7 @@ struct TalkieApp: App {
         Settings {
             SettingsView()
                 .frame(minWidth: 800, minHeight: 600)
+                .tint(settingsManager.accentColor.color)
         }
     }
 }

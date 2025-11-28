@@ -99,7 +99,7 @@ class WorkflowExecutor: ObservableObject {
         modelId: String? = nil,
         context: NSManagedObjectContext
     ) async throws {
-        guard let transcript = memo.transcription, !transcript.isEmpty else {
+        guard let transcript = memo.currentTranscript, !transcript.isEmpty else {
             throw WorkflowError.noTranscript
         }
 
@@ -171,7 +171,7 @@ class WorkflowExecutor: ObservableObject {
         for memo: VoiceMemo,
         context: NSManagedObjectContext
     ) async throws -> [String: String] {
-        guard let transcript = memo.transcription, !transcript.isEmpty else {
+        guard let transcript = memo.currentTranscript, !transcript.isEmpty else {
             throw WorkflowError.noTranscript
         }
 

@@ -9,6 +9,7 @@ import SwiftUI
 import CloudKit
 
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject var settingsManager = SettingsManager.shared
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
@@ -17,6 +18,19 @@ struct SettingsView: View {
         NavigationSplitView {
             // Sidebar
             List {
+                Section("APPEARANCE") {
+                    NavigationLink(destination: AppearanceSettingsView()) {
+                        Label {
+                            Text("Theme & Colors")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        } icon: {
+                            Image(systemName: "paintbrush")
+                                .font(.system(size: 11))
+                                .frame(width: 16)
+                        }
+                    }
+                }
+
                 Section("WORKFLOWS") {
                     NavigationLink(destination: QuickActionsSettingsView()) {
                         Label {
@@ -109,6 +123,322 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(NSColor.textBackgroundColor))
         }
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return, modifiers: .command)
+            }
+        }
+    }
+}
+
+// MARK: - Appearance Settings View
+struct AppearanceSettingsView: View {
+    @ObservedObject private var settingsManager = SettingsManager.shared
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "paintbrush")
+                            .font(.system(size: 16))
+                        Text("APPEARANCE")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                    }
+                    .foregroundColor(.primary)
+
+                    Text("Customize how Talkie looks on your Mac.")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Divider()
+
+                // MARK: - Theme Mode
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("THEME")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 12) {
+                        ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                            AppearanceModeButton(
+                                mode: mode,
+                                isSelected: settingsManager.appearanceMode == mode,
+                                action: { settingsManager.appearanceMode = mode }
+                            )
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+
+                // MARK: - Accent Color
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("ACCENT COLOR")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.secondary)
+
+                    Text("Used for buttons, selections, and highlights.")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                        ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
+                            AccentColorButton(
+                                colorOption: colorOption,
+                                isSelected: settingsManager.accentColor == colorOption,
+                                action: { settingsManager.accentColor = colorOption }
+                            )
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+
+                // MARK: - Typography
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("TYPOGRAPHY")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.secondary)
+
+                    // Font Style
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Font Style")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.8))
+
+                        HStack(spacing: 8) {
+                            ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
+                                FontStyleButton(
+                                    style: style,
+                                    isSelected: settingsManager.fontStyle == style,
+                                    action: { settingsManager.fontStyle = style }
+                                )
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    // Font Size
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Font Size")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.8))
+
+                        HStack(spacing: 8) {
+                            ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
+                                FontSizeButton(
+                                    size: size,
+                                    isSelected: settingsManager.fontSize == size,
+                                    action: { settingsManager.fontSize = size }
+                                )
+                            }
+                        }
+                    }
+
+                    // Preview
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Preview")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.8))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("The quick brown fox jumps over the lazy dog.")
+                                .font(settingsManager.themedFont(baseSize: 13))
+                            Text("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                                .font(settingsManager.themedFont(baseSize: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                    }
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+
+                // Note about accent color
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(.blue)
+                    Text("Accent color applies to Talkie only. System accent color is set in System Settings.")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                .padding(8)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(6)
+
+                Spacer()
+            }
+            .padding(32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.textBackgroundColor))
+    }
+}
+
+// MARK: - Appearance Mode Button
+struct AppearanceModeButton: View {
+    let mode: AppearanceMode
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .frame(width: 48, height: 48)
+                    .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                    )
+
+                Text(mode.displayName)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 80)
+    }
+}
+
+// MARK: - Accent Color Button
+struct AccentColorButton: View {
+    let colorOption: AccentColorOption
+    let isSelected: Bool
+    let action: () -> Void
+
+    private var displayColor: Color {
+        colorOption.color ?? .accentColor
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                // Color swatch
+                if colorOption == .system {
+                    // Gradient for system
+                    LinearGradient(
+                        colors: [.blue, .purple, .pink],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(width: 14, height: 14)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(displayColor)
+                        .frame(width: 14, height: 14)
+                }
+
+                Text(colorOption.displayName)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color(NSColor.controlBackgroundColor))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Font Style Button
+struct FontStyleButton: View {
+    let style: FontStyleOption
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: style.icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .frame(width: 40, height: 40)
+                    .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                    )
+
+                Text(style.displayName)
+                    .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 70)
+    }
+}
+
+// MARK: - Font Size Button
+struct FontSizeButton: View {
+    let size: FontSizeOption
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: size.icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+
+                Text(size.displayName)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

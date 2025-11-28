@@ -13,8 +13,11 @@ struct VoiceMemoDetailView: View {
     @ObservedObject var audioPlayer: AudioPlayerManager
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isEditing = false
+    @State private var isEditingTitle = false
     @State private var editedTitle = ""
+    @State private var isEditingTranscript = false
+    @State private var editedTranscript = ""
+    @State private var showingVersionHistory = false
     @State private var showingSummary = false
     @State private var showingTasks = false
     @State private var showingReminders = false
@@ -52,7 +55,7 @@ struct VoiceMemoDetailView: View {
                         // Header: Title + Metadata
                         VStack(spacing: Spacing.sm) {
                             // Title
-                            if isEditing {
+                            if isEditingTitle {
                                 TextField("Title", text: $editedTitle)
                                     .font(.bodyMedium)
                                     .padding(Spacing.sm)
@@ -193,26 +196,104 @@ struct VoiceMemoDetailView: View {
                             .background(Color.transcribing.opacity(0.08))
                             .cornerRadius(CornerRadius.sm)
                             .padding(.horizontal, Spacing.md)
-                        } else if let transcription = memo.transcription {
+                        } else if let transcription = memo.currentTranscript {
                             VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("TRANSCRIPT")
-                                    .font(.techLabel)
-                                    .tracking(2)
-                                    .foregroundColor(.textSecondary)
+                                // Header with title and edit action
+                                HStack {
+                                    Text("TRANSCRIPT")
+                                        .font(.techLabel)
+                                        .tracking(2)
+                                        .foregroundColor(.textSecondary)
 
-                                Text(transcription)
-                                    .font(.bodySmall)
-                                    .foregroundColor(.textPrimary)
-                                    .textSelection(.enabled)
-                                    .lineSpacing(4)
-                                    .padding(Spacing.md)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.surfaceSecondary)
-                                    .cornerRadius(CornerRadius.sm)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                                    )
+                                    Spacer()
+
+                                    // Edit button
+                                    if !isEditingTranscript {
+                                        Button(action: {
+                                            editedTranscript = transcription
+                                            isEditingTranscript = true
+                                        }) {
+                                            Image(systemName: "pencil")
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundColor(.active)
+                                        }
+                                    }
+                                }
+
+                                // Transcript content or editor
+                                if isEditingTranscript {
+                                    VStack(spacing: Spacing.sm) {
+                                        TextEditor(text: $editedTranscript)
+                                            .font(.bodySmall)
+                                            .foregroundColor(.textPrimary)
+                                            .scrollContentBackground(.hidden)
+                                            .lineSpacing(4)
+                                            .padding(Spacing.sm)
+                                            .frame(minHeight: 150, maxHeight: 300)
+                                            .background(Color.surfaceSecondary)
+                                            .cornerRadius(CornerRadius.sm)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                                    .strokeBorder(Color.active, lineWidth: 1)
+                                            )
+
+                                        HStack(spacing: Spacing.sm) {
+                                            Button(action: {
+                                                isEditingTranscript = false
+                                                editedTranscript = ""
+                                            }) {
+                                                Text("CANCEL")
+                                                    .font(.techLabel)
+                                                    .tracking(1)
+                                                    .foregroundColor(.textSecondary)
+                                                    .padding(.horizontal, Spacing.md)
+                                                    .padding(.vertical, Spacing.sm)
+                                                    .background(Color.surfaceSecondary)
+                                                    .cornerRadius(CornerRadius.sm)
+                                            }
+
+                                            Spacer()
+
+                                            Button(action: saveTranscriptEdit) {
+                                                Text("SAVE")
+                                                    .font(.techLabel)
+                                                    .tracking(1)
+                                                    .foregroundColor(.white)
+                                                    .padding(.horizontal, Spacing.md)
+                                                    .padding(.vertical, Spacing.sm)
+                                                    .background(Color.active)
+                                                    .cornerRadius(CornerRadius.sm)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Text(transcription)
+                                        .font(.bodySmall)
+                                        .foregroundColor(.textPrimary)
+                                        .textSelection(.enabled)
+                                        .lineSpacing(4)
+                                        .padding(Spacing.md)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.surfaceSecondary)
+                                        .cornerRadius(CornerRadius.sm)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                                .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                        )
+                                        .contextMenu {
+                                            // Power user: access version history via long-press
+                                            if memo.sortedTranscriptVersions.count > 1 {
+                                                Button(action: { showingVersionHistory = true }) {
+                                                    Label("Version History", systemImage: "clock.arrow.circlepath")
+                                                }
+                                            }
+                                            Button(action: {
+                                                UIPasteboard.general.string = transcription
+                                            }) {
+                                                Label("Copy", systemImage: "doc.on.doc")
+                                            }
+                                        }
+                                }
                             }
                             .padding(.horizontal, Spacing.md)
 
@@ -281,7 +362,7 @@ struct VoiceMemoDetailView: View {
 
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        if isEditing {
+                        if isEditingTitle {
                             saveTitle()
                         }
                         dismiss()
@@ -295,14 +376,14 @@ struct VoiceMemoDetailView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        if isEditing {
+                        if isEditingTitle {
                             saveTitle()
                         } else {
                             editedTitle = memoTitle
-                            isEditing = true
+                            isEditingTitle = true
                         }
                     }) {
-                        Text(isEditing ? "SAVE" : "EDIT")
+                        Text(isEditingTitle ? "SAVE" : "EDIT TITLE")
                             .font(.techLabel)
                             .tracking(1)
                             .foregroundColor(.active)
@@ -334,7 +415,10 @@ struct VoiceMemoDetailView: View {
                 )
             }
             .sheet(isPresented: $showingShare) {
-                ShareSheet(items: [memo.transcription ?? ""])
+                ShareSheet(items: [memo.currentTranscript ?? ""])
+            }
+            .sheet(isPresented: $showingVersionHistory) {
+                TranscriptVersionHistorySheet(memo: memo)
             }
             .onAppear {
                 // Fetch latest from CloudKit
@@ -365,7 +449,18 @@ struct VoiceMemoDetailView: View {
     private func saveTitle() {
         memo.title = editedTitle
         try? memo.managedObjectContext?.save()
-        isEditing = false
+        isEditingTitle = false
+    }
+
+    private func saveTranscriptEdit() {
+        guard !editedTranscript.isEmpty else { return }
+
+        // Create a new user version (immutable - keeps history)
+        memo.addUserTranscript(content: editedTranscript)
+        try? memo.managedObjectContext?.save()
+
+        isEditingTranscript = false
+        editedTranscript = ""
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -467,5 +562,148 @@ struct ActionButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(isProcessing)
+    }
+}
+
+// MARK: - Transcript Version History Sheet
+struct TranscriptVersionHistorySheet: View {
+    @ObservedObject var memo: VoiceMemo
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.surfacePrimary
+                    .ignoresSafeArea()
+
+                if memo.sortedTranscriptVersions.isEmpty {
+                    VStack(spacing: Spacing.md) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 40))
+                            .foregroundColor(.textTertiary)
+                        Text("No version history")
+                            .font(.bodyMedium)
+                            .foregroundColor(.textSecondary)
+                    }
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: Spacing.md) {
+                            ForEach(memo.sortedTranscriptVersions, id: \.id) { version in
+                                TranscriptVersionRow(version: version, isLatest: version == memo.latestTranscriptVersion)
+                            }
+                        }
+                        .padding(Spacing.md)
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("VERSION HISTORY")
+                        .font(.techLabel)
+                        .tracking(2)
+                        .foregroundColor(.textPrimary)
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("DONE") {
+                        dismiss()
+                    }
+                    .font(.techLabel)
+                    .foregroundColor(.active)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Transcript Version Row
+struct TranscriptVersionRow: View {
+    let version: TranscriptVersion
+    let isLatest: Bool
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Header
+            HStack {
+                // Version badge
+                HStack(spacing: 4) {
+                    Text("v\(version.version)")
+                        .font(.monoSmall)
+                        .fontWeight(.semibold)
+                    if isLatest {
+                        Text("CURRENT")
+                            .font(.techLabelSmall)
+                            .tracking(1)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.active.opacity(0.15))
+                            .foregroundColor(.active)
+                            .cornerRadius(4)
+                    }
+                }
+
+                Spacer()
+
+                // Source type icon
+                Image(systemName: sourceIcon)
+                    .font(.system(size: 12))
+                    .foregroundColor(.textTertiary)
+            }
+
+            // Source and date info
+            HStack(spacing: Spacing.xs) {
+                Text(version.sourceDescription.uppercased())
+                    .font(.techLabelSmall)
+                    .tracking(1)
+
+                Text("·")
+
+                Text(version.formattedDate)
+                    .font(.monoSmall)
+            }
+            .foregroundColor(.textTertiary)
+
+            // Content preview or full (expandable)
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
+                Text(version.content ?? "")
+                    .font(.bodySmall)
+                    .foregroundColor(.textPrimary)
+                    .lineLimit(isExpanded ? nil : 3)
+                    .lineSpacing(4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            if !isExpanded && (version.content?.count ?? 0) > 150 {
+                Text("TAP TO EXPAND")
+                    .font(.techLabelSmall)
+                    .tracking(1)
+                    .foregroundColor(.active)
+            }
+        }
+        .padding(Spacing.md)
+        .background(isLatest ? Color.active.opacity(0.05) : Color.surfaceSecondary)
+        .cornerRadius(CornerRadius.sm)
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .strokeBorder(isLatest ? Color.active.opacity(0.3) : Color.borderPrimary, lineWidth: 0.5)
+        )
+    }
+
+    private var sourceIcon: String {
+        guard let sourceType = version.sourceTypeEnum else {
+            return "doc.text"
+        }
+        switch sourceType {
+        case .systemIOS:
+            return "iphone"
+        case .systemMacOS:
+            return "desktopcomputer"
+        case .user:
+            return "pencil"
+        }
     }
 }

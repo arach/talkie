@@ -57,7 +57,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(.ultraThinMaterial)
 
                 Divider()
 
@@ -84,7 +84,7 @@ struct ContentView: View {
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(NSColor.textBackgroundColor))
+                    .background(.background)
                 } else {
                     List(selection: $selectedMemo) {
                         ForEach(voiceMemos) { memo in
@@ -111,7 +111,7 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.textBackgroundColor))
+                .background(.background)
             }
         }
 
@@ -168,13 +168,7 @@ struct ContentView: View {
             .padding(.trailing, 16)
         }
         .frame(height: 28)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-        .overlay(
-            Rectangle()
-                .fill(Color.secondary.opacity(0.1))
-                .frame(height: 0.5),
-            alignment: .top
-        )
+        .background(.ultraThinMaterial)
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
             DispatchQueue.main.async {

@@ -96,7 +96,12 @@ class TranscriptionService {
                 switch result {
                 case .success(let transcription):
                     AppLogger.transcription.info("Transcription succeeded: \(transcription.prefix(50))...")
-                    memo.transcription = transcription
+                    // Create versioned transcript (also sets legacy field for compatibility)
+                    memo.addSystemTranscript(
+                        content: transcription,
+                        fromMacOS: false,
+                        engine: TranscriptEngines.appleSpeech
+                    )
                     memo.isTranscribing = false
 
                 case .failure(let error):

@@ -88,7 +88,7 @@ struct MemoRowView: View {
     /// Simple indicator: green checkmark = transcribed + synced, gray dot = not ready
     @ViewBuilder
     private var syncStatusIndicator: some View {
-        let isReady = memo.transcription != nil && memo.cloudSyncedAt != nil
+        let isReady = memo.currentTranscript != nil && memo.cloudSyncedAt != nil
 
         if isReady {
             // Green checkmark = transcribed and synced to cloud

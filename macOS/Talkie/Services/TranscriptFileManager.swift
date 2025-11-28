@@ -109,7 +109,7 @@ class TranscriptFileManager {
                 for memo in memos {
                     // Write transcript file (if enabled and memo has transcription)
                     if SettingsManager.shared.saveTranscriptsLocally,
-                       let transcription = memo.transcription, !transcription.isEmpty {
+                       let transcription = memo.currentTranscript, !transcription.isEmpty {
                         let result = self.writeTranscriptFile(for: memo)
                         switch result {
                         case .created: transcriptsCreated += 1
@@ -141,7 +141,7 @@ class TranscriptFileManager {
     /// Write a single transcript as Markdown with YAML frontmatter
     func writeTranscriptFile(for memo: VoiceMemo) -> WriteResult {
         guard SettingsManager.shared.saveTranscriptsLocally else { return .skipped }
-        guard let transcript = memo.transcription, !transcript.isEmpty else { return .skipped }
+        guard let transcript = memo.currentTranscript, !transcript.isEmpty else { return .skipped }
         guard memo.id != nil else { return .skipped }
 
         let fileURL = transcriptFileURL(for: memo)
@@ -281,7 +281,7 @@ class TranscriptFileManager {
         content += "---\n\n"
 
         // Transcript
-        if let transcript = memo.transcription {
+        if let transcript = memo.currentTranscript {
             content += transcript
             content += "\n"
         }

@@ -14,17 +14,6 @@ struct VoiceMemoRow: View {
 
     @State private var showingDetail = false
 
-    private var memoURL: URL? {
-        guard let filename = memo.fileURL else { return nil }
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return documentsPath.appendingPathComponent(filename)
-    }
-
-    private var isPlaying: Bool {
-        guard let url = memoURL else { return false }
-        return audioPlayer.isPlaying && audioPlayer.currentPlayingURL == url
-    }
-
     private var memoTitle: String {
         memo.title ?? "Recording"
     }
@@ -33,162 +22,121 @@ struct VoiceMemoRow: View {
         memo.createdAt ?? Date()
     }
 
+    /// File size from audioData or estimated from duration
+    private var fileSize: String {
+        if let data = memo.audioData {
+            return formatFileSize(data.count)
+        }
+        let estimatedBytes = Int(memo.duration * 16000)
+        return formatFileSize(estimatedBytes)
+    }
+
+    /// Audio format from filename extension
+    private var audioFormat: String {
+        guard let filename = memo.fileURL else { return "M4A" }
+        let ext = (filename as NSString).pathExtension.uppercased()
+        return ext.isEmpty ? "M4A" : ext
+    }
+
     var body: some View {
         Button(action: { showingDetail = true }) {
-            VStack(spacing: 0) {
-                HStack(spacing: Spacing.sm) {
-                    // Left: Title and metadata
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        // Title - monospace for dev tool feel
-                        Text(memoTitle)
-                            .font(.bodyMedium)
-                            .foregroundColor(.textPrimary)
-                            .lineLimit(1)
+            HStack(alignment: .top, spacing: 12) {
+                // Left side: Name and metadata
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(memoTitle)
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .foregroundColor(.textPrimary)
+                        .lineLimit(1)
 
-                        // Metadata row - compact, technical
-                        HStack(spacing: Spacing.xs) {
-                            // Duration with icon
-                            HStack(spacing: 2) {
-                                Image(systemName: "clock")
-                                    .font(.system(size: 9, weight: .medium))
-                                Text(formatDuration(memo.duration))
-                                    .font(.monoSmall)
-                            }
-                            .foregroundColor(.textSecondary)
+                    // Metadata: Time | Size | Format
+                    HStack(spacing: 0) {
+                        Text(formatTime(memoCreatedAt))
+                        Text("  |  ").foregroundColor(.textTertiary.opacity(0.5))
+                        Text(fileSize)
+                        Text("  |  ").foregroundColor(.textTertiary.opacity(0.5))
+                        Text(audioFormat)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.textTertiary)
+                }
 
-                            Text("·")
-                                .font(.labelSmall)
-                                .foregroundColor(.textTertiary)
+                Spacer(minLength: 8)
 
-                            // Date
-                            Text(formatDateCompact(memoCreatedAt))
-                                .font(.labelSmall)
-                                .foregroundColor(.textSecondary)
+                // Right side: Duration and status badges
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(formatDuration(memo.duration))
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(.textSecondary)
 
-                            // Transcription status: PROC (pulsing) or TXT ✓
-                            if memo.isTranscribing {
-                                Text("·")
-                                    .font(.labelSmall)
-                                    .foregroundColor(.textTertiary)
+                    // Status badges
+                    HStack(spacing: 6) {
+                        if memo.isTranscribing {
+                            Text("...")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.orange)
+                        } else if memo.transcription != nil {
+                            Text("TXT")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.green)
+                        }
 
-                                PulsingText("PROC")
-                            } else if memo.transcription != nil {
-                                Text("·")
-                                    .font(.labelSmall)
-                                    .foregroundColor(.textTertiary)
-
-                                HStack(spacing: 2) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 10, weight: .semibold))
-                                    Text("TXT")
-                                        .font(.techLabelSmall)
-                                        .tracking(0.5)
-                                }
-                                .foregroundColor(.success)
-                            }
-
-                            // Sync status: cloud = safely synced to iCloud
-                            if memo.cloudSyncedAt != nil {
-                                Text("·")
-                                    .font(.labelSmall)
-                                    .foregroundColor(.textTertiary)
-
-                                Image(systemName: "cloud.fill")
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(.success)
-                            }
+                        if memo.cloudSyncedAt != nil {
+                            Image(systemName: "checkmark.icloud.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.green)
                         }
                     }
-
-                    Spacer(minLength: Spacing.xs)
-
-                    // Right: Chevron
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.textTertiary)
                 }
-                .padding(.vertical, Spacing.sm)
-                .padding(.horizontal, Spacing.md)
             }
-            .background(Color.surfaceSecondary)
-            .cornerRadius(CornerRadius.sm)
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-            )
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
         .sheet(isPresented: $showingDetail) {
             VoiceMemoDetailView(memo: memo, audioPlayer: audioPlayer)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("DEL", systemImage: "trash.fill")
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash.fill")
             }
-            .tint(.recording)
+            .tint(.red)
         }
     }
 
-    private func togglePlayback() {
-        guard let url = memoURL else { return }
-        audioPlayer.togglePlayPause(url: url)
-    }
-
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
-    private func formatDateCompact(_ date: Date) -> String {
+    private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         let calendar = Calendar.current
 
-        if calendar.isDateInToday(date) {
-            formatter.timeStyle = .short
-            return "Today, \(formatter.string(from: date))"
-        } else if calendar.isDateInYesterday(date) {
-            formatter.timeStyle = .short
-            return "Yesterday, \(formatter.string(from: date))"
-        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
-            formatter.dateFormat = "EEEE, h:mm a"
+        if calendar.isDateInToday(date) || calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "h:mm a"
             return formatter.string(from: date)
         } else {
-            formatter.dateFormat = "MMM d, h:mm a"
+            formatter.dateFormat = "MMM d"
             return formatter.string(from: date)
         }
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-}
+        let totalSeconds = Int(duration)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
 
-// MARK: - Pulsing Text for Processing State
-
-private struct PulsingText: View {
-    let text: String
-    @State private var opacity: Double = 1.0
-
-    init(_ text: String) {
-        self.text = text
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
     }
 
-    var body: some View {
-        Text(text)
-            .font(.techLabelSmall)
-            .tracking(0.5)
-            .foregroundColor(.transcribing)
-            .opacity(opacity)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                    opacity = 0.3
-                }
-            }
+    private func formatFileSize(_ bytes: Int) -> String {
+        let mb = Double(bytes) / (1024 * 1024)
+        if mb >= 1.0 {
+            return String(format: "%.1f MB", mb)
+        } else {
+            let kb = Double(bytes) / 1024
+            return String(format: "%.0f KB", kb)
+        }
     }
 }

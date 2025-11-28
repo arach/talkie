@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		08DE6F8EECE2C98D49F6D7B7 /* ModelsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */; };
+		VMTRANS_BUILDFILE /* VoiceMemo+Transcripts.swift in Sources */ = {isa = PBXBuildFile; fileRef = VMTRANS_FILEREF /* VoiceMemo+Transcripts.swift */; };
 		107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */; };
 		123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96107EE13719761E10A69B43 /* TalkieApp.swift */; };
 		14A7C2FC561959C8A828FDDC /* WorkflowExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */; };
@@ -64,6 +65,7 @@
 		FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowDefinition.swift; sourceTree = "<group>"; };
 		SYSCONSOLE_FILEREF /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
 		TFMGR_FILEREF /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
+		VMTRANS_FILEREF /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +122,7 @@
 			children = (
 				1A5E5501D5B93090C1EE4CFC /* Persistence.swift */,
 				221F1F73B64929D9AA318F9E /* talkie.xcdatamodeld */,
+				VMTRANS_FILEREF /* VoiceMemo+Transcripts.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -264,6 +267,7 @@
 				SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */,
 				CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */,
 				TFMGR_BUILDFILE /* TranscriptFileManager.swift in Sources */,
+				VMTRANS_BUILDFILE /* VoiceMemo+Transcripts.swift in Sources */,
 				123C74675657E6A0A85C29EA /* TalkieApp.swift in Sources */,
 				A07ED69ED8E7F9AE9BD61FEC /* WorkflowAction.swift in Sources */,
 				BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */,

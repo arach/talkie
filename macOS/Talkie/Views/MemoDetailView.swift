@@ -18,7 +18,8 @@ struct MemoDetailView: View {
     @State private var audioPlayer: AVAudioPlayer?
     @State private var editedTitle: String = ""
     @State private var editedNotes: String = ""
-    @State private var isEditingTitle = false
+    @State private var editedTranscript: String = ""
+    @State private var isEditing = false
     @State private var selectedTab: DetailTab = .transcript
     @State private var selectedWorkflowRun: WorkflowRun?
     @FocusState private var titleFieldFocused: Bool
@@ -42,51 +43,51 @@ struct MemoDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Header with editable title
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        if isEditingTitle {
+                // Header with title and edit toggle
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if isEditing {
                             TextField("Recording title", text: $editedTitle)
-                                .font(.system(size: 16, weight: .regular, design: .monospaced))
+                                .font(.system(size: 16, weight: .medium, design: .monospaced))
                                 .textFieldStyle(.plain)
                                 .focused($titleFieldFocused)
-                                .onSubmit {
-                                    saveTitle()
-                                }
                         } else {
                             Text(memoTitle)
-                                .font(.system(size: 16, weight: .regular, design: .monospaced))
+                                .font(.system(size: 16, weight: .medium, design: .monospaced))
                                 .foregroundColor(.primary)
                         }
 
-                        Button(action: {
-                            if isEditingTitle {
-                                saveTitle()
-                            } else {
-                                editedTitle = memoTitle
-                                isEditingTitle = true
-                                titleFieldFocused = true
-                            }
-                        }) {
-                            Image(systemName: isEditingTitle ? "checkmark.circle.fill" : "pencil.circle")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
+                        HStack(spacing: 6) {
+                            Text(formatDate(memoCreatedAt).uppercased())
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .tracking(1)
+
+                            Text("·")
+                                .font(.system(size: 9))
+
+                            Text(formatDuration(memo.duration))
+                                .font(.system(size: 11, weight: .regular, design: .monospaced))
                         }
-                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
                     }
 
-                    HStack(spacing: 6) {
-                        Text(formatDate(memoCreatedAt).uppercased())
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(1)
+                    Spacer()
 
-                        Text("·")
-                            .font(.system(size: 9))
-
-                        Text(formatDuration(memo.duration))
-                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    // Edit/Done button
+                    if isEditing {
+                        Button(action: toggleEditMode) {
+                            Text("Done")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
+                    } else {
+                        Button(action: toggleEditMode) {
+                            Text("Edit")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.accentColor)
+                        .keyboardShortcut("e", modifiers: .command)
                     }
-                    .foregroundColor(.secondary)
                 }
 
                 // Playback controls
@@ -96,9 +97,8 @@ struct MemoDetailView: View {
                             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 14))
                                 .foregroundColor(.primary)
-                                .frame(width: 36, height: 36)
-                                .background(Color.primary.opacity(0.1))
-                                .cornerRadius(6)
+                                .frame(width: 40, height: 40)
+                                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
                         }
                         .buttonStyle(.plain)
 
@@ -145,21 +145,17 @@ struct MemoDetailView: View {
                     TextEditor(text: $editedNotes)
                         .font(.system(size: 12, weight: .regular, design: .monospaced))
                         .foregroundColor(.primary)
+                        .scrollContentBackground(.hidden)
                         .frame(minHeight: 80)
                         .padding(12)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 0.5)
-                        )
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                         .onChange(of: editedNotes) { newValue in
                             saveNotes()
                         }
                 }
 
                 // Workflow Actions
-                if memo.transcription != nil && !memo.isTranscribing {
+                if memo.currentTranscript != nil && !memo.isTranscribing {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("ACTIONS")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -214,18 +210,16 @@ struct MemoDetailView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "doc.on.clipboard")
                                 .font(.system(size: 10))
-                            Text("COPY TRANSCRIPT")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .tracking(1)
+                            Text("COPY")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
                         }
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(4)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .disabled(memo.transcription == nil)
+                    .disabled(memo.currentTranscript == nil)
 
                     // Delete memo
                     Button(action: deleteMemo) {
@@ -233,14 +227,12 @@ struct MemoDetailView: View {
                             Image(systemName: "trash")
                                 .font(.system(size: 10))
                             Text("DELETE")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .tracking(1)
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
                         }
                         .foregroundColor(.red)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.red.opacity(0.08))
-                        .cornerRadius(4)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
 
@@ -252,7 +244,7 @@ struct MemoDetailView: View {
             .padding(24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(.background)
         .onAppear {
             editedTitle = memoTitle
             editedNotes = memo.notes ?? ""
@@ -261,21 +253,56 @@ struct MemoDetailView: View {
             // Reset state when memo changes
             editedTitle = memo.title ?? "Recording"
             editedNotes = memo.notes ?? ""
-            isEditingTitle = false
+            editedTranscript = ""
+            isEditing = false
             isPlaying = false
             audioPlayer?.stop()
             audioPlayer = nil
             currentTime = 0
         }
+        .onExitCommand {
+            // Escape cancels edit mode
+            if isEditing {
+                isEditing = false
+            }
+        }
     }
 
-    private func saveTitle() {
-        guard let context = memo.managedObjectContext else { return }
-        context.perform {
-            memo.title = editedTitle
-            try? context.save()
+    private func toggleEditMode() {
+        if isEditing {
+            // Save changes
+            saveAllEdits()
+            isEditing = false
+        } else {
+            // Enter edit mode - populate fields
+            editedTitle = memoTitle
+            editedTranscript = memo.currentTranscript ?? ""
+            isEditing = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                titleFieldFocused = true
+            }
         }
-        isEditingTitle = false
+    }
+
+    private func saveAllEdits() {
+        guard let context = memo.managedObjectContext else { return }
+
+        // Save title if changed
+        if editedTitle != memoTitle {
+            memo.title = editedTitle
+        }
+
+        // Save transcript if changed (creates new version)
+        if let currentTranscript = memo.currentTranscript,
+           editedTranscript != currentTranscript,
+           !editedTranscript.isEmpty {
+            memo.addUserTranscript(content: editedTranscript)
+        }
+
+        // Save notes
+        memo.notes = editedNotes
+
+        try? context.save()
     }
 
     private func saveNotes() {
@@ -330,10 +357,10 @@ struct MemoDetailView: View {
     }
 
     private func copyTranscript() {
-        guard let transcription = memo.transcription else { return }
+        guard let transcript = memo.currentTranscript else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(transcription, forType: .string)
+        pasteboard.setString(transcript, forType: .string)
     }
 
     private func deleteMemo() {
@@ -385,7 +412,7 @@ struct MemoDetailView: View {
     }
 
     private func shareTranscript() {
-        guard let transcript = memo.transcription else { return }
+        guard let transcript = memo.currentTranscript else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(transcript, forType: .string)
@@ -393,7 +420,7 @@ struct MemoDetailView: View {
     }
 
     private func addToAppleNotes() {
-        guard let transcript = memo.transcription else {
+        guard let transcript = memo.currentTranscript else {
             print("⚠️ No transcript to add to Notes")
             return
         }
@@ -462,21 +489,45 @@ struct MemoDetailView: View {
                 RoundedRectangle(cornerRadius: 4)
                     .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
             )
-        } else if let transcription = memo.transcription {
+        } else if let transcript = memo.currentTranscript {
             VStack(alignment: .leading, spacing: 8) {
-                Text(transcription)
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .textSelection(.enabled)
-                    .lineSpacing(4)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 0.5)
-                    )
+                if isEditing {
+                    // Edit mode: TextEditor
+                    TextEditor(text: $editedTranscript)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .lineSpacing(4)
+                        .scrollContentBackground(.hidden)
+                        .padding(12)
+                        .frame(minHeight: 150)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(Color.accentColor.opacity(0.4), lineWidth: 1)
+                        )
+                } else {
+                    // Read mode
+                    Text(transcript)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .textSelection(.enabled)
+                        .lineSpacing(4)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .contextMenu {
+                            Button("Copy") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(transcript, forType: .string)
+                            }
+                            if memo.sortedTranscriptVersions.count > 1 {
+                                Divider()
+                                Button("Version History (\(memo.sortedTranscriptVersions.count))") {
+                                    // TODO: Show version history sheet
+                                }
+                            }
+                        }
+                }
             }
         } else {
             VStack(spacing: 12) {
@@ -654,21 +705,19 @@ struct ActionButtonMac: View {
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 14))
-                        .foregroundColor(isCompleted ? .primary : .secondary)
+                        .foregroundColor(isCompleted ? .accentColor : .secondary)
                 }
 
                 Text(title)
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(4)
+            .padding(.vertical, 12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
             .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(isCompleted ? Color.primary.opacity(0.2) : Color.primary.opacity(0.08), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(isCompleted ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

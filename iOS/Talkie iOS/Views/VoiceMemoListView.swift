@@ -39,6 +39,7 @@ enum SortOption: String, CaseIterable {
 
 struct VoiceMemoListView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject var themeManager = ThemeManager.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -52,6 +53,7 @@ struct VoiceMemoListView: View {
     @StateObject private var audioPlayer = AudioPlayerManager()
     @StateObject private var pushToTalkRecorder = AudioRecorderManager()
     @State private var showingRecordingView = false
+    @State private var showingSettings = false
     @State private var displayLimit = 10
     @State private var searchText = ""
     @State private var isSearching = false
@@ -175,61 +177,82 @@ struct VoiceMemoListView: View {
                         .padding(.top, Spacing.xxl)
                     }
 
-                    List {
-                        ForEach(voiceMemos) { memo in
-                            VoiceMemoRow(
-                                memo: memo,
-                                audioPlayer: audioPlayer,
-                                onDelete: { deleteMemo(memo) }
-                            )
-                            .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.md, bottom: Spacing.xs, trailing: Spacing.md))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
-                        .onDelete(perform: deleteMemos)
-                        .onMove(perform: moveMemos)
+                    // Bordered table container
+                    VStack(spacing: 0) {
+                        // Fixed table header (outside ScrollView)
+                        HStack {
+                            Text("NAME")
+                                .font(.system(size: 10, weight: .medium))
+                                .tracking(1)
+                                .foregroundColor(themeManager.colors.textTertiary)
 
-                        // Load More button
-                        if hasMore {
-                            Button(action: {
-                                withAnimation(TalkieAnimation.spring) {
-                                    displayLimit += 10
+                            Spacer()
+
+                            Text("DURATION")
+                                .font(.system(size: 10, weight: .medium))
+                                .tracking(1)
+                                .foregroundColor(themeManager.colors.textTertiary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(themeManager.colors.tableHeaderBackground)
+
+                        // Scrollable content
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                // Table rows
+                                ForEach(voiceMemos) { memo in
+                                    VStack(spacing: 0) {
+                                        // Row divider
+                                        Rectangle()
+                                            .fill(themeManager.colors.tableDivider)
+                                            .frame(height: 1)
+
+                                        VoiceMemoRow(
+                                            memo: memo,
+                                            audioPlayer: audioPlayer,
+                                            onDelete: { deleteMemo(memo) }
+                                        )
+                                        .background(themeManager.colors.tableCellBackground)
+                                    }
                                 }
-                            }) {
-                                HStack(spacing: Spacing.xs) {
-                                    Spacer()
-                                    Image(systemName: "arrow.down")
-                                        .font(.system(size: 9, weight: .bold))
-                                    Text("LOAD +\(min(10, allVoiceMemos.count - displayLimit))")
-                                        .font(.techLabel)
-                                        .tracking(1)
-                                    Spacer()
+
+                                // Load More button
+                                if hasMore {
+                                    VStack(spacing: 0) {
+                                        Rectangle()
+                                            .fill(themeManager.colors.tableDivider)
+                                            .frame(height: 1)
+
+                                        Button(action: {
+                                            withAnimation(TalkieAnimation.spring) {
+                                                displayLimit += 10
+                                            }
+                                        }) {
+                                            HStack(spacing: Spacing.xs) {
+                                                Spacer()
+                                                Image(systemName: "arrow.down")
+                                                    .font(.system(size: 10, weight: .semibold))
+                                                Text("Load \(min(10, allVoiceMemos.count - displayLimit)) more")
+                                                    .font(.system(size: 13))
+                                                Spacer()
+                                            }
+                                            .foregroundColor(themeManager.colors.textSecondary)
+                                            .padding(.vertical, 14)
+                                        }
+                                        .background(themeManager.colors.tableCellBackground)
+                                    }
                                 }
-                                .foregroundColor(.textSecondary)
-                                .padding(.vertical, Spacing.xs)
-                                .background(Color.surfaceSecondary)
-                                .cornerRadius(CornerRadius.sm)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                                )
                             }
-                            .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.md, bottom: Spacing.xs, trailing: Spacing.md))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
                         }
-
-                        // Small bottom padding so last item doesn't touch record area
-                        Color.clear
-                            .frame(height: Spacing.sm)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .refreshable {
-                        await refreshMemos()
-                    }
+                    .cornerRadius(CornerRadius.sm)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(themeManager.colors.tableBorder, lineWidth: 0.5)
+                    )
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.bottom, 100) // Space for mic area
                     } // end VStack
 
                     // Record button area with distinct background
@@ -325,17 +348,18 @@ struct VoiceMemoListView: View {
                             }, perform: {
                                 // Long press completed (finger still down) - do nothing, handled in pressing
                             })
-                            .padding(.vertical, Spacing.md)
+                            .padding(.top, Spacing.sm)
+                            .padding(.bottom, Spacing.xs)
                         }
                         .frame(maxWidth: .infinity)
                         .background(
-                            Color.surfaceSecondary.opacity(0.85)
+                            themeManager.colors.cardBackground.opacity(0.95)
                         )
                         .background(
                             // Top edge highlight
                             VStack {
                                 Rectangle()
-                                    .fill(Color.borderPrimary)
+                                    .fill(themeManager.colors.tableBorder)
                                     .frame(height: 0.5)
                                 Spacer()
                             }
@@ -360,6 +384,19 @@ struct VoiceMemoListView: View {
                             .foregroundColor(.textTertiary)
                     }
                 }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingSettings = true
+                    }) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.textSecondary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
             }
             .sheet(isPresented: $showingRecordingView) {
                 RecordingView()
@@ -367,6 +404,7 @@ struct VoiceMemoListView: View {
             }
         }
         .navigationViewStyle(.stack)
+        .preferredColorScheme(themeManager.appearanceMode.colorScheme)
     }
 
     // MARK: - Pull to Refresh
