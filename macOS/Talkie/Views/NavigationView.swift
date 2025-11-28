@@ -24,6 +24,7 @@ enum NavigationSection: Hashable {
 
 struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject private var settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -197,7 +198,7 @@ struct TalkieNavigationView: View {
             // Header
             HStack {
                 Text("TALKIE")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(settings.themedFont(baseSize: 13, weight: .bold))
                     .tracking(2)
                     .foregroundColor(.primary)
 
@@ -216,7 +217,7 @@ struct TalkieNavigationView: View {
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(settings.themedFont(baseSize: 11, weight: .regular))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -232,10 +233,10 @@ struct TalkieNavigationView: View {
                         Label {
                             HStack {
                                 Text("All Memos")
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(settings.themedFont(baseSize: 11, weight: .regular))
                                 Spacer()
                                 Text("\(allMemos.count)")
-                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .font(settings.themedFont(baseSize: 9, weight: .medium))
                                     .foregroundColor(.secondary)
                             }
                         } icon: {
@@ -247,7 +248,7 @@ struct TalkieNavigationView: View {
                     NavigationLink(value: NavigationSection.recent) {
                         Label {
                             Text("Recent")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(settings.themedFont(baseSize: 11, weight: .regular))
                         } icon: {
                             Image(systemName: "clock")
                                 .font(.system(size: 10))

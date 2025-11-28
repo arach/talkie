@@ -11,6 +11,7 @@ import AppKit
 
 struct MemoDetailView: View {
     @ObservedObject var memo: VoiceMemo
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var isPlaying = false
     @State private var currentTime: TimeInterval = 0
@@ -48,25 +49,25 @@ struct MemoDetailView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         if isEditing {
                             TextField("Recording title", text: $editedTitle)
-                                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                                .font(settings.themedFont(baseSize: 16, weight: .medium))
                                 .textFieldStyle(.plain)
                                 .focused($titleFieldFocused)
                         } else {
                             Text(memoTitle)
-                                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                                .font(settings.themedFont(baseSize: 16, weight: .medium))
                                 .foregroundColor(.primary)
                         }
 
                         HStack(spacing: 6) {
                             Text(formatDate(memoCreatedAt).uppercased())
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .font(settings.themedFont(baseSize: 9, weight: .bold))
                                 .tracking(1)
 
                             Text("·")
-                                .font(.system(size: 9))
+                                .font(settings.themedFont(baseSize: 9, weight: .regular))
 
                             Text(formatDuration(memo.duration))
-                                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                .font(settings.themedFont(baseSize: 11, weight: .regular))
                         }
                         .foregroundColor(.secondary)
                     }
@@ -494,7 +495,7 @@ struct MemoDetailView: View {
                 if isEditing {
                     // Edit mode: TextEditor
                     TextEditor(text: $editedTranscript)
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .font(settings.themedFont(baseSize: 12, weight: .regular))
                         .foregroundColor(.primary)
                         .lineSpacing(4)
                         .scrollContentBackground(.hidden)
@@ -508,7 +509,7 @@ struct MemoDetailView: View {
                 } else {
                     // Read mode
                     Text(transcript)
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .font(settings.themedFont(baseSize: 12, weight: .regular))
                         .foregroundColor(.primary)
                         .textSelection(.enabled)
                         .lineSpacing(4)

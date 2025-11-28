@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MemoRowView: View {
     @ObservedObject var memo: VoiceMemo
+    @ObservedObject private var settings = SettingsManager.shared
 
     private var memoTitle: String {
         memo.title ?? "Recording"
@@ -26,21 +27,21 @@ struct MemoRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 // Title
                 Text(memoTitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(settings.themedFont(baseSize: 11, weight: .medium))
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
                 // Minimal metadata: duration + relative time
                 HStack(spacing: 4) {
                     Text(formatDuration(memo.duration))
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(settings.themedFont(baseSize: 9, weight: .regular))
 
                     Text("·")
-                        .font(.system(size: 9))
+                        .font(settings.themedFont(baseSize: 9, weight: .regular))
                         .foregroundColor(.secondary.opacity(0.4))
 
                     Text(formatDateCompact(memoCreatedAt))
-                        .font(.system(size: 9))
+                        .font(settings.themedFont(baseSize: 9, weight: .regular))
                 }
                 .foregroundColor(.secondary)
             }

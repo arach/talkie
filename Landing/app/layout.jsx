@@ -17,16 +17,9 @@ export const metadata = {
       'Record once. Talkie transcribes, summarizes, and turns memos into tasks — synced across iOS and macOS.',
     url: 'https://talkie.arach.dev',
     siteName: 'Talkie',
-    images: [
-      {
-        url: '/og.svg',
-        width: 1200,
-        height: 630,
-        alt: 'Talkie — Voice memos that think with you',
-      },
-    ],
     locale: 'en_US',
     type: 'website',
+    // Images are auto-generated from opengraph-image.jsx
   },
   icons: {
     icon: [
@@ -43,7 +36,7 @@ export const metadata = {
     title: 'Talkie — Voice memos that think with you',
     description:
       'Record once. Talkie transcribes, summarizes, and turns memos into tasks — synced across iOS and macOS.',
-    images: ['/og.svg'],
+    // Images are auto-generated from twitter-image.jsx
   },
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
