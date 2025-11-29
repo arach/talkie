@@ -393,7 +393,7 @@ struct LargeWidgetView: View {
                             }
                             Spacer()
                         } else {
-                            ForEach(recentMemos.prefix(10)) { memo in
+                            ForEach(recentMemos.prefix(8)) { memo in
                                 Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
                                     MemoRowView(memo: memo, colors: colors)
                                 }
