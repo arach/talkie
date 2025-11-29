@@ -2,76 +2,43 @@
 //  TalkieWidgetControl.swift
 //  TalkieWidget
 //
-//  Created by Arach Tchoupani on 2025-11-29.
+//  Control Center widget for quick recording (iOS 18+)
 //
 
 import AppIntents
 import SwiftUI
 import WidgetKit
 
+// MARK: - Control Widget
+
 struct TalkieWidgetControl: ControlWidget {
-    static let kind: String = "jdi.talkie-os.TalkieWidget"
+    static let kind: String = "com.jdi.talkie.record-control"
 
     var body: some ControlWidgetConfiguration {
-        AppIntentControlConfiguration(
-            kind: Self.kind,
-            provider: Provider()
-        ) { value in
-            ControlWidgetToggle(
-                "Start Timer",
-                isOn: value.isRunning,
-                action: StartTimerIntent(value.name)
-            ) { isRunning in
-                Label(isRunning ? "On" : "Off", systemImage: "timer")
+        StaticControlConfiguration(kind: Self.kind) {
+            ControlWidgetButton(action: RecordVoiceMemoIntent()) {
+                Label("Record", systemImage: "mic.fill")
             }
         }
-        .displayName("Timer")
-        .description("A an example control that runs a timer.")
+        .displayName("Record Memo")
+        .description("Quickly start recording a voice memo")
     }
 }
 
-extension TalkieWidgetControl {
-    struct Value {
-        var isRunning: Bool
-        var name: String
-    }
+// MARK: - Record Intent
 
-    struct Provider: AppIntentControlValueProvider {
-        func previewValue(configuration: TimerConfiguration) -> Value {
-            TalkieWidgetControl.Value(isRunning: false, name: configuration.timerName)
-        }
+struct RecordVoiceMemoIntent: AppIntent {
+    static var title: LocalizedStringResource = "Record Voice Memo"
+    static var description = IntentDescription("Start recording a new voice memo")
 
-        func currentValue(configuration: TimerConfiguration) async throws -> Value {
-            let isRunning = true // Check if the timer is running
-            return TalkieWidgetControl.Value(isRunning: isRunning, name: configuration.timerName)
-        }
-    }
-}
-
-struct TimerConfiguration: ControlConfigurationIntent {
-    static let title: LocalizedStringResource = "Timer Name Configuration"
-
-    @Parameter(title: "Timer Name", default: "Timer")
-    var timerName: String
-}
-
-struct StartTimerIntent: SetValueIntent {
-    static let title: LocalizedStringResource = "Start a timer"
-
-    @Parameter(title: "Timer Name")
-    var name: String
-
-    @Parameter(title: "Timer is running")
-    var value: Bool
-
-    init() {}
-
-    init(_ name: String) {
-        self.name = name
-    }
+    static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
-        // Start the timer…
+        // Set a flag in shared UserDefaults that the app will check on launch
+        if let defaults = UserDefaults(suiteName: "group.com.jdi.talkie") {
+            defaults.set(true, forKey: "shouldStartRecording")
+            defaults.synchronize() // Ensure immediate write for cross-process access
+        }
         return .result()
     }
 }

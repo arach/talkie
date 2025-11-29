@@ -2,87 +2,466 @@
 //  TalkieWidget.swift
 //  TalkieWidget
 //
-//  Created by Arach Tchoupani on 2025-11-29.
+//  Quick record widget for Talkie - Adaptive theme design
 //
 
 import WidgetKit
 import SwiftUI
 
-struct Provider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: ConfigurationAppIntent())
+// MARK: - Appearance Mode (mirrors app's setting)
+
+enum WidgetAppearance: String {
+    case system
+    case light
+    case dark
+}
+
+// MARK: - Timeline Provider
+
+struct Provider: TimelineProvider {
+    func placeholder(in context: Context) -> TalkieEntry {
+        TalkieEntry(date: Date(), memoCount: 0, recentMemos: [], appearance: .system)
     }
 
-    func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: configuration)
+    func getSnapshot(in context: Context, completion: @escaping (TalkieEntry) -> Void) {
+        let entry = TalkieEntry(
+            date: Date(),
+            memoCount: getMemoCount(),
+            recentMemos: getRecentMemos(),
+            appearance: getAppearance()
+        )
+        completion(entry)
     }
-    
-    func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
-        var entries: [SimpleEntry] = []
 
-        // Generate a timeline consisting of five entries an hour apart, starting from the current date.
-        let currentDate = Date()
-        for hourOffset in 0 ..< 5 {
-            let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let entry = SimpleEntry(date: entryDate, configuration: configuration)
-            entries.append(entry)
+    func getTimeline(in context: Context, completion: @escaping (Timeline<TalkieEntry>) -> Void) {
+        let entry = TalkieEntry(
+            date: Date(),
+            memoCount: getMemoCount(),
+            recentMemos: getRecentMemos(),
+            appearance: getAppearance()
+        )
+        // Refresh every 15 minutes
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date())!
+        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        completion(timeline)
+    }
+
+    private func getMemoCount() -> Int {
+        let defaults = UserDefaults(suiteName: "group.com.jdi.talkie")
+        return defaults?.integer(forKey: "memoCount") ?? 0
+    }
+
+    private func getRecentMemos() -> [MemoSnapshot] {
+        guard let defaults = UserDefaults(suiteName: "group.com.jdi.talkie"),
+              let data = defaults.data(forKey: "recentMemos"),
+              let memos = try? JSONDecoder().decode([MemoSnapshot].self, from: data) else {
+            return []
         }
-
-        return Timeline(entries: entries, policy: .atEnd)
+        return memos
     }
 
-//    func relevances() async -> WidgetRelevances<ConfigurationAppIntent> {
-//        // Generate a list containing the contexts this widget is relevant in.
-//    }
+    private func getAppearance() -> WidgetAppearance {
+        guard let defaults = UserDefaults(suiteName: "group.com.jdi.talkie"),
+              let mode = defaults.string(forKey: "appearanceMode"),
+              let appearance = WidgetAppearance(rawValue: mode) else {
+            return .system
+        }
+        return appearance
+    }
 }
 
-struct SimpleEntry: TimelineEntry {
+// MARK: - Memo Snapshot for Widget
+
+struct MemoSnapshot: Codable, Identifiable {
+    let id: String
+    let title: String
+    let duration: TimeInterval
+    let hasTranscription: Bool
+    let hasAIProcessing: Bool
+    let isSynced: Bool
+    let createdAt: Date
+}
+
+// MARK: - Timeline Entry
+
+struct TalkieEntry: TimelineEntry {
     let date: Date
-    let configuration: ConfigurationAppIntent
+    let memoCount: Int
+    let recentMemos: [MemoSnapshot]
+    let appearance: WidgetAppearance
 }
 
-struct TalkieWidgetEntryView : View {
+// MARK: - Theme Colors
+
+struct WidgetColors {
+    let background: Color
+    let foreground: Color
+    let secondaryForeground: Color
+    let tertiaryForeground: Color
+    let accent: Color
+
+    static func forScheme(_ isDark: Bool) -> WidgetColors {
+        if isDark {
+            return WidgetColors(
+                background: .black,
+                foreground: .white.opacity(0.9),
+                secondaryForeground: .white.opacity(0.5),
+                tertiaryForeground: .white.opacity(0.3),
+                accent: .white.opacity(0.5)
+            )
+        } else {
+            return WidgetColors(
+                background: .white,
+                foreground: .black.opacity(0.85),
+                secondaryForeground: .black.opacity(0.5),
+                tertiaryForeground: .black.opacity(0.3),
+                accent: .black.opacity(0.4)
+            )
+        }
+    }
+}
+
+// MARK: - Widget Views
+
+struct TalkieWidgetEntryView: View {
     var entry: Provider.Entry
+    @Environment(\.widgetFamily) var family
+    @Environment(\.colorScheme) var systemColorScheme
+
+    var isDark: Bool {
+        switch entry.appearance {
+        case .system: return systemColorScheme == .dark
+        case .dark: return true
+        case .light: return false
+        }
+    }
+
+    var colors: WidgetColors {
+        WidgetColors.forScheme(isDark)
+    }
 
     var body: some View {
-        VStack {
-            Text("Time:")
-            Text(entry.date, style: .time)
-
-            Text("Favorite Emoji:")
-            Text(entry.configuration.favoriteEmoji)
+        switch family {
+        case .systemSmall:
+            SmallWidgetView(memoCount: entry.memoCount, colors: colors)
+        case .systemMedium:
+            MediumWidgetView(memoCount: entry.memoCount, recentMemos: entry.recentMemos, colors: colors)
+        case .accessoryCircular:
+            CircularWidgetView()
+        case .accessoryRectangular:
+            RectangularWidgetView(memoCount: entry.memoCount)
+        default:
+            SmallWidgetView(memoCount: entry.memoCount, colors: colors)
         }
     }
 }
+
+// MARK: - Small Widget - Tap to record
+
+struct SmallWidgetView: View {
+    let memoCount: Int
+    let colors: WidgetColors
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Background
+                colors.background
+
+                // Corner accents
+                CornerAccents(color: colors.accent)
+
+                // Content
+                VStack(spacing: 8) {
+                    Spacer()
+
+                    // Mic button
+                    ZStack {
+                        Circle()
+                            .fill(colors.foreground.opacity(0.1))
+                            .frame(width: 52, height: 52)
+
+                        Circle()
+                            .stroke(colors.secondaryForeground, lineWidth: 1)
+                            .frame(width: 52, height: 52)
+
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundColor(colors.foreground)
+                    }
+
+                    Text("RECORD")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(colors.secondaryForeground)
+                        .tracking(2)
+
+                    Spacer()
+
+                    // Memo count
+                    if memoCount > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "waveform")
+                                .font(.system(size: 8))
+                            Text("\(memoCount)")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        }
+                        .foregroundColor(colors.secondaryForeground)
+                        .padding(.bottom, 8)
+                    }
+                }
+            }
+        }
+        .widgetURL(URL(string: "talkie://record"))
+    }
+}
+
+// MARK: - Medium Widget - Recent memos list
+
+struct MediumWidgetView: View {
+    let memoCount: Int
+    let recentMemos: [MemoSnapshot]
+    let colors: WidgetColors
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Background
+                colors.background
+
+                // Corner accents
+                CornerAccents(color: colors.accent)
+
+                HStack(spacing: 0) {
+                    // Left side - Record button
+                    Link(destination: URL(string: "talkie://record")!) {
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle()
+                                    .fill(colors.foreground.opacity(0.1))
+                                    .frame(width: 44, height: 44)
+
+                                Circle()
+                                    .stroke(colors.secondaryForeground, lineWidth: 1)
+                                    .frame(width: 44, height: 44)
+
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(colors.foreground)
+                            }
+
+                            Text("REC")
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundColor(colors.secondaryForeground)
+                                .tracking(1.5)
+                        }
+                        .frame(width: geo.size.width * 0.28)
+                    }
+
+                    // Divider
+                    Rectangle()
+                        .fill(colors.tertiaryForeground)
+                        .frame(width: 1)
+                        .padding(.vertical, 16)
+
+                    // Right side - Recent memos
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Header
+                        HStack {
+                            Text("TALKIE")
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundColor(colors.secondaryForeground)
+                                .tracking(1.5)
+
+                            Spacer()
+
+                            Text("\(memoCount)")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.tertiaryForeground)
+                        }
+                        .padding(.bottom, 2)
+
+                        if recentMemos.isEmpty {
+                            // Empty state
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                VStack(spacing: 4) {
+                                    Image(systemName: "waveform")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(colors.tertiaryForeground)
+                                    Text("No memos yet")
+                                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                        .foregroundColor(colors.tertiaryForeground)
+                                }
+                                Spacer()
+                            }
+                            Spacer()
+                        } else {
+                            // Memo list
+                            ForEach(recentMemos.prefix(3)) { memo in
+                                Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
+                                    MemoRowView(memo: memo, colors: colors)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Memo Row
+
+struct MemoRowView: View {
+    let memo: MemoSnapshot
+    let colors: WidgetColors
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Title
+            Text(memo.title)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(colors.foreground)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            // Duration
+            Text(formatDuration(memo.duration))
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .foregroundColor(colors.secondaryForeground)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Corner Accents
+
+struct CornerAccents: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let cornerLength: CGFloat = 14
+            let cornerOffset: CGFloat = 3
+
+            // Top-left corner
+            Path { path in
+                path.move(to: CGPoint(x: cornerOffset, y: cornerOffset + cornerLength))
+                path.addLine(to: CGPoint(x: cornerOffset, y: cornerOffset))
+                path.addLine(to: CGPoint(x: cornerOffset + cornerLength, y: cornerOffset))
+            }
+            .stroke(color, lineWidth: 1)
+
+            // Top-right corner
+            Path { path in
+                path.move(to: CGPoint(x: geo.size.width - cornerOffset - cornerLength, y: cornerOffset))
+                path.addLine(to: CGPoint(x: geo.size.width - cornerOffset, y: cornerOffset))
+                path.addLine(to: CGPoint(x: geo.size.width - cornerOffset, y: cornerOffset + cornerLength))
+            }
+            .stroke(color, lineWidth: 1)
+
+            // Bottom-left corner
+            Path { path in
+                path.move(to: CGPoint(x: cornerOffset, y: geo.size.height - cornerOffset - cornerLength))
+                path.addLine(to: CGPoint(x: cornerOffset, y: geo.size.height - cornerOffset))
+                path.addLine(to: CGPoint(x: cornerOffset + cornerLength, y: geo.size.height - cornerOffset))
+            }
+            .stroke(color, lineWidth: 1)
+
+            // Bottom-right corner
+            Path { path in
+                path.move(to: CGPoint(x: geo.size.width - cornerOffset - cornerLength, y: geo.size.height - cornerOffset))
+                path.addLine(to: CGPoint(x: geo.size.width - cornerOffset, y: geo.size.height - cornerOffset))
+                path.addLine(to: CGPoint(x: geo.size.width - cornerOffset, y: geo.size.height - cornerOffset - cornerLength))
+            }
+            .stroke(color, lineWidth: 1)
+        }
+    }
+}
+
+// MARK: - Lock Screen Widgets
+
+struct CircularWidgetView: View {
+    var body: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            Image(systemName: "mic.fill")
+                .font(.system(size: 18, weight: .semibold))
+        }
+        .widgetURL(URL(string: "talkie://record"))
+    }
+}
+
+struct RectangularWidgetView: View {
+    let memoCount: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 18, weight: .semibold))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("TALKIE")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                Text("\(memoCount) memos")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .widgetURL(URL(string: "talkie://record"))
+    }
+}
+
+// MARK: - Widget Configuration
 
 struct TalkieWidget: Widget {
     let kind: String = "TalkieWidget"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
+        StaticConfiguration(kind: kind, provider: Provider()) { entry in
             TalkieWidgetEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(.clear, for: .widget)
         }
+        .configurationDisplayName("Talkie")
+        .description("Quick access to record voice memos")
+        .supportedFamilies([
+            .systemSmall,
+            .systemMedium,
+            .accessoryCircular,
+            .accessoryRectangular
+        ])
     }
 }
 
-extension ConfigurationAppIntent {
-    fileprivate static var smiley: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "😀"
-        return intent
-    }
-    
-    fileprivate static var starEyes: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "🤩"
-        return intent
-    }
-}
+// MARK: - Preview
 
 #Preview(as: .systemSmall) {
     TalkieWidget()
 } timeline: {
-    SimpleEntry(date: .now, configuration: .smiley)
-    SimpleEntry(date: .now, configuration: .starEyes)
+    TalkieEntry(date: .now, memoCount: 0, recentMemos: [], appearance: .dark)
+    TalkieEntry(date: .now, memoCount: 12, recentMemos: [], appearance: .light)
+}
+
+#Preview(as: .systemMedium) {
+    TalkieWidget()
+} timeline: {
+    TalkieEntry(date: .now, memoCount: 5, recentMemos: [
+        MemoSnapshot(id: "1", title: "Meeting notes", duration: 145, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date()),
+        MemoSnapshot(id: "2", title: "Idea for app", duration: 32, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date()),
+        MemoSnapshot(id: "3", title: "Quick reminder", duration: 8, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date())
+    ], appearance: .dark)
 }

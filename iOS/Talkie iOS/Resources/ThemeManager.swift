@@ -79,6 +79,7 @@ struct ThemeColors {
     // General surfaces
     let background: Color
     let cardBackground: Color
+    let searchBackground: Color
 
     // Text
     let textPrimary: Color
@@ -103,6 +104,7 @@ extension AppTheme {
                 tableBorder: Color(hex: "D0D0D0", darkHex: "FFFFFF").opacity(0.12),
                 background: Color(hex: "FFFFFF", darkHex: "0A0A0A"),
                 cardBackground: Color(hex: "F8F8F8", darkHex: "111111"),
+                searchBackground: Color(hex: "F0F0F0", darkHex: "0F0F0F"),
                 textPrimary: Color(hex: "0A0A0A", darkHex: "FAFAFA"),
                 textSecondary: Color(hex: "6A6A6A", darkHex: "9A9A9A"),
                 textTertiary: Color(hex: "9A9A9A", darkHex: "6A6A6A"),
@@ -118,6 +120,7 @@ extension AppTheme {
                 tableBorder: Color(hex: "BBBBBB", darkHex: "4A4A4A"),
                 background: Color(hex: "F0F0F0", darkHex: "0A0A0A"),
                 cardBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+                searchBackground: Color(hex: "FFFFFF", darkHex: "181818"),
                 textPrimary: Color(hex: "1A1A1A", darkHex: "F0F0F0"),
                 textSecondary: Color(hex: "5A5A5A", darkHex: "A0A0A0"),
                 textTertiary: Color(hex: "8A8A8A", darkHex: "707070"),
@@ -133,6 +136,7 @@ extension AppTheme {
                 tableBorder: Color(hex: "DDDDDD", darkHex: "333333"),
                 background: Color(hex: "F5F5F5", darkHex: "0E0E0E"),
                 cardBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+                searchBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
                 textPrimary: Color(hex: "2A2A2A", darkHex: "E5E5E5"),
                 textSecondary: Color(hex: "7A7A7A", darkHex: "8A8A8A"),
                 textTertiary: Color(hex: "A0A0A0", darkHex: "5A5A5A"),
@@ -160,6 +164,8 @@ class ThemeManager: ObservableObject {
     @Published var appearanceMode: AppearanceMode {
         didSet {
             UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceKey)
+            // Also save to App Group for widget
+            UserDefaults(suiteName: "group.com.jdi.talkie")?.set(appearanceMode.rawValue, forKey: appearanceKey)
         }
     }
 

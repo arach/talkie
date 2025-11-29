@@ -352,6 +352,9 @@ struct RecordingView: View {
             try viewContext.save()
             AppLogger.persistence.info("Memo saved with audio data for CloudKit sync")
 
+            // Update widget with new memo
+            PersistenceController.refreshWidgetData(context: viewContext)
+
             let memoObjectID = newMemo.objectID
 
             Task { @MainActor in

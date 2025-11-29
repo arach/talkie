@@ -2,7 +2,7 @@
 //  TalkieWidgetBundle.swift
 //  TalkieWidget
 //
-//  Created by Arach Tchoupani on 2025-11-29.
+//  Widget bundle for Talkie
 //
 
 import WidgetKit
@@ -13,6 +13,5 @@ struct TalkieWidgetBundle: WidgetBundle {
     var body: some Widget {
         TalkieWidget()
         TalkieWidgetControl()
-        TalkieWidgetLiveActivity()
     }
 }

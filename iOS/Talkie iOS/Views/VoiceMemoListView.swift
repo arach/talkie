@@ -39,6 +39,7 @@ enum SortOption: String, CaseIterable {
 
 struct VoiceMemoListView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var deepLinkManager: DeepLinkManager
     @ObservedObject var themeManager = ThemeManager.shared
 
@@ -60,6 +61,7 @@ struct VoiceMemoListView: View {
     @State private var isSearching = false
     @State private var isPushToTalkActive = false
     @State private var pushToTalkScale: CGFloat = 1.0
+    @State private var deepLinkMemo: VoiceMemo? = nil
 
     private var filteredMemos: [VoiceMemo] {
         if searchText.isEmpty {
@@ -406,17 +408,32 @@ struct VoiceMemoListView: View {
                 RecordingView()
                     .environment(\.managedObjectContext, viewContext)
             }
+            .sheet(item: $deepLinkMemo) { memo in
+                VoiceMemoDetailView(memo: memo, audioPlayer: audioPlayer)
+            }
         }
         .navigationViewStyle(.stack)
         .preferredColorScheme(themeManager.appearanceMode.colorScheme)
         .onChange(of: deepLinkManager.pendingAction) { _, action in
             handleDeepLinkAction(action)
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                // Check for Control Center widget trigger when app becomes active
+                checkForControlCenterAction()
+            }
+        }
         .onAppear {
             // Handle any pending deep link when view appears
             if deepLinkManager.pendingAction != .none {
                 handleDeepLinkAction(deepLinkManager.pendingAction)
             }
+
+            // Check for Control Center widget trigger
+            checkForControlCenterAction()
+
+            // Refresh widget data on app launch
+            PersistenceController.refreshWidgetData(context: viewContext)
         }
     }
 
@@ -429,13 +446,17 @@ struct VoiceMemoListView: View {
             deepLinkManager.clearAction()
 
         case .openMemo(let id):
-            // TODO: Navigate to memo detail view
+            // Find memo by ID and show detail
+            if let memo = allVoiceMemos.first(where: { $0.id == id }) {
+                deepLinkMemo = memo
+            }
             deepLinkManager.clearAction()
 
         case .playLastMemo:
             // Play the most recent memo
-            if let lastMemo = allVoiceMemos.first {
-                audioPlayer.play(memo: lastMemo)
+            if let lastMemo = allVoiceMemos.first,
+               let audioData = lastMemo.audioData {
+                audioPlayer.togglePlayPause(data: audioData)
             }
             deepLinkManager.clearAction()
 
@@ -447,6 +468,29 @@ struct VoiceMemoListView: View {
 
         case .none:
             break
+        }
+    }
+
+    /// Check if Control Center widget triggered a recording action
+    private func checkForControlCenterAction() {
+        guard let defaults = UserDefaults(suiteName: "group.com.jdi.talkie") else {
+            AppLogger.app.warning("Failed to access App Group UserDefaults")
+            return
+        }
+
+        // Synchronize to get latest values from other processes (widget)
+        defaults.synchronize()
+
+        if defaults.bool(forKey: "shouldStartRecording") {
+            AppLogger.app.info("Control Center recording trigger detected")
+            // Clear the flag first
+            defaults.set(false, forKey: "shouldStartRecording")
+            defaults.synchronize()
+
+            // Trigger recording with slight delay to ensure UI is ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showingRecordingView = true
+            }
         }
     }
 
@@ -483,6 +527,8 @@ struct VoiceMemoListView: View {
 
             do {
                 try viewContext.save()
+                // Update widget after deletion
+                PersistenceController.refreshWidgetData(context: viewContext)
             } catch {
                 let nsError = error as NSError
                 AppLogger.persistence.error("Error deleting memo: \(nsError.localizedDescription)")
@@ -580,6 +626,9 @@ struct VoiceMemoListView: View {
         do {
             try viewContext.save()
             AppLogger.persistence.info("Push-to-talk memo saved")
+
+            // Update widget with new memo
+            PersistenceController.refreshWidgetData(context: viewContext)
 
             let memoObjectID = newMemo.objectID
 

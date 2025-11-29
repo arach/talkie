@@ -90,8 +90,7 @@ struct TalkieShortcuts: AppShortcutsProvider {
                 "Record with \(.applicationName)",
                 "Start recording with \(.applicationName)",
                 "Record a voice memo with \(.applicationName)",
-                "New memo in \(.applicationName)",
-                "Hey \(.applicationName), record"
+                "New memo in \(.applicationName)"
             ],
             shortTitle: "Record",
             systemImageName: "mic.fill"
@@ -117,17 +116,6 @@ struct TalkieShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Play Last",
             systemImageName: "play.fill"
-        )
-
-        AppShortcut(
-            intent: SearchMemosIntent(),
-            phrases: [
-                "Search \(.applicationName) for \(\.$searchTerm)",
-                "Find \(\.$searchTerm) in \(.applicationName)",
-                "Look for \(\.$searchTerm) in my memos"
-            ],
-            shortTitle: "Search",
-            systemImageName: "magnifyingglass"
         )
     }
 }

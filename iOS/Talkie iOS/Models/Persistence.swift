@@ -302,6 +302,7 @@ struct PersistenceController {
 
     private static func logMemoCount(context: NSManagedObjectContext) {
         let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+        fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
 
         do {
             let memos = try context.fetch(fetchRequest)
@@ -313,9 +314,9 @@ struct PersistenceController {
                 AppLogger.persistence.info("  ... and \(memos.count - 3) more")
             }
 
-            // Update widget with memo count
+            // Update widget with memo count and recent memos
             #if os(iOS)
-            updateWidgetMemoCount(memos.count)
+            updateWidgetData(count: memos.count, recentMemos: Array(memos.prefix(5)))
             #endif
         } catch {
             AppLogger.persistence.error("❌ Failed to fetch memos: \(error.localizedDescription)")
@@ -328,7 +329,53 @@ struct PersistenceController {
     /// App Group identifier for sharing data with widgets
     static let appGroupIdentifier = "group.com.jdi.talkie"
 
-    /// Update the widget with the current memo count
+    /// Snapshot of a memo for widget display
+    struct WidgetMemoSnapshot: Codable {
+        let id: String
+        let title: String
+        let duration: TimeInterval
+        let hasTranscription: Bool
+        let hasAIProcessing: Bool
+        let isSynced: Bool
+        let createdAt: Date
+    }
+
+    /// Update the widget with the current memo count and recent memos
+    static func updateWidgetData(count: Int, recentMemos: [VoiceMemo]) {
+        guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
+            AppLogger.persistence.warning("⚠️ Could not access App Group UserDefaults")
+            return
+        }
+
+        // Save count
+        defaults.set(count, forKey: "memoCount")
+        defaults.set(Date(), forKey: "lastUpdated")
+
+        // Save recent memos as JSON
+        let snapshots = recentMemos.prefix(5).map { memo in
+            WidgetMemoSnapshot(
+                id: memo.id?.uuidString ?? UUID().uuidString,
+                title: memo.title ?? "Untitled",
+                duration: memo.duration,
+                hasTranscription: memo.transcription != nil && !memo.transcription!.isEmpty,
+                hasAIProcessing: memo.summary != nil && !memo.summary!.isEmpty,
+                isSynced: memo.cloudSyncedAt != nil,
+                createdAt: memo.createdAt ?? Date()
+            )
+        }
+
+        if let data = try? JSONEncoder().encode(Array(snapshots)) {
+            defaults.set(data, forKey: "recentMemos")
+        }
+
+        defaults.synchronize()
+
+        // Tell WidgetKit to refresh
+        WidgetCenter.shared.reloadAllTimelines()
+        AppLogger.persistence.info("📱 Widget updated with \(count) memos")
+    }
+
+    /// Legacy method for compatibility
     static func updateWidgetMemoCount(_ count: Int) {
         guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
             AppLogger.persistence.warning("⚠️ Could not access App Group UserDefaults")
@@ -337,6 +384,7 @@ struct PersistenceController {
 
         defaults.set(count, forKey: "memoCount")
         defaults.set(Date(), forKey: "lastUpdated")
+        defaults.synchronize()
 
         // Tell WidgetKit to refresh
         WidgetCenter.shared.reloadAllTimelines()
@@ -347,11 +395,16 @@ struct PersistenceController {
     static func refreshWidgetData(context: NSManagedObjectContext) {
         context.perform {
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
+            fetchRequest.fetchLimit = 5
+
             do {
-                let count = try context.count(for: fetchRequest)
-                updateWidgetMemoCount(count)
+                let recentMemos = try context.fetch(fetchRequest)
+                let countRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+                let count = try context.count(for: countRequest)
+                updateWidgetData(count: count, recentMemos: recentMemos)
             } catch {
-                AppLogger.persistence.error("❌ Failed to get memo count for widget: \(error.localizedDescription)")
+                AppLogger.persistence.error("❌ Failed to get memos for widget: \(error.localizedDescription)")
             }
         }
     }
