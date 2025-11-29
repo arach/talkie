@@ -362,23 +362,18 @@ struct LargeWidgetView: View {
                 CornerAccents(color: colors.accent)
 
                 VStack(spacing: 0) {
-                    // Top header - TALKIE centered with memo count
-                    HStack {
-                        Spacer()
+                    // Top header - matches app style exactly
+                    VStack(spacing: 0) {
                         Text("TALKIE")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(colors.foreground.opacity(0.9))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .tracking(2)
-                        Text("·")
+                            .foregroundColor(colors.foreground)
+                        Text("\(memoCount) MEMOS")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .foregroundColor(colors.tertiaryForeground)
-                            .padding(.horizontal, 4)
-                        Text("\(memoCount)")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(colors.tertiaryForeground)
-                        Spacer()
                     }
-                    .padding(.top, 10)
-                    .padding(.bottom, 4)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
 
                     // Memos list - table style
                     VStack(alignment: .leading, spacing: 0) {

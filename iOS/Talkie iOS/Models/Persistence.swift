@@ -316,7 +316,7 @@ struct PersistenceController {
 
             // Update widget with memo count and recent memos
             #if os(iOS)
-            updateWidgetData(count: memos.count, recentMemos: Array(memos.prefix(5)))
+            updateWidgetData(count: memos.count, recentMemos: Array(memos.prefix(10)))
             #endif
         } catch {
             AppLogger.persistence.error("❌ Failed to fetch memos: \(error.localizedDescription)")
@@ -354,7 +354,7 @@ struct PersistenceController {
         defaults.set(Date(), forKey: "lastUpdated")
 
         // Save recent memos as JSON
-        let snapshots = recentMemos.prefix(5).map { memo in
+        let snapshots = recentMemos.prefix(10).map { memo in
             // Calculate file size from audioData or estimate from duration
             let fileSize: Int
             if let data = memo.audioData {
