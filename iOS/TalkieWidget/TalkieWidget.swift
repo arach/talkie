@@ -362,66 +362,26 @@ struct LargeWidgetView: View {
                 CornerAccents(color: colors.accent)
 
                 VStack(spacing: 0) {
-                    // Top header - TALKIE centered
+                    // Top header - TALKIE centered with memo count
                     HStack {
                         Spacer()
                         Text("TALKIE")
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .foregroundColor(colors.foreground.opacity(0.9))
                             .tracking(2)
+                        Text("·")
+                            .foregroundColor(colors.tertiaryForeground)
+                            .padding(.horizontal, 4)
+                        Text("\(memoCount)")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(colors.tertiaryForeground)
                         Spacer()
                     }
                     .padding(.top, 12)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 6)
 
-                    // Record section
-                    Link(destination: URL(string: "talkie://record")!) {
-                        HStack {
-                            ZStack {
-                                Circle()
-                                    .fill(colors.foreground.opacity(0.1))
-                                    .frame(width: 48, height: 48)
-
-                                Circle()
-                                    .stroke(colors.secondaryForeground, lineWidth: 1)
-                                    .frame(width: 48, height: 48)
-
-                                Image(systemName: "mic.fill")
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(colors.foreground)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("RECORD")
-                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(colors.foreground)
-                                    .tracking(1.5)
-
-                                Text("Tap to start")
-                                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                    .foregroundColor(colors.tertiaryForeground)
-                            }
-                            .padding(.leading, 10)
-
-                            Spacer()
-
-                            Text("\(memoCount)")
-                                .font(.system(size: 20, weight: .light, design: .monospaced))
-                                .foregroundColor(colors.tertiaryForeground)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                    }
-
-                    // Divider
-                    Rectangle()
-                        .fill(colors.tertiaryForeground)
-                        .frame(height: 1)
-                        .padding(.horizontal, 12)
-
-                    // Memos list
+                    // Memos list - table style
                     VStack(alignment: .leading, spacing: 0) {
-
                         if recentMemos.isEmpty {
                             Spacer()
                             HStack {
@@ -438,7 +398,7 @@ struct LargeWidgetView: View {
                             }
                             Spacer()
                         } else {
-                            ForEach(recentMemos.prefix(6)) { memo in
+                            ForEach(recentMemos.prefix(8)) { memo in
                                 Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
                                     MemoRowView(memo: memo, colors: colors)
                                 }
@@ -447,7 +407,28 @@ struct LargeWidgetView: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
+
+                    // Bottom record button - app style
+                    Link(destination: URL(string: "talkie://record")!) {
+                        ZStack {
+                            // Outer ring
+                            Circle()
+                                .strokeBorder(colors.foreground.opacity(0.6), lineWidth: 2)
+                                .frame(width: 52, height: 52)
+
+                            // Inner filled circle
+                            Circle()
+                                .fill(colors.foreground.opacity(0.15))
+                                .frame(width: 44, height: 44)
+
+                            // Mic icon
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(colors.foreground)
+                        }
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
                 }
             }
         }
