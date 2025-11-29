@@ -67,7 +67,7 @@ struct VoiceMemoRow: View {
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.textSecondary)
 
-                    // Status badges - matches widget design
+                    // Status badges - TXT → CLOUD → SPARKLES
                     HStack(spacing: 6) {
                         if memo.isTranscribing {
                             Text("...")
@@ -79,16 +79,16 @@ struct VoiceMemoRow: View {
                                 .foregroundColor(.green)
                         }
 
-                        if memo.summary != nil && !memo.summary!.isEmpty {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.purple)
-                        }
-
                         if memo.cloudSyncedAt != nil {
                             Image(systemName: "checkmark.icloud.fill")
                                 .font(.system(size: 11))
                                 .foregroundColor(.green)
+                        }
+
+                        if memo.summary != nil && !memo.summary!.isEmpty {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.purple)
                         }
                     }
                 }

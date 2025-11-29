@@ -487,22 +487,22 @@ struct MemoRowView: View {
 
                 Spacer(minLength: 8)
 
-                // Status badges - matches app exactly
+                // Status badges - TXT → CLOUD → SPARKLES
                 HStack(spacing: 4) {
                     if memo.hasTranscription {
                         Text("TXT")
                             .font(.system(size: 8, weight: .medium))
                             .foregroundColor(.green)
                     }
-                    if memo.hasAIProcessing {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(.purple)
-                    }
                     if memo.isSynced {
                         Image(systemName: "checkmark.icloud.fill")
                             .font(.system(size: 9))
                             .foregroundColor(.green)
+                    }
+                    if memo.hasAIProcessing {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.purple)
                     }
                 }
             }
