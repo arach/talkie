@@ -546,6 +546,7 @@ private struct GetStartedPage: View {
     @State private var showStorage = false
     @State private var showICloud = false
     @State private var showReady = false
+    @State private var buttonSpinComplete = false
 
     var body: some View {
         ZStack {
@@ -640,6 +641,7 @@ private struct GetStartedPage: View {
 
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 12, weight: .bold))
+                                .rotationEffect(.degrees(buttonSpinComplete ? 0 : 360))
                         }
                         .foregroundColor(Color(hex: "0A0A0A"))
                         .frame(maxWidth: .infinity)
@@ -666,6 +668,7 @@ private struct GetStartedPage: View {
         showStorage = false
         showICloud = false
         showReady = false
+        buttonSpinComplete = false
 
         // Staggered animation
         withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
@@ -679,6 +682,10 @@ private struct GetStartedPage: View {
         }
         withAnimation(.easeOut(duration: 0.5).delay(3.0)) {
             showReady = true
+        }
+        // Arrow spin after button appears
+        withAnimation(.easeInOut(duration: 0.5).delay(3.3)) {
+            buttonSpinComplete = true
         }
     }
 
