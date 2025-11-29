@@ -458,50 +458,54 @@ struct MemoRowView: View {
     let colors: WidgetColors
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // Line 1: Title | Duration + Status
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 3) {
+            // Line 1: Title (left) | Duration (right)
+            HStack {
                 Text(memo.title)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundColor(colors.foreground)
                     .lineLimit(1)
 
-                Spacer(minLength: 4)
-
-                // Status indicators
-                HStack(spacing: 3) {
-                    if memo.hasTranscription {
-                        Text("TXT")
-                            .font(.system(size: 7, weight: .medium, design: .monospaced))
-                            .foregroundColor(.green.opacity(0.8))
-                    }
-                    if memo.hasAIProcessing {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 7, weight: .medium))
-                            .foregroundColor(.purple.opacity(0.8))
-                    }
-                    if memo.isSynced {
-                        Image(systemName: "checkmark.icloud")
-                            .font(.system(size: 7, weight: .medium))
-                            .foregroundColor(colors.secondaryForeground)
-                    }
-                }
+                Spacer(minLength: 8)
 
                 Text(formatDuration(memo.duration))
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(colors.secondaryForeground)
             }
 
-            // Line 2: Time | Size | Format
-            HStack(spacing: 0) {
-                Text(formatTime(memo.createdAt))
-                Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
-                Text(formatFileSize(memo.fileSize))
-                Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
-                Text(memo.audioFormat)
+            // Line 2: Metadata (left) | Status badges (right)
+            HStack {
+                HStack(spacing: 0) {
+                    Text(formatTime(memo.createdAt))
+                    Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                    Text(formatFileSize(memo.fileSize))
+                    Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                    Text(memo.audioFormat)
+                }
+                .font(.system(size: 8))
+                .foregroundColor(colors.tertiaryForeground)
+
+                Spacer(minLength: 8)
+
+                // Status badges - matches app exactly
+                HStack(spacing: 4) {
+                    if memo.hasTranscription {
+                        Text("TXT")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.green)
+                    }
+                    if memo.hasAIProcessing {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.purple)
+                    }
+                    if memo.isSynced {
+                        Image(systemName: "checkmark.icloud.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.green)
+                    }
+                }
             }
-            .font(.system(size: 8, design: .monospaced))
-            .foregroundColor(colors.tertiaryForeground)
         }
         .padding(.vertical, 4)
     }
