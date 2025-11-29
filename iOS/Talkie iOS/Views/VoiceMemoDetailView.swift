@@ -22,6 +22,8 @@ struct VoiceMemoDetailView: View {
     @State private var showingTasks = false
     @State private var showingReminders = false
     @State private var showingShare = false
+    @State private var showingDeleteConfirmation = false
+    @Environment(\.managedObjectContext) private var viewContext
 
     private var memoURL: URL? {
         guard let filename = memo.fileURL else { return nil }
@@ -345,12 +347,44 @@ struct VoiceMemoDetailView: View {
                             .padding(.horizontal, Spacing.md)
                         }
 
+                        // Delete button
+                        Button(action: {
+                            showingDeleteConfirmation = true
+                        }) {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 14, weight: .medium))
+                                Text("DELETE MEMO")
+                                    .font(.techLabel)
+                                    .tracking(1)
+                            }
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Spacing.md)
+                            .background(Color.red.opacity(0.08))
+                            .cornerRadius(CornerRadius.sm)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                    .strokeBorder(Color.red.opacity(0.3), lineWidth: 0.5)
+                            )
+                        }
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.top, Spacing.lg)
+
                         Spacer(minLength: Spacing.xxl)
                     }
                     .padding(.vertical, Spacing.md)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Delete Memo?", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    deleteMemo()
+                }
+            } message: {
+                Text("This will permanently delete this memo and its recordings. This action cannot be undone.")
+            }
             .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -474,6 +508,30 @@ struct VoiceMemoDetailView: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func deleteMemo() {
+        // Stop playback if playing
+        audioPlayer.stopPlayback()
+
+        // Delete audio file
+        if let filename = memo.fileURL {
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let filePath = documentsPath.appendingPathComponent(filename)
+            if FileManager.default.fileExists(atPath: filePath.path) {
+                try? FileManager.default.removeItem(at: filePath)
+            }
+        }
+
+        // Delete from Core Data
+        viewContext.delete(memo)
+
+        do {
+            try viewContext.save()
+            dismiss()
+        } catch {
+            AppLogger.persistence.error("Error deleting memo: \(error.localizedDescription)")
+        }
     }
 
     /// Fetch latest memo data from CloudKit and update local Core Data

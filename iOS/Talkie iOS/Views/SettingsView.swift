@@ -229,28 +229,37 @@ struct SettingsView: View {
                         // Debug section (only in DEBUG builds)
                         #if DEBUG
                         VStack(alignment: .leading, spacing: Spacing.sm) {
-                            Text("DEBUG")
+                            Text("DEV TOOLS")
                                 .font(.techLabel)
                                 .tracking(2)
-                                .foregroundColor(.recording)
+                                .foregroundColor(.textTertiary)
                                 .padding(.horizontal, Spacing.md)
 
                             Button(action: {
                                 UserDefaults.standard.set(false, forKey: "hasSeenOnboarding")
+                                dismiss()
+                                // Small delay to let sheet dismiss, then show onboarding
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    NotificationCenter.default.post(name: talkieApp.showOnboardingNotification, object: nil)
+                                }
                             }) {
                                 HStack {
                                     Image(systemName: "arrow.counterclockwise")
-                                    Text("Reset Onboarding")
+                                    Text("Show Onboarding")
                                     Spacer()
-                                    Text("Restart app")
-                                        .font(.system(size: 10))
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12))
                                         .foregroundColor(.textTertiary)
                                 }
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.recording)
+                                .foregroundColor(.textPrimary)
                                 .padding(Spacing.sm)
-                                .background(Color.recording.opacity(0.1))
+                                .background(Color.surfaceSecondary)
                                 .cornerRadius(CornerRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                )
                             }
                             .padding(.horizontal, Spacing.md)
                         }

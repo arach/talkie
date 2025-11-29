@@ -160,9 +160,33 @@ struct AppearanceSettingsView: View {
 
                 Divider()
 
+                // MARK: - Theme Presets
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("QUICK THEMES")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.secondary)
+
+                    Text("Apply a curated theme preset with one click.")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
+                            ThemePresetCard(
+                                preset: preset,
+                                action: { settingsManager.applyTheme(preset) }
+                            )
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+
                 // MARK: - Theme Mode
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("THEME")
+                    Text("APPEARANCE")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(1)
                         .foregroundColor(.secondary)
@@ -436,6 +460,58 @@ struct FontSizeButton: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Theme Preset Card
+struct ThemePresetCard: View {
+    let preset: ThemePreset
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Preview bar
+                HStack(spacing: 0) {
+                    preset.previewColors.bg
+                        .frame(height: 32)
+                        .overlay(
+                            HStack(spacing: 6) {
+                                Image(systemName: preset.icon)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(preset.previewColors.accent)
+                                Text("Aa")
+                                    .font(.system(size: 11, weight: .medium, design: preset.fontStyle == .monospace ? .monospaced : (preset.fontStyle == .rounded ? .rounded : .default)))
+                                    .foregroundColor(preset.previewColors.fg)
+                            }
+                            .padding(.horizontal, 10)
+                            , alignment: .leading
+                        )
+                }
+                .cornerRadius(6)
+
+                // Name and description
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(preset.displayName)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.primary)
+
+                    Text(preset.description)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(10)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

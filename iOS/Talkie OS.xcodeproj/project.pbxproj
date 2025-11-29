@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
+		53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
+		53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		539C69442ED39ADF00BC034F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +27,37 @@
 			remoteGlobalIDString = 539C69302ED39ADE00BC034F;
 			remoteInfo = talkie;
 		};
+		53B43ED42EDB539400C09544 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 53B43EBF2EDB539100C09544;
+			remoteInfo = TalkieWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		53B43EDB2EDB539400C09544 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		539C69312ED39ADE00BC034F /* Talkie OS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie OS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		53B43EC22EDB539100C09544 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		53B43EC42EDB539200C09544 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		53B43EDF2EDB541600C09544 /* TalkieWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkieWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -36,6 +67,13 @@
 				Info.plist,
 			);
 			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
+		};
+		53B43EDA2EDB539400C09544 /* Exceptions for "TalkieWidget" folder in "TalkieWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -56,6 +94,14 @@
 		539C69502ED39ADF00BC034F /* talkieUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = talkieUITests;
+			sourceTree = "<group>";
+		};
+		53B43EC62EDB539200C09544 /* TalkieWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				53B43EDA2EDB539400C09544 /* Exceptions for "TalkieWidget" folder in "TalkieWidgetExtension" target */,
+			);
+			path = TalkieWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -82,15 +128,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		53B43EBD2EDB539100C09544 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */,
+				53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		539C69282ED39ADE00BC034F = {
 			isa = PBXGroup;
 			children = (
+				53B43EDF2EDB541600C09544 /* TalkieWidgetExtension.entitlements */,
 				539C69332ED39ADE00BC034F /* Talkie iOS */,
 				539C69462ED39ADF00BC034F /* talkieTests */,
 				539C69502ED39ADF00BC034F /* talkieUITests */,
+				53B43EC62EDB539200C09544 /* TalkieWidget */,
+				53B43EC12EDB539100C09544 /* Frameworks */,
 				539C69322ED39ADE00BC034F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -101,8 +159,18 @@
 				539C69312ED39ADE00BC034F /* Talkie OS.app */,
 				539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */,
 				539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */,
+				53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		53B43EC12EDB539100C09544 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				53B43EC22EDB539100C09544 /* WidgetKit.framework */,
+				53B43EC42EDB539200C09544 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -115,10 +183,12 @@
 				539C692D2ED39ADE00BC034F /* Sources */,
 				539C692E2ED39ADE00BC034F /* Frameworks */,
 				539C692F2ED39ADE00BC034F /* Resources */,
+				53B43EDB2EDB539400C09544 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				53B43ED52EDB539400C09544 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				539C69332ED39ADE00BC034F /* Talkie iOS */,
@@ -176,6 +246,28 @@
 			productReference = 539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 53B43ED72EDB539400C09544 /* Build configuration list for PBXNativeTarget "TalkieWidgetExtension" */;
+			buildPhases = (
+				53B43EBC2EDB539100C09544 /* Sources */,
+				53B43EBD2EDB539100C09544 /* Frameworks */,
+				53B43EBE2EDB539100C09544 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				53B43EC62EDB539200C09544 /* TalkieWidget */,
+			);
+			name = TalkieWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = TalkieWidgetExtension;
+			productReference = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -197,6 +289,9 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = 539C69302ED39ADE00BC034F;
 					};
+					53B43EBF2EDB539100C09544 = {
+						CreatedOnToolsVersion = 16.4;
+					};
 				};
 			};
 			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie OS" */;
@@ -216,6 +311,7 @@
 				539C69302ED39ADE00BC034F /* Talkie OS */,
 				539C69422ED39ADF00BC034F /* Talkie OSTests */,
 				539C694C2ED39ADF00BC034F /* Talkie OSUITests */,
+				53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -236,6 +332,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		539C694B2ED39ADF00BC034F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53B43EBE2EDB539100C09544 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -266,6 +369,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		53B43EBC2EDB539100C09544 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -278,6 +388,11 @@
 			isa = PBXTargetDependency;
 			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
 			targetProxy = 539C694E2ED39ADF00BC034F /* PBXContainerItemProxy */;
+		};
+		53B43ED52EDB539400C09544 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */;
+			targetProxy = 53B43ED42EDB539400C09544 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -555,6 +670,64 @@
 			};
 			name = Release;
 		};
+		53B43ED82EDB539400C09544 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TalkieWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os.TalkieWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		53B43ED92EDB539400C09544 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TalkieWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os.TalkieWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -590,6 +763,15 @@
 			buildConfigurations = (
 				539C695E2ED39ADF00BC034F /* Debug */,
 				539C695F2ED39ADF00BC034F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		53B43ED72EDB539400C09544 /* Build configuration list for PBXNativeTarget "TalkieWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				53B43ED82EDB539400C09544 /* Debug */,
+				53B43ED92EDB539400C09544 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

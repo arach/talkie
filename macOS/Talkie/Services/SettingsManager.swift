@@ -130,6 +130,82 @@ enum FontSizeOption: String, CaseIterable {
     }
 }
 
+// MARK: - Curated Theme Presets
+enum ThemePreset: String, CaseIterable {
+    case terminal = "terminal"
+    case minimal = "minimal"
+    case classic = "classic"
+    case warm = "warm"
+
+    var displayName: String {
+        switch self {
+        case .terminal: return "Terminal"
+        case .minimal: return "Minimal"
+        case .classic: return "Classic"
+        case .warm: return "Warm"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .terminal: return "Dark mode with monospace fonts and green accents"
+        case .minimal: return "Clean and subtle with rounded fonts"
+        case .classic: return "System defaults with blue accents"
+        case .warm: return "Dark mode with orange tones"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .terminal: return "terminal"
+        case .minimal: return "circle"
+        case .classic: return "star"
+        case .warm: return "flame"
+        }
+    }
+
+    var previewColors: (bg: Color, fg: Color, accent: Color) {
+        switch self {
+        case .terminal:
+            return (Color.black, Color.green.opacity(0.9), Color.green)
+        case .minimal:
+            return (Color(white: 0.95), Color.black.opacity(0.8), Color.gray)
+        case .classic:
+            return (Color(white: 0.15), Color.white.opacity(0.9), Color.blue)
+        case .warm:
+            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color.white.opacity(0.9), Color.orange)
+        }
+    }
+
+    // Theme preset values
+    var appearanceMode: AppearanceMode {
+        switch self {
+        case .terminal: return .dark
+        case .minimal: return .light
+        case .classic: return .dark
+        case .warm: return .dark
+        }
+    }
+
+    var fontStyle: FontStyleOption {
+        switch self {
+        case .terminal: return .monospace
+        case .minimal: return .rounded
+        case .classic: return .system
+        case .warm: return .monospace
+        }
+    }
+
+    var accentColor: AccentColorOption {
+        switch self {
+        case .terminal: return .green
+        case .minimal: return .gray
+        case .classic: return .blue
+        case .warm: return .orange
+        }
+    }
+}
+
 class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
@@ -169,6 +245,13 @@ class SettingsManager: ObservableObject {
     func themedFont(baseSize: CGFloat, weight: Font.Weight = .regular) -> Font {
         let scaledSize = baseSize * fontSize.scale
         return fontStyle.font(size: scaledSize, weight: weight)
+    }
+
+    /// Apply a curated theme preset
+    func applyTheme(_ theme: ThemePreset) {
+        appearanceMode = theme.appearanceMode
+        fontStyle = theme.fontStyle
+        accentColor = theme.accentColor
     }
 
     func applyAppearanceMode() {

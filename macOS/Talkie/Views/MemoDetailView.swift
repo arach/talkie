@@ -202,6 +202,82 @@ struct MemoDetailView: View {
                     }
                 }
 
+                // Recent Workflow Runs
+                if !sortedWorkflowRuns.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("RECENT RUNS")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .tracking(2)
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            if sortedWorkflowRuns.count > 3 {
+                                Button(action: { selectedTab = .aiResults }) {
+                                    Text("View All (\(sortedWorkflowRuns.count))")
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        VStack(spacing: 6) {
+                            ForEach(Array(sortedWorkflowRuns.prefix(3)), id: \.id) { run in
+                                Button(action: {
+                                    selectedWorkflowRun = run
+                                    selectedTab = .aiResults
+                                }) {
+                                    HStack(spacing: 8) {
+                                        // Workflow icon
+                                        Image(systemName: run.workflowIcon ?? "bolt.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.accentColor)
+                                            .frame(width: 20)
+
+                                        // Workflow name
+                                        Text(run.workflowName ?? "Workflow")
+                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.primary)
+                                            .lineLimit(1)
+
+                                        Spacer()
+
+                                        // Status indicator
+                                        if run.status == "completed" {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.green)
+                                        } else if run.status == "failed" {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.red)
+                                        } else {
+                                            ProgressView()
+                                                .scaleEffect(0.5)
+                                                .frame(width: 12, height: 12)
+                                        }
+
+                                        // Time ago
+                                        Text(formatTimeAgo(run.runDate))
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .foregroundColor(.secondary)
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 8, weight: .semibold))
+                                            .foregroundColor(.secondary.opacity(0.5))
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+
                 // Quick Actions
                 Divider()
 
@@ -355,6 +431,29 @@ struct MemoDetailView: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func formatTimeAgo(_ date: Date?) -> String {
+        guard let date = date else { return "" }
+        let now = Date()
+        let diff = now.timeIntervalSince(date)
+
+        if diff < 60 {
+            return "just now"
+        } else if diff < 3600 {
+            let mins = Int(diff / 60)
+            return "\(mins)m ago"
+        } else if diff < 86400 {
+            let hours = Int(diff / 3600)
+            return "\(hours)h ago"
+        } else if diff < 604800 {
+            let days = Int(diff / 86400)
+            return "\(days)d ago"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: date)
+        }
     }
 
     private func copyTranscript() {

@@ -30,7 +30,7 @@ struct ModelsContentView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 24)
+                .padding(.top, 12)
 
                 Divider()
 
@@ -73,9 +73,11 @@ struct ModelsContentView: View {
 
     private var cloudProvidersSection: some View {
         LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12)
-        ], spacing: 12) {
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8)
+        ], spacing: 8) {
             CompactProviderCard(
                 name: "OpenAI",
                 isConfigured: settingsManager.openaiApiKey != nil,
@@ -213,12 +215,14 @@ struct ModelsContentView: View {
     @State private var downloadingLocalModelId: String?
 
     private var localProvidersSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             #if arch(arm64)
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ], spacing: 12) {
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ], spacing: 8) {
                 ForEach(registry.allModels.filter { $0.provider == "mlx" }) { model in
                     CompactModelCard(
                         model: model,
@@ -489,157 +493,100 @@ struct CompactModelCard: View {
     let onDelete: () -> Void
     let onCancel: () -> Void
 
-    private var modelHighlights: [String] {
-        var highlights: [String] = []
-
+    private var modelHighlight: String {
         switch model.id {
         case "mlx-community/Llama-3.2-1B-Instruct-4bit":
-            highlights = [
-                "1B params: Ultra-fast",
-                "Perfect for quick tasks",
-                "~700MB download"
-            ]
+            return "1B • ~700MB"
         case "mlx-community/Qwen2.5-1.5B-Instruct-4bit":
-            highlights = [
-                "1.5B params: Fast & capable",
-                "Great for summaries",
-                "~1GB download"
-            ]
+            return "1.5B • ~1GB"
         case "mlx-community/Qwen2.5-3B-Instruct-4bit":
-            highlights = [
-                "3B params: Fast, efficient",
-                "Great for quick tasks",
-                "~2GB download"
-            ]
+            return "3B • ~2GB"
         case "mlx-community/Qwen2.5-7B-Instruct-4bit":
-            highlights = [
-                "7B params: Balanced performance",
-                "Good reasoning capabilities",
-                "~4GB download"
-            ]
+            return "7B • ~4GB"
         case "mlx-community/Llama-3.2-3B-Instruct-4bit":
-            highlights = [
-                "Llama 3.2: Meta's latest",
-                "Optimized for chat",
-                "~2GB download"
-            ]
+            return "3B • ~2GB"
         case "mlx-community/gemma-2-9b-it-4bit":
-            highlights = [
-                "9B params: Strong performance",
-                "Google's Gemma family",
-                "~5GB download"
-            ]
+            return "9B • ~5GB"
         default:
-            highlights = [
-                model.size,
-                "Local inference",
-                model.isInstalled ? "Ready to use" : "Not installed"
-            ]
+            return model.size
         }
-
-        return highlights
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
+            // Icon + Name
+            HStack(spacing: 8) {
                 Image(systemName: model.isInstalled ? "checkmark.circle.fill" : "cpu")
-                    .font(.system(size: 18))
+                    .font(.system(size: 14))
                     .foregroundColor(model.isInstalled ? .green : .secondary)
-                    .frame(width: 28, height: 28)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(model.displayName)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(model.isInstalled ? Color.green : Color.gray)
-                            .frame(width: 6, height: 6)
-
-                        Text(model.isInstalled ? "INSTALLED" : "AVAILABLE")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
-                            .foregroundColor(model.isInstalled ? .green : .secondary)
-                    }
+                    Text(modelHighlight)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
                 }
-
                 Spacer()
-            }
-
-            // Highlights
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(modelHighlights, id: \.self) { highlight in
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("•")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.secondary)
-                        Text(highlight)
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
             }
 
             Spacer()
 
             // Action button
             if isDownloading {
-                VStack(spacing: 8) {
+                VStack(spacing: 4) {
                     ProgressView(value: downloadProgress)
-                    HStack(spacing: 6) {
+                    HStack {
                         Text("\(Int(downloadProgress * 100))%")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: 8, design: .monospaced))
                             .foregroundColor(.secondary)
                         Spacer()
                         Button(action: onCancel) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 9))
-                                Text("Cancel")
-                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            }
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.orange)
+                        .buttonStyle(.plain)
+                        .foregroundColor(.orange)
                     }
                 }
             } else if model.isInstalled {
                 Button(action: onDelete) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 9))
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 8))
                         Text("Delete")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.system(size: 8, weight: .medium, design: .monospaced))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
                 .tint(.red)
+                .controlSize(.small)
             } else {
                 Button(action: onDownload) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 9))
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.system(size: 8))
                         Text("Download")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.system(size: 8, weight: .medium, design: .monospaced))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
-        .padding(16)
-        .frame(height: 180)
+        .padding(10)
+        .frame(height: 90)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(8)
+        .cornerRadius(6)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
     }
@@ -662,34 +609,33 @@ struct CompactProviderCard: View {
     var body: some View {
         ZStack {
             // Back side - Configuration
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Configure \(name)")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .foregroundColor(.primary)
 
                 SecureField("API Key", text: apiKeyBinding)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 9, design: .monospaced))
+                    .controlSize(.small)
 
-                HStack(spacing: 8) {
-                    Button("Cancel") {
-                        onCancel()
-                    }
-                    .buttonStyle(.bordered)
+                HStack(spacing: 6) {
+                    Button("Cancel") { onCancel() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
 
-                    Button("Save") {
-                        onSave()
-                    }
-                    .buttonStyle(.borderedProminent)
+                    Button("Save") { onSave() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
                 }
             }
-            .padding(16)
-            .frame(height: 180)
+            .padding(10)
+            .frame(height: 90)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
+            .cornerRadius(6)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.blue.opacity(0.5), lineWidth: 1)
             )
             .opacity(isConfiguring ? 1 : 0)
@@ -697,68 +643,52 @@ struct CompactProviderCard: View {
             .zIndex(isConfiguring ? 1 : 0)
 
             // Front side - Provider info
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: icon)
-                        .font(.system(size: 18))
+                        .font(.system(size: 14))
                         .foregroundColor(isConfigured ? .blue : .secondary)
-                        .frame(width: 28, height: 28)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(name)
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
 
-                        HStack(spacing: 6) {
+                        HStack(spacing: 4) {
                             Circle()
                                 .fill(isConfigured ? Color.green : Color.orange)
-                                .frame(width: 6, height: 6)
+                                .frame(width: 5, height: 5)
 
-                            Text(isConfigured ? "ACTIVE" : "SETUP REQUIRED")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
+                            Text(isConfigured ? "ACTIVE" : "SETUP")
+                                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                .tracking(0.3)
                                 .foregroundColor(isConfigured ? .green : .orange)
                         }
                     }
-
                     Spacer()
-                }
-
-                // Highlights
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(highlights, id: \.self) { highlight in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("•")
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary)
-                            Text(highlight)
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
                 }
 
                 Spacer()
 
                 Button(action: onConfigure) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 9))
+                    HStack(spacing: 4) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 8))
                         Text("Configure")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.system(size: 8, weight: .medium, design: .monospaced))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            .padding(16)
-            .frame(height: 180)
+            .padding(10)
+            .frame(height: 90)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
+            .cornerRadius(6)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
             .opacity(isConfiguring ? 0 : 1)

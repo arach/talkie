@@ -24,6 +24,9 @@ struct talkieApp: App {
     static let refreshTaskIdentifier = "jdi.talkie-os.refresh"
     static let syncTaskIdentifier = "jdi.talkie-os.sync"
 
+    // Notification for triggering onboarding from Settings
+    static let showOnboardingNotification = Notification.Name("showOnboarding")
+
     init() {
         registerBackgroundTasks()
     }
@@ -41,6 +44,9 @@ struct talkieApp: App {
                     if !hasSeenOnboarding {
                         showOnboarding = true
                     }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
+                    showOnboarding = true
                 }
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView(hasSeenOnboarding: $hasSeenOnboarding)
