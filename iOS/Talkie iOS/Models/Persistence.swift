@@ -417,7 +417,7 @@ struct PersistenceController {
         context.perform {
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
             fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
-            fetchRequest.fetchLimit = 5
+            fetchRequest.fetchLimit = 10
 
             do {
                 let recentMemos = try context.fetch(fetchRequest)
