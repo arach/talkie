@@ -10,6 +10,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var logStore = LogStore.shared
+    @State private var showingAllLogs = false
 
     // App info
     private var appVersion: String {
@@ -24,15 +26,8 @@ struct SettingsView: View {
         Bundle.main.bundleIdentifier ?? "com.talkie.ios"
     }
 
-    private var deviceModel: String {
-        var systemInfo = utsname()
-        uname(&systemInfo)
-        let machineMirror = Mirror(reflecting: systemInfo.machine)
-        let identifier = machineMirror.children.reduce("") { identifier, element in
-            guard let value = element.value as? Int8, value != 0 else { return identifier }
-            return identifier + String(UnicodeScalar(UInt8(value)))
-        }
-        return identifier
+    private var deviceName: String {
+        UIDevice.current.name
     }
 
     private var iosVersion: String {
@@ -131,11 +126,9 @@ struct SettingsView: View {
                                 Divider().background(Color.borderPrimary)
                                 DebugInfoRow(label: "Bundle ID", value: bundleId)
                                 Divider().background(Color.borderPrimary)
-                                DebugInfoRow(label: "Device", value: deviceModel)
+                                DebugInfoRow(label: "Device", value: deviceName)
                                 Divider().background(Color.borderPrimary)
                                 DebugInfoRow(label: "iOS", value: iosVersion)
-                                Divider().background(Color.borderPrimary)
-                                DebugInfoRow(label: "Environment", value: isDebugBuild ? "DEBUG" : "RELEASE")
                             }
                             .background(Color.surfaceSecondary)
                             .cornerRadius(CornerRadius.sm)
@@ -145,6 +138,123 @@ struct SettingsView: View {
                             )
                             .padding(.horizontal, Spacing.md)
                         }
+
+                        // Recent Logs
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            HStack {
+                                Text("RECENT LOGS")
+                                    .font(.techLabel)
+                                    .tracking(2)
+                                    .foregroundColor(.textTertiary)
+
+                                Spacer()
+
+                                if !logStore.entries.isEmpty {
+                                    Button(action: {
+                                        showingAllLogs = true
+                                    }) {
+                                        Text("VIEW ALL")
+                                            .font(.techLabelSmall)
+                                            .tracking(1)
+                                            .foregroundColor(.active)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, Spacing.md)
+
+                            if logStore.importantEntries.isEmpty {
+                                HStack {
+                                    Image(systemName: "checkmark.circle")
+                                        .foregroundColor(.green)
+                                    Text("No errors or warnings")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.textSecondary)
+                                }
+                                .padding(Spacing.md)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.surfaceSecondary)
+                                .cornerRadius(CornerRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                )
+                                .padding(.horizontal, Spacing.md)
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(logStore.importantEntries.prefix(5)) { entry in
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack(spacing: 6) {
+                                                Circle()
+                                                    .fill(entry.level.color)
+                                                    .frame(width: 6, height: 6)
+                                                Text(entry.category)
+                                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                                    .foregroundColor(.textSecondary)
+                                                Spacer()
+                                                Text(entry.formattedTime)
+                                                    .font(.system(size: 10, design: .monospaced))
+                                                    .foregroundColor(.textTertiary)
+                                            }
+                                            Text(entry.message)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundColor(entry.level.color)
+                                                .lineLimit(2)
+                                        }
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, Spacing.xs)
+                                        .contentShape(Rectangle())
+                                        .contextMenu {
+                                            Button(action: {
+                                                UIPasteboard.general.string = "[\(entry.category)] \(entry.message)"
+                                            }) {
+                                                Label("Copy", systemImage: "doc.on.doc")
+                                            }
+                                        }
+
+                                        if entry.id != logStore.importantEntries.prefix(5).last?.id {
+                                            Divider().background(Color.borderPrimary)
+                                        }
+                                    }
+                                }
+                                .background(Color.surfaceSecondary)
+                                .cornerRadius(CornerRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                )
+                                .padding(.horizontal, Spacing.md)
+                            }
+                        }
+
+                        // Debug section (only in DEBUG builds)
+                        #if DEBUG
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("DEBUG")
+                                .font(.techLabel)
+                                .tracking(2)
+                                .foregroundColor(.recording)
+                                .padding(.horizontal, Spacing.md)
+
+                            Button(action: {
+                                UserDefaults.standard.set(false, forKey: "hasSeenOnboarding")
+                            }) {
+                                HStack {
+                                    Image(systemName: "arrow.counterclockwise")
+                                    Text("Reset Onboarding")
+                                    Spacer()
+                                    Text("Restart app")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.textTertiary)
+                                }
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.recording)
+                                .padding(Spacing.sm)
+                                .background(Color.recording.opacity(0.1))
+                                .cornerRadius(CornerRadius.sm)
+                            }
+                            .padding(.horizontal, Spacing.md)
+                        }
+                        #endif
 
                         Spacer(minLength: 40)
                     }
@@ -164,14 +274,136 @@ struct SettingsView: View {
             }
         }
         .preferredColorScheme(themeManager.appearanceMode.colorScheme)
+        .sheet(isPresented: $showingAllLogs) {
+            LogViewerSheet()
+        }
+    }
+}
+
+// MARK: - Log Viewer Sheet
+
+struct LogViewerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var logStore = LogStore.shared
+    @State private var filterLevel: LogEntry.LogLevel? = nil
+
+    var filteredLogs: [LogEntry] {
+        if let level = filterLevel {
+            return logStore.entries.filter { $0.level == level }
+        }
+        return logStore.entries
     }
 
-    private var isDebugBuild: Bool {
-        #if DEBUG
-        return true
-        #else
-        return false
-        #endif
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.surfacePrimary
+                    .ignoresSafeArea()
+
+                if logStore.entries.isEmpty {
+                    VStack(spacing: Spacing.md) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 40))
+                            .foregroundColor(.textTertiary)
+                        Text("No logs yet")
+                            .font(.bodyMedium)
+                            .foregroundColor(.textSecondary)
+                    }
+                } else {
+                    VStack(spacing: 0) {
+                        // Filter buttons
+                        HStack(spacing: Spacing.xs) {
+                            FilterButton(title: "All", isSelected: filterLevel == nil) {
+                                filterLevel = nil
+                            }
+                            FilterButton(title: "Errors", isSelected: filterLevel == .error) {
+                                filterLevel = .error
+                            }
+                            FilterButton(title: "Warnings", isSelected: filterLevel == .warning) {
+                                filterLevel = .warning
+                            }
+                            Spacer()
+                            Button(action: { logStore.clear() }) {
+                                Text("Clear")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.vertical, Spacing.sm)
+
+                        ScrollView {
+                            LazyVStack(spacing: 1) {
+                                ForEach(filteredLogs) { entry in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 6) {
+                                            Circle()
+                                                .fill(entry.level.color)
+                                                .frame(width: 6, height: 6)
+                                            Text(entry.category)
+                                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                                .foregroundColor(.textSecondary)
+                                            Spacer()
+                                            Text(entry.formattedTime)
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundColor(.textTertiary)
+                                        }
+                                        Text(entry.message)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(entry.level.color)
+                                            .textSelection(.enabled)
+                                    }
+                                    .padding(.horizontal, Spacing.sm)
+                                    .padding(.vertical, Spacing.xs)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.surfaceSecondary)
+                                    .contextMenu {
+                                        Button(action: {
+                                            UIPasteboard.general.string = "[\(entry.formattedTime)] [\(entry.category)] \(entry.message)"
+                                        }) {
+                                            Label("Copy", systemImage: "doc.on.doc")
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, Spacing.md)
+                        }
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("LOGS")
+                        .font(.techLabel)
+                        .tracking(2)
+                        .foregroundColor(.textPrimary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.active)
+                }
+            }
+        }
+    }
+}
+
+struct FilterButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? .white : .textSecondary)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 4)
+                .background(isSelected ? Color.active : Color.surfaceSecondary)
+                .cornerRadius(CornerRadius.sm)
+        }
     }
 }
 

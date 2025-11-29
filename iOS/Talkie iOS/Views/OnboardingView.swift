@@ -535,18 +535,11 @@ private struct SyncPage: View {
     }
 }
 
-// MARK: - Get Started Page (Tactical Style with Animation)
+// MARK: - Get Started Page (Tactical Style)
 
 private struct GetStartedPage: View {
     let iCloudStatus: CKAccountStatus
     let onComplete: () -> Void
-
-    // Animation states
-    @State private var showApp = false
-    @State private var showStorage = false
-    @State private var showICloud = false
-    @State private var showReady = false
-    @State private var buttonSpinComplete = false
 
     var body: some View {
         ZStack {
@@ -562,32 +555,21 @@ private struct GetStartedPage: View {
                 Spacer()
 
                 // System status header
-                Text("SYSTEM CHECK")
+                Text("SYSTEM STATUS")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(3)
                     .foregroundColor(Color(hex: "6A6A6A"))
 
-                // Status panel with animated rows
+                // Status panel
                 VStack(spacing: Spacing.md) {
-                    if showApp {
-                        StatusRow(label: "App", value: "Ready", isHighlight: false)
-                            .transition(.opacity.combined(with: .move(edge: .leading)))
-                    }
-
-                    if showStorage {
-                        StatusRow(label: "Storage", value: "Local", isHighlight: false)
-                            .transition(.opacity.combined(with: .move(edge: .leading)))
-                    }
-
-                    if showICloud {
-                        StatusRow(
-                            label: "iCloud",
-                            value: iCloudStatus == .available ? "Connected" : "Offline",
-                            isHighlight: true,
-                            isActive: iCloudStatus == .available
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                    }
+                    StatusRow(label: "App", value: "Ready")
+                    StatusRow(label: "Storage", value: "Local")
+                    StatusRow(
+                        label: "iCloud",
+                        value: iCloudStatus == .available ? "Connected" : "Offline",
+                        isHighlight: true,
+                        isActive: iCloudStatus == .available
+                    )
                 }
                 .padding(Spacing.md)
                 .background(
@@ -599,93 +581,55 @@ private struct GetStartedPage: View {
                         )
                 )
                 .padding(.horizontal, Spacing.xl)
-                .frame(minHeight: 100)
 
-                // Message - appears after iCloud check
-                if showReady {
-                    VStack(spacing: Spacing.sm) {
-                        if iCloudStatus == .available {
-                            Text("All systems go.")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(hex: "22C55E"))
-                        } else {
-                            Text("Running locally.")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(hex: "9A9A9A"))
+                // Message
+                VStack(spacing: Spacing.sm) {
+                    if iCloudStatus == .available {
+                        Text("All systems go.")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(hex: "22C55E"))
+                    } else {
+                        Text("Running locally.")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(hex: "9A9A9A"))
 
-                            Button(action: openSettings) {
-                                HStack(spacing: Spacing.xs) {
-                                    Text("Enable iCloud Sync")
-                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 9, weight: .bold))
-                                }
-                                .foregroundColor(Color(hex: "22C55E"))
+                        Button(action: openSettings) {
+                            HStack(spacing: Spacing.xs) {
+                                Text("Enable iCloud Sync")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 9, weight: .bold))
                             }
-                            .padding(.top, Spacing.xxs)
+                            .foregroundColor(Color(hex: "22C55E"))
                         }
+                        .padding(.top, Spacing.xxs)
                     }
-                    .transition(.opacity)
-                    .padding(.top, Spacing.sm)
                 }
+                .padding(.top, Spacing.sm)
 
                 Spacer()
 
-                // Initialize button - appears when ready
-                if showReady {
-                    Button(action: onComplete) {
-                        HStack(spacing: Spacing.sm) {
-                            Text("GET STARTED")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .tracking(2)
+                // Get started button
+                Button(action: onComplete) {
+                    HStack(spacing: Spacing.sm) {
+                        Text("GET STARTED")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .tracking(2)
 
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 12, weight: .bold))
-                                .rotationEffect(.degrees(buttonSpinComplete ? 0 : 360))
-                        }
-                        .foregroundColor(Color(hex: "0A0A0A"))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.md)
-                        .background(Color(hex: "22C55E"))
-                        .cornerRadius(8)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 12, weight: .bold))
                     }
-                    .padding(.horizontal, Spacing.xl)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .foregroundColor(Color(hex: "0A0A0A"))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.md)
+                    .background(Color(hex: "22C55E"))
+                    .cornerRadius(8)
                 }
+                .padding(.horizontal, Spacing.xl)
 
                 Spacer()
                     .frame(height: Spacing.xl)
             }
-        }
-        .onAppear {
-            startAnimation()
-        }
-    }
-
-    private func startAnimation() {
-        // Reset states
-        showApp = false
-        showStorage = false
-        showICloud = false
-        showReady = false
-        buttonSpinComplete = false
-
-        // Staggered animation
-        withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
-            showApp = true
-        }
-        withAnimation(.easeOut(duration: 0.4).delay(1.0)) {
-            showStorage = true
-        }
-        withAnimation(.easeOut(duration: 0.4).delay(2.0)) {
-            showICloud = true
-        }
-        withAnimation(.easeOut(duration: 0.5).delay(3.0)) {
-            showReady = true
-        }
-        // Arrow spin after button appears
-        withAnimation(.easeInOut(duration: 0.5).delay(3.3)) {
-            buttonSpinComplete = true
         }
     }
 
