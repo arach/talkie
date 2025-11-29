@@ -80,6 +80,34 @@ struct MemoSnapshot: Codable, Identifiable {
     let hasAIProcessing: Bool
     let isSynced: Bool
     let createdAt: Date
+    let fileSize: Int
+    let audioFormat: String
+
+    // Support decoding older snapshots without new fields
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        hasTranscription = try container.decode(Bool.self, forKey: .hasTranscription)
+        hasAIProcessing = try container.decode(Bool.self, forKey: .hasAIProcessing)
+        isSynced = try container.decode(Bool.self, forKey: .isSynced)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        fileSize = try container.decodeIfPresent(Int.self, forKey: .fileSize) ?? 0
+        audioFormat = try container.decodeIfPresent(String.self, forKey: .audioFormat) ?? "M4A"
+    }
+
+    init(id: String, title: String, duration: TimeInterval, hasTranscription: Bool, hasAIProcessing: Bool, isSynced: Bool, createdAt: Date, fileSize: Int = 0, audioFormat: String = "M4A") {
+        self.id = id
+        self.title = title
+        self.duration = duration
+        self.hasTranscription = hasTranscription
+        self.hasAIProcessing = hasAIProcessing
+        self.isSynced = isSynced
+        self.createdAt = createdAt
+        self.fileSize = fileSize
+        self.audioFormat = audioFormat
+    }
 }
 
 // MARK: - Timeline Entry
@@ -430,46 +458,81 @@ struct MemoRowView: View {
     let colors: WidgetColors
 
     var body: some View {
-        HStack(spacing: 6) {
-            // Title
-            Text(memo.title)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(colors.foreground)
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 2) {
+            // Line 1: Title | Duration + Status
+            HStack(spacing: 6) {
+                Text(memo.title)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(colors.foreground)
+                    .lineLimit(1)
 
-            Spacer(minLength: 4)
+                Spacer(minLength: 4)
 
-            // Status indicators
-            HStack(spacing: 3) {
-                if memo.hasTranscription {
-                    Text("TXT")
-                        .font(.system(size: 7, weight: .medium, design: .monospaced))
-                        .foregroundColor(.green.opacity(0.8))
+                // Status indicators
+                HStack(spacing: 3) {
+                    if memo.hasTranscription {
+                        Text("TXT")
+                            .font(.system(size: 7, weight: .medium, design: .monospaced))
+                            .foregroundColor(.green.opacity(0.8))
+                    }
+                    if memo.hasAIProcessing {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 7, weight: .medium))
+                            .foregroundColor(.purple.opacity(0.8))
+                    }
+                    if memo.isSynced {
+                        Image(systemName: "checkmark.icloud")
+                            .font(.system(size: 7, weight: .medium))
+                            .foregroundColor(colors.secondaryForeground)
+                    }
                 }
-                if memo.hasAIProcessing {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 7, weight: .medium))
-                        .foregroundColor(.purple.opacity(0.8))
-                }
-                if memo.isSynced {
-                    Image(systemName: "checkmark.icloud")
-                        .font(.system(size: 7, weight: .medium))
-                        .foregroundColor(colors.secondaryForeground)
-                }
+
+                Text(formatDuration(memo.duration))
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundColor(colors.secondaryForeground)
             }
 
-            // Duration
-            Text(formatDuration(memo.duration))
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .foregroundColor(colors.secondaryForeground)
+            // Line 2: Time | Size | Format
+            HStack(spacing: 0) {
+                Text(formatTime(memo.createdAt))
+                Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                Text(formatFileSize(memo.fileSize))
+                Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                Text(memo.audioFormat)
+            }
+            .font(.system(size: 8, design: .monospaced))
+            .foregroundColor(colors.tertiaryForeground)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        let calendar = Calendar.current
+
+        if calendar.isDateInToday(date) || calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "h:mm a"
+        } else {
+            formatter.dateFormat = "MMM d"
+        }
+        return formatter.string(from: date)
+    }
+
+    private func formatFileSize(_ bytes: Int) -> String {
+        guard bytes > 0 else { return "-- KB" }
+        let mb = Double(bytes) / (1024 * 1024)
+        if mb >= 1.0 {
+            return String(format: "%.1f MB", mb)
+        } else {
+            let kb = Double(bytes) / 1024
+            return String(format: "%.0f KB", kb)
+        }
     }
 }
 
@@ -588,9 +651,9 @@ struct TalkieWidget: Widget {
     TalkieWidget()
 } timeline: {
     TalkieEntry(date: .now, memoCount: 5, recentMemos: [
-        MemoSnapshot(id: "1", title: "Meeting notes", duration: 145, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date()),
-        MemoSnapshot(id: "2", title: "Idea for app", duration: 32, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date()),
-        MemoSnapshot(id: "3", title: "Quick reminder", duration: 8, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date())
+        MemoSnapshot(id: "1", title: "Meeting notes", duration: 145, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date(), fileSize: 2_320_000, audioFormat: "M4A"),
+        MemoSnapshot(id: "2", title: "Idea for app", duration: 32, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date().addingTimeInterval(-3600), fileSize: 512_000, audioFormat: "M4A"),
+        MemoSnapshot(id: "3", title: "Quick reminder", duration: 8, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date().addingTimeInterval(-7200), fileSize: 128_000, audioFormat: "M4A")
     ], appearance: .dark)
 }
 
@@ -598,11 +661,11 @@ struct TalkieWidget: Widget {
     TalkieWidget()
 } timeline: {
     TalkieEntry(date: .now, memoCount: 12, recentMemos: [
-        MemoSnapshot(id: "1", title: "Meeting notes", duration: 145, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date()),
-        MemoSnapshot(id: "2", title: "Idea for app", duration: 32, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date()),
-        MemoSnapshot(id: "3", title: "Quick reminder", duration: 8, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date()),
-        MemoSnapshot(id: "4", title: "Project brainstorm", duration: 312, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date()),
-        MemoSnapshot(id: "5", title: "Grocery list", duration: 18, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date()),
-        MemoSnapshot(id: "6", title: "Voice note 11/29", duration: 67, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date())
+        MemoSnapshot(id: "1", title: "Meeting notes", duration: 145, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date(), fileSize: 2_320_000, audioFormat: "M4A"),
+        MemoSnapshot(id: "2", title: "Idea for app", duration: 32, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date().addingTimeInterval(-3600), fileSize: 512_000, audioFormat: "M4A"),
+        MemoSnapshot(id: "3", title: "Quick reminder", duration: 8, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date().addingTimeInterval(-7200), fileSize: 128_000, audioFormat: "M4A"),
+        MemoSnapshot(id: "4", title: "Project brainstorm", duration: 312, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date().addingTimeInterval(-86400), fileSize: 4_992_000, audioFormat: "M4A"),
+        MemoSnapshot(id: "5", title: "Grocery list", duration: 18, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date().addingTimeInterval(-172800), fileSize: 288_000, audioFormat: "M4A"),
+        MemoSnapshot(id: "6", title: "Voice note 11/29", duration: 67, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date().addingTimeInterval(-259200), fileSize: 1_072_000, audioFormat: "M4A")
     ], appearance: .dark)
 }

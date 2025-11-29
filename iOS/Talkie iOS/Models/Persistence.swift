@@ -338,6 +338,8 @@ struct PersistenceController {
         let hasAIProcessing: Bool
         let isSynced: Bool
         let createdAt: Date
+        let fileSize: Int      // bytes
+        let audioFormat: String // M4A, WAV, etc.
     }
 
     /// Update the widget with the current memo count and recent memos
@@ -353,14 +355,33 @@ struct PersistenceController {
 
         // Save recent memos as JSON
         let snapshots = recentMemos.prefix(5).map { memo in
-            WidgetMemoSnapshot(
+            // Calculate file size from audioData or estimate from duration
+            let fileSize: Int
+            if let data = memo.audioData {
+                fileSize = data.count
+            } else {
+                fileSize = Int(memo.duration * 16000) // Estimate ~16KB/sec for M4A
+            }
+
+            // Get audio format from filename extension
+            let audioFormat: String
+            if let filename = memo.fileURL {
+                let ext = (filename as NSString).pathExtension.uppercased()
+                audioFormat = ext.isEmpty ? "M4A" : ext
+            } else {
+                audioFormat = "M4A"
+            }
+
+            return WidgetMemoSnapshot(
                 id: memo.id?.uuidString ?? UUID().uuidString,
                 title: memo.title ?? "Untitled",
                 duration: memo.duration,
                 hasTranscription: memo.transcription != nil && !memo.transcription!.isEmpty,
                 hasAIProcessing: memo.summary != nil && !memo.summary!.isEmpty,
                 isSynced: memo.cloudSyncedAt != nil,
-                createdAt: memo.createdAt ?? Date()
+                createdAt: memo.createdAt ?? Date(),
+                fileSize: fileSize,
+                audioFormat: audioFormat
             )
         }
 
