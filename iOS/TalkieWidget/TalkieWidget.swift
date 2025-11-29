@@ -362,16 +362,22 @@ struct LargeWidgetView: View {
                 CornerAccents(color: colors.accent)
 
                 VStack(spacing: 0) {
-                    // Top - memo count (Home app style)
+                    // Top header - TALKIE centered with memo count
                     HStack {
                         Spacer()
-                        Text("\(memoCount) MEMOS")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        Text("TALKIE")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(colors.foreground.opacity(0.9))
+                            .tracking(2)
+                        Text("·")
                             .foregroundColor(colors.tertiaryForeground)
-                            .tracking(1)
+                            .padding(.horizontal, 4)
+                        Text("\(memoCount)")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(colors.tertiaryForeground)
+                        Spacer()
                     }
                     .padding(.top, 10)
-                    .padding(.horizontal, 14)
                     .padding(.bottom, 4)
 
                     // Memos list - table style
@@ -456,14 +462,7 @@ struct LargeWidgetView: View {
                         }
                     }
                     .padding(.top, 8)
-
-                    // TALKIE title at bottom
-                    Text("TALKIE")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(colors.foreground.opacity(0.9))
-                        .tracking(2)
-                        .padding(.top, 4)
-                        .padding(.bottom, 10)
+                    .padding(.bottom, 12)
                 }
             }
         }

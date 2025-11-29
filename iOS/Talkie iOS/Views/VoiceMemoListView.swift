@@ -59,6 +59,7 @@ struct VoiceMemoListView: View {
     @State private var displayLimit = 10
     @State private var searchText = ""
     @State private var isSearching = false
+    @FocusState private var isSearchFieldFocused: Bool
     @State private var isPushToTalkActive = false
     @State private var pushToTalkScale: CGFloat = 1.0
     @State private var deepLinkMemo: VoiceMemo? = nil
@@ -110,6 +111,7 @@ struct VoiceMemoListView: View {
                                     .textInputAutocapitalization(.never)
                                     .keyboardType(.asciiCapable)
                                     .submitLabel(.search)
+                                    .focused($isSearchFieldFocused)
                                     .onTapGesture {
                                         isSearching = true
                                     }
@@ -464,11 +466,13 @@ struct VoiceMemoListView: View {
             // Set the search text to trigger filtering
             searchText = query
             isSearching = true
+            isSearchFieldFocused = true
             deepLinkManager.clearAction()
 
         case .openSearch:
-            // Just activate search mode
+            // Activate search mode and focus the field
             isSearching = true
+            isSearchFieldFocused = true
             deepLinkManager.clearAction()
 
         case .openAllMemos:
