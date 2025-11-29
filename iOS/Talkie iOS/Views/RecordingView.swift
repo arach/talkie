@@ -59,8 +59,8 @@ struct RecordingView: View {
             if !hasAppeared {
                 hasAppeared = true
                 defaultTitle = "Recording \(formatDate(Date()))"
-                // Auto-start recording immediately
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // Auto-start recording with minimal delay for UI readiness
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     recorder.startRecording()
                 }
             }

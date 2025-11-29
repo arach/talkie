@@ -426,7 +426,7 @@ struct VoiceMemoListView: View {
             }
         }
         .onAppear {
-            // Handle any pending deep link when view appears
+            // Handle any pending deep link when view appears - prioritize this!
             if deepLinkManager.pendingAction != .none {
                 handleDeepLinkAction(deepLinkManager.pendingAction)
             }
@@ -434,8 +434,8 @@ struct VoiceMemoListView: View {
             // Check for Control Center widget trigger
             checkForControlCenterAction()
 
-            // Refresh widget data on app launch
-            PersistenceController.refreshWidgetData(context: viewContext)
+            // Note: Widget data is only refreshed when memos are saved/deleted
+            // WidgetKit handles periodic refresh every 30 minutes via timeline policy
         }
     }
 

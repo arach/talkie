@@ -159,10 +159,16 @@ struct PersistenceController {
             } else if event.succeeded {
                 AppLogger.persistence.info("☁️ CloudKit \(eventTypeName) succeeded")
 
-                // We care about successful export events (data pushed to CloudKit)
+                // Export success: mark local memos as synced
                 if event.type == .export {
                     AppLogger.persistence.info("☁️ Export succeeded - marking memos as synced")
                     PersistenceController.markRecentMemosAsSynced(context: containerRef.viewContext)
+                }
+
+                // Import success: new data from other devices - refresh widget
+                if event.type == .import {
+                    AppLogger.persistence.info("☁️ Import succeeded - refreshing widget with new data")
+                    PersistenceController.refreshWidgetData(context: containerRef.viewContext)
                 }
             } else {
                 AppLogger.persistence.info("☁️ CloudKit \(eventTypeName) in progress...")
