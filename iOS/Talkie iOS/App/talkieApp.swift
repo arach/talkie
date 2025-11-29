@@ -16,6 +16,10 @@ struct talkieApp: App {
     let persistenceController = PersistenceController.shared
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
 
+    // First launch detection
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @State private var showOnboarding = false
+
     // MARK: - Background Task Identifiers
     static let refreshTaskIdentifier = "jdi.talkie-os.refresh"
     static let syncTaskIdentifier = "jdi.talkie-os.sync"
@@ -31,6 +35,15 @@ struct talkieApp: App {
                 .environmentObject(deepLinkManager)
                 .onOpenURL { url in
                     deepLinkManager.handle(url: url)
+                }
+                .onAppear {
+                    // Show onboarding on first launch
+                    if !hasSeenOnboarding {
+                        showOnboarding = true
+                    }
+                }
+                .fullScreenCover(isPresented: $showOnboarding) {
+                    OnboardingView(hasSeenOnboarding: $hasSeenOnboarding)
                 }
         }
     }
