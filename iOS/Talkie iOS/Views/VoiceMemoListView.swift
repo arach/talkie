@@ -39,6 +39,7 @@ enum SortOption: String, CaseIterable {
 
 struct VoiceMemoListView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject var deepLinkManager: DeepLinkManager
     @ObservedObject var themeManager = ThemeManager.shared
 
     @FetchRequest(
@@ -105,6 +106,8 @@ struct VoiceMemoListView: View {
                                     .foregroundColor(.textPrimary)
                                     .autocorrectionDisabled()
                                     .textInputAutocapitalization(.never)
+                                    .keyboardType(.asciiCapable)
+                                    .submitLabel(.search)
                                     .onTapGesture {
                                         isSearching = true
                                     }
@@ -121,11 +124,11 @@ struct VoiceMemoListView: View {
                             }
                             .padding(.horizontal, Spacing.sm)
                             .padding(.vertical, Spacing.xs)
-                            .background(Color.surfaceSecondary)
+                            .background(themeManager.colors.searchBackground)
                             .cornerRadius(CornerRadius.sm)
                             .overlay(
                                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                    .strokeBorder(themeManager.colors.tableBorder, lineWidth: 0.5)
                             )
 
                             if isSearching {
@@ -177,9 +180,9 @@ struct VoiceMemoListView: View {
                         .padding(.top, Spacing.xxl)
                     }
 
-                    // Bordered table container
+                    // Table with header
                     VStack(spacing: 0) {
-                        // Fixed table header (outside ScrollView)
+                        // Fixed table header
                         HStack {
                             Text("NAME")
                                 .font(.system(size: 10, weight: .medium))
@@ -197,55 +200,56 @@ struct VoiceMemoListView: View {
                         .padding(.vertical, 10)
                         .background(themeManager.colors.tableHeaderBackground)
 
-                        // Scrollable content
-                        ScrollView {
-                            LazyVStack(spacing: 0) {
-                                // Table rows
-                                ForEach(voiceMemos) { memo in
-                                    VStack(spacing: 0) {
-                                        // Row divider
-                                        Rectangle()
-                                            .fill(themeManager.colors.tableDivider)
-                                            .frame(height: 1)
-
-                                        VoiceMemoRow(
-                                            memo: memo,
-                                            audioPlayer: audioPlayer,
-                                            onDelete: { deleteMemo(memo) }
-                                        )
-                                        .background(themeManager.colors.tableCellBackground)
-                                    }
-                                }
-
-                                // Load More button
-                                if hasMore {
-                                    VStack(spacing: 0) {
-                                        Rectangle()
-                                            .fill(themeManager.colors.tableDivider)
-                                            .frame(height: 1)
-
-                                        Button(action: {
-                                            withAnimation(TalkieAnimation.spring) {
-                                                displayLimit += 10
-                                            }
-                                        }) {
-                                            HStack(spacing: Spacing.xs) {
-                                                Spacer()
-                                                Image(systemName: "arrow.down")
-                                                    .font(.system(size: 10, weight: .semibold))
-                                                Text("Load \(min(10, allVoiceMemos.count - displayLimit)) more")
-                                                    .font(.system(size: 13))
-                                                Spacer()
-                                            }
-                                            .foregroundColor(themeManager.colors.textSecondary)
-                                            .padding(.vertical, 14)
-                                        }
-                                        .background(themeManager.colors.tableCellBackground)
+                        // List with native swipe actions and pull-to-refresh
+                        List {
+                            ForEach(voiceMemos) { memo in
+                                VoiceMemoRow(
+                                    memo: memo,
+                                    audioPlayer: audioPlayer
+                                )
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(themeManager.colors.tableCellBackground)
+                                .listRowSeparatorTint(themeManager.colors.tableDivider)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        deleteMemo(memo)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash.fill")
                                     }
                                 }
                             }
+
+                            // Load More button
+                            if hasMore {
+                                Button(action: {
+                                    withAnimation(TalkieAnimation.spring) {
+                                        displayLimit += 10
+                                    }
+                                }) {
+                                    HStack(spacing: Spacing.xs) {
+                                        Spacer()
+                                        Image(systemName: "arrow.down")
+                                            .font(.system(size: 10, weight: .semibold))
+                                        Text("Load \(min(10, allVoiceMemos.count - displayLimit)) more")
+                                            .font(.system(size: 13))
+                                        Spacer()
+                                    }
+                                    .foregroundColor(themeManager.colors.textSecondary)
+                                    .padding(.vertical, 14)
+                                }
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(themeManager.colors.tableCellBackground)
+                                .listRowSeparatorTint(themeManager.colors.tableDivider)
+                            }
+                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .scrollDismissesKeyboard(.interactively)
+                        .refreshable {
+                            await refreshMemos()
                         }
                     }
+                    .background(themeManager.colors.tableCellBackground)
                     .cornerRadius(CornerRadius.sm)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
@@ -405,6 +409,45 @@ struct VoiceMemoListView: View {
         }
         .navigationViewStyle(.stack)
         .preferredColorScheme(themeManager.appearanceMode.colorScheme)
+        .onChange(of: deepLinkManager.pendingAction) { _, action in
+            handleDeepLinkAction(action)
+        }
+        .onAppear {
+            // Handle any pending deep link when view appears
+            if deepLinkManager.pendingAction != .none {
+                handleDeepLinkAction(deepLinkManager.pendingAction)
+            }
+        }
+    }
+
+    // MARK: - Deep Link Handling
+
+    private func handleDeepLinkAction(_ action: DeepLinkAction) {
+        switch action {
+        case .record:
+            showingRecordingView = true
+            deepLinkManager.clearAction()
+
+        case .openMemo(let id):
+            // TODO: Navigate to memo detail view
+            deepLinkManager.clearAction()
+
+        case .playLastMemo:
+            // Play the most recent memo
+            if let lastMemo = allVoiceMemos.first {
+                audioPlayer.play(memo: lastMemo)
+            }
+            deepLinkManager.clearAction()
+
+        case .search(let query):
+            // Set the search text to trigger filtering
+            searchText = query
+            isSearching = true
+            deepLinkManager.clearAction()
+
+        case .none:
+            break
+        }
     }
 
     // MARK: - Pull to Refresh
@@ -568,4 +611,5 @@ struct VoiceMemoListView: View {
 #Preview {
     VoiceMemoListView()
         .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+        .environmentObject(DeepLinkManager.shared)
 }

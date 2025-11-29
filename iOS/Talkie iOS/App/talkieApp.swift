@@ -14,6 +14,7 @@ struct talkieApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     let persistenceController = PersistenceController.shared
+    @ObservedObject private var deepLinkManager = DeepLinkManager.shared
 
     // MARK: - Background Task Identifiers
     static let refreshTaskIdentifier = "jdi.talkie-os.refresh"
@@ -27,6 +28,10 @@ struct talkieApp: App {
         WindowGroup {
             VoiceMemoListView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .environmentObject(deepLinkManager)
+                .onOpenURL { url in
+                    deepLinkManager.handle(url: url)
+                }
         }
     }
 

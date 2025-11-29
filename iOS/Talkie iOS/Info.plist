@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.jdi.talkie</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>talkie</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSSiriUsageDescription</key>
+	<string>Talkie uses Siri to let you record voice memos, play recordings, and search your memos hands-free.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

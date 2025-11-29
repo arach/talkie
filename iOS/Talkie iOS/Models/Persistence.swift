@@ -9,6 +9,7 @@ import CoreData
 import CloudKit
 #if os(iOS)
 import UIKit
+import WidgetKit
 #else
 import AppKit
 #endif
@@ -120,27 +121,55 @@ struct PersistenceController {
 
     /// Monitor CloudKit sync events to update cloudSyncedAt on memos
     private func setupCloudKitSyncMonitoring() {
+        let containerRef = container // Capture strong reference
+
         NotificationCenter.default.addObserver(
             forName: NSPersistentCloudKitContainer.eventChangedNotification,
             object: container,
             queue: .main
-        ) { [weak container] notification in
-            guard let container = container,
-                  let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else {
+        ) { notification in
+            guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else {
+                AppLogger.persistence.warning("☁️ CloudKit event notification received but no event in userInfo")
                 return
             }
 
-            // We care about successful export events (data pushed to CloudKit)
-            if event.type == .export && event.succeeded {
-                AppLogger.persistence.info("☁️ CloudKit export succeeded - marking recent memos as synced")
-                PersistenceController.markRecentMemosAsSynced(context: container.viewContext)
+            // Log all CloudKit events for debugging
+            let eventTypeName: String
+            switch event.type {
+            case .setup: eventTypeName = "setup"
+            case .import: eventTypeName = "import"
+            case .export: eventTypeName = "export"
+            @unknown default: eventTypeName = "unknown"
             }
 
-            // Log import events (data received from CloudKit)
-            if event.type == .import && event.succeeded {
-                AppLogger.persistence.info("📥 CloudKit import succeeded")
+            if let error = event.error {
+                AppLogger.persistence.error("☁️ CloudKit \(eventTypeName) FAILED: \(error.localizedDescription)")
+
+                // Check for specific CloudKit errors
+                if let ckError = error as? CKError {
+                    AppLogger.persistence.error("  CKError code: \(ckError.code.rawValue)")
+                    if ckError.code == .serverRecordChanged {
+                        AppLogger.persistence.error("  Server record changed - conflict detected")
+                    } else if ckError.code == .networkUnavailable || ckError.code == .networkFailure {
+                        AppLogger.persistence.error("  Network issue - will retry when connected")
+                    } else if ckError.code == .quotaExceeded {
+                        AppLogger.persistence.error("  iCloud quota exceeded!")
+                    }
+                }
+            } else if event.succeeded {
+                AppLogger.persistence.info("☁️ CloudKit \(eventTypeName) succeeded")
+
+                // We care about successful export events (data pushed to CloudKit)
+                if event.type == .export {
+                    AppLogger.persistence.info("☁️ Export succeeded - marking memos as synced")
+                    PersistenceController.markRecentMemosAsSynced(context: containerRef.viewContext)
+                }
+            } else {
+                AppLogger.persistence.info("☁️ CloudKit \(eventTypeName) in progress...")
             }
         }
+
+        AppLogger.persistence.info("☁️ CloudKit sync monitoring initialized")
     }
 
     /// Mark all memos without cloudSyncedAt as synced
@@ -175,6 +204,7 @@ struct PersistenceController {
         AppLogger.persistence.info("🔧 Build Configuration: DEBUG (uses CloudKit Development environment)")
         #else
         AppLogger.persistence.info("🚀 Build Configuration: RELEASE (uses CloudKit Production environment)")
+        AppLogger.persistence.info("⚠️ Ensure CloudKit schema is deployed to Production via CloudKit Dashboard!")
         #endif
 
         container.accountStatus { status, error in
@@ -282,8 +312,48 @@ struct PersistenceController {
             if memos.count > 3 {
                 AppLogger.persistence.info("  ... and \(memos.count - 3) more")
             }
+
+            // Update widget with memo count
+            #if os(iOS)
+            updateWidgetMemoCount(memos.count)
+            #endif
         } catch {
             AppLogger.persistence.error("❌ Failed to fetch memos: \(error.localizedDescription)")
         }
     }
+
+    // MARK: - Widget Support
+
+    #if os(iOS)
+    /// App Group identifier for sharing data with widgets
+    static let appGroupIdentifier = "group.com.jdi.talkie"
+
+    /// Update the widget with the current memo count
+    static func updateWidgetMemoCount(_ count: Int) {
+        guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
+            AppLogger.persistence.warning("⚠️ Could not access App Group UserDefaults")
+            return
+        }
+
+        defaults.set(count, forKey: "memoCount")
+        defaults.set(Date(), forKey: "lastUpdated")
+
+        // Tell WidgetKit to refresh
+        WidgetCenter.shared.reloadAllTimelines()
+        AppLogger.persistence.info("📱 Widget updated with memo count: \(count)")
+    }
+
+    /// Call this when memos are added/deleted to update widget
+    static func refreshWidgetData(context: NSManagedObjectContext) {
+        context.perform {
+            let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            do {
+                let count = try context.count(for: fetchRequest)
+                updateWidgetMemoCount(count)
+            } catch {
+                AppLogger.persistence.error("❌ Failed to get memo count for widget: \(error.localizedDescription)")
+            }
+        }
+    }
+    #endif
 }
