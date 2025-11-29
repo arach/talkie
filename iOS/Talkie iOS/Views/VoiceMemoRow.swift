@@ -10,7 +10,6 @@ import SwiftUI
 struct VoiceMemoRow: View {
     @ObservedObject var memo: VoiceMemo
     @ObservedObject var audioPlayer: AudioPlayerManager
-    let onDelete: () -> Void
 
     @State private var showingDetail = false
 
@@ -68,16 +67,22 @@ struct VoiceMemoRow: View {
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.textSecondary)
 
-                    // Status badges
+                    // Status badges - matches widget design
                     HStack(spacing: 6) {
                         if memo.isTranscribing {
                             Text("...")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.orange)
-                        } else if memo.transcription != nil {
+                        } else if memo.transcription != nil && !memo.transcription!.isEmpty {
                             Text("TXT")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.green)
+                        }
+
+                        if memo.summary != nil && !memo.summary!.isEmpty {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.purple)
                         }
 
                         if memo.cloudSyncedAt != nil {
@@ -95,12 +100,6 @@ struct VoiceMemoRow: View {
         .buttonStyle(PlainButtonStyle())
         .sheet(isPresented: $showingDetail) {
             VoiceMemoDetailView(memo: memo, audioPlayer: audioPlayer)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive, action: onDelete) {
-                Label("Delete", systemImage: "trash.fill")
-            }
-            .tint(.red)
         }
     }
 
