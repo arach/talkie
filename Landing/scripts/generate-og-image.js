@@ -36,10 +36,10 @@ const html = `
       opacity: 0.6;
     }
     .corner { position: absolute; width: 20px; height: 20px; }
-    .corner-tl { top: 32px; left: 32px; border-top: 2px solid #22c55e; border-left: 2px solid #22c55e; }
-    .corner-tr { top: 32px; right: 32px; border-top: 2px solid #22c55e; border-right: 2px solid #22c55e; }
-    .corner-bl { bottom: 32px; left: 32px; border-bottom: 2px solid #22c55e; border-left: 2px solid #22c55e; }
-    .corner-br { bottom: 32px; right: 32px; border-bottom: 2px solid #22c55e; border-right: 2px solid #22c55e; }
+    .corner-tl { top: 32px; left: 32px; border-top: 2px solid #52525b; border-left: 2px solid #52525b; }
+    .corner-tr { top: 32px; right: 32px; border-top: 2px solid #52525b; border-right: 2px solid #52525b; }
+    .corner-bl { bottom: 32px; left: 32px; border-bottom: 2px solid #52525b; border-left: 2px solid #52525b; }
+    .corner-br { bottom: 32px; right: 32px; border-bottom: 2px solid #52525b; border-right: 2px solid #52525b; }
     .content {
       display: flex;
       flex-direction: column;
@@ -85,14 +85,45 @@ const html = `
     h1 .plus {
       color: #52525b;
     }
+    h1 .ai {
+      color: #22c55e;
+    }
     .tagline {
-      font-size: 22px;
+      font-size: 15px;
       color: #a1a1aa;
-      margin-top: 32px;
-      font-family: 'Inter', sans-serif;
+      margin-top: 36px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      max-width: 900px;
+      line-height: 1.8;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .tagline .sep {
+      color: #3f3f46;
+      margin: 0 8px;
+    }
+    .tagline-sub {
+      font-size: 13px;
+      color: #71717a;
+      margin-top: 16px;
+      font-family: 'JetBrains Mono', monospace;
       font-weight: 400;
-      max-width: 700px;
-      line-height: 1.6;
+      letter-spacing: 0.08em;
+    }
+    .tagline-sub .highlight {
+      color: #a1a1aa;
+    }
+    .lock-icon {
+      width: 14px;
+      height: 14px;
+      vertical-align: middle;
+      margin-right: 6px;
+      color: #71717a;
+    }
+    .lock-icon.lock-right {
+      margin-right: 0;
+      margin-left: 6px;
     }
     .badge {
       position: absolute;
@@ -140,8 +171,9 @@ const html = `
         <div class="hero-badge-dot"></div>
         <span class="hero-badge-text">Native on iOS & macOS</span>
       </div>
-      <h1>VOICE MEMOS<br/><span class="plus">+</span> AI.</h1>
-      <p class="tagline">Capture on iPhone. Process on Mac.<br/>Synced through your encrypted iCloud.</p>
+      <h1>VOICE MEMOS<br/><span class="plus">+</span> <span class="ai">AI.</span></h1>
+      <p class="tagline">Capture on iPhone <span class="sep">|</span> Process on Mac</p>
+      <p class="tagline-sub"><svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg> synced via <span class="highlight">your</span> iCloud <svg class="lock-icon lock-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></p>
     </div>
     <div class="bottom">
       <span style="letter-spacing: 0.1em;">iOS + macOS</span>
