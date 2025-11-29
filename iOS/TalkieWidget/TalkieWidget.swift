@@ -40,8 +40,8 @@ struct Provider: TimelineProvider {
             recentMemos: getRecentMemos(),
             appearance: getAppearance()
         )
-        // Refresh every 15 minutes
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date())!
+        // Refresh every 30 minutes for status updates
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date())!
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
     }
@@ -438,6 +438,25 @@ struct MemoRowView: View {
                 .lineLimit(1)
 
             Spacer(minLength: 4)
+
+            // Status indicators
+            HStack(spacing: 3) {
+                if memo.hasTranscription {
+                    Text("TXT")
+                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                        .foregroundColor(.green.opacity(0.8))
+                }
+                if memo.hasAIProcessing {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundColor(.purple.opacity(0.8))
+                }
+                if memo.isSynced {
+                    Image(systemName: "checkmark.icloud")
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundColor(colors.secondaryForeground)
+                }
+            }
 
             // Duration
             Text(formatDuration(memo.duration))
