@@ -393,7 +393,7 @@ struct LargeWidgetView: View {
                             }
                             Spacer()
                         } else {
-                            ForEach(recentMemos.prefix(8)) { memo in
+                            ForEach(recentMemos.prefix(10)) { memo in
                                 Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
                                     MemoRowView(memo: memo, colors: colors)
                                 }
@@ -403,61 +403,47 @@ struct LargeWidgetView: View {
                     }
                     .padding(.horizontal, 14)
 
-                    // Quick actions row
-                    HStack(spacing: 16) {
+                    // Bottom bar: Search | Record | Settings
+                    HStack {
+                        // Search - left
                         Link(destination: URL(string: "talkie://search")!) {
-                            VStack(spacing: 2) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("Search")
-                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                            }
-                            .foregroundColor(colors.secondaryForeground)
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(colors.secondaryForeground)
+                                .frame(width: 44, height: 44)
                         }
 
-                        Link(destination: URL(string: "talkie://memos")!) {
-                            VStack(spacing: 2) {
-                                Image(systemName: "list.bullet")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("All")
-                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        Spacer()
+
+                        // Red record button - center
+                        Link(destination: URL(string: "talkie://record")!) {
+                            ZStack {
+                                Circle()
+                                    .strokeBorder(Color.red.opacity(0.8), lineWidth: 2)
+                                    .frame(width: 44, height: 44)
+
+                                Circle()
+                                    .fill(Color.red.opacity(0.2))
+                                    .frame(width: 36, height: 36)
+
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.red)
                             }
-                            .foregroundColor(colors.secondaryForeground)
                         }
 
+                        Spacer()
+
+                        // Settings - right
                         Link(destination: URL(string: "talkie://settings")!) {
-                            VStack(spacing: 2) {
-                                Image(systemName: "gearshape")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("Settings")
-                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                            }
-                            .foregroundColor(colors.secondaryForeground)
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(colors.secondaryForeground)
+                                .frame(width: 44, height: 44)
                         }
                     }
-                    .padding(.top, 6)
-
-                    // Red record button
-                    Link(destination: URL(string: "talkie://record")!) {
-                        ZStack {
-                            // Outer ring
-                            Circle()
-                                .strokeBorder(Color.red.opacity(0.8), lineWidth: 2)
-                                .frame(width: 48, height: 48)
-
-                            // Inner filled circle
-                            Circle()
-                                .fill(Color.red.opacity(0.2))
-                                .frame(width: 40, height: 40)
-
-                            // Mic icon
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundColor(.red)
-                        }
-                    }
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
                 }
             }
         }
