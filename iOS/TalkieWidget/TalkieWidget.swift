@@ -458,7 +458,7 @@ struct MemoRowView: View {
     let colors: WidgetColors
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             // Line 1: Title (left) | Duration (right)
             HStack {
                 Text(memo.title)
@@ -477,9 +477,9 @@ struct MemoRowView: View {
             HStack {
                 HStack(spacing: 0) {
                     Text(formatTime(memo.createdAt))
-                    Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                    Text(" | ").foregroundColor(colors.tertiaryForeground.opacity(0.8))
                     Text(formatFileSize(memo.fileSize))
-                    Text("  |  ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                    Text(" | ").foregroundColor(colors.tertiaryForeground.opacity(0.8))
                     Text(memo.audioFormat)
                 }
                 .font(.system(size: 8))
@@ -492,22 +492,22 @@ struct MemoRowView: View {
                     if memo.hasTranscription {
                         Text("TXT")
                             .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(.green)
+                            .foregroundColor(.green.opacity(0.7))
                     }
                     if memo.isSynced {
                         Image(systemName: "checkmark.icloud.fill")
                             .font(.system(size: 9))
-                            .foregroundColor(.green)
+                            .foregroundColor(.green.opacity(0.7))
                     }
                     if memo.hasAIProcessing {
                         Image(systemName: "sparkles")
                             .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(.purple)
+                            .foregroundColor(.purple.opacity(0.7))
                     }
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
