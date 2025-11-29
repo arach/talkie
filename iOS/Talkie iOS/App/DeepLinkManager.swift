@@ -14,6 +14,9 @@ enum DeepLinkAction: Equatable {
     case openMemo(id: UUID)
     case playLastMemo
     case search(query: String)
+    case openSearch      // Just open search UI
+    case openAllMemos    // Open main memo list
+    case openSettings    // Open settings view
 }
 
 class DeepLinkManager: ObservableObject {
@@ -46,11 +49,22 @@ class DeepLinkManager: ObservableObject {
             pendingAction = .playLastMemo
 
         case "search":
-            // Handle talkie://search?q=<query>
+            // Handle talkie://search or talkie://search?q=<query>
             if let query = components?.queryItems?.first(where: { $0.name == "q" })?.value {
                 AppLogger.app.info("Deep link: search for '\(query)'")
                 pendingAction = .search(query: query)
+            } else {
+                AppLogger.app.info("Deep link: open search")
+                pendingAction = .openSearch
             }
+
+        case "memos":
+            AppLogger.app.info("Deep link: open all memos")
+            pendingAction = .openAllMemos
+
+        case "settings":
+            AppLogger.app.info("Deep link: open settings")
+            pendingAction = .openSettings
 
         default:
             AppLogger.app.warning("Unknown deep link: \(url.absoluteString)")

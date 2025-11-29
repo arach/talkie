@@ -362,23 +362,17 @@ struct LargeWidgetView: View {
                 CornerAccents(color: colors.accent)
 
                 VStack(spacing: 0) {
-                    // Top header - TALKIE centered with memo count
+                    // Top - memo count (Home app style)
                     HStack {
                         Spacer()
-                        Text("TALKIE")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(colors.foreground.opacity(0.9))
-                            .tracking(2)
-                        Text("·")
+                        Text("\(memoCount) MEMOS")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
                             .foregroundColor(colors.tertiaryForeground)
-                            .padding(.horizontal, 4)
-                        Text("\(memoCount)")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(colors.tertiaryForeground)
-                        Spacer()
+                            .tracking(1)
                     }
-                    .padding(.top, 12)
-                    .padding(.bottom, 6)
+                    .padding(.top, 10)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 4)
 
                     // Memos list - table style
                     VStack(alignment: .leading, spacing: 0) {
@@ -408,27 +402,68 @@ struct LargeWidgetView: View {
                     }
                     .padding(.horizontal, 14)
 
-                    // Bottom record button - app style
+                    // Quick actions row
+                    HStack(spacing: 16) {
+                        Link(destination: URL(string: "talkie://search")!) {
+                            VStack(spacing: 2) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("Search")
+                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            }
+                            .foregroundColor(colors.secondaryForeground)
+                        }
+
+                        Link(destination: URL(string: "talkie://memos")!) {
+                            VStack(spacing: 2) {
+                                Image(systemName: "list.bullet")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("All")
+                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            }
+                            .foregroundColor(colors.secondaryForeground)
+                        }
+
+                        Link(destination: URL(string: "talkie://settings")!) {
+                            VStack(spacing: 2) {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("Settings")
+                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            }
+                            .foregroundColor(colors.secondaryForeground)
+                        }
+                    }
+                    .padding(.top, 6)
+
+                    // Red record button
                     Link(destination: URL(string: "talkie://record")!) {
                         ZStack {
                             // Outer ring
                             Circle()
-                                .strokeBorder(colors.foreground.opacity(0.6), lineWidth: 2)
-                                .frame(width: 52, height: 52)
+                                .strokeBorder(Color.red.opacity(0.8), lineWidth: 2)
+                                .frame(width: 48, height: 48)
 
                             // Inner filled circle
                             Circle()
-                                .fill(colors.foreground.opacity(0.15))
-                                .frame(width: 44, height: 44)
+                                .fill(Color.red.opacity(0.2))
+                                .frame(width: 40, height: 40)
 
                             // Mic icon
                             Image(systemName: "mic.fill")
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(colors.foreground)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.red)
                         }
                     }
                     .padding(.top, 8)
-                    .padding(.bottom, 14)
+
+                    // TALKIE title at bottom
+                    Text("TALKIE")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(colors.foreground.opacity(0.9))
+                        .tracking(2)
+                        .padding(.top, 4)
+                        .padding(.bottom, 10)
                 }
             }
         }

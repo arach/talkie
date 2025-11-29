@@ -466,6 +466,21 @@ struct VoiceMemoListView: View {
             isSearching = true
             deepLinkManager.clearAction()
 
+        case .openSearch:
+            // Just activate search mode
+            isSearching = true
+            deepLinkManager.clearAction()
+
+        case .openAllMemos:
+            // Already on memo list, just clear search
+            searchText = ""
+            isSearching = false
+            deepLinkManager.clearAction()
+
+        case .openSettings:
+            showingSettings = true
+            deepLinkManager.clearAction()
+
         case .none:
             break
         }
