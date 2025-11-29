@@ -146,6 +146,8 @@ struct TalkieWidgetEntryView: View {
             SmallWidgetView(memoCount: entry.memoCount, colors: colors)
         case .systemMedium:
             MediumWidgetView(memoCount: entry.memoCount, recentMemos: entry.recentMemos, colors: colors)
+        case .systemLarge:
+            LargeWidgetView(memoCount: entry.memoCount, recentMemos: entry.recentMemos, colors: colors)
         case .accessoryCircular:
             CircularWidgetView()
         case .accessoryRectangular:
@@ -315,6 +317,112 @@ struct MediumWidgetView: View {
     }
 }
 
+// MARK: - Large Widget - More memos with bigger record button
+
+struct LargeWidgetView: View {
+    let memoCount: Int
+    let recentMemos: [MemoSnapshot]
+    let colors: WidgetColors
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Background
+                colors.background
+
+                // Corner accents
+                CornerAccents(color: colors.accent)
+
+                VStack(spacing: 0) {
+                    // Top section - Record button
+                    Link(destination: URL(string: "talkie://record")!) {
+                        HStack {
+                            ZStack {
+                                Circle()
+                                    .fill(colors.foreground.opacity(0.1))
+                                    .frame(width: 56, height: 56)
+
+                                Circle()
+                                    .stroke(colors.secondaryForeground, lineWidth: 1)
+                                    .frame(width: 56, height: 56)
+
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 24, weight: .medium))
+                                    .foregroundColor(colors.foreground)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("RECORD")
+                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(colors.foreground)
+                                    .tracking(2)
+
+                                Text("Tap to start")
+                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                    .foregroundColor(colors.tertiaryForeground)
+                            }
+                            .padding(.leading, 12)
+
+                            Spacer()
+
+                            Text("\(memoCount)")
+                                .font(.system(size: 24, weight: .light, design: .monospaced))
+                                .foregroundColor(colors.tertiaryForeground)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+
+                    // Divider
+                    Rectangle()
+                        .fill(colors.tertiaryForeground)
+                        .frame(height: 1)
+                        .padding(.horizontal, 12)
+
+                    // Memos list
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text("TALKIE")
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundColor(colors.secondaryForeground)
+                                .tracking(1.5)
+                            Spacer()
+                        }
+                        .padding(.top, 10)
+                        .padding(.bottom, 4)
+
+                        if recentMemos.isEmpty {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                VStack(spacing: 6) {
+                                    Image(systemName: "waveform")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(colors.tertiaryForeground)
+                                    Text("No memos yet")
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .foregroundColor(colors.tertiaryForeground)
+                                }
+                                Spacer()
+                            }
+                            Spacer()
+                        } else {
+                            ForEach(recentMemos.prefix(6)) { memo in
+                                Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
+                                    MemoRowView(memo: memo, colors: colors)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Memo Row
 
 struct MemoRowView: View {
@@ -441,6 +549,7 @@ struct TalkieWidget: Widget {
         .supportedFamilies([
             .systemSmall,
             .systemMedium,
+            .systemLarge,
             .accessoryCircular,
             .accessoryRectangular
         ])
@@ -463,5 +572,18 @@ struct TalkieWidget: Widget {
         MemoSnapshot(id: "1", title: "Meeting notes", duration: 145, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date()),
         MemoSnapshot(id: "2", title: "Idea for app", duration: 32, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date()),
         MemoSnapshot(id: "3", title: "Quick reminder", duration: 8, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date())
+    ], appearance: .dark)
+}
+
+#Preview(as: .systemLarge) {
+    TalkieWidget()
+} timeline: {
+    TalkieEntry(date: .now, memoCount: 12, recentMemos: [
+        MemoSnapshot(id: "1", title: "Meeting notes", duration: 145, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date()),
+        MemoSnapshot(id: "2", title: "Idea for app", duration: 32, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date()),
+        MemoSnapshot(id: "3", title: "Quick reminder", duration: 8, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date()),
+        MemoSnapshot(id: "4", title: "Project brainstorm", duration: 312, hasTranscription: true, hasAIProcessing: true, isSynced: true, createdAt: Date()),
+        MemoSnapshot(id: "5", title: "Grocery list", duration: 18, hasTranscription: true, hasAIProcessing: false, isSynced: true, createdAt: Date()),
+        MemoSnapshot(id: "6", title: "Voice note 11/29", duration: 67, hasTranscription: false, hasAIProcessing: false, isSynced: false, createdAt: Date())
     ], appearance: .dark)
 }
