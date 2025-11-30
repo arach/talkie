@@ -168,6 +168,11 @@ struct TalkieWidgetEntryView: View {
         WidgetColors.forScheme(isDark)
     }
 
+    /// Background color for container - used by widget configuration
+    var backgroundColor: Color {
+        colors.background
+    }
+
     var body: some View {
         switch family {
         case .systemSmall:
@@ -627,7 +632,9 @@ struct TalkieWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             TalkieWidgetEntryView(entry: entry)
-                .containerBackground(.clear, for: .widget)
+                .containerBackground(for: .widget) {
+                    ContainerBackgroundView(appearance: entry.appearance)
+                }
         }
         .configurationDisplayName("Talkie")
         .description("Quick access to record voice memos")
@@ -638,6 +645,24 @@ struct TalkieWidget: Widget {
             .accessoryCircular,
             .accessoryRectangular
         ])
+    }
+}
+
+/// Separate view for container background to properly access colorScheme
+private struct ContainerBackgroundView: View {
+    let appearance: WidgetAppearance
+    @Environment(\.colorScheme) var systemColorScheme
+
+    var isDark: Bool {
+        switch appearance {
+        case .system: return systemColorScheme == .dark
+        case .dark: return true
+        case .light: return false
+        }
+    }
+
+    var body: some View {
+        WidgetColors.forScheme(isDark).background
     }
 }
 
