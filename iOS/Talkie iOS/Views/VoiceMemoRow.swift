@@ -70,19 +70,22 @@ struct VoiceMemoRow: View {
                     // Status badges - TXT → CLOUD → SPARKLES
                     HStack(spacing: 6) {
                         if memo.isTranscribing {
-                            Text("...")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.orange)
+                            ZStack {
+                                PulsingDot(color: .textTertiary, size: 4)
+                            }
+                            .frame(width: 22, height: 12) // Match TXT label size
                         } else if memo.transcription != nil && !memo.transcription!.isEmpty {
                             Text("TXT")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.green)
                         }
 
-                        if memo.cloudSyncedAt != nil {
-                            Image(systemName: "checkmark.icloud.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(.green)
+                        if memo.cloudSyncedAt == nil && memo.audioData != nil {
+                            // Uploading to cloud
+                            CloudSyncIndicator(isSynced: false)
+                        } else if memo.cloudSyncedAt != nil {
+                            // Synced
+                            CloudSyncIndicator(isSynced: true)
                         }
 
                         if memo.summary != nil && !memo.summary!.isEmpty {
@@ -93,7 +96,7 @@ struct VoiceMemoRow: View {
                     }
                 }
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
             .padding(.horizontal, 16)
             .contentShape(Rectangle())
         }
@@ -136,6 +139,159 @@ struct VoiceMemoRow: View {
         } else {
             let kb = Double(bytes) / 1024
             return String(format: "%.0f KB", kb)
+        }
+    }
+}
+
+// MARK: - Pulsing Dot Indicator
+
+/// A single dot that pulses smoothly for processing states
+struct PulsingDot: View {
+    let color: Color
+    var size: CGFloat = 8
+
+    @State private var isPulsing = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .scaleEffect(isPulsing ? 1.2 : 0.8)
+                .opacity(isPulsing ? 1.0 : 0.5)
+        }
+        .frame(width: size, height: size)
+        .animation(
+            Animation.easeInOut(duration: 1.2)
+                .repeatForever(autoreverses: true),
+            value: isPulsing
+        )
+        .onAppear {
+            isPulsing = true
+        }
+    }
+}
+
+// MARK: - Cloud Sync Indicator
+
+/// Cloud icon - same shape for both states, just different fill
+struct CloudSyncIndicator: View {
+    let isSynced: Bool
+
+    var body: some View {
+        Image(systemName: isSynced ? "checkmark.icloud.fill" : "arrow.up.icloud.fill")
+            .font(.system(size: 11))
+            .foregroundColor(isSynced ? .green : .textTertiary)
+    }
+}
+
+/// Animated braille-style dots over cloud for upload state
+struct CloudSyncBraille: View {
+    @State private var dotIndex = 0
+
+    // Braille patterns that look like dots moving upward
+    private let patterns = ["⠁", "⠂", "⠄", "⠠", "⠐", "⠈"]
+
+    var body: some View {
+        ZStack {
+            // Base cloud
+            Image(systemName: "icloud.fill")
+                .font(.system(size: 11))
+                .foregroundColor(.textTertiary.opacity(0.5))
+
+            // Animated braille dot
+            Text(patterns[dotIndex])
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(.textTertiary)
+                .offset(y: -1)
+        }
+        .onAppear {
+            Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
+                dotIndex = (dotIndex + 1) % patterns.count
+            }
+        }
+    }
+}
+
+// MARK: - Debug Combined Status Row
+
+/// Shows TXT and SYNC side by side with different timing
+/// TXT: 2.5s processing -> done, SYNC: 1.5s uploading -> done
+struct CombinedStatusRow: View {
+    @State private var txtDone = false
+    @State private var syncDone = false
+    @State private var cycleTimer: Timer?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // TXT indicator
+            ZStack {
+                if txtDone {
+                    Text("TXT")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.green)
+                } else {
+                    PulsingDot(color: .textTertiary, size: 4)
+                }
+            }
+            .frame(width: 24, height: 12)
+            .animation(.easeInOut(duration: 0.2), value: txtDone)
+
+            // SYNC indicator
+            ZStack {
+                if syncDone {
+                    Image(systemName: "checkmark.icloud.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.green)
+                } else {
+                    Image(systemName: "icloud.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.textTertiary)
+                }
+            }
+            .frame(width: 16, height: 12)
+            .animation(.easeInOut(duration: 0.2), value: syncDone)
+
+            Spacer()
+        }
+        .onAppear {
+            startCycle()
+        }
+        .onDisappear {
+            cycleTimer?.invalidate()
+        }
+    }
+
+    private func startCycle() {
+        // Reset to processing state
+        txtDone = false
+        syncDone = false
+
+        // SYNC completes first at 1.5s
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            syncDone = true
+        }
+
+        // TXT completes at 2.5s
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            txtDone = true
+        }
+
+        // Restart cycle after showing done state for 1.5s
+        cycleTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { _ in
+            // Reset
+            txtDone = false
+            syncDone = false
+
+            // SYNC completes first
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                syncDone = true
+            }
+
+            // TXT completes after
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                txtDone = true
+            }
         }
     }
 }

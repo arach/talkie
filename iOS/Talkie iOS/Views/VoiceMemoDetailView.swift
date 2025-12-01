@@ -201,12 +201,11 @@ struct VoiceMemoDetailView: View {
 
                         // Transcription section
                         if memo.isTranscribing {
-                            HStack(spacing: Spacing.xs) {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("PROCESSING TRANSCRIPT...")
+                            HStack(spacing: Spacing.sm) {
+                                PulsingDot(color: .transcribing, size: 10)
+                                Text("TRANSCRIBING")
                                     .font(.techLabel)
-                                    .tracking(1)
+                                    .tracking(2)
                                     .foregroundColor(.transcribing)
                             }
                             .padding(Spacing.md)

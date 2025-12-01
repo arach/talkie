@@ -65,6 +65,7 @@ struct VoiceMemoListView: View {
     @State private var deepLinkMemo: VoiceMemo? = nil
     @State private var scrollToActivity: Bool = false
 
+
     private var filteredMemos: [VoiceMemo] {
         if searchText.isEmpty {
             return Array(allVoiceMemos)

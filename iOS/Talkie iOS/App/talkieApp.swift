@@ -33,30 +33,36 @@ struct talkieApp: App {
 
     var body: some Scene {
         WindowGroup {
-            VoiceMemoListView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                .environmentObject(deepLinkManager)
-                .onOpenURL { url in
-                    deepLinkManager.handle(url: url)
-                }
-                .onAppear {
-                    // Show onboarding on first launch
-                    if !hasSeenOnboarding {
+            ZStack {
+                VoiceMemoListView()
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                    .environmentObject(deepLinkManager)
+                    .onOpenURL { url in
+                        deepLinkManager.handle(url: url)
+                    }
+                    .onAppear {
+                        // Show onboarding on first launch
+                        if !hasSeenOnboarding {
+                            showOnboarding = true
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
                         showOnboarding = true
                     }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
-                    showOnboarding = true
-                }
-                .fullScreenCover(isPresented: $showOnboarding) {
-                    OnboardingView(
-                        hasSeenOnboarding: $hasSeenOnboarding,
-                        onStartRecording: {
-                            // Trigger recording via deep link manager
-                            deepLinkManager.pendingAction = .record
-                        }
-                    )
-                }
+                    .fullScreenCover(isPresented: $showOnboarding) {
+                        OnboardingView(
+                            hasSeenOnboarding: $hasSeenOnboarding,
+                            onStartRecording: {
+                                // Trigger recording via deep link manager
+                                deepLinkManager.pendingAction = .record
+                            }
+                        )
+                    }
+
+                #if DEBUG
+                DebugToolbarOverlay()
+                #endif
+            }
         }
     }
 
