@@ -68,16 +68,17 @@ class CloudKitSyncManager: ObservableObject {
         ) { [weak self] notification in
             guard let self = self else { return }
 
-            // Check if there are actual changes worth syncing
-            let hasRealChanges = self.checkForRealChanges(notification: notification)
+            // Dispatch to main actor for Swift 6 compatibility
+            Task { @MainActor in
+                // Check if there are actual changes worth syncing
+                let hasRealChanges = self.checkForRealChanges(notification: notification)
 
-            #if DEBUG
-            self.logRemoteChangeNotification(notification, hasRealChanges: hasRealChanges)
-            #endif
+                #if DEBUG
+                self.logRemoteChangeNotification(notification, hasRealChanges: hasRealChanges)
+                #endif
 
-            // Only schedule sync if there are real data changes
-            if hasRealChanges {
-                Task { @MainActor in
+                // Only schedule sync if there are real data changes
+                if hasRealChanges {
                     self.scheduleDebounceSync()
                 }
             }

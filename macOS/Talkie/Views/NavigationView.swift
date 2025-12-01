@@ -1480,13 +1480,8 @@ struct ActivityInspectorPanel: View {
 
                 Spacer()
 
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(SettingsManager.shared.fontSMMedium)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Close inspector")
+                CloseButton(action: onClose)
+                    .help("Close inspector")
             }
             .padding(12)
             .background(Color(NSColor.controlBackgroundColor))
@@ -3114,13 +3109,8 @@ struct MemoInspectorPanel: View {
 
                 Spacer()
 
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
-                }
-                .buttonStyle(.plain)
-                .help("Close inspector (Esc)")
+                CloseButton(action: onClose)
+                    .help("Close inspector (Esc)")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -3134,5 +3124,45 @@ struct MemoInspectorPanel: View {
             MemoDetailView(memo: memo, showHeader: false)
         }
         .background(SettingsManager.shared.tacticalBackground)
+    }
+}
+
+// MARK: - Close Button
+
+/// Reusable close button with extended hit target and hover highlight
+struct CloseButton: View {
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 0) {
+                // Extended hit area to the left (invisible)
+                Color.clear
+                    .frame(width: 16)
+
+                // Visual button area with highlight
+                Image(systemName: "xmark")
+                    .font(SettingsManager.shared.fontSM)
+                    .foregroundColor(isHovering
+                        ? SettingsManager.shared.tacticalForeground
+                        : SettingsManager.shared.tacticalForegroundSecondary)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(isHovering
+                                ? SettingsManager.shared.tacticalForegroundMuted.opacity(0.15)
+                                : Color.clear)
+                    )
+            }
+            .frame(height: 28)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isHovering = hovering
+            }
+        }
     }
 }

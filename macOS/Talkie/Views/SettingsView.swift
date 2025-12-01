@@ -437,6 +437,7 @@ struct AppearanceSettingsView: View {
                             }
                         }
                         .toggleStyle(.switch)
+                        .tint(settingsManager.resolvedAccentColor)
                         .controlSize(.mini)
                     }
                     .padding(10)
@@ -1885,7 +1886,8 @@ struct OutputSettingsView: View {
 
 struct QuickActionsSettingsView: View {
     @ObservedObject private var workflowManager = WorkflowManager.shared
-    @State private var pinnedWorkflowIDs: Set<UUID> = QuickActionsConfig.pinnedWorkflowIDs
+    @State private var selectedWorkflow: WorkflowDefinition?
+    @State private var showingWorkflowEditor = false
 
     var body: some View {
         ScrollView {
@@ -1897,7 +1899,7 @@ struct QuickActionsSettingsView: View {
                         .tracking(1)
                         .foregroundColor(.secondary)
 
-                    Text("Pin workflows to show them as quick actions when viewing a memo.")
+                    Text("Pin workflows to show them as quick actions when viewing a memo. Pinned workflows sync to iOS via iCloud.")
                         .font(SettingsManager.shared.fontSM)
                         .foregroundColor(.secondary)
                 }
@@ -1924,7 +1926,7 @@ struct QuickActionsSettingsView: View {
                     } else {
                         VStack(spacing: 4) {
                             ForEach(pinnedWorkflows) { workflow in
-                                workflowRow(workflow, isPinned: true)
+                                workflowRow(workflow)
                             }
                         }
                     }
@@ -1954,7 +1956,7 @@ struct QuickActionsSettingsView: View {
                     } else {
                         VStack(spacing: 4) {
                             ForEach(unpinnedWorkflows) { workflow in
-                                workflowRow(workflow, isPinned: false)
+                                workflowRow(workflow)
                             }
                         }
                     }
@@ -1966,18 +1968,34 @@ struct QuickActionsSettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(NSColor.textBackgroundColor))
+        .sheet(isPresented: $showingWorkflowEditor) {
+            if let workflow = selectedWorkflow {
+                WorkflowEditorSheet(
+                    workflow: workflow,
+                    isNew: false,
+                    onSave: { updatedWorkflow in
+                        workflowManager.updateWorkflow(updatedWorkflow)
+                        showingWorkflowEditor = false
+                    },
+                    onCancel: {
+                        showingWorkflowEditor = false
+                    }
+                )
+                .frame(minWidth: 600, minHeight: 500)
+            }
+        }
     }
 
     private var pinnedWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows.filter { pinnedWorkflowIDs.contains($0.id) }
+        workflowManager.workflows.filter { $0.isPinned }
     }
 
     private var unpinnedWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows.filter { !pinnedWorkflowIDs.contains($0.id) }
+        workflowManager.workflows.filter { !$0.isPinned }
     }
 
     @ViewBuilder
-    private func workflowRow(_ workflow: WorkflowDefinition, isPinned: Bool) -> some View {
+    private func workflowRow(_ workflow: WorkflowDefinition) -> some View {
         HStack(spacing: 12) {
             // Icon
             Image(systemName: workflow.icon)
@@ -1999,48 +2017,39 @@ struct QuickActionsSettingsView: View {
 
             Spacer()
 
-            // Pin/unpin button
-            Button(action: { togglePin(workflow) }) {
-                Image(systemName: isPinned ? "pin.fill" : "pin")
+            // Edit button
+            Button(action: { editWorkflow(workflow) }) {
+                Image(systemName: "pencil")
                     .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(isPinned ? .orange : .secondary)
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help(isPinned ? "Unpin from quick actions" : "Pin to quick actions")
+            .help("Edit workflow")
+
+            // Pin/unpin button
+            Button(action: { togglePin(workflow) }) {
+                Image(systemName: workflow.isPinned ? "pin.fill" : "pin")
+                    .font(SettingsManager.shared.fontSM)
+                    .foregroundColor(workflow.isPinned ? .orange : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help(workflow.isPinned ? "Unpin from quick actions" : "Pin to quick actions")
         }
         .padding(10)
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(8)
     }
 
-    private func togglePin(_ workflow: WorkflowDefinition) {
-        if pinnedWorkflowIDs.contains(workflow.id) {
-            pinnedWorkflowIDs.remove(workflow.id)
-        } else {
-            pinnedWorkflowIDs.insert(workflow.id)
-        }
-        QuickActionsConfig.pinnedWorkflowIDs = pinnedWorkflowIDs
+    private func editWorkflow(_ workflow: WorkflowDefinition) {
+        selectedWorkflow = workflow
+        showingWorkflowEditor = true
     }
-}
 
-// MARK: - Quick Actions Configuration
-
-enum QuickActionsConfig {
-    private static let pinnedKey = "TalkiePinnedWorkflowIDs"
-
-    static var pinnedWorkflowIDs: Set<UUID> {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: pinnedKey),
-                  let ids = try? JSONDecoder().decode(Set<UUID>.self, from: data) else {
-                return []
-            }
-            return ids
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: pinnedKey)
-            }
-        }
+    private func togglePin(_ workflow: WorkflowDefinition) {
+        var updated = workflow
+        updated.isPinned.toggle()
+        updated.modifiedAt = Date()
+        workflowManager.updateWorkflow(updated)
     }
 }
 
@@ -2282,6 +2291,7 @@ struct LocalFilesSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
+                    .tint(settingsManager.resolvedAccentColor)
                     .onChange(of: settingsManager.saveTranscriptsLocally) { _, enabled in
                         if enabled {
                             TranscriptFileManager.shared.ensureFoldersExist()
@@ -2340,6 +2350,7 @@ struct LocalFilesSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
+                    .tint(settingsManager.resolvedAccentColor)
                     .onChange(of: settingsManager.saveAudioLocally) { _, enabled in
                         if enabled {
                             TranscriptFileManager.shared.ensureFoldersExist()

@@ -686,6 +686,7 @@ struct WorkflowInlineEditor: View {
     let onRun: () -> Void
 
     @State private var showingStepTypePicker = false
+    @State private var isEditing = false
 
     private var editedWorkflow: Binding<WorkflowDefinition> {
         Binding(
@@ -699,72 +700,118 @@ struct WorkflowInlineEditor: View {
             // Header bar
             HStack(spacing: 8) {
                 Image(systemName: editedWorkflow.wrappedValue.icon)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 14))
+                    .foregroundColor(editedWorkflow.wrappedValue.color.color)
+                    .frame(width: 28, height: 28)
+                    .background(editedWorkflow.wrappedValue.color.color.opacity(0.15))
+                    .cornerRadius(6)
 
-                TextField("Workflow name", text: editedWorkflow.name)
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .textFieldStyle(.plain)
+                if isEditing {
+                    TextField("Workflow name", text: editedWorkflow.name)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .textFieldStyle(.plain)
+                } else {
+                    Text(editedWorkflow.wrappedValue.name)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                }
 
                 Spacer()
 
-                // Duplicate button
-                Button(action: onDuplicate) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 9))
-                        Text("DUPLICATE")
+                if isEditing {
+                    // Cancel button
+                    Button(action: { isEditing = false }) {
+                        Text("CANCEL")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
                             .tracking(0.5)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Color.secondary.opacity(0.08))
+                            .cornerRadius(4)
                     }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.secondary.opacity(0.08))
-                    .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
-                Button(action: onRun) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play")
-                            .font(.system(size: 9))
-                        Text("RUN")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
+                    // Save button
+                    Button(action: {
+                        onSave()
+                        isEditing = false
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9))
+                            Text("SAVE")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.accentColor)
+                        .cornerRadius(4)
                     }
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.primary.opacity(0.1))
-                    .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
-                .disabled(editedWorkflow.wrappedValue.steps.isEmpty)
-
-                Button(action: onSave) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.system(size: 9))
-                        Text("SAVE")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
-                    }
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.primary.opacity(0.08))
-                    .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 10))
+                    .buttonStyle(.plain)
+                } else {
+                    // Edit button
+                    Button(action: { isEditing = true }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 9))
+                            Text("EDIT")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                        }
                         .foregroundColor(.secondary)
-                        .padding(6)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+
+                    // Duplicate button
+                    Button(action: onDuplicate) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 9))
+                            Text("DUPLICATE")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                        }
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+
+                    // Run button
+                    Button(action: onRun) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 9))
+                            Text("RUN")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                        }
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.primary.opacity(0.1))
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(editedWorkflow.wrappedValue.steps.isEmpty)
+
+                    // Delete button
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .padding(6)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -783,42 +830,72 @@ struct WorkflowInlineEditor: View {
                             .tracking(1)
                             .foregroundColor(.secondary.opacity(0.6))
 
-                        TextField("What does this workflow do?", text: editedWorkflow.description)
-                            .font(.system(size: 11, design: .monospaced))
-                            .textFieldStyle(.plain)
-                            .padding(8)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(4)
+                        if isEditing {
+                            TextField("What does this workflow do?", text: editedWorkflow.description)
+                                .font(.system(size: 11, design: .monospaced))
+                                .textFieldStyle(.plain)
+                                .padding(8)
+                                .background(Color(NSColor.controlBackgroundColor))
+                                .cornerRadius(4)
+                        } else {
+                            Text(editedWorkflow.wrappedValue.description.isEmpty ? "No description" : editedWorkflow.wrappedValue.description)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(editedWorkflow.wrappedValue.description.isEmpty ? .secondary.opacity(0.5) : .primary)
+                                .padding(8)
+                        }
                     }
 
-                    // Icon selector (compact)
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("ICON")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(1)
-                                .foregroundColor(.secondary.opacity(0.6))
+                    // Icon & Color selector (only in edit mode)
+                    if isEditing {
+                        HStack(spacing: 16) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("ICON")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .tracking(1)
+                                    .foregroundColor(.secondary.opacity(0.6))
 
-                            HStack(spacing: 6) {
-                                Image(systemName: editedWorkflow.wrappedValue.icon)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.primary.opacity(0.7))
-                                    .frame(width: 28, height: 28)
-                                    .background(Color.primary.opacity(0.05))
-                                    .cornerRadius(4)
+                                HStack(spacing: 6) {
+                                    Image(systemName: editedWorkflow.wrappedValue.icon)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(editedWorkflow.wrappedValue.color.color)
+                                        .frame(width: 28, height: 28)
+                                        .background(editedWorkflow.wrappedValue.color.color.opacity(0.15))
+                                        .cornerRadius(4)
 
-                                TextField("SF Symbol", text: editedWorkflow.icon)
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .textFieldStyle(.plain)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 6)
-                                    .background(Color(NSColor.controlBackgroundColor))
-                                    .cornerRadius(4)
-                                    .frame(width: 120)
+                                    TextField("SF Symbol", text: editedWorkflow.icon)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .textFieldStyle(.plain)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 6)
+                                        .background(Color(NSColor.controlBackgroundColor))
+                                        .cornerRadius(4)
+                                        .frame(width: 120)
+                                }
                             }
-                        }
 
-                        Spacer()
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("COLOR")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .tracking(1)
+                                    .foregroundColor(.secondary.opacity(0.6))
+
+                                Picker("", selection: editedWorkflow.color) {
+                                    ForEach(WorkflowColor.allCases, id: \.self) { color in
+                                        HStack {
+                                            Circle()
+                                                .fill(color.color)
+                                                .frame(width: 10, height: 10)
+                                            Text(color.displayName)
+                                        }
+                                        .tag(color)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 100)
+                            }
+
+                            Spacer()
+                        }
                     }
 
                     Divider()
@@ -834,21 +911,23 @@ struct WorkflowInlineEditor: View {
 
                             Spacer()
 
-                            Button(action: { showingStepTypePicker = true }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 9))
-                                    Text("ADD STEP")
-                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                        .tracking(0.5)
+                            if isEditing {
+                                Button(action: { showingStepTypePicker = true }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 9))
+                                        Text("ADD STEP")
+                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                            .tracking(0.5)
+                                    }
+                                    .foregroundColor(.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.primary.opacity(0.08))
+                                    .cornerRadius(4)
                                 }
-                                .foregroundColor(.primary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.primary.opacity(0.08))
-                                .cornerRadius(4)
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
 
                         if editedWorkflow.wrappedValue.steps.isEmpty {
@@ -863,25 +942,27 @@ struct WorkflowInlineEditor: View {
                                     .tracking(1)
                                     .foregroundColor(.secondary.opacity(0.5))
 
-                                Text("Add steps to define workflow actions")
+                                Text(isEditing ? "Add steps to define workflow actions" : "This workflow has no steps yet")
                                     .font(.system(size: 9, design: .monospaced))
                                     .foregroundColor(.secondary.opacity(0.4))
 
-                                Button(action: { showingStepTypePicker = true }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "plus")
-                                            .font(.system(size: 9))
-                                        Text("ADD FIRST STEP")
-                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                            .tracking(0.5)
+                                if isEditing {
+                                    Button(action: { showingStepTypePicker = true }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "plus")
+                                                .font(.system(size: 9))
+                                            Text("ADD FIRST STEP")
+                                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                                .tracking(0.5)
+                                        }
+                                        .foregroundColor(.primary)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.primary.opacity(0.1))
+                                        .cornerRadius(4)
                                     }
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(Color.primary.opacity(0.1))
-                                    .cornerRadius(4)
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 32)
@@ -892,6 +973,7 @@ struct WorkflowInlineEditor: View {
                                 WorkflowStepEditor(
                                     step: stepBinding(at: index),
                                     stepNumber: index + 1,
+                                    isEditing: isEditing,
                                     onDelete: { deleteStep(at: index) },
                                     onMoveUp: index > 0 ? { moveStep(from: index, to: index - 1) } : nil,
                                     onMoveDown: index < editedWorkflow.wrappedValue.steps.count - 1 ? { moveStep(from: index, to: index + 1) } : nil
@@ -1001,13 +1083,23 @@ struct WorkflowEditorSheet: View {
                             .tracking(1)
                             .foregroundColor(.secondary)
 
-                        TextField("Workflow Name", text: $editedWorkflow.name)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12, design: .monospaced))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("NAME")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            TextField("Workflow Name", text: $editedWorkflow.name)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12, design: .monospaced))
+                        }
 
-                        TextField("Description", text: $editedWorkflow.description)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 11, design: .monospaced))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("DESCRIPTION")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            TextField("What does this workflow do?", text: $editedWorkflow.description)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11, design: .monospaced))
+                        }
 
                         HStack(spacing: 16) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -1270,6 +1362,7 @@ struct StepTypeCard: View {
 struct WorkflowStepEditor: View {
     @Binding var step: WorkflowStep
     let stepNumber: Int
+    var isEditing: Bool = true
     let onDelete: () -> Void
     let onMoveUp: (() -> Void)?
     let onMoveDown: (() -> Void)?
@@ -1296,23 +1389,25 @@ struct WorkflowStepEditor: View {
 
                 Spacer()
 
-                // Reorder buttons
-                if let moveUp = onMoveUp {
-                    Button(action: moveUp) {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 10))
+                // Reorder buttons (only in edit mode)
+                if isEditing {
+                    if let moveUp = onMoveUp {
+                        Button(action: moveUp) {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 10))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                }
 
-                if let moveDown = onMoveDown {
-                    Button(action: moveDown) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10))
+                    if let moveDown = onMoveDown {
+                        Button(action: moveDown) {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
                 }
 
                 Button(action: { isExpanded.toggle() }) {
@@ -1322,12 +1417,14 @@ struct WorkflowStepEditor: View {
                 .buttonStyle(.plain)
                 .foregroundColor(.secondary)
 
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 10))
-                        .foregroundColor(.red)
+                if isEditing {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 10))
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
             if isExpanded {

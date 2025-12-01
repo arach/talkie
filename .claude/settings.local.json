@@ -79,7 +79,9 @@
       "Bash(chmod:*)",
       "Bash(./run.sh:*)",
       "Bash(/Users/arach/dev/talkie/macOS/run.sh:*)",
-      "Bash(/Users/arach/dev/talkie/iOS/run.sh:*)"
+      "Bash(/Users/arach/dev/talkie/iOS/run.sh:*)",
+      "Bash(for dir in /Users/arach/dev/talkie/macOS/Talkie/Assets.xcassets/AppIcon.appiconset /Users/arach/dev/talkie/iOS/TalkieWidget/Assets.xcassets/AppIcon.appiconset '/Users/arach/dev/talkie/iOS/Talkie iOS/Resources/Assets.xcassets/AppIcon.appiconset')",
+      "Bash(do echo '=== $dir ===' cat $dir/Contents.json)"
     ],
     "deny": [],
     "ask": []

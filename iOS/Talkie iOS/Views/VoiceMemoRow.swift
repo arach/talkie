@@ -67,27 +67,24 @@ struct VoiceMemoRow: View {
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.textSecondary)
 
-                    // Status badges - TXT → CLOUD → SPARKLES
+                    // Status badges - TXT → CLOUD → SPARKLES (fixed width slots)
                     HStack(spacing: 6) {
-                        if memo.isTranscribing {
-                            ZStack {
+                        // TXT slot - always reserve space
+                        ZStack {
+                            if memo.isTranscribing {
                                 PulsingDot(color: .textTertiary, size: 4)
+                            } else if memo.transcription != nil && !memo.transcription!.isEmpty {
+                                Text("TXT")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.green)
                             }
-                            .frame(width: 22, height: 12) // Match TXT label size
-                        } else if memo.transcription != nil && !memo.transcription!.isEmpty {
-                            Text("TXT")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.green)
                         }
+                        .frame(width: 22, height: 12)
 
-                        if memo.cloudSyncedAt == nil && memo.audioData != nil {
-                            // Uploading to cloud
-                            CloudSyncIndicator(isSynced: false)
-                        } else if memo.cloudSyncedAt != nil {
-                            // Synced
-                            CloudSyncIndicator(isSynced: true)
-                        }
+                        // Cloud slot - always show (uploading or synced)
+                        CloudSyncIndicator(isSynced: memo.cloudSyncedAt != nil)
 
+                        // Sparkles slot
                         if memo.summary != nil && !memo.summary!.isEmpty {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 10, weight: .medium))
@@ -179,7 +176,7 @@ struct CloudSyncIndicator: View {
     let isSynced: Bool
 
     var body: some View {
-        Image(systemName: isSynced ? "checkmark.icloud.fill" : "arrow.up.icloud.fill")
+        Image(systemName: isSynced ? "checkmark.icloud.fill" : "icloud.fill")
             .font(.system(size: 11))
             .foregroundColor(isSynced ? .green : .textTertiary)
     }

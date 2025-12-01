@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CloudKit
+import EventKit
 
 struct VoiceMemoDetailView: View {
     @ObservedObject var memo: VoiceMemo
@@ -24,8 +25,26 @@ struct VoiceMemoDetailView: View {
     @State private var showingDeleteConfirmation = false
     @State private var isGeneratingTitle = false
     @State private var aiError: String?
+    @State private var reminderStatus: ReminderStatus = .idle
+    @State private var noteCopyStatus: NoteCopyStatus = .idle
+    @State private var showingReminderSheet = false
+    @State private var showingReminderToast = false
+    @State private var reminderTitle: String = ""
+    @State private var reminderDueDate: Date = Date().addingTimeInterval(3600) // 1 hour from now
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var aiService = OnDeviceAIService.shared
+
+    private enum ReminderStatus: Equatable {
+        case idle
+        case creating
+        case success
+        case error(String)
+    }
+
+    private enum NoteCopyStatus {
+        case idle
+        case copied
+    }
 
     private var memoURL: URL? {
         guard let filename = memo.fileURL else { return nil }
@@ -317,101 +336,11 @@ struct VoiceMemoDetailView: View {
                             .padding(.horizontal, Spacing.md)
                         }
 
-                        // Quick Actions - Compact 4-button row
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            HStack {
-                                Text("QUICK ACTIONS")
-                                    .font(.techLabel)
-                                    .tracking(2)
-                                    .foregroundColor(.textSecondary)
+                        // Quick Actions - Local iPhone actions
+                        quickActionsSection
 
-                                Spacer()
-
-                                // Show badges for available processing options
-                                HStack(spacing: 6) {
-                                    if aiService.isAvailable {
-                                        Image(systemName: "apple.intelligence")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundColor(.active)
-                                    }
-                                    Image(systemName: "desktopcomputer")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(memo.macReceivedAt != nil ? .blue : .textTertiary.opacity(0.4))
-                                }
-                            }
-
-                            // AI Error banner (if any)
-                            if let error = aiError {
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .font(.system(size: 10))
-                                    Text(error)
-                                        .font(.techLabelSmall)
-                                        .lineLimit(1)
-                                }
-                                .foregroundColor(.red)
-                                .padding(.horizontal, Spacing.sm)
-                                .padding(.vertical, Spacing.xs)
-                                .frame(maxWidth: .infinity)
-                                .background(Color.red.opacity(0.1))
-                                .cornerRadius(CornerRadius.sm)
-                                .onTapGesture { aiError = nil }
-                            }
-
-                            // Quick action buttons - only show AI buttons if available
-                            HStack(spacing: Spacing.xs) {
-                                // Local: Smart Title (on-device AI) - only if AI available
-                                if aiService.isAvailable {
-                                    QuickActionButton(
-                                        icon: "wand.and.stars",
-                                        label: "Title",
-                                        badge: .local,
-                                        isProcessing: isGeneratingTitle,
-                                        hasContent: memo.title != nil && !memo.title!.isEmpty && memo.title != "New Memo",
-                                        isAvailable: memo.currentTranscript != nil
-                                    ) {
-                                        generateSmartTitle()
-                                    }
-
-                                    // Local: Summary (on-device AI)
-                                    QuickActionButton(
-                                        icon: "doc.text",
-                                        label: "Summary",
-                                        badge: .local,
-                                        isProcessing: memo.isProcessingSummary,
-                                        hasContent: memo.summary != nil && !memo.summary!.isEmpty,
-                                        isAvailable: memo.currentTranscript != nil
-                                    ) {
-                                        generateSummary()
-                                    }
-                                }
-
-                                // Remote: Tasks (Mac workflow)
-                                QuickActionButton(
-                                    icon: "checklist",
-                                    label: "Tasks",
-                                    badge: .remote,
-                                    isProcessing: memo.isProcessingTasks,
-                                    hasContent: memo.tasks != nil && !memo.tasks!.isEmpty,
-                                    isAvailable: memo.macReceivedAt != nil
-                                ) {
-                                    // View tasks if available
-                                }
-
-                                // Remote: Reminders (Mac workflow)
-                                QuickActionButton(
-                                    icon: "bell",
-                                    label: "Reminders",
-                                    badge: .remote,
-                                    isProcessing: memo.isProcessingReminders,
-                                    hasContent: memo.reminders != nil && !memo.reminders!.isEmpty,
-                                    isAvailable: memo.macReceivedAt != nil
-                                ) {
-                                    // View reminders if available
-                                }
-                            }
-                        }
-                        .padding(.horizontal, Spacing.md)
+                        // Mac Actions - Remote AI workflows
+                        macActionsSection
 
                         // Activity Section - Workflow outputs and runs
                         if memo.summary != nil || memo.tasks != nil || memo.reminders != nil ||
@@ -581,6 +510,14 @@ struct VoiceMemoDetailView: View {
                 // Fetch latest from CloudKit
                 fetchLatestFromCloudKit()
             }
+            .overlay(alignment: .bottom) {
+                if showingReminderToast {
+                    ReminderToast()
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, 100)
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingReminderToast)
         }
     }
 
@@ -682,6 +619,425 @@ struct VoiceMemoDetailView: View {
         }
     }
 
+    private func copyTranscript() {
+        guard let transcript = memo.currentTranscript else { return }
+        UIPasteboard.general.string = transcript
+
+        // Brief haptic feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+    }
+
+    private func createReminder() {
+        // Initialize with memo title and show configuration sheet
+        reminderTitle = memo.title ?? "Voice Memo"
+        reminderDueDate = Date().addingTimeInterval(3600) // 1 hour from now
+        showingReminderSheet = true
+    }
+
+    private func confirmCreateReminder() {
+        let eventStore = EKEventStore()
+        reminderStatus = .creating
+
+        // Request access to reminders
+        if #available(iOS 17.0, *) {
+            eventStore.requestFullAccessToReminders { granted, error in
+                DispatchQueue.main.async {
+                    if granted && error == nil {
+                        self.saveReminder(to: eventStore)
+                    } else {
+                        self.reminderStatus = .error("Permission denied")
+                        self.resetReminderStatusAfterDelay()
+                    }
+                }
+            }
+        } else {
+            eventStore.requestAccess(to: .reminder) { granted, error in
+                DispatchQueue.main.async {
+                    if granted && error == nil {
+                        self.saveReminder(to: eventStore)
+                    } else {
+                        self.reminderStatus = .error("Permission denied")
+                        self.resetReminderStatusAfterDelay()
+                    }
+                }
+            }
+        }
+    }
+
+    private func saveReminder(to eventStore: EKEventStore) {
+        // Find or create "Talkie" reminder list
+        let calendar = findOrCreateTalkieList(in: eventStore)
+        guard let calendar = calendar else {
+            reminderStatus = .error("No calendar found")
+            resetReminderStatusAfterDelay()
+            return
+        }
+
+        let reminder = EKReminder(eventStore: eventStore)
+        reminder.title = reminderTitle
+        reminder.calendar = calendar
+
+        // Add transcript as notes if available
+        if let transcript = memo.currentTranscript {
+            let maxLength = 2000
+            if transcript.count > maxLength {
+                reminder.notes = String(transcript.prefix(maxLength)) + "..."
+            } else {
+                reminder.notes = transcript
+            }
+        }
+
+        // Set due date from picker
+        let dateComponents = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: reminderDueDate
+        )
+        reminder.dueDateComponents = dateComponents
+
+        // Add alarm at due time
+        let alarm = EKAlarm(absoluteDate: reminderDueDate)
+        reminder.addAlarm(alarm)
+
+        do {
+            try eventStore.save(reminder, commit: true)
+            reminderStatus = .success
+
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+
+            // Show toast notification
+            showingReminderToast = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                showingReminderToast = false
+            }
+
+            resetReminderStatusAfterDelay()
+        } catch {
+            reminderStatus = .error("Failed to save")
+            resetReminderStatusAfterDelay()
+        }
+    }
+
+    private func resetReminderStatusAfterDelay() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            reminderStatus = .idle
+        }
+    }
+
+    /// Find existing "Talkie" reminder list or create one
+    private func findOrCreateTalkieList(in eventStore: EKEventStore) -> EKCalendar? {
+        let calendars = eventStore.calendars(for: .reminder)
+
+        // Look for existing "Talkie" list
+        if let existing = calendars.first(where: { $0.title == "Talkie" }) {
+            return existing
+        }
+
+        // Create new "Talkie" list with orange color
+        let newCalendar = EKCalendar(for: .reminder, eventStore: eventStore)
+        newCalendar.title = "Talkie"
+        newCalendar.cgColor = UIColor.orange.cgColor
+
+        // Find a source that supports reminders (prefer iCloud, then local)
+        // Use the same source as the default reminders calendar
+        if let defaultCalendar = eventStore.defaultCalendarForNewReminders() {
+            newCalendar.source = defaultCalendar.source
+        } else {
+            // Try to find iCloud or local source
+            let sources = eventStore.sources
+            if let iCloudSource = sources.first(where: { $0.sourceType == .calDAV }) {
+                newCalendar.source = iCloudSource
+            } else if let localSource = sources.first(where: { $0.sourceType == .local }) {
+                newCalendar.source = localSource
+            } else {
+                // No valid source found
+                return nil
+            }
+        }
+
+        do {
+            try eventStore.saveCalendar(newCalendar, commit: true)
+            return newCalendar
+        } catch {
+            AppLogger.persistence.error("Failed to create Talkie reminder list: \(error.localizedDescription)")
+            // Fallback to default
+            return eventStore.defaultCalendarForNewReminders()
+        }
+    }
+
+    private func createNote() {
+        // Apple Notes has no public API, so we copy content and let user paste
+        UIPasteboard.general.string = noteContent
+
+        // Haptic feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+
+        // Open Notes app
+        if let url = URL(string: "mobilenotes://") {
+            UIApplication.shared.open(url)
+        }
+
+        noteCopyStatus = .copied
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            noteCopyStatus = .idle
+        }
+    }
+
+    /// Content to share to Notes app
+    private var noteContent: String {
+        var content = ""
+        let title = memo.title ?? "Voice Memo"
+        let date = memo.createdAt ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+
+        content += "\(title)\n"
+        content += "Recorded: \(formatter.string(from: date))\n"
+        content += String(repeating: "─", count: 30) + "\n\n"
+
+        if let transcript = memo.currentTranscript {
+            content += transcript
+        }
+
+        if let summary = memo.summary, !summary.isEmpty {
+            content += "\n\n" + String(repeating: "─", count: 30) + "\n"
+            content += "Summary:\n\(summary)"
+        }
+
+        return content
+    }
+
+    // MARK: - Extracted View Sections
+
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("QUICK ACTIONS")
+                .font(.techLabel)
+                .tracking(2)
+                .foregroundColor(.textSecondary)
+
+            HStack(spacing: Spacing.xs) {
+                // Share
+                QuickActionButton(
+                    icon: "square.and.arrow.up",
+                    label: "Share",
+                    badge: .none,
+                    isProcessing: false,
+                    hasContent: false,
+                    isAvailable: true
+                ) {
+                    showingShare = true
+                }
+
+                // Add to Notes (copies content and opens Notes app)
+                QuickActionButton(
+                    icon: noteCopyStatus == .copied ? "checkmark.circle.fill" : "note.text",
+                    label: noteCopyStatus == .copied ? "Copied!" : "Note",
+                    badge: .none,
+                    isProcessing: false,
+                    hasContent: noteCopyStatus == .copied,
+                    isAvailable: memo.currentTranscript != nil
+                ) {
+                    createNote()
+                }
+
+                // Set Reminder (creates via EventKit)
+                QuickActionButton(
+                    icon: reminderStatusIcon,
+                    label: reminderStatusLabel,
+                    badge: .none,
+                    isProcessing: reminderStatus == .creating,
+                    hasContent: reminderStatus == .success,
+                    isAvailable: reminderStatus != .creating
+                ) {
+                    createReminder()
+                }
+            }
+
+            // Show reminder error if any
+            if case .error(let message) = reminderStatus {
+                Text(message)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.red)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .sheet(isPresented: $showingReminderSheet) {
+            ReminderConfigSheet(
+                title: $reminderTitle,
+                dueDate: $reminderDueDate,
+                onConfirm: {
+                    showingReminderSheet = false
+                    confirmCreateReminder()
+                },
+                onCancel: {
+                    showingReminderSheet = false
+                }
+            )
+            .presentationDetents([.medium])
+        }
+    }
+
+    private var reminderStatusIcon: String {
+        switch reminderStatus {
+        case .idle: return "bell"
+        case .creating: return "bell"
+        case .success: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.triangle"
+        }
+    }
+
+    private var reminderStatusLabel: String {
+        switch reminderStatus {
+        case .idle: return "Remind"
+        case .creating: return "Creating..."
+        case .success: return "Added!"
+        case .error: return "Error"
+        }
+    }
+
+    /// Pinned workflows from Mac (synced via iCloud KVS)
+    private var pinnedWorkflows: [[String: String]] {
+        guard let data = NSUbiquitousKeyValueStore.default.data(forKey: "pinnedWorkflows"),
+              let info = try? JSONDecoder().decode([[String: String]].self, from: data) else {
+            return []
+        }
+        return info
+    }
+
+    private var macActionsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack {
+                Text("MAC ACTIONS")
+                    .font(.techLabel)
+                    .tracking(2)
+                    .foregroundColor(.textSecondary)
+
+                Spacer()
+
+                // Mac connection status
+                macConnectionBadge
+            }
+
+            // AI Error banner (if any)
+            if let error = aiError {
+                aiErrorBanner(error: error)
+            }
+
+            // Show pinned workflows from Mac, or defaults if none pinned
+            let pinned = pinnedWorkflows
+            if pinned.isEmpty {
+                // Default actions when no pinned workflows
+                HStack(spacing: Spacing.xs) {
+                    QuickActionButton(
+                        icon: "doc.text",
+                        label: "Summary",
+                        badge: .remote,
+                        isProcessing: memo.isProcessingSummary,
+                        hasContent: memo.summary != nil && !memo.summary!.isEmpty,
+                        isAvailable: memo.macReceivedAt != nil
+                    ) {
+                        // Trigger summary workflow on Mac
+                    }
+
+                    QuickActionButton(
+                        icon: "checklist",
+                        label: "Tasks",
+                        badge: .remote,
+                        isProcessing: memo.isProcessingTasks,
+                        hasContent: memo.tasks != nil && !memo.tasks!.isEmpty,
+                        isAvailable: memo.macReceivedAt != nil
+                    ) {
+                        // Trigger tasks workflow on Mac
+                    }
+
+                    QuickActionButton(
+                        icon: "bell.badge",
+                        label: "Reminders",
+                        badge: .remote,
+                        isProcessing: memo.isProcessingReminders,
+                        hasContent: memo.reminders != nil && !memo.reminders!.isEmpty,
+                        isAvailable: memo.macReceivedAt != nil
+                    ) {
+                        // Trigger reminders workflow on Mac
+                    }
+                }
+            } else {
+                // Show pinned workflows from Mac
+                HStack(spacing: Spacing.xs) {
+                    ForEach(pinned.prefix(4), id: \.["id"]) { workflow in
+                        let name = workflow["name"] ?? "Action"
+                        let icon = workflow["icon"] ?? "gearshape"
+
+                        QuickActionButton(
+                            icon: icon,
+                            label: name,
+                            badge: .remote,
+                            isProcessing: false,
+                            hasContent: hasWorkflowOutput(workflowId: workflow["id"]),
+                            isAvailable: memo.macReceivedAt != nil
+                        ) {
+                            // Trigger this workflow on Mac
+                        }
+                    }
+                }
+            }
+
+            // Hint if Mac not connected
+            if memo.macReceivedAt == nil {
+                Text("Open Talkie on your Mac to enable AI actions")
+                    .font(.system(size: 11))
+                    .foregroundColor(.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+    }
+
+    /// Check if we have output from a specific workflow
+    private func hasWorkflowOutput(workflowId: String?) -> Bool {
+        guard let idString = workflowId,
+              let uuid = UUID(uuidString: idString),
+              let runs = memo.workflowRuns as? Set<WorkflowRun> else {
+            return false
+        }
+        return runs.contains { $0.workflowId == uuid && $0.status == "completed" }
+    }
+
+    private var macConnectionBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "desktopcomputer")
+                .font(.system(size: 10, weight: .medium))
+            if memo.macReceivedAt != nil {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 8, weight: .bold))
+            }
+        }
+        .foregroundColor(memo.macReceivedAt != nil ? .green : .textTertiary.opacity(0.4))
+    }
+
+    private func aiErrorBanner(error: String) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 10))
+            Text(error)
+                .font(.techLabelSmall)
+                .lineLimit(1)
+        }
+        .foregroundColor(.red)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .frame(maxWidth: .infinity)
+        .background(Color.red.opacity(0.1))
+        .cornerRadius(CornerRadius.sm)
+        .onTapGesture { aiError = nil }
+    }
+
     private func saveTranscriptEdit() {
         guard !editedTranscript.isEmpty else { return }
 
@@ -739,7 +1095,8 @@ struct VoiceMemoDetailView: View {
         let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
 
         // Query for this specific memo by CD_id (Core Data uses CD_ prefix)
-        let predicate = NSPredicate(format: "CD_id == %@", memoId as CVarArg)
+        // CloudKit requires UUID as string, not UUID object
+        let predicate = NSPredicate(format: "CD_id == %@", memoId.uuidString)
         let query = CKQuery(recordType: "CD_VoiceMemo", predicate: predicate)
 
         privateDB.fetch(withQuery: query, inZoneWith: zoneID) { result in
@@ -853,6 +1210,7 @@ struct VoiceMemoDetailView: View {
 // MARK: - Quick Action Button (compact, with local/remote badge)
 
 enum ActionBadge {
+    case none    // No badge (local iPhone action)
     case local   // On-device AI
     case remote  // Mac workflow
 }
@@ -868,8 +1226,12 @@ struct QuickActionButton: View {
 
     @State private var showingDetail = false
 
-    private var badgeIcon: String {
-        badge == .local ? "apple.intelligence" : "desktopcomputer"
+    private var badgeIcon: String? {
+        switch badge {
+        case .none: return nil
+        case .local: return "apple.intelligence"
+        case .remote: return "desktopcomputer"
+        }
     }
 
     private var isDisabled: Bool {
@@ -878,7 +1240,13 @@ struct QuickActionButton: View {
 
     private var statusColor: Color {
         if hasContent { return .success }
-        if isAvailable { return badge == .local ? .active : .blue }
+        if isAvailable {
+            switch badge {
+            case .none: return .active
+            case .local: return .active
+            case .remote: return .blue
+            }
+        }
         return .textTertiary.opacity(0.4)
     }
 
@@ -1664,3 +2032,177 @@ struct WorkflowRunRow: View {
         )
     }
 }
+
+// MARK: - Reminder Configuration Sheet
+
+struct ReminderConfigSheet: View {
+    @Binding var title: String
+    @Binding var dueDate: Date
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Title field
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("TITLE")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.textTertiary)
+
+                    TextField("Reminder title", text: $title)
+                        .font(.system(size: 16, design: .monospaced))
+                        .padding(Spacing.sm)
+                        .background(Color.surfaceSecondary)
+                        .cornerRadius(CornerRadius.sm)
+                }
+                .padding(.horizontal, Spacing.md)
+                .padding(.top, Spacing.md)
+
+                // Due date picker
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("REMIND ME")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.textTertiary)
+
+                    DatePicker(
+                        "",
+                        selection: $dueDate,
+                        in: Date()...,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .tint(.active)
+                }
+                .padding(.horizontal, Spacing.md)
+                .padding(.top, Spacing.md)
+
+                Spacer()
+
+                // Quick time options
+                VStack(spacing: Spacing.sm) {
+                    Text("QUICK SET")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(spacing: Spacing.xs) {
+                        QuickTimeButton(label: "1h", date: Date().addingTimeInterval(3600), selection: $dueDate)
+                        QuickTimeButton(label: "3h", date: Date().addingTimeInterval(10800), selection: $dueDate)
+                        QuickTimeButton(label: "Tomorrow", date: tomorrowMorning, selection: $dueDate)
+                        QuickTimeButton(label: "Next Week", date: nextWeek, selection: $dueDate)
+                    }
+                }
+                .padding(.horizontal, Spacing.md)
+                .padding(.bottom, Spacing.lg)
+            }
+            .background(Color.surfacePrimary)
+            .navigationTitle("New Reminder")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                    .foregroundColor(.textSecondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        onConfirm()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private var tomorrowMorning: Date {
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date())!
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)!
+    }
+
+    private var nextWeek: Date {
+        let calendar = Calendar.current
+        let nextWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: Date())!
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: nextWeek)!
+    }
+}
+
+struct QuickTimeButton: View {
+    let label: String
+    let date: Date
+    @Binding var selection: Date
+
+    private var isSelected: Bool {
+        abs(selection.timeIntervalSince(date)) < 60 // within 1 minute
+    }
+
+    var body: some View {
+        Button(action: { selection = date }) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundColor(isSelected ? .surfacePrimary : .textSecondary)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
+                .background(isSelected ? Color.active : Color.surfaceSecondary)
+                .cornerRadius(CornerRadius.sm)
+        }
+    }
+}
+
+// MARK: - Reminder Toast
+
+struct ReminderToast: View {
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.green)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Reminder added")
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(.textPrimary)
+
+                Text("Find it in Reminders → Talkie")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.textSecondary)
+            }
+
+            Spacer()
+
+            // Open Reminders button
+            Button(action: {
+                if let url = URL(string: "x-apple-reminderkit://") {
+                    UIApplication.shared.open(url)
+                }
+            }) {
+                Text("Open")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.active)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Color.active.opacity(0.15))
+                    .cornerRadius(CornerRadius.sm)
+            }
+        }
+        .padding(Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .fill(Color.surfaceSecondary)
+                .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .strokeBorder(Color.borderPrimary.opacity(0.3), lineWidth: 0.5)
+        )
+        .padding(.horizontal, Spacing.md)
+    }
+}
+

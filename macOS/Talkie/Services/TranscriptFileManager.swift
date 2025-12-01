@@ -178,15 +178,9 @@ class TranscriptFileManager {
     // MARK: - Write Audio File
 
     /// Copy the M4A audio file to local storage
+    /// For synced memos from iOS, uses audioData binary; for local recordings, copies the file
     func writeAudioFile(for memo: VoiceMemo) -> WriteResult {
         guard SettingsManager.shared.saveAudioLocally else { return .skipped }
-        guard let sourceURLString = memo.fileURL else { return .skipped }
-
-        let sourceURL = URL(fileURLWithPath: sourceURLString)
-        guard fileManager.fileExists(atPath: sourceURL.path) else {
-            // Source audio file doesn't exist locally (might be on another device)
-            return .skipped
-        }
 
         let destURL = audioFileURL(for: memo)
 
@@ -195,14 +189,35 @@ class TranscriptFileManager {
             return .unchanged
         }
 
-        do {
-            try fileManager.copyItem(at: sourceURL, to: destURL)
-            logger.debug("Copied audio file: \(destURL.lastPathComponent)")
-            return .created
-        } catch {
-            logger.error("Failed to copy audio file: \(error.localizedDescription)")
-            return .skipped
+        // Try 1: Use audioData (synced from iOS via CloudKit)
+        if let audioData = memo.audioData, !audioData.isEmpty {
+            do {
+                try audioData.write(to: destURL)
+                logger.debug("Wrote audio file from synced data: \(destURL.lastPathComponent)")
+                return .created
+            } catch {
+                logger.error("Failed to write audio from data: \(error.localizedDescription)")
+                return .skipped
+            }
         }
+
+        // Try 2: Copy from local file path (local recordings)
+        if let sourceURLString = memo.fileURL {
+            let sourceURL = URL(fileURLWithPath: sourceURLString)
+            if fileManager.fileExists(atPath: sourceURL.path) {
+                do {
+                    try fileManager.copyItem(at: sourceURL, to: destURL)
+                    logger.debug("Copied audio file: \(destURL.lastPathComponent)")
+                    return .created
+                } catch {
+                    logger.error("Failed to copy audio file: \(error.localizedDescription)")
+                    return .skipped
+                }
+            }
+        }
+
+        // No audio source available
+        return .skipped
     }
 
     enum WriteResult {

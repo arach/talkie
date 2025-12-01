@@ -18,6 +18,7 @@ struct WorkflowDefinition: Identifiable, Codable {
     var color: WorkflowColor
     var steps: [WorkflowStep]
     var isEnabled: Bool
+    var isPinned: Bool  // Pinned workflows appear in iOS MAC ACTIONS section
     var createdAt: Date
     var modifiedAt: Date
 
@@ -29,6 +30,7 @@ struct WorkflowDefinition: Identifiable, Codable {
         color: WorkflowColor = .blue,
         steps: [WorkflowStep] = [],
         isEnabled: Bool = true,
+        isPinned: Bool = false,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
     ) {
@@ -39,8 +41,28 @@ struct WorkflowDefinition: Identifiable, Codable {
         self.color = color
         self.steps = steps
         self.isEnabled = isEnabled
+        self.isPinned = isPinned
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
+    }
+
+    // Custom decoder to handle migration from workflows saved without isPinned
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decode(String.self, forKey: .description)
+        icon = try container.decode(String.self, forKey: .icon)
+        color = try container.decode(WorkflowColor.self, forKey: .color)
+        steps = try container.decode([WorkflowStep].self, forKey: .steps)
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, description, icon, color, steps, isEnabled, isPinned, createdAt, modifiedAt
     }
 
     // Built-in system workflows
@@ -1063,6 +1085,7 @@ class WorkflowManager: ObservableObject {
     @Published var workflows: [WorkflowDefinition] = []
 
     private let userDefaultsKey = "workflows_v2"
+    private let iCloudPinnedKey = "pinnedWorkflows"
 
     private init() {
         loadWorkflows()
@@ -1095,6 +1118,7 @@ class WorkflowManager: ObservableObject {
             color: workflow.color,
             steps: workflow.steps,
             isEnabled: workflow.isEnabled,
+            isPinned: false, // Duplicates start unpinned
             createdAt: Date(),
             modifiedAt: Date()
         )
@@ -1107,6 +1131,8 @@ class WorkflowManager: ObservableObject {
         if let data = try? JSONEncoder().encode(workflows) {
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         }
+        // Sync pinned workflows to iCloud KVS for iOS
+        syncPinnedToiCloud()
     }
 
     private func loadWorkflows() {
@@ -1118,6 +1144,24 @@ class WorkflowManager: ObservableObject {
             // Initialize with default workflows
             workflows = WorkflowDefinition.defaultWorkflows
             saveWorkflows()
+        }
+    }
+
+    /// Sync pinned workflow info to iCloud Key-Value Store
+    /// iOS reads this to show pinned workflows in MAC ACTIONS section
+    private func syncPinnedToiCloud() {
+        let pinnedWorkflows = workflows.filter { $0.isPinned }
+        let pinnedInfo: [[String: String]] = pinnedWorkflows.map { workflow in
+            [
+                "id": workflow.id.uuidString,
+                "name": workflow.name,
+                "icon": workflow.icon
+            ]
+        }
+
+        if let data = try? JSONEncoder().encode(pinnedInfo) {
+            NSUbiquitousKeyValueStore.default.set(data, forKey: iCloudPinnedKey)
+            NSUbiquitousKeyValueStore.default.synchronize()
         }
     }
 }

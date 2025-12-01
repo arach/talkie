@@ -75,11 +75,10 @@ struct MemoDetailView: View {
     /// Build the quick actions list: pinned workflows first, then defaults, max 5 items
     private var quickActionItems: [QuickActionItem] {
         var items: [QuickActionItem] = []
-        let pinnedIDs = QuickActionsConfig.pinnedWorkflowIDs
 
         // Add pinned workflows first (up to 5)
         let pinnedWorkflows = workflowManager.workflows
-            .filter { pinnedIDs.contains($0.id) && $0.isEnabled }
+            .filter { $0.isPinned && $0.isEnabled }
             .prefix(5)
         for workflow in pinnedWorkflows {
             items.append(.workflow(workflow))

@@ -297,6 +297,11 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    /// Resolved accent color for UI elements (toggles, buttons, etc.)
+    var resolvedAccentColor: Color {
+        accentColor.color ?? .accentColor
+    }
+
     /// Font style for UI chrome: labels, headers, buttons, badges, navigation
     @Published var uiFontStyle: FontStyleOption {
         didSet {

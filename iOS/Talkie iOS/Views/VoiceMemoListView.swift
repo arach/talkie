@@ -618,7 +618,8 @@ struct VoiceMemoListView: View {
     }
 
     private func stopPushToTalk() {
-        pushToTalkRecorder.stopRecording()
+        // Fully stop (not pause) so file is released for transcription
+        pushToTalkRecorder.finalizeRecording()
 
         // Haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
