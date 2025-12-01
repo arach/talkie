@@ -13,6 +13,11 @@ import {
   Quote,
   HardDrive,
   Ban,
+  Menu,
+  X,
+  Layers,
+  FileText,
+  DollarSign,
 } from 'lucide-react'
 import PrimitivesSection from './PrimitivesSection'
 import Container from './Container'
@@ -23,6 +28,7 @@ import ThemeToggle from './ThemeToggle'
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [pricingActive, setPricingActive] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -102,7 +108,54 @@ export default function LandingPage() {
           >
             Launch Web Demo <ArrowRight className="w-3 h-3" />
           </button>
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 -mr-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </Container>
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md">
+            <Container className="py-4 flex flex-col gap-3">
+              <Link
+                href="/features"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              >
+                <Layers className="w-4 h-4" />
+                Features
+              </Link>
+              <Link
+                href="/manifesto"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                Manifesto
+              </Link>
+              <Link
+                href="/security"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Security
+              </Link>
+              <a
+                href="#pricing"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              >
+                <DollarSign className="w-4 h-4" />
+                Pricing
+              </a>
+            </Container>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section - Technical Grid Background */}
@@ -112,9 +165,10 @@ export default function LandingPage() {
         <Container className="relative z-10 text-center">
           <div className="mb-8 flex justify-center"><HeroBadge /></div>
 
-          <h1 className="text-5xl md:text-8xl font-bold tracking-tighter text-zinc-900 dark:text-white mb-6 leading-[0.9]">
-            VOICE MEMOS<br />
-            <span className="text-zinc-400 dark:text-zinc-600">+</span> AI.
+          <h1 className="text-5xl md:text-8xl font-bold tracking-tighter text-zinc-900 dark:text-white mb-6 leading-[0.9] group cursor-default">
+            <span className="transition-all duration-300 group-hover:drop-shadow-[0_0_30px_rgba(255,255,255,0.4)] dark:group-hover:drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">VOICE MEMOS</span><br />
+            <span className="text-zinc-400 dark:text-zinc-600 font-normal">+</span>{' '}
+            <span className="transition-all duration-300 group-hover:text-emerald-400">AI.</span>
           </h1>
 
           <p className="mx-auto max-w-2xl text-lg text-zinc-600 dark:text-zinc-400 mb-10 leading-relaxed">

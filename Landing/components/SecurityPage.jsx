@@ -35,7 +35,7 @@ export default function SecurityPage() {
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link
             href="/"
             className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-black dark:hover:text-white transition-colors group"
@@ -44,10 +44,10 @@ export default function SecurityPage() {
             BACK
           </Link>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
             <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">SECURITY & SOVEREIGNTY</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">SECURITY</span>
           </div>
         </div>
       </nav>
