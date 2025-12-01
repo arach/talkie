@@ -28,7 +28,7 @@ struct MemoRowView: View {
                 // Title
                 Text(memoTitle)
                     .font(settings.fontBodyMedium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(settings.tacticalForeground)
                     .lineLimit(1)
 
                 // Minimal metadata: duration + relative time
@@ -38,12 +38,12 @@ struct MemoRowView: View {
 
                     Text("·")
                         .font(settings.fontXS)
-                        .foregroundColor(.secondary.opacity(0.4))
+                        .foregroundColor(settings.tacticalForegroundMuted)
 
                     Text(formatDateCompact(memoCreatedAt))
                         .font(settings.fontXS)
                 }
-                .foregroundColor(.secondary)
+                .foregroundColor(settings.tacticalForegroundSecondary)
             }
 
             Spacer()
@@ -94,7 +94,7 @@ struct MemoRowView: View {
         if isReady {
             // Green checkmark = transcribed and synced to cloud
             Image(systemName: "checkmark")
-                .font(.system(size: 8, weight: .bold))
+                .font(settings.fontXSBold)
                 .foregroundColor(.green)
         } else {
             // Gray dot = not ready yet

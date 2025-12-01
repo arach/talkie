@@ -132,7 +132,7 @@ enum FontSizeOption: String, CaseIterable {
 
 // MARK: - Curated Theme Presets
 enum ThemePreset: String, CaseIterable {
-    case tactical = "tactical"
+    case talkiePro = "talkiePro"
     case terminal = "terminal"
     case minimal = "minimal"
     case classic = "classic"
@@ -140,7 +140,7 @@ enum ThemePreset: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .tactical: return "Tactical"
+        case .talkiePro: return "Talkie Pro"
         case .terminal: return "Terminal"
         case .minimal: return "Minimal"
         case .classic: return "Classic"
@@ -150,17 +150,17 @@ enum ThemePreset: String, CaseIterable {
 
     var description: String {
         switch self {
-        case .tactical: return "Sharp monospace, tight spacing, military precision"
-        case .terminal: return "Dark mode with monospace fonts and green accents"
-        case .minimal: return "Clean, subtle, follows system light/dark"
-        case .classic: return "System defaults with blue accents"
-        case .warm: return "Dark mode with orange tones"
+        case .talkiePro: return "Sharp, professional, high contrast"
+        case .terminal: return "Terminal vibes with green accents"
+        case .minimal: return "Clean and subtle, adapts to system"
+        case .classic: return "Comfortable defaults with blue accents"
+        case .warm: return "Cozy dark mode with orange tones"
         }
     }
 
     var icon: String {
         switch self {
-        case .tactical: return "scope"
+        case .talkiePro: return "waveform"
         case .terminal: return "terminal"
         case .minimal: return "circle"
         case .classic: return "star"
@@ -170,12 +170,12 @@ enum ThemePreset: String, CaseIterable {
 
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
-        case .tactical:
+        case .talkiePro:
             return (Color(white: 0.08), Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
         case .terminal:
             return (Color.black, Color.green.opacity(0.9), Color.green)
         case .minimal:
-            return (Color(white: 0.95), Color.black.opacity(0.8), Color.gray)
+            return (Color(white: 0.96), Color.black.opacity(0.8), Color.gray)
         case .classic:
             return (Color(white: 0.15), Color.white.opacity(0.9), Color.blue)
         case .warm:
@@ -186,7 +186,7 @@ enum ThemePreset: String, CaseIterable {
     // Theme preset values
     var appearanceMode: AppearanceMode {
         switch self {
-        case .tactical: return .dark
+        case .talkiePro: return .dark
         case .terminal: return .dark
         case .minimal: return .system  // Respects system light/dark
         case .classic: return .dark
@@ -197,28 +197,28 @@ enum ThemePreset: String, CaseIterable {
     /// UI chrome font style (labels, headers, buttons, badges)
     var uiFontStyle: FontStyleOption {
         switch self {
-        case .tactical: return .system      // SF Pro - clean, professional
+        case .talkiePro: return .system     // SF Pro - clean, professional
         case .terminal: return .monospace
-        case .minimal: return .rounded
+        case .minimal: return .system       // Clean system font
         case .classic: return .system
-        case .warm: return .monospace
+        case .warm: return .system
         }
     }
 
     /// Content font style (transcripts, notes, markdown)
     var contentFontStyle: FontStyleOption {
         switch self {
-        case .tactical: return .system      // SF Pro - readable, luxurious
-        case .terminal: return .system      // Readable content even in terminal theme
+        case .talkiePro: return .system     // SF Pro - readable, luxurious
+        case .terminal: return .monospace   // Full terminal experience
         case .minimal: return .system       // Clean system font for content
         case .classic: return .system       // Standard system font
-        case .warm: return .serif           // Warm, readable serif for content
+        case .warm: return .monospace       // Monospace content for warm theme
         }
     }
 
     var accentColor: AccentColorOption {
         switch self {
-        case .tactical: return .blue
+        case .talkiePro: return .blue
         case .terminal: return .green
         case .minimal: return .gray
         case .classic: return .blue
@@ -229,7 +229,7 @@ enum ThemePreset: String, CaseIterable {
     /// Font size option for this theme
     var fontSize: FontSizeOption {
         switch self {
-        case .tactical: return .medium      // Tight spacing, readable fonts
+        case .talkiePro: return .medium
         case .terminal: return .medium
         case .minimal: return .medium
         case .classic: return .medium
@@ -264,14 +264,14 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    /// Whether to use light/thin font weights (for sharp, tactical aesthetics)
+    /// Whether to use light/thin font weights (for sharp aesthetics)
     var useLightFonts: Bool {
-        currentTheme == .tactical
+        currentTheme == .talkiePro
     }
 
     /// Whether current theme uses high-contrast colors
     var useTacticalColors: Bool {
-        currentTheme == .tactical
+        currentTheme == .talkiePro
     }
 
     /// Check if minimal theme is active
@@ -366,33 +366,33 @@ class SettingsManager: ObservableObject {
     // Uses uiFontStyle (themed/branded)
 
     /// Extra small UI text - labels, badges (10pt base)
-    var fontXS: Font { themedFont(baseSize: 10, weight: useLightFonts ? .light : .regular) }
-    var fontXSMedium: Font { themedFont(baseSize: 10, weight: useLightFonts ? .light : .regular) }
-    var fontXSBold: Font { themedFont(baseSize: 10, weight: useLightFonts ? .regular : .medium) }
+    var fontXS: Font { themedFont(baseSize: 10, weight: useLightFonts ? .regular : .regular) }
+    var fontXSMedium: Font { themedFont(baseSize: 10, weight: useLightFonts ? .medium : .medium) }
+    var fontXSBold: Font { themedFont(baseSize: 10, weight: useLightFonts ? .semibold : .semibold) }
 
     /// Small UI text - secondary info, metadata (11pt base)
-    var fontSM: Font { themedFont(baseSize: 11, weight: useLightFonts ? .light : .regular) }
-    var fontSMMedium: Font { themedFont(baseSize: 11, weight: useLightFonts ? .light : .regular) }
-    var fontSMBold: Font { themedFont(baseSize: 11, weight: useLightFonts ? .regular : .medium) }
+    var fontSM: Font { themedFont(baseSize: 11, weight: useLightFonts ? .regular : .regular) }
+    var fontSMMedium: Font { themedFont(baseSize: 11, weight: useLightFonts ? .medium : .medium) }
+    var fontSMBold: Font { themedFont(baseSize: 11, weight: useLightFonts ? .semibold : .semibold) }
 
     /// Body UI text - primary UI elements (13pt base)
-    var fontBody: Font { themedFont(baseSize: 13, weight: useLightFonts ? .light : .regular) }
-    var fontBodyMedium: Font { themedFont(baseSize: 13, weight: useLightFonts ? .light : .regular) }
-    var fontBodyBold: Font { themedFont(baseSize: 13, weight: useLightFonts ? .regular : .medium) }
+    var fontBody: Font { themedFont(baseSize: 13, weight: useLightFonts ? .regular : .regular) }
+    var fontBodyMedium: Font { themedFont(baseSize: 13, weight: useLightFonts ? .medium : .medium) }
+    var fontBodyBold: Font { themedFont(baseSize: 13, weight: useLightFonts ? .semibold : .semibold) }
 
     /// Title UI text - section headers (15pt base)
-    var fontTitle: Font { themedFont(baseSize: 15, weight: useLightFonts ? .light : .regular) }
-    var fontTitleMedium: Font { themedFont(baseSize: 15, weight: useLightFonts ? .regular : .medium) }
-    var fontTitleBold: Font { themedFont(baseSize: 15, weight: useLightFonts ? .medium : .bold) }
+    var fontTitle: Font { themedFont(baseSize: 15, weight: useLightFonts ? .regular : .regular) }
+    var fontTitleMedium: Font { themedFont(baseSize: 15, weight: useLightFonts ? .medium : .medium) }
+    var fontTitleBold: Font { themedFont(baseSize: 15, weight: useLightFonts ? .semibold : .bold) }
 
     /// Headline UI text - large headers (18pt base)
-    var fontHeadline: Font { themedFont(baseSize: 18, weight: useLightFonts ? .light : .regular) }
-    var fontHeadlineMedium: Font { themedFont(baseSize: 18, weight: useLightFonts ? .regular : .medium) }
-    var fontHeadlineBold: Font { themedFont(baseSize: 18, weight: useLightFonts ? .medium : .bold) }
+    var fontHeadline: Font { themedFont(baseSize: 18, weight: useLightFonts ? .regular : .regular) }
+    var fontHeadlineMedium: Font { themedFont(baseSize: 18, weight: useLightFonts ? .medium : .medium) }
+    var fontHeadlineBold: Font { themedFont(baseSize: 18, weight: useLightFonts ? .semibold : .bold) }
 
     /// Display UI text - hero elements (32pt base)
-    var fontDisplay: Font { themedFont(baseSize: 32, weight: .thin) }
-    var fontDisplayMedium: Font { themedFont(baseSize: 32, weight: useLightFonts ? .thin : .regular) }
+    var fontDisplay: Font { themedFont(baseSize: 32, weight: .light) }
+    var fontDisplayMedium: Font { themedFont(baseSize: 32, weight: useLightFonts ? .regular : .regular) }
 
     // MARK: - Theme Color Tokens
     // Returns themed colors based on active theme, falls back to system colors
@@ -433,10 +433,10 @@ class SettingsManager: ObservableObject {
     /// Primary text
     var tacticalForeground: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.95) : Color(white: 0.1)
+            return appearanceMode == .dark ? Color(white: 0.98) : Color(white: 0.08)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.88) : Color(white: 0.15)
+            return isSystemDarkMode ? Color(white: 0.92) : Color(white: 0.12)
         }
         return Color.primary
     }
@@ -444,10 +444,10 @@ class SettingsManager: ObservableObject {
     /// Secondary text
     var tacticalForegroundSecondary: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.6) : Color(white: 0.4)
+            return appearanceMode == .dark ? Color(white: 0.72) : Color(white: 0.32)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.55) : Color(white: 0.45)
+            return isSystemDarkMode ? Color(white: 0.65) : Color(white: 0.38)
         }
         return Color.secondary
     }
@@ -455,10 +455,10 @@ class SettingsManager: ObservableObject {
     /// Muted text for timestamps, metadata
     var tacticalForegroundMuted: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.4) : Color(white: 0.55)
+            return appearanceMode == .dark ? Color(white: 0.52) : Color(white: 0.48)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.4) : Color(white: 0.55)
+            return isSystemDarkMode ? Color(white: 0.48) : Color(white: 0.50)
         }
         return Color.secondary.opacity(0.7)
     }

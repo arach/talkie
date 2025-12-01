@@ -33,10 +33,11 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.appearance) {
                         Label {
                             Text("Theme & Colors")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "paintbrush")
-                                .font(.system(size: 11))
+                                .font(SettingsManager.shared.fontXS)
                                 .frame(width: 16)
                         }
                     }
@@ -46,10 +47,11 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.quickActions) {
                         Label {
                             Text("Quick Actions")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "bolt.circle")
-                                .font(.system(size: 11))
+                                .font(SettingsManager.shared.fontXS)
                                 .frame(width: 16)
                         }
                     }
@@ -59,10 +61,11 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.apiKeys) {
                         Label {
                             Text("API Keys")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "key")
-                                .font(.system(size: 11))
+                                .font(SettingsManager.shared.fontXS)
                                 .frame(width: 16)
                         }
                     }
@@ -72,10 +75,11 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.allowedCommands) {
                         Label {
                             Text("Allowed Commands")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "terminal")
-                                .font(.system(size: 11))
+                                .font(SettingsManager.shared.fontXS)
                                 .frame(width: 16)
                         }
                     }
@@ -83,10 +87,11 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.outputSettings) {
                         Label {
                             Text("Output & Aliases")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "folder")
-                                .font(.system(size: 11))
+                                .font(SettingsManager.shared.fontXS)
                                 .frame(width: 16)
                         }
                     }
@@ -96,10 +101,11 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.localFiles) {
                         Label {
                             Text("Local Files")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "folder.badge.person.crop")
-                                .font(.system(size: 11))
+                                .font(SettingsManager.shared.fontXS)
                                 .frame(width: 16)
                         }
                     }
@@ -109,10 +115,11 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.debugInfo) {
                         Label {
                             Text("Debug Info")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "info.circle")
-                                .font(.system(size: 11))
+                                .font(SettingsManager.shared.fontXS)
                                 .frame(width: 16)
                         }
                     }
@@ -169,7 +176,7 @@ struct AppearanceSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "paintbrush")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("APPEARANCE")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -377,9 +384,9 @@ struct AppearanceSettingsView: View {
 
                     // UI Chrome: Font + Size together
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("UI CHROME")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
+                        Text("UI Chrome")
+                            .font(SettingsManager.shared.fontXSBold)
+                            .textCase(SettingsManager.shared.uiTextCase)
                             .foregroundColor(.secondary.opacity(0.6))
 
                         HStack(spacing: 12) {
@@ -424,7 +431,7 @@ struct AppearanceSettingsView: View {
                                 Text("ALL CAPS")
                                     .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary.opacity(0.8))
-                                Text("tactical style")
+                                Text("labels & headers")
                                     .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary.opacity(0.5))
                             }
@@ -438,9 +445,9 @@ struct AppearanceSettingsView: View {
 
                     // Content: Font + Size together
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("CONTENT")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
+                        Text("Content")
+                            .font(SettingsManager.shared.fontXSBold)
+                            .textCase(SettingsManager.shared.uiTextCase)
                             .foregroundColor(.secondary.opacity(0.6))
 
                         HStack(spacing: 12) {
@@ -492,8 +499,9 @@ struct AppearanceSettingsView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             // UI Font Preview
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("UI CHROME")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                Text("UI Chrome")
+                                    .font(SettingsManager.shared.fontXSBold)
+                                    .textCase(SettingsManager.shared.uiTextCase)
                                     .foregroundColor(.secondary.opacity(0.6))
                                 Text(settingsManager.uiAllCaps ? "MEMOS · ACTIONS · 12:34 PM" : "Memos · Actions · 12:34 PM")
                                     .font(settingsManager.themedFont(baseSize: 12))
@@ -504,8 +512,9 @@ struct AppearanceSettingsView: View {
 
                             // Content Font Preview
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("CONTENT")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                Text("Content")
+                                    .font(SettingsManager.shared.fontXSBold)
+                                    .textCase(SettingsManager.shared.uiTextCase)
                                     .foregroundColor(.secondary.opacity(0.6))
                                 Text("The quick brown fox jumps over the lazy dog. This is how your transcripts and notes will appear.")
                                     .font(settingsManager.contentFont(baseSize: 13))
@@ -529,7 +538,7 @@ struct AppearanceSettingsView: View {
                 // Note about accent color
                 HStack(spacing: 6) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 10))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.blue)
                     Text("Accent color applies to Talkie only. System accent color is set in System Settings.")
                         .font(SettingsManager.shared.fontXS)
@@ -558,7 +567,7 @@ struct AppearanceModeButton: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: mode.icon)
-                    .font(.system(size: 20))
+                    .font(SettingsManager.shared.fontHeadline)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 48, height: 48)
                     .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
@@ -615,7 +624,7 @@ struct AccentColorButton: View {
 
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(SettingsManager.shared.fontXSBold)
                         .foregroundColor(.accentColor)
                 }
             }
@@ -642,7 +651,7 @@ struct FontStyleButton: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: style.icon)
-                    .font(.system(size: 12))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 28, height: 28)
                     .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
@@ -672,7 +681,7 @@ struct FontSizeButton: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: size.icon)
-                    .font(.system(size: 10))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
 
                 Text(size.displayName)
@@ -708,7 +717,7 @@ struct ThemePresetCard: View {
                         .overlay(
                             HStack(spacing: 6) {
                                 Image(systemName: preset.icon)
-                                    .font(.system(size: 10))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(preset.previewColors.accent)
                                 Text("Aa")
                                     .font(.system(size: 11, weight: .medium, design: preset.uiFontStyle == .monospace ? .monospaced : (preset.uiFontStyle == .rounded ? .rounded : .default)))
@@ -718,7 +727,7 @@ struct ThemePresetCard: View {
 
                                 if isActive {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 12))
+                                        .font(SettingsManager.shared.fontSM)
                                         .foregroundColor(preset.previewColors.accent)
                                 }
                             }
@@ -780,7 +789,7 @@ struct APISettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "key")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("API KEYS")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -984,7 +993,7 @@ struct APIKeyRow: View {
             // Header row
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .font(SettingsManager.shared.fontTitle)
                     .foregroundColor(isConfigured ? .blue : .secondary)
                     .frame(width: 20)
 
@@ -1048,7 +1057,7 @@ struct APIKeyRow: View {
                         // Reveal button
                         Button(action: onReveal) {
                             Image(systemName: isRevealed ? "eye.slash" : "eye")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
@@ -1066,7 +1075,7 @@ struct APIKeyRow: View {
 
                     Button(action: onDelete) {
                         Image(systemName: "trash")
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
@@ -1077,7 +1086,7 @@ struct APIKeyRow: View {
                     Button(action: onEdit) {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                             Text("Add API Key")
                                 .font(SettingsManager.shared.fontXSMedium)
                         }
@@ -1091,7 +1100,7 @@ struct APIKeyRow: View {
                             Text("Get key")
                                 .font(SettingsManager.shared.fontXS)
                             Image(systemName: "arrow.up.right.square")
-                                .font(.system(size: 8))
+                                .font(SettingsManager.shared.fontXS)
                         }
                         .foregroundColor(.blue)
                     }
@@ -1124,7 +1133,7 @@ struct ModelLibraryView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "brain")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("MODEL LIBRARY")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -1163,7 +1172,7 @@ struct ModelCard: View {
         HStack(alignment: .top, spacing: 16) {
             // Icon
             Image(systemName: "sparkles")
-                .font(.system(size: 20))
+                .font(SettingsManager.shared.fontHeadline)
                 .foregroundColor(installed ? .blue : .secondary)
                 .frame(width: 32, height: 32)
                 .background(Color(NSColor.controlBackgroundColor))
@@ -1199,7 +1208,7 @@ struct ModelCard: View {
             if installed {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.green)
                     Text("INSTALLED")
                         .font(SettingsManager.shared.fontXSBold)
@@ -1235,7 +1244,7 @@ struct WorkflowsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "wand.and.stars")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("WORKFLOWS")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -1271,7 +1280,7 @@ struct ActivityLogView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "list.bullet.clipboard")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("ACTIVITY LOG")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -1311,7 +1320,7 @@ struct AllowedCommandsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "terminal")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("ALLOWED COMMANDS")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -1370,7 +1379,7 @@ struct AllowedCommandsView: View {
                     if let result = showingWhichResult {
                         HStack(spacing: 6) {
                             Image(systemName: "info.circle")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.blue)
                             Text(result)
                                 .font(SettingsManager.shared.fontXS)
@@ -1401,7 +1410,7 @@ struct AllowedCommandsView: View {
                         ForEach(customCommands, id: \.self) { path in
                             HStack {
                                 Image(systemName: "terminal")
-                                    .font(.system(size: 10))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.green)
 
                                 Text(path)
@@ -1412,7 +1421,7 @@ struct AllowedCommandsView: View {
 
                                 Button(action: { removeCommand(path) }) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 12))
+                                        .font(SettingsManager.shared.fontSM)
                                         .foregroundColor(.red.opacity(0.7))
                                 }
                                 .buttonStyle(.plain)
@@ -1538,7 +1547,7 @@ struct OutputSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Configure default output location and path aliases for workflows.")
-                        .font(.system(size: 11))
+                        .font(SettingsManager.shared.fontSM)
                         .foregroundColor(.secondary)
                 }
 
@@ -1556,14 +1565,14 @@ struct OutputSettingsView: View {
 
                         Button(action: { showingFolderPicker = true }) {
                             Image(systemName: "folder")
-                                .font(.system(size: 12))
+                                .font(SettingsManager.shared.fontSM)
                         }
                         .buttonStyle(.bordered)
                         .help("Browse for folder")
 
                         Button(action: saveDirectory) {
                             Text("Save")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(SettingsManager.shared.fontXSMedium)
                         }
                         .buttonStyle(.borderedProminent)
                     }
@@ -1571,7 +1580,7 @@ struct OutputSettingsView: View {
                     // Current value display
                     HStack(spacing: 4) {
                         Image(systemName: "folder.fill")
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.blue)
                         Text(SaveFileStepConfig.defaultOutputDirectory)
                             .font(SettingsManager.shared.fontXS)
@@ -1607,7 +1616,7 @@ struct OutputSettingsView: View {
                                 Image(systemName: "folder.badge.gearshape")
                                 Text("Open in Finder")
                             }
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                         }
                         .buttonStyle(.bordered)
 
@@ -1616,7 +1625,7 @@ struct OutputSettingsView: View {
                                 Image(systemName: "folder.badge.plus")
                                 Text("Create Folder")
                             }
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                         }
                         .buttonStyle(.bordered)
 
@@ -1625,7 +1634,7 @@ struct OutputSettingsView: View {
                                 Image(systemName: "arrow.counterclockwise")
                                 Text("Reset to Default")
                             }
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                         }
                         .buttonStyle(.bordered)
                     }
@@ -1643,7 +1652,7 @@ struct OutputSettingsView: View {
                             .foregroundColor(.secondary)
 
                         Text("Define shortcuts like @Obsidian, @Notes to use in file paths")
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
                     }
 
@@ -1664,7 +1673,7 @@ struct OutputSettingsView: View {
 
                                     // Arrow
                                     Image(systemName: "arrow.right")
-                                        .font(.system(size: 9))
+                                        .font(SettingsManager.shared.fontXS)
                                         .foregroundColor(.secondary)
 
                                     // Path
@@ -1679,7 +1688,7 @@ struct OutputSettingsView: View {
                                     // Delete button
                                     Button(action: { removeAlias(alias) }) {
                                         Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 12))
+                                            .font(SettingsManager.shared.fontSM)
                                             .foregroundColor(.secondary.opacity(0.5))
                                     }
                                     .buttonStyle(.plain)
@@ -1716,13 +1725,13 @@ struct OutputSettingsView: View {
 
                             Button(action: { showingAliasFolderPicker = true }) {
                                 Image(systemName: "folder")
-                                    .font(.system(size: 12))
+                                    .font(SettingsManager.shared.fontSM)
                             }
                             .buttonStyle(.bordered)
 
                             Button(action: addAlias) {
                                 Text("Add")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(SettingsManager.shared.fontXSMedium)
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(newAliasName.isEmpty || newAliasPath.isEmpty)
@@ -1732,7 +1741,7 @@ struct OutputSettingsView: View {
                     // Usage hint
                     HStack(spacing: 6) {
                         Image(systemName: "lightbulb")
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.yellow)
                         Text("Use in Save File step directory: @Obsidian/Voice Notes")
                             .font(SettingsManager.shared.fontXS)
@@ -1889,7 +1898,7 @@ struct QuickActionsSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Pin workflows to show them as quick actions when viewing a memo.")
-                        .font(.system(size: 11))
+                        .font(SettingsManager.shared.fontSM)
                         .foregroundColor(.secondary)
                 }
 
@@ -1972,7 +1981,7 @@ struct QuickActionsSettingsView: View {
         HStack(spacing: 12) {
             // Icon
             Image(systemName: workflow.icon)
-                .font(.system(size: 14))
+                .font(SettingsManager.shared.fontTitle)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 24, height: 24)
                 .background(workflow.color.color.opacity(0.15))
@@ -1993,7 +2002,7 @@ struct QuickActionsSettingsView: View {
             // Pin/unpin button
             Button(action: { togglePin(workflow) }) {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
-                    .font(.system(size: 12))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(isPinned ? .orange : .secondary)
             }
             .buttonStyle(.plain)
@@ -2073,7 +2082,7 @@ struct DebugInfoView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("DEBUG INFO")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -2214,7 +2223,7 @@ struct LocalFilesSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.person.crop")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("LOCAL FILES")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .tracking(2)
@@ -2230,7 +2239,7 @@ struct LocalFilesSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.shield")
-                            .font(.system(size: 12))
+                            .font(SettingsManager.shared.fontSM)
                             .foregroundColor(.green)
                         Text("YOUR DATA, YOUR FILES")
                             .font(SettingsManager.shared.fontXSBold)
@@ -2258,7 +2267,7 @@ struct LocalFilesSettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: "doc.text")
-                                    .font(.system(size: 12))
+                                    .font(SettingsManager.shared.fontSM)
                                     .foregroundColor(.blue)
                                 Text("Save Transcripts Locally")
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -2294,14 +2303,14 @@ struct LocalFilesSettingsView: View {
 
                                 Button(action: { showingTranscriptsFolderPicker = true }) {
                                     Image(systemName: "folder")
-                                        .font(.system(size: 12))
+                                        .font(SettingsManager.shared.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Browse for folder")
 
                                 Button(action: { TranscriptFileManager.shared.openTranscriptsFolderInFinder() }) {
                                     Image(systemName: "arrow.up.forward.square")
-                                        .font(.system(size: 12))
+                                        .font(SettingsManager.shared.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Open in Finder")
@@ -2320,7 +2329,7 @@ struct LocalFilesSettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: "waveform")
-                                    .font(.system(size: 12))
+                                    .font(SettingsManager.shared.fontSM)
                                     .foregroundColor(.purple)
                                 Text("Save Audio Files Locally")
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -2352,14 +2361,14 @@ struct LocalFilesSettingsView: View {
 
                                 Button(action: { showingAudioFolderPicker = true }) {
                                     Image(systemName: "folder")
-                                        .font(.system(size: 12))
+                                        .font(SettingsManager.shared.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Browse for folder")
 
                                 Button(action: { TranscriptFileManager.shared.openAudioFolderInFinder() }) {
                                     Image(systemName: "arrow.up.forward.square")
-                                        .font(.system(size: 12))
+                                        .font(SettingsManager.shared.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Open in Finder")
@@ -2367,7 +2376,7 @@ struct LocalFilesSettingsView: View {
 
                             HStack(spacing: 6) {
                                 Image(systemName: "exclamationmark.triangle")
-                                    .font(.system(size: 10))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.orange)
                                 Text("Audio files can take significant disk space")
                                     .font(SettingsManager.shared.fontXS)
@@ -2442,7 +2451,7 @@ struct LocalFilesSettingsView: View {
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                     Text("Sync Now")
                                 }
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                             }
                             .buttonStyle(.bordered)
 
@@ -2451,7 +2460,7 @@ struct LocalFilesSettingsView: View {
                                     Image(systemName: "arrow.clockwise")
                                     Text("Refresh Stats")
                                 }
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                             }
                             .buttonStyle(.bordered)
                         }

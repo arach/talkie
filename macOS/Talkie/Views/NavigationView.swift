@@ -198,7 +198,7 @@ struct TalkieNavigationView: View {
             // Header
             HStack {
                 Text("TALKIE")
-                    .font(SettingsManager.shared.themedFont(baseSize: 11, weight: .bold))
+                    .font(SettingsManager.shared.fontSMBold)
                     .tracking(2)
                     .foregroundColor(SettingsManager.shared.tacticalForeground)
 
@@ -219,7 +219,7 @@ struct TalkieNavigationView: View {
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(SettingsManager.shared.themedFont(baseSize: 10, weight: .regular))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(SettingsManager.shared.tacticalForeground)
             }
             .padding(.horizontal, 8)
@@ -231,9 +231,9 @@ struct TalkieNavigationView: View {
 
             // Navigation sections
             List(selection: $selectedSection) {
-                Section(header: Text("LIBRARY")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .tracking(1.5)
+                Section(header: Text("Library")
+                    .font(SettingsManager.shared.fontXSMedium)
+                    .textCase(SettingsManager.shared.uiTextCase)
                     .foregroundColor(.secondary.opacity(0.6))
                 ) {
                     NavigationLink(value: NavigationSection.allMemos) {
@@ -294,9 +294,9 @@ struct TalkieNavigationView: View {
                 }
                 .collapsible(false)
 
-                Section(header: Text("TOOLS")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .tracking(1.5)
+                Section(header: Text("Tools")
+                    .font(SettingsManager.shared.fontXSMedium)
+                    .textCase(SettingsManager.shared.uiTextCase)
                     .foregroundColor(.secondary.opacity(0.6))
                 ) {
                     NavigationLink(value: NavigationSection.aiResults) {
@@ -555,19 +555,19 @@ struct TalkieNavigationView: View {
             HStack(spacing: 6) {
                 Text(sectionTitle)
                     .font(SettingsManager.shared.fontSMMedium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(SettingsManager.shared.tacticalForeground)
 
                 if let subtitle = sectionSubtitle {
                     Text(subtitle)
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
                 }
 
                 Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(SettingsManager.shared.tacticalBackgroundSecondary)
 
             Divider()
 
@@ -577,20 +577,20 @@ struct TalkieNavigationView: View {
                     Spacer()
                     Image(systemName: "waveform")
                         .font(SettingsManager.shared.fontDisplay)
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
 
                     Text("NO MEMOS")
                         .font(.techLabel)
                         .tracking(Tracking.wide)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
 
                     Text("Record on iPhone to sync")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.textBackgroundColor))
+                .background(SettingsManager.shared.tacticalBackground)
             } else {
                 List(selection: $selectedMemo) {
                     ForEach(filteredMemos) { memo in
@@ -600,10 +600,10 @@ struct TalkieNavigationView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .background(Color(NSColor.textBackgroundColor))
+                .background(SettingsManager.shared.tacticalBackground)
             }
         }
-        .background(Color(NSColor.textBackgroundColor))
+        .background(SettingsManager.shared.tacticalBackground)
     }
 }
 
@@ -831,10 +831,20 @@ struct AIResultsListColumn: View {
     @State private var memoWidth: CGFloat = 180
     @State private var durationWidth: CGFloat = 90
 
-    // Sorted runs based on current sort state
+    // Sorted runs based on current sort state, deduplicated by run ID
     private var sortedRuns: [WorkflowRun] {
-        let runs = Array(allRuns)
-        return runs.sorted { a, b in
+        // Deduplicate by workflow run ID (CloudKit sync can create duplicates with same ID)
+        var seen = Set<UUID>()
+        let dedupedRuns = allRuns.filter { run in
+            guard let runId = run.id else { return true } // Keep runs without ID
+            if seen.contains(runId) {
+                return false
+            }
+            seen.insert(runId)
+            return true
+        }
+
+        return dedupedRuns.sorted { a, b in
             let result: Bool
             switch sortField {
             case .status:
@@ -923,10 +933,10 @@ struct AIResultsListColumn: View {
                 // Table rows
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(sortedRuns, id: \.id) { run in
+                        ForEach(sortedRuns, id: \.objectID) { run in
                             ActivityTableRow(
                                 run: run,
-                                isSelected: selectedRun?.id == run.id,
+                                isSelected: selectedRun?.objectID == run.objectID,
                                 onSelect: { selectedRun = run },
                                 statusWidth: statusWidth,
                                 timestampWidth: timestampWidth,
@@ -934,9 +944,6 @@ struct AIResultsListColumn: View {
                                 memoWidth: memoWidth,
                                 durationWidth: durationWidth
                             )
-
-                            Divider()
-                                .padding(.leading, 16)
                         }
                     }
                 }
@@ -959,56 +966,40 @@ struct ActivityTableHeader: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SortableColumnHeader(
-                title: "STATUS",
-                field: .status,
-                currentSort: $sortField,
-                ascending: $sortAscending,
-                width: statusWidth
-            )
-            ColumnResizer(width: $statusWidth, minWidth: 24, maxWidth: 50)
+            // Timestamp
+            Text("TIMESTAMP")
+                .font(SettingsManager.shared.fontXSBold)
+                .foregroundColor(.secondary.opacity(0.6))
+                .frame(width: timestampWidth, alignment: .leading)
 
-            SortableColumnHeader(
-                title: "TIMESTAMP",
-                field: .timestamp,
-                currentSort: $sortField,
-                ascending: $sortAscending,
-                width: timestampWidth
-            )
-            ColumnResizer(width: $timestampWidth, minWidth: 100, maxWidth: 200)
+            // Workflow
+            Text("WORKFLOW")
+                .font(SettingsManager.shared.fontXSBold)
+                .foregroundColor(.secondary.opacity(0.6))
+                .frame(width: workflowWidth, alignment: .leading)
 
-            SortableColumnHeader(
-                title: "WORKFLOW",
-                field: .workflow,
-                currentSort: $sortField,
-                ascending: $sortAscending,
-                width: workflowWidth
-            )
-            ColumnResizer(width: $workflowWidth, minWidth: 80, maxWidth: 250)
+            // Memo
+            Text("MEMO")
+                .font(SettingsManager.shared.fontXSBold)
+                .foregroundColor(.secondary.opacity(0.6))
+                .frame(width: memoWidth, alignment: .leading)
 
-            SortableColumnHeader(
-                title: "MEMO",
-                field: .memo,
-                currentSort: $sortField,
-                ascending: $sortAscending,
-                width: memoWidth
-            )
-            ColumnResizer(width: $memoWidth, minWidth: 100, maxWidth: 300)
-
-            SortableColumnHeader(
-                title: "DURATION",
-                field: .duration,
-                currentSort: $sortField,
-                ascending: $sortAscending,
-                width: durationWidth,
-                alignment: .trailing
-            )
+            // Duration
+            Text("DURATION")
+                .font(SettingsManager.shared.fontXSBold)
+                .foregroundColor(.secondary.opacity(0.6))
+                .frame(width: durationWidth, alignment: .trailing)
 
             Spacer()
+
+            // Status header on the right
+            Text("STATUS")
+                .font(SettingsManager.shared.fontXSBold)
+                .foregroundColor(.secondary.opacity(0.6))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
-        .frame(height: 32)
+        .frame(height: 28)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
     }
 }
@@ -1138,12 +1129,6 @@ struct ActivityTableRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 0) {
-                // Status (just a dot)
-                Circle()
-                    .fill(isSuccess ? Color.green : Color.red)
-                    .frame(width: 8, height: 8)
-                    .frame(width: statusWidth, alignment: .leading)
-
                 // Timestamp
                 Text(formatTimestamp(runDate))
                     .font(SettingsManager.shared.fontSM)
@@ -1152,7 +1137,7 @@ struct ActivityTableRow: View {
 
                 // Workflow
                 Text(workflowName)
-                    .font(SettingsManager.shared.fontBodyMedium)
+                    .font(SettingsManager.shared.fontBodyBold)
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .frame(width: workflowWidth, alignment: .leading)
@@ -1183,9 +1168,24 @@ struct ActivityTableRow: View {
                 .frame(width: durationWidth, alignment: .trailing)
 
                 Spacer()
+
+                // Run ID (truncated, shown on hover)
+                if isHovering || isSelected, let runId = run.id {
+                    Text(runId.uuidString.prefix(8).uppercased())
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .padding(.trailing, 6)
+                }
+
+                // Status (dot on the right)
+                Circle()
+                    .fill(isSuccess ? Color.green : Color.red)
+                    .frame(width: 6, height: 6)
+                    .padding(.leading, 4)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 4)
+            .frame(height: 32)
             .background(
                 isSelected ? Color.blue.opacity(0.1) :
                     (isHovering ? Color.primary.opacity(0.03) : Color.clear)
@@ -1193,6 +1193,9 @@ struct ActivityTableRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in isHovering = hovering }
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 16)
+        }
     }
 
     private func formatTimestamp(_ date: Date) -> String {
@@ -1240,10 +1243,20 @@ struct ActivityLogFullView: View {
     // Inspector panel width (resizable)
     @State private var inspectorWidth: CGFloat = 380
 
-    // Sorted runs based on current sort state
+    // Sorted runs based on current sort state, deduplicated by run ID
     private var sortedRuns: [WorkflowRun] {
-        let runs = Array(allRuns)
-        return runs.sorted { a, b in
+        // Deduplicate by workflow run ID (CloudKit sync can create duplicates with same ID)
+        var seen = Set<UUID>()
+        let dedupedRuns = allRuns.filter { run in
+            guard let runId = run.id else { return true } // Keep runs without ID
+            if seen.contains(runId) {
+                return false
+            }
+            seen.insert(runId)
+            return true
+        }
+
+        return dedupedRuns.sorted { a, b in
             let result: Bool
             switch sortField {
             case .status:
@@ -1345,10 +1358,10 @@ struct ActivityLogFullView: View {
                     // Table rows
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(sortedRuns, id: \.id) { run in
+                            ForEach(sortedRuns, id: \.objectID) { run in
                                 ActivityTableRow(
                                     run: run,
-                                    isSelected: selectedRun?.id == run.id,
+                                    isSelected: selectedRun?.objectID == run.objectID,
                                     onSelect: {
                                         selectedRun = run
                                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -1361,9 +1374,6 @@ struct ActivityLogFullView: View {
                                     memoWidth: memoWidth,
                                     durationWidth: durationWidth
                                 )
-
-                                Divider()
-                                    .padding(.leading, 16)
                             }
                         }
                     }
@@ -1455,9 +1465,17 @@ struct ActivityInspectorPanel: View {
                         .font(SettingsManager.shared.fontBodyMedium)
                         .lineLimit(1)
 
-                    Text(formatFullDate(runDate))
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Text(formatFullDate(runDate))
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.secondary)
+
+                        if let runId = run.id {
+                            Text(runId.uuidString.prefix(8).uppercased())
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.4))
+                        }
+                    }
                 }
 
                 Spacer()
@@ -2407,13 +2425,15 @@ struct AIRunRowView: View {
                     .foregroundColor(isSelected ? .white.opacity(0.5) : .secondary.opacity(0.3))
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
+            .frame(height: 44)
             .background(isSelected ? Color.blue : (isHovering ? Color.primary.opacity(0.05) : Color.clear))
             .cornerRadius(6)
         }
         .buttonStyle(.plain)
         .onHover { hovering in isHovering = hovering }
         .padding(.horizontal, 8)
+        .padding(.vertical, 1)
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -2474,6 +2494,12 @@ struct AIRunDetailView: View {
                             Text(formatFullDate(runDate))
                                 .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.secondary.opacity(0.6))
+
+                            if let runId = run.id {
+                                Text(runId.uuidString.prefix(8).uppercased())
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.secondary.opacity(0.4))
+                            }
                         }
                     }
 

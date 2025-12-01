@@ -229,7 +229,7 @@ struct MemoDetailView: View {
 
                         Button(action: togglePlayback) {
                             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(settings.fontTitle)
                                 .foregroundColor(.primary)
                                 .offset(x: isPlaying ? 0 : 1) // Optical centering for play triangle
                                 .frame(width: 32, height: 32)
@@ -302,7 +302,7 @@ struct MemoDetailView: View {
 
                         if showNotesSaved {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 10))
+                                .font(settings.fontXS)
                                 .foregroundColor(.secondary.opacity(0.5))
                                 .transition(.opacity)
                         }
@@ -1534,7 +1534,8 @@ struct OutputCard: View {
                     Button(action: copyToClipboard) {
                         HStack(spacing: 4) {
                             Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(SettingsManager.shared.fontXSMedium)
+                                .foregroundColor(copied ? .green : .secondary.opacity(0.5))
                             if copied {
                                 Text("COPIED")
                                     .font(.techLabelSmall)
@@ -1567,7 +1568,7 @@ struct OutputCard: View {
                             .font(.techLabelSmall)
                             .tracking(Tracking.normal)
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(SettingsManager.shared.fontXSBold)
                     }
                     .foregroundColor(.accentColor)
                 }

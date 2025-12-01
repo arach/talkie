@@ -156,16 +156,16 @@ struct SystemConsoleView: View {
         HStack(spacing: 8) {
             // Terminal icon
             Image(systemName: "terminal")
-                .font(.system(size: 10))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(subtleGreen.opacity(0.7))
 
             Text("SYSTEM CONSOLE")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(SettingsManager.shared.fontXSBold)
                 .tracking(1.5)
                 .foregroundColor(.white.opacity(0.9))
 
             Text("v1.0")
-                .font(.system(size: 8, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.white.opacity(0.3))
 
             Spacer()
@@ -178,14 +178,14 @@ struct SystemConsoleView: View {
                     .shadow(color: subtleGreen.opacity(0.5), radius: 3)
 
                 Text("LIVE")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXSBold)
                     .foregroundColor(subtleGreen.opacity(0.8))
             }
 
             // Clear button
             Button(action: { eventManager.clear() }) {
                 Text("CLEAR")
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.white.opacity(0.4))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -213,7 +213,7 @@ struct SystemConsoleView: View {
             Spacer()
 
             Text("\(filteredEvents.count) events")
-                .font(.system(size: 8, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.white.opacity(0.3))
         }
         .padding(.horizontal, 12)
@@ -227,7 +227,7 @@ struct SystemConsoleView: View {
 
         return Button(action: { filterType = type }) {
             Text(label)
-                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                .font(SettingsManager.shared.fontXSBold)
                 .foregroundColor(isSelected ? bgColor : chipColor.opacity(0.6))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
@@ -268,11 +268,11 @@ struct SystemConsoleView: View {
             // Prompt
             HStack(spacing: 4) {
                 Text(">")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXSBold)
                     .foregroundColor(subtleGreen)
 
                 Text("ready")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.white.opacity(0.4))
             }
 
@@ -282,9 +282,9 @@ struct SystemConsoleView: View {
             Button(action: { autoScroll.toggle() }) {
                 HStack(spacing: 3) {
                     Image(systemName: autoScroll ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(.system(size: 8))
+                        .font(SettingsManager.shared.fontXS)
                     Text("AUTO")
-                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                 }
                 .foregroundColor(autoScroll ? subtleGreen : .white.opacity(0.3))
             }
@@ -315,37 +315,37 @@ struct ConsoleEventRow: View {
         HStack(alignment: .top, spacing: 0) {
             // Timestamp
             Text(formatTime(event.timestamp))
-                .font(.system(size: 9, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.white.opacity(0.25))
                 .frame(width: 65, alignment: .leading)
 
             // Separator
             Text("│")
-                .font(.system(size: 9, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.white.opacity(0.1))
                 .padding(.horizontal, 4)
 
             // Type badge
             Text(event.type.rawValue)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(SettingsManager.shared.fontXSBold)
                 .foregroundColor(event.type.color)
                 .frame(width: 55, alignment: .leading)
 
             // Separator
             Text("│")
-                .font(.system(size: 9, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.white.opacity(0.1))
                 .padding(.horizontal, 4)
 
             // Message
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.message)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.white.opacity(0.8))
 
                 if let detail = event.detail {
                     Text(detail)
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.white.opacity(0.35))
                 }
             }

@@ -21,12 +21,12 @@ struct ModelsContentView: View {
                 // Header
                 VStack(alignment: .leading, spacing: 8) {
                     Text("MODELS & INTELLIGENCE")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(settingsManager.fontBodyBold)
                         .tracking(2)
                         .foregroundColor(.primary)
 
                     Text("Manage AI providers and local models")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(settingsManager.fontSM)
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 24)
@@ -37,7 +37,7 @@ struct ModelsContentView: View {
                 // Cloud Providers Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text("☁️ CLOUD PROVIDERS")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(settingsManager.fontSMBold)
                         .tracking(1.5)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 24)
@@ -50,7 +50,7 @@ struct ModelsContentView: View {
                 // Local Providers Section
                 VStack(alignment: .leading, spacing: 16) {
                     Text("💻 LOCAL PROVIDERS")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(settingsManager.fontSMBold)
                         .tracking(1.5)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 24)
@@ -240,7 +240,7 @@ struct ModelsContentView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.orange)
                     Text("MLX requires Apple Silicon (M1/M2/M3)")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(settingsManager.fontXS)
                         .foregroundColor(.secondary)
                 }
                 .padding(12)
@@ -328,13 +328,13 @@ struct ProviderCard<Content: View>: View {
             // Header
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
+                    .font(SettingsManager.shared.fontTitle)
                     .foregroundColor(isConfigured ? .blue : .secondary)
                     .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(SettingsManager.shared.fontBody)
 
                     HStack(spacing: 6) {
                         Circle()
@@ -342,7 +342,7 @@ struct ProviderCard<Content: View>: View {
                             .frame(width: 6, height: 6)
 
                         Text(status.uppercased())
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(0.5)
                             .foregroundColor(isConfigured ? .green : .orange)
                     }
@@ -359,7 +359,7 @@ struct ProviderCard<Content: View>: View {
                             Text("•")
                                 .foregroundColor(.secondary)
                             Text(model)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -389,25 +389,25 @@ struct ModelRow: View {
             // Model info
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.displayName)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(SettingsManager.shared.fontSM)
 
                 HStack(spacing: 8) {
                     Text(model.size)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
 
                     if let sizeGB = model.sizeInGB {
                         Text("~\(String(format: "%.1f", sizeGB))GB")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
                     }
 
                     if model.isInstalled {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 9))
+                                .font(SettingsManager.shared.fontXS)
                             Text("INSTALLED")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSBold)
                                 .tracking(0.5)
                         }
                         .foregroundColor(.green)
@@ -423,13 +423,13 @@ struct ModelRow: View {
                     ProgressView(value: downloadProgress)
                         .frame(width: 80)
                     Text("\(Int(downloadProgress * 100))%")
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
             } else if model.isInstalled {
                 Button(action: onDelete) {
                     Text("DELETE")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(0.5)
                         .foregroundColor(.red)
                         .padding(.horizontal, 12)
@@ -442,9 +442,9 @@ struct ModelRow: View {
                 Button(action: onDownload) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 10))
+                            .font(SettingsManager.shared.fontXS)
                         Text("DOWNLOAD")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(0.5)
                     }
                     .foregroundColor(.blue)
@@ -467,7 +467,7 @@ struct ModelRow: View {
 struct ActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .font(SettingsManager.shared.fontXSBold)
             .tracking(1)
             .foregroundColor(.white)
             .padding(.horizontal, 12)
@@ -517,16 +517,16 @@ struct CompactModelCard: View {
             // Icon + Name
             HStack(spacing: 8) {
                 Image(systemName: model.isInstalled ? "checkmark.circle.fill" : "cpu")
-                    .font(.system(size: 14))
+                    .font(SettingsManager.shared.fontTitle)
                     .foregroundColor(model.isInstalled ? .green : .secondary)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.displayName)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .lineLimit(1)
 
                     Text(modelHighlight)
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
@@ -540,12 +540,12 @@ struct CompactModelCard: View {
                     ProgressView(value: downloadProgress)
                     HStack {
                         Text("\(Int(downloadProgress * 100))%")
-                            .font(.system(size: 8, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
                         Spacer()
                         Button(action: onCancel) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(.orange)
@@ -555,9 +555,9 @@ struct CompactModelCard: View {
                 Button(action: onDelete) {
                     HStack(spacing: 4) {
                         Image(systemName: "trash")
-                            .font(.system(size: 8))
+                            .font(SettingsManager.shared.fontXS)
                         Text("Delete")
-                            .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
@@ -569,9 +569,9 @@ struct CompactModelCard: View {
                 Button(action: onDownload) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 8))
+                            .font(SettingsManager.shared.fontXS)
                         Text("Download")
-                            .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
@@ -611,12 +611,12 @@ struct CompactProviderCard: View {
             // Back side - Configuration
             VStack(alignment: .leading, spacing: 8) {
                 Text("Configure \(name)")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.primary)
 
                 SecureField("API Key", text: apiKeyBinding)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .controlSize(.small)
 
                 HStack(spacing: 6) {
@@ -646,12 +646,12 @@ struct CompactProviderCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: icon)
-                        .font(.system(size: 14))
+                        .font(SettingsManager.shared.fontTitle)
                         .foregroundColor(isConfigured ? .blue : .secondary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
 
                         HStack(spacing: 4) {
                             Circle()
@@ -659,7 +659,7 @@ struct CompactProviderCard: View {
                                 .frame(width: 5, height: 5)
 
                             Text(isConfigured ? "ACTIVE" : "SETUP")
-                                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSBold)
                                 .tracking(0.3)
                                 .foregroundColor(isConfigured ? .green : .orange)
                         }
@@ -672,9 +672,9 @@ struct CompactProviderCard: View {
                 Button(action: onConfigure) {
                     HStack(spacing: 4) {
                         Image(systemName: "gearshape")
-                            .font(.system(size: 8))
+                            .font(SettingsManager.shared.fontXS)
                         Text("Configure")
-                            .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
