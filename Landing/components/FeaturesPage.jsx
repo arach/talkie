@@ -107,172 +107,18 @@ export default function FeaturesPage() {
             </p>
           </div>
 
-          {/* 1. Voice Recording */}
-          <section className="mb-20">
-            <SectionHeader label="Voice Recording & Transcription" icon={Mic} />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <FeatureCard title="One-Tap Capture" description="Instant recording startup time. No lag. No loading screens." />
-              <FeatureCard title="Auto-Transcribe" description="Local, high-accuracy transcription running on-device via Apple's Neural Engine." />
-              <FeatureCard title="iCloud Sync" description="Seamless, encrypted synchronization across iPhone, iPad, and Mac." />
-              <FeatureCard title="Smart Library" description="Organize with Recent, Processed, Archived, and custom Smart Folders." />
-            </div>
+          {/* 1. Example Workflows - Lead with what you can DO */}
+          <section className="mb-24">
+             <SectionHeader label="Example Workflows" icon={Workflow} />
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FeatureCard title="Voice → Obsidian" description="Extract insights → enrich with Claude CLI → save to Markdown in your vault." />
+                <FeatureCard title="Meeting Notes → Tasks" description="Extract todos → structure JSON → send to Todoist or Linear via API." />
+                <FeatureCard title="Daily Journal Builder" description="Summarize daily thoughts → append to daily journal file with timestamp." />
+                <FeatureCard title="Quick GitHub Issue" description="Dictate bug report → transform to format → gh issue create." />
+             </div>
           </section>
 
-          {/* 2. Widgets */}
-          <section className="mb-20">
-            <SectionHeader label="Widgets & Quick Access" icon={LayoutGrid} />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-6">Record From Anywhere</h3>
-                <p className="text-zinc-600 dark:text-zinc-400 mb-8 max-w-xl">
-                  Add Talkie widgets to your Home Screen, Lock Screen, or Control Center for instant voice capture — no need to open the app.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <FeatureCard title="Home Screen Widget" description="Small or medium widget with quick record button and memo count." />
-                  <FeatureCard title="Lock Screen Widget" description="Circular widget for instant capture without unlocking." />
-                  <FeatureCard title="Control Center" description="iOS 18+ toggle for one-tap recording from anywhere." />
-                  <FeatureCard title="Deep Links" description="Widget taps open directly to recording view." />
-                </div>
-              </div>
-
-              {/* Widget Preview */}
-              <div className="flex items-center justify-center">
-                <div className="relative">
-                  {/* Phone frame mockup */}
-                  <div className="w-64 h-[420px] bg-zinc-900 rounded-[2.5rem] p-3 shadow-2xl">
-                    <div className="w-full h-full bg-zinc-800 rounded-[2rem] p-4 flex flex-col">
-                      {/* Status bar */}
-                      <div className="flex justify-between text-[10px] text-zinc-400 mb-4">
-                        <span>9:41</span>
-                        <div className="flex gap-1">
-                          <span>5G</span>
-                          <span>100%</span>
-                        </div>
-                      </div>
-
-                      {/* Widget preview */}
-                      <div className="bg-black rounded-2xl p-4 mb-4">
-                        <div className="flex flex-col items-center">
-                          <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center mb-2 shadow-lg shadow-red-500/30">
-                            <Mic className="w-6 h-6 text-white" />
-                          </div>
-                          <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">Record</span>
-                          <span className="text-[9px] text-zinc-600 mt-1">12 memos</span>
-                        </div>
-                      </div>
-
-                      {/* App icons placeholder */}
-                      <div className="grid grid-cols-4 gap-3 mt-auto">
-                        {[...Array(8)].map((_, i) => (
-                          <div key={i} className="w-10 h-10 bg-zinc-700 rounded-xl" />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Floating badge */}
-                  <div className="absolute -right-4 top-20 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full shadow-lg">
-                    iOS 16+
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 3. Siri & Shortcuts */}
-          <section className="mb-20">
-            <SectionHeader label="Siri & Shortcuts Integration" icon={MessageCircle} />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-6">Hands-Free Control</h3>
-                <p className="text-zinc-600 dark:text-zinc-400 mb-8 max-w-xl">
-                  Use Siri voice commands to record memos, play recordings, search your library, and more — all without touching your device.
-                </p>
-
-                {/* Siri command examples */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                      <Mic className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-zinc-900 dark:text-white">"Hey Siri, record with Talkie"</p>
-                      <p className="text-xs text-zinc-500">Instantly starts recording</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 p-4 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                    <div className="w-10 h-10 bg-zinc-200 dark:bg-zinc-800 rounded-full flex items-center justify-center">
-                      <Play className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-zinc-900 dark:text-white">"Play my last Talkie memo"</p>
-                      <p className="text-xs text-zinc-500">Plays most recent recording</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 p-4 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                    <div className="w-10 h-10 bg-zinc-200 dark:bg-zinc-800 rounded-full flex items-center justify-center">
-                      <Search className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-zinc-900 dark:text-white">"Search Talkie for meeting notes"</p>
-                      <p className="text-xs text-zinc-500">Searches transcriptions</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 p-4 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                    <div className="w-10 h-10 bg-zinc-200 dark:bg-zinc-800 rounded-full flex items-center justify-center">
-                      <Hash className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-zinc-900 dark:text-white">"How many memos in Talkie?"</p>
-                      <p className="text-xs text-zinc-500">Quick count of your library</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Shortcuts App Integration */}
-              <div className="bg-white dark:bg-black border border-zinc-200 dark:border-zinc-800">
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Shortcuts App</span>
-                </div>
-                <div className="p-4">
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-4">
-                    All Talkie actions are available in the Shortcuts app for custom automations.
-                  </p>
-                  <ul className="space-y-3 text-xs">
-                    <li className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                      <span className="text-zinc-700 dark:text-zinc-300">Start Recording</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                      <span className="text-zinc-700 dark:text-zinc-300">Play Last Memo</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                      <span className="text-zinc-700 dark:text-zinc-300">Search Memos</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                      <span className="text-zinc-700 dark:text-zinc-300">Get Memo Count</span>
-                    </li>
-                  </ul>
-
-                  <div className="mt-6 p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded">
-                    <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1">Example Automation</p>
-                    <p className="text-xs text-zinc-700 dark:text-zinc-300">
-                      "When I arrive at the office → Start recording with Talkie"
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 4. AI Workflows */}
+          {/* 2. AI Workflows */}
           <section className="mb-20">
             <SectionHeader label="AI-Powered Workflows" icon={Workflow} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -381,15 +227,76 @@ export default function FeaturesPage() {
              </div>
           </section>
 
-          {/* 5. Example Workflows */}
-          <section className="mb-24">
-             <SectionHeader label="Example Workflows" icon={Workflow} />
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FeatureCard title="Voice → Obsidian" description="Extract insights → enrich with Claude CLI → save to Markdown in your vault." />
-                <FeatureCard title="Meeting Notes → Tasks" description="Extract todos → structure JSON → send to Todoist or Linear via API." />
-                <FeatureCard title="Daily Journal Builder" description="Summarize daily thoughts → append to daily journal file with timestamp." />
-                <FeatureCard title="Quick GitHub Issue" description="Dictate bug report → transform to format → gh issue create." />
-             </div>
+          {/* 5. Voice Recording */}
+          <section className="mb-20">
+            <SectionHeader label="Voice Recording & Transcription" icon={Mic} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <FeatureCard title="One-Tap Capture" description="Instant recording startup time. No lag. No loading screens." />
+              <FeatureCard title="Auto-Transcribe" description="Local, high-accuracy transcription running on-device via Apple's Neural Engine." />
+              <FeatureCard title="iCloud Sync" description="Seamless, encrypted synchronization across iPhone, iPad, and Mac." />
+              <FeatureCard title="Smart Library" description="Organize with Recent, Processed, Archived, and custom Smart Folders." />
+            </div>
+          </section>
+
+          {/* 6. Widgets */}
+          <section className="mb-20">
+            <SectionHeader label="Widgets & Quick Access" icon={LayoutGrid} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-6">Record From Anywhere</h3>
+                <p className="text-zinc-600 dark:text-zinc-400 mb-8 max-w-xl">
+                  Add Talkie widgets to your Home Screen, Lock Screen, or Control Center for instant voice capture — no need to open the app.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <FeatureCard title="Home Screen Widget" description="Small or medium widget with quick record button and memo count." />
+                  <FeatureCard title="Lock Screen Widget" description="Circular widget for instant capture without unlocking." />
+                  <FeatureCard title="Control Center" description="iOS 18+ toggle for one-tap recording from anywhere." />
+                  <FeatureCard title="Deep Links" description="Widget taps open directly to recording view." />
+                </div>
+              </div>
+
+              {/* Widget Preview */}
+              <div className="flex items-center justify-center">
+                <div className="relative">
+                  {/* Phone frame mockup */}
+                  <div className="w-64 h-[420px] bg-zinc-900 rounded-[2.5rem] p-3 shadow-2xl">
+                    <div className="w-full h-full bg-zinc-800 rounded-[2rem] p-4 flex flex-col">
+                      {/* Status bar */}
+                      <div className="flex justify-between text-[10px] text-zinc-400 mb-4">
+                        <span>9:41</span>
+                        <div className="flex gap-1">
+                          <span>5G</span>
+                          <span>100%</span>
+                        </div>
+                      </div>
+
+                      {/* Widget preview */}
+                      <div className="bg-black rounded-2xl p-4 mb-4">
+                        <div className="flex flex-col items-center">
+                          <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center mb-2 shadow-lg shadow-red-500/30">
+                            <Mic className="w-6 h-6 text-white" />
+                          </div>
+                          <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">Record</span>
+                          <span className="text-[9px] text-zinc-600 mt-1">12 memos</span>
+                        </div>
+                      </div>
+
+                      {/* App icons placeholder */}
+                      <div className="grid grid-cols-4 gap-3 mt-auto">
+                        {[...Array(8)].map((_, i) => (
+                          <div key={i} className="w-10 h-10 bg-zinc-700 rounded-xl" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Floating badge */}
+                  <div className="absolute -right-4 top-20 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full shadow-lg">
+                    iOS 16+
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
 
           {/* 6. Security Infographic */}
