@@ -12,6 +12,7 @@ enum DeepLinkAction: Equatable {
     case none
     case record
     case openMemo(id: UUID)
+    case openMemoActivity(id: UUID)  // Open memo and scroll to activity section
     case playLastMemo
     case search(query: String)
     case openSearch      // Just open search UI

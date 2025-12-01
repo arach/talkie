@@ -1,0 +1,12 @@
+/*
+  Localizable.strings
+  Talkie iOS
+
+  Push notification strings for CloudKit subscriptions
+*/
+
+// Push notifications from macOS via CloudKit
+// These are APNs push notifications triggered by CKQuerySubscription
+// %1$@ = first arg (CD_title for title, CD_body for body)
+"PUSH_NOTIFICATION_TITLE" = "%1$@";
+"PUSH_NOTIFICATION_BODY" = "%1$@";

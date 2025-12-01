@@ -181,6 +181,9 @@ class WorkflowExecutor: ObservableObject {
             date: memo.createdAt ?? Date()
         )
 
+        // Add workflow name to context for use in templates
+        workflowContext.outputs["WORKFLOW_NAME"] = workflow.name
+
         // Track provider/model used for the run
         var usedProvider: String?
         var usedModel: String?
@@ -335,6 +338,9 @@ class WorkflowExecutor: ObservableObject {
 
         case .notification(let config):
             return try await executeNotificationStep(config, context: context)
+
+        case .iOSPush(let config):
+            return try await executeiOSPushStep(config, context: context, memo: memo, coreDataContext: coreDataContext)
 
         case .appleNotes(let config):
             return try await executeAppleNotesStep(config, context: context)
@@ -677,6 +683,59 @@ class WorkflowExecutor: ObservableObject {
         try await UNUserNotificationCenter.current().add(request)
 
         return "Notification sent"
+    }
+
+    // MARK: - iOS Push Notification Step Execution
+    /// Sends a push notification to the iOS app via CloudKit
+    /// Creates a PushNotification record that iOS subscribes to via CKQuerySubscription
+    private func executeiOSPushStep(
+        _ config: iOSPushStepConfig,
+        context: WorkflowContext,
+        memo: VoiceMemo,
+        coreDataContext: NSManagedObjectContext
+    ) async throws -> String {
+        // Resolve template variables, including workflow name
+        var resolvedTitle = context.resolve(config.title)
+        var resolvedBody = context.resolve(config.body)
+
+        // Handle {{WORKFLOW_NAME}} separately since it's not in the standard context
+        // The workflow name will be set by the parent execution if available
+        if let workflowName = context.outputs["WORKFLOW_NAME"] {
+            resolvedTitle = resolvedTitle.replacingOccurrences(of: "{{WORKFLOW_NAME}}", with: workflowName)
+            resolvedBody = resolvedBody.replacingOccurrences(of: "{{WORKFLOW_NAME}}", with: workflowName)
+        }
+
+        print("📱 [iOS Push] Creating push notification record...")
+        print("📱 [iOS Push]   Title: \(resolvedTitle)")
+        print("📱 [iOS Push]   Body: \(resolvedBody)")
+        print("📱 [iOS Push]   Memo: \(memo.title ?? "Untitled") (ID: \(memo.id?.uuidString.prefix(8) ?? "nil")...)")
+        print("📱 [iOS Push]   Sound: \(config.sound ? "enabled" : "disabled")")
+
+        // Create PushNotification record in Core Data
+        // This will sync to CloudKit and trigger the iOS CKQuerySubscription
+        return try await coreDataContext.perform {
+            let notificationId = UUID()
+            let pushNotification = PushNotification(context: coreDataContext)
+            pushNotification.id = notificationId
+            pushNotification.title = resolvedTitle
+            pushNotification.body = resolvedBody
+            pushNotification.createdAt = Date()
+            pushNotification.memoId = memo.id
+            pushNotification.memoTitle = memo.title
+            pushNotification.soundEnabled = config.sound
+            pushNotification.isRead = false
+
+            // Include workflow name for iOS display
+            if let workflowName = context.outputs["WORKFLOW_NAME"] {
+                pushNotification.workflowName = workflowName
+            }
+
+            try coreDataContext.save()
+            print("📱 [iOS Push] ✅ Record saved to Core Data (ID: \(notificationId.uuidString.prefix(8))...)")
+            print("📱 [iOS Push]   → Will sync to CloudKit → APNs → iOS device")
+
+            return "Push notification queued for iOS"
+        }
     }
 
     // MARK: - Apple Notes Step Execution

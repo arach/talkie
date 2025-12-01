@@ -55,4 +55,15 @@
         <attribute name="workflowName" optional="YES" attributeType="String"/>
         <relationship name="memo" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="VoiceMemo" inverseName="workflowRuns" inverseEntity="VoiceMemo"/>
     </entity>
+    <entity name="PushNotification" representedClassName="PushNotification" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="body" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="workflowName" optional="YES" attributeType="String"/>
+        <attribute name="memoTitle" optional="YES" attributeType="String"/>
+        <attribute name="memoId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isRead" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="soundEnabled" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+    </entity>
 </model>

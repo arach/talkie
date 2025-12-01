@@ -291,6 +291,8 @@ struct WorkflowStepCard: View {
             EmailStepDetails(config: config)
         case .notification(let config):
             NotificationStepDetails(config: config)
+        case .iOSPush(let config):
+            iOSPushStepDetails(config: config)
         case .appleNotes(let config):
             AppleNotesStepDetails(config: config)
         case .appleReminders(let config):
@@ -461,6 +463,38 @@ struct NotificationStepDetails: View {
             HStack(spacing: 8) {
                 if config.sound {
                     DetailBadge(label: "SOUND", color: .blue)
+                }
+            }
+        }
+    }
+}
+
+struct iOSPushStepDetails: View {
+    let config: iOSPushStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "iphone")
+                    .font(.system(size: 9))
+                    .foregroundColor(.blue)
+                if !config.title.isEmpty {
+                    Text(config.title)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
+            }
+            if !config.body.isEmpty {
+                Text(config.body)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+            HStack(spacing: 8) {
+                if config.sound {
+                    DetailBadge(label: "SOUND", color: .blue)
+                }
+                if config.includeOutput {
+                    DetailBadge(label: "OUTPUT", color: .green)
                 }
             }
         }
@@ -1321,6 +1355,8 @@ struct WorkflowStepEditor: View {
             EmailStepConfigEditor(step: $step)
         case .notification:
             NotificationStepConfigEditor(step: $step)
+        case .iOSPush:
+            iOSPushStepConfigEditor(step: $step)
         case .appleNotes:
             AppleNotesStepConfigEditor(step: $step)
         case .appleReminders:
@@ -1701,7 +1737,7 @@ struct ShellStepConfigEditor: View {
                 TextField("arg1 arg2 {{TRANSCRIPT}}", text: $argumentsText)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 10, design: .monospaced))
-                    .onChange(of: argumentsText) { newValue in
+                    .onChange(of: argumentsText) { _, newValue in
                         var newConfig = config
                         // Split by space but preserve quoted strings
                         newConfig.arguments = parseArguments(newValue)
@@ -1739,7 +1775,7 @@ struct ShellStepConfigEditor: View {
                 }
                 .toggleStyle(.checkbox)
                 .font(.system(size: 10))
-                .onChange(of: usePromptTemplate) { enabled in
+                .onChange(of: usePromptTemplate) { _, enabled in
                     var newConfig = config
                     newConfig.promptTemplate = enabled ? promptTemplate : nil
                     // Clear arguments when enabling prompt template to avoid duplicate content
@@ -1761,7 +1797,7 @@ struct ShellStepConfigEditor: View {
                             RoundedRectangle(cornerRadius: 6)
                                 .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
                         )
-                        .onChange(of: promptTemplate) { newValue in
+                        .onChange(of: promptTemplate) { _, newValue in
                             var newConfig = config
                             newConfig.promptTemplate = newValue.isEmpty ? nil : newValue
                             step.config = .shell(newConfig)
@@ -2096,6 +2132,97 @@ struct NotificationStepConfigEditor: View {
                     .font(.system(size: 10, design: .monospaced))
             }
             .toggleStyle(.checkbox)
+        }
+    }
+}
+
+struct iOSPushStepConfigEditor: View {
+    @Binding var step: WorkflowStep
+
+    private var config: iOSPushStepConfig {
+        if case .iOSPush(let c) = step.config { return c }
+        return iOSPushStepConfig()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Info banner
+            HStack(spacing: 8) {
+                Image(systemName: "iphone.badge.play")
+                    .foregroundColor(.blue)
+                Text("Sends a push notification to your iPhone via CloudKit")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .padding(8)
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(6)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("TITLE")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+
+                TextField("{{WORKFLOW_NAME}} Complete", text: Binding(
+                    get: { config.title },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.title = newValue
+                        step.config = .iOSPush(newConfig)
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 10, design: .monospaced))
+
+                Text("Use {{WORKFLOW_NAME}}, {{TITLE}}, {{OUTPUT}}")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("BODY")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+
+                TextField("Finished processing {{TITLE}}", text: Binding(
+                    get: { config.body },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.body = newValue
+                        step.config = .iOSPush(newConfig)
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 10, design: .monospaced))
+            }
+
+            HStack(spacing: 16) {
+                Toggle(isOn: Binding(
+                    get: { config.sound },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.sound = newValue
+                        step.config = .iOSPush(newConfig)
+                    }
+                )) {
+                    Text("Play Sound")
+                        .font(.system(size: 10, design: .monospaced))
+                }
+                .toggleStyle(.checkbox)
+
+                Toggle(isOn: Binding(
+                    get: { config.includeOutput },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.includeOutput = newValue
+                        step.config = .iOSPush(newConfig)
+                    }
+                )) {
+                    Text("Include Output")
+                        .font(.system(size: 10, design: .monospaced))
+                }
+                .toggleStyle(.checkbox)
+            }
         }
     }
 }

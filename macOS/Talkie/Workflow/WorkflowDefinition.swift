@@ -161,6 +161,7 @@ struct WorkflowStep: Identifiable, Codable {
         case webhook = "Webhook"
         case email = "Send Email"
         case notification = "Send Notification"
+        case iOSPush = "Notify iPhone"
         case appleNotes = "Add to Apple Notes"
         case appleReminders = "Create Reminder"
         case appleCalendar = "Create Calendar Event"
@@ -176,6 +177,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .webhook: return "arrow.up.forward.app"
             case .email: return "envelope"
             case .notification: return "bell.badge"
+            case .iOSPush: return "iphone.badge.play"
             case .appleNotes: return "note.text"
             case .appleReminders: return "checklist"
             case .appleCalendar: return "calendar.badge.plus"
@@ -193,6 +195,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .webhook: return "Send data to URL"
             case .email: return "Compose and send email"
             case .notification: return "Show system notification"
+            case .iOSPush: return "Send push notification to iPhone"
             case .appleNotes: return "Save to Apple Notes"
             case .appleReminders: return "Add to Reminders app"
             case .appleCalendar: return "Add calendar event"
@@ -209,7 +212,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .shell: return .integration
             case .webhook: return .integration
             case .email: return .communication
-            case .notification: return .communication
+            case .notification, .iOSPush: return .communication
             case .appleNotes, .appleReminders, .appleCalendar: return .apple
             case .clipboard, .saveFile: return .output
             case .conditional, .transform: return .logic
@@ -250,6 +253,7 @@ enum StepConfig: Codable {
     case webhook(WebhookStepConfig)
     case email(EmailStepConfig)
     case notification(NotificationStepConfig)
+    case iOSPush(iOSPushStepConfig)
     case appleNotes(AppleNotesStepConfig)
     case appleReminders(AppleRemindersStepConfig)
     case appleCalendar(AppleCalendarStepConfig)
@@ -271,6 +275,8 @@ enum StepConfig: Codable {
             return .email(EmailStepConfig(to: "", subject: "", body: ""))
         case .notification:
             return .notification(NotificationStepConfig(title: "", body: ""))
+        case .iOSPush:
+            return .iOSPush(iOSPushStepConfig(title: "{{WORKFLOW_NAME}} Complete", body: "Finished processing {{TITLE}}"))
         case .appleNotes:
             return .appleNotes(AppleNotesStepConfig(folderName: nil, title: "", body: ""))
         case .appleReminders:
@@ -774,6 +780,28 @@ struct NotificationStepConfig: Codable {
         self.body = body
         self.sound = sound
         self.actionLabel = actionLabel
+    }
+}
+
+/// Configuration for sending push notifications to the iOS app via CloudKit
+/// When this step executes, it saves a PushNotification record to CloudKit
+/// which triggers a CKQuerySubscription on iOS to display the notification
+struct iOSPushStepConfig: Codable {
+    var title: String           // Notification title (supports {{WORKFLOW_NAME}}, {{TITLE}}, etc.)
+    var body: String            // Notification body (supports template variables)
+    var sound: Bool             // Play notification sound on iOS
+    var includeOutput: Bool     // Include the workflow output in the notification data
+
+    init(
+        title: String = "Workflow Complete",
+        body: String = "{{WORKFLOW_NAME}} finished processing",
+        sound: Bool = true,
+        includeOutput: Bool = false
+    ) {
+        self.title = title
+        self.body = body
+        self.sound = sound
+        self.includeOutput = includeOutput
     }
 }
 

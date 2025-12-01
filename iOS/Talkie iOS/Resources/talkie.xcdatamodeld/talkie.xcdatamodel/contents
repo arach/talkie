@@ -40,5 +40,30 @@
         <attribute name="transcription" optional="YES" attributeType="String"/>
         <attribute name="waveformData" optional="YES" attributeType="Binary"/>
         <relationship name="transcriptVersions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TranscriptVersion" inverseName="memo" inverseEntity="TranscriptVersion"/>
+        <relationship name="workflowRuns" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkflowRun" inverseName="memo" inverseEntity="WorkflowRun"/>
+    </entity>
+    <entity name="WorkflowRun" representedClassName="WorkflowRun" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="modelId" optional="YES" attributeType="String"/>
+        <attribute name="output" optional="YES" attributeType="String"/>
+        <attribute name="providerName" optional="YES" attributeType="String"/>
+        <attribute name="runDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="status" optional="YES" attributeType="String" defaultValueString="completed"/>
+        <attribute name="stepOutputsJSON" optional="YES" attributeType="String"/>
+        <attribute name="workflowIcon" optional="YES" attributeType="String"/>
+        <attribute name="workflowId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="workflowName" optional="YES" attributeType="String"/>
+        <relationship name="memo" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="VoiceMemo" inverseName="workflowRuns" inverseEntity="VoiceMemo"/>
+    </entity>
+    <entity name="PushNotification" representedClassName="PushNotification" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="body" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="workflowName" optional="YES" attributeType="String"/>
+        <attribute name="memoTitle" optional="YES" attributeType="String"/>
+        <attribute name="memoId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isRead" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="soundEnabled" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
     </entity>
 </model>
