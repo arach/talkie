@@ -49,7 +49,13 @@ struct talkieApp: App {
                     showOnboarding = true
                 }
                 .fullScreenCover(isPresented: $showOnboarding) {
-                    OnboardingView(hasSeenOnboarding: $hasSeenOnboarding)
+                    OnboardingView(
+                        hasSeenOnboarding: $hasSeenOnboarding,
+                        onStartRecording: {
+                            // Trigger recording via deep link manager
+                            deepLinkManager.pendingAction = .record
+                        }
+                    )
                 }
         }
     }

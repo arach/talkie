@@ -121,4 +121,7 @@ enum AppLogger {
 
     /// UI and view-related logging
     static let ui = CapturedLogger(subsystem: subsystem, category: "UI")
+
+    /// On-device AI processing
+    static let ai = CapturedLogger(subsystem: subsystem, category: "AI")
 }

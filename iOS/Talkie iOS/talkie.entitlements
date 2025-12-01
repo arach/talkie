@@ -24,5 +24,7 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

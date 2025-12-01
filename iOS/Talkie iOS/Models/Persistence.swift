@@ -61,7 +61,7 @@ struct PersistenceController {
     init(inMemory: Bool = false) {
         container = NSPersistentCloudKitContainer(name: "talkie")
 
-        AppLogger.persistence.info("🚀 Initializing PersistenceController...")
+        AppLogger.persistence.info("Initializing PersistenceController...")
 
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
@@ -82,21 +82,21 @@ struct PersistenceController {
                 // Without this, we won't receive updates from other devices!
                 description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
 
-                AppLogger.persistence.info("☁️ CloudKit container: iCloud.com.jdi.talkie (full sync enabled)")
-                AppLogger.persistence.info("📂 Store URL: \(description.url?.absoluteString ?? "nil")")
+                AppLogger.persistence.info("CloudKit container: iCloud.com.jdi.talkie (full sync enabled)")
+                AppLogger.persistence.info("Store URL: \(description.url?.absoluteString ?? "nil")")
             }
         }
 
         container.loadPersistentStores { storeDescription, error in
             if let error = error as NSError? {
-                AppLogger.persistence.error("❌ Core Data store failed to load: \(error.localizedDescription)")
+                AppLogger.persistence.error("Core Data store failed to load: \(error.localizedDescription)")
                 AppLogger.persistence.error("Error details: \(error.userInfo)")
             } else {
-                AppLogger.persistence.info("✅ Core Data loaded successfully")
+                AppLogger.persistence.info("Core Data loaded successfully")
                 AppLogger.persistence.info("Store type: \(storeDescription.type)")
 
                 if let cloudKitOptions = storeDescription.cloudKitContainerOptions {
-                    AppLogger.persistence.info("☁️ CloudKit container ID: \(cloudKitOptions.containerIdentifier)")
+                    AppLogger.persistence.info("CloudKit container ID: \(cloudKitOptions.containerIdentifier)")
                 }
             }
         }
@@ -129,7 +129,7 @@ struct PersistenceController {
             queue: .main
         ) { notification in
             guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else {
-                AppLogger.persistence.warning("☁️ CloudKit event notification received but no event in userInfo")
+                AppLogger.persistence.warning("CloudKit event notification received but no event in userInfo")
                 return
             }
 
@@ -143,7 +143,7 @@ struct PersistenceController {
             }
 
             if let error = event.error {
-                AppLogger.persistence.error("☁️ CloudKit \(eventTypeName) FAILED: \(error.localizedDescription)")
+                AppLogger.persistence.error("CloudKit \(eventTypeName) FAILED: \(error.localizedDescription)")
 
                 // Check for specific CloudKit errors
                 if let ckError = error as? CKError {
@@ -157,25 +157,28 @@ struct PersistenceController {
                     }
                 }
             } else if event.succeeded {
-                AppLogger.persistence.info("☁️ CloudKit \(eventTypeName) succeeded")
+                AppLogger.persistence.info("CloudKit \(eventTypeName) succeeded")
 
                 // Export success: mark local memos as synced
                 if event.type == .export {
-                    AppLogger.persistence.info("☁️ Export succeeded - marking memos as synced")
+                    AppLogger.persistence.info("Export succeeded - marking memos as synced")
                     PersistenceController.markRecentMemosAsSynced(context: containerRef.viewContext)
                 }
 
                 // Import success: new data from other devices - refresh widget
                 if event.type == .import {
-                    AppLogger.persistence.info("☁️ Import succeeded - refreshing widget with new data")
+                    AppLogger.persistence.info("Import succeeded - refreshing widget with new data")
                     PersistenceController.refreshWidgetData(context: containerRef.viewContext)
+
+                    // Note: Push notifications from macOS are handled via CKQuerySubscription on PushNotification records
+                    // No need for local notification fallback - APNs handles it
                 }
             } else {
-                AppLogger.persistence.info("☁️ CloudKit \(eventTypeName) in progress...")
+                AppLogger.persistence.info("CloudKit \(eventTypeName) in progress...")
             }
         }
 
-        AppLogger.persistence.info("☁️ CloudKit sync monitoring initialized")
+        AppLogger.persistence.info("CloudKit sync monitoring initialized")
     }
 
     /// Mark all memos without cloudSyncedAt as synced
@@ -195,9 +198,9 @@ struct PersistenceController {
                 }
 
                 try context.save()
-                AppLogger.persistence.info("☁️ Marked \(unsyncedMemos.count) memo(s) as synced to iCloud")
+                AppLogger.persistence.info("Marked \(unsyncedMemos.count) memo(s) as synced to iCloud")
             } catch {
-                AppLogger.persistence.error("❌ Failed to mark memos as synced: \(error.localizedDescription)")
+                AppLogger.persistence.error("Failed to mark memos as synced: \(error.localizedDescription)")
             }
         }
     }
@@ -207,33 +210,33 @@ struct PersistenceController {
 
         // Log build configuration (Development vs Production environment)
         #if DEBUG
-        AppLogger.persistence.info("🔧 Build Configuration: DEBUG (uses CloudKit Development environment)")
+        AppLogger.persistence.info("Build Configuration: DEBUG (uses CloudKit Development environment)")
         #else
-        AppLogger.persistence.info("🚀 Build Configuration: RELEASE (uses CloudKit Production environment)")
-        AppLogger.persistence.info("⚠️ Ensure CloudKit schema is deployed to Production via CloudKit Dashboard!")
+        AppLogger.persistence.info("Build Configuration: RELEASE (uses CloudKit Production environment)")
+        AppLogger.persistence.info("Ensure CloudKit schema is deployed to Production via CloudKit Dashboard!")
         #endif
 
         container.accountStatus { status, error in
             if let error = error {
-                AppLogger.persistence.error("❌ iCloud account error: \(error.localizedDescription)")
+                AppLogger.persistence.error("iCloud account error: \(error.localizedDescription)")
                 return
             }
 
             switch status {
             case .available:
-                AppLogger.persistence.info("✅ iCloud account status: Available")
+                AppLogger.persistence.info("iCloud account status: Available")
                 // Now fetch detailed zone and database info
                 fetchCloudKitDatabaseInfo(container: container)
             case .noAccount:
-                AppLogger.persistence.warning("⚠️ iCloud account status: No Account - user not signed into iCloud")
+                AppLogger.persistence.warning("iCloud account status: No Account - user not signed into iCloud")
             case .restricted:
-                AppLogger.persistence.warning("⚠️ iCloud account status: Restricted")
+                AppLogger.persistence.warning("iCloud account status: Restricted")
             case .couldNotDetermine:
-                AppLogger.persistence.warning("⚠️ iCloud account status: Could not determine")
+                AppLogger.persistence.warning("iCloud account status: Could not determine")
             case .temporarilyUnavailable:
-                AppLogger.persistence.warning("⚠️ iCloud account status: Temporarily unavailable")
+                AppLogger.persistence.warning("iCloud account status: Temporarily unavailable")
             @unknown default:
-                AppLogger.persistence.warning("⚠️ iCloud account status: Unknown")
+                AppLogger.persistence.warning("iCloud account status: Unknown")
             }
         }
     }
@@ -242,24 +245,24 @@ struct PersistenceController {
         let privateDB = container.privateCloudDatabase
 
         // Log database scope
-        AppLogger.persistence.info("📦 CloudKit Database Scope: Private Database")
-        AppLogger.persistence.info("📦 Container ID: \(container.containerIdentifier ?? "unknown")")
+        AppLogger.persistence.info("CloudKit Database Scope: Private Database")
+        AppLogger.persistence.info("Container ID: \(container.containerIdentifier ?? "unknown")")
 
         // Fetch all record zones to understand structure
         privateDB.fetchAllRecordZones { zones, error in
             if let error = error {
-                AppLogger.persistence.error("❌ Failed to fetch zones: \(error.localizedDescription)")
+                AppLogger.persistence.error("Failed to fetch zones: \(error.localizedDescription)")
                 return
             }
 
             guard let zones = zones else {
-                AppLogger.persistence.warning("⚠️ No zones returned")
+                AppLogger.persistence.warning("No zones returned")
                 return
             }
 
-            AppLogger.persistence.info("🗂️ Found \(zones.count) CloudKit zone(s):")
+            AppLogger.persistence.info("Found \(zones.count) CloudKit zone(s)")
             for zone in zones {
-                AppLogger.persistence.info("  📁 Zone: \(zone.zoneID.zoneName) (owner: \(zone.zoneID.ownerName))")
+                AppLogger.persistence.info("Zone: \(zone.zoneID.zoneName)")
 
                 // Query records in each zone
                 queryRecordsInZone(database: privateDB, zoneID: zone.zoneID)
@@ -278,26 +281,26 @@ struct PersistenceController {
                 // This might fail if the record type doesn't exist in this zone
                 let ckError = error as? CKError
                 if ckError?.code == .unknownItem {
-                    AppLogger.persistence.info("  📝 Zone '\(zoneID.zoneName)': No CD_VoiceMemo records (type not found)")
+                    AppLogger.persistence.info("Zone '\(zoneID.zoneName)': No CD_VoiceMemo records")
                 } else {
-                    AppLogger.persistence.error("  ❌ Query failed in zone '\(zoneID.zoneName)': \(error.localizedDescription)")
+                    AppLogger.persistence.error("Query failed in zone '\(zoneID.zoneName)': \(error.localizedDescription)")
                 }
                 return
 
             case .success(let (matchResults, _)):
                 let records = matchResults.compactMap { try? $0.1.get() }
                 if records.isEmpty {
-                    AppLogger.persistence.info("  📝 Zone '\(zoneID.zoneName)': No records returned")
+                    AppLogger.persistence.info("Zone '\(zoneID.zoneName)': No records returned")
                     return
                 }
 
-                AppLogger.persistence.info("  📝 Zone '\(zoneID.zoneName)': Found \(records.count) CD_VoiceMemo record(s)")
+                AppLogger.persistence.info("Zone '\(zoneID.zoneName)': Found \(records.count) CD_VoiceMemo record(s)")
 
                 // Log first few record details
                 for record in records.prefix(3) {
                     let title = record["CD_title"] as? String ?? "Untitled"
                     let createdAt = record.creationDate?.description ?? "unknown"
-                    AppLogger.persistence.info("    • \(title) (created: \(createdAt), recordID: \(record.recordID.recordName.prefix(20))...)")
+                    AppLogger.persistence.info("  \(title) (created: \(createdAt), recordID: \(record.recordID.recordName.prefix(20))...)")
                 }
                 if records.count > 3 {
                     AppLogger.persistence.info("    ... and \(records.count - 3) more records")
@@ -312,7 +315,7 @@ struct PersistenceController {
 
         do {
             let memos = try context.fetch(fetchRequest)
-            AppLogger.persistence.info("📊 Total VoiceMemos in database: \(memos.count)")
+            AppLogger.persistence.info("Total VoiceMemos in database: \(memos.count)")
             for memo in memos.prefix(3) {
                 AppLogger.persistence.info("  - \(memo.title ?? "Untitled") (created: \(memo.createdAt?.description ?? "nil"))")
             }
@@ -325,7 +328,7 @@ struct PersistenceController {
             updateWidgetData(count: memos.count, recentMemos: Array(memos.prefix(10)))
             #endif
         } catch {
-            AppLogger.persistence.error("❌ Failed to fetch memos: \(error.localizedDescription)")
+            AppLogger.persistence.error("Failed to fetch memos: \(error.localizedDescription)")
         }
     }
 
@@ -351,7 +354,7 @@ struct PersistenceController {
     /// Update the widget with the current memo count and recent memos
     static func updateWidgetData(count: Int, recentMemos: [VoiceMemo]) {
         guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
-            AppLogger.persistence.warning("⚠️ Could not access App Group UserDefaults")
+            AppLogger.persistence.warning("Could not access App Group UserDefaults")
             return
         }
 
@@ -399,13 +402,13 @@ struct PersistenceController {
 
         // Tell WidgetKit to refresh
         WidgetCenter.shared.reloadAllTimelines()
-        AppLogger.persistence.info("📱 Widget updated with \(count) memos")
+        AppLogger.persistence.info("Widget updated with \(count) memos")
     }
 
     /// Legacy method for compatibility
     static func updateWidgetMemoCount(_ count: Int) {
         guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
-            AppLogger.persistence.warning("⚠️ Could not access App Group UserDefaults")
+            AppLogger.persistence.warning("Could not access App Group UserDefaults")
             return
         }
 
@@ -415,7 +418,7 @@ struct PersistenceController {
 
         // Tell WidgetKit to refresh
         WidgetCenter.shared.reloadAllTimelines()
-        AppLogger.persistence.info("📱 Widget updated with memo count: \(count)")
+        AppLogger.persistence.info("Widget updated with memo count: \(count)")
     }
 
     /// Call this when memos are added/deleted to update widget
@@ -431,7 +434,7 @@ struct PersistenceController {
                 let count = try context.count(for: countRequest)
                 updateWidgetData(count: count, recentMemos: recentMemos)
             } catch {
-                AppLogger.persistence.error("❌ Failed to get memos for widget: \(error.localizedDescription)")
+                AppLogger.persistence.error("Failed to get memos for widget: \(error.localizedDescription)")
             }
         }
     }

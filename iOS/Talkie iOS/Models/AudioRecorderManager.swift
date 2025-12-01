@@ -326,7 +326,7 @@ class AudioRecorderManager: NSObject, ObservableObject {
     }
 
     func stopRecording() {
-        audioRecorder?.stop()
+        audioRecorder?.pause()  // Pause instead of stop to allow resume
         timer?.invalidate()
         timer = nil
         levelTimer?.invalidate()
@@ -335,12 +335,39 @@ class AudioRecorderManager: NSObject, ObservableObject {
         isInterrupted = false
         wasRecordingBeforeInterruption = false
 
-        // End background task when recording stops
+        // Keep background task alive briefly to allow resume
+        // endBackgroundTask() - don't end yet, allow resume
+        AppLogger.recording.info("Recording paused (can resume)")
+    }
+
+    func resumeRecording() {
+        guard let recorder = audioRecorder, currentRecordingURL != nil else {
+            AppLogger.recording.warning("Cannot resume - no active recorder")
+            return
+        }
+
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            recorder.record()
+            isRecording = true
+            isInterrupted = false
+
+            // Restart timers
+            startTimers()
+
+            AppLogger.recording.info("Recording resumed")
+        } catch {
+            AppLogger.recording.error("Failed to resume recording: \(error)")
+        }
+    }
+
+    func finalizeRecording() {
+        audioRecorder?.stop()
         endBackgroundTask()
 
         if let url = currentRecordingURL {
             let fileExists = FileManager.default.fileExists(atPath: url.path)
-            AppLogger.recording.info("Recording stopped. File exists: \(fileExists) at \(url.path)")
+            AppLogger.recording.info("Recording finalized. File exists: \(fileExists) at \(url.path)")
 
             if fileExists {
                 do {
@@ -351,21 +378,6 @@ class AudioRecorderManager: NSObject, ObservableObject {
                     AppLogger.recording.warning("Could not get file attributes: \(error.localizedDescription)")
                 }
             }
-        }
-    }
-
-    /// Resume recording after an interruption
-    func resumeRecording() {
-        guard isInterrupted, audioRecorder != nil else { return }
-
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-            audioRecorder?.record()
-            startTimers()
-            isInterrupted = false
-            AppLogger.recording.info("Recording resumed")
-        } catch {
-            AppLogger.recording.error("Failed to resume recording: \(error)")
         }
     }
 

@@ -182,34 +182,20 @@ struct SettingsView: View {
                             } else {
                                 VStack(spacing: 0) {
                                     ForEach(logStore.importantEntries.prefix(5)) { entry in
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack(spacing: 6) {
-                                                Circle()
-                                                    .fill(entry.level.color)
-                                                    .frame(width: 6, height: 6)
-                                                Text(entry.category)
-                                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                                    .foregroundColor(.textSecondary)
-                                                Spacer()
-                                                Text(entry.formattedTime)
-                                                    .font(.system(size: 10, design: .monospaced))
-                                                    .foregroundColor(.textTertiary)
-                                            }
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Text(entry.formattedTime)
+                                                .font(.system(size: 9, design: .monospaced))
+                                                .foregroundColor(.textTertiary)
+
                                             Text(entry.message)
                                                 .font(.system(size: 11, design: .monospaced))
-                                                .foregroundColor(entry.level.color)
+                                                .foregroundColor(entry.level == .info ? .textPrimary : entry.level.color.opacity(0.85))
                                                 .lineLimit(2)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
                                         }
                                         .padding(.horizontal, Spacing.sm)
-                                        .padding(.vertical, Spacing.xs)
+                                        .padding(.vertical, 4)
                                         .contentShape(Rectangle())
-                                        .contextMenu {
-                                            Button(action: {
-                                                UIPasteboard.general.string = "[\(entry.category)] \(entry.message)"
-                                            }) {
-                                                Label("Copy", systemImage: "doc.on.doc")
-                                            }
-                                        }
 
                                         if entry.id != logStore.importantEntries.prefix(5).last?.id {
                                             Divider().background(Color.borderPrimary)
@@ -250,6 +236,26 @@ struct SettingsView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12))
                                         .foregroundColor(.textTertiary)
+                                }
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.textPrimary)
+                                .padding(Spacing.sm)
+                                .background(Color.surfaceSecondary)
+                                .cornerRadius(CornerRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                )
+                            }
+                            .padding(.horizontal, Spacing.md)
+
+                            Button(action: {
+                                UserDefaults.standard.set(false, forKey: "hasSeenResumeTooltip")
+                            }) {
+                                HStack {
+                                    Image(systemName: "text.bubble")
+                                    Text("Reset Resume Tooltip")
+                                    Spacer()
                                 }
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.textPrimary)
@@ -344,31 +350,23 @@ struct LogViewerSheet: View {
                         ScrollView {
                             LazyVStack(spacing: 1) {
                                 ForEach(filteredLogs) { entry in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 6) {
-                                            Circle()
-                                                .fill(entry.level.color)
-                                                .frame(width: 6, height: 6)
-                                            Text(entry.category)
-                                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                                .foregroundColor(.textSecondary)
-                                            Spacer()
-                                            Text(entry.formattedTime)
-                                                .font(.system(size: 10, design: .monospaced))
-                                                .foregroundColor(.textTertiary)
-                                        }
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text(entry.formattedTime)
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .foregroundColor(.textTertiary)
+
                                         Text(entry.message)
                                             .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(entry.level.color)
+                                            .foregroundColor(entry.level == .info ? .textPrimary : entry.level.color.opacity(0.85))
                                             .textSelection(.enabled)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .padding(.horizontal, Spacing.sm)
-                                    .padding(.vertical, Spacing.xs)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 5)
                                     .background(Color.surfaceSecondary)
                                     .contextMenu {
                                         Button(action: {
-                                            UIPasteboard.general.string = "[\(entry.formattedTime)] [\(entry.category)] \(entry.message)"
+                                            UIPasteboard.general.string = "[\(entry.formattedTime)] \(entry.message)"
                                         }) {
                                             Label("Copy", systemImage: "doc.on.doc")
                                         }

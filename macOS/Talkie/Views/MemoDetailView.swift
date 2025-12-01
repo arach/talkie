@@ -12,6 +12,7 @@ import AppKit
 struct MemoDetailView: View {
     @ObservedObject var memo: VoiceMemo
     @ObservedObject private var settings = SettingsManager.shared
+    var showHeader: Bool = true  // Set to false when embedded in inspector
 
     @State private var isPlaying = false
     @State private var currentTime: TimeInterval = 0
@@ -21,16 +22,76 @@ struct MemoDetailView: View {
     @State private var editedNotes: String = ""
     @State private var editedTranscript: String = ""
     @State private var isEditing = false
-    @State private var selectedTab: DetailTab = .transcript
+    @State private var notesSaveTimer: Timer?
+    @State private var showNotesSaved = false
+    @State private var playbackTimer: Timer?
+    @State private var notesInitialized = false
     @State private var selectedWorkflowRun: WorkflowRun?
     @FocusState private var titleFieldFocused: Bool
 
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var workflowManager = WorkflowManager.shared
+    @State private var processingWorkflowIDs: Set<UUID> = []
 
-    enum DetailTab: String, CaseIterable {
-        case transcript = "Transcript"
-        case aiResults = "AI Results"
+    // MARK: - Quick Actions Logic
+
+    /// Represents a quick action slot (either pinned workflow or built-in action)
+    enum QuickActionItem: Identifiable {
+        case workflow(WorkflowDefinition)
+        case builtIn(BuiltInAction)
+
+        var id: String {
+            switch self {
+            case .workflow(let wf): return wf.id.uuidString
+            case .builtIn(let action): return action.id
+            }
+        }
+
+        enum BuiltInAction: String, CaseIterable {
+            case summarize, taskify, remind, toNotes, copy
+
+            var id: String { rawValue }
+            var icon: String {
+                switch self {
+                case .summarize: return "list.bullet.clipboard"
+                case .taskify: return "checkmark.square"
+                case .remind: return "bell"
+                case .toNotes: return "note.text"
+                case .copy: return "doc.on.doc"
+                }
+            }
+            var title: String {
+                switch self {
+                case .summarize: return "SUMMARIZE"
+                case .taskify: return "TASKIFY"
+                case .remind: return "REMIND"
+                case .toNotes: return "TO NOTES"
+                case .copy: return "COPY"
+                }
+            }
+        }
+    }
+
+    /// Build the quick actions list: pinned workflows first, then defaults, max 5 items
+    private var quickActionItems: [QuickActionItem] {
+        var items: [QuickActionItem] = []
+        let pinnedIDs = QuickActionsConfig.pinnedWorkflowIDs
+
+        // Add pinned workflows first (up to 5)
+        let pinnedWorkflows = workflowManager.workflows
+            .filter { pinnedIDs.contains($0.id) && $0.isEnabled }
+            .prefix(5)
+        for workflow in pinnedWorkflows {
+            items.append(.workflow(workflow))
+        }
+
+        // Fill remaining slots with defaults
+        let defaultActions: [QuickActionItem.BuiltInAction] = [.summarize, .taskify, .remind, .toNotes, .copy]
+        for action in defaultActions where items.count < 5 {
+            items.append(.builtIn(action))
+        }
+
+        return items
     }
 
     private var memoTitle: String {
@@ -43,183 +104,237 @@ struct MemoDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header with title and edit toggle
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if isEditing {
-                            TextField("Recording title", text: $editedTitle)
-                                .font(settings.themedFont(baseSize: 16, weight: .medium))
-                                .textFieldStyle(.plain)
-                                .focused($titleFieldFocused)
-                        } else {
-                            Text(memoTitle)
-                                .font(settings.themedFont(baseSize: 16, weight: .medium))
-                                .foregroundColor(.primary)
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                // Header with title and edit toggle (optional)
+                if showHeader {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if isEditing {
+                                TextField("Recording title", text: $editedTitle)
+                                    .font(settings.fontTitleMedium)
+                                    .textFieldStyle(.plain)
+                                    .focused($titleFieldFocused)
+                            } else {
+                                Text(memoTitle)
+                                    .font(settings.fontTitleMedium)
+                                    .foregroundColor(.primary)
+                            }
+
+                            HStack(spacing: Spacing.xs) {
+                                Text(formatDate(memoCreatedAt).uppercased())
+                                    .font(.techLabelSmall)
+                                    .tracking(Tracking.normal)
+
+                                Text("·")
+                                    .font(.techLabelSmall)
+
+                                Text(formatDuration(memo.duration))
+                                    .font(.monoXSmall)
+                            }
+                            .foregroundColor(.secondary)
                         }
 
-                        HStack(spacing: 6) {
+                        Spacer()
+
+                        // Edit/Done button
+                        if isEditing {
+                            Button(action: toggleEditMode) {
+                                Text("Done")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.return, modifiers: .command)
+                        } else {
+                            Button(action: toggleEditMode) {
+                                Text("Edit")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.accentColor)
+                            .keyboardShortcut("e", modifiers: .command)
+                        }
+                    }
+                } else {
+                    // Compact header when embedded in inspector
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        // Title row
+                        HStack {
+                            if isEditing {
+                                TextField("Recording title", text: $editedTitle)
+                                    .font(settings.fontTitleMedium)
+                                    .textFieldStyle(.plain)
+                                    .focused($titleFieldFocused)
+                            } else {
+                                Text(memoTitle)
+                                    .font(settings.fontTitleMedium)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            // Edit/Done button
+                            if isEditing {
+                                Button(action: toggleEditMode) {
+                                    Text("Done")
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                                .keyboardShortcut(.return, modifiers: .command)
+                            } else {
+                                Button(action: toggleEditMode) {
+                                    Text("Edit")
+                                        .font(settings.fontSMMedium)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .keyboardShortcut("e", modifiers: .command)
+                            }
+                        }
+
+                        // Date and duration
+                        HStack(spacing: Spacing.xs) {
                             Text(formatDate(memoCreatedAt).uppercased())
-                                .font(settings.themedFont(baseSize: 9, weight: .bold))
-                                .tracking(1)
-
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.normal)
                             Text("·")
-                                .font(settings.themedFont(baseSize: 9, weight: .regular))
-
+                                .font(.techLabelSmall)
                             Text(formatDuration(memo.duration))
-                                .font(settings.themedFont(baseSize: 11, weight: .regular))
+                                .font(.monoXSmall)
                         }
                         .foregroundColor(.secondary)
                     }
-
-                    Spacer()
-
-                    // Edit/Done button
-                    if isEditing {
-                        Button(action: toggleEditMode) {
-                            Text("Done")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.return, modifiers: .command)
-                    } else {
-                        Button(action: toggleEditMode) {
-                            Text("Edit")
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.accentColor)
-                        .keyboardShortcut("e", modifiers: .command)
-                    }
                 }
 
-                // Playback controls
-                VStack(spacing: 12) {
-                    HStack(spacing: 12) {
+                // Playback controls with waveform
+                VStack(spacing: Spacing.xs) {
+                    // Waveform visualization (full width, with background)
+                    WaveformView(
+                        progress: memo.duration > 0 ? currentTime / memo.duration : 0,
+                        isPlaying: isPlaying
+                    )
+                    .frame(height: 40)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Color.secondary.opacity(0.05))
+                    .overlay(
+                        Rectangle()
+                            .strokeBorder(Color.secondary.opacity(0.08), lineWidth: 0.5)
+                    )
+
+                    // Controls: start time, play button, end time - aligned with waveform edges
+                    HStack(alignment: .center, spacing: 0) {
+                        Text(formatDuration(currentTime))
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
                         Button(action: togglePlayback) {
                             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 14))
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.primary)
-                                .frame(width: 40, height: 40)
-                                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                                .offset(x: isPlaying ? 0 : 1) // Optical centering for play triangle
+                                .frame(width: 32, height: 32)
+                                .background(.ultraThinMaterial, in: Circle())
                         }
                         .buttonStyle(.plain)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(formatDuration(currentTime))
-                                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                                .foregroundColor(.primary)
-
-                            Text(formatDuration(memo.duration))
-                                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundColor(.secondary)
-                        }
+                        Text(formatDuration(memo.duration))
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
 
-                Divider()
+                // Transcript Section
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("TRANSCRIPT")
+                        .font(.techLabel)
+                        .tracking(Tracking.wide)
+                        .foregroundColor(.secondary)
 
-                // Tabs
-                Picker("", selection: $selectedTab) {
-                    ForEach(DetailTab.allCases, id: \.self) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
+                    transcriptView
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
 
-                // Tab Content
-                Group {
-                    switch selectedTab {
-                    case .transcript:
-                        transcriptView
-                    case .aiResults:
+                // AI Results Section (only show if there are results)
+                if !sortedWorkflowRuns.isEmpty || memo.summary != nil || memo.tasks != nil {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("AI RESULTS")
+                            .font(.techLabel)
+                            .tracking(Tracking.wide)
+                            .foregroundColor(.secondary)
+
                         aiResultsView
                     }
                 }
 
-                // Notes Section
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("NOTES")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                        .foregroundColor(.secondary)
+                // Quick Actions (3x2 grid)
+                if memo.currentTranscript != nil && !memo.isTranscribing {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("QUICK ACTIONS")
+                            .font(.techLabel)
+                            .tracking(Tracking.wide)
+                            .foregroundColor(.secondary)
+
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8)
+                        ], spacing: 8) {
+                            // Dynamic quick action items (pinned + defaults)
+                            ForEach(quickActionItems) { item in
+                                quickActionButton(for: item)
+                            }
+
+                            // 6th slot is always "MORE"
+                            BrowseWorkflowsButton(action: { browseWorkflows() })
+                        }
+                    }
+                }
+
+                // Notes Section (moved below quick actions)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack {
+                        Text("NOTES")
+                            .font(.techLabel)
+                            .tracking(Tracking.wide)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        if showNotesSaved {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .transition(.opacity)
+                        }
+                    }
 
                     TextEditor(text: $editedNotes)
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .font(settings.contentFontBody)
                         .foregroundColor(.primary)
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 80)
                         .padding(12)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                        .onChange(of: editedNotes) { newValue in
-                            saveNotes()
+                        .onChange(of: editedNotes) { _, _ in
+                            debouncedSaveNotes()
                         }
-                }
-
-                // Workflow Actions
-                if memo.currentTranscript != nil && !memo.isTranscribing {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("ACTIONS")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                            .foregroundColor(.secondary)
-
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 8),
-                            GridItem(.flexible(), spacing: 8)
-                        ], spacing: 8) {
-                            ActionButtonMac(
-                                icon: "list.bullet.clipboard",
-                                title: "SUMMARIZE",
-                                isProcessing: memo.isProcessingSummary,
-                                isCompleted: memo.summary != nil,
-                                action: { executeWorkflow(.summarize) }
-                            )
-
-                            ActionButtonMac(
-                                icon: "checkmark.square",
-                                title: "TASKIFY",
-                                isProcessing: memo.isProcessingTasks,
-                                isCompleted: memo.tasks != nil,
-                                action: { executeWorkflow(.extractTasks) }
-                            )
-
-                            ActionButtonMac(
-                                icon: "bell",
-                                title: "REMIND",
-                                isProcessing: memo.isProcessingReminders,
-                                isCompleted: memo.reminders != nil,
-                                action: { executeWorkflow(.reminders) }
-                            )
-
-                            ActionButtonMac(
-                                icon: "note.text",
-                                title: "ADD TO NOTES",
-                                isProcessing: false,
-                                isCompleted: false,
-                                action: { addToAppleNotes() }
-                            )
-                        }
-                    }
                 }
 
                 // Recent Workflow Runs
                 if !sortedWorkflowRuns.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("RECENT RUNS")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .tracking(2)
+                                .font(.techLabel)
+                                .tracking(Tracking.wide)
                                 .foregroundColor(.secondary)
 
                             Spacer()
 
                             if sortedWorkflowRuns.count > 3 {
-                                Button(action: { selectedTab = .aiResults }) {
-                                    Text("View All (\(sortedWorkflowRuns.count))")
-                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
+                                Text("\(sortedWorkflowRuns.count) runs")
+                                    .font(.techLabelSmall)
+                                    .foregroundColor(.secondary)
                             }
                         }
 
@@ -227,18 +342,17 @@ struct MemoDetailView: View {
                             ForEach(Array(sortedWorkflowRuns.prefix(3)), id: \.id) { run in
                                 Button(action: {
                                     selectedWorkflowRun = run
-                                    selectedTab = .aiResults
                                 }) {
                                     HStack(spacing: 8) {
                                         // Workflow icon
                                         Image(systemName: run.workflowIcon ?? "bolt.fill")
-                                            .font(.system(size: 10))
+                                            .font(settings.fontSM)
                                             .foregroundColor(.accentColor)
                                             .frame(width: 20)
 
                                         // Workflow name
                                         Text(run.workflowName ?? "Workflow")
-                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                            .font(settings.fontBodyMedium)
                                             .foregroundColor(.primary)
                                             .lineLimit(1)
 
@@ -247,11 +361,11 @@ struct MemoDetailView: View {
                                         // Status indicator
                                         if run.status == "completed" {
                                             Image(systemName: "checkmark.circle.fill")
-                                                .font(.system(size: 10))
+                                                .font(settings.fontSM)
                                                 .foregroundColor(.green)
                                         } else if run.status == "failed" {
                                             Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 10))
+                                                .font(settings.fontSM)
                                                 .foregroundColor(.red)
                                         } else {
                                             ProgressView()
@@ -261,11 +375,11 @@ struct MemoDetailView: View {
 
                                         // Time ago
                                         Text(formatTimeAgo(run.runDate))
-                                            .font(.system(size: 9, design: .monospaced))
+                                            .font(settings.fontXS)
                                             .foregroundColor(.secondary)
 
                                         Image(systemName: "chevron.right")
-                                            .font(.system(size: 8, weight: .semibold))
+                                            .font(settings.fontXS)
                                             .foregroundColor(.secondary.opacity(0.5))
                                     }
                                     .padding(.horizontal, 10)
@@ -278,56 +392,45 @@ struct MemoDetailView: View {
                     }
                 }
 
-                // Quick Actions
+                // Danger Zone
                 Divider()
 
                 HStack(spacing: 8) {
-                    // Copy transcript
-                    Button(action: copyTranscript) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.on.clipboard")
-                                .font(.system(size: 10))
-                            Text("COPY")
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        }
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(memo.currentTranscript == nil)
+                    Spacer()
 
                     // Delete memo
                     Button(action: deleteMemo) {
                         HStack(spacing: 4) {
                             Image(systemName: "trash")
-                                .font(.system(size: 10))
-                            Text("DELETE")
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .font(settings.fontSM)
+                            Text("DELETE MEMO")
+                                .font(settings.fontSMMedium)
                         }
-                        .foregroundColor(.red)
+                        .foregroundColor(.red.opacity(0.8))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-
-                    Spacer()
                 }
 
                 Spacer()
             }
-            .padding(24)
+            .padding(Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
+        .background(SettingsManager.shared.tacticalBackground)
         .onAppear {
             editedTitle = memoTitle
             editedNotes = memo.notes ?? ""
+            // Delay to avoid triggering save on initial load
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                notesInitialized = true
+            }
         }
-        .onChange(of: memo.id) { _ in
+        .onChange(of: memo.id) { _, _ in
             // Reset state when memo changes
+            notesInitialized = false
             editedTitle = memo.title ?? "Recording"
             editedNotes = memo.notes ?? ""
             editedTranscript = ""
@@ -336,6 +439,10 @@ struct MemoDetailView: View {
             audioPlayer?.stop()
             audioPlayer = nil
             currentTime = 0
+            // Re-enable after memo change settles
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                notesInitialized = true
+            }
         }
         .onExitCommand {
             // Escape cancels edit mode
@@ -382,13 +489,40 @@ struct MemoDetailView: View {
         try? context.save()
     }
 
+    private func debouncedSaveNotes() {
+        // Skip on initial load
+        guard notesInitialized else { return }
+
+        // Cancel previous timer
+        notesSaveTimer?.invalidate()
+
+        // Hide checkmark while typing
+        withAnimation { showNotesSaved = false }
+
+        // Start new timer - save after 10 seconds of no typing
+        notesSaveTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { _ in
+            saveNotes()
+        }
+    }
+
     private func saveNotes() {
         guard let context = memo.managedObjectContext else { return }
-        // Debounce: save after 500ms of no typing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            context.perform {
-                memo.notes = editedNotes
-                try? context.save()
+        context.perform {
+            memo.notes = editedNotes
+            try? context.save()
+
+            // Show checkmark briefly
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showNotesSaved = true
+                }
+
+                // Hide after 2 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        showNotesSaved = false
+                    }
+                }
             }
         }
     }
@@ -396,9 +530,11 @@ struct MemoDetailView: View {
     private func togglePlayback() {
         if isPlaying {
             audioPlayer?.pause()
+            stopPlaybackTimer()
             isPlaying = false
         } else if audioPlayer != nil {
             audioPlayer?.play()
+            startPlaybackTimer()
             isPlaying = true
         } else {
             // Initialize player with synced audio data
@@ -412,12 +548,33 @@ struct MemoDetailView: View {
                 audioPlayer?.prepareToPlay()
                 duration = audioPlayer?.duration ?? 0
                 audioPlayer?.play()
+                startPlaybackTimer()
                 isPlaying = true
                 print("✅ Playing synced audio: \(audioData.count) bytes, duration: \(duration)s")
             } catch {
                 print("❌ Failed to play audio: \(error)")
             }
         }
+    }
+
+    private func startPlaybackTimer() {
+        playbackTimer?.invalidate()
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+            if let player = audioPlayer {
+                currentTime = player.currentTime
+                // Check if playback finished
+                if !player.isPlaying && currentTime >= duration - 0.1 {
+                    stopPlaybackTimer()
+                    isPlaying = false
+                    currentTime = 0
+                }
+            }
+        }
+    }
+
+    private func stopPlaybackTimer() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -468,27 +625,6 @@ struct MemoDetailView: View {
         context.perform {
             context.delete(memo)
             try? context.save()
-        }
-    }
-
-    private func executeWorkflow(_ actionType: WorkflowActionType) {
-        Task {
-            do {
-                // Get provider/model from settings, with fallback to gemini
-                let settings = SettingsManager.shared
-                let (providerName, modelId) = resolveProviderAndModel(from: settings)
-
-                try await WorkflowExecutor.shared.execute(
-                    action: actionType,
-                    for: memo,
-                    providerName: providerName,
-                    modelId: modelId,
-                    context: viewContext
-                )
-                print("✅ \(actionType.rawValue) workflow completed with \(providerName)/\(modelId)")
-            } catch {
-                print("❌ Workflow error: \(error.localizedDescription)")
-            }
         }
     }
 
@@ -568,6 +704,135 @@ struct MemoDetailView: View {
             .replacingOccurrences(of: "\r", with: "\\r")
     }
 
+    private func browseWorkflows() {
+        // Post notification to switch to Workflows tab and open workflow browser
+        NotificationCenter.default.post(name: .browseWorkflows, object: memo)
+        print("🔍 Browse workflows for memo: \(memo.title ?? "Untitled")")
+    }
+
+    // MARK: - Quick Action Button Builder
+
+    @ViewBuilder
+    private func quickActionButton(for item: QuickActionItem) -> some View {
+        switch item {
+        case .workflow(let workflow):
+            // Custom workflow button
+            ActionButtonMac(
+                icon: workflow.icon,
+                title: workflow.name.uppercased(),
+                isProcessing: processingWorkflowIDs.contains(workflow.id),
+                isCompleted: hasCompletedRun(for: workflow),
+                runCount: runCount(for: workflow),
+                action: { executeCustomWorkflow(workflow) }
+            )
+
+        case .builtIn(let action):
+            // Built-in action button
+            switch action {
+            case .summarize:
+                ActionButtonMac(
+                    icon: action.icon,
+                    title: action.title,
+                    isProcessing: memo.isProcessingSummary,
+                    isCompleted: memo.summary != nil,
+                    runCount: memo.summary != nil ? 1 : 0,
+                    action: { executeLegacyAction(.summarize) }
+                )
+            case .taskify:
+                ActionButtonMac(
+                    icon: action.icon,
+                    title: action.title,
+                    isProcessing: memo.isProcessingTasks,
+                    isCompleted: memo.tasks != nil,
+                    runCount: memo.tasks != nil ? 1 : 0,
+                    action: { executeLegacyAction(.extractTasks) }
+                )
+            case .remind:
+                ActionButtonMac(
+                    icon: action.icon,
+                    title: action.title,
+                    isProcessing: memo.isProcessingReminders,
+                    isCompleted: memo.reminders != nil,
+                    runCount: memo.reminders != nil ? 1 : 0,
+                    action: { executeLegacyAction(.reminders) }
+                )
+            case .toNotes:
+                ActionButtonMac(
+                    icon: action.icon,
+                    title: action.title,
+                    isProcessing: false,
+                    isCompleted: false,
+                    runCount: 0,
+                    action: { addToAppleNotes() }
+                )
+            case .copy:
+                ActionButtonMac(
+                    icon: action.icon,
+                    title: action.title,
+                    isProcessing: false,
+                    isCompleted: false,
+                    runCount: 0,
+                    action: { copyTranscript() }
+                )
+            }
+        }
+    }
+
+    /// Check if this workflow has been run on this memo
+    private func hasCompletedRun(for workflow: WorkflowDefinition) -> Bool {
+        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return false }
+        return runs.contains { $0.workflowId == workflow.id && $0.status == "completed" }
+    }
+
+    /// Count how many times this workflow has been run (completed) on this memo
+    private func runCount(for workflow: WorkflowDefinition) -> Int {
+        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return 0 }
+        return runs.filter { $0.workflowId == workflow.id && $0.status == "completed" }.count
+    }
+
+    /// Execute a custom workflow definition
+    private func executeCustomWorkflow(_ workflow: WorkflowDefinition) {
+        processingWorkflowIDs.insert(workflow.id)
+
+        Task {
+            do {
+                _ = try await WorkflowExecutor.shared.executeWorkflow(
+                    workflow,
+                    for: memo,
+                    context: viewContext
+                )
+                print("✅ Workflow '\(workflow.name)' completed")
+            } catch {
+                print("❌ Workflow error: \(error.localizedDescription)")
+            }
+
+            _ = await MainActor.run {
+                processingWorkflowIDs.remove(workflow.id)
+            }
+        }
+    }
+
+    /// Execute a legacy built-in action
+    private func executeLegacyAction(_ actionType: WorkflowActionType) {
+        Task {
+            do {
+                let settings = SettingsManager.shared
+                let (providerName, modelId) = resolveProviderAndModel(from: settings)
+
+                try await WorkflowExecutor.shared.execute(
+                    action: actionType,
+                    for: memo,
+                    providerName: providerName,
+                    modelId: modelId,
+                    context: viewContext
+                )
+                print("✅ \(actionType.rawValue) completed with \(providerName)/\(modelId)")
+            } catch {
+                print("❌ Action error: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Tab Views
 
     @ViewBuilder
@@ -577,7 +842,7 @@ struct MemoDetailView: View {
                 ProgressView()
                     .scaleEffect(0.7)
                 Text("PROCESSING...")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(settings.fontXSBold)
                     .tracking(1)
                     .foregroundColor(.secondary)
             }
@@ -590,11 +855,11 @@ struct MemoDetailView: View {
                     .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
             )
         } else if let transcript = memo.currentTranscript {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 if isEditing {
                     // Edit mode: TextEditor
                     TextEditor(text: $editedTranscript)
-                        .font(settings.themedFont(baseSize: 12, weight: .regular))
+                        .font(settings.contentFontBody)
                         .foregroundColor(.primary)
                         .lineSpacing(4)
                         .scrollContentBackground(.hidden)
@@ -608,7 +873,7 @@ struct MemoDetailView: View {
                 } else {
                     // Read mode
                     Text(transcript)
-                        .font(settings.themedFont(baseSize: 12, weight: .regular))
+                        .font(settings.contentFontBody)
                         .foregroundColor(.primary)
                         .textSelection(.enabled)
                         .lineSpacing(4)
@@ -632,10 +897,10 @@ struct MemoDetailView: View {
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "waveform.circle")
-                    .font(.system(size: 32))
+                    .font(settings.fontDisplay)
                     .foregroundColor(.secondary.opacity(0.5))
                 Text("NO TRANSCRIPT AVAILABLE")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(settings.fontSMBold)
                     .tracking(1)
                     .foregroundColor(.secondary)
             }
@@ -663,7 +928,7 @@ struct MemoDetailView: View {
                 )
             } else {
                 // List of workflow runs
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     ForEach(workflowRuns, id: \.id) { run in
                         WorkflowRunListItem(
                             run: run,
@@ -677,7 +942,7 @@ struct MemoDetailView: View {
                         if let summary = memo.summary {
                             AIResultSection(title: "Summary", icon: "list.bullet.clipboard") {
                                 Text(summary)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(settings.contentFontBody)
                                     .foregroundColor(.primary)
                                     .textSelection(.enabled)
                             }
@@ -691,10 +956,10 @@ struct MemoDetailView: View {
                                     ForEach(tasks) { task in
                                         HStack(spacing: 8) {
                                             Text(taskPriorityIndicator(task.priority))
-                                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                                .font(settings.fontXSBold)
                                                 .foregroundColor(.secondary)
                                             Text(task.title)
-                                                .font(.system(size: 11, design: .monospaced))
+                                                .font(settings.contentFontBody)
                                         }
                                     }
                                 }
@@ -704,7 +969,7 @@ struct MemoDetailView: View {
                         if let remindersJSON = memo.reminders {
                             AIResultSection(title: "Reminders", icon: "bell") {
                                 Text(remindersJSON)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(settings.contentFontBody)
                                     .foregroundColor(.primary)
                                     .textSelection(.enabled)
                             }
@@ -715,14 +980,14 @@ struct MemoDetailView: View {
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "wand.and.rays")
-                    .font(.system(size: 24))
+                    .font(settings.fontHeadline)
                     .foregroundColor(.secondary.opacity(0.3))
                 Text("NO RESULTS")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(settings.fontSMBold)
                     .tracking(1)
                     .foregroundColor(.secondary)
                 Text("Run workflows to generate AI results")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(settings.fontSM)
                     .foregroundColor(.secondary.opacity(0.5))
                     .multilineTextAlignment(.center)
             }
@@ -765,24 +1030,24 @@ struct AIResultSection<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 9))
+                    .font(.techLabel)
                 Text(title.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1)
+                    .font(.techLabel)
+                    .tracking(Tracking.wide)
             }
             .foregroundColor(.secondary)
 
             content()
-                .padding(12)
+                .padding(Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(4)
+                .cornerRadius(CornerRadius.xs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .strokeBorder(Color.primary.opacity(Opacity.light), lineWidth: 0.5)
                 )
         }
     }
@@ -794,34 +1059,72 @@ struct ActionButtonMac: View {
     let title: String
     let isProcessing: Bool
     let isCompleted: Bool
+    var runCount: Int = 0  // Number of times this action has been run
     let action: () -> Void
 
+    @State private var triggered = false
+
     var body: some View {
-        Button(action: action) {
+        Button(action: triggerAction) {
             VStack(spacing: 6) {
-                if isProcessing {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                } else {
+                ZStack {
+                    // Main icon
                     Image(systemName: icon)
-                        .font(.system(size: 14))
-                        .foregroundColor(isCompleted ? .accentColor : .secondary)
+                        .font(SettingsManager.shared.fontTitle)
+                        .foregroundColor(triggered ? .accentColor : .secondary)
+                        .frame(width: 20, height: 20)
+                        .scaleEffect(triggered ? 1.2 : 1.0)
+
+                    // Triggered flash overlay
+                    if triggered {
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.3))
+                            .frame(width: 32, height: 32)
+                            .scaleEffect(triggered ? 1.5 : 0.5)
+                            .opacity(triggered ? 0 : 1)
+                    }
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: triggered)
 
                 Text(title)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(SettingsManager.shared.fontXSMedium)
+                    .foregroundColor(triggered ? .accentColor : .secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(isCompleted ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
-        .disabled(isProcessing)
+        .overlay(alignment: .topTrailing) {
+            // Run count badge
+            if runCount > 0 {
+                Text("\(runCount)")
+                    .font(.techLabelSmall)
+                    .foregroundColor(.primary.opacity(0.7))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.1))
+                    .clipShape(Capsule())
+                    .offset(x: -4, y: 4)
+            }
+        }
+    }
+
+    private func triggerAction() {
+        // Visual feedback
+        withAnimation(.easeOut(duration: 0.15)) {
+            triggered = true
+        }
+
+        // Reset after brief moment
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                triggered = false
+            }
+        }
+
+        // Fire the action (async, non-blocking)
+        action()
     }
 }
 
@@ -843,7 +1146,7 @@ struct WorkflowRunListItem: View {
             HStack(spacing: 10) {
                 // Icon
                 Image(systemName: workflowIcon)
-                    .font(.system(size: 12))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.secondary)
                     .frame(width: 24, height: 24)
                     .background(Color.primary.opacity(0.05))
@@ -852,7 +1155,7 @@ struct WorkflowRunListItem: View {
                 // Workflow name (clickable to navigate)
                 Button(action: onNavigateToWorkflow) {
                     Text(workflowName)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(SettingsManager.shared.fontBodyMedium)
                         .foregroundColor(.primary)
                         .underline(isHovering)
                 }
@@ -861,7 +1164,7 @@ struct WorkflowRunListItem: View {
                 // Model badge
                 if let model = modelInfo {
                     Text(model)
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.7))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -873,12 +1176,12 @@ struct WorkflowRunListItem: View {
 
                 // Timestamp
                 Text(formatRunDate(runDate))
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.secondary.opacity(0.6))
 
                 // Chevron
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.secondary.opacity(0.4))
             }
             .padding(.horizontal, 12)
@@ -931,9 +1234,9 @@ struct WorkflowRunDetailView: View {
                 Button(action: onBack) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 9))
+                            .font(SettingsManager.shared.fontSM)
                         Text("BACK")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontSMBold)
                             .tracking(0.5)
                     }
                     .foregroundColor(.secondary)
@@ -944,19 +1247,19 @@ struct WorkflowRunDetailView: View {
                     .frame(height: 16)
 
                 Image(systemName: workflowIcon)
-                    .font(.system(size: 12))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.secondary)
 
                 Button(action: onNavigateToWorkflow) {
                     Text(workflowName)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(SettingsManager.shared.fontBodyMedium)
                         .foregroundColor(.primary)
                 }
                 .buttonStyle(.plain)
 
                 if let model = modelId {
                     Text(model)
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.7))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -967,12 +1270,12 @@ struct WorkflowRunDetailView: View {
                 Spacer()
 
                 Text(formatFullDate(runDate))
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.secondary.opacity(0.6))
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10))
+                        .font(SettingsManager.shared.fontSM)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -992,12 +1295,12 @@ struct WorkflowRunDetailView: View {
                         if let output = run.output, !output.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("OUTPUT")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .font(SettingsManager.shared.fontSMBold)
                                     .tracking(1)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(SettingsManager.shared.contentFontBody)
                                     .foregroundColor(.primary)
                                     .textSelection(.enabled)
                                     .lineSpacing(3)
@@ -1055,18 +1358,18 @@ struct StepExecutionCard: View {
             // Step header
             HStack(spacing: 8) {
                 Text("\(step.stepNumber)")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontSMBold)
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
                     .background(Color.blue)
                     .cornerRadius(4)
 
                 Image(systemName: step.stepIcon)
-                    .font(.system(size: 11))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.secondary)
 
                 Text(step.stepType.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontSMBold)
                     .tracking(0.5)
                     .foregroundColor(.primary)
 
@@ -1074,7 +1377,7 @@ struct StepExecutionCard: View {
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
-                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSMedium)
                         .tracking(0.3)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
@@ -1089,12 +1392,12 @@ struct StepExecutionCard: View {
             if showInput {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("INPUT")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(0.5)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(SettingsManager.shared.fontSM)
                         .foregroundColor(.secondary)
                         .lineSpacing(2)
                         .lineLimit(10)
@@ -1106,32 +1409,7 @@ struct StepExecutionCard: View {
             }
 
             // Output
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("OUTPUT")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
-                        .foregroundColor(.secondary.opacity(0.6))
-
-                    Text("→ {{\(step.outputKey)}}")
-                        .font(.system(size: 7, design: .monospaced))
-                        .foregroundColor(.blue.opacity(0.7))
-                }
-
-                Text(step.output)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .textSelection(.enabled)
-                    .lineSpacing(3)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(isLast ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
-                    )
-            }
+            OutputCard(step.output, label: "output → {{\(step.outputKey)}}", isHighlighted: isLast)
         }
         .padding(12)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
@@ -1141,4 +1419,187 @@ struct StepExecutionCard: View {
                 .strokeBorder(Color.secondary.opacity(0.1), lineWidth: 0.5)
         )
     }
+}
+
+// MARK: - Browse Workflows Button (special CTA style)
+struct BrowseWorkflowsButton: View {
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(SettingsManager.shared.fontTitle)
+                    .foregroundColor(.accentColor)
+
+                Text("MORE")
+                    .font(SettingsManager.shared.fontXSMedium)
+                    .foregroundColor(.accentColor)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.accentColor.opacity(isHovering ? 0.15 : 0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.accentColor.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .help("Browse all workflows")
+    }
+}
+
+// MARK: - Waveform View
+struct WaveformView: View {
+    let progress: Double
+    let isPlaying: Bool
+
+    // Generate pseudo-random but consistent waveform bars
+    private let barCount = 60
+
+    private func barHeight(at index: Int) -> CGFloat {
+        // Use sine waves with different frequencies to create natural-looking waveform
+        let x = Double(index) / Double(barCount)
+        let h1 = sin(x * .pi * 3) * 0.3
+        let h2 = sin(x * .pi * 7 + 1) * 0.2
+        let h3 = sin(x * .pi * 13 + 2) * 0.15
+        let h4 = cos(x * .pi * 5) * 0.2
+        let base = 0.3 + abs(h1 + h2 + h3 + h4)
+        return CGFloat(min(1.0, max(0.15, base)))
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let barWidth = (geometry.size.width - CGFloat(barCount - 1) * 2) / CGFloat(barCount)
+
+            HStack(spacing: 2) {
+                ForEach(0..<barCount, id: \.self) { index in
+                    let barProgress = Double(index) / Double(barCount)
+                    let isPast = barProgress < progress
+
+                    Rectangle()
+                        .fill(isPast ? Color.accentColor : Color.secondary.opacity(0.25))
+                        .frame(width: max(1, barWidth), height: geometry.size.height * barHeight(at: index))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        }
+    }
+}
+
+// MARK: - Output Card (clean card with copy button)
+struct OutputCard: View {
+    let content: String
+    let label: String?
+    var isHighlighted: Bool = false
+
+    @State private var copied = false
+    @State private var isExpanded = false
+
+    private var isLong: Bool { content.count > 300 }
+    private var displayContent: String {
+        if isLong && !isExpanded {
+            return String(content.prefix(280)) + "..."
+        }
+        return content
+    }
+
+    init(_ content: String, label: String? = nil, isHighlighted: Bool = false) {
+        self.content = content
+        self.label = label
+        self.isHighlighted = isHighlighted
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            // Header with label and copy button
+            if label != nil || true {
+                HStack {
+                    if let label = label {
+                        Text(label.uppercased())
+                            .font(.techLabelSmall)
+                            .tracking(Tracking.normal)
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+
+                    Spacer()
+
+                    Button(action: copyToClipboard) {
+                        HStack(spacing: 4) {
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 10, weight: .medium))
+                            if copied {
+                                Text("COPIED")
+                                    .font(.techLabelSmall)
+                                    .tracking(Tracking.tight)
+                            }
+                        }
+                        .foregroundColor(copied ? .green : .secondary.opacity(0.5))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.secondary.opacity(copied ? 0.1 : 0.05))
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Content
+            Text(displayContent)
+                .font(.bodySmall)
+                .foregroundColor(.primary)
+                .textSelection(.enabled)
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Expand button for long content
+            if isLong {
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
+                    HStack(spacing: 4) {
+                        Text(isExpanded ? "SHOW LESS" : "SHOW MORE")
+                            .font(.techLabelSmall)
+                            .tracking(Tracking.normal)
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(Spacing.md)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(CornerRadius.sm)
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .strokeBorder(isHighlighted ? Color.green.opacity(0.3) : Color.secondary.opacity(0.1), lineWidth: isHighlighted ? 1 : 0.5)
+        )
+    }
+
+    private func copyToClipboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(content, forType: .string)
+
+        withAnimation(.easeInOut(duration: 0.15)) {
+            copied = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                copied = false
+            }
+        }
+    }
+}
+
+// MARK: - Notification Names
+extension Notification.Name {
+    static let browseWorkflows = Notification.Name("browseWorkflows")
 }

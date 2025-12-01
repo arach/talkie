@@ -63,6 +63,7 @@ struct VoiceMemoListView: View {
     @State private var isPushToTalkActive = false
     @State private var pushToTalkScale: CGFloat = 1.0
     @State private var deepLinkMemo: VoiceMemo? = nil
+    @State private var scrollToActivity: Bool = false
 
     private var filteredMemos: [VoiceMemo] {
         if searchText.isEmpty {
@@ -148,7 +149,7 @@ struct VoiceMemoListView: View {
                                 }
                             }
                         }
-                        .padding(.horizontal, Spacing.md)
+                        .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.sm)
 
                         // Results count when searching
@@ -160,7 +161,7 @@ struct VoiceMemoListView: View {
                                     .foregroundColor(.textTertiary)
                                 Spacer()
                             }
-                            .padding(.horizontal, Spacing.md)
+                            .padding(.horizontal, Spacing.sm)
                             .padding(.bottom, Spacing.xs)
                         }
 
@@ -259,8 +260,8 @@ struct VoiceMemoListView: View {
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
                             .strokeBorder(themeManager.colors.tableBorder, lineWidth: 0.5)
                     )
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.bottom, 100) // Space for mic area
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.bottom, 90) // Space for mic area
                     } // end VStack
 
                     // Record button area with distinct background
@@ -269,6 +270,10 @@ struct VoiceMemoListView: View {
 
                         // Record area container - expands for push-to-talk
                         VStack(spacing: 0) {
+                            // Top padding for record area
+                            Spacer()
+                                .frame(height: Spacing.md)
+
                             // Push-to-talk visualization when active
                             if isPushToTalkActive {
                                 VStack(spacing: Spacing.sm) {
@@ -305,18 +310,18 @@ struct VoiceMemoListView: View {
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
 
-                            // Centered record button - smaller, minimal glow
+                            // Centered record button
                             ZStack {
                                 // Subtle glow - only when recording
                                 if isPushToTalkActive {
                                     Circle()
                                         .fill(Color.recording)
-                                        .frame(width: 60, height: 60)
+                                        .frame(width: 68, height: 68)
                                         .blur(radius: 20)
                                         .opacity(0.6)
                                 }
 
-                                // Main button
+                                // Main button with subtle border
                                 Circle()
                                     .fill(
                                         LinearGradient(
@@ -325,17 +330,21 @@ struct VoiceMemoListView: View {
                                             endPoint: .bottomTrailing
                                         )
                                     )
-                                    .frame(width: 52, height: 52)
+                                    .frame(width: 58, height: 58)
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(Color.recordingGlow.opacity(0.5), lineWidth: 1.5)
+                                    )
                                     .scaleEffect(pushToTalkScale)
 
                                 // Icon changes based on state
                                 if isPushToTalkActive {
                                     RoundedRectangle(cornerRadius: 3)
                                         .fill(Color.white)
-                                        .frame(width: 16, height: 16)
+                                        .frame(width: 18, height: 18)
                                 } else {
                                     Image(systemName: "mic.fill")
-                                        .font(.system(size: 20, weight: .medium))
+                                        .font(.system(size: 22, weight: .medium))
                                         .foregroundColor(.white)
                                 }
                             }
@@ -356,8 +365,8 @@ struct VoiceMemoListView: View {
                             }, perform: {
                                 // Long press completed (finger still down) - do nothing, handled in pressing
                             })
-                            .padding(.top, Spacing.sm)
-                            .padding(.bottom, Spacing.xs)
+                            .padding(.top, Spacing.xs)
+                            .padding(.bottom, 10)
                         }
                         .frame(maxWidth: .infinity)
                         .background(
@@ -383,7 +392,7 @@ struct VoiceMemoListView: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
                         Text("TALKIE")
-                            .font(.techLabel)
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .tracking(2)
                             .foregroundColor(.textPrimary)
                         Text("\(allVoiceMemos.count) MEMOS")
@@ -398,7 +407,7 @@ struct VoiceMemoListView: View {
                         showingSettings = true
                     }) {
                         Image(systemName: "gearshape")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.textSecondary)
                     }
                 }
@@ -411,7 +420,10 @@ struct VoiceMemoListView: View {
                     .environment(\.managedObjectContext, viewContext)
             }
             .sheet(item: $deepLinkMemo) { memo in
-                VoiceMemoDetailView(memo: memo, audioPlayer: audioPlayer)
+                VoiceMemoDetailView(memo: memo, audioPlayer: audioPlayer, scrollToActivity: scrollToActivity)
+                    .onDisappear {
+                        scrollToActivity = false
+                    }
             }
         }
         .navigationViewStyle(.stack)
@@ -450,6 +462,15 @@ struct VoiceMemoListView: View {
         case .openMemo(let id):
             // Find memo by ID and show detail
             if let memo = allVoiceMemos.first(where: { $0.id == id }) {
+                scrollToActivity = false
+                deepLinkMemo = memo
+            }
+            deepLinkManager.clearAction()
+
+        case .openMemoActivity(let id):
+            // Find memo by ID and show detail scrolled to activity
+            if let memo = allVoiceMemos.first(where: { $0.id == id }) {
+                scrollToActivity = true
                 deepLinkMemo = memo
             }
             deepLinkManager.clearAction()

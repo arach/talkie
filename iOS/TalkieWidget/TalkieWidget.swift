@@ -196,53 +196,52 @@ struct TalkieWidgetEntryView: View {
 struct SmallWidgetView: View {
     let memoCount: Int
     let colors: WidgetColors
+    @Environment(\.widgetRenderingMode) var renderingMode
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Background
-                colors.background
-
-                // Corner accents
+        ZStack {
+            // Corner accents - hide in tinted mode
+            if renderingMode == .fullColor {
                 CornerAccents(color: colors.accent)
+            }
 
-                // Content
-                VStack(spacing: 8) {
-                    Spacer()
+            // Content
+            VStack(spacing: 8) {
+                Spacer()
 
-                    // Mic button
-                    ZStack {
-                        Circle()
-                            .fill(colors.foreground.opacity(0.1))
-                            .frame(width: 52, height: 52)
+                // Mic button
+                ZStack {
+                    Circle()
+                        .fill(colors.foreground.opacity(0.1))
+                        .frame(width: 52, height: 52)
 
-                        Circle()
-                            .stroke(colors.secondaryForeground, lineWidth: 1)
-                            .frame(width: 52, height: 52)
+                    Circle()
+                        .stroke(colors.secondaryForeground, lineWidth: 1)
+                        .frame(width: 52, height: 52)
 
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundColor(colors.foreground)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundColor(colors.foreground)
+                        .widgetAccentable()
+                }
+
+                Text("RECORD")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(colors.secondaryForeground)
+                    .tracking(2)
+
+                Spacer()
+
+                // Memo count
+                if memoCount > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 8))
+                        Text("\(memoCount)")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
                     }
-
-                    Text("RECORD")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(colors.secondaryForeground)
-                        .tracking(2)
-
-                    Spacer()
-
-                    // Memo count
-                    if memoCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "waveform")
-                                .font(.system(size: 8))
-                            Text("\(memoCount)")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        }
-                        .foregroundColor(colors.secondaryForeground)
-                        .padding(.bottom, 8)
-                    }
+                    .foregroundColor(colors.secondaryForeground)
+                    .padding(.bottom, 8)
                 }
             }
         }
@@ -256,94 +255,93 @@ struct MediumWidgetView: View {
     let memoCount: Int
     let recentMemos: [MemoSnapshot]
     let colors: WidgetColors
+    @Environment(\.widgetRenderingMode) var renderingMode
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Background
-                colors.background
-
-                // Corner accents
+        ZStack {
+            // Corner accents - hide in tinted mode
+            if renderingMode == .fullColor {
                 CornerAccents(color: colors.accent)
+            }
 
-                VStack(spacing: 0) {
-                    // Top header - TALKIE centered
-                    HStack {
-                        Spacer()
-                        Text("TALKIE")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(colors.foreground.opacity(0.9))
-                            .tracking(2)
-                        Spacer()
+            VStack(spacing: 0) {
+                // Top header - TALKIE centered
+                HStack {
+                    Spacer()
+                    Text("TALKIE")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(colors.foreground.opacity(0.9))
+                        .tracking(2)
+                    Spacer()
+                }
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+
+                // Main content
+                HStack(spacing: 0) {
+                    // Left side - Record button
+                    Link(destination: URL(string: "talkie://record")!) {
+                        VStack(spacing: 4) {
+                            ZStack {
+                                Circle()
+                                    .fill(colors.foreground.opacity(0.1))
+                                    .frame(width: 40, height: 40)
+
+                                Circle()
+                                    .stroke(colors.secondaryForeground, lineWidth: 1)
+                                    .frame(width: 40, height: 40)
+
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(colors.foreground)
+                                    .widgetAccentable()
+                            }
+
+                            Text("REC")
+                                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                                .foregroundColor(colors.secondaryForeground)
+                                .tracking(1)
+                        }
+                        .frame(width: 80)
                     }
-                    .padding(.top, 10)
-                    .padding(.bottom, 6)
 
-                    // Main content
-                    HStack(spacing: 0) {
-                        // Left side - Record button
-                        Link(destination: URL(string: "talkie://record")!) {
-                            VStack(spacing: 4) {
-                                ZStack {
-                                    Circle()
-                                        .fill(colors.foreground.opacity(0.1))
-                                        .frame(width: 40, height: 40)
-
-                                    Circle()
-                                        .stroke(colors.secondaryForeground, lineWidth: 1)
-                                        .frame(width: 40, height: 40)
-
-                                    Image(systemName: "mic.fill")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(colors.foreground)
-                                }
-
-                                Text("REC")
-                                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(colors.secondaryForeground)
-                                    .tracking(1)
-                            }
-                            .frame(width: geo.size.width * 0.26)
-                        }
-
-                        // Divider
-                        Rectangle()
-                            .fill(colors.tertiaryForeground)
-                            .frame(width: 1)
-                            .padding(.vertical, 4)
-
-                        // Right side - Recent memos
-                        VStack(alignment: .leading, spacing: 2) {
-                            if recentMemos.isEmpty {
-                                // Empty state
-                                Spacer()
-                                HStack {
-                                    Spacer()
-                                    VStack(spacing: 4) {
-                                        Image(systemName: "waveform")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(colors.tertiaryForeground)
-                                        Text("No memos yet")
-                                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                            .foregroundColor(colors.tertiaryForeground)
-                                    }
-                                    Spacer()
-                                }
-                                Spacer()
-                            } else {
-                                // Memo list
-                                ForEach(recentMemos.prefix(3)) { memo in
-                                    Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
-                                        MemoRowView(memo: memo, colors: colors)
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                            }
-                        }
-                        .padding(.horizontal, 10)
+                    // Divider
+                    Rectangle()
+                        .fill(colors.tertiaryForeground)
+                        .frame(width: 1)
                         .padding(.vertical, 4)
-                        .frame(maxWidth: .infinity)
+
+                    // Right side - Recent memos
+                    VStack(alignment: .leading, spacing: 2) {
+                        if recentMemos.isEmpty {
+                            // Empty state
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                VStack(spacing: 4) {
+                                    Image(systemName: "waveform")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(colors.tertiaryForeground)
+                                    Text("No memos yet")
+                                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                        .foregroundColor(colors.tertiaryForeground)
+                                }
+                                Spacer()
+                            }
+                            Spacer()
+                        } else {
+                            // Memo list
+                            ForEach(recentMemos.prefix(3)) { memo in
+                                Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
+                                    WidgetMemoRowView(memo: memo, colors: colors)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -356,108 +354,107 @@ struct LargeWidgetView: View {
     let memoCount: Int
     let recentMemos: [MemoSnapshot]
     let colors: WidgetColors
+    @Environment(\.widgetRenderingMode) var renderingMode
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Background
-                colors.background
-
-                // Corner accents
+        ZStack {
+            // Corner accents - hide in tinted mode
+            if renderingMode == .fullColor {
                 CornerAccents(color: colors.accent)
+            }
 
+            VStack(spacing: 0) {
+                // Top header - matches app style exactly
                 VStack(spacing: 0) {
-                    // Top header - matches app style exactly
-                    VStack(spacing: 0) {
-                        Text("TALKIE")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                            .foregroundColor(colors.foreground)
-                        Text("\(memoCount) MEMOS")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(colors.tertiaryForeground)
-                    }
-                    .padding(.top, 12)
-                    .padding(.bottom, 6)
-
-                    // Memos list - table style
-                    VStack(alignment: .leading, spacing: 0) {
-                        if recentMemos.isEmpty {
-                            Spacer()
-                            HStack {
-                                Spacer()
-                                VStack(spacing: 6) {
-                                    Image(systemName: "waveform")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(colors.tertiaryForeground)
-                                    Text("No memos yet")
-                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                        .foregroundColor(colors.tertiaryForeground)
-                                }
-                                Spacer()
-                            }
-                            Spacer()
-                        } else {
-                            ForEach(recentMemos.prefix(8)) { memo in
-                                Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
-                                    MemoRowView(memo: memo, colors: colors)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-
-                    // Bottom bar: Search | Record | Settings
-                    HStack {
-                        // Search - left
-                        Link(destination: URL(string: "talkie://search")!) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(colors.secondaryForeground)
-                                .frame(width: 44, height: 44)
-                        }
-
-                        Spacer()
-
-                        // Red record button - center
-                        Link(destination: URL(string: "talkie://record")!) {
-                            ZStack {
-                                Circle()
-                                    .strokeBorder(Color.red.opacity(0.8), lineWidth: 2)
-                                    .frame(width: 44, height: 44)
-
-                                Circle()
-                                    .fill(Color.red.opacity(0.2))
-                                    .frame(width: 36, height: 36)
-
-                                Image(systemName: "mic.fill")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.red)
-                            }
-                        }
-
-                        Spacer()
-
-                        // Settings - right
-                        Link(destination: URL(string: "talkie://settings")!) {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(colors.secondaryForeground)
-                                .frame(width: 44, height: 44)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                    Text("TALKIE")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundColor(colors.foreground)
+                    Text("\(memoCount) MEMOS")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(colors.tertiaryForeground)
                 }
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+
+                // Memos list - table style
+                VStack(alignment: .leading, spacing: 0) {
+                    if recentMemos.isEmpty {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            VStack(spacing: 6) {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(colors.tertiaryForeground)
+                                Text("No memos yet")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundColor(colors.tertiaryForeground)
+                            }
+                            Spacer()
+                        }
+                        Spacer()
+                    } else {
+                        ForEach(recentMemos.prefix(8)) { memo in
+                            Link(destination: URL(string: "talkie://memo?id=\(memo.id)")!) {
+                                WidgetMemoRowView(memo: memo, colors: colors)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                .padding(.horizontal, 14)
+
+                // Bottom bar: Search | Record | Settings
+                HStack {
+                    // Search - left
+                    Link(destination: URL(string: "talkie://search")!) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(colors.secondaryForeground)
+                            .frame(width: 44, height: 44)
+                    }
+
+                    Spacer()
+
+                    // Red record button - center
+                    Link(destination: URL(string: "talkie://record")!) {
+                        ZStack {
+                            Circle()
+                                .strokeBorder(Color.red.opacity(0.8), lineWidth: 2)
+                                .frame(width: 44, height: 44)
+
+                            Circle()
+                                .fill(Color.red.opacity(0.2))
+                                .frame(width: 36, height: 36)
+
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.red)
+                                .widgetAccentable()
+                        }
+                    }
+
+                    Spacer()
+
+                    // Settings - right
+                    Link(destination: URL(string: "talkie://settings")!) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(colors.secondaryForeground)
+                            .frame(width: 44, height: 44)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
         }
     }
 }
 
-// MARK: - Memo Row
+// MARK: - Widget Memo Row
 
-struct MemoRowView: View {
+struct WidgetMemoRowView: View {
     let memo: MemoSnapshot
     let colors: WidgetColors
 
@@ -632,9 +629,7 @@ struct TalkieWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             TalkieWidgetEntryView(entry: entry)
-                .containerBackground(for: .widget) {
-                    ContainerBackgroundView(appearance: entry.appearance)
-                }
+                .widgetBackground(entry: entry)
         }
         .configurationDisplayName("Talkie")
         .description("Quick access to record voice memos")
@@ -648,21 +643,39 @@ struct TalkieWidget: Widget {
     }
 }
 
-/// Separate view for container background to properly access colorScheme
-private struct ContainerBackgroundView: View {
-    let appearance: WidgetAppearance
-    @Environment(\.colorScheme) var systemColorScheme
+// MARK: - Widget Background Extension
 
-    var isDark: Bool {
+extension View {
+    @ViewBuilder
+    func widgetBackground(entry: TalkieEntry) -> some View {
+        if #available(iOS 17.0, *) {
+            self.containerBackground(for: .widget) {
+                WidgetBackgroundView(appearance: entry.appearance)
+            }
+        } else {
+            self.background(WidgetBackgroundView(appearance: entry.appearance))
+        }
+    }
+}
+
+/// Widget background view that handles color scheme properly
+private struct WidgetBackgroundView: View {
+    let appearance: WidgetAppearance
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool {
         switch appearance {
-        case .system: return systemColorScheme == .dark
+        case .system: return colorScheme == .dark
         case .dark: return true
         case .light: return false
         }
     }
 
     var body: some View {
-        WidgetColors.forScheme(isDark).background
+        // Use Rectangle with explicit fill - more reliable on device
+        Rectangle()
+            .fill(isDark ? Color(red: 0, green: 0, blue: 0) : Color(red: 1, green: 1, blue: 1))
+            .ignoresSafeArea()
     }
 }
 

@@ -12,6 +12,7 @@ import UIKit
 struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var hasSeenOnboarding: Bool
+    var onStartRecording: (() -> Void)? = nil  // Optional callback to start recording
 
     @State private var currentPage = 0
     @State private var iCloudStatus: CKAccountStatus = .couldNotDetermine
@@ -51,8 +52,18 @@ struct OnboardingView: View {
                     SyncPage()
                         .tag(2)
 
-                    GetStartedPage(iCloudStatus: iCloudStatus, onComplete: completeOnboarding)
-                        .tag(3)
+                    GetStartedPage(
+                        iCloudStatus: iCloudStatus,
+                        onComplete: completeOnboarding,
+                        onTryRecord: {
+                            completeOnboarding()
+                            // Trigger recording after a brief delay to let dismiss complete
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                onStartRecording?()
+                            }
+                        }
+                    )
+                    .tag(3)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut(duration: 0.3), value: currentPage)
@@ -434,9 +445,40 @@ private struct CapturePage: View {
 
 // MARK: - Sync Page (Simple with optional deep dive)
 
+private enum SyncTooltip: String, CaseIterable {
+    case iphone = "iphone"
+    case icloud = "icloud"
+    case mac = "mac"
+
+    var title: String {
+        switch self {
+        case .iphone: return "Instant Capture"
+        case .icloud: return "Seamless Sync"
+        case .mac: return "Desktop Engine"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .iphone: return "LOCAL-FIRST"
+        case .icloud: return "E2E ENCRYPTED"
+        case .mac: return "AI POWERED"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .iphone: return "Capture audio instantly with zero latency. Recordings are secured locally on your device."
+        case .icloud: return "Memos sync via your personal iCloud. No third-party servers—you hold the encryption keys."
+        case .mac: return "Your Mac handles AI tasks, transcribing audio and generating summaries in the background."
+        }
+    }
+}
+
 private struct SyncPage: View {
     @State private var animateSync = false
     @State private var showArchitectureDetail = false
+    @State private var activeTooltip: SyncTooltip? = nil
 
     var body: some View {
         ZStack {
@@ -451,26 +493,21 @@ private struct SyncPage: View {
             VStack(spacing: Spacing.lg) {
                 Spacer()
 
-                // USER OWNED DATA header
-                UserOwnedDataHeader()
-
-                // Simple diagram container
+                // Simple diagram container with overlayed label
                 VStack(spacing: 12) {
                     // Icons row with arrows
                     HStack(spacing: 0) {
-                        // iPhone
-                        VStack(spacing: 6) {
-                            Image(systemName: "iphone")
-                                .font(.system(size: 32))
-                                .foregroundColor(.white)
-                            Text("iPhone")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(Color(hex: "6A6A6A"))
-                            Text("Capture")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(hex: "22C55E"))
+                        // iPhone - tappable
+                        SyncIconButton(
+                            icon: "iphone",
+                            label: "iPhone",
+                            action: "Capture",
+                            isSelected: activeTooltip == .iphone
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                activeTooltip = activeTooltip == .iphone ? nil : .iphone
+                            }
                         }
-                        .frame(maxWidth: .infinity)
 
                         // Arrows left
                         VStack(spacing: 2) {
@@ -481,19 +518,17 @@ private struct SyncPage: View {
                         .foregroundColor(Color(hex: "22C55E"))
                         .opacity(animateSync ? 0.8 : 0.3)
 
-                        // iCloud
-                        VStack(spacing: 6) {
-                            Image(systemName: "icloud.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(.white)
-                            Text("iCloud")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(Color(hex: "6A6A6A"))
-                            Text("Sync")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(hex: "22C55E"))
+                        // iCloud - tappable
+                        SyncIconButton(
+                            icon: "icloud.fill",
+                            label: "iCloud",
+                            action: "Sync",
+                            isSelected: activeTooltip == .icloud
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                activeTooltip = activeTooltip == .icloud ? nil : .icloud
+                            }
                         }
-                        .frame(maxWidth: .infinity)
 
                         // Arrows right
                         VStack(spacing: 2) {
@@ -504,23 +539,22 @@ private struct SyncPage: View {
                         .foregroundColor(Color(hex: "22C55E"))
                         .opacity(animateSync ? 0.8 : 0.3)
 
-                        // Mac
-                        VStack(spacing: 6) {
-                            Image(systemName: "macbook")
-                                .font(.system(size: 32))
-                                .foregroundColor(.white)
-                            Text("Mac")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(Color(hex: "6A6A6A"))
-                            Text("Process")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(hex: "22C55E"))
+                        // Mac - tappable
+                        SyncIconButton(
+                            icon: "macbook",
+                            label: "Mac",
+                            action: "Process",
+                            isSelected: activeTooltip == .mac
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                activeTooltip = activeTooltip == .mac ? nil : .mac
+                            }
                         }
-                        .frame(maxWidth: .infinity)
                     }
                     .padding(.vertical, 20)
                 }
                 .padding(16)
+                .padding(.top, 8) // Extra top padding for the label
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: "0D0D0D"))
@@ -528,23 +562,61 @@ private struct SyncPage: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
-                            style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
                         )
-                        .foregroundColor(Color(hex: "2A2A2A"))
+                        .foregroundColor(Color(hex: "22C55E").opacity(0.5))
                 )
+                .overlay(alignment: .top) {
+                    // USER OWNED DATA label on top border
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 8))
+                        Text("USER OWNED DATA")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                    }
+                    .foregroundColor(Color(hex: "22C55E"))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Color(hex: "0A0A0A"))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(
+                                style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                            )
+                            .foregroundColor(Color(hex: "22C55E").opacity(0.5))
+                    )
+                    .clipShape(Capsule())
+                    .offset(y: -12)
+                }
                 .padding(.horizontal, Spacing.md)
 
-                // Title and description
-                VStack(spacing: Spacing.sm) {
-                    Text("The Magic of Sync")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
+                // Tooltip or Title/description
+                if let tooltip = activeTooltip {
+                    // Tooltip card
+                    SyncTooltipCard(tooltip: tooltip) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            activeTooltip = nil
+                        }
+                    }
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.9).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+                } else {
+                    // Default title and description
+                    VStack(spacing: Spacing.sm) {
+                        Text("The Magic of Sync")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
 
-                    Text("Your data syncs through your iCloud.\niOS captures, Mac processes with AI—\nall encrypted, all yours.")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color(hex: "8A8A8A"))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
+                        Text("Record anywhere on your iPhone.\nSync through your own iCloud.\nMac processes with on-device AI.\nAll encrypted, all yours.")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(hex: "8A8A8A"))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(4)
+                    }
+                    .transition(.opacity)
                 }
 
                 // "How it works" button
@@ -589,18 +661,111 @@ private struct SyncPage: View {
     }
 }
 
+// MARK: - Sync Icon Button
+
+private struct SyncIconButton: View {
+    let icon: String
+    let label: String
+    let action: String
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 32))
+                    .foregroundColor(isSelected ? Color(hex: "22C55E") : .white)
+                Text(label)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(isSelected ? Color(hex: "22C55E") : Color(hex: "6A6A6A"))
+                Text(action)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(hex: "22C55E"))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color(hex: "22C55E").opacity(0.1) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Sync Tooltip Card
+
+private struct SyncTooltipCard: View {
+    let tooltip: SyncTooltip
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header with close button
+            HStack {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color(hex: "22C55E"))
+                        .frame(width: 6, height: 6)
+
+                    Text(tooltip.subtitle)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(Color(hex: "22C55E"))
+                }
+
+                Spacer()
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(hex: "6A6A6A"))
+                        .frame(width: 24, height: 24)
+                        .background(Color(hex: "2A2A2A"))
+                        .clipShape(Circle())
+                }
+            }
+
+            // Title
+            Text(tooltip.title)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+
+            // Description
+            Text(tooltip.description)
+                .font(.system(size: 12))
+                .foregroundColor(Color(hex: "8A8A8A"))
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(hex: "151515"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color(hex: "22C55E").opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, Spacing.md)
+    }
+}
+
 // MARK: - Architecture Walkthrough (Full Screen Detail View)
 
 private struct ArchitectureWalkthrough: View {
     @Environment(\.dismiss) private var dismiss
     @State private var currentStep = 0
+    @State private var pulseComplete = false
     private let totalSteps = 4
 
     private let steps: [(title: String, subtitle: String, description: String)] = [
-        ("Instant Capture", "LOCAL-FIRST SPEED", "Capture audio immediately with zero latency. Recordings are secured locally on your device, ensuring you never miss a moment."),
-        ("Seamless Sync", "END-TO-END ENCRYPTED", "Memos sync silently via your personal iCloud. No third-party servers, no data mining. You hold the only encryption keys."),
-        ("Desktop Engine", "INTELLIGENT PROCESSING", "Your Mac acts as the powerhouse—handling heavy AI tasks, transcribing audio, and generating summaries securely in the background."),
-        ("The Full Picture", "PRIVACY BY DESIGN", "Your voice, your devices, your iCloud. No middlemen, no third-party servers. Just a seamless flow from capture to insight—all under your control.")
+        ("Your Voice", "LOCAL-FIRST CAPTURE", "Capture audio immediately with zero latency. Recordings are secured locally on your device, ensuring you never miss a moment."),
+        ("Your Cloud", "END-TO-END ENCRYPTED", "Memos sync silently via your personal iCloud. No third-party servers, no data mining. You hold the only encryption keys."),
+        ("Your Workstation", "ORCHESTRATE", "Your Mac acts as the powerhouse—handling heavy AI tasks, transcribing audio, and generating summaries securely in the background."),
+        ("Your Data", "PRIVACY BY DESIGN", "Your voice, your devices, your iCloud. No middlemen, no third-party servers. Just a seamless flow from capture to insight—all under your control.")
     ]
 
     var body: some View {
@@ -678,31 +843,57 @@ private struct ArchitectureWalkthrough: View {
                 Spacer()
                     .frame(height: 24)
 
-                // Step dots + action
-                HStack(spacing: 6) {
-                    ForEach(0..<totalSteps, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentStep ? Color(hex: "22C55E") : Color(hex: "3A3A3A"))
-                            .frame(width: index == currentStep ? 8 : 6, height: index == currentStep ? 8 : 6)
+                // Navigation: back button, centered dots, forward/continue
+                HStack {
+                    // Back button
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            currentStep -= 1
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .frame(width: 44, height: 44)
+                    }
+                    .opacity(currentStep > 0 ? 1 : 0)
+                    .disabled(currentStep == 0)
+
+                    Spacer()
+
+                    // Centered dots
+                    HStack(spacing: 8) {
+                        ForEach(0..<totalSteps, id: \.self) { index in
+                            Circle()
+                                .fill(index == currentStep ? Color(hex: "22C55E") : Color(hex: "3A3A3A"))
+                                .frame(width: index == currentStep ? 8 : 6, height: index == currentStep ? 8 : 6)
+                        }
                     }
 
                     Spacer()
 
+                    // Forward / Continue button
                     if currentStep < totalSteps - 1 {
-                        Text("TAP TO CONTINUE")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundColor(Color(hex: "4A4A4A"))
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                currentStep += 1
+                            }
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Color(hex: "0A0A0A"))
+                                .frame(width: 44, height: 44)
+                                .background(Color(hex: "22C55E"))
+                                .clipShape(Circle())
+                        }
                     } else {
                         Button(action: { dismiss() }) {
-                            HStack(spacing: 4) {
-                                Text("DONE")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .tracking(1)
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 8, weight: .bold))
-                            }
-                            .foregroundColor(Color(hex: "22C55E"))
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Color(hex: "0A0A0A"))
+                                .frame(width: 44, height: 44)
+                                .background(Color(hex: "22C55E"))
+                                .clipShape(Circle())
                         }
                     }
                 }
@@ -718,6 +909,11 @@ private struct ArchitectureWalkthrough: View {
                 if currentStep < totalSteps - 1 {
                     currentStep += 1
                 }
+            }
+        }
+        .onChange(of: currentStep) { _, newStep in
+            if newStep == totalSteps - 1 {
+                pulseComplete = true
             }
         }
     }
@@ -763,9 +959,9 @@ private struct ArchitectureDiagram: View {
                         title: "MAC",
                         subtitle: "Orchestrate",
                         steps: [
-                            ("Download", "arrow.down"),
-                            ("Privacy", "lock"),
-                            ("Think", "sparkles")
+                            ("Backup", "arrow.down.doc"),
+                            ("Automate", "gearshape.2"),
+                            ("On-Device AI", "cpu")
                         ],
                         isActive: currentStep == 2 || currentStep == 3
                     )
@@ -954,10 +1150,20 @@ private struct StepRow: View {
 private struct GetStartedPage: View {
     let iCloudStatus: CKAccountStatus
     let onComplete: () -> Void
+    var onTryRecord: (() -> Void)? = nil  // Separate action for "tap to try"
     @State private var pulseRecord = false
+
+    // Staggered status animation states
+    @State private var showHeader = false
+    @State private var statusChecks: [Bool] = [false, false, false, false]
+    @State private var showRecordButton = false
 
     private var deviceName: String {
         UIDevice.current.name
+    }
+
+    private var allChecksComplete: Bool {
+        statusChecks.allSatisfy { $0 }
     }
 
     var body: some View {
@@ -978,17 +1184,35 @@ private struct GetStartedPage: View {
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(3)
                     .foregroundColor(Color(hex: "6A6A6A"))
+                    .opacity(showHeader ? 1 : 0)
+                    .offset(y: showHeader ? 0 : 10)
 
                 // Status panel
                 VStack(spacing: Spacing.md) {
-                    StatusRow(label: "App", value: "Ready", isActive: true)
-                    StatusRow(label: "Storage", value: "Local", isActive: true)
-                    StatusRow(label: "Encryption", value: "On-Device", isActive: true)
-                    StatusRow(
+                    AnimatedStatusRow(
+                        label: "App",
+                        value: "Ready",
+                        isActive: true,
+                        isChecked: statusChecks[0]
+                    )
+                    AnimatedStatusRow(
+                        label: "Storage",
+                        value: "Local",
+                        isActive: true,
+                        isChecked: statusChecks[1]
+                    )
+                    AnimatedStatusRow(
+                        label: "Encryption",
+                        value: "On-Device",
+                        isActive: true,
+                        isChecked: statusChecks[2]
+                    )
+                    AnimatedStatusRow(
                         label: "iCloud",
                         value: iCloudStatus == .available ? "Connected" : "Offline",
                         isHighlight: true,
-                        isActive: iCloudStatus == .available
+                        isActive: iCloudStatus == .available,
+                        isChecked: statusChecks[3]
                     )
                 }
                 .padding(Spacing.md)
@@ -1001,21 +1225,26 @@ private struct GetStartedPage: View {
                         )
                 )
                 .padding(.horizontal, Spacing.xl)
+                .opacity(showHeader ? 1 : 0)
 
-                // Record button preview - tap to complete onboarding
-                Button(action: onComplete) {
+                // Record button preview - tap to start recording
+                Button(action: { onTryRecord?() ?? onComplete() }) {
                     VStack(spacing: Spacing.sm) {
                         ZStack {
-                            // Subtle pulse ring - green accent
+                            // Subtle pulse ring - red to draw attention
                             Circle()
-                                .stroke(Color(hex: "22C55E").opacity(0.5), lineWidth: 2)
+                                .stroke(Color(hex: "EF4444").opacity(0.4), lineWidth: 1.5)
                                 .frame(width: 52, height: 52)
-                                .scaleEffect(pulseRecord ? 1.5 : 1.0)
-                                .opacity(pulseRecord ? 0 : 0.8)
+                                .scaleEffect(pulseRecord ? 1.35 : 1.0)
+                                .opacity(pulseRecord ? 0 : 0.6)
+                                .animation(
+                                    .easeOut(duration: 1.5).repeatForever(autoreverses: false),
+                                    value: pulseRecord
+                                )
 
-                            // Main button
+                            // Main button - red record style
                             Circle()
-                                .fill(Color(hex: "22C55E"))
+                                .fill(Color(hex: "EF4444"))
                                 .frame(width: 52, height: 52)
                                 .overlay(
                                     Image(systemName: "mic.fill")
@@ -1032,11 +1261,9 @@ private struct GetStartedPage: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, Spacing.md)
-                .onAppear {
-                    withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
-                        pulseRecord = true
-                    }
-                }
+                .opacity(showRecordButton ? 1 : 0)
+                .scaleEffect(showRecordButton ? 1 : 0.8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: showRecordButton)
 
                 Spacer()
 
@@ -1073,6 +1300,8 @@ private struct GetStartedPage: View {
                 }
                 .padding(.horizontal, Spacing.xl)
                 .padding(.top, Spacing.md)
+                .opacity(showRecordButton ? 1 : 0)
+                .offset(y: showRecordButton ? 0 : 20)
 
                 // Device identifier
                 HStack(spacing: 6) {
@@ -1083,10 +1312,38 @@ private struct GetStartedPage: View {
                 }
                 .foregroundColor(Color(hex: "3A3A3A"))
                 .padding(.top, Spacing.sm)
+                .opacity(showRecordButton ? 1 : 0)
 
                 Spacer()
                     .frame(height: Spacing.lg)
             }
+        }
+        .onAppear {
+            startStatusAnimation()
+        }
+    }
+
+    private func startStatusAnimation() {
+        // Show header first
+        withAnimation(.easeOut(duration: 0.4)) {
+            showHeader = true
+        }
+
+        // Stagger each status check with delays
+        let checkDelays: [Double] = [0.5, 0.9, 1.3, 1.7]
+        for (index, delay) in checkDelays.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    statusChecks[index] = true
+                }
+            }
+        }
+
+        // Show record button after all checks complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            showRecordButton = true
+            // Start pulse animation (animation is defined on the view)
+            pulseRecord = true
         }
     }
 
@@ -1121,6 +1378,51 @@ private struct StatusRow: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .tracking(1)
                 .foregroundColor(isHighlight && isActive ? Color(hex: "22C55E") : Color(hex: "9A9A9A"))
+        }
+    }
+}
+
+// MARK: - Animated Status Row
+
+private struct AnimatedStatusRow: View {
+    let label: String
+    let value: String
+    var isHighlight: Bool = false
+    var isActive: Bool = true
+    var isChecked: Bool
+
+    var body: some View {
+        HStack {
+            // Status indicator - gray dot that turns green when checked
+            Circle()
+                .fill(isChecked ? (isActive ? Color(hex: "22C55E") : Color(hex: "6A6A6A")) : Color(hex: "3A3A3A"))
+                .frame(width: 6, height: 6)
+                .animation(.easeOut(duration: 0.3), value: isChecked)
+
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(1)
+                .foregroundColor(Color(hex: "6A6A6A"))
+
+            Spacer()
+
+            // Value - shows "CHECKING..." then actual value
+            ZStack(alignment: .trailing) {
+                Text("CHECKING...")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(Color(hex: "4A4A4A"))
+                    .opacity(isChecked ? 0 : 1)
+                    .offset(x: isChecked ? 10 : 0)
+
+                Text(value.uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(isHighlight && isActive ? Color(hex: "22C55E") : Color(hex: "9A9A9A"))
+                    .opacity(isChecked ? 1 : 0)
+                    .offset(x: isChecked ? 0 : -10)
+            }
+            .animation(.easeOut(duration: 0.3), value: isChecked)
         }
     }
 }

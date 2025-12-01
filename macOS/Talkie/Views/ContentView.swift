@@ -10,6 +10,7 @@ import CoreData
 
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject private var settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -34,12 +35,12 @@ struct ContentView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("TALKIE")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(settings.fontSMBold)
                             .tracking(2)
                             .foregroundColor(.primary)
 
                         Text("\(voiceMemos.count) MEMOS")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(settings.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.secondary)
                     }
@@ -49,7 +50,7 @@ struct ContentView: View {
                     // Settings button
                     Button(action: { showingSettings = true }) {
                         Image(systemName: "gear")
-                            .font(.system(size: 12))
+                            .font(settings.fontBody)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -67,17 +68,17 @@ struct ContentView: View {
                         Spacer()
 
                         Image(systemName: "waveform")
-                            .font(.system(size: 40, weight: .regular))
+                            .font(settings.fontDisplay)
                             .foregroundColor(.secondary)
 
                         VStack(spacing: 4) {
                             Text("NO MEMOS")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(settings.fontSMBold)
                                 .tracking(2)
                                 .foregroundColor(.secondary)
 
                             Text("Record on iPhone to sync")
-                                .font(.system(size: 10))
+                                .font(settings.fontSM)
                                 .foregroundColor(.secondary.opacity(0.7))
                         }
 
@@ -103,11 +104,11 @@ struct ContentView: View {
             } else {
                 VStack(spacing: 20) {
                     Image(systemName: "sidebar.left")
-                        .font(.system(size: 48, weight: .thin))
+                        .font(settings.fontDisplay)
                         .foregroundColor(.secondary)
 
                     Text("Select a memo")
-                        .font(.system(size: 14))
+                        .font(settings.fontTitle)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -124,7 +125,7 @@ struct ContentView: View {
                     .frame(width: 6, height: 6)
 
                 Text("CONNECTED")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(settings.fontXSBold)
                     .tracking(1)
                     .foregroundColor(.secondary)
             }
@@ -136,32 +137,32 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(settings.fontXSMedium)
                         .foregroundColor(.secondary)
 
                     Text("SYNCED \(syncedMemoCount) \(syncedMemoCount == 1 ? "MEMO" : "MEMOS")")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(settings.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
                 }
 
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(settings.fontXSMedium)
                         .foregroundColor(.secondary)
 
                     Text(formatSyncTime(lastSyncTime))
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .font(settings.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
                 }
 
                 HStack(spacing: 6) {
                     Image(systemName: "icloud")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(settings.fontXSMedium)
                         .foregroundColor(.secondary)
 
                     Text("\(voiceMemos.count)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(settings.fontXSMedium)
                         .foregroundColor(.secondary.opacity(0.8))
                 }
             }
@@ -181,7 +182,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .frame(minWidth: 800, minHeight: 600)
+                .frame(minWidth: 900, minHeight: 600)
         }
     }
 

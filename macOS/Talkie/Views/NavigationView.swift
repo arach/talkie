@@ -69,7 +69,7 @@ struct TalkieNavigationView: View {
             // Full-width status bar (like VS Code/Cursor)
             statusBarView
         }
-        .onChange(of: allMemos.count) { _ in
+        .onChange(of: allMemos.count) { _, _ in
             // Mark any new memos as received when they appear in the list
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
         }
@@ -100,7 +100,7 @@ struct TalkieNavigationView: View {
                 CloudKitSyncManager.shared.syncNow()
             }) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 9))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
@@ -113,10 +113,10 @@ struct TalkieNavigationView: View {
             // Memo count
             HStack(spacing: 4) {
                 Image(systemName: "square.stack")
-                    .font(.system(size: 9))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary)
                 Text("\(allMemos.count) memos")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary)
             }
 
@@ -125,7 +125,7 @@ struct TalkieNavigationView: View {
             // Right side - DEV indicator (only in debug builds)
             #if DEBUG
             Text("DEV")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(SettingsManager.shared.fontXSBold)
                 .tracking(1)
                 .foregroundColor(.orange.opacity(0.7))
                 .padding(.horizontal, 6)
@@ -134,13 +134,13 @@ struct TalkieNavigationView: View {
                 .cornerRadius(3)
             #endif
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color(NSColor.windowBackgroundColor))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(SettingsManager.shared.tacticalBackgroundSecondary)
         .overlay(
             Rectangle()
-                .frame(height: 1)
-                .foregroundColor(Color(NSColor.separatorColor)),
+                .frame(height: 0.5)
+                .foregroundColor(SettingsManager.shared.tacticalDivider),
             alignment: .top
         )
     }
@@ -150,19 +150,19 @@ struct TalkieNavigationView: View {
         switch syncManager.state {
         case .synced:
             Image(systemName: "checkmark.icloud")
-                .font(.system(size: 9))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.green)
         case .syncing:
             Image(systemName: "arrow.triangle.2.circlepath.icloud")
-                .font(.system(size: 9))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.blue)
         case .error:
             Image(systemName: "exclamationmark.icloud")
-                .font(.system(size: 9))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.orange)
         case .idle:
             Image(systemName: "icloud")
-                .font(.system(size: 9))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.secondary)
         }
     }
@@ -172,19 +172,19 @@ struct TalkieNavigationView: View {
         switch syncManager.state {
         case .synced:
             Text("Synced \(syncManager.lastSyncAgo)")
-                .font(.system(size: 9, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.secondary)
         case .syncing:
             Text("Syncing...")
-                .font(.system(size: 9, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.blue)
         case .error(let message):
             Text(message)
-                .font(.system(size: 9, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.orange)
         case .idle:
             Text("iCloud")
-                .font(.system(size: 9, design: .monospaced))
+                .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.secondary)
         }
     }
@@ -198,60 +198,69 @@ struct TalkieNavigationView: View {
             // Header
             HStack {
                 Text("TALKIE")
-                    .font(settings.themedFont(baseSize: 13, weight: .bold))
+                    .font(SettingsManager.shared.themedFont(baseSize: 11, weight: .bold))
                     .tracking(2)
-                    .foregroundColor(.primary)
+                    .foregroundColor(SettingsManager.shared.tacticalForeground)
 
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
 
-            Divider()
+            Rectangle()
+                .fill(SettingsManager.shared.tacticalDivider)
+                .frame(height: 0.5)
 
             // Search
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .font(SettingsManager.shared.fontXS)
+                    .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(settings.themedFont(baseSize: 11, weight: .regular))
+                    .font(SettingsManager.shared.themedFont(baseSize: 10, weight: .regular))
+                    .foregroundColor(SettingsManager.shared.tacticalForeground)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(6)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(SettingsManager.shared.tacticalBackgroundTertiary)
+            .cornerRadius(4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
 
             // Navigation sections
             List(selection: $selectedSection) {
-                Section("LIBRARY") {
+                Section(header: Text("LIBRARY")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundColor(.secondary.opacity(0.6))
+                ) {
                     NavigationLink(value: NavigationSection.allMemos) {
                         Label {
                             HStack {
                                 Text("All Memos")
-                                    .font(settings.themedFont(baseSize: 11, weight: .regular))
+                                    .font(SettingsManager.shared.fontSM)
+                                    .textCase(SettingsManager.shared.uiTextCase)
                                 Spacer()
                                 Text("\(allMemos.count)")
-                                    .font(settings.themedFont(baseSize: 9, weight: .medium))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                             }
                         } icon: {
                             Image(systemName: "square.stack")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
 
                     NavigationLink(value: NavigationSection.recent) {
                         Label {
                             Text("Recent")
-                                .font(settings.themedFont(baseSize: 11, weight: .regular))
+                                .font(SettingsManager.shared.fontSM)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "clock")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
 
@@ -259,68 +268,78 @@ struct TalkieNavigationView: View {
                         Label {
                             HStack {
                                 Text("Processed")
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(SettingsManager.shared.fontSM)
+                                    .textCase(SettingsManager.shared.uiTextCase)
                                 Spacer()
                                 Text("\(processedCount)")
-                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                             }
                         } icon: {
                             Image(systemName: "checkmark.circle")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
 
                     NavigationLink(value: NavigationSection.archived) {
                         Label {
                             Text("Archived")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(SettingsManager.shared.fontSM)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "archivebox")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
                 }
                 .collapsible(false)
 
-                Section("TOOLS") {
+                Section(header: Text("TOOLS")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundColor(.secondary.opacity(0.6))
+                ) {
                     NavigationLink(value: NavigationSection.aiResults) {
                         Label {
                             Text("Activity Log")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(SettingsManager.shared.fontSM)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
 
                     NavigationLink(value: NavigationSection.workflows) {
                         Label {
                             Text("Workflows")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(SettingsManager.shared.fontSM)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "wand.and.stars")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
 
                     NavigationLink(value: NavigationSection.models) {
                         Label {
                             Text("Models")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(SettingsManager.shared.fontSM)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "brain")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
 
                     NavigationLink(value: NavigationSection.systemConsole) {
                         Label {
                             Text("Console")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(SettingsManager.shared.fontSM)
+                                .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
                             Image(systemName: "terminal")
-                                .font(.system(size: 10))
+                                .font(SettingsManager.shared.fontXS)
                         }
                     }
                 }
@@ -333,23 +352,25 @@ struct TalkieNavigationView: View {
             Divider()
 
             Button(action: { showingSettings = true }) {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Image(systemName: "gear")
-                        .font(.system(size: 10))
+                        .font(SettingsManager.shared.fontXS)
                     Text("Settings")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(SettingsManager.shared.fontSM)
+                        .textCase(SettingsManager.shared.uiTextCase)
                     Spacer()
                 }
                 .foregroundColor(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
         }
-        .frame(minWidth: 200, idealWidth: 220)
+        .frame(minWidth: 180, idealWidth: 200)
+        .background(SettingsManager.shared.tacticalBackground)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .frame(minWidth: 800, minHeight: 600)
+                .frame(minWidth: 900, minHeight: 600)
         }
     }
 
@@ -417,11 +438,11 @@ struct TalkieNavigationView: View {
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "text.below.photo")
-                        .font(.system(size: 48))
+                        .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Text("SELECT A MEMO")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontBodyBold)
                         .tracking(2)
                         .foregroundColor(.secondary)
                 }
@@ -533,12 +554,12 @@ struct TalkieNavigationView: View {
             // Section header
             HStack(spacing: 6) {
                 Text(sectionTitle)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(SettingsManager.shared.fontSMMedium)
                     .foregroundColor(.primary)
 
                 if let subtitle = sectionSubtitle {
                     Text(subtitle)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
 
@@ -555,20 +576,21 @@ struct TalkieNavigationView: View {
                 VStack(spacing: 16) {
                     Spacer()
                     Image(systemName: "waveform")
-                        .font(.system(size: 36))
+                        .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Text("NO MEMOS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .tracking(2)
+                        .font(.techLabel)
+                        .tracking(Tracking.wide)
                         .foregroundColor(.secondary)
 
                     Text("Record on iPhone to sync")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.7))
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.textBackgroundColor))
             } else {
                 List(selection: $selectedMemo) {
                     ForEach(filteredMemos) { memo in
@@ -577,8 +599,11 @@ struct TalkieNavigationView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color(NSColor.textBackgroundColor))
             }
         }
+        .background(Color(NSColor.textBackgroundColor))
     }
 }
 
@@ -595,16 +620,16 @@ struct WorkflowListColumn: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("WORKFLOWS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontSMBold)
                         .tracking(1.5)
                     Text("\(workflowManager.workflows.count) total")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
                 Button(action: createNewWorkflow) {
                     Image(systemName: "plus")
-                        .font(.system(size: 11))
+                        .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.primary)
                         .frame(width: 24, height: 24)
                         .background(Color.primary.opacity(0.1))
@@ -680,20 +705,20 @@ struct WorkflowDetailColumn: View {
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "rectangle.stack")
-                        .font(.system(size: 28))
+                        .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.2))
 
                     Text("SELECT OR CREATE")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Button(action: createNewWorkflow) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
-                                .font(.system(size: 9))
+                                .font(SettingsManager.shared.fontXS)
                             Text("NEW WORKFLOW")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSBold)
                                 .tracking(0.5)
                         }
                         .foregroundColor(.primary)
@@ -800,7 +825,7 @@ struct AIResultsListColumn: View {
     @State private var sortAscending: Bool = false
 
     // Column widths (resizable)
-    @State private var statusWidth: CGFloat = 90
+    @State private var statusWidth: CGFloat = 30
     @State private var timestampWidth: CGFloat = 150
     @State private var workflowWidth: CGFloat = 140
     @State private var memoWidth: CGFloat = 180
@@ -844,15 +869,15 @@ struct AIResultsListColumn: View {
             // Header
             HStack(spacing: 8) {
                 Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 12))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.primary)
 
                 Text("Activity Log")
-                    .font(.system(size: 13, weight: .semibold, design: .default))
+                    .font(SettingsManager.shared.fontTitleMedium)
                     .foregroundColor(.primary)
 
                 Text("\(allRuns.count) events")
-                    .font(.system(size: 11))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.secondary)
 
                 Spacer()
@@ -867,16 +892,16 @@ struct AIResultsListColumn: View {
                 VStack(spacing: 16) {
                     Spacer()
                     Image(systemName: "wand.and.rays")
-                        .font(.system(size: 32))
+                        .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.3))
 
                     Text("NO ACTIVITY YET")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
                     Text("Run workflows on your memos")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.6))
                     Spacer()
                 }
@@ -941,7 +966,7 @@ struct ActivityTableHeader: View {
                 ascending: $sortAscending,
                 width: statusWidth
             )
-            ColumnResizer(width: $statusWidth, minWidth: 70, maxWidth: 120)
+            ColumnResizer(width: $statusWidth, minWidth: 24, maxWidth: 50)
 
             SortableColumnHeader(
                 title: "TIMESTAMP",
@@ -998,6 +1023,7 @@ struct SortableColumnHeader: View {
     let width: CGFloat
     var alignment: Alignment = .leading
 
+    @ObservedObject private var settings = SettingsManager.shared
     @State private var isHovering = false
 
     private var isSorted: Bool { currentSort == field }
@@ -1015,12 +1041,12 @@ struct SortableColumnHeader: View {
                 if alignment == .trailing { Spacer() }
 
                 Text(title)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(SettingsManager.shared.fontSMMedium)
                     .foregroundColor(isSorted ? .primary : .secondary)
 
                 if isSorted {
                     Image(systemName: ascending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(SettingsManager.shared.fontXSBold)
                         .foregroundColor(.blue)
                 }
 
@@ -1112,34 +1138,28 @@ struct ActivityTableRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 0) {
-                // Status
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(isSuccess ? Color.green : Color.red)
-                        .frame(width: 6, height: 6)
-
-                    Text(isSuccess ? "Success" : "Error")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(isSuccess ? .green : .red)
-                }
-                .frame(width: statusWidth, alignment: .leading)
+                // Status (just a dot)
+                Circle()
+                    .fill(isSuccess ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                    .frame(width: statusWidth, alignment: .leading)
 
                 // Timestamp
                 Text(formatTimestamp(runDate))
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.secondary)
                     .frame(width: timestampWidth, alignment: .leading)
 
                 // Workflow
                 Text(workflowName)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsManager.shared.fontBodyMedium)
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .frame(width: workflowWidth, alignment: .leading)
 
                 // Memo
                 Text(memoTitle)
-                    .font(.system(size: 10))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .frame(width: memoWidth, alignment: .leading)
@@ -1147,16 +1167,16 @@ struct ActivityTableRow: View {
                 // Duration
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
-                        .font(.system(size: 8))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     if let ms = durationMs {
-                        Text("\(ms)ms")
-                            .font(.system(size: 10, design: .monospaced))
+                        Text(formatDurationMs(ms))
+                            .font(.monoSmall)
                             .foregroundColor(.secondary)
                     } else {
                         Text("--")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.monoSmall)
                             .foregroundColor(.secondary.opacity(0.5))
                     }
                 }
@@ -1180,6 +1200,15 @@ struct ActivityTableRow: View {
         formatter.dateFormat = "MMM d, hh:mm a"
         return formatter.string(from: date)
     }
+
+    private func formatDurationMs(_ ms: Int) -> String {
+        if ms >= 1000 {
+            let seconds = Double(ms) / 1000.0
+            return String(format: "%.2fs", seconds)
+        } else {
+            return "\(ms)ms"
+        }
+    }
 }
 
 // MARK: - Activity Log Full View (with Inspector Panel)
@@ -1202,7 +1231,7 @@ struct ActivityLogFullView: View {
     @State private var sortAscending: Bool = false
 
     // Column widths (resizable)
-    @State private var statusWidth: CGFloat = 90
+    @State private var statusWidth: CGFloat = 30
     @State private var timestampWidth: CGFloat = 150
     @State private var workflowWidth: CGFloat = 140
     @State private var memoWidth: CGFloat = 180
@@ -1251,15 +1280,15 @@ struct ActivityLogFullView: View {
                 // Header
                 HStack(spacing: 8) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 12))
+                        .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.primary)
 
                     Text("Activity Log")
-                        .font(.system(size: 13, weight: .semibold, design: .default))
+                        .font(SettingsManager.shared.fontTitleMedium)
                         .foregroundColor(.primary)
 
                     Text("\(allRuns.count) events")
-                        .font(.system(size: 11))
+                        .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.secondary)
 
                     Spacer()
@@ -1268,7 +1297,7 @@ struct ActivityLogFullView: View {
                     if selectedRun != nil {
                         Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
                             Image(systemName: showInspector ? "sidebar.right" : "sidebar.right")
-                                .font(.system(size: 12))
+                                .font(SettingsManager.shared.fontBody)
                                 .foregroundColor(showInspector ? .blue : .secondary)
                         }
                         .buttonStyle(.plain)
@@ -1285,16 +1314,16 @@ struct ActivityLogFullView: View {
                     VStack(spacing: 16) {
                         Spacer()
                         Image(systemName: "wand.and.rays")
-                            .font(.system(size: 32))
+                            .font(SettingsManager.shared.fontDisplay)
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO ACTIVITY YET")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Run workflows on your memos")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary.opacity(0.6))
                         Spacer()
                     }
@@ -1415,7 +1444,7 @@ struct ActivityInspectorPanel: View {
             // Inspector Header
             HStack(spacing: 10) {
                 Image(systemName: workflowIcon)
-                    .font(.system(size: 12))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.blue)
                     .frame(width: 24, height: 24)
                     .background(Color.blue.opacity(0.1))
@@ -1423,11 +1452,11 @@ struct ActivityInspectorPanel: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(workflowName)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(SettingsManager.shared.fontBodyMedium)
                         .lineLimit(1)
 
                     Text(formatFullDate(runDate))
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
 
@@ -1435,7 +1464,7 @@ struct ActivityInspectorPanel: View {
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(SettingsManager.shared.fontSMMedium)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -1449,16 +1478,16 @@ struct ActivityInspectorPanel: View {
             // Memo reference
             HStack(spacing: 6) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 9))
+                    .font(SettingsManager.shared.fontXS)
                 Text("From: \(memoTitle)")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .lineLimit(1)
 
                 Spacer()
 
                 if let model = modelId {
                     Text(model)
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -1481,12 +1510,12 @@ struct ActivityInspectorPanel: View {
                         if let output = run.output, !output.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("OUTPUT")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXSBold)
                                     .tracking(1)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
-                                    .font(.system(size: 10, design: .monospaced))
+                                    .font(SettingsManager.shared.fontSM)
                                     .foregroundColor(.primary)
                                     .textSelection(.enabled)
                                     .lineSpacing(2)
@@ -1513,9 +1542,9 @@ struct ActivityInspectorPanel: View {
                 Button(action: onDelete) {
                     HStack(spacing: 4) {
                         Image(systemName: "trash")
-                            .font(.system(size: 9))
+                            .font(SettingsManager.shared.fontXS)
                         Text("Delete Run")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(SettingsManager.shared.fontXSMedium)
                     }
                     .foregroundColor(.red.opacity(0.7))
                 }
@@ -1549,18 +1578,18 @@ struct InspectorStepCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Text("\(step.stepNumber)")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXSBold)
                     .foregroundColor(.white)
                     .frame(width: 16, height: 16)
                     .background(Color.blue)
                     .cornerRadius(3)
 
                 Image(systemName: step.stepIcon)
-                    .font(.system(size: 9))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary)
 
                 Text(step.stepType.uppercased())
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXSBold)
                     .tracking(0.5)
                     .foregroundColor(.primary)
 
@@ -1568,7 +1597,7 @@ struct InspectorStepCard: View {
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Image(systemName: showInput ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(SettingsManager.shared.fontXSBold)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -1577,11 +1606,11 @@ struct InspectorStepCard: View {
             if showInput {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("INPUT")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                         .lineSpacing(1)
                         .lineLimit(6)
@@ -1595,16 +1624,16 @@ struct InspectorStepCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text("OUTPUT")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text("→ {{\(step.outputKey)}}")
-                        .font(.system(size: 7, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.blue.opacity(0.7))
                 }
 
                 Text(step.output)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.primary)
                     .textSelection(.enabled)
                     .lineSpacing(2)
@@ -1677,14 +1706,14 @@ struct AIResultsDetailColumn: View {
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "sidebar.right")
-                    .font(.system(size: 28))
+                    .font(SettingsManager.shared.fontDisplay)
                     .foregroundColor(.secondary.opacity(0.3))
                 Text("SELECT A RUN")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXSBold)
                     .tracking(1)
                     .foregroundColor(.secondary)
                 Text("Choose a workflow run to view details")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary.opacity(0.5))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1727,16 +1756,16 @@ struct WorkflowsContentView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("WORKFLOWS")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontSMBold)
                             .tracking(1.5)
                         Text("\(workflowManager.workflows.count) total")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
                     }
                     Spacer()
                     Button(action: createNewWorkflow) {
                         Image(systemName: "plus")
-                            .font(.system(size: 11))
+                            .font(SettingsManager.shared.fontBody)
                             .foregroundColor(.primary)
                             .frame(width: 24, height: 24)
                             .background(Color.primary.opacity(0.1))
@@ -1785,20 +1814,20 @@ struct WorkflowsContentView: View {
                 // Empty state
                 VStack(spacing: 12) {
                     Image(systemName: "rectangle.stack")
-                        .font(.system(size: 28))
+                        .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.2))
 
                     Text("SELECT OR CREATE")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Button(action: createNewWorkflow) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
-                                .font(.system(size: 9))
+                                .font(SettingsManager.shared.fontXS)
                             Text("NEW WORKFLOW")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSBold)
                                 .tracking(0.5)
                         }
                         .foregroundColor(.primary)
@@ -1901,15 +1930,15 @@ struct WorkflowMemoSelectorSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Run Workflow")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontTitleBold)
                     Text(workflow.name)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
                 Button(action: onCancel) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(SettingsManager.shared.fontHeadline)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -1921,15 +1950,15 @@ struct WorkflowMemoSelectorSheet: View {
             if memos.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "waveform.slash")
-                        .font(.system(size: 36))
+                        .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.4))
 
                     Text("No Transcribed Memos")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(SettingsManager.shared.fontBodyMedium)
                         .foregroundColor(.secondary)
 
                     Text("Record and transcribe a voice memo first")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(SettingsManager.shared.fontSM)
                         .foregroundColor(.secondary.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1940,19 +1969,19 @@ struct WorkflowMemoSelectorSheet: View {
                             Button(action: { onSelect(memo) }) {
                                 HStack(spacing: 12) {
                                     Image(systemName: "waveform")
-                                        .font(.system(size: 14))
+                                        .font(SettingsManager.shared.fontTitle)
                                         .foregroundColor(.blue)
                                         .frame(width: 32)
 
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(memo.title ?? "Untitled")
-                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                            .font(SettingsManager.shared.fontBodyMedium)
                                             .foregroundColor(.primary)
                                             .lineLimit(1)
 
                                         if let date = memo.createdAt {
                                             Text(date, style: .relative)
-                                                .font(.system(size: 9, design: .monospaced))
+                                                .font(SettingsManager.shared.fontXS)
                                                 .foregroundColor(.secondary)
                                         }
                                     }
@@ -1960,7 +1989,7 @@ struct WorkflowMemoSelectorSheet: View {
                                     Spacer()
 
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 10))
+                                        .font(SettingsManager.shared.fontSM)
                                         .foregroundColor(.secondary)
                                 }
                                 .padding(12)
@@ -2012,7 +2041,7 @@ struct WorkflowCard: View {
         }) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .font(SettingsManager.shared.fontTitle)
                     .foregroundColor(.primary.opacity(0.7))
                     .frame(width: 32, height: 32)
                     .background(Color.primary.opacity(0.05))
@@ -2020,11 +2049,11 @@ struct WorkflowCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title.uppercased())
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontSMBold)
                         .tracking(0.5)
 
                     Text(description)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
 
                     if isExecuting {
@@ -2032,7 +2061,7 @@ struct WorkflowCard: View {
                             ProgressView()
                                 .scaleEffect(0.5)
                             Text("RUNNING...")
-                                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
                                 .tracking(0.5)
                                 .foregroundColor(.secondary)
                         }
@@ -2042,7 +2071,7 @@ struct WorkflowCard: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.secondary.opacity(0.3))
             }
             .padding(12)
@@ -2112,11 +2141,11 @@ struct MemoSelectorSheet: View {
             // Header
             HStack {
                 Text("Select Memo")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontTitleBold)
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(SettingsManager.shared.fontHeadline)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -2135,18 +2164,18 @@ struct MemoSelectorSheet: View {
                         }) {
                             HStack(spacing: 12) {
                                 Image(systemName: "waveform")
-                                    .font(.system(size: 14))
+                                    .font(SettingsManager.shared.fontTitle)
                                     .foregroundColor(.blue)
                                     .frame(width: 32)
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(memo.title ?? "Untitled")
-                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .font(SettingsManager.shared.fontBodyMedium)
                                         .lineLimit(1)
 
                                     if let date = memo.createdAt {
                                         Text(date, style: .relative)
-                                            .font(.system(size: 9, design: .monospaced))
+                                            .font(SettingsManager.shared.fontXS)
                                             .foregroundColor(.secondary)
                                     }
                                 }
@@ -2154,7 +2183,7 @@ struct MemoSelectorSheet: View {
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 10))
+                                    .font(SettingsManager.shared.fontSM)
                                     .foregroundColor(.secondary)
                             }
                             .padding(12)
@@ -2203,15 +2232,15 @@ struct AIResultsContentView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 14))
+                            .font(SettingsManager.shared.fontTitle)
                         Text("ACTIVITY LOG")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontBodyBold)
                             .tracking(2)
                     }
                     .foregroundColor(.primary)
 
                     Text("All workflow runs across your memos")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2224,16 +2253,16 @@ struct AIResultsContentView: View {
                     VStack(spacing: 16) {
                         Spacer()
                         Image(systemName: "wand.and.rays")
-                            .font(.system(size: 32))
+                            .font(SettingsManager.shared.fontDisplay)
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO RESULTS YET")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Run workflows on your memos")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary.opacity(0.6))
                         Spacer()
                     }
@@ -2271,14 +2300,14 @@ struct AIResultsContentView: View {
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.right")
-                        .font(.system(size: 28))
+                        .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.3))
                     Text("SELECT A RUN")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
                     Text("Choose a workflow run to view details")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2304,18 +2333,18 @@ struct AIMemoHeaderView: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
-                .font(.system(size: 10))
+                .font(SettingsManager.shared.fontSM)
                 .foregroundColor(.secondary)
 
             Text(memo.title ?? "Untitled")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(SettingsManager.shared.fontSMBold)
                 .foregroundColor(.primary)
                 .lineLimit(1)
 
             Spacer()
 
             Text("\(runCount)")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(SettingsManager.shared.fontXSBold)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -2346,7 +2375,7 @@ struct AIRunRowView: View {
             HStack(spacing: 10) {
                 // Workflow icon
                 Image(systemName: workflowIcon)
-                    .font(.system(size: 10))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(isSelected ? .white : .secondary)
                     .frame(width: 22, height: 22)
                     .background(isSelected ? Color.blue : Color.primary.opacity(0.05))
@@ -2354,19 +2383,19 @@ struct AIRunRowView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(workflowName)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(SettingsManager.shared.fontSMMedium)
                         .foregroundColor(isSelected ? .white : .primary)
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
                         if let model = modelId {
                             Text(model)
-                                .font(.system(size: 7, design: .monospaced))
+                                .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.7))
                         }
 
                         Text(formatDate(runDate))
-                            .font(.system(size: 7, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.5))
                     }
                 }
@@ -2374,7 +2403,7 @@ struct AIRunRowView: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 8))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(isSelected ? .white.opacity(0.5) : .secondary.opacity(0.3))
             }
             .padding(.horizontal, 12)
@@ -2421,7 +2450,7 @@ struct AIRunDetailView: View {
                 // Workflow info
                 HStack(spacing: 10) {
                     Image(systemName: workflowIcon)
-                        .font(.system(size: 14))
+                        .font(SettingsManager.shared.fontTitle)
                         .foregroundColor(.blue)
                         .frame(width: 32, height: 32)
                         .background(Color.blue.opacity(0.1))
@@ -2429,12 +2458,12 @@ struct AIRunDetailView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workflowName)
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .font(SettingsManager.shared.fontTitleMedium)
 
                         HStack(spacing: 8) {
                             if let model = modelId {
                                 Text(model)
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -2443,7 +2472,7 @@ struct AIRunDetailView: View {
                             }
 
                             Text(formatFullDate(runDate))
-                                .font(.system(size: 9, design: .monospaced))
+                                .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.secondary.opacity(0.6))
                         }
                     }
@@ -2452,7 +2481,7 @@ struct AIRunDetailView: View {
 
                     Button(action: onDelete) {
                         Image(systemName: "trash")
-                            .font(.system(size: 11))
+                            .font(SettingsManager.shared.fontBody)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -2461,9 +2490,9 @@ struct AIRunDetailView: View {
                 // Memo reference
                 HStack(spacing: 6) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 9))
+                        .font(SettingsManager.shared.fontXS)
                     Text("From: \(memoTitle)")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                 }
                 .foregroundColor(.secondary.opacity(0.7))
             }
@@ -2480,12 +2509,12 @@ struct AIRunDetailView: View {
                         if let output = run.output, !output.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("OUTPUT")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXSBold)
                                     .tracking(1)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(SettingsManager.shared.fontBody)
                                     .foregroundColor(.primary)
                                     .textSelection(.enabled)
                                     .lineSpacing(3)
@@ -2540,18 +2569,18 @@ struct AIStepCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("\(step.stepNumber)")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXSBold)
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
                     .background(Color.blue)
                     .cornerRadius(4)
 
                 Image(systemName: step.stepIcon)
-                    .font(.system(size: 11))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.secondary)
 
                 Text(step.stepType.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(SettingsManager.shared.fontXSBold)
                     .tracking(0.5)
                     .foregroundColor(.primary)
 
@@ -2559,7 +2588,7 @@ struct AIStepCard: View {
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
-                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSMedium)
                         .tracking(0.3)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
@@ -2573,12 +2602,12 @@ struct AIStepCard: View {
             if showInput {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("INPUT")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(0.5)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(SettingsManager.shared.fontSM)
                         .foregroundColor(.secondary)
                         .lineSpacing(2)
                         .lineLimit(10)
@@ -2592,17 +2621,17 @@ struct AIStepCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("OUTPUT")
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(0.5)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text("→ {{\(step.outputKey)}}")
-                        .font(.system(size: 7, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.blue.opacity(0.7))
                 }
 
                 Text(step.output)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.primary)
                     .textSelection(.enabled)
                     .lineSpacing(3)
@@ -2634,22 +2663,22 @@ struct ActivityLogContentView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "list.bullet.clipboard")
-                            .font(.system(size: 16))
+                            .font(SettingsManager.shared.fontHeadline)
                         Text("ACTIVITY LOG")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontTitleBold)
                             .tracking(2)
                     }
                     .foregroundColor(.primary)
 
                     Text("View workflow execution history and results.")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.secondary)
                 }
 
                 Divider()
 
                 Text("Coming soon: Activity log with workflow execution history")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(SettingsManager.shared.fontSM)
                     .foregroundColor(.secondary.opacity(0.7))
                     .italic()
 
@@ -2728,18 +2757,15 @@ struct MemoTableFullView: View {
             // Main table content (full width, always visible)
             VStack(spacing: 0) {
                 // Header
-                HStack(spacing: 6) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-
+                HStack(spacing: 4) {
                     Text("All Memos")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.primary)
+                        .font(SettingsManager.shared.fontSM)
+                        .foregroundColor(SettingsManager.shared.tacticalForeground)
+                        .textCase(SettingsManager.shared.uiTextCase)
 
                     Text("\(allMemos.count)")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
 
                     Spacer()
 
@@ -2747,16 +2773,16 @@ struct MemoTableFullView: View {
                     if selectedMemo != nil {
                         Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
                             Image(systemName: showInspector ? "sidebar.right" : "sidebar.right")
-                                .font(.system(size: 10))
-                                .foregroundColor(showInspector ? .blue : .secondary)
+                                .font(SettingsManager.shared.fontXS)
+                                .foregroundColor(showInspector ? .blue : SettingsManager.shared.tacticalForegroundSecondary)
                         }
                         .buttonStyle(.plain)
                         .help(showInspector ? "Hide Details" : "Show Details")
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(NSColor.controlBackgroundColor))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(SettingsManager.shared.tacticalBackgroundSecondary)
 
                 Divider()
 
@@ -2764,16 +2790,16 @@ struct MemoTableFullView: View {
                     VStack(spacing: 16) {
                         Spacer()
                         Image(systemName: "waveform.slash")
-                            .font(.system(size: 32))
+                            .font(SettingsManager.shared.fontDisplay)
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO MEMOS YET")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Record your first voice memo on iOS")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary.opacity(0.6))
                         Spacer()
                     }
@@ -2810,15 +2836,17 @@ struct MemoTableFullView: View {
                                     workflowsWidth: workflowsWidth
                                 )
 
-                                Divider()
-                                    .padding(.leading, 16)
+                                Rectangle()
+                                    .fill(SettingsManager.shared.tacticalDivider.opacity(0.25))
+                                    .frame(height: 1)
                             }
                         }
                     }
+                    .background(SettingsManager.shared.tacticalBackground)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(NSColor.textBackgroundColor))
+            .background(SettingsManager.shared.tacticalBackground)
 
             // Inspector Panel (overlays from right, anchored to right edge)
             if showInspector, let memo = selectedMemo {
@@ -2903,10 +2931,10 @@ struct MemoTableHeader: View {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .frame(height: 32)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .frame(height: 26)
+        .background(SettingsManager.shared.tacticalBackgroundSecondary)
     }
 }
 
@@ -2920,6 +2948,7 @@ struct MemoSortableColumnHeader: View {
     let width: CGFloat
     var alignment: Alignment = .leading
 
+    @ObservedObject private var settings = SettingsManager.shared
     @State private var isHovering = false
 
     private var isSorted: Bool { currentSort == field }
@@ -2937,12 +2966,12 @@ struct MemoSortableColumnHeader: View {
                 if alignment == .trailing { Spacer() }
 
                 Text(title)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(SettingsManager.shared.fontSMMedium)
                     .foregroundColor(isSorted ? .primary : .secondary)
 
                 if isSorted {
                     Image(systemName: ascending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(SettingsManager.shared.fontXSBold)
                         .foregroundColor(.blue)
                 }
 
@@ -2962,6 +2991,7 @@ struct MemoSortableColumnHeader: View {
 
 struct MemoTableRow: View {
     @ObservedObject var memo: VoiceMemo
+    @ObservedObject private var settings = SettingsManager.shared
     let isSelected: Bool
     let onSelect: () -> Void
     let timestampWidth: CGFloat
@@ -2980,53 +3010,47 @@ struct MemoTableRow: View {
             HStack(spacing: 0) {
                 // Timestamp
                 Text(formatTimestamp(memo.createdAt ?? Date()))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(SettingsManager.shared.fontSM)
+                    .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
                     .frame(width: timestampWidth, alignment: .leading)
 
                 // Title
-                HStack(spacing: 4) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 8))
-                        .foregroundColor(.secondary.opacity(0.5))
-
-                    Text(memo.title ?? "Untitled")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                }
-                .frame(width: titleWidth, alignment: .leading)
+                Text(memo.title ?? "Untitled")
+                    .font(SettingsManager.shared.fontSM)
+                    .foregroundColor(SettingsManager.shared.tacticalForeground)
+                    .lineLimit(1)
+                    .frame(width: titleWidth, alignment: .leading)
 
                 // Duration
                 Text(formatDuration(memo.duration))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(SettingsManager.shared.fontSM)
+                    .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
                     .frame(width: durationWidth, alignment: .trailing)
 
                 // Workflow count
                 HStack(spacing: 3) {
                     if workflowCount > 0 {
                         Image(systemName: "wand.and.stars")
-                            .font(.system(size: 8))
-                            .foregroundColor(.blue.opacity(0.7))
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.blue.opacity(0.8))
                         Text("\(workflowCount)")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontSM)
                             .foregroundColor(.blue)
                     } else {
                         Text("—")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.4))
+                            .font(SettingsManager.shared.fontSM)
+                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted.opacity(0.5))
                     }
                 }
                 .frame(width: workflowsWidth, alignment: .trailing)
 
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .background(
-                isSelected ? Color.blue.opacity(0.08) :
-                    (isHovering ? Color.primary.opacity(0.02) : Color.clear)
+                isSelected ? Color.blue.opacity(0.15) :
+                    (isHovering ? SettingsManager.shared.tacticalBackgroundTertiary : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -3035,7 +3059,7 @@ struct MemoTableRow: View {
 
     private func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, hh:mm a"
+        formatter.dateFormat = "MMM d, HH:mm"  // 24hr for tactical look
         return formatter.string(from: date)
     }
 
@@ -3050,54 +3074,39 @@ struct MemoTableRow: View {
 
 struct MemoInspectorPanel: View {
     @ObservedObject var memo: VoiceMemo
+    @ObservedObject private var settings = SettingsManager.shared
     let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            // Inspector Header
-            HStack(spacing: 10) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 12))
-                    .foregroundColor(.blue)
-                    .frame(width: 24, height: 24)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(4)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(memo.title ?? "Untitled")
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-
-                    Text(formatFullDate(memo.createdAt ?? Date()))
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
+            // Minimal inspector toolbar
+            HStack {
+                Text("DETAILS")
+                    .font(SettingsManager.shared.fontXSBold)
+                    .tracking(1)
+                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
 
                 Spacer()
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .font(SettingsManager.shared.fontSM)
+                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
                 }
                 .buttonStyle(.plain)
-                .help("Close inspector")
+                .help("Close inspector (Esc)")
             }
-            .padding(12)
-            .background(Color(NSColor.controlBackgroundColor))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(SettingsManager.shared.tacticalBackgroundSecondary)
 
-            Divider()
+            Rectangle()
+                .fill(SettingsManager.shared.tacticalDivider)
+                .frame(height: 0.5)
 
-            // Embed the full MemoDetailView
-            MemoDetailView(memo: memo)
+            // Embed MemoDetailView without redundant header
+            MemoDetailView(memo: memo, showHeader: false)
         }
-        .background(Color(NSColor.textBackgroundColor))
-    }
-
-    private func formatFullDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        .background(SettingsManager.shared.tacticalBackground)
     }
 }

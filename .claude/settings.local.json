@@ -75,7 +75,11 @@
       "Bash(\"iOS/TalkieWidget/TalkieWidget.swift\" )",
       "Bash(\"iOS/TalkieWidget/TalkieWidgetBundle.swift\" )",
       "Bash(\"iOS/TalkieWidget/TalkieWidgetControl.swift\" )",
-      "Bash(\"iOS/TalkieWidget/TalkieControlWidget.swift\")"
+      "Bash(\"iOS/TalkieWidget/TalkieControlWidget.swift\")",
+      "Bash(chmod:*)",
+      "Bash(./run.sh:*)",
+      "Bash(/Users/arach/dev/talkie/macOS/run.sh:*)",
+      "Bash(/Users/arach/dev/talkie/iOS/run.sh:*)"
     ],
     "deny": [],
     "ask": []

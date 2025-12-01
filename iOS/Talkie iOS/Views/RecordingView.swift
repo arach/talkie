@@ -15,11 +15,13 @@ struct RecordingView: View {
     @StateObject private var recorder = AudioRecorderManager()
     @State private var recordingTitle = ""
     @State private var defaultTitle = ""
-    @State private var showDeleteConfirmation = false
     @State private var recPulse = false
+    @State private var showResumeTooltip = false
+    @AppStorage("hasSeenResumeTooltip") private var hasSeenResumeTooltip = false
     @State private var waveformStyle: WaveformStyle = .particles
     @State private var sheetDetent: PresentationDetent = .height(280)
     @State private var hasAppeared = false
+    @State private var isCancelling = false
 
     private let compactHeight: CGFloat = 280
     private let expandedHeight: CGFloat = 600
@@ -37,7 +39,10 @@ struct RecordingView: View {
                     .padding(.top, Spacing.sm)
                     .padding(.bottom, Spacing.md)
 
-                if recorder.isRecording {
+                if isCancelling {
+                    // CANCELLING STATE - show nothing during dismiss
+                    Color.clear
+                } else if recorder.isRecording {
                     // RECORDING STATE
                     recordingContent
                 } else if recorder.currentRecordingURL != nil {
@@ -64,15 +69,6 @@ struct RecordingView: View {
                     recorder.startRecording()
                 }
             }
-        }
-        .alert("Delete Recording?", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                deleteRecording()
-                dismiss()
-            }
-        } message: {
-            Text("This recording will be permanently deleted.")
         }
     }
 
@@ -148,7 +144,7 @@ struct RecordingView: View {
 
             Spacer(minLength: Spacing.sm)
 
-            // Stop button centered - same size as list view (52pt), subtle glow while recording
+            // Stop button centered - matches list view mic button position
             Button(action: {
                 recorder.stopRecording()
             }) {
@@ -156,22 +152,23 @@ struct RecordingView: View {
                     // Subtle glow while recording
                     Circle()
                         .fill(Color.recording)
-                        .frame(width: 60, height: 60)
+                        .frame(width: 68, height: 68)
                         .blur(radius: 20)
                         .opacity(0.5)
 
                     // Outer ring
                     Circle()
                         .strokeBorder(Color.recording, lineWidth: 3)
-                        .frame(width: 52, height: 52)
+                        .frame(width: 58, height: 58)
 
                     // Stop icon
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color.recording)
-                        .frame(width: 16, height: 16)
+                        .frame(width: 18, height: 18)
                 }
             }
-            .padding(.bottom, Spacing.md)
+            .padding(.top, Spacing.xs)
+            .padding(.bottom, 8)
         }
     }
 
@@ -179,90 +176,147 @@ struct RecordingView: View {
 
     private var stoppedContent: some View {
         VStack(spacing: Spacing.sm) {
-            // Duration display
-            HStack {
-                Text(formatDuration(recorder.recordingDuration))
-                    .font(.monoMedium)
-                    .foregroundColor(.textSecondary)
+            // Top row: Trash | Title | READY
+            HStack(spacing: Spacing.sm) {
+                Button(action: {
+                    deleteRecording()
+                    dismiss()
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.textTertiary)
+                        .frame(width: 32, height: 32)
+                }
 
-                Text("•")
-                    .foregroundColor(.textTertiary)
-
-                Text("READY")
-                    .font(.techLabelSmall)
-                    .tracking(1)
-                    .foregroundColor(.success)
-            }
-
-            // Rename input - always visible with label
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("RECORDING NAME")
-                    .font(.techLabelSmall)
-                    .tracking(1)
-                    .foregroundColor(.textSecondary)
-                    .padding(.horizontal, Spacing.xs)
-
-                TextField(defaultTitle, text: $recordingTitle)
+                // Title input - expands to fill
+                TextField("", text: $recordingTitle, prompt: Text(defaultTitle).foregroundColor(.white.opacity(0.6)))
                     .font(.bodySmall)
-                    .foregroundColor(.textPrimary)
-                    .padding(Spacing.sm)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.white)
+                    .padding(.vertical, Spacing.xs)
+                    .padding(.horizontal, Spacing.sm)
                     .background(Color.surfacePrimary)
                     .cornerRadius(CornerRadius.sm)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(Color.active.opacity(0.5), lineWidth: 1)
+                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
                     )
+
+                // READY indicator
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.success)
+                        .frame(width: 6, height: 6)
+
+                    Text("READY")
+                        .font(.techLabelSmall)
+                        .tracking(1)
+                        .foregroundColor(.success)
+                }
+                .frame(width: 70, alignment: .trailing)
             }
+            .padding(.horizontal, Spacing.md)
+
+            // Waveform preview - taller
+            WaveformView(
+                levels: recorder.audioLevels.map { $0 * 1.5 }, // Amplify levels
+                height: 56,
+                color: .textTertiary.opacity(0.5)
+            )
+            .background(Color.surfacePrimary.opacity(0.6))
+            .cornerRadius(CornerRadius.sm)
             .padding(.horizontal, Spacing.lg)
 
-            Spacer(minLength: Spacing.sm)
+            // Duration centered below waveform
+            Text(formatDuration(recorder.recordingDuration))
+                .font(.monoMedium)
+                .foregroundColor(.textPrimary)
 
-            // Action buttons
-            HStack(spacing: Spacing.md) {
-                // Delete button
+            Spacer(minLength: Spacing.xs)
+
+            // Action buttons - Resume left, Save center
+            HStack(spacing: Spacing.lg) {
+                // Resume button with tooltip
                 Button(action: {
-                    showDeleteConfirmation = true
+                    hasSeenResumeTooltip = true
+                    showResumeTooltip = false
+                    resumeRecording()
                 }) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.recording)
-                        .frame(width: 48, height: 48)
-                        .background(Color.recording.opacity(0.1))
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.recording.opacity(0.7))
+                        .frame(width: 44, height: 44)
+                        .background(Color.surfaceSecondary)
                         .cornerRadius(CornerRadius.full)
                         .overlay(
                             Circle()
-                                .strokeBorder(Color.recording.opacity(0.3), lineWidth: 1)
+                                .strokeBorder(Color.recording.opacity(0.7), lineWidth: 1)
                         )
                 }
+                .overlay(alignment: .top) {
+                    if showResumeTooltip {
+                        VStack(spacing: 0) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.7))
+                                Text("You can tap the mic to resume recording")
+                                    .font(.caption2)
+                                    .foregroundColor(.white)
+                            }
+                            .fixedSize()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.85))
+                            .cornerRadius(6)
 
-                // Save button
+                            // Arrow pointing down
+                            Triangle()
+                                .fill(Color.black.opacity(0.85))
+                                .frame(width: 10, height: 5)
+                        }
+                        .offset(y: -42)
+                        .transition(.opacity.combined(with: .scale))
+                    }
+                }
+
+                // Save button - primary action, centered
                 Button(action: {
                     saveRecording()
                     dismiss()
                 }) {
-                    HStack(spacing: Spacing.xs) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.success)
+                            .frame(width: 58, height: 58)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(Color.success.opacity(0.6), lineWidth: 1.5)
+                            )
+
                         Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("SAVE")
-                            .font(.techLabelSmall)
-                            .tracking(1)
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(.white)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, Spacing.xl)
-                    .padding(.vertical, Spacing.sm)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.active, Color.activeGlow],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(CornerRadius.full)
-                    .shadow(color: Color.active.opacity(0.3), radius: 8, x: 0, y: 4)
+                }
+
+                // Balance spacer for resume button
+                Color.clear.frame(width: 44, height: 44)
+            }
+            .padding(.bottom, 7)
+        }
+        .onAppear {
+            if !hasSeenResumeTooltip {
+                withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
+                    showResumeTooltip = true
                 }
             }
-            .padding(.bottom, Spacing.md)
         }
+    }
+
+    private func resumeRecording() {
+        // Resume appends to existing recording
+        recorder.resumeRecording()
     }
 
     // MARK: - Starting Content
@@ -306,7 +360,8 @@ struct RecordingView: View {
     // MARK: - Actions
 
     private func cancelRecording() {
-        recorder.stopRecording()
+        isCancelling = true
+        recorder.finalizeRecording()
         if let url = recorder.currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
             AppLogger.recording.info("Cancelled recording: \(url.lastPathComponent)")
@@ -315,6 +370,7 @@ struct RecordingView: View {
     }
 
     private func deleteRecording() {
+        recorder.finalizeRecording()
         if let url = recorder.currentRecordingURL {
             try? FileManager.default.removeItem(at: url)
             AppLogger.recording.info("Deleted unsaved recording: \(url.lastPathComponent)")
@@ -322,6 +378,9 @@ struct RecordingView: View {
     }
 
     private func saveRecording() {
+        // Finalize the recording (stop the recorder properly)
+        recorder.finalizeRecording()
+
         guard let url = recorder.currentRecordingURL else { return }
 
         let newMemo = VoiceMemo(context: viewContext)
@@ -392,6 +451,19 @@ struct RecordingView: View {
         case .spectrum: return "SPECTRUM"
         case .particles: return "PARTICLES"
         }
+    }
+}
+
+// MARK: - Triangle Shape
+
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
 

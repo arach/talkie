@@ -115,7 +115,7 @@ enum FontSizeOption: String, CaseIterable {
 
     var scale: CGFloat {
         switch self {
-        case .small: return 0.85
+        case .small: return 0.9   // Tight but readable
         case .medium: return 1.0
         case .large: return 1.15
         }
@@ -132,6 +132,7 @@ enum FontSizeOption: String, CaseIterable {
 
 // MARK: - Curated Theme Presets
 enum ThemePreset: String, CaseIterable {
+    case tactical = "tactical"
     case terminal = "terminal"
     case minimal = "minimal"
     case classic = "classic"
@@ -139,6 +140,7 @@ enum ThemePreset: String, CaseIterable {
 
     var displayName: String {
         switch self {
+        case .tactical: return "Tactical"
         case .terminal: return "Terminal"
         case .minimal: return "Minimal"
         case .classic: return "Classic"
@@ -148,8 +150,9 @@ enum ThemePreset: String, CaseIterable {
 
     var description: String {
         switch self {
+        case .tactical: return "Sharp monospace, tight spacing, military precision"
         case .terminal: return "Dark mode with monospace fonts and green accents"
-        case .minimal: return "Clean and subtle with rounded fonts"
+        case .minimal: return "Clean, subtle, follows system light/dark"
         case .classic: return "System defaults with blue accents"
         case .warm: return "Dark mode with orange tones"
         }
@@ -157,6 +160,7 @@ enum ThemePreset: String, CaseIterable {
 
     var icon: String {
         switch self {
+        case .tactical: return "scope"
         case .terminal: return "terminal"
         case .minimal: return "circle"
         case .classic: return "star"
@@ -166,6 +170,8 @@ enum ThemePreset: String, CaseIterable {
 
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
+        case .tactical:
+            return (Color(white: 0.08), Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
         case .terminal:
             return (Color.black, Color.green.opacity(0.9), Color.green)
         case .minimal:
@@ -180,15 +186,18 @@ enum ThemePreset: String, CaseIterable {
     // Theme preset values
     var appearanceMode: AppearanceMode {
         switch self {
+        case .tactical: return .dark
         case .terminal: return .dark
-        case .minimal: return .light
+        case .minimal: return .system  // Respects system light/dark
         case .classic: return .dark
         case .warm: return .dark
         }
     }
 
-    var fontStyle: FontStyleOption {
+    /// UI chrome font style (labels, headers, buttons, badges)
+    var uiFontStyle: FontStyleOption {
         switch self {
+        case .tactical: return .system      // SF Pro - clean, professional
         case .terminal: return .monospace
         case .minimal: return .rounded
         case .classic: return .system
@@ -196,12 +205,35 @@ enum ThemePreset: String, CaseIterable {
         }
     }
 
+    /// Content font style (transcripts, notes, markdown)
+    var contentFontStyle: FontStyleOption {
+        switch self {
+        case .tactical: return .system      // SF Pro - readable, luxurious
+        case .terminal: return .system      // Readable content even in terminal theme
+        case .minimal: return .system       // Clean system font for content
+        case .classic: return .system       // Standard system font
+        case .warm: return .serif           // Warm, readable serif for content
+        }
+    }
+
     var accentColor: AccentColorOption {
         switch self {
+        case .tactical: return .blue
         case .terminal: return .green
         case .minimal: return .gray
         case .classic: return .blue
         case .warm: return .orange
+        }
+    }
+
+    /// Font size option for this theme
+    var fontSize: FontSizeOption {
+        switch self {
+        case .tactical: return .medium      // Tight spacing, readable fonts
+        case .terminal: return .medium
+        case .minimal: return .medium
+        case .classic: return .medium
+        case .warm: return .medium
         }
     }
 }
@@ -213,8 +245,44 @@ class SettingsManager: ObservableObject {
 
     private let appearanceModeKey = "appearanceMode"
     private let accentColorKey = "accentColor"
-    private let fontStyleKey = "fontStyle"
-    private let fontSizeKey = "fontSize"
+    private let uiFontStyleKey = "uiFontStyle"
+    private let contentFontStyleKey = "contentFontStyle"
+    private let fontSizeKey = "fontSize"  // Legacy, maps to uiFontSize
+    private let uiFontSizeKey = "uiFontSize"
+    private let contentFontSizeKey = "contentFontSize"
+    private let currentThemeKey = "currentTheme"
+    private let uiAllCapsKey = "uiAllCaps"
+
+    /// The currently active theme preset
+    @Published var currentTheme: ThemePreset? {
+        didSet {
+            if let theme = currentTheme {
+                UserDefaults.standard.set(theme.rawValue, forKey: currentThemeKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: currentThemeKey)
+            }
+        }
+    }
+
+    /// Whether to use light/thin font weights (for sharp, tactical aesthetics)
+    var useLightFonts: Bool {
+        currentTheme == .tactical
+    }
+
+    /// Whether current theme uses high-contrast colors
+    var useTacticalColors: Bool {
+        currentTheme == .tactical
+    }
+
+    /// Check if minimal theme is active
+    var isMinimalTheme: Bool {
+        currentTheme == .minimal
+    }
+
+    /// Check if system is in dark mode
+    var isSystemDarkMode: Bool {
+        NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
 
     @Published var appearanceMode: AppearanceMode {
         didSet {
@@ -229,29 +297,209 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    @Published var fontStyle: FontStyleOption {
+    /// Font style for UI chrome: labels, headers, buttons, badges, navigation
+    @Published var uiFontStyle: FontStyleOption {
         didSet {
-            UserDefaults.standard.set(fontStyle.rawValue, forKey: fontStyleKey)
+            UserDefaults.standard.set(uiFontStyle.rawValue, forKey: uiFontStyleKey)
         }
     }
 
-    @Published var fontSize: FontSizeOption {
+    /// Font style for content: transcripts, notes, markdown, user-generated text
+    @Published var contentFontStyle: FontStyleOption {
         didSet {
-            UserDefaults.standard.set(fontSize.rawValue, forKey: fontSizeKey)
+            UserDefaults.standard.set(contentFontStyle.rawValue, forKey: contentFontStyleKey)
         }
     }
 
-    /// Get a font with the current style and size settings applied
+    /// Legacy accessor - maps to uiFontStyle for backwards compatibility
+    var fontStyle: FontStyleOption {
+        get { uiFontStyle }
+        set { uiFontStyle = newValue }
+    }
+
+    /// UI chrome font size (labels, headers, buttons, badges)
+    @Published var uiFontSize: FontSizeOption {
+        didSet {
+            UserDefaults.standard.set(uiFontSize.rawValue, forKey: uiFontSizeKey)
+        }
+    }
+
+    /// Content font size (transcripts, notes, markdown)
+    @Published var contentFontSize: FontSizeOption {
+        didSet {
+            UserDefaults.standard.set(contentFontSize.rawValue, forKey: contentFontSizeKey)
+        }
+    }
+
+    /// Whether UI chrome labels should be ALL CAPS (tactical style)
+    @Published var uiAllCaps: Bool {
+        didSet {
+            UserDefaults.standard.set(uiAllCaps, forKey: uiAllCapsKey)
+        }
+    }
+
+    /// Text case for UI labels - returns .uppercase when uiAllCaps is enabled
+    var uiTextCase: Text.Case? {
+        uiAllCaps ? .uppercase : nil
+    }
+
+    /// Legacy accessor - maps to uiFontSize for backwards compatibility
+    var fontSize: FontSizeOption {
+        get { uiFontSize }
+        set { uiFontSize = newValue }
+    }
+
+    /// Get a UI font with the current style and size settings applied
     func themedFont(baseSize: CGFloat, weight: Font.Weight = .regular) -> Font {
-        let scaledSize = baseSize * fontSize.scale
-        return fontStyle.font(size: scaledSize, weight: weight)
+        let scaledSize = baseSize * uiFontSize.scale
+        return uiFontStyle.font(size: scaledSize, weight: weight)
     }
+
+    /// Get a content font with the current style and size settings applied
+    func contentFont(baseSize: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let scaledSize = baseSize * contentFontSize.scale
+        return contentFontStyle.font(size: scaledSize, weight: weight)
+    }
+
+    // MARK: - UI Font Tokens
+    // For UI chrome: labels, headers, buttons, badges, navigation
+    // Uses uiFontStyle (themed/branded)
+
+    /// Extra small UI text - labels, badges (10pt base)
+    var fontXS: Font { themedFont(baseSize: 10, weight: useLightFonts ? .light : .regular) }
+    var fontXSMedium: Font { themedFont(baseSize: 10, weight: useLightFonts ? .light : .regular) }
+    var fontXSBold: Font { themedFont(baseSize: 10, weight: useLightFonts ? .regular : .medium) }
+
+    /// Small UI text - secondary info, metadata (11pt base)
+    var fontSM: Font { themedFont(baseSize: 11, weight: useLightFonts ? .light : .regular) }
+    var fontSMMedium: Font { themedFont(baseSize: 11, weight: useLightFonts ? .light : .regular) }
+    var fontSMBold: Font { themedFont(baseSize: 11, weight: useLightFonts ? .regular : .medium) }
+
+    /// Body UI text - primary UI elements (13pt base)
+    var fontBody: Font { themedFont(baseSize: 13, weight: useLightFonts ? .light : .regular) }
+    var fontBodyMedium: Font { themedFont(baseSize: 13, weight: useLightFonts ? .light : .regular) }
+    var fontBodyBold: Font { themedFont(baseSize: 13, weight: useLightFonts ? .regular : .medium) }
+
+    /// Title UI text - section headers (15pt base)
+    var fontTitle: Font { themedFont(baseSize: 15, weight: useLightFonts ? .light : .regular) }
+    var fontTitleMedium: Font { themedFont(baseSize: 15, weight: useLightFonts ? .regular : .medium) }
+    var fontTitleBold: Font { themedFont(baseSize: 15, weight: useLightFonts ? .medium : .bold) }
+
+    /// Headline UI text - large headers (18pt base)
+    var fontHeadline: Font { themedFont(baseSize: 18, weight: useLightFonts ? .light : .regular) }
+    var fontHeadlineMedium: Font { themedFont(baseSize: 18, weight: useLightFonts ? .regular : .medium) }
+    var fontHeadlineBold: Font { themedFont(baseSize: 18, weight: useLightFonts ? .medium : .bold) }
+
+    /// Display UI text - hero elements (32pt base)
+    var fontDisplay: Font { themedFont(baseSize: 32, weight: .thin) }
+    var fontDisplayMedium: Font { themedFont(baseSize: 32, weight: useLightFonts ? .thin : .regular) }
+
+    // MARK: - Theme Color Tokens
+    // Returns themed colors based on active theme, falls back to system colors
+
+    /// Primary background
+    var tacticalBackground: Color {
+        if useTacticalColors {
+            return appearanceMode == .dark ? Color(white: 0.05) : Color(white: 0.98)
+        }
+        if isMinimalTheme {
+            return isSystemDarkMode ? Color(white: 0.11) : Color(white: 0.97)
+        }
+        return Color(NSColor.windowBackgroundColor)
+    }
+
+    /// Secondary background (slightly lighter/darker)
+    var tacticalBackgroundSecondary: Color {
+        if useTacticalColors {
+            return appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.94)
+        }
+        if isMinimalTheme {
+            return isSystemDarkMode ? Color(white: 0.14) : Color(white: 0.94)
+        }
+        return Color(NSColor.controlBackgroundColor)
+    }
+
+    /// Tertiary background for cards/panels
+    var tacticalBackgroundTertiary: Color {
+        if useTacticalColors {
+            return appearanceMode == .dark ? Color(white: 0.12) : Color(white: 0.90)
+        }
+        if isMinimalTheme {
+            return isSystemDarkMode ? Color(white: 0.18) : Color(white: 0.91)
+        }
+        return Color(NSColor.controlBackgroundColor).opacity(0.5)
+    }
+
+    /// Primary text
+    var tacticalForeground: Color {
+        if useTacticalColors {
+            return appearanceMode == .dark ? Color(white: 0.95) : Color(white: 0.1)
+        }
+        if isMinimalTheme {
+            return isSystemDarkMode ? Color(white: 0.88) : Color(white: 0.15)
+        }
+        return Color.primary
+    }
+
+    /// Secondary text
+    var tacticalForegroundSecondary: Color {
+        if useTacticalColors {
+            return appearanceMode == .dark ? Color(white: 0.6) : Color(white: 0.4)
+        }
+        if isMinimalTheme {
+            return isSystemDarkMode ? Color(white: 0.55) : Color(white: 0.45)
+        }
+        return Color.secondary
+    }
+
+    /// Muted text for timestamps, metadata
+    var tacticalForegroundMuted: Color {
+        if useTacticalColors {
+            return appearanceMode == .dark ? Color(white: 0.4) : Color(white: 0.55)
+        }
+        if isMinimalTheme {
+            return isSystemDarkMode ? Color(white: 0.4) : Color(white: 0.55)
+        }
+        return Color.secondary.opacity(0.7)
+    }
+
+    /// Divider/border color
+    var tacticalDivider: Color {
+        if useTacticalColors {
+            return appearanceMode == .dark ? Color(white: 0.2) : Color(white: 0.85)
+        }
+        if isMinimalTheme {
+            return isSystemDarkMode ? Color(white: 0.22) : Color(white: 0.88)
+        }
+        return Color(NSColor.separatorColor)
+    }
+
+    // MARK: - Content Font Tokens
+    // For user content: transcripts, notes, markdown, AI results
+    // Uses contentFontStyle (optimized for readability)
+
+    /// Small content text - footnotes, captions (10pt base)
+    var contentFontSM: Font { contentFont(baseSize: 10, weight: .regular) }
+    var contentFontSMMedium: Font { contentFont(baseSize: 10, weight: .medium) }
+
+    /// Body content text - main transcripts, notes (13pt base)
+    var contentFontBody: Font { contentFont(baseSize: 13, weight: .regular) }
+    var contentFontBodyMedium: Font { contentFont(baseSize: 13, weight: .medium) }
+    var contentFontBodyBold: Font { contentFont(baseSize: 13, weight: .bold) }
+
+    /// Large content text - summaries, key points (15pt base)
+    var contentFontLarge: Font { contentFont(baseSize: 15, weight: .regular) }
+    var contentFontLargeMedium: Font { contentFont(baseSize: 15, weight: .medium) }
+    var contentFontLargeBold: Font { contentFont(baseSize: 15, weight: .bold) }
 
     /// Apply a curated theme preset
     func applyTheme(_ theme: ThemePreset) {
+        currentTheme = theme
         appearanceMode = theme.appearanceMode
-        fontStyle = theme.fontStyle
+        uiFontStyle = theme.uiFontStyle
+        contentFontStyle = theme.contentFontStyle
         accentColor = theme.accentColor
+        fontSize = theme.fontSize
     }
 
     func applyAppearanceMode() {
@@ -376,18 +624,54 @@ class SettingsManager: ObservableObject {
             self.accentColor = .system
         }
 
-        if let fontStyleString = UserDefaults.standard.string(forKey: fontStyleKey),
-           let style = FontStyleOption(rawValue: fontStyleString) {
-            self.fontStyle = style
+        // Load UI font style (with migration from old fontStyle key)
+        if let uiFontStyleString = UserDefaults.standard.string(forKey: uiFontStyleKey),
+           let style = FontStyleOption(rawValue: uiFontStyleString) {
+            self.uiFontStyle = style
+        } else if let legacyFontStyleString = UserDefaults.standard.string(forKey: "fontStyle"),
+                  let style = FontStyleOption(rawValue: legacyFontStyleString) {
+            // Migrate from old single fontStyle setting
+            self.uiFontStyle = style
         } else {
-            self.fontStyle = .monospace  // Default to monospace for code-style UI
+            self.uiFontStyle = .monospace  // Default to monospace for code-style UI
         }
 
-        if let fontSizeString = UserDefaults.standard.string(forKey: fontSizeKey),
-           let size = FontSizeOption(rawValue: fontSizeString) {
-            self.fontSize = size
+        // Load content font style
+        if let contentFontStyleString = UserDefaults.standard.string(forKey: contentFontStyleKey),
+           let style = FontStyleOption(rawValue: contentFontStyleString) {
+            self.contentFontStyle = style
         } else {
-            self.fontSize = .medium
+            self.contentFontStyle = .system  // Default to system for readable content
+        }
+
+        // Load UI font size (with migration from legacy fontSizeKey)
+        if let uiFontSizeString = UserDefaults.standard.string(forKey: uiFontSizeKey),
+           let size = FontSizeOption(rawValue: uiFontSizeString) {
+            self.uiFontSize = size
+        } else if let legacyFontSizeString = UserDefaults.standard.string(forKey: fontSizeKey),
+                  let size = FontSizeOption(rawValue: legacyFontSizeString) {
+            self.uiFontSize = size
+        } else {
+            self.uiFontSize = .medium
+        }
+
+        // Load content font size
+        if let contentFontSizeString = UserDefaults.standard.string(forKey: contentFontSizeKey),
+           let size = FontSizeOption(rawValue: contentFontSizeString) {
+            self.contentFontSize = size
+        } else {
+            self.contentFontSize = .medium
+        }
+
+        // Load UI all caps setting (default: false)
+        self.uiAllCaps = UserDefaults.standard.object(forKey: uiAllCapsKey) as? Bool ?? false
+
+        // Load current theme
+        if let themeString = UserDefaults.standard.string(forKey: currentThemeKey),
+           let theme = ThemePreset(rawValue: themeString) {
+            self.currentTheme = theme
+        } else {
+            self.currentTheme = nil
         }
 
         // Initialize local file storage settings from UserDefaults

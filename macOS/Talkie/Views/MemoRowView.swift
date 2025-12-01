@@ -27,21 +27,21 @@ struct MemoRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 // Title
                 Text(memoTitle)
-                    .font(settings.themedFont(baseSize: 11, weight: .medium))
+                    .font(settings.fontBodyMedium)
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
                 // Minimal metadata: duration + relative time
                 HStack(spacing: 4) {
                     Text(formatDuration(memo.duration))
-                        .font(settings.themedFont(baseSize: 9, weight: .regular))
+                        .font(settings.fontXS)
 
                     Text("·")
-                        .font(settings.themedFont(baseSize: 9, weight: .regular))
+                        .font(settings.fontXS)
                         .foregroundColor(.secondary.opacity(0.4))
 
                     Text(formatDateCompact(memoCreatedAt))
-                        .font(settings.themedFont(baseSize: 9, weight: .regular))
+                        .font(settings.fontXS)
                 }
                 .foregroundColor(.secondary)
             }

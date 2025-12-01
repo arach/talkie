@@ -54,6 +54,68 @@ struct WaveformView: View {
     }
 }
 
+// MARK: - Interactive Waveform (with progress + tap-to-seek)
+
+struct InteractiveWaveformView: View {
+    let levels: [Float]
+    let height: CGFloat
+    var progress: Double // 0.0 to 1.0
+    var playedColor: Color = .active
+    var unplayedColor: Color = .textTertiary
+    var barWidth: CGFloat = 2.5
+    var spacing: CGFloat = 2
+    var onSeek: ((Double) -> Void)? // Called with progress 0.0-1.0
+
+    var body: some View {
+        GeometryReader { geometry in
+            let totalWidth = geometry.size.width
+            let barSpacing = barWidth + spacing
+            let maxBars = max(1, Int(totalWidth / barSpacing))
+            let displayLevels = sampleLevels(levels, targetCount: maxBars)
+            let progressIndex = Int(Double(displayLevels.count) * progress)
+
+            HStack(alignment: .center, spacing: spacing) {
+                ForEach(0..<displayLevels.count, id: \.self) { index in
+                    let isPlayed = index < progressIndex
+                    RoundedRectangle(cornerRadius: barWidth / 2)
+                        .fill(isPlayed ? playedColor : unplayedColor)
+                        .frame(
+                            width: barWidth,
+                            height: max(4, CGFloat(displayLevels[index]) * height * 0.85)
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: height, alignment: .center)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onEnded { value in
+                        let tapProgress = max(0, min(1, value.location.x / totalWidth))
+                        onSeek?(tapProgress)
+                    }
+            )
+        }
+        .frame(height: height)
+    }
+
+    private func sampleLevels(_ levels: [Float], targetCount: Int) -> [Float] {
+        guard !levels.isEmpty else { return Array(repeating: 0.15, count: targetCount) }
+        guard levels.count > targetCount else { return levels }
+
+        let step = Float(levels.count) / Float(targetCount)
+        var sampled: [Float] = []
+
+        for i in 0..<targetCount {
+            let index = Int(Float(i) * step)
+            if index < levels.count {
+                sampled.append(levels[index])
+            }
+        }
+
+        return sampled
+    }
+}
+
 // MARK: - Waveform Style Options
 
 enum WaveformStyle: Hashable {

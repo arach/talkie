@@ -8,18 +8,29 @@
 import SwiftUI
 import CloudKit
 
+enum SettingsSection: String, Hashable {
+    case appearance
+    case quickActions
+    case apiKeys
+    case allowedCommands
+    case outputSettings
+    case localFiles
+    case debugInfo
+}
+
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var settingsManager = SettingsManager.shared
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
+    @State private var selectedSection: SettingsSection? = .appearance  // Default to first item
 
     var body: some View {
         NavigationSplitView {
             // Sidebar
-            List {
+            List(selection: $selectedSection) {
                 Section("APPEARANCE") {
-                    NavigationLink(destination: AppearanceSettingsView()) {
+                    NavigationLink(value: SettingsSection.appearance) {
                         Label {
                             Text("Theme & Colors")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -32,7 +43,7 @@ struct SettingsView: View {
                 }
 
                 Section("WORKFLOWS") {
-                    NavigationLink(destination: QuickActionsSettingsView()) {
+                    NavigationLink(value: SettingsSection.quickActions) {
                         Label {
                             Text("Quick Actions")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -45,7 +56,7 @@ struct SettingsView: View {
                 }
 
                 Section("API & PROVIDERS") {
-                    NavigationLink(destination: APISettingsView(settingsManager: settingsManager)) {
+                    NavigationLink(value: SettingsSection.apiKeys) {
                         Label {
                             Text("API Keys")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -58,7 +69,7 @@ struct SettingsView: View {
                 }
 
                 Section("SHELL & OUTPUT") {
-                    NavigationLink(destination: AllowedCommandsView()) {
+                    NavigationLink(value: SettingsSection.allowedCommands) {
                         Label {
                             Text("Allowed Commands")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -69,7 +80,7 @@ struct SettingsView: View {
                         }
                     }
 
-                    NavigationLink(destination: OutputSettingsView()) {
+                    NavigationLink(value: SettingsSection.outputSettings) {
                         Label {
                             Text("Output & Aliases")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -82,7 +93,7 @@ struct SettingsView: View {
                 }
 
                 Section("DATA & FILES") {
-                    NavigationLink(destination: LocalFilesSettingsView()) {
+                    NavigationLink(value: SettingsSection.localFiles) {
                         Label {
                             Text("Local Files")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -95,7 +106,7 @@ struct SettingsView: View {
                 }
 
                 Section("DEBUG") {
-                    NavigationLink(destination: DebugInfoView()) {
+                    NavigationLink(value: SettingsSection.debugInfo) {
                         Label {
                             Text("Debug Info")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -110,18 +121,25 @@ struct SettingsView: View {
             .listStyle(.sidebar)
             .frame(minWidth: 180)
         } detail: {
-            // Default detail view
-            VStack(spacing: 20) {
-                Image(systemName: "gear")
-                    .font(.system(size: 48))
-                    .foregroundColor(.secondary)
-                Text("SELECT A SETTING")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundColor(.secondary)
+            // Detail view based on selection
+            switch selectedSection {
+            case .appearance:
+                AppearanceSettingsView()
+            case .quickActions:
+                QuickActionsSettingsView()
+            case .apiKeys:
+                APISettingsView(settingsManager: settingsManager)
+            case .allowedCommands:
+                AllowedCommandsView()
+            case .outputSettings:
+                OutputSettingsView()
+            case .localFiles:
+                LocalFilesSettingsView()
+            case .debugInfo:
+                DebugInfoView()
+            case .none:
+                AppearanceSettingsView()  // Default to appearance
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(NSColor.textBackgroundColor))
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -138,6 +156,11 @@ struct SettingsView: View {
 // MARK: - Appearance Settings View
 struct AppearanceSettingsView: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
+
+    /// Check if this theme is the current active theme
+    private func isThemeActive(_ preset: ThemePreset) -> Bool {
+        return settingsManager.currentTheme == preset
+    }
 
     var body: some View {
         ScrollView {
@@ -163,20 +186,135 @@ struct AppearanceSettingsView: View {
                 // MARK: - Theme Presets
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK THEMES")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
                     Text("Apply a curated theme preset with one click.")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    // Live preview (top) - sidebar + table
+                    HStack(spacing: 0) {
+                        // Mini sidebar
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("TALKIE")
+                                .font(SettingsManager.shared.fontXSBold)
+                                .tracking(1)
+                                .foregroundColor(SettingsManager.shared.tacticalForeground)
+                                .padding(.bottom, 4)
+
+                            ForEach(["All Memos", "Recent", "Processed"], id: \.self) { item in
+                                HStack(spacing: 6) {
+                                    Image(systemName: item == "All Memos" ? "square.stack" : (item == "Recent" ? "clock" : "checkmark.circle"))
+                                        .font(SettingsManager.shared.fontXS)
+                                        .foregroundColor(item == "All Memos" ? .accentColor : SettingsManager.shared.tacticalForegroundMuted)
+                                    Text(item)
+                                        .font(SettingsManager.shared.fontSM)
+                                        .foregroundColor(item == "All Memos" ? SettingsManager.shared.tacticalForeground : SettingsManager.shared.tacticalForegroundSecondary)
+                                    Spacer()
+                                    if item == "All Memos" {
+                                        Text("103")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                                    }
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(item == "All Memos" ? Color.accentColor.opacity(0.15) : Color.clear)
+                                .cornerRadius(4)
+                            }
+                        }
+                        .padding(8)
+                        .frame(width: 130)
+                        .background(SettingsManager.shared.tacticalBackground)
+
+                        Rectangle()
+                            .fill(SettingsManager.shared.tacticalDivider)
+                            .frame(width: 0.5)
+
+                        // Table
+                        VStack(spacing: 0) {
+                            // Header row
+                            HStack(spacing: 0) {
+                                Text("TIMESTAMP")
+                                    .font(SettingsManager.shared.fontXSBold)
+                                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                                    .frame(width: 90, alignment: .leading)
+                                Text("TITLE")
+                                    .font(SettingsManager.shared.fontXSBold)
+                                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Text("DUR")
+                                    .font(SettingsManager.shared.fontXSBold)
+                                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                                    .frame(width: 40, alignment: .trailing)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(SettingsManager.shared.tacticalBackgroundSecondary)
+
+                            // Sample rows
+                            ForEach(0..<5) { i in
+                                VStack(spacing: 0) {
+                                    Rectangle()
+                                        .fill(SettingsManager.shared.tacticalDivider.opacity(0.3))
+                                        .frame(height: 0.5)
+                                    HStack(spacing: 0) {
+                                        Text(["Nov 30, 11:22", "Nov 29, 15:42", "Nov 29, 12:51", "Nov 28, 21:49", "Nov 28, 19:33"][i])
+                                            .font(SettingsManager.shared.fontSM)
+                                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                                            .frame(width: 90, alignment: .leading)
+                                        Text(["Recording 2025-11-30", "Quick memo 11/29", "Recording 11/29", "Quick memo 11/28", "Meeting notes"][i])
+                                            .font(SettingsManager.shared.fontSM)
+                                            .foregroundColor(SettingsManager.shared.tacticalForeground)
+                                            .lineLimit(1)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        Text(["0:09", "0:34", "0:08", "0:31", "1:04"][i])
+                                            .font(SettingsManager.shared.fontSM)
+                                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                                            .frame(width: 40, alignment: .trailing)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(i == 0 ? Color.accentColor.opacity(0.15) : Color.clear)
+                                }
+                            }
+                        }
+                        .background(SettingsManager.shared.tacticalBackground)
+                    }
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(SettingsManager.shared.tacticalDivider, lineWidth: 0.5)
+                    )
+
+                    // Theme selection (bottom)
+                    HStack(spacing: 6) {
                         ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
-                            ThemePresetCard(
-                                preset: preset,
-                                action: { settingsManager.applyTheme(preset) }
-                            )
+                            Button(action: { settingsManager.applyTheme(preset) }) {
+                                HStack(spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(preset.previewColors.bg)
+                                        .frame(width: 14, height: 14)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .stroke(preset.previewColors.accent, lineWidth: 1)
+                                        )
+                                    Text(preset.displayName)
+                                        .font(SettingsManager.shared.fontXS)
+                                        .foregroundColor(isThemeActive(preset) ? .primary : .secondary)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(isThemeActive(preset) ? Color.accentColor.opacity(0.15) : SettingsManager.shared.tacticalBackgroundTertiary)
+                                .cornerRadius(4)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(isThemeActive(preset) ? Color.accentColor : Color.clear, lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -187,7 +325,7 @@ struct AppearanceSettingsView: View {
                 // MARK: - Theme Mode
                 VStack(alignment: .leading, spacing: 12) {
                     Text("APPEARANCE")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
@@ -208,12 +346,12 @@ struct AppearanceSettingsView: View {
                 // MARK: - Accent Color
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ACCENT COLOR")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
                     Text("Used for buttons, selections, and highlights.")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
@@ -231,60 +369,148 @@ struct AppearanceSettingsView: View {
                 .cornerRadius(8)
 
                 // MARK: - Typography
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("TYPOGRAPHY")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
-                    // Font Style
+                    // UI Chrome: Font + Size together
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Font Style")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.8))
+                        Text("UI CHROME")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(.secondary.opacity(0.6))
 
-                        HStack(spacing: 8) {
-                            ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
-                                FontStyleButton(
-                                    style: style,
-                                    isSelected: settingsManager.fontStyle == style,
-                                    action: { settingsManager.fontStyle = style }
-                                )
+                        HStack(spacing: 12) {
+                            // UI Font
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Font")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.8))
+                                HStack(spacing: 4) {
+                                    ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
+                                        FontStyleButton(
+                                            style: style,
+                                            isSelected: settingsManager.uiFontStyle == style,
+                                            action: { settingsManager.uiFontStyle = style }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Divider().frame(height: 36)
+
+                            // UI Size
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Size")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.8))
+                                HStack(spacing: 4) {
+                                    ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
+                                        FontSizeButton(
+                                            size: size,
+                                            isSelected: settingsManager.uiFontSize == size,
+                                            action: { settingsManager.uiFontSize = size }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // ALL CAPS toggle
+                        Toggle(isOn: $settingsManager.uiAllCaps) {
+                            HStack(spacing: 4) {
+                                Text("ALL CAPS")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.8))
+                                Text("tactical style")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                        }
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                    }
+                    .padding(10)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+
+                    // Content: Font + Size together
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("CONTENT")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(.secondary.opacity(0.6))
+
+                        HStack(spacing: 12) {
+                            // Content Font
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Font")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.8))
+                                HStack(spacing: 4) {
+                                    ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
+                                        FontStyleButton(
+                                            style: style,
+                                            isSelected: settingsManager.contentFontStyle == style,
+                                            action: { settingsManager.contentFontStyle = style }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Divider().frame(height: 36)
+
+                            // Content Size
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Size")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.8))
+                                HStack(spacing: 4) {
+                                    ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
+                                        FontSizeButton(
+                                            size: size,
+                                            isSelected: settingsManager.contentFontSize == size,
+                                            action: { settingsManager.contentFontSize = size }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-
-                    Divider()
-
-                    // Font Size
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Font Size")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.8))
-
-                        HStack(spacing: 8) {
-                            ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
-                                FontSizeButton(
-                                    size: size,
-                                    isSelected: settingsManager.fontSize == size,
-                                    action: { settingsManager.fontSize = size }
-                                )
-                            }
-                        }
-                    }
+                    .padding(10)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
 
                     // Preview
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Preview")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("The quick brown fox jumps over the lazy dog.")
-                                .font(settingsManager.themedFont(baseSize: 13))
-                            Text("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-                                .font(settingsManager.themedFont(baseSize: 11))
-                                .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 12) {
+                            // UI Font Preview
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("UI CHROME")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.secondary.opacity(0.6))
+                                Text(settingsManager.uiAllCaps ? "MEMOS · ACTIONS · 12:34 PM" : "Memos · Actions · 12:34 PM")
+                                    .font(settingsManager.themedFont(baseSize: 12))
+                                    .foregroundColor(.primary)
+                            }
+
+                            Divider()
+
+                            // Content Font Preview
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("CONTENT")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.secondary.opacity(0.6))
+                                Text("The quick brown fox jumps over the lazy dog. This is how your transcripts and notes will appear.")
+                                    .font(settingsManager.contentFont(baseSize: 13))
+                                    .foregroundColor(.primary)
+                            }
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -306,7 +532,7 @@ struct AppearanceSettingsView: View {
                         .font(.system(size: 10))
                         .foregroundColor(.blue)
                     Text("Accent color applies to Talkie only. System accent color is set in System Settings.")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
                 .padding(8)
@@ -414,25 +640,25 @@ struct FontStyleButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Image(systemName: style.icon)
-                    .font(.system(size: 16))
+                    .font(.system(size: 12))
                     .foregroundColor(isSelected ? .accentColor : .secondary)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 28, height: 28)
                     .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(8)
+                    .cornerRadius(6)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
                     )
 
                 Text(style.displayName)
-                    .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .font(.system(size: 8, weight: isSelected ? .medium : .regular, design: .monospaced))
                     .foregroundColor(isSelected ? .primary : .secondary)
             }
         }
         .buttonStyle(.plain)
-        .frame(minWidth: 70)
+        .frame(minWidth: 50)
     }
 }
 
@@ -444,21 +670,21 @@ struct FontSizeButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Image(systemName: size.icon)
-                    .font(.system(size: 12))
+                    .font(.system(size: 10))
                     .foregroundColor(isSelected ? .accentColor : .secondary)
 
                 Text(size.displayName)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .font(.system(size: 9, weight: isSelected ? .medium : .regular, design: .monospaced))
                     .foregroundColor(isSelected ? .primary : .secondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
-            .cornerRadius(6)
+            .cornerRadius(4)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 4)
                     .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: 1)
             )
         }
@@ -469,6 +695,7 @@ struct FontSizeButton: View {
 // MARK: - Theme Preset Card
 struct ThemePresetCard: View {
     let preset: ThemePreset
+    let isActive: Bool
     let action: () -> Void
 
     var body: some View {
@@ -484,8 +711,16 @@ struct ThemePresetCard: View {
                                     .font(.system(size: 10))
                                     .foregroundColor(preset.previewColors.accent)
                                 Text("Aa")
-                                    .font(.system(size: 11, weight: .medium, design: preset.fontStyle == .monospace ? .monospaced : (preset.fontStyle == .rounded ? .rounded : .default)))
+                                    .font(.system(size: 11, weight: .medium, design: preset.uiFontStyle == .monospace ? .monospaced : (preset.uiFontStyle == .rounded ? .rounded : .default)))
                                     .foregroundColor(preset.previewColors.fg)
+
+                                Spacer()
+
+                                if isActive {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(preset.previewColors.accent)
+                                }
                             }
                             .padding(.horizontal, 10)
                             , alignment: .leading
@@ -495,23 +730,36 @@ struct ThemePresetCard: View {
 
                 // Name and description
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(preset.displayName)
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.primary)
+                    HStack(spacing: 4) {
+                        Text(preset.displayName)
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.primary)
+
+                        if isActive {
+                            Text("ACTIVE")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.accentColor)
+                                .cornerRadius(3)
+                        }
+                    }
 
                     Text(preset.description)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
             }
             .padding(10)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(isActive ? Color.accentColor.opacity(0.1) : Color(NSColor.controlBackgroundColor))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    .stroke(isActive ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: isActive ? 2 : 1)
             )
         }
         .buttonStyle(.plain)
@@ -774,13 +1022,13 @@ struct APIKeyRow: View {
 
                     Button(action: onCancel) {
                         Text("Cancel")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSMedium)
                     }
                     .buttonStyle(.bordered)
 
                     Button(action: onSave) {
                         Text("Save")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSMedium)
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -812,7 +1060,7 @@ struct APIKeyRow: View {
 
                     Button(action: onEdit) {
                         Text("Edit")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSMedium)
                     }
                     .buttonStyle(.bordered)
 
@@ -831,7 +1079,7 @@ struct APIKeyRow: View {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 10))
                             Text("Add API Key")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSMedium)
                         }
                     }
                     .buttonStyle(.bordered)
@@ -841,7 +1089,7 @@ struct APIKeyRow: View {
                     Link(destination: URL(string: helpURL)!) {
                         HStack(spacing: 4) {
                             Text("Get key")
-                                .font(.system(size: 9, design: .monospaced))
+                                .font(SettingsManager.shared.fontXS)
                             Image(systemName: "arrow.up.right.square")
                                 .font(.system(size: 8))
                         }
@@ -941,7 +1189,7 @@ struct ModelCard: View {
                     .foregroundColor(.secondary)
 
                 Text("ID: \(model.rawValue)")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary.opacity(0.6))
             }
 
@@ -954,14 +1202,14 @@ struct ModelCard: View {
                         .font(.system(size: 10))
                         .foregroundColor(.green)
                     Text("INSTALLED")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.green)
                 }
             } else {
                 Button(action: {}) {
                     Text("DOWNLOAD")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
@@ -1080,7 +1328,7 @@ struct AllowedCommandsView: View {
                 // Add new command
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ADD COMMAND")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
@@ -1094,7 +1342,7 @@ struct AllowedCommandsView: View {
 
                         Button(action: findCommand) {
                             Text("WHICH")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSBold)
                                 .tracking(1)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 12)
@@ -1107,7 +1355,7 @@ struct AllowedCommandsView: View {
 
                         Button(action: addCommand) {
                             Text("ADD")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(SettingsManager.shared.fontXSBold)
                                 .tracking(1)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
@@ -1125,13 +1373,13 @@ struct AllowedCommandsView: View {
                                 .font(.system(size: 10))
                                 .foregroundColor(.blue)
                             Text(result)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.blue)
                         }
                     }
 
                     Text("Enter the full path to the executable (e.g., /Users/you/.bun/bin/claude)")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
 
@@ -1140,7 +1388,7 @@ struct AllowedCommandsView: View {
                 // Custom commands
                 VStack(alignment: .leading, spacing: 12) {
                     Text("YOUR CUSTOM COMMANDS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
@@ -1181,7 +1429,7 @@ struct AllowedCommandsView: View {
                 // Default commands (collapsed)
                 VStack(alignment: .leading, spacing: 12) {
                     Text("BUILT-IN COMMANDS (\(ShellStepConfig.defaultAllowedExecutables.count))")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
@@ -1189,14 +1437,14 @@ struct AllowedCommandsView: View {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
                             ForEach(ShellStepConfig.defaultAllowedExecutables.sorted(), id: \.self) { path in
                                 Text(path)
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                     } label: {
                         Text("Show built-in allowed commands")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.blue)
                     }
                 }
@@ -1285,7 +1533,7 @@ struct OutputSettingsView: View {
                 // Header
                 VStack(alignment: .leading, spacing: 8) {
                     Text("OUTPUT SETTINGS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
@@ -1326,7 +1574,7 @@ struct OutputSettingsView: View {
                             .font(.system(size: 10))
                             .foregroundColor(.blue)
                         Text(SaveFileStepConfig.defaultOutputDirectory)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
                     }
                     .padding(8)
@@ -1340,7 +1588,7 @@ struct OutputSettingsView: View {
                         Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                             .foregroundColor(message.contains("✓") ? .green : .orange)
                         Text(message)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                     }
                 }
 
@@ -1390,7 +1638,7 @@ struct OutputSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("PATH ALIASES")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.secondary)
 
@@ -1421,7 +1669,7 @@ struct OutputSettingsView: View {
 
                                     // Path
                                     Text(path)
-                                        .font(.system(size: 10, design: .monospaced))
+                                        .font(SettingsManager.shared.fontXS)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
@@ -1487,7 +1735,7 @@ struct OutputSettingsView: View {
                             .font(.system(size: 10))
                             .foregroundColor(.yellow)
                         Text("Use in Save File step directory: @Obsidian/Voice Notes")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
                     }
                     .padding(8)
@@ -1636,7 +1884,7 @@ struct QuickActionsSettingsView: View {
                 // Header
                 VStack(alignment: .leading, spacing: 8) {
                     Text("QUICK ACTIONS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
@@ -1735,7 +1983,7 @@ struct QuickActionsSettingsView: View {
                 Text(workflow.name)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                 Text(workflow.description)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
@@ -1855,7 +2103,7 @@ struct DebugInfoView: View {
                 // Sync status section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("SYNC STATUS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(SettingsManager.shared.fontXSBold)
                         .tracking(1)
                         .foregroundColor(.secondary)
 
@@ -1985,13 +2233,13 @@ struct LocalFilesSettingsView: View {
                             .font(.system(size: 12))
                             .foregroundColor(.green)
                         Text("YOUR DATA, YOUR FILES")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.green)
                     }
 
                     Text("Local files are stored as plain text (Markdown) and standard audio formats. You can open, edit, backup, or move them freely. No lock-in, full portability.")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
                 .padding(16)
@@ -2017,10 +2265,10 @@ struct LocalFilesSettingsView: View {
                             }
                             HStack(spacing: 4) {
                                 Text("Save as Markdown with YAML frontmatter.")
-                                    .font(.system(size: 10, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                                 Link("File format", destination: URL(string: "https://talkie.jdi.do/docs/file-format")!)
-                                    .font(.system(size: 10, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                             }
                         }
                     }
@@ -2078,7 +2326,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                             }
                             Text("Copy M4A audio recordings to your local folder.")
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -2122,7 +2370,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 10))
                                     .foregroundColor(.orange)
                                 Text("Audio files can take significant disk space")
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.orange)
                             }
                             .padding(8)
@@ -2143,7 +2391,7 @@ struct LocalFilesSettingsView: View {
                     // Stats
                     VStack(alignment: .leading, spacing: 12) {
                         Text("FILE STATISTICS")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.secondary)
 
@@ -2153,7 +2401,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                                     .foregroundColor(.blue)
                                 Text("Transcripts")
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                             }
 
@@ -2162,7 +2410,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                                     .foregroundColor(.purple)
                                 Text("Audio Files")
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                             }
 
@@ -2171,7 +2419,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                                     .foregroundColor(.green)
                                 Text("Total Size")
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(SettingsManager.shared.fontXS)
                                     .foregroundColor(.secondary)
                             }
                         }
@@ -2184,7 +2432,7 @@ struct LocalFilesSettingsView: View {
                     // Quick actions
                     VStack(alignment: .leading, spacing: 12) {
                         Text("QUICK ACTIONS")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(SettingsManager.shared.fontXSBold)
                             .tracking(1)
                             .foregroundColor(.secondary)
 
@@ -2215,7 +2463,7 @@ struct LocalFilesSettingsView: View {
                             Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
                                 .foregroundColor(message.contains("✓") ? .green : .blue)
                             Text(message)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(SettingsManager.shared.fontXS)
                         }
                         .padding(8)
                         .background(Color.green.opacity(0.1))
