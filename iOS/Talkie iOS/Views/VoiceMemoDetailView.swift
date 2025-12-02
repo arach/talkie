@@ -113,28 +113,21 @@ struct VoiceMemoDetailView: View {
                                 }
                             }
 
-                            // Metadata row - date + sync status only
                             HStack(spacing: Spacing.xs) {
                                 Text(formatDate(memoCreatedAt).uppercased())
                                     .font(.techLabelSmall)
                                     .tracking(1)
 
-                                // Sync status: cloud + mac
-                                if memo.cloudSyncedAt != nil {
-                                    Text("·")
-                                        .font(.labelSmall)
+                                Text("·").font(.labelSmall)
 
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "checkmark.icloud.fill")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundColor(.success)
+                                HStack(spacing: 4) {
+                                    Image(systemName: memo.cloudSyncedAt != nil ? "checkmark.icloud.fill" : "icloud")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(memo.cloudSyncedAt != nil ? .success : .textTertiary)
 
-                                        if memo.macReceivedAt != nil {
-                                            Image(systemName: "desktopcomputer")
-                                                .font(.system(size: 10, weight: .medium))
-                                                .foregroundColor(.success)
-                                        }
-                                    }
+                                    Image(systemName: "desktopcomputer")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(memo.macReceivedAt != nil ? .success : .textTertiary)
                                 }
                             }
                             .foregroundColor(.textSecondary)
@@ -1013,7 +1006,6 @@ struct VoiceMemoDetailView: View {
             // Show pinned workflows from Mac, or defaults if none pinned
             let pinned = pinnedWorkflows
             if pinned.isEmpty {
-                // Default actions when no pinned workflows
                 HStack(spacing: Spacing.xs) {
                     QuickActionButton(
                         icon: "doc.text",
@@ -1021,9 +1013,8 @@ struct VoiceMemoDetailView: View {
                         badge: .remote,
                         isProcessing: memo.isProcessingSummary,
                         hasContent: memo.summary != nil && !memo.summary!.isEmpty,
-                        isAvailable: memo.macReceivedAt != nil
+                        isAvailable: true
                     ) {
-                        // Trigger summary workflow on Mac
                     }
 
                     QuickActionButton(
@@ -1032,9 +1023,8 @@ struct VoiceMemoDetailView: View {
                         badge: .remote,
                         isProcessing: memo.isProcessingTasks,
                         hasContent: memo.tasks != nil && !memo.tasks!.isEmpty,
-                        isAvailable: memo.macReceivedAt != nil
+                        isAvailable: true
                     ) {
-                        // Trigger tasks workflow on Mac
                     }
 
                     QuickActionButton(
@@ -1043,13 +1033,11 @@ struct VoiceMemoDetailView: View {
                         badge: .remote,
                         isProcessing: memo.isProcessingReminders,
                         hasContent: memo.reminders != nil && !memo.reminders!.isEmpty,
-                        isAvailable: memo.macReceivedAt != nil
+                        isAvailable: true
                     ) {
-                        // Trigger reminders workflow on Mac
                     }
                 }
             } else {
-                // Show pinned workflows from Mac
                 HStack(spacing: Spacing.xs) {
                     ForEach(pinned.prefix(4), id: \.["id"]) { workflow in
                         let name = workflow["name"] ?? "Action"
@@ -1061,14 +1049,11 @@ struct VoiceMemoDetailView: View {
                             badge: .remote,
                             isProcessing: isPendingWorkflow(workflowId: workflow["id"]),
                             hasContent: hasWorkflowOutput(workflowId: workflow["id"]),
-                            isAvailable: memo.macReceivedAt != nil
+                            isAvailable: true
                         ) {
-                            // Add to pending queue
                             if let idString = workflow["id"], let workflowId = UUID(uuidString: idString) {
                                 addPendingWorkflow(workflowId)
                             }
-
-                            // Show feedback toast (RisingToast handles its own dismiss timing)
                             tappedWorkflowName = name
                             showingMacWorkflowToast = true
                         }
@@ -1076,9 +1061,8 @@ struct VoiceMemoDetailView: View {
                 }
             }
 
-            // Hint if Mac not connected
             if memo.macReceivedAt == nil {
-                Text("Open Talkie on your Mac to enable AI actions")
+                Text("Actions will run when Mac syncs")
                     .font(.system(size: 11))
                     .foregroundColor(.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -1135,15 +1119,9 @@ struct VoiceMemoDetailView: View {
     }
 
     private var macConnectionBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "desktopcomputer")
-                .font(.system(size: 10, weight: .medium))
-            if memo.macReceivedAt != nil {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 8, weight: .bold))
-            }
-        }
-        .foregroundColor(memo.macReceivedAt != nil ? .green : .textTertiary.opacity(0.4))
+        Image(systemName: "desktopcomputer")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(memo.macReceivedAt != nil ? .green : .textTertiary)
     }
 
     private func aiErrorBanner(error: String) -> some View {
@@ -1176,8 +1154,7 @@ struct VoiceMemoDetailView: View {
 
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.timeStyle = .short
+        formatter.dateFormat = "M/d h:mm a"
         return formatter.string(from: date)
     }
 

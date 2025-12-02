@@ -190,14 +190,14 @@ struct VoiceMemoListView: View {
                     VStack(spacing: 0) {
                         // Fixed table header
                         HStack {
-                            Text("NAME")
+                            Text("MEMOS")
                                 .font(.system(size: 10, weight: .medium))
                                 .tracking(1)
                                 .foregroundColor(themeManager.colors.textTertiary)
 
                             Spacer()
 
-                            Text("DURATION")
+                            Text("ACTIONS")
                                 .font(.system(size: 10, weight: .medium))
                                 .tracking(1)
                                 .foregroundColor(themeManager.colors.textTertiary)

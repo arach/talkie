@@ -349,6 +349,8 @@ struct PersistenceController {
         let createdAt: Date
         let fileSize: Int      // bytes
         let audioFormat: String // M4A, WAV, etc.
+        let isSeenByMac: Bool  // whether Mac has received this memo
+        let actionCount: Int   // number of completed workflow actions
     }
 
     /// Update the widget with the current memo count and recent memos
@@ -381,6 +383,14 @@ struct PersistenceController {
                 audioFormat = "M4A"
             }
 
+            // Count completed workflow actions
+            let actionCount: Int
+            if let runs = memo.workflowRuns as? Set<WorkflowRun> {
+                actionCount = runs.filter { $0.status == "completed" }.count
+            } else {
+                actionCount = 0
+            }
+
             return WidgetMemoSnapshot(
                 id: memo.id?.uuidString ?? UUID().uuidString,
                 title: memo.title ?? "Untitled",
@@ -390,7 +400,9 @@ struct PersistenceController {
                 isSynced: memo.cloudSyncedAt != nil,
                 createdAt: memo.createdAt ?? Date(),
                 fileSize: fileSize,
-                audioFormat: audioFormat
+                audioFormat: audioFormat,
+                isSeenByMac: memo.macReceivedAt != nil,
+                actionCount: actionCount
             )
         }
 

@@ -10,6 +10,7 @@ import SwiftUI
 struct VoiceMemoRow: View {
     @ObservedObject var memo: VoiceMemo
     @ObservedObject var audioPlayer: AudioPlayerManager
+    @ObservedObject var themeManager = ThemeManager.shared
 
     @State private var showingDetail = false
 
@@ -37,63 +38,55 @@ struct VoiceMemoRow: View {
         return ext.isEmpty ? "M4A" : ext
     }
 
+    /// Whether the Mac has seen/received this memo
+    private var isSeenByMac: Bool {
+        memo.macReceivedAt != nil
+    }
+
+    /// Count of workflow actions that have been run
+    private var actionCount: Int {
+        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return 0 }
+        return runs.filter { $0.status == "completed" }.count
+    }
+
     var body: some View {
         Button(action: { showingDetail = true }) {
-            HStack(alignment: .top, spacing: 12) {
-                // Left side: Name and metadata
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(spacing: 4) {
+                HStack(alignment: .center, spacing: 12) {
                     Text(memoTitle)
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(.textPrimary)
                         .lineLimit(1)
 
-                    // Metadata: Time | Size | Format
-                    HStack(spacing: 0) {
-                        Text(formatTime(memoCreatedAt))
-                        Text("  |  ").foregroundColor(.textTertiary.opacity(0.5))
-                        Text(fileSize)
-                        Text("  |  ").foregroundColor(.textTertiary.opacity(0.5))
-                        Text(audioFormat)
-                    }
-                    .font(.system(size: 11))
-                    .foregroundColor(.textTertiary)
-                }
+                    Spacer(minLength: 8)
 
-                Spacer(minLength: 8)
-
-                // Right side: Duration and status badges
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(formatDuration(memo.duration))
-                        .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(.textSecondary)
-
-                    // Status badges - TXT → CLOUD → SPARKLES (fixed width slots)
-                    HStack(spacing: 6) {
-                        // TXT slot - always reserve space
-                        ZStack {
-                            if memo.isTranscribing {
-                                PulsingDot(color: .textTertiary, size: 4)
-                            } else if memo.transcription != nil && !memo.transcription!.isEmpty {
-                                Text("TXT")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.green)
-                            }
-                        }
-                        .frame(width: 22, height: 12)
-
-                        // Cloud slot - always show (uploading or synced)
-                        CloudSyncIndicator(isSynced: memo.cloudSyncedAt != nil)
-
-                        // Sparkles slot
-                        if memo.summary != nil && !memo.summary!.isEmpty {
+                    if actionCount > 0 {
+                        HStack(spacing: 4) {
+                            Text("\(actionCount)")
+                                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                .foregroundColor(themeManager.colors.accent)
                             Image(systemName: "sparkles")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.purple)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(themeManager.colors.accent)
                         }
                     }
                 }
+
+                HStack(spacing: 0) {
+                    Text(formatDateTime(memoCreatedAt))
+                    Text(" · ").foregroundColor(.textTertiary.opacity(0.5))
+                    Text(fileSize)
+                    if isSeenByMac {
+                        Text(" · ").foregroundColor(.textTertiary.opacity(0.5))
+                        Image(systemName: "desktopcomputer")
+                            .font(.system(size: 9))
+                    }
+                    Spacer()
+                }
+                .font(.system(size: 10))
+                .foregroundColor(.textTertiary)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 12)
             .padding(.horizontal, 16)
             .contentShape(Rectangle())
         }
@@ -103,17 +96,14 @@ struct VoiceMemoRow: View {
         }
     }
 
-    private func formatTime(_ date: Date) -> String {
+    private func formatDateTime(_ date: Date) -> String {
         let formatter = DateFormatter()
-        let calendar = Calendar.current
-
-        if calendar.isDateInToday(date) || calendar.isDateInYesterday(date) {
+        if Calendar.current.isDateInToday(date) {
             formatter.dateFormat = "h:mm a"
-            return formatter.string(from: date)
         } else {
-            formatter.dateFormat = "MMM d"
-            return formatter.string(from: date)
+            formatter.dateFormat = "M/d h:mm a"
         }
+        return formatter.string(from: date)
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
