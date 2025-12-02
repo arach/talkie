@@ -310,6 +310,15 @@ class CloudKitSyncManager: ObservableObject {
 
             // Mark memos from other devices as received by Mac
             if let context = self.viewContext {
+                // If we detected changes, wait a moment for NSPersistentCloudKitContainer
+                // to import them into Core Data. Our manual fetch is just for tracking -
+                // the actual import is done asynchronously by the container.
+                if changes > 0 {
+                    logger.info("Waiting for Core Data import...")
+                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                    context.refreshAllObjects() // Refresh after import
+                }
+
                 PersistenceController.markMemosAsReceivedByMac(context: context)
                 // Process any pending workflow requests from iOS
                 PersistenceController.processPendingWorkflows(context: context)

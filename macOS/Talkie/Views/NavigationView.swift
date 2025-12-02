@@ -687,8 +687,12 @@ struct WorkflowListColumn: View {
     }
 
     private func selectWorkflow(_ workflow: WorkflowDefinition) {
-        selectedWorkflowID = workflow.id
-        editingWorkflow = workflow
+        // Only update editingWorkflow if selecting a different workflow
+        // This prevents overwriting unsaved edits when clicking the same item
+        if selectedWorkflowID != workflow.id {
+            selectedWorkflowID = workflow.id
+            editingWorkflow = workflow
+        }
     }
 }
 
@@ -1899,8 +1903,12 @@ struct WorkflowsContentView: View {
     }
 
     private func selectWorkflow(_ workflow: WorkflowDefinition) {
-        selectedWorkflowID = workflow.id
-        editingWorkflow = workflow
+        // Only update editingWorkflow if selecting a different workflow
+        // This prevents overwriting unsaved edits when clicking the same item
+        if selectedWorkflowID != workflow.id {
+            selectedWorkflowID = workflow.id
+            editingWorkflow = workflow
+        }
     }
 
     private func saveWorkflow() {
