@@ -16,36 +16,142 @@ struct WorkflowListItem: View {
     let onSelect: () -> Void
     let onEdit: () -> Void
 
+    @ObservedObject private var settings = SettingsManager.shared
+    @State private var isHovered = false
+
+    private var workflowColor: Color {
+        workflow.color.color
+    }
+
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 10) {
-                Image(systemName: workflow.icon)
-                    .font(.system(size: 12))
-                    .foregroundColor(.primary.opacity(0.6))
-                    .frame(width: 26, height: 26)
-                    .background(Color.primary.opacity(0.05))
-                    .cornerRadius(4)
+            HStack(spacing: 12) {
+                // Icon with workflow color
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(workflowColor.opacity(isSelected ? 0.25 : 0.15))
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(workflow.name)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
+                    Image(systemName: workflow.icon)
+                        .font(settings.fontSM)
+                        .foregroundColor(isSelected ? workflowColor : workflowColor.opacity(0.8))
+                }
+                .frame(width: 28, height: 28)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(workflowColor.opacity(isSelected ? 0.4 : 0.2), lineWidth: 1)
+                )
 
-                    Text("\(workflow.steps.count) step\(workflow.steps.count == 1 ? "" : "s")")
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.6))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(workflow.name)
+                            .font(settings.fontBodyMedium)
+                            .foregroundColor(isSelected ? settings.tacticalForeground : settings.tacticalForegroundSecondary)
+                            .lineLimit(1)
+
+                        // Pinned indicator
+                        if workflow.isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 8))
+                                .foregroundColor(workflowColor.opacity(0.7))
+                        }
+
+                        // Auto-run indicator
+                        if workflow.autoRun {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 8))
+                                .foregroundColor(.orange.opacity(0.8))
+                        }
+                    }
+
+                    HStack(spacing: 4) {
+                        Text("\(workflow.steps.count) step\(workflow.steps.count == 1 ? "" : "s")")
+                            .font(settings.fontXS)
+                            .foregroundColor(settings.tacticalForegroundMuted)
+
+                        if !workflow.isEnabled {
+                            Text("·")
+                                .font(settings.fontXS)
+                                .foregroundColor(settings.tacticalForegroundMuted)
+                            Text("DISABLED")
+                                .font(settings.fontXS)
+                                .foregroundColor(.orange.opacity(0.7))
+                        }
+                    }
                 }
 
                 Spacer()
+
+                // Color indicator bar
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(workflowColor)
+                    .frame(width: 3, height: 24)
+                    .opacity(isSelected ? 1 : (isHovered ? 0.6 : 0.3))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.primary.opacity(0.08) : Color.clear)
-            .cornerRadius(4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected
+                        ? workflowColor.opacity(0.12)
+                        : (isHovered ? settings.tacticalBackgroundTertiary : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(isSelected ? workflowColor.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+// NOTE: Toggle styles are now in DesignSystem.swift
+// Use .toggleStyle(.talkieSuccess), .toggleStyle(.talkieInfo), etc.
+
+// MARK: - Workflow Toggle
+
+struct WorkflowToggle: View {
+    @Binding var isOn: Bool
+    let label: String
+    let icon: String
+    let activeColor: Color
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: { isOn.toggle() }) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(isOn ? activeColor : .secondary.opacity(0.4))
+
+                Text(label)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(isOn ? activeColor : .secondary.opacity(0.6))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isOn ? activeColor.opacity(0.15) : Color.secondary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(isOn ? activeColor.opacity(0.3) : Color.secondary.opacity(isHovered ? 0.2 : 0.1), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 }
 
@@ -307,6 +413,12 @@ struct WorkflowStepCard: View {
             ConditionalStepDetails(config: config)
         case .transform(let config):
             TransformStepDetails(config: config)
+        case .trigger(let config):
+            TriggerStepDetails(config: config)
+        case .intentExtract(let config):
+            IntentExtractStepDetails(config: config)
+        case .executeWorkflows(let config):
+            ExecuteWorkflowsStepDetails(config: config)
         }
     }
 }
@@ -658,6 +770,70 @@ struct TransformStepDetails: View {
     }
 }
 
+struct TriggerStepDetails: View {
+    let config: TriggerStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                DetailBadge(label: "TRIGGER", color: .orange)
+                DetailBadge(label: config.searchLocation.rawValue.uppercased(), color: .secondary)
+            }
+            Text("Phrases: \(config.phrases.joined(separator: ", "))")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary)
+            if config.stopIfNoMatch {
+                Text("⛔ Stops workflow if no match")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+}
+
+struct IntentExtractStepDetails: View {
+    let config: IntentExtractStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                DetailBadge(label: "EXTRACT INTENTS", color: .cyan)
+                DetailBadge(label: config.extractionMethod.rawValue.uppercased(), color: .secondary)
+            }
+            Text("\(config.recognizedIntents.filter { $0.isEnabled }.count) intent(s) configured")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+struct ExecuteWorkflowsStepDetails: View {
+    let config: ExecuteWorkflowsStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                DetailBadge(label: "EXECUTE", color: .green)
+                if config.parallel {
+                    DetailBadge(label: "PARALLEL", color: .blue)
+                } else {
+                    DetailBadge(label: "SEQUENTIAL", color: .secondary)
+                }
+            }
+            if config.stopOnError {
+                Text("⛔ Stops on first error")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.orange)
+            }
+            if config.notifyOnComplete {
+                Text("🔔 Notifies on completion")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
 // MARK: - Detail Badge
 
 struct DetailBadge: View {
@@ -698,21 +874,21 @@ struct WorkflowInlineEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header bar
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.xs) {
                 Image(systemName: editedWorkflow.wrappedValue.icon)
-                    .font(.system(size: 14))
+                    .font(.headlineSmall)
                     .foregroundColor(editedWorkflow.wrappedValue.color.color)
                     .frame(width: 28, height: 28)
-                    .background(editedWorkflow.wrappedValue.color.color.opacity(0.15))
-                    .cornerRadius(6)
+                    .background(editedWorkflow.wrappedValue.color.color.opacity(Opacity.medium))
+                    .cornerRadius(CornerRadius.xs)
 
                 if isEditing {
                     TextField("Workflow name", text: editedWorkflow.name)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.bodySmall)
                         .textFieldStyle(.plain)
                 } else {
                     Text(editedWorkflow.wrappedValue.name)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.bodySmall)
                 }
 
                 Spacer()
@@ -721,13 +897,13 @@ struct WorkflowInlineEditor: View {
                     // Cancel button
                     Button(action: { isEditing = false }) {
                         Text("CANCEL")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
+                            .font(.techLabelSmall)
+                            .tracking(Tracking.tight)
                             .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
+                            .padding(.horizontal, Spacing.xs)
                             .padding(.vertical, 5)
-                            .background(Color.secondary.opacity(0.08))
-                            .cornerRadius(4)
+                            .background(Color.secondary.opacity(Opacity.light))
+                            .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
 
@@ -736,69 +912,69 @@ struct WorkflowInlineEditor: View {
                         onSave()
                         isEditing = false
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 9))
+                                .font(.techLabelSmall)
                             Text("SAVE")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, 5)
-                        .background(Color.accentColor)
-                        .cornerRadius(4)
+                        .background(SemanticColor.success)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 } else {
                     // Edit button
                     Button(action: { isEditing = true }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 9))
+                                .font(.techLabelSmall)
                             Text("EDIT")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 5)
-                        .background(Color.secondary.opacity(0.08))
-                        .cornerRadius(4)
+                        .background(Color.secondary.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
 
                     // Duplicate button
                     Button(action: onDuplicate) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Image(systemName: "doc.on.doc")
-                                .font(.system(size: 9))
+                                .font(.techLabelSmall)
                             Text("DUPLICATE")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 5)
-                        .background(Color.secondary.opacity(0.08))
-                        .cornerRadius(4)
+                        .background(Color.secondary.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
 
                     // Run button
                     Button(action: onRun) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Image(systemName: "play.fill")
-                                .font(.system(size: 9))
+                                .font(.techLabelSmall)
                             Text("RUN")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.primary)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, 5)
-                        .background(Color.primary.opacity(0.1))
-                        .cornerRadius(4)
+                        .background(Color.primary.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                     .disabled(editedWorkflow.wrappedValue.steps.isEmpty)
@@ -806,77 +982,77 @@ struct WorkflowInlineEditor: View {
                     // Delete button
                     Button(action: onDelete) {
                         Image(systemName: "trash")
-                            .font(.system(size: 10))
+                            .font(.labelSmall)
                             .foregroundColor(.secondary)
-                            .padding(6)
+                            .padding(Spacing.xs)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
             .background(Color(NSColor.controlBackgroundColor))
 
             Divider()
-                .opacity(0.5)
+                .opacity(Opacity.half)
 
             // Editor content
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
                     // Description
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("DESCRIPTION")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(1)
+                            .font(.techLabelSmall)
+                            .tracking(Tracking.normal)
                             .foregroundColor(.secondary.opacity(0.6))
 
                         if isEditing {
                             TextField("What does this workflow do?", text: editedWorkflow.description)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.monoSmall)
                                 .textFieldStyle(.plain)
-                                .padding(8)
+                                .padding(Spacing.xs)
                                 .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(4)
+                                .cornerRadius(CornerRadius.xs)
                         } else {
                             Text(editedWorkflow.wrappedValue.description.isEmpty ? "No description" : editedWorkflow.wrappedValue.description)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(editedWorkflow.wrappedValue.description.isEmpty ? .secondary.opacity(0.5) : .primary)
-                                .padding(8)
+                                .font(.monoSmall)
+                                .foregroundColor(editedWorkflow.wrappedValue.description.isEmpty ? .secondary.opacity(Opacity.half) : .primary)
+                                .padding(Spacing.xs)
                         }
                     }
 
                     // Icon & Color selector (only in edit mode)
                     if isEditing {
-                        HStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: Spacing.md) {
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
                                 Text("ICON")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                    .tracking(1)
+                                    .font(.techLabelSmall)
+                                    .tracking(Tracking.normal)
                                     .foregroundColor(.secondary.opacity(0.6))
 
-                                HStack(spacing: 6) {
+                                HStack(spacing: Spacing.xs) {
                                     Image(systemName: editedWorkflow.wrappedValue.icon)
-                                        .font(.system(size: 12))
+                                        .font(.bodySmall)
                                         .foregroundColor(editedWorkflow.wrappedValue.color.color)
                                         .frame(width: 28, height: 28)
-                                        .background(editedWorkflow.wrappedValue.color.color.opacity(0.15))
-                                        .cornerRadius(4)
+                                        .background(editedWorkflow.wrappedValue.color.color.opacity(Opacity.medium))
+                                        .cornerRadius(CornerRadius.xs)
 
                                     TextField("SF Symbol", text: editedWorkflow.icon)
-                                        .font(.system(size: 10, design: .monospaced))
+                                        .font(.monoXSmall)
                                         .textFieldStyle(.plain)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 6)
+                                        .padding(.horizontal, Spacing.xs)
+                                        .padding(.vertical, Spacing.xs)
                                         .background(Color(NSColor.controlBackgroundColor))
-                                        .cornerRadius(4)
+                                        .cornerRadius(CornerRadius.xs)
                                         .frame(width: 120)
                                 }
                             }
 
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
                                 Text("COLOR")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                    .tracking(1)
+                                    .font(.techLabelSmall)
+                                    .tracking(Tracking.normal)
                                     .foregroundColor(.secondary.opacity(0.6))
 
                                 Picker("", selection: editedWorkflow.color) {
@@ -896,35 +1072,74 @@ struct WorkflowInlineEditor: View {
 
                             Spacer()
                         }
+
+                        // Workflow toggles section
+                        Divider()
+                            .opacity(Opacity.strong)
+
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("OPTIONS")
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.normal)
+                                .foregroundColor(.secondary.opacity(0.6))
+
+                            HStack(spacing: 20) {
+                                // Enabled toggle
+                                WorkflowToggle(
+                                    isOn: editedWorkflow.isEnabled,
+                                    label: "ENABLED",
+                                    icon: "checkmark.circle.fill",
+                                    activeColor: SemanticColor.success
+                                )
+
+                                // Pinned toggle
+                                WorkflowToggle(
+                                    isOn: editedWorkflow.isPinned,
+                                    label: "PINNED",
+                                    icon: "pin.fill",
+                                    activeColor: editedWorkflow.wrappedValue.color.color
+                                )
+
+                                // Auto-run toggle
+                                WorkflowToggle(
+                                    isOn: editedWorkflow.autoRun,
+                                    label: "AUTO-RUN",
+                                    icon: "bolt.fill",
+                                    activeColor: SemanticColor.warning
+                                )
+
+                                Spacer()
+                            }
+                        }
                     }
 
                     Divider()
-                        .opacity(0.3)
+                        .opacity(Opacity.strong)
 
                     // Steps section
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("STEPS")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(1)
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.normal)
                                 .foregroundColor(.secondary.opacity(0.6))
 
                             Spacer()
 
                             if isEditing {
                                 Button(action: { showingStepTypePicker = true }) {
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: Spacing.xxs) {
                                         Image(systemName: "plus")
-                                            .font(.system(size: 9))
+                                            .font(.techLabelSmall)
                                         Text("ADD STEP")
-                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                            .tracking(0.5)
+                                            .font(.techLabelSmall)
+                                            .tracking(Tracking.tight)
                                     }
                                     .foregroundColor(.primary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.primary.opacity(0.08))
-                                    .cornerRadius(4)
+                                    .padding(.horizontal, Spacing.xs)
+                                    .padding(.vertical, Spacing.xxs)
+                                    .background(Color.primary.opacity(Opacity.light))
+                                    .cornerRadius(CornerRadius.xs)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -932,42 +1147,42 @@ struct WorkflowInlineEditor: View {
 
                         if editedWorkflow.wrappedValue.steps.isEmpty {
                             // Empty state
-                            VStack(spacing: 10) {
+                            VStack(spacing: Spacing.sm) {
                                 Image(systemName: "rectangle.stack.badge.plus")
-                                    .font(.system(size: 24))
+                                    .font(.displaySmall)
                                     .foregroundColor(.secondary.opacity(0.2))
 
                                 Text("NO STEPS")
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                    .tracking(1)
-                                    .foregroundColor(.secondary.opacity(0.5))
+                                    .font(.techLabelSmall)
+                                    .tracking(Tracking.normal)
+                                    .foregroundColor(.secondary.opacity(Opacity.half))
 
                                 Text(isEditing ? "Add steps to define workflow actions" : "This workflow has no steps yet")
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(.monoXSmall)
                                     .foregroundColor(.secondary.opacity(0.4))
 
                                 if isEditing {
                                     Button(action: { showingStepTypePicker = true }) {
-                                        HStack(spacing: 4) {
+                                        HStack(spacing: Spacing.xxs) {
                                             Image(systemName: "plus")
-                                                .font(.system(size: 9))
+                                                .font(.techLabelSmall)
                                             Text("ADD FIRST STEP")
-                                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                                .tracking(0.5)
+                                                .font(.techLabelSmall)
+                                                .tracking(Tracking.tight)
                                         }
                                         .foregroundColor(.primary)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.primary.opacity(0.1))
-                                        .cornerRadius(4)
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, Spacing.xs)
+                                        .background(Color.primary.opacity(Opacity.light))
+                                        .cornerRadius(CornerRadius.xs)
                                     }
                                     .buttonStyle(.plain)
                                 }
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 32)
-                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                            .cornerRadius(6)
+                            .padding(.vertical, Spacing.xxl)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(Opacity.half))
+                            .cornerRadius(CornerRadius.sm)
                         } else {
                             ForEach(Array(editedWorkflow.wrappedValue.steps.enumerated()), id: \.element.id) { index, step in
                                 WorkflowStepEditor(
@@ -986,7 +1201,7 @@ struct WorkflowInlineEditor: View {
                         }
                     }
                 }
-                .padding(16)
+                .padding(Spacing.md)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1369,32 +1584,68 @@ struct WorkflowStepEditor: View {
 
     @State private var isExpanded = true
 
+    private var stepColor: Color {
+        step.type.themeColor
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack(spacing: 12) {
-                Text("\(stepNumber)")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .frame(width: 24, height: 24)
-                    .background(Color.blue)
-                    .cornerRadius(6)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header - always visible
+            stepHeader
 
-                Image(systemName: step.type.icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
+            if isExpanded {
+                Divider()
+                    .opacity(Opacity.strong)
 
-                Text(step.type.rawValue)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-
-                Spacer()
-
-                // Reorder buttons (only in edit mode)
+                // Content: Read-only summary OR full editor
                 if isEditing {
+                    stepEditView
+                        .padding(Spacing.md)
+                } else {
+                    stepReadView
+                        .padding(Spacing.md)
+                }
+            }
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(CornerRadius.sm)
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .strokeBorder(stepColor.opacity(isEditing ? 0.3 : 0.15), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Header
+
+    private var stepHeader: some View {
+        HStack(spacing: Spacing.sm) {
+            // Step number badge with type color
+            Text("\(stepNumber)")
+                .font(.monoSmall)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .frame(width: 24, height: 24)
+                .background(stepColor)
+                .cornerRadius(CornerRadius.xs)
+
+            // Icon and type name
+            Image(systemName: step.type.icon)
+                .font(.labelMedium)
+                .foregroundColor(stepColor)
+
+            Text(step.type.displayName)
+                .font(.labelMedium)
+                .foregroundColor(.primary)
+
+            Spacer()
+
+            // Reorder buttons (only in edit mode)
+            if isEditing {
+                HStack(spacing: Spacing.xxs) {
                     if let moveUp = onMoveUp {
                         Button(action: moveUp) {
                             Image(systemName: "chevron.up")
-                                .font(.system(size: 10))
+                                .font(.labelSmall)
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(.secondary)
@@ -1403,89 +1654,1345 @@ struct WorkflowStepEditor: View {
                     if let moveDown = onMoveDown {
                         Button(action: moveDown) {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 10))
+                                .font(.labelSmall)
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(.secondary)
                     }
                 }
+            }
 
-                Button(action: { isExpanded.toggle() }) {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10))
+            // Expand/collapse
+            Button(action: { withAnimation(TalkieAnimation.fast) { isExpanded.toggle() } }) {
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.labelSmall)
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+
+            // Delete button (only in edit mode)
+            if isEditing {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.labelSmall)
+                        .foregroundColor(SemanticColor.error.opacity(0.8))
                 }
                 .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+    }
+
+    // MARK: - Read-Only View (Compact Summary)
+
+    @ViewBuilder
+    private var stepReadView: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            switch step.config {
+            case .llm(let config):
+                LLMStepReadView(config: config)
+            case .shell(let config):
+                ShellStepReadView(config: config)
+            case .webhook(let config):
+                WebhookStepReadView(config: config)
+            case .email(let config):
+                EmailStepReadView(config: config)
+            case .notification(let config):
+                NotificationStepReadView(config: config)
+            case .iOSPush(let config):
+                iOSPushStepReadView(config: config)
+            case .appleNotes(let config):
+                AppleNotesStepReadView(config: config)
+            case .appleReminders(let config):
+                AppleRemindersStepReadView(config: config)
+            case .appleCalendar(let config):
+                AppleCalendarStepReadView(config: config)
+            case .clipboard(let config):
+                ClipboardStepReadView(config: config)
+            case .saveFile(let config):
+                SaveFileStepReadView(config: config)
+            case .conditional(let config):
+                ConditionalStepReadView(config: config)
+            case .transform(let config):
+                TransformStepReadView(config: config)
+            case .trigger(let config):
+                TriggerStepReadView(config: config)
+            case .intentExtract(let config):
+                IntentExtractStepReadView(config: config)
+            case .executeWorkflows(let config):
+                ExecuteWorkflowsStepReadView(config: config)
+            }
+
+            // Output key (always shown in read mode)
+            if !step.outputKey.isEmpty {
+                HStack(spacing: Spacing.xxs) {
+                    Image(systemName: "arrow.right.circle")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                    Text("→ \(step.outputKey)")
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Edit View (Full Form)
+
+    @ViewBuilder
+    private var stepEditView: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            switch step.config {
+            case .llm:
+                LLMStepConfigEditor(step: $step)
+            case .shell:
+                ShellStepConfigEditor(step: $step)
+            case .webhook:
+                WebhookStepConfigEditor(step: $step)
+            case .email:
+                EmailStepConfigEditor(step: $step)
+            case .notification:
+                NotificationStepConfigEditor(step: $step)
+            case .iOSPush:
+                iOSPushStepConfigEditor(step: $step)
+            case .appleNotes:
+                AppleNotesStepConfigEditor(step: $step)
+            case .appleReminders:
+                AppleRemindersStepConfigEditor(step: $step)
+            case .appleCalendar:
+                AppleCalendarStepConfigEditor(step: $step)
+            case .clipboard:
+                ClipboardStepConfigEditor(step: $step)
+            case .saveFile:
+                SaveFileStepConfigEditor(step: $step)
+            case .conditional:
+                ConditionalStepConfigEditor(step: $step)
+            case .transform:
+                TransformStepConfigEditor(step: $step)
+            case .trigger:
+                TriggerStepConfigEditor(step: $step)
+            case .intentExtract:
+                IntentExtractStepConfigEditor(step: $step)
+            case .executeWorkflows:
+                ExecuteWorkflowsStepConfigEditor(step: $step)
+            }
+
+            // Output key editor
+            Divider()
+                .opacity(Opacity.strong)
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("OUTPUT KEY")
+                    .font(.techLabelSmall)
+                    .tracking(Tracking.tight)
+                    .foregroundColor(.secondary)
+
+                TextField("Key name for storing output", text: $step.outputKey)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.monoXSmall)
+
+                Text("Use {{\(step.outputKey)}} in subsequent steps")
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary.opacity(Opacity.prominent))
+            }
+        }
+    }
+}
+
+// MARK: - Read-Only Step Views
+
+struct LLMStepReadView: View {
+    let config: LLMStepConfig
+
+    private var modelDisplayName: String {
+        // Try to get a friendly name for the model
+        if let model = config.provider.models.first(where: { $0.id == config.modelId }) {
+            return model.name
+        }
+        // Fallback: extract last component of model ID
+        return config.modelId.components(separatedBy: "/").last ?? config.modelId
+    }
+
+    private var modelContextWindow: String? {
+        if let model = config.provider.models.first(where: { $0.id == config.modelId }) {
+            return model.formattedContext
+        }
+        return nil
+    }
+
+    private var providerColor: Color {
+        switch config.provider {
+        case .mlx:
+            return SemanticColor.processing  // Purple for local AI
+        case .anthropic:
+            return .orange
+        case .openai:
+            return SemanticColor.success
+        case .groq:
+            return SemanticColor.info
+        case .gemini:
+            return SemanticColor.pin  // Blue for Gemini
+        }
+    }
+
+    private var temperatureIcon: String {
+        if config.temperature < 0.3 {
+            return "snowflake"  // Cold/precise
+        } else if config.temperature < 0.7 {
+            return "thermometer.medium"  // Balanced
+        } else {
+            return "flame.fill"  // Hot/creative
+        }
+    }
+
+    private var temperatureColor: Color {
+        if config.temperature < 0.3 {
+            return SemanticColor.info  // Cool cyan
+        } else if config.temperature < 0.7 {
+            return SemanticColor.warning  // Warm orange
+        } else {
+            return SemanticColor.error  // Hot red
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Provider & Model info
+            HStack(spacing: Spacing.sm) {
+                // Provider badge with local/external indicator
+                HStack(spacing: 4) {
+                    Image(systemName: config.provider == .mlx ? "cpu" : "globe")
+                        .font(.system(size: 9))
+                    Text(config.provider.displayName)
+                        .font(.techLabelSmall)
+                }
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, 3)
+                .background(providerColor.opacity(0.15))
+                .foregroundColor(providerColor)
+                .cornerRadius(CornerRadius.xs)
+
+                // Model name with context window
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(modelDisplayName)
+                        .font(.monoSmall)
+                        .foregroundColor(.primary)
+
+                    if let context = modelContextWindow {
+                        Text(context)
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            // Row 2: Generation parameters
+            HStack(spacing: Spacing.md) {
+                // Temperature with visual indicator
+                HStack(spacing: 4) {
+                    Image(systemName: temperatureIcon)
+                        .font(.system(size: 10))
+                        .foregroundColor(temperatureColor)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(String(format: "%.1f", config.temperature))
+                            .font(.monoSmall)
+                            .foregroundColor(.primary)
+                        Text("temp")
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // Max tokens
+                HStack(spacing: 4) {
+                    Image(systemName: "text.word.spacing")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("\(config.maxTokens)")
+                            .font(.monoSmall)
+                            .foregroundColor(.primary)
+                        Text("tokens")
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            // Row 3: Prompt
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("PROMPT")
+                    .font(.techLabelSmall)
+                    .tracking(Tracking.tight)
+                    .foregroundColor(.secondary.opacity(0.6))
+
+                Text(config.prompt)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary.opacity(0.9))
+                    .lineLimit(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.sm)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(CornerRadius.xs)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+            }
+        }
+    }
+}
+
+struct ShellStepReadView: View {
+    let config: ShellStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Command with security indicator
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: config.isExecutableAllowed() ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(config.isExecutableAllowed() ? SemanticColor.success : SemanticColor.warning)
+
+                // Full command line
+                Text(config.executable)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+
+                if !config.arguments.isEmpty {
+                    Text(config.arguments.joined(separator: " "))
+                        .font(.monoSmall)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+            }
+
+            // Row 2: Metadata badges
+            HStack(spacing: Spacing.sm) {
+                // Timeout
+                HStack(spacing: 2) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 9))
+                    Text("\(config.timeout)s")
+                        .font(.monoXSmall)
+                }
                 .foregroundColor(.secondary)
 
-                if isEditing {
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 10))
-                            .foregroundColor(.red)
+                // Stderr capture indicator
+                if config.captureStderr {
+                    HStack(spacing: 2) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 9))
+                        Text("stderr")
+                            .font(.monoXSmall)
                     }
-                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                }
+
+                // Working directory if set
+                if let dir = config.workingDirectory, !dir.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 9))
+                        Text(dir.components(separatedBy: "/").last ?? dir)
+                            .font(.monoXSmall)
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                // Environment vars count
+                if !config.environment.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 9))
+                        Text("\(config.environment.count) env")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            // Row 3: stdin if provided
+            if let stdin = config.stdin, !stdin.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("STDIN")
+                        .font(.techLabelSmall)
+                        .tracking(Tracking.tight)
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    Text(stdin)
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.xs)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(CornerRadius.xs)
                 }
             }
 
-            if isExpanded {
-                Divider()
+            // Row 4: Prompt template if used
+            if let template = config.promptTemplate, !template.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("PROMPT TEMPLATE")
+                        .font(.techLabelSmall)
+                        .tracking(Tracking.tight)
+                        .foregroundColor(.secondary.opacity(0.6))
 
-                // Step-specific fields
-                stepConfigEditor
+                    Text(template)
+                        .font(.monoXSmall)
+                        .foregroundColor(.primary.opacity(0.9))
+                        .lineLimit(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.xs)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(CornerRadius.xs)
+                }
             }
         }
-        .padding(16)
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(8)
+    }
+}
+
+struct WebhookStepReadView: View {
+    let config: WebhookStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Method badge + URL
+            HStack(spacing: Spacing.xs) {
+                Text(config.method.rawValue)
+                    .font(.techLabelSmall)
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, 2)
+                    .background(methodColor.opacity(0.2))
+                    .foregroundColor(methodColor)
+                    .cornerRadius(CornerRadius.xs)
+
+                Text(config.url)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Metadata indicators
+            HStack(spacing: Spacing.sm) {
+                // Include transcript indicator
+                if config.includeTranscript {
+                    HStack(spacing: 2) {
+                        Image(systemName: "text.quote")
+                            .font(.system(size: 9))
+                        Text("Transcript")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.info)
+                }
+
+                // Include metadata indicator
+                if config.includeMetadata {
+                    HStack(spacing: 2) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 9))
+                        Text("Metadata")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.info)
+                }
+
+                // Headers count
+                if !config.headers.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.system(size: 9))
+                        Text("\(config.headers.count) headers")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            // Row 3: Body template if set
+            if let body = config.bodyTemplate, !body.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("BODY TEMPLATE")
+                        .font(.techLabelSmall)
+                        .tracking(Tracking.tight)
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    Text(body)
+                        .font(.monoXSmall)
+                        .foregroundColor(.primary.opacity(0.9))
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.xs)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(CornerRadius.xs)
+                }
+            }
+        }
     }
 
-    @ViewBuilder
-    private var stepConfigEditor: some View {
-        switch step.config {
-        case .llm:
-            LLMStepConfigEditor(step: $step)
-        case .shell:
-            ShellStepConfigEditor(step: $step)
-        case .webhook:
-            WebhookStepConfigEditor(step: $step)
-        case .email:
-            EmailStepConfigEditor(step: $step)
-        case .notification:
-            NotificationStepConfigEditor(step: $step)
-        case .iOSPush:
-            iOSPushStepConfigEditor(step: $step)
-        case .appleNotes:
-            AppleNotesStepConfigEditor(step: $step)
-        case .appleReminders:
-            AppleRemindersStepConfigEditor(step: $step)
-        case .appleCalendar:
-            AppleCalendarStepConfigEditor(step: $step)
-        case .clipboard:
-            ClipboardStepConfigEditor(step: $step)
-        case .saveFile:
-            SaveFileStepConfigEditor(step: $step)
-        case .conditional:
-            ConditionalStepConfigEditor(step: $step)
-        case .transform:
-            TransformStepConfigEditor(step: $step)
+    private var methodColor: Color {
+        switch config.method {
+        case .get: return .blue
+        case .post: return .green
+        case .put, .patch: return .orange
+        case .delete: return .red
         }
+    }
+}
 
-        // Output key (common to all steps)
-        Divider()
+struct NotificationStepReadView: View {
+    let config: NotificationStepConfig
 
-        VStack(alignment: .leading, spacing: 6) {
-            Text("OUTPUT KEY")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .tracking(0.5)
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: macOS icon + Title
+            HStack(spacing: Spacing.xxs) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.warning)
+
+                Text(config.title)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Body preview
+            Text(config.body)
+                .font(.monoXSmall)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+
+            // Row 3: Options badges
+            HStack(spacing: Spacing.sm) {
+                // Sound indicator
+                HStack(spacing: 2) {
+                    Image(systemName: config.sound ? "speaker.wave.2.fill" : "speaker.slash")
+                        .font(.system(size: 9))
+                    Text(config.sound ? "Sound" : "Silent")
+                        .font(.monoXSmall)
+                }
+                .foregroundColor(config.sound ? SemanticColor.info : .secondary)
+
+                // Action label if set
+                if let action = config.actionLabel, !action.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "hand.tap")
+                            .font(.system(size: 9))
+                        Text(action)
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.info)
+                }
+
+                Spacer()
+            }
+        }
+    }
+}
+
+struct iOSPushStepReadView: View {
+    let config: iOSPushStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: iOS icon + Title
+            HStack(spacing: Spacing.xxs) {
+                Image(systemName: "iphone.badge.play")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.info)
+
+                Text(config.title)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Body preview
+            Text(config.body)
+                .font(.monoXSmall)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+
+            // Row 3: Options badges
+            HStack(spacing: Spacing.sm) {
+                // Sound indicator
+                HStack(spacing: 2) {
+                    Image(systemName: config.sound ? "speaker.wave.2.fill" : "speaker.slash")
+                        .font(.system(size: 9))
+                    Text(config.sound ? "Sound" : "Silent")
+                        .font(.monoXSmall)
+                }
+                .foregroundColor(config.sound ? SemanticColor.info : .secondary)
+
+                // Include output indicator
+                if config.includeOutput {
+                    HStack(spacing: 2) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 9))
+                        Text("Output")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.success)
+                }
+
+                Spacer()
+            }
+        }
+    }
+}
+
+struct IntentExtractStepReadView: View {
+    let config: IntentExtractStepConfig
+    @ObservedObject private var workflowManager = WorkflowManager.shared
+
+    private func workflowName(for id: UUID?) -> String? {
+        guard let id = id else { return nil }
+        return workflowManager.workflows.first { $0.id == id }?.name
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Method, Confidence, Notify
+            HStack(spacing: Spacing.sm) {
+                // Extraction method badge
+                HStack(spacing: 4) {
+                    Image(systemName: methodIcon)
+                        .font(.system(size: 9))
+                    Text(config.extractionMethod.rawValue.uppercased())
+                        .font(.techLabelSmall)
+                }
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, 3)
+                .background(methodColor.opacity(0.15))
+                .foregroundColor(methodColor)
+                .cornerRadius(CornerRadius.xs)
+
+                // Confidence threshold
+                HStack(spacing: 2) {
+                    Image(systemName: "dial.low")
+                        .font(.system(size: 9))
+                    Text("\(Int(config.confidenceThreshold * 100))%")
+                        .font(.monoXSmall)
+                }
                 .foregroundColor(.secondary)
 
-            TextField("Key name for storing output", text: $step.outputKey)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 10, design: .monospaced))
+                // Notify indicator
+                if config.notifyOnExtraction {
+                    HStack(spacing: 2) {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 9))
+                        Text("Notify")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.info)
+                }
 
-            Text("Use {{" + step.outputKey + "}} in subsequent steps")
-                .font(.system(size: 8, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.7))
+                Spacer()
+            }
+
+            // Row 2: Configured intents list
+            let enabledIntents = config.recognizedIntents.filter { $0.isEnabled }
+            let disabledIntents = config.recognizedIntents.filter { !$0.isEnabled }
+
+            if !enabledIntents.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("INTENTS")
+                        .font(.techLabelSmall)
+                        .tracking(Tracking.tight)
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    // Intent cards
+                    ForEach(enabledIntents) { intent in
+                        IntentReadRow(intent: intent, workflowName: workflowName(for: intent.targetWorkflowId))
+                    }
+
+                    // Show disabled count if any
+                    if !disabledIntents.isEmpty {
+                        Text("\(disabledIntents.count) disabled: \(disabledIntents.map { $0.name }.joined(separator: ", "))")
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .italic()
+                    }
+                }
+            } else {
+                Text("No intents configured")
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .italic()
+            }
+        }
+    }
+
+    private var methodIcon: String {
+        switch config.extractionMethod {
+        case .llm: return "brain"
+        case .keywords: return "textformat.abc"
+        case .hybrid: return "arrow.triangle.merge"
+        }
+    }
+
+    private var methodColor: Color {
+        switch config.extractionMethod {
+        case .llm: return .purple
+        case .keywords: return .green
+        case .hybrid: return .orange
+        }
+    }
+}
+
+/// Compact row showing a single intent's configuration
+struct IntentReadRow: View {
+    let intent: IntentDefinition
+    let workflowName: String?
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            // Intent name
+            Text(intent.name)
+                .font(.monoSmall)
+                .foregroundColor(.primary)
+
+            // Synonyms count
+            if !intent.synonyms.isEmpty {
+                Text("(+\(intent.synonyms.count))")
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary)
+            }
+
+            // Arrow and target workflow
+            if let workflow = workflowName {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 8))
+                    .foregroundColor(.secondary)
+
+                Text(workflow)
+                    .font(.monoXSmall)
+                    .foregroundColor(SemanticColor.info)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 3)
+        .padding(.horizontal, Spacing.xs)
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(CornerRadius.xs)
+    }
+}
+
+struct EmailStepReadView: View {
+    let config: EmailStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Recipients
+            HStack(spacing: Spacing.xxs) {
+                Image(systemName: "envelope.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.info)
+
+                Text(config.to)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+
+                // CC/BCC indicators
+                if config.cc != nil || config.bcc != nil {
+                    Text("•")
+                        .foregroundColor(.secondary)
+
+                    if config.cc != nil {
+                        Text("CC")
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary)
+                    }
+                    if config.bcc != nil {
+                        Text("BCC")
+                            .font(.monoXSmall)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            // Row 2: Subject line
+            Text(config.subject)
+                .font(.monoSmall)
+                .foregroundColor(.primary.opacity(0.9))
+                .lineLimit(1)
+
+            // Row 3: Body preview with HTML indicator
+            HStack(spacing: Spacing.xs) {
+                if config.isHTML {
+                    Text("HTML")
+                        .font(.techLabelSmall)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(SemanticColor.processing.opacity(0.2))
+                        .foregroundColor(SemanticColor.processing)
+                        .cornerRadius(CornerRadius.xs)
+                }
+
+                Text(config.body)
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+struct AppleNotesStepReadView: View {
+    let config: AppleNotesStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Notes icon + folder + title
+            HStack(spacing: Spacing.xxs) {
+                Image(systemName: "note.text")
+                    .font(.system(size: 10))
+                    .foregroundColor(.yellow)
+
+                if let folder = config.folderName, !folder.isEmpty {
+                    Text(folder)
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+
+                    Text("/")
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+
+                Text(config.title)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Body preview
+            Text(config.body)
+                .font(.monoXSmall)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+
+            // Row 3: Options
+            HStack(spacing: Spacing.sm) {
+                if config.attachTranscript {
+                    HStack(spacing: 2) {
+                        Image(systemName: "text.quote")
+                            .font(.system(size: 9))
+                        Text("Attach Transcript")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.info)
+                }
+
+                Spacer()
+            }
+        }
+    }
+}
+
+struct AppleRemindersStepReadView: View {
+    let config: AppleRemindersStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Reminders icon + list + title
+            HStack(spacing: Spacing.xxs) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange)
+
+                if let list = config.listName, !list.isEmpty {
+                    Text(list)
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+
+                    Text("/")
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+
+                Text(config.title)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Metadata badges
+            HStack(spacing: Spacing.sm) {
+                // Due date
+                if let due = config.dueDate, !due.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 9))
+                        Text(due)
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.warning)
+                }
+
+                // Priority
+                if config.priority != .none {
+                    HStack(spacing: 2) {
+                        Image(systemName: priorityIcon)
+                            .font(.system(size: 9))
+                        Text(config.priority.displayName)
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(priorityColor)
+                }
+
+                Spacer()
+            }
+
+            // Row 3: Notes preview if set
+            if let notes = config.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private var priorityIcon: String {
+        switch config.priority {
+        case .high: return "exclamationmark.3"
+        case .medium: return "exclamationmark.2"
+        case .low: return "exclamationmark"
+        case .none: return "minus"
+        }
+    }
+
+    private var priorityColor: Color {
+        switch config.priority {
+        case .high: return SemanticColor.error
+        case .medium: return SemanticColor.warning
+        case .low: return SemanticColor.info
+        case .none: return .secondary
+        }
+    }
+}
+
+struct AppleCalendarStepReadView: View {
+    let config: AppleCalendarStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Calendar icon + calendar name + title
+            HStack(spacing: Spacing.xxs) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 10))
+                    .foregroundColor(.red)
+
+                if let calendar = config.calendarName, !calendar.isEmpty {
+                    Text(calendar)
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+
+                    Text("/")
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+
+                Text(config.title)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Metadata badges
+            HStack(spacing: Spacing.sm) {
+                // Duration or All Day
+                if config.isAllDay {
+                    HStack(spacing: 2) {
+                        Image(systemName: "sun.max")
+                            .font(.system(size: 9))
+                        Text("All Day")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.warning)
+                } else {
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 9))
+                        Text("\(config.duration / 60) min")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                // Start date if set
+                if let start = config.startDate, !start.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.system(size: 9))
+                        Text(start)
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.info)
+                }
+
+                // Location
+                if let loc = config.location, !loc.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "mappin")
+                            .font(.system(size: 9))
+                        Text(loc)
+                            .font(.monoXSmall)
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            // Row 3: Notes preview if set
+            if let notes = config.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+struct ClipboardStepReadView: View {
+    let config: ClipboardStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Icon + content preview
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.success)
+
+                Text("Copy to Clipboard")
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+
+                Spacer()
+            }
+
+            // Row 2: Content template in code box
+            Text(config.content)
+                .font(.monoXSmall)
+                .foregroundColor(.primary.opacity(0.9))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.xs)
+                .background(Color(NSColor.textBackgroundColor))
+                .cornerRadius(CornerRadius.xs)
+        }
+    }
+}
+
+struct SaveFileStepReadView: View {
+    let config: SaveFileStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Icon + filename
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: config.appendIfExists ? "doc.badge.arrow.up" : "doc.badge.plus")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.success)
+
+                Text(config.filename)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+
+                Spacer()
+            }
+
+            // Row 2: Metadata
+            HStack(spacing: Spacing.sm) {
+                // Directory
+                if let dir = config.directory, !dir.isEmpty {
+                    HStack(spacing: 2) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 9))
+                        Text(dir.components(separatedBy: "/").last ?? dir)
+                            .font(.monoXSmall)
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.secondary)
+                } else {
+                    HStack(spacing: 2) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 9))
+                        Text("Default")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                // Append mode
+                if config.appendIfExists {
+                    HStack(spacing: 2) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 9))
+                        Text("Append")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.info)
+                }
+
+                Spacer()
+            }
+
+            // Row 3: Content template preview
+            if !config.content.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("CONTENT")
+                        .font(.techLabelSmall)
+                        .tracking(Tracking.tight)
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    Text(config.content)
+                        .font(.monoXSmall)
+                        .foregroundColor(.primary.opacity(0.9))
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.xs)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(CornerRadius.xs)
+                }
+            }
+        }
+    }
+}
+
+struct ConditionalStepReadView: View {
+    let config: ConditionalStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Icon + condition
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.warning)
+
+                Text("IF")
+                    .font(.techLabelSmall)
+                    .foregroundColor(SemanticColor.warning)
+
+                Text(config.condition)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Branch info
+            HStack(spacing: Spacing.sm) {
+                HStack(spacing: 2) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 9))
+                    Text("\(config.thenSteps.count) then")
+                        .font(.monoXSmall)
+                }
+                .foregroundColor(SemanticColor.success)
+
+                HStack(spacing: 2) {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 9))
+                    Text("\(config.elseSteps.count) else")
+                        .font(.monoXSmall)
+                }
+                .foregroundColor(config.elseSteps.isEmpty ? .secondary : SemanticColor.error)
+
+                Spacer()
+            }
+        }
+    }
+}
+
+struct TransformStepReadView: View {
+    let config: TransformStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Operation badge + description
+            HStack(spacing: Spacing.xs) {
+                Text(config.operation.rawValue.uppercased())
+                    .font(.techLabelSmall)
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, 2)
+                    .background(SemanticColor.processing.opacity(0.2))
+                    .foregroundColor(SemanticColor.processing)
+                    .cornerRadius(CornerRadius.xs)
+
+                Text(config.operation.description)
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Row 2: Parameters if any
+            if !config.parameters.isEmpty {
+                HStack(spacing: Spacing.sm) {
+                    ForEach(Array(config.parameters.keys.sorted().prefix(3)), id: \.self) { key in
+                        if let value = config.parameters[key], !value.isEmpty {
+                            HStack(spacing: 2) {
+                                Text(key)
+                                    .font(.techLabelSmall)
+                                    .foregroundColor(.secondary)
+                                Text(value)
+                                    .font(.monoXSmall)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+}
+
+struct TriggerStepReadView: View {
+    let config: TriggerStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Phrases
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "waveform.badge.mic")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.info)
+
+                ForEach(config.phrases.prefix(3), id: \.self) { phrase in
+                    Text("\"\(phrase)\"")
+                        .font(.monoSmall)
+                        .foregroundColor(.primary)
+                }
+
+                if config.phrases.count > 3 {
+                    Text("+\(config.phrases.count - 3)")
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            // Row 2: Search options
+            HStack(spacing: Spacing.sm) {
+                // Search location
+                HStack(spacing: 2) {
+                    Image(systemName: locationIcon)
+                        .font(.system(size: 9))
+                    Text(config.searchLocation.rawValue)
+                        .font(.monoXSmall)
+                }
+                .foregroundColor(.secondary)
+
+                // Case sensitive
+                if config.caseSensitive {
+                    HStack(spacing: 2) {
+                        Image(systemName: "textformat")
+                            .font(.system(size: 9))
+                        Text("Case sensitive")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                // Context window
+                HStack(spacing: 2) {
+                    Image(systemName: "text.viewfinder")
+                        .font(.system(size: 9))
+                    Text("\(config.contextWindowSize) words")
+                        .font(.monoXSmall)
+                }
+                .foregroundColor(.secondary)
+
+                // Gate indicator
+                if config.stopIfNoMatch {
+                    HStack(spacing: 2) {
+                        Image(systemName: "hand.raised")
+                            .font(.system(size: 9))
+                        Text("Gate")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.warning)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private var locationIcon: String {
+        switch config.searchLocation {
+        case .start: return "arrow.backward.to.line"
+        case .end: return "arrow.forward.to.line"
+        case .anywhere: return "arrow.left.and.right"
+        }
+    }
+}
+
+struct ExecuteWorkflowsStepReadView: View {
+    let config: ExecuteWorkflowsStepConfig
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 10))
+                .foregroundColor(SemanticColor.info)
+
+            // Show parallel vs sequential
+            Text(config.parallel ? "PARALLEL" : "SEQUENTIAL")
+                .font(.techLabelSmall)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, 2)
+                .background(SemanticColor.info.opacity(0.2))
+                .foregroundColor(SemanticColor.info)
+                .cornerRadius(CornerRadius.xs)
+
+            if config.notifyOnComplete {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 9))
+                    .foregroundColor(SemanticColor.info)
+            }
         }
     }
 }
@@ -2808,6 +4315,814 @@ struct TransformStepConfigEditor: View {
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.secondary)
             }
+        }
+    }
+}
+
+// MARK: - Trigger Step Config Editor
+
+struct TriggerStepConfigEditor: View {
+    @Binding var step: WorkflowStep
+    @State private var newPhrase = ""
+
+    private var config: TriggerStepConfig {
+        if case .trigger(let c) = step.config { return c }
+        return TriggerStepConfig()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Trigger phrases
+            VStack(alignment: .leading, spacing: 6) {
+                Text("TRIGGER PHRASES")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                ForEach(config.phrases, id: \.self) { phrase in
+                    HStack {
+                        Text(phrase)
+                            .font(.system(size: 10, design: .monospaced))
+                        Spacer()
+                        Button(action: {
+                            var newConfig = config
+                            newConfig.phrases.removeAll { $0 == phrase }
+                            step.config = .trigger(newConfig)
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(4)
+                }
+
+                HStack {
+                    TextField("Add phrase...", text: $newPhrase)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 10, design: .monospaced))
+                    Button(action: {
+                        guard !newPhrase.isEmpty else { return }
+                        var newConfig = config
+                        newConfig.phrases.append(newPhrase.lowercased())
+                        step.config = .trigger(newConfig)
+                        newPhrase = ""
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newPhrase.isEmpty)
+                }
+            }
+
+            Divider()
+
+            // Search location
+            VStack(alignment: .leading, spacing: 6) {
+                Text("SEARCH LOCATION")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                Picker("", selection: Binding(
+                    get: { config.searchLocation },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.searchLocation = newValue
+                        step.config = .trigger(newConfig)
+                    }
+                )) {
+                    ForEach(TriggerStepConfig.SearchLocation.allCases, id: \.self) { loc in
+                        Text(loc.rawValue.capitalized).tag(loc)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Text(searchLocationDescription)
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
+            // Options
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("CONTEXT WINDOW")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundColor(.secondary)
+
+                    HStack {
+                        TextField("", value: Binding(
+                            get: { config.contextWindowSize },
+                            set: { newValue in
+                                var newConfig = config
+                                newConfig.contextWindowSize = newValue
+                                step.config = .trigger(newConfig)
+                            }
+                        ), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 60)
+                        .font(.system(size: 10, design: .monospaced))
+
+                        Text("words")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Toggle(isOn: Binding(
+                    get: { config.stopIfNoMatch },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.stopIfNoMatch = newValue
+                        step.config = .trigger(newConfig)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("STOP IF NO MATCH")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(.secondary)
+                        Text("Gates workflow execution")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
+                }
+                .toggleStyle(.switch)
+            }
+
+            Toggle(isOn: Binding(
+                get: { config.caseSensitive },
+                set: { newValue in
+                    var newConfig = config
+                    newConfig.caseSensitive = newValue
+                    step.config = .trigger(newConfig)
+                }
+            )) {
+                Text("Case sensitive matching")
+                    .font(.system(size: 9, design: .monospaced))
+            }
+            .toggleStyle(.switch)
+        }
+    }
+
+    private var searchLocationDescription: String {
+        switch config.searchLocation {
+        case .end: return "Search from end of transcript (best for voice commands)"
+        case .anywhere: return "Search entire transcript"
+        case .start: return "Search beginning of transcript only"
+        }
+    }
+}
+
+// MARK: - Intent Extract Step Config Editor
+
+struct IntentExtractStepConfigEditor: View {
+    @Binding var step: WorkflowStep
+    @State private var expandedIntentId: UUID?
+    @State private var showPromptEditor = false
+
+    private var config: IntentExtractStepConfig {
+        if case .intentExtract(let c) = step.config { return c }
+        return IntentExtractStepConfig()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Extraction method
+            VStack(alignment: .leading, spacing: 6) {
+                Text("EXTRACTION METHOD")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                Picker("", selection: Binding(
+                    get: { config.extractionMethod },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.extractionMethod = newValue
+                        step.config = .intentExtract(newConfig)
+                    }
+                )) {
+                    ForEach(IntentExtractStepConfig.ExtractionMethod.allCases, id: \.self) { method in
+                        Text(method.rawValue.uppercased()).tag(method)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Text(extractionMethodDescription)
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
+            // Input key
+            VStack(alignment: .leading, spacing: 6) {
+                Text("INPUT KEY")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                TextField("", text: Binding(
+                    get: { config.inputKey },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.inputKey = newValue
+                        step.config = .intentExtract(newConfig)
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 10, design: .monospaced))
+
+                Text("Use {{TRANSCRIPT}} for memo transcript, {{PREVIOUS_OUTPUT}} for previous step, or {{key_name}} for specific output")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+
+            // LLM Settings (only show when LLM or Hybrid is selected)
+            if config.extractionMethod != .keywords {
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("LLM SETTINGS")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Button(action: { showPromptEditor.toggle() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: showPromptEditor ? "chevron.up" : "chevron.down")
+                                Text(showPromptEditor ? "Hide Prompt" : "Edit Prompt")
+                            }
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.accentColor)
+                    }
+
+                    // Confidence threshold slider
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Confidence Threshold:")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            Text(String(format: "%.0f%%", config.confidenceThreshold * 100))
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(.accentColor)
+                        }
+
+                        Slider(value: Binding(
+                            get: { config.confidenceThreshold },
+                            set: { newValue in
+                                var newConfig = config
+                                newConfig.confidenceThreshold = newValue
+                                step.config = .intentExtract(newConfig)
+                            }
+                        ), in: 0...1, step: 0.05)
+
+                        Text("Intents below this confidence will be filtered out")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
+
+                    // Expandable prompt editor
+                    if showPromptEditor {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("LLM Prompt Template")
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+
+                                Spacer()
+
+                                Button(action: resetPromptToDefault) {
+                                    Text("Reset to Default")
+                                        .font(.system(size: 8, design: .monospaced))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.orange)
+                            }
+
+                            TextEditor(text: Binding(
+                                get: { config.llmPromptTemplate },
+                                set: { newValue in
+                                    var newConfig = config
+                                    newConfig.llmPromptTemplate = newValue
+                                    step.config = .intentExtract(newConfig)
+                                }
+                            ))
+                            .font(.system(size: 10, design: .monospaced))
+                            .frame(minHeight: 150, maxHeight: 250)
+                            .padding(6)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            )
+
+                            // Available variables
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Available Variables:")
+                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.secondary)
+
+                                FlowLayout(spacing: 4) {
+                                    ForEach(["{{INPUT}}", "{{TRANSCRIPT}}", "{{INTENT_NAMES}}"], id: \.self) { variable in
+                                        Text(variable)
+                                            .font(.system(size: 8, design: .monospaced))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(Color.purple.opacity(0.15))
+                                            .cornerRadius(3)
+                                    }
+                                }
+
+                                Text("The LLM should return: ACTION: [name] | PARAM: [value] | CONFIDENCE: [0.0-1.0]")
+                                    .font(.system(size: 8, design: .monospaced))
+                                    .foregroundColor(.secondary.opacity(0.7))
+                            }
+                        }
+                        .padding(10)
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+
+            Divider()
+
+            // Notification toggle
+            VStack(alignment: .leading, spacing: 6) {
+                Text("NOTIFICATIONS")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                Toggle(isOn: Binding(
+                    get: { config.notifyOnExtraction },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.notifyOnExtraction = newValue
+                        step.config = .intentExtract(newConfig)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notify on Extraction")
+                            .font(.system(size: 9, design: .monospaced))
+                        Text("Show notification with detected intents and confidence")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.talkieInfo)
+            }
+
+            Divider()
+
+            // Recognized intents
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("RECOGNIZED INTENTS")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Button(action: addNewIntent) {
+                        HStack(spacing: 2) {
+                            Image(systemName: "plus")
+                            Text("Add")
+                        }
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.accentColor)
+                }
+
+                Text("Map intents to workflows. When an intent is detected, its target workflow will execute.")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+
+                ForEach(config.recognizedIntents) { intent in
+                    IntentDefinitionRow(
+                        intent: intent,
+                        isExpanded: expandedIntentId == intent.id,
+                        onToggleExpand: { expandedIntentId = expandedIntentId == intent.id ? nil : intent.id },
+                        onUpdate: { updated in updateIntent(updated) },
+                        onDelete: { deleteIntent(intent) }
+                    )
+                }
+            }
+        }
+    }
+
+    private var extractionMethodDescription: String {
+        switch config.extractionMethod {
+        case .llm: return "Use LLM for intelligent intent detection (requires API)"
+        case .keywords: return "Simple keyword matching (fast, works offline)"
+        case .hybrid: return "Try LLM first, fall back to keywords if unavailable"
+        }
+    }
+
+    private func resetPromptToDefault() {
+        var newConfig = config
+        newConfig.llmPromptTemplate = IntentExtractStepConfig.defaultPromptTemplate
+        step.config = .intentExtract(newConfig)
+    }
+
+    private func addNewIntent() {
+        var newConfig = config
+        let newIntent = IntentDefinition(
+            id: UUID(),
+            name: "new_intent",
+            synonyms: [],
+            targetWorkflowId: nil,
+            isEnabled: true
+        )
+        newConfig.recognizedIntents.append(newIntent)
+        step.config = .intentExtract(newConfig)
+        expandedIntentId = newIntent.id
+    }
+
+    private func updateIntent(_ intent: IntentDefinition) {
+        var newConfig = config
+        if let index = newConfig.recognizedIntents.firstIndex(where: { $0.id == intent.id }) {
+            newConfig.recognizedIntents[index] = intent
+            step.config = .intentExtract(newConfig)
+        }
+    }
+
+    private func deleteIntent(_ intent: IntentDefinition) {
+        var newConfig = config
+        newConfig.recognizedIntents.removeAll { $0.id == intent.id }
+        step.config = .intentExtract(newConfig)
+    }
+}
+
+struct IntentDefinitionRow: View {
+    let intent: IntentDefinition
+    let isExpanded: Bool
+    let onToggleExpand: () -> Void
+    let onUpdate: (IntentDefinition) -> Void
+    let onDelete: () -> Void
+
+    @State private var newSynonym = ""
+    @ObservedObject private var workflowManager = WorkflowManager.shared
+
+    /// Available workflows for mapping (excludes Hey Talkie to prevent recursion)
+    private var availableWorkflows: [WorkflowDefinition] {
+        workflowManager.workflows.filter { $0.id != WorkflowDefinition.heyTalkieWorkflowId }
+    }
+
+    /// Get workflow name for display
+    private func workflowName(for id: UUID?) -> String {
+        guard let id = id else { return "None (use name matching)" }
+        return availableWorkflows.first { $0.id == id }?.name ?? "Unknown"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Toggle("", isOn: Binding(
+                    get: { intent.isEnabled },
+                    set: { newValue in
+                        var updated = intent
+                        updated.isEnabled = newValue
+                        onUpdate(updated)
+                    }
+                ))
+                .toggleStyle(.talkieSuccess)
+                .labelsHidden()
+                .scaleEffect(0.7)
+
+                Text(intent.name)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(intent.isEnabled ? .primary : .secondary)
+
+                if !intent.synonyms.isEmpty {
+                    Text("(\(intent.synonyms.count) synonyms)")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                // Show mapped workflow indicator
+                if let workflowId = intent.targetWorkflowId,
+                   let workflow = availableWorkflows.first(where: { $0.id == workflowId }) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 7))
+                        Image(systemName: workflow.icon)
+                            .font(.system(size: 8))
+                        Text(workflow.name)
+                            .font(.system(size: 8, design: .monospaced))
+                    }
+                    .foregroundColor(workflow.color.color)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(workflow.color.color.opacity(0.15))
+                    .cornerRadius(4)
+                }
+
+                Spacer()
+
+                Button(action: onToggleExpand) {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.secondary)
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9))
+                        .foregroundColor(.red.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Intent name
+                    HStack {
+                        Text("Name:")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        TextField("", text: Binding(
+                            get: { intent.name },
+                            set: { newValue in
+                                var updated = intent
+                                updated.name = newValue.lowercased().replacingOccurrences(of: " ", with: "_")
+                                onUpdate(updated)
+                            }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 9, design: .monospaced))
+                    }
+
+                    // Synonyms
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Synonyms:")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary)
+
+                        FlowLayout(spacing: 4) {
+                            ForEach(intent.synonyms, id: \.self) { synonym in
+                                HStack(spacing: 2) {
+                                    Text(synonym)
+                                        .font(.system(size: 8, design: .monospaced))
+                                    Button(action: {
+                                        var updated = intent
+                                        updated.synonyms.removeAll { $0 == synonym }
+                                        onUpdate(updated)
+                                    }) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 6))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.cyan.opacity(0.15))
+                                .cornerRadius(3)
+                            }
+                        }
+
+                        HStack {
+                            TextField("Add synonym...", text: $newSynonym)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 9, design: .monospaced))
+                            Button(action: {
+                                guard !newSynonym.isEmpty else { return }
+                                var updated = intent
+                                updated.synonyms.append(newSynonym.lowercased())
+                                onUpdate(updated)
+                                newSynonym = ""
+                            }) {
+                                Text("Add")
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(newSynonym.isEmpty)
+                        }
+                    }
+
+                    // Target workflow picker
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Target Workflow:")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary)
+
+                        Picker("", selection: Binding(
+                            get: { intent.targetWorkflowId },
+                            set: { newValue in
+                                var updated = intent
+                                updated.targetWorkflowId = newValue
+                                onUpdate(updated)
+                            }
+                        )) {
+                            Text("None (use name matching)")
+                                .tag(nil as UUID?)
+
+                            Divider()
+
+                            ForEach(availableWorkflows) { workflow in
+                                HStack(spacing: 4) {
+                                    Image(systemName: workflow.icon)
+                                    Text(workflow.name)
+                                }
+                                .tag(workflow.id as UUID?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+
+                        Text("When this intent is detected, the selected workflow will execute")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
+                }
+                .padding(.leading, 24)
+            }
+        }
+        .padding(8)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(6)
+    }
+}
+
+// Simple flow layout for tags
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = computeLayout(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = computeLayout(proposal: proposal, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+
+    private func computeLayout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        var positions: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        let maxWidth = proposal.width ?? .infinity
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > maxWidth && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            positions.append(CGPoint(x: currentX, y: currentY))
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+
+        return (CGSize(width: maxWidth, height: currentY + lineHeight), positions)
+    }
+}
+
+// MARK: - Execute Workflows Step Config Editor
+
+struct ExecuteWorkflowsStepConfigEditor: View {
+    @Binding var step: WorkflowStep
+
+    private var config: ExecuteWorkflowsStepConfig {
+        if case .executeWorkflows(let c) = step.config { return c }
+        return ExecuteWorkflowsStepConfig()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Intents key
+            VStack(alignment: .leading, spacing: 6) {
+                Text("INTENTS INPUT KEY")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                TextField("", text: Binding(
+                    get: { config.intentsKey },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.intentsKey = newValue
+                        step.config = .executeWorkflows(newConfig)
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 10, design: .monospaced))
+
+                Text("Key containing the intents array from previous step")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+
+            Divider()
+
+            // Execution options
+            VStack(alignment: .leading, spacing: 8) {
+                Text("EXECUTION OPTIONS")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 24) {
+                    Toggle(isOn: Binding(
+                        get: { config.parallel },
+                        set: { newValue in
+                            var newConfig = config
+                            newConfig.parallel = newValue
+                            step.config = .executeWorkflows(newConfig)
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Parallel Execution")
+                                .font(.system(size: 9, design: .monospaced))
+                            Text("Run workflows concurrently")
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+
+                    Toggle(isOn: Binding(
+                        get: { config.stopOnError },
+                        set: { newValue in
+                            var newConfig = config
+                            newConfig.stopOnError = newValue
+                            step.config = .executeWorkflows(newConfig)
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Stop on Error")
+                                .font(.system(size: 9, design: .monospaced))
+                            Text("Halt if any workflow fails")
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                }
+
+                Toggle(isOn: Binding(
+                    get: { config.notifyOnComplete },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.notifyOnComplete = newValue
+                        step.config = .executeWorkflows(newConfig)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notify on Completion")
+                            .font(.system(size: 9, design: .monospaced))
+                        Text("Show notification with execution summary")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+            }
+
+            // Info box
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Workflow Routing")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    Text("This step reads intents from the previous step and executes the workflow mapped to each intent's targetWorkflowId.")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(10)
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(6)
         }
     }
 }

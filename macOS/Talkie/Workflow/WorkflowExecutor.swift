@@ -9,6 +9,9 @@ import Foundation
 import CoreData
 import AppKit
 import UserNotifications
+import os
+
+private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "WorkflowExecutor")
 
 // MARK: - Workflow Execution Context
 
@@ -112,14 +115,10 @@ class WorkflowExecutor: ObservableObject {
            let modelId = modelId {
             provider = selectedProvider
             model = modelId
-        } else if let geminiProvider = registry.provider(for: "gemini") {
-            // Default to Gemini Flash if available
-            provider = geminiProvider
-            model = "gemini-1.5-flash-latest"
-        } else if let firstProvider = registry.providers.first {
-            // Fallback to first available provider
-            provider = firstProvider
-            model = "gemini-1.5-flash-latest"
+        } else if let resolved = await registry.resolveProviderAndModel() {
+            // Use selected or first available provider with its default model
+            provider = resolved.provider
+            model = resolved.modelId
         } else {
             throw LLMError.providerNotAvailable("No LLM providers available. Please configure an API key in Settings.")
         }
@@ -175,6 +174,16 @@ class WorkflowExecutor: ObservableObject {
             throw WorkflowError.noTranscript
         }
 
+        // Prevent system from throttling during workflow execution
+        // This is lightweight - just tells macOS "we're doing something important"
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiated,
+            reason: "Executing workflow: \(workflow.name)"
+        )
+        defer {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
+
         var workflowContext = WorkflowContext(
             transcript: transcript,
             title: memo.title ?? "Untitled",
@@ -194,9 +203,14 @@ class WorkflowExecutor: ObservableObject {
         // Log workflow start to console
         await SystemEventManager.shared.log(.workflow, "Starting: \(workflow.name)", detail: "Memo: \(memo.title ?? "Untitled")")
 
+        logger.info("🔄 Starting workflow loop with \(workflow.steps.count) steps")
+
         for (index, step) in workflow.steps.enumerated() {
+            logger.info("🔄 Processing step \(index + 1)/\(workflow.steps.count): \(step.type.rawValue)")
+
             guard step.isEnabled else {
                 await SystemEventManager.shared.log(.workflow, "Skipping step \(index + 1) (disabled)", detail: workflow.name)
+                logger.info("⏭️ Step \(index + 1) is disabled, skipping")
                 continue
             }
 
@@ -206,6 +220,7 @@ class WorkflowExecutor: ObservableObject {
                 if !evaluateCondition(resolvedCondition) {
                     if condition.skipOnFail {
                         await SystemEventManager.shared.log(.workflow, "Skipping step \(index + 1) (condition)", detail: workflow.name)
+                        logger.info("⏭️ Step \(index + 1) condition not met, skipping")
                         continue
                     }
                 }
@@ -236,8 +251,22 @@ class WorkflowExecutor: ObservableObject {
                 stepInput = workflowContext.transcript
             }
 
-            let output = try await executeStep(step, context: &workflowContext, memo: memo, coreDataContext: context)
+            logger.info("🔄 Executing step \(index + 1)...")
+            let output: String
+            do {
+                output = try await executeStep(step, context: &workflowContext, memo: memo, coreDataContext: context)
+                logger.info("✅ Step \(index + 1) completed, output length: \(output.count) chars")
+            } catch is TriggerNotMatchedError {
+                // Trigger step didn't match - stop workflow gracefully (not an error)
+                logger.info("🛑 Trigger not matched at step \(index + 1), stopping workflow '\(workflow.name)' gracefully")
+                await SystemEventManager.shared.log(.workflow, "Trigger not matched, stopping", detail: workflow.name)
+                break
+            } catch {
+                logger.error("❌ Step \(index + 1) failed with error: \(error.localizedDescription)")
+                throw error
+            }
             workflowContext.outputs[step.outputKey] = output
+            logger.info("💾 Saved output to key '\(step.outputKey)'")
 
             // Record step execution
             stepExecutions.append(StepExecution(
@@ -250,7 +279,10 @@ class WorkflowExecutor: ObservableObject {
             ))
 
             await SystemEventManager.shared.log(.workflow, "Step \(index + 1) completed", detail: workflow.name)
+            logger.info("➡️ Moving to next step...")
         }
+
+        logger.info("🏁 Workflow loop finished, executed \(stepExecutions.count) steps")
 
         await SystemEventManager.shared.log(.workflow, "Completed: \(workflow.name)", detail: "\(workflow.steps.count) steps")
 
@@ -363,6 +395,15 @@ class WorkflowExecutor: ObservableObject {
 
         case .transform(let config):
             return try executeTransformStep(config, context: context)
+
+        case .trigger(let config):
+            return try executeTriggerStep(config, context: context)
+
+        case .intentExtract(let config):
+            return try await executeIntentExtractStep(config, context: context)
+
+        case .executeWorkflows(let config):
+            return try await executeWorkflowsStep(config, context: context, memo: memo, coreDataContext: coreDataContext)
         }
     }
 
@@ -1064,6 +1105,482 @@ class WorkflowExecutor: ObservableObject {
 
         // Default: non-empty string is truthy
         return !trimmed.isEmpty
+    }
+
+    // MARK: - Trigger Step Execution
+
+    /// Thrown when trigger step doesn't match and stopIfNoMatch is true
+    struct TriggerNotMatchedError: Error {}
+
+    private func executeTriggerStep(_ config: TriggerStepConfig, context: WorkflowContext) throws -> String {
+        let transcript = context.transcript
+
+        // Determine search text based on case sensitivity
+        let searchText = config.caseSensitive ? transcript : transcript.lowercased()
+        let searchPhrases = config.caseSensitive ? config.phrases : config.phrases.map { $0.lowercased() }
+
+        // Find the first matching phrase
+        var matchedPhrase: String? = nil
+        var matchRange: Range<String.Index>? = nil
+
+        for phrase in searchPhrases {
+            let options: String.CompareOptions
+            switch config.searchLocation {
+            case .end:
+                options = .backwards
+            case .start:
+                options = []
+            case .anywhere:
+                options = []
+            }
+
+            if let range = searchText.range(of: phrase, options: options) {
+                matchedPhrase = phrase
+                matchRange = range
+                break
+            }
+        }
+
+        guard let phrase = matchedPhrase, let range = matchRange else {
+            // No match found
+            if config.stopIfNoMatch {
+                throw TriggerNotMatchedError()
+            }
+            return """
+            {"matched": false}
+            """
+        }
+
+        // Extract context window around the match
+        let position = searchText.distance(from: searchText.startIndex, to: range.lowerBound)
+        let contextWindow = extractContextWindow(from: transcript, triggerPosition: position, windowSize: config.contextWindowSize)
+
+        // Return JSON with match info
+        let result: [String: Any] = [
+            "matched": true,
+            "phrase": phrase,
+            "position": position,
+            "context": contextWindow
+        ]
+
+        if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            return jsonString
+        }
+
+        return """
+        {"matched": true, "phrase": "\(phrase)", "context": "\(contextWindow.prefix(200))..."}
+        """
+    }
+
+    /// Extract context window around the trigger position
+    private func extractContextWindow(from transcript: String, triggerPosition: Int, windowSize: Int) -> String {
+        let words = transcript.split(separator: " ", omittingEmptySubsequences: true)
+
+        // Find which word index contains the trigger position
+        var charCount = 0
+        var triggerWordIndex = 0
+
+        for (index, word) in words.enumerated() {
+            charCount += word.count + 1 // +1 for space
+            if charCount > triggerPosition {
+                triggerWordIndex = index
+                break
+            }
+        }
+
+        // Get words before and after (bias toward after for commands)
+        let startIndex = max(0, triggerWordIndex - 50)
+        let endIndex = min(words.count, triggerWordIndex + windowSize)
+
+        let windowWords = words[startIndex..<endIndex]
+        return windowWords.joined(separator: " ")
+    }
+
+    // MARK: - Intent Extract Step Execution
+
+    private func executeIntentExtractStep(_ config: IntentExtractStepConfig, context: WorkflowContext) async throws -> String {
+        // Get input from previous step or specified key
+        let input = context.resolve(config.inputKey)
+
+        // Parse context if it's JSON from trigger step
+        var textToAnalyze = input
+        if let data = input.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let contextText = json["context"] as? String {
+            textToAnalyze = contextText
+        }
+
+        var extractedIntents: [ExtractedIntent] = []
+
+        switch config.extractionMethod {
+        case .keywords:
+            extractedIntents = extractIntentsWithKeywords(from: textToAnalyze, recognizedIntents: config.recognizedIntents)
+
+        case .llm:
+            extractedIntents = await extractIntentsWithLLM(from: textToAnalyze, config: config)
+
+        case .hybrid:
+            // Try LLM first, fall back to keywords
+            extractedIntents = await extractIntentsWithLLM(from: textToAnalyze, config: config)
+            if extractedIntents.isEmpty {
+                extractedIntents = extractIntentsWithKeywords(from: textToAnalyze, recognizedIntents: config.recognizedIntents)
+            }
+        }
+
+        // Filter by confidence threshold
+        let threshold = config.confidenceThreshold
+        extractedIntents = extractedIntents.filter { ($0.confidence ?? 1.0) >= threshold }
+
+        // Send iOS push notification if configured
+        if config.notifyOnExtraction {
+            await sendIntentExtractionPushNotification(intents: extractedIntents, context: context)
+        }
+
+        // Encode as JSON
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        if let jsonData = try? encoder.encode(extractedIntents),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            return jsonString
+        }
+
+        return "[]"
+    }
+
+    /// Send iOS push notification with extracted intents via CloudKit
+    private func sendIntentExtractionPushNotification(intents: [ExtractedIntent], context: WorkflowContext) async {
+        let title: String
+        let body: String
+
+        if intents.isEmpty {
+            title = "Intent Extraction"
+            body = "No intents detected"
+        } else {
+            let intentSummary = intents.map { intent in
+                let confidence = intent.confidence.map { String(format: "%.0f%%", $0 * 100) } ?? ""
+                let param = intent.parameter.map { " (\($0))" } ?? ""
+                return "• \(intent.action)\(param) \(confidence)"
+            }.joined(separator: "\n")
+
+            title = "Extracted \(intents.count) Intent\(intents.count == 1 ? "" : "s")"
+            body = intentSummary
+        }
+
+        // Create PushNotification record via Core Data → CloudKit → iOS
+        let coreDataContext = PersistenceController.shared.container.viewContext
+
+        await coreDataContext.perform {
+            let pushNotification = PushNotification(context: coreDataContext)
+            pushNotification.id = UUID()
+            pushNotification.title = title
+            pushNotification.body = body
+            pushNotification.createdAt = Date()
+            pushNotification.soundEnabled = true
+            pushNotification.isRead = false
+            pushNotification.workflowName = "Extract Intents"
+
+            // Link to memo if available
+            if let memoId = UUID(uuidString: context.outputs["MEMO_ID"] ?? "") {
+                pushNotification.memoId = memoId
+            }
+
+            do {
+                try coreDataContext.save()
+                logger.info("📱 Sent iOS push for intent extraction: \(intents.count) intents")
+            } catch {
+                logger.warning("⚠️ Failed to save push notification: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Extract intents using keyword matching
+    private func extractIntentsWithKeywords(from text: String, recognizedIntents: [IntentDefinition]) -> [ExtractedIntent] {
+        let lowercased = text.lowercased()
+        var results: [ExtractedIntent] = []
+
+        for intent in recognizedIntents where intent.isEnabled {
+            // Check main name and synonyms
+            let allKeywords = [intent.name] + intent.synonyms
+            for keyword in allKeywords {
+                if lowercased.contains(keyword.lowercased()) {
+                    // Avoid duplicates
+                    if !results.contains(where: { $0.action == intent.name }) {
+                        let parameter = extractParameterForIntent(intent.name, from: lowercased)
+                        results.append(ExtractedIntent(
+                            action: intent.name,
+                            parameter: parameter,
+                            confidence: 0.7,
+                            workflowId: intent.targetWorkflowId
+                        ))
+                    }
+                    break
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Extract time/parameter for certain intent types
+    private func extractParameterForIntent(_ intent: String, from text: String) -> String? {
+        guard intent == "remind" || intent == "calendar" else { return nil }
+
+        // Simple time extraction patterns
+        let patterns = [
+            "tomorrow", "next week", "next monday", "next tuesday", "next wednesday",
+            "next thursday", "next friday", "next saturday", "next sunday",
+            "in an hour", "in two hours", "in a day", "in two days", "in three days",
+            "in a week", "this afternoon", "this evening", "tonight"
+        ]
+
+        for pattern in patterns {
+            if text.contains(pattern) {
+                return pattern
+            }
+        }
+
+        // Regex for "in X days/hours/minutes"
+        if let regex = try? NSRegularExpression(pattern: "in (\\d+) (day|hour|minute|week)s?", options: .caseInsensitive),
+           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+           let range = Range(match.range, in: text) {
+            return String(text[range])
+        }
+
+        return nil
+    }
+
+    /// Extract intents using LLM with configurable prompt template
+    private func extractIntentsWithLLM(from text: String, config: IntentExtractStepConfig) async -> [ExtractedIntent] {
+        let recognizedIntents = config.recognizedIntents
+        // Build prompt from template
+        let intentNames = recognizedIntents.filter { $0.isEnabled }.map { $0.name }.joined(separator: ", ")
+        let prompt = config.llmPromptTemplate
+            .replacingOccurrences(of: "{{INPUT}}", with: text)
+            .replacingOccurrences(of: "{{TRANSCRIPT}}", with: text)
+            .replacingOccurrences(of: "{{INTENT_NAMES}}", with: intentNames)
+
+        // Use the registry to resolve provider and model (reads from config)
+        guard let resolved = await registry.resolveProviderAndModel() else {
+            logger.warning("No LLM provider available for intent extraction. Configure an API key in Settings.")
+            return []
+        }
+
+        let provider = resolved.provider
+        let modelId = resolved.modelId
+        logger.info("Intent extraction using \(provider.name) with model \(modelId)")
+
+        do {
+            let response = try await provider.generate(
+                prompt: prompt,
+                model: modelId,
+                options: GenerationOptions(temperature: 0.3, maxTokens: 512)
+            )
+
+            return parseIntentLLMResponse(response, recognizedIntents: recognizedIntents)
+        } catch {
+            logger.warning("LLM intent extraction failed: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    /// Parse LLM response into ExtractedIntent array
+    private func parseIntentLLMResponse(_ response: String, recognizedIntents: [IntentDefinition]) -> [ExtractedIntent] {
+        var results: [ExtractedIntent] = []
+
+        let lines = response.components(separatedBy: .newlines)
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.lowercased().hasPrefix("action:") else { continue }
+
+            let parts = trimmed.components(separatedBy: "|")
+
+            if let actionPart = parts.first {
+                let action = actionPart
+                    .replacingOccurrences(of: "ACTION:", with: "", options: .caseInsensitive)
+                    .trimmingCharacters(in: .whitespaces)
+                    .lowercased()
+
+                var param: String? = nil
+                var confidence: Double = 0.85 // default confidence for LLM
+
+                // Parse PARAM if present
+                for part in parts.dropFirst() {
+                    let trimmedPart = part.trimmingCharacters(in: .whitespaces)
+                    if trimmedPart.lowercased().hasPrefix("param:") {
+                        let value = trimmedPart
+                            .replacingOccurrences(of: "PARAM:", with: "", options: .caseInsensitive)
+                            .trimmingCharacters(in: .whitespaces)
+                        if !value.isEmpty {
+                            param = value
+                        }
+                    } else if trimmedPart.lowercased().hasPrefix("confidence:") {
+                        let value = trimmedPart
+                            .replacingOccurrences(of: "CONFIDENCE:", with: "", options: .caseInsensitive)
+                            .trimmingCharacters(in: .whitespaces)
+                        if let parsed = Double(value) {
+                            confidence = parsed
+                        }
+                    }
+                }
+
+                // Find matching intent definition for workflowId
+                let matchingIntent = recognizedIntents.first { $0.name == action }
+
+                if !action.isEmpty {
+                    results.append(ExtractedIntent(
+                        action: action,
+                        parameter: param,
+                        confidence: confidence,
+                        workflowId: matchingIntent?.targetWorkflowId
+                    ))
+                }
+            }
+        }
+
+        return results
+    }
+
+    // MARK: - Execute Workflows Step
+
+    private func executeWorkflowsStep(
+        _ config: ExecuteWorkflowsStepConfig,
+        context: WorkflowContext,
+        memo: VoiceMemo,
+        coreDataContext: NSManagedObjectContext
+    ) async throws -> String {
+        logger.info("📋 executeWorkflowsStep started")
+        logger.info("📋 notifyOnComplete: \(config.notifyOnComplete)")
+
+        // Get intents from previous step
+        let intentsJson = context.resolve(config.intentsKey)
+        logger.info("📋 Resolved intents JSON length: \(intentsJson.count) chars")
+
+        guard let data = intentsJson.data(using: .utf8),
+              let intents = try? JSONDecoder().decode([ExtractedIntent].self, from: data) else {
+            logger.warning("📋 Failed to decode intents JSON: \(intentsJson.prefix(200))")
+            // Still send notification if configured
+            if config.notifyOnComplete {
+                logger.info("📋 Sending 'no intents' notification...")
+                await sendNoIntentsNotification()
+            }
+            return "No intents to execute"
+        }
+
+        logger.info("📋 Decoded \(intents.count) intents")
+
+        var results: [String] = []
+        var errors: [String] = []
+
+        for intent in intents {
+            logger.info("📋 Processing intent: \(intent.action)")
+
+            // Find workflow by ID first, then fallback to name matching
+            var workflow: WorkflowDefinition?
+
+            if let workflowId = intent.workflowId {
+                workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId })
+            }
+
+            // Fallback: match intent action to workflow by name
+            if workflow == nil {
+                let intentLower = intent.action.lowercased()
+                workflow = WorkflowManager.shared.workflows.first { wf in
+                    let nameLower = wf.name.lowercased()
+                    // Match if workflow name contains intent action or vice versa
+                    return nameLower.contains(intentLower) ||
+                           intentLower.contains(nameLower.components(separatedBy: " ").first ?? "") ||
+                           (intentLower == "summarize" && nameLower.contains("summary")) ||
+                           (intentLower == "todo" && (nameLower.contains("task") || nameLower.contains("todo"))) ||
+                           (intentLower == "remind" && nameLower.contains("remind")) ||
+                           (intentLower == "note" && nameLower.contains("note"))
+                }
+                if let wf = workflow {
+                    logger.info("📋 Matched intent '\(intent.action)' to workflow '\(wf.name)' by name")
+                }
+            }
+
+            guard let workflow = workflow else {
+                logger.info("📋 Intent '\(intent.action)' has no workflow mapped and no match found")
+                results.append("\(intent.action): No workflow mapped")
+                continue
+            }
+
+            do {
+                _ = try await executeWorkflow(workflow, for: memo, context: coreDataContext)
+                results.append("\(intent.action): Completed - \(workflow.name)")
+                logger.info("Executed workflow '\(workflow.name)' for intent '\(intent.action)'")
+            } catch {
+                let errorMsg = "\(intent.action): Failed - \(error.localizedDescription)"
+                errors.append(errorMsg)
+                if config.stopOnError {
+                    throw WorkflowError.executionFailed(errorMsg)
+                }
+            }
+        }
+
+        // Build summary
+        let summary = """
+        Executed \(results.count) workflow(s)
+        \(results.joined(separator: "\n"))
+        \(errors.isEmpty ? "" : "\nErrors:\n\(errors.joined(separator: "\n"))")
+        """
+
+        // Send notification if configured
+        logger.info("📋 Checking notification: notifyOnComplete=\(config.notifyOnComplete), intents.count=\(intents.count)")
+        if config.notifyOnComplete && !intents.isEmpty {
+            logger.info("📋 Sending completion notification...")
+            await sendCompletionNotification(intents: intents, results: results)
+        } else {
+            logger.info("📋 Skipping notification (notifyOnComplete=\(config.notifyOnComplete), intents.isEmpty=\(intents.isEmpty))")
+        }
+
+        logger.info("📋 executeWorkflowsStep finished")
+        return summary
+    }
+
+    /// Send a notification when no intents were found/decoded
+    private func sendNoIntentsNotification() async {
+        let content = UNMutableNotificationContent()
+        content.title = "Hey Talkie"
+        content.body = "No intents detected"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            logger.info("🔔 Sent 'no intents' notification")
+        } catch {
+            logger.warning("⚠️ Failed to send notification: \(error.localizedDescription)")
+        }
+    }
+
+    /// Send a notification summarizing completed intents
+    private func sendCompletionNotification(intents: [ExtractedIntent], results: [String]) async {
+        let intentNames = intents.map { $0.action }.joined(separator: ", ")
+
+        let content = UNMutableNotificationContent()
+        content.title = "Hey Talkie Complete"
+        content.body = "Executed: \(intentNames)"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            logger.info("🔔 Sent completion notification for intents: \(intentNames)")
+        } catch {
+            logger.warning("⚠️ Failed to send notification: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Execute Action Chain (legacy)

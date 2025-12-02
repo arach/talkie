@@ -10,7 +10,14 @@ import SwiftUI
 
 // MARK: - Workflow Definition
 
-struct WorkflowDefinition: Identifiable, Codable {
+struct WorkflowDefinition: Identifiable, Codable, Hashable {
+    static func == (lhs: WorkflowDefinition, rhs: WorkflowDefinition) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
     let id: UUID
     var name: String
     var description: String
@@ -19,6 +26,8 @@ struct WorkflowDefinition: Identifiable, Codable {
     var steps: [WorkflowStep]
     var isEnabled: Bool
     var isPinned: Bool  // Pinned workflows appear in iOS MAC ACTIONS section
+    var autoRun: Bool   // Run automatically on sync (for trigger workflows)
+    var autoRunOrder: Int // Execution order for multiple auto-run workflows
     var createdAt: Date
     var modifiedAt: Date
 
@@ -31,6 +40,8 @@ struct WorkflowDefinition: Identifiable, Codable {
         steps: [WorkflowStep] = [],
         isEnabled: Bool = true,
         isPinned: Bool = false,
+        autoRun: Bool = false,
+        autoRunOrder: Int = 0,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
     ) {
@@ -42,11 +53,13 @@ struct WorkflowDefinition: Identifiable, Codable {
         self.steps = steps
         self.isEnabled = isEnabled
         self.isPinned = isPinned
+        self.autoRun = autoRun
+        self.autoRunOrder = autoRunOrder
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
     }
 
-    // Custom decoder to handle migration from workflows saved without isPinned
+    // Custom decoder to handle migration from workflows saved without newer fields
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -57,12 +70,14 @@ struct WorkflowDefinition: Identifiable, Codable {
         steps = try container.decode([WorkflowStep].self, forKey: .steps)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        autoRun = try container.decodeIfPresent(Bool.self, forKey: .autoRun) ?? false
+        autoRunOrder = try container.decodeIfPresent(Int.self, forKey: .autoRunOrder) ?? 0
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, description, icon, color, steps, isEnabled, isPinned, createdAt, modifiedAt
+        case id, name, description, icon, color, steps, isEnabled, isPinned, autoRun, autoRunOrder, createdAt, modifiedAt
     }
 
     // Built-in system workflows
@@ -147,6 +162,59 @@ struct WorkflowDefinition: Identifiable, Codable {
         ]
     )
 
+    // MARK: - Hey Talkie Auto-Run Workflow
+
+    /// Fixed UUID for Hey Talkie workflow (stable across updates)
+    static let heyTalkieWorkflowId = UUID(uuidString: "00000000-7A1C-1E00-0000-000000000001")!
+
+    /// Default "Hey Talkie" workflow - detects voice commands and routes to workflows
+    static let heyTalkie = WorkflowDefinition(
+        id: heyTalkieWorkflowId,
+        name: "Hey Talkie",
+        description: "Detects voice commands and routes to appropriate workflows",
+        icon: "waveform.badge.mic",
+        color: .purple,
+        steps: [
+            // Step 1: Trigger detection - looks for "hey talkie" at end of transcript
+            WorkflowStep(
+                type: .trigger,
+                config: .trigger(TriggerStepConfig(
+                    phrases: ["hey talkie"],
+                    caseSensitive: false,
+                    searchLocation: .end,
+                    contextWindowSize: 200,
+                    stopIfNoMatch: true
+                )),
+                outputKey: "trigger"
+            ),
+            // Step 2: Intent extraction - parse what the user wants to do
+            WorkflowStep(
+                type: .intentExtract,
+                config: .intentExtract(IntentExtractStepConfig(
+                    inputKey: "{{trigger}}",
+                    extractionMethod: .hybrid,
+                    recognizedIntents: IntentDefinition.defaults
+                )),
+                outputKey: "intents"
+            ),
+            // Step 3: Execute mapped workflows for each detected intent
+            WorkflowStep(
+                type: .executeWorkflows,
+                config: .executeWorkflows(ExecuteWorkflowsStepConfig(
+                    intentsKey: "{{intents}}",
+                    stopOnError: false,
+                    parallel: false,
+                    notifyOnComplete: true
+                )),
+                outputKey: "results"
+            )
+        ],
+        isEnabled: true,
+        isPinned: false,
+        autoRun: true,
+        autoRunOrder: 0
+    )
+
     // MARK: - Default Workflows (Initial set)
     static let defaultWorkflows = [summarize, extractTasks, keyInsights]
 }
@@ -191,6 +259,10 @@ struct WorkflowStep: Identifiable, Codable {
         case saveFile = "Save to File"
         case conditional = "Conditional Branch"
         case transform = "Transform Data"
+        // Trigger-related step types
+        case trigger = "Trigger Detection"
+        case intentExtract = "Extract Intents"
+        case executeWorkflows = "Execute Workflows"
 
         var icon: String {
             switch self {
@@ -207,6 +279,9 @@ struct WorkflowStep: Identifiable, Codable {
             case .saveFile: return "doc.badge.plus"
             case .conditional: return "arrow.triangle.branch"
             case .transform: return "wand.and.rays"
+            case .trigger: return "waveform.badge.mic"
+            case .intentExtract: return "text.magnifyingglass"
+            case .executeWorkflows: return "arrow.triangle.2.circlepath"
             }
         }
 
@@ -225,6 +300,9 @@ struct WorkflowStep: Identifiable, Codable {
             case .saveFile: return "Save to local file"
             case .conditional: return "Branch based on condition"
             case .transform: return "Transform or filter data"
+            case .trigger: return "Detect keywords to trigger workflow"
+            case .intentExtract: return "Extract intents from text"
+            case .executeWorkflows: return "Run workflows for each intent"
             }
         }
 
@@ -238,6 +316,42 @@ struct WorkflowStep: Identifiable, Codable {
             case .appleNotes, .appleReminders, .appleCalendar: return .apple
             case .clipboard, .saveFile: return .output
             case .conditional, .transform: return .logic
+            case .trigger, .intentExtract, .executeWorkflows: return .trigger
+            }
+        }
+
+        /// Display name for headers (shorter than rawValue for some)
+        var displayName: String {
+            switch self {
+            case .llm: return "LLM Generation"
+            case .shell: return "Shell Command"
+            case .webhook: return "Webhook"
+            case .email: return "Email"
+            case .notification: return "Notification"
+            case .iOSPush: return "iOS Push"
+            case .appleNotes: return "Apple Notes"
+            case .appleReminders: return "Reminder"
+            case .appleCalendar: return "Calendar Event"
+            case .clipboard: return "Clipboard"
+            case .saveFile: return "Save File"
+            case .conditional: return "Conditional"
+            case .transform: return "Transform"
+            case .trigger: return "Trigger"
+            case .intentExtract: return "Extract Intents"
+            case .executeWorkflows: return "Execute Workflows"
+            }
+        }
+
+        /// Theme color for step type
+        var themeColor: Color {
+            switch self.category {
+            case .ai: return .purple
+            case .communication: return .blue
+            case .apple: return .pink
+            case .integration: return .orange
+            case .output: return .green
+            case .logic: return .yellow
+            case .trigger: return .cyan
             }
         }
     }
@@ -249,6 +363,7 @@ struct WorkflowStep: Identifiable, Codable {
         case integration = "Integrations"
         case output = "Output"
         case logic = "Logic"
+        case trigger = "Triggers"
 
         var icon: String {
             switch self {
@@ -258,6 +373,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .integration: return "puzzlepiece.extension"
             case .output: return "square.and.arrow.down"
             case .logic: return "gearshape.2"
+            case .trigger: return "waveform.badge.mic"
             }
         }
 
@@ -283,6 +399,10 @@ enum StepConfig: Codable {
     case saveFile(SaveFileStepConfig)
     case conditional(ConditionalStepConfig)
     case transform(TransformStepConfig)
+    // Trigger-related configs
+    case trigger(TriggerStepConfig)
+    case intentExtract(IntentExtractStepConfig)
+    case executeWorkflows(ExecuteWorkflowsStepConfig)
 
     // Provide a default config for each step type
     static func defaultConfig(for type: WorkflowStep.StepType) -> StepConfig {
@@ -313,6 +433,12 @@ enum StepConfig: Codable {
             return .conditional(ConditionalStepConfig(condition: "", thenSteps: [], elseSteps: []))
         case .transform:
             return .transform(TransformStepConfig(operation: .extractJSON, parameters: [:]))
+        case .trigger:
+            return .trigger(TriggerStepConfig())
+        case .intentExtract:
+            return .intentExtract(IntentExtractStepConfig())
+        case .executeWorkflows:
+            return .executeWorkflows(ExecuteWorkflowsStepConfig())
         }
     }
 }
@@ -1037,6 +1163,184 @@ struct TransformStepConfig: Codable {
             case .template: return "Apply custom template"
             }
         }
+    }
+}
+
+// MARK: - Trigger Step Configurations
+
+/// Configuration for keyword trigger detection
+struct TriggerStepConfig: Codable {
+    var phrases: [String]              // Trigger phrases to detect (e.g., ["hey talkie"])
+    var caseSensitive: Bool            // Case-sensitive matching
+    var searchLocation: SearchLocation // Where to search in transcript
+    var contextWindowSize: Int         // Words to extract around trigger
+    var stopIfNoMatch: Bool            // Gate workflow - stop if no match
+
+    init(
+        phrases: [String] = ["hey talkie"],
+        caseSensitive: Bool = false,
+        searchLocation: SearchLocation = .end,
+        contextWindowSize: Int = 200,
+        stopIfNoMatch: Bool = true
+    ) {
+        self.phrases = phrases
+        self.caseSensitive = caseSensitive
+        self.searchLocation = searchLocation
+        self.contextWindowSize = contextWindowSize
+        self.stopIfNoMatch = stopIfNoMatch
+    }
+
+    enum SearchLocation: String, Codable, CaseIterable {
+        case end = "End"
+        case anywhere = "Anywhere"
+        case start = "Start"
+
+        var displayName: String {
+            switch self {
+            case .end: return "End of transcript"
+            case .anywhere: return "Anywhere"
+            case .start: return "Beginning"
+            }
+        }
+    }
+}
+
+/// Configuration for intent extraction
+struct IntentExtractStepConfig: Codable {
+    var inputKey: String               // Which previous output to use
+    var extractionMethod: ExtractionMethod
+    var recognizedIntents: [IntentDefinition]
+    var llmPromptTemplate: String      // Customizable prompt for LLM extraction
+    var confidenceThreshold: Double    // Minimum confidence to accept (0.0-1.0)
+    var notifyOnExtraction: Bool       // Send notification with extracted intents
+
+    init(
+        inputKey: String = "{{PREVIOUS_OUTPUT}}",
+        extractionMethod: ExtractionMethod = .hybrid,
+        recognizedIntents: [IntentDefinition] = IntentDefinition.defaults,
+        llmPromptTemplate: String = Self.defaultPromptTemplate,
+        confidenceThreshold: Double = 0.5,
+        notifyOnExtraction: Bool = true
+    ) {
+        self.inputKey = inputKey
+        self.extractionMethod = extractionMethod
+        self.recognizedIntents = recognizedIntents
+        self.llmPromptTemplate = llmPromptTemplate
+        self.confidenceThreshold = confidenceThreshold
+        self.notifyOnExtraction = notifyOnExtraction
+    }
+
+    // Custom decoder for migration from configs saved without newer fields
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        inputKey = try container.decode(String.self, forKey: .inputKey)
+        extractionMethod = try container.decode(ExtractionMethod.self, forKey: .extractionMethod)
+        recognizedIntents = try container.decode([IntentDefinition].self, forKey: .recognizedIntents)
+        llmPromptTemplate = try container.decodeIfPresent(String.self, forKey: .llmPromptTemplate) ?? Self.defaultPromptTemplate
+        confidenceThreshold = try container.decodeIfPresent(Double.self, forKey: .confidenceThreshold) ?? 0.5
+        notifyOnExtraction = try container.decodeIfPresent(Bool.self, forKey: .notifyOnExtraction) ?? true
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case inputKey, extractionMethod, recognizedIntents, llmPromptTemplate, confidenceThreshold, notifyOnExtraction
+    }
+
+    /// Default prompt template with placeholders
+    static let defaultPromptTemplate = """
+        Analyze this voice transcript and extract any requested actions.
+
+        Transcript:
+        {{INPUT}}
+
+        Recognized actions: {{INTENT_NAMES}}
+
+        List each action found, one per line, in this format:
+        ACTION: [action name] | PARAM: [optional parameter like time/date] | CONFIDENCE: [0.0-1.0]
+
+        Only list actions explicitly requested. Be concise.
+        """
+
+    enum ExtractionMethod: String, Codable, CaseIterable {
+        case llm = "LLM"
+        case keywords = "Keywords"
+        case hybrid = "Hybrid"
+
+        var displayName: String {
+            switch self {
+            case .llm: return "LLM (AI-powered)"
+            case .keywords: return "Keywords (fast, offline)"
+            case .hybrid: return "Hybrid (LLM with keyword fallback)"
+            }
+        }
+    }
+}
+
+/// Defines a recognized intent with synonyms and optional target workflow
+struct IntentDefinition: Identifiable, Codable {
+    let id: UUID
+    var name: String                   // Canonical name (e.g., "summarize")
+    var synonyms: [String]             // Alternative words (e.g., ["summary", "sum up"])
+    var targetWorkflowId: UUID?        // Workflow to execute for this intent
+    var isEnabled: Bool
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        synonyms: [String] = [],
+        targetWorkflowId: UUID? = nil,
+        isEnabled: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.synonyms = synonyms
+        self.targetWorkflowId = targetWorkflowId
+        self.isEnabled = isEnabled
+    }
+
+    /// Default recognized intents
+    static let defaults: [IntentDefinition] = [
+        IntentDefinition(name: "summarize", synonyms: ["summary", "sum up", "brief", "tldr"]),
+        IntentDefinition(name: "remind", synonyms: ["reminder", "remind me", "set reminder"]),
+        IntentDefinition(name: "note", synonyms: ["notes", "take note", "make note"]),
+        IntentDefinition(name: "email", synonyms: ["mail", "send email", "draft email"]),
+        IntentDefinition(name: "todo", synonyms: ["task", "tasks", "to do", "action item"]),
+        IntentDefinition(name: "calendar", synonyms: ["schedule", "event", "meeting", "appointment"]),
+        IntentDefinition(name: "save", synonyms: ["store", "keep", "archive"]),
+    ]
+}
+
+/// Result of intent extraction (for passing between steps)
+struct ExtractedIntent: Codable {
+    let action: String
+    let parameter: String?
+    let confidence: Double?
+    let workflowId: UUID?
+
+    var description: String {
+        if let param = parameter {
+            return "\(action): \(param)"
+        }
+        return action
+    }
+}
+
+/// Configuration for executing workflows based on extracted intents
+struct ExecuteWorkflowsStepConfig: Codable {
+    var intentsKey: String             // Key containing intents array
+    var stopOnError: Bool              // Stop loop if a workflow fails
+    var parallel: Bool                 // Run workflows in parallel
+    var notifyOnComplete: Bool         // Send notification when all complete
+
+    init(
+        intentsKey: String = "{{PREVIOUS_OUTPUT}}",
+        stopOnError: Bool = false,
+        parallel: Bool = false,
+        notifyOnComplete: Bool = true
+    ) {
+        self.intentsKey = intentsKey
+        self.stopOnError = stopOnError
+        self.parallel = parallel
+        self.notifyOnComplete = notifyOnComplete
     }
 }
 
