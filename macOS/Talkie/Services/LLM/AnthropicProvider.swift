@@ -10,7 +10,7 @@ import Foundation
 class AnthropicProvider: LLMProvider {
     let id = "anthropic"
     let name = "Anthropic"
-    
+
     var models: [LLMModel] {
         get async throws {
             return [

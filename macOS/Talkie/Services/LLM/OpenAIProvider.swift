@@ -10,7 +10,7 @@ import Foundation
 class OpenAIProvider: LLMProvider {
     let id = "openai"
     let name = "OpenAI"
-    
+
     var models: [LLMModel] {
         get async throws {
             return [

@@ -7,6 +7,47 @@
 
 import Foundation
 
+// MARK: - LLM Configuration (loaded from LLMConfig.json)
+
+struct LLMConfig: Codable {
+    let providers: [String: ProviderConfig]
+    let preferredProviderOrder: [String]
+
+    struct ProviderConfig: Codable {
+        let id: String
+        let name: String
+        let defaultModel: String
+        let models: [ModelConfig]
+    }
+
+    struct ModelConfig: Codable {
+        let id: String
+        let displayName: String
+        let description: String?
+    }
+
+    /// Shared config instance loaded from bundle
+    static let shared: LLMConfig = {
+        guard let url = Bundle.main.url(forResource: "LLMConfig", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let config = try? JSONDecoder().decode(LLMConfig.self, from: data) else {
+            print("⚠️ Failed to load LLMConfig.json, using empty config")
+            return LLMConfig(providers: [:], preferredProviderOrder: [])
+        }
+        return config
+    }()
+
+    /// Get config for a specific provider
+    func config(for providerId: String) -> ProviderConfig? {
+        providers[providerId]
+    }
+
+    /// Get default model ID for a provider
+    func defaultModel(for providerId: String) -> String? {
+        providers[providerId]?.defaultModel
+    }
+}
+
 // MARK: - Core Protocol
 
 protocol LLMProvider {
@@ -35,6 +76,20 @@ protocol LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> AsyncThrowingStream<String, Error>
+}
+
+// MARK: - Protocol Extension for Config-Based Defaults
+
+extension LLMProvider {
+    /// Default model ID from config file
+    var defaultModelId: String {
+        LLMConfig.shared.defaultModel(for: id) ?? ""
+    }
+
+    /// Provider display name from config (falls back to protocol property)
+    var configName: String {
+        LLMConfig.shared.config(for: id)?.name ?? name
+    }
 }
 
 // MARK: - Model Definition
@@ -147,6 +202,34 @@ class LLMProviderRegistry: ObservableObject {
     var selectedModel: LLMModel? {
         guard let id = selectedModelId else { return nil }
         return model(for: id)
+    }
+
+    // MARK: - Default Model Resolution
+
+    /// Get the first available provider with its default model
+    /// Returns (provider, modelId) tuple or nil if no providers available
+    func firstAvailableProvider() async -> (provider: LLMProvider, modelId: String)? {
+        let preferredOrder = LLMConfig.shared.preferredProviderOrder
+
+        for providerId in preferredOrder {
+            if let provider = provider(for: providerId),
+               await provider.isAvailable {
+                return (provider, provider.defaultModelId)
+            }
+        }
+        return nil
+    }
+
+    /// Get the selected provider/model or fall back to first available
+    func resolveProviderAndModel() async -> (provider: LLMProvider, modelId: String)? {
+        // First try user's selection
+        if let provider = selectedProvider,
+           let model = selectedModel {
+            return (provider, model.id)
+        }
+
+        // Fall back to first available
+        return await firstAvailableProvider()
     }
 }
 

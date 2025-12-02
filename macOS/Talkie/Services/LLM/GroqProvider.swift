@@ -10,7 +10,7 @@ import Foundation
 class GroqProvider: LLMProvider {
     let id = "groq"
     let name = "Groq"
-    
+
     var models: [LLMModel] {
         get async throws {
             return [
