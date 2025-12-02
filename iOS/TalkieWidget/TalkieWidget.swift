@@ -431,7 +431,7 @@ struct LargeWidgetView: View {
 
                             Circle()
                                 .fill(colors.foreground.opacity(0.1))
-                                .frame(width: 36, height: 36)
+                                .frame(width: 38, height: 38)
 
                             Image(systemName: "mic.fill")
                                 .font(.system(size: 16, weight: .medium))
