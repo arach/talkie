@@ -15,13 +15,13 @@ import {
 } from 'lucide-react'
 
 const ServiceBadge = ({ label, icon: Icon, imgSrc, color = "text-zinc-400" }) => (
-  <div className="flex items-center gap-2.5 bg-zinc-950 border border-zinc-800 px-3 py-2.5 rounded shadow-sm hover:border-zinc-700 hover:bg-zinc-900 transition-all cursor-default group">
+  <div className="flex items-center gap-2.5 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 px-3 py-2.5 rounded shadow-sm hover:border-zinc-400 dark:hover:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-900 transition-all cursor-default group">
     {imgSrc ? (
-       <img src={imgSrc} alt={label} className="w-3.5 h-3.5 object-contain opacity-70 group-hover:opacity-100 transition-all grayscale group-hover:grayscale-0" />
+       <img src={imgSrc} alt={label} className="w-3.5 h-3.5 object-contain opacity-70 group-hover:opacity-100 transition-all grayscale group-hover:grayscale-0 dark:invert-0" />
     ) : (
        Icon && <Icon className={`w-3.5 h-3.5 ${color}`} />
     )}
-    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 transition-colors">{label}</span>
+    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-300 transition-colors">{label}</span>
   </div>
 )
 
@@ -55,25 +55,25 @@ export function SecurityInfographic() {
         case 'green': return 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
         case 'blue': return 'bg-blue-500/10 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
         case 'purple': return 'bg-purple-500/10 border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.1)]'
-        default: return 'bg-zinc-900/30 border-zinc-800'
+        default: return 'bg-white/50 dark:bg-zinc-900/30 border-zinc-300 dark:border-zinc-800'
     }
   }
 
   const getIconColor = (colorState) => {
       switch (colorState) {
-          case 'green': return 'text-emerald-400'
-          case 'blue': return 'text-blue-400'
-          case 'purple': return 'text-purple-400'
-          default: return 'text-zinc-500'
+          case 'green': return 'text-emerald-500 dark:text-emerald-400'
+          case 'blue': return 'text-blue-500 dark:text-blue-400'
+          case 'purple': return 'text-purple-500 dark:text-purple-400'
+          default: return 'text-zinc-400 dark:text-zinc-500'
       }
   }
 
   const getTextColor = (colorState) => {
     switch (colorState) {
-        case 'green': return 'text-emerald-300'
-        case 'blue': return 'text-blue-300'
-        case 'purple': return 'text-purple-300'
-        default: return 'text-zinc-300'
+        case 'green': return 'text-emerald-600 dark:text-emerald-300'
+        case 'blue': return 'text-blue-600 dark:text-blue-300'
+        case 'purple': return 'text-purple-600 dark:text-purple-300'
+        default: return 'text-zinc-700 dark:text-zinc-300'
     }
   }
 
@@ -82,15 +82,15 @@ export function SecurityInfographic() {
   const processingLegendColor = isUserZone ? 'bg-emerald-500' : 'bg-purple-500'
 
   return (
-    <div className="bg-zinc-950 border border-zinc-800 p-6 md:p-12 relative overflow-visible rounded-sm select-none" onMouseLeave={() => setActiveZone(null)}>
-      <div className="absolute inset-0 bg-tactical-grid-dark opacity-20 pointer-events-none" />
+    <div className="bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 p-6 md:p-12 relative overflow-visible rounded-sm select-none" onMouseLeave={() => setActiveZone(null)}>
+      <div className="absolute inset-0 bg-tactical-grid-dark opacity-10 dark:opacity-20 pointer-events-none" />
 
       <div className="relative z-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
             <div className="flex items-center gap-3">
             <ShieldCheck className="w-6 h-6 text-emerald-500" />
             <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-white uppercase tracking-wide leading-none">Security Architecture</h2>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide leading-none">Security Architecture</h2>
                 <span className="text-[10px] font-mono text-zinc-500 uppercase mt-1">Data Sovereignty Model v1.2</span>
             </div>
             </div>
@@ -114,7 +114,7 @@ export function SecurityInfographic() {
         </div>
 
         {/* Main Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 border border-zinc-800 rounded-sm overflow-visible bg-zinc-950/50 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-12 border border-zinc-300 dark:border-zinc-800 rounded-sm overflow-visible bg-white/50 dark:bg-zinc-950/50 relative">
 
           {/* === USER OWNED ZONE (Left 8 Cols) === */}
           <div
@@ -202,17 +202,17 @@ export function SecurityInfographic() {
                       className={`w-full flex items-center justify-between gap-4 p-4 border rounded-sm transition-all duration-300 ${
                           icloudActive
                           ? 'bg-emerald-500/5 border-emerald-500/30'
-                          : 'bg-zinc-900/30 border-zinc-800'
+                          : 'bg-white/50 dark:bg-zinc-900/30 border-zinc-300 dark:border-zinc-800'
                       }`}
                   >
                      <div className="flex items-center gap-4">
                         <div className={`p-2 rounded-sm border transition-colors ${
-                            icloudActive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-zinc-950 border-zinc-800 text-zinc-500'
+                            icloudActive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-zinc-100 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-800 text-zinc-500'
                         }`}>
                             <Cloud className="w-5 h-5" />
                         </div>
                         <div>
-                            <h4 className={`text-xs font-bold uppercase tracking-wider mb-1 transition-colors ${icloudActive ? 'text-emerald-400' : 'text-zinc-300'}`}>iCloud</h4>
+                            <h4 className={`text-xs font-bold uppercase tracking-wider mb-1 transition-colors ${icloudActive ? 'text-emerald-500 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'}`}>iCloud</h4>
                             <span className="text-[10px] font-mono text-zinc-500">Encrypted CloudKit Container</span>
                         </div>
                      </div>
@@ -262,8 +262,8 @@ export function SecurityInfographic() {
                            ].map((step, i) => (
                               <div key={i} className={`flex items-center gap-2 p-1.5 border rounded-sm transition-colors ${
                                   iphoneColorState !== 'idle'
-                                    ? (iphoneColorState === 'green' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-100' : 'bg-blue-500/20 border-blue-500/30 text-blue-100')
-                                    : 'bg-zinc-950/50 border-zinc-800/50 text-zinc-600'
+                                    ? (iphoneColorState === 'green' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-700 dark:text-emerald-100' : 'bg-blue-500/20 border-blue-500/30 text-blue-700 dark:text-blue-100')
+                                    : 'bg-zinc-100 dark:bg-zinc-950/50 border-zinc-300/50 dark:border-zinc-800/50 text-zinc-600'
                               }`}>
                                  <span className="text-[9px] font-mono uppercase tracking-wide">{step}</span>
                               </div>
@@ -304,8 +304,8 @@ export function SecurityInfographic() {
                            ].map((step, i) => (
                               <div key={i} className={`flex items-center gap-2 p-1.5 border rounded-sm transition-colors ${
                                   macColorState !== 'idle'
-                                    ? (macColorState === 'green' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-100' : 'bg-purple-500/20 border-purple-500/30 text-purple-100')
-                                    : 'bg-zinc-950/50 border-zinc-800/50 text-zinc-600'
+                                    ? (macColorState === 'green' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-700 dark:text-emerald-100' : 'bg-purple-500/20 border-purple-500/30 text-purple-700 dark:text-purple-100')
+                                    : 'bg-zinc-100 dark:bg-zinc-950/50 border-zinc-300/50 dark:border-zinc-800/50 text-zinc-600'
                               }`}>
                                  <span className="text-[9px] font-mono uppercase tracking-wide">{step}</span>
                               </div>
@@ -316,8 +316,8 @@ export function SecurityInfographic() {
 
                   {/* Outbound Arrow (Interactive via Barrier) */}
                   <div className="absolute top-[60%] left-full z-50 flex items-center pointer-events-none -ml-px pl-2">
-                       <div className={`w-24 h-0.5 relative transition-colors delay-75 ${isOutboundActive ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.8)]' : 'bg-zinc-800'}`}></div>
-                       <ArrowRight className={`w-4 h-4 -ml-1 transition-colors delay-75 ${isOutboundActive ? 'text-amber-500' : 'text-zinc-600'}`} />
+                       <div className={`w-24 h-0.5 relative transition-colors delay-75 ${isOutboundActive ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.8)]' : 'bg-zinc-400 dark:bg-zinc-800'}`}></div>
+                       <ArrowRight className={`w-4 h-4 -ml-1 transition-colors delay-75 ${isOutboundActive ? 'text-amber-500' : 'text-zinc-500 dark:text-zinc-600'}`} />
                   </div>
                 </div>
 
@@ -333,7 +333,7 @@ export function SecurityInfographic() {
              >
                  {/* Visual Line */}
                  <div className={`absolute inset-y-0 w-[8px] border-l border-r shadow-[0_0_15px_rgba(0,0,0,0.8)] transition-colors duration-300 ${
-                     isBarrier ? 'bg-amber-950/50 border-amber-500/50' : 'bg-zinc-950 border-zinc-700'
+                     isBarrier ? 'bg-amber-950/50 border-amber-500/50' : 'bg-zinc-200 dark:bg-zinc-950 border-zinc-400 dark:border-zinc-700'
                  }`}></div>
 
                  {/* Hatch Pattern */}
@@ -344,8 +344,8 @@ export function SecurityInfographic() {
                  }`}></div>
 
                  {/* Lock Icon */}
-                 <div className={`relative z-10 p-1.5 bg-zinc-950 border rounded-full transition-all duration-300 ${
-                     isBarrier ? 'text-amber-500 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-110' : (isProcessing ? 'text-amber-500 border-amber-500/50' : 'text-zinc-600 border-zinc-700')
+                 <div className={`relative z-10 p-1.5 bg-zinc-100 dark:bg-zinc-950 border rounded-full transition-all duration-300 ${
+                     isBarrier ? 'text-amber-500 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-110' : (isProcessing ? 'text-amber-500 border-amber-500/50' : 'text-zinc-500 dark:text-zinc-600 border-zinc-400 dark:border-zinc-700')
                  }`}>
                     <Lock className="w-3.5 h-3.5" />
                  </div>
@@ -356,8 +356,8 @@ export function SecurityInfographic() {
           {/* === EXTERNAL SERVICES (Right 4 Cols) === */}
           <div
             onMouseOver={() => setActiveZone('external')}
-            className={`lg:col-span-4 relative bg-zinc-950 p-8 flex flex-col z-10 transition-colors duration-500 ${
-                isExternal ? 'bg-amber-900/10' : ''
+            className={`lg:col-span-4 relative bg-zinc-50 dark:bg-zinc-950 p-8 flex flex-col z-10 transition-colors duration-500 ${
+                isExternal ? 'bg-amber-100/50 dark:bg-amber-900/10' : ''
             }`}
           >
 
@@ -380,18 +380,18 @@ export function SecurityInfographic() {
                     <ServiceBadge label="Linear" imgSrc="https://cdn.simpleicons.org/linear/5E6AD2" />
                  </div>
 
-                 <div className={`w-full max-w-[200px] border-t border-dashed mt-2 transition-colors ${isOutboundActive ? 'border-amber-500/50' : 'border-zinc-800'}`}></div>
+                 <div className={`w-full max-w-[200px] border-t border-dashed mt-2 transition-colors ${isOutboundActive ? 'border-amber-500/50' : 'border-zinc-300 dark:border-zinc-800'}`}></div>
 
                  <div className={`group/tooltip relative transition-all duration-300 ${isBarrier ? 'scale-105' : ''}`}>
                     <p className={`text-[10px] text-center max-w-[250px] leading-relaxed cursor-help border-b border-dotted inline-block pb-0.5 transition-colors ${
-                        isOutboundActive ? 'text-zinc-100 border-amber-500' : 'text-zinc-500 border-zinc-700/50'
+                        isOutboundActive ? 'text-zinc-900 dark:text-zinc-100 border-amber-500' : 'text-zinc-500 border-zinc-400/50 dark:border-zinc-700/50'
                     }`}>
-                      Outbound: <span className={`font-bold transition-colors ${isOutboundActive ? 'text-amber-500' : 'text-zinc-400'}`}>Text-Only Stream</span>
+                      Outbound: <span className={`font-bold transition-colors ${isOutboundActive ? 'text-amber-500' : 'text-zinc-600 dark:text-zinc-400'}`}>Text-Only Stream</span>
                     </p>
 
                     {/* Tooltip Pop-up */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-56 p-3 bg-zinc-900 border border-zinc-800 text-zinc-300 text-[10px] leading-relaxed rounded shadow-xl opacity-0 group-hover/tooltip:opacity-100 transition-all duration-300 pointer-events-none z-50">
-                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-zinc-900 border-r border-b border-zinc-800 rotate-45"></div>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-56 p-3 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] leading-relaxed rounded shadow-xl opacity-0 group-hover/tooltip:opacity-100 transition-all duration-300 pointer-events-none z-50">
+                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white dark:bg-zinc-900 border-r border-b border-zinc-300 dark:border-zinc-800 rotate-45"></div>
                        <div className="flex gap-2">
                           <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                           <span>
