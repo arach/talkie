@@ -392,6 +392,7 @@ struct RecordingView: View {
         newMemo.isTranscribing = false
         newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
         newMemo.originDeviceId = PersistenceController.deviceId
+        newMemo.autoProcessed = false  // Mark for macOS auto-run processing
 
         // Load and store audio data for CloudKit sync
         do {

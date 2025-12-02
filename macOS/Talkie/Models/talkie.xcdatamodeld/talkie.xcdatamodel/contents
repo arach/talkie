@@ -39,6 +39,7 @@
         <attribute name="tasks" optional="YES" attributeType="String"/>
         <attribute name="title" optional="YES" attributeType="String"/>
         <attribute name="transcription" optional="YES" attributeType="String"/>
+        <attribute name="autoProcessed" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="waveformData" optional="YES" attributeType="Binary"/>
         <relationship name="transcriptVersions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TranscriptVersion" inverseName="memo" inverseEntity="TranscriptVersion"/>
         <relationship name="workflowRuns" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkflowRun" inverseName="memo" inverseEntity="WorkflowRun"/>

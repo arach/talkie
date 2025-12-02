@@ -655,6 +655,7 @@ struct VoiceMemoListView: View {
         newMemo.fileURL = url.lastPathComponent
         newMemo.isTranscribing = false
         newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
+        newMemo.autoProcessed = false  // Mark for macOS auto-run processing
 
         // Load audio data
         do {
