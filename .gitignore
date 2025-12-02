@@ -64,3 +64,4 @@ build/
 # Logs
 logs/
 *.log
+.claude/settings.local.json
