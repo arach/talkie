@@ -14,7 +14,6 @@
 		30586490648C90923277B31B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2BABB2A599587B53D1C8F8E6 /* Assets.xcassets */; };
 		4C81B1B6F7050791F5B8BC2C /* GeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC57A7E03EC8CAD3BA267D1 /* GeminiService.swift */; };
 		5A5438F817916C90E382D61D /* MLXProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ADA028D69ADAFECFB2C122C /* MLXProvider.swift */; };
-		5BD3C063C7AA17132AD940A3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 888D73AFBB1C2ECD155F2455 /* ContentView.swift */; };
 		5C8D73C95973BEDB0418F46A /* AnthropicProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7DBC6AC45B5F36375DA880 /* AnthropicProvider.swift */; };
 		616C1BAAF1AA835E650A9FE0 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36E93046E4E6FE29C1208DB2 /* LLMProvider.swift */; };
 		694FB95D3C8FBDE6C5468854 /* WorkflowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D622DF99A06064E75BE6360 /* WorkflowViews.swift */; };
@@ -36,6 +35,9 @@
 		SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SYSCONSOLE_FILEREF /* SystemConsoleView.swift */; };
 		TFMGR_BUILDFILE /* TranscriptFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFMGR_FILEREF /* TranscriptFileManager.swift */; };
 		VMTRANS_BUILDFILE /* VoiceMemo+Transcripts.swift in Sources */ = {isa = PBXBuildFile; fileRef = VMTRANS_FILEREF /* VoiceMemo+Transcripts.swift */; };
+		AUTORUN_BUILDFILE /* AutoRunProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUTORUN_FILEREF /* AutoRunProcessor.swift */; };
+		DEBUGTOOLBAR_BUILDFILE /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */; };
+		LLMCONFIG_BUILDFILE /* LLMConfig.json in Resources */ = {isa = PBXBuildFile; fileRef = LLMCONFIG_FILEREF /* LLMConfig.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,7 +52,6 @@
 		7D622DF99A06064E75BE6360 /* WorkflowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowViews.swift; sourceTree = "<group>"; };
 		7F55812343FAF92F60D28E19 /* WorkflowAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowAction.swift; sourceTree = "<group>"; };
 		86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
-		888D73AFBB1C2ECD155F2455 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		8DE81C0FD66EBEFF8002D848 /* MemoDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoDetailView.swift; sourceTree = "<group>"; };
 		92173E2C177853E5ADD8A345 /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Talkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		95658B54C871F5DB7FC1429E /* talkie.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = talkie.xcdatamodel; sourceTree = "<group>"; };
@@ -68,6 +69,9 @@
 		SYSCONSOLE_FILEREF /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
 		TFMGR_FILEREF /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
 		VMTRANS_FILEREF /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
+		AUTORUN_FILEREF /* AutoRunProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRunProcessor.swift; sourceTree = "<group>"; };
+		DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugToolbar.swift; sourceTree = "<group>"; };
+		LLMCONFIG_FILEREF /* LLMConfig.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LLMConfig.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,7 +90,7 @@
 		1984160F4CDC0703A74ABA82 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				888D73AFBB1C2ECD155F2455 /* ContentView.swift */,
+				DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */,
 				8DE81C0FD66EBEFF8002D848 /* MemoDetailView.swift */,
 				6919ADEAE61E04AD110C560F /* MemoRowView.swift */,
 				188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */,
@@ -152,6 +156,7 @@
 		BCE703377263E0FF67BFB409 /* Workflow */ = {
 			isa = PBXGroup;
 			children = (
+				AUTORUN_FILEREF /* AutoRunProcessor.swift */,
 				7F55812343FAF92F60D28E19 /* WorkflowAction.swift */,
 				FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */,
 				16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */,
@@ -167,11 +172,20 @@
 				6B228E4044C6AFC31BBDE3C6 /* Talkie.entitlements */,
 				3C6A910C9E66A64213122BE1 /* App */,
 				6567D7B64FADBC03115A6088 /* Models */,
+				RESOURCES_GROUP /* Resources */,
 				6B1BD9F1258C9847A6B79B56 /* Services */,
 				1984160F4CDC0703A74ABA82 /* Views */,
 				BCE703377263E0FF67BFB409 /* Workflow */,
 			);
 			path = Talkie;
+			sourceTree = "<group>";
+		};
+		RESOURCES_GROUP /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				LLMCONFIG_FILEREF /* LLMConfig.json */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		EC3EE94DAAE074F1D0B4D2E1 /* Products */ = {
@@ -242,6 +256,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				30586490648C90923277B31B /* Assets.xcassets in Resources */,
+				LLMCONFIG_BUILDFILE /* LLMConfig.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -254,7 +269,6 @@
 			files = (
 				APPDELEGATE_BUILDFILE /* AppDelegate.swift in Sources */,
 				5C8D73C95973BEDB0418F46A /* AnthropicProvider.swift in Sources */,
-				5BD3C063C7AA17132AD940A3 /* ContentView.swift in Sources */,
 				4C81B1B6F7050791F5B8BC2C /* GeminiService.swift in Sources */,
 				F5F06E5237A90BC70DCA3D04 /* GroqProvider.swift in Sources */,
 				616C1BAAF1AA835E650A9FE0 /* LLMProvider.swift in Sources */,
@@ -269,6 +283,7 @@
 				107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */,
 				CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */,
 				SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */,
+				DEBUGTOOLBAR_BUILDFILE /* DebugToolbar.swift in Sources */,
 				CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */,
 				TFMGR_BUILDFILE /* TranscriptFileManager.swift in Sources */,
 				VMTRANS_BUILDFILE /* VoiceMemo+Transcripts.swift in Sources */,
@@ -277,6 +292,7 @@
 				BFD1ADA67CA16C1B41058BB9 /* WorkflowDefinition.swift in Sources */,
 				14A7C2FC561959C8A828FDDC /* WorkflowExecutor.swift in Sources */,
 				694FB95D3C8FBDE6C5468854 /* WorkflowViews.swift in Sources */,
+				AUTORUN_BUILDFILE /* AutoRunProcessor.swift in Sources */,
 				FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
