@@ -3,14 +3,18 @@
 //  Talkie macOS
 //
 //  Live activity console with tactical dark theme
+//  Events persist to log files and console reads from them
 //
 
 import SwiftUI
 import Combine
+import os
+
+private let fileLogger = Logger(subsystem: "jdi.talkie-os-mac", category: "LogFile")
 
 // MARK: - System Event Model
 
-enum SystemEventType: String {
+enum SystemEventType: String, CaseIterable {
     case sync = "SYNC"
     case record = "RECORD"
     case transcribe = "WHISPER"
@@ -31,17 +35,181 @@ enum SystemEventType: String {
 }
 
 struct SystemEvent: Identifiable {
-    let id = UUID()
+    let id: UUID
     let timestamp: Date
     let type: SystemEventType
     let message: String
     let detail: String?
 
     init(type: SystemEventType, message: String, detail: String? = nil) {
+        self.id = UUID()
         self.timestamp = Date()
         self.type = type
         self.message = message
         self.detail = detail
+    }
+
+    init(id: UUID, timestamp: Date, type: SystemEventType, message: String, detail: String?) {
+        self.id = id
+        self.timestamp = timestamp
+        self.type = type
+        self.message = message
+        self.detail = detail
+    }
+
+    /// Serialize to log file format
+    func toLogLine() -> String {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let ts = isoFormatter.string(from: timestamp)
+        let escapedMessage = message.replacingOccurrences(of: "|", with: "\\|")
+        let escapedDetail = detail?.replacingOccurrences(of: "|", with: "\\|") ?? ""
+        return "\(ts)|\(type.rawValue)|\(escapedMessage)|\(escapedDetail)"
+    }
+
+    /// Parse from log file format
+    static func fromLogLine(_ line: String) -> SystemEvent? {
+        let parts = line.components(separatedBy: "|")
+        guard parts.count >= 3 else { return nil }
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        guard let timestamp = isoFormatter.date(from: parts[0]),
+              let type = SystemEventType(rawValue: parts[1]) else { return nil }
+
+        let message = parts[2].replacingOccurrences(of: "\\|", with: "|")
+        let detail = parts.count > 3 && !parts[3].isEmpty
+            ? parts[3].replacingOccurrences(of: "\\|", with: "|")
+            : nil
+
+        return SystemEvent(id: UUID(), timestamp: timestamp, type: type, message: message, detail: detail)
+    }
+}
+
+// MARK: - Log File Manager
+
+class LogFileManager {
+    static let shared = LogFileManager()
+
+    private let fileManager = FileManager.default
+    private var currentFileHandle: FileHandle?
+    private var currentLogDate: String?
+    private let queue = DispatchQueue(label: "jdi.talkie.logfile", qos: .utility)
+
+    private var logsDirectory: URL {
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("Talkie/logs", isDirectory: true)
+    }
+
+    private init() {
+        ensureLogsDirectory()
+    }
+
+    private func ensureLogsDirectory() {
+        try? fileManager.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
+    }
+
+    private func logFileName(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "talkie-\(formatter.string(from: date)).log"
+    }
+
+    private func logFilePath(for date: Date) -> URL {
+        logsDirectory.appendingPathComponent(logFileName(for: date))
+    }
+
+    /// Append an event to today's log file
+    func append(_ event: SystemEvent) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let today = dateFormatter.string(from: Date())
+
+            // Rotate file handle if date changed
+            if self.currentLogDate != today {
+                self.currentFileHandle?.closeFile()
+                self.currentFileHandle = nil
+                self.currentLogDate = today
+            }
+
+            // Open file handle if needed
+            if self.currentFileHandle == nil {
+                let path = self.logFilePath(for: Date())
+                if !self.fileManager.fileExists(atPath: path.path) {
+                    self.fileManager.createFile(atPath: path.path, contents: nil)
+                }
+                self.currentFileHandle = try? FileHandle(forWritingTo: path)
+                self.currentFileHandle?.seekToEndOfFile()
+            }
+
+            // Write the event
+            let line = event.toLogLine() + "\n"
+            if let data = line.data(using: .utf8) {
+                self.currentFileHandle?.write(data)
+            }
+        }
+    }
+
+    /// Load events from a log file
+    func loadEvents(from date: Date, limit: Int = 500) -> [SystemEvent] {
+        let path = logFilePath(for: date)
+        guard let content = try? String(contentsOf: path, encoding: .utf8) else {
+            return []
+        }
+
+        let lines = content.components(separatedBy: .newlines)
+        var events: [SystemEvent] = []
+
+        // Read from end to get most recent first, up to limit
+        for line in lines.reversed() {
+            guard !line.isEmpty, let event = SystemEvent.fromLogLine(line) else { continue }
+            events.append(event)
+            if events.count >= limit { break }
+        }
+
+        return events
+    }
+
+    /// Load today's events
+    func loadTodayEvents(limit: Int = 500) -> [SystemEvent] {
+        loadEvents(from: Date(), limit: limit)
+    }
+
+    /// Get list of available log files
+    func availableLogFiles() -> [URL] {
+        guard let files = try? fileManager.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: [.creationDateKey]) else {
+            return []
+        }
+        return files
+            .filter { $0.pathExtension == "log" }
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }
+    }
+
+    /// Get path to logs directory (for opening in Finder)
+    func logsDirectoryPath() -> URL {
+        logsDirectory
+    }
+
+    /// Clean up old log files (keep last N days)
+    func cleanupOldLogs(keepDays: Int = 7) {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -keepDays, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        for file in availableLogFiles() {
+            // Extract date from filename: talkie-2025-12-01.log
+            let name = file.deletingPathExtension().lastPathComponent
+            if let dateStr = name.components(separatedBy: "-").dropFirst().joined(separator: "-") as String?,
+               let fileDate = formatter.date(from: dateStr),
+               fileDate < cutoff {
+                try? fileManager.removeItem(at: file)
+                fileLogger.info("Cleaned up old log: \(file.lastPathComponent)")
+            }
+        }
     }
 }
 
@@ -52,25 +220,57 @@ class SystemEventManager: ObservableObject {
     static let shared = SystemEventManager()
 
     @Published var events: [SystemEvent] = []
-    private let maxEvents = 200
+    private let maxEventsInMemory = 500
 
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
+        // Load historical events from log file
+        loadHistoricalEvents()
+
         setupObservers()
 
         // Initial boot event
-        log(.system, "Console initialized", detail: "Talkie OS v1.0")
+        logSync(.system, "Console initialized", detail: "Talkie OS v1.0")
+
+        // Clean up old logs on launch
+        Task.detached {
+            LogFileManager.shared.cleanupOldLogs(keepDays: 7)
+        }
     }
 
-    func log(_ type: SystemEventType, _ message: String, detail: String? = nil) {
+    private func loadHistoricalEvents() {
+        let historical = LogFileManager.shared.loadTodayEvents(limit: maxEventsInMemory)
+        events = historical
+    }
+
+    /// Reload events from file (useful after clearing or for refresh)
+    func reloadFromFile() {
+        loadHistoricalEvents()
+    }
+
+    func log(_ type: SystemEventType, _ message: String, detail: String? = nil) async {
         let event = SystemEvent(type: type, message: message, detail: detail)
+        appendEvent(event)
+    }
+
+    /// Non-async version for synchronous contexts
+    func logSync(_ type: SystemEventType, _ message: String, detail: String? = nil) {
+        let event = SystemEvent(type: type, message: message, detail: detail)
+        appendEvent(event)
+    }
+
+    private func appendEvent(_ event: SystemEvent) {
+        // Add to in-memory list
         events.insert(event, at: 0)
 
-        // Trim old events
-        if events.count > maxEvents {
-            events = Array(events.prefix(maxEvents))
+        // Trim in-memory events (file keeps everything)
+        if events.count > maxEventsInMemory {
+            events = Array(events.prefix(maxEventsInMemory))
         }
+
+        // Persist to file
+        LogFileManager.shared.append(event)
     }
 
     private func setupObservers() {
@@ -78,7 +278,7 @@ class SystemEventManager: ObservableObject {
         NotificationCenter.default.publisher(for: .talkieSyncStarted)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.log(.sync, "Sync started", detail: "Fetching changes...")
+                self?.logSync(.sync, "Sync started", detail: "Fetching changes...")
             }
             .store(in: &cancellables)
 
@@ -88,9 +288,9 @@ class SystemEventManager: ObservableObject {
             .sink { [weak self] notification in
                 let changes = notification.userInfo?["changes"] as? Int ?? 0
                 if changes > 0 {
-                    self?.log(.sync, "Sync completed", detail: "\(changes) change(s) from iCloud")
+                    self?.logSync(.sync, "Sync completed", detail: "\(changes) change(s) from iCloud")
                 } else {
-                    self?.log(.sync, "Sync completed", detail: "No changes")
+                    self?.logSync(.sync, "Sync completed", detail: "No changes")
                 }
             }
             .store(in: &cancellables)
@@ -100,7 +300,7 @@ class SystemEventManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 if let inserted = notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>, !inserted.isEmpty {
-                    self?.log(.system, "Data saved", detail: "\(inserted.count) object(s)")
+                    self?.logSync(.system, "Data saved", detail: "\(inserted.count) object(s)")
                 }
             }
             .store(in: &cancellables)
@@ -108,7 +308,7 @@ class SystemEventManager: ObservableObject {
 
     func clear() {
         events.removeAll()
-        log(.system, "Console cleared")
+        logSync(.system, "Console cleared")
     }
 }
 
@@ -118,16 +318,31 @@ struct SystemConsoleView: View {
     @StateObject private var eventManager = SystemEventManager.shared
     @State private var autoScroll = true
     @State private var filterType: SystemEventType? = nil
+    @State private var searchQuery = ""
 
     private let bgColor = Color(red: 0.06, green: 0.06, blue: 0.08)
     private let borderColor = Color(red: 0.15, green: 0.15, blue: 0.18)
     private let subtleGreen = Color(red: 0.4, green: 0.8, blue: 0.4)
 
     var filteredEvents: [SystemEvent] {
+        var events = eventManager.events
+
+        // Apply type filter
         if let filter = filterType {
-            return eventManager.events.filter { $0.type == filter }
+            events = events.filter { $0.type == filter }
         }
-        return eventManager.events
+
+        // Apply search filter
+        if !searchQuery.isEmpty {
+            let query = searchQuery.lowercased()
+            events = events.filter {
+                $0.message.lowercased().contains(query) ||
+                ($0.detail?.lowercased().contains(query) ?? false) ||
+                $0.type.rawValue.lowercased().contains(query)
+            }
+        }
+
+        return events
     }
 
     var body: some View {
@@ -135,17 +350,17 @@ struct SystemConsoleView: View {
             // Header
             consoleHeader
 
-            // Filter bar
+            // Filter & search bar
             filterBar
 
             Divider()
                 .background(borderColor)
 
-            // Console output
+            // Log output
             consoleOutput
 
-            // Input/status bar
-            consoleStatusBar
+            // Status bar
+            statusBar
         }
         .background(bgColor)
     }
@@ -203,6 +418,7 @@ struct SystemConsoleView: View {
 
     private var filterBar: some View {
         HStack(spacing: 6) {
+            // Type filter chips
             filterChip(nil, label: "ALL")
             filterChip(.sync, label: "SYNC")
             filterChip(.record, label: "RECORD")
@@ -212,7 +428,33 @@ struct SystemConsoleView: View {
 
             Spacer()
 
-            Text("\(filteredEvents.count) events")
+            // Search field
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.4))
+
+                TextField("Search...", text: $searchQuery)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(width: 120)
+
+                if !searchQuery.isEmpty {
+                    Button(action: { searchQuery = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(4)
+
+            Text("\(filteredEvents.count)")
                 .font(SettingsManager.shared.fontXS)
                 .foregroundColor(.white.opacity(0.3))
         }
@@ -263,18 +505,19 @@ struct SystemConsoleView: View {
 
     // MARK: - Status Bar
 
-    private var consoleStatusBar: some View {
+    private var statusBar: some View {
         HStack(spacing: 12) {
-            // Prompt
-            HStack(spacing: 4) {
-                Text(">")
-                    .font(SettingsManager.shared.fontXSBold)
-                    .foregroundColor(subtleGreen)
-
-                Text("ready")
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.white.opacity(0.4))
+            // Log file info
+            Button(action: openLogsFolder) {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 9))
+                    Text("Open Logs")
+                        .font(SettingsManager.shared.fontXS)
+                }
+                .foregroundColor(.white.opacity(0.4))
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -299,6 +542,13 @@ struct SystemConsoleView: View {
                 .foregroundColor(borderColor),
             alignment: .top
         )
+    }
+
+    // MARK: - Actions
+
+    private func openLogsFolder() {
+        let url = LogFileManager.shared.logsDirectoryPath()
+        NSWorkspace.shared.open(url)
     }
 }
 

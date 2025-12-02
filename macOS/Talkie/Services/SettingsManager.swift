@@ -128,6 +128,15 @@ enum FontSizeOption: String, CaseIterable {
         case .large: return "textformat.size.larger"
         }
     }
+
+    /// Preview font size for the label itself
+    var previewFontSize: CGFloat {
+        switch self {
+        case .small: return 9
+        case .medium: return 11
+        case .large: return 13
+        }
+    }
 }
 
 // MARK: - Curated Theme Presets
@@ -574,12 +583,26 @@ class SettingsManager: ObservableObject {
     var transcriptFilesEnabled: Bool { saveTranscriptsLocally }
     var localFilesIncludeAudio: Bool { saveAudioLocally }
 
+    // MARK: - Auto-Run Workflow Settings (UserDefaults - device-specific)
+    // Control whether auto-run workflows execute on synced memos
+
+    private let autoRunWorkflowsEnabledKey = "autoRunWorkflowsEnabled"
+
+    /// Whether auto-run workflows are enabled (default: false)
+    /// When enabled, workflows marked as autoRun will execute automatically when memos sync
+    /// Note: Only memos created in the last 5 minutes are processed (forward-only behavior)
+    @Published var autoRunWorkflowsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(autoRunWorkflowsEnabled, forKey: autoRunWorkflowsEnabledKey)
+        }
+    }
+
     // Internal storage
     @Published private var _geminiApiKey: String = ""
     @Published private var _openaiApiKey: String?
     @Published private var _anthropicApiKey: String?
     @Published private var _groqApiKey: String?
-    @Published private var _selectedModel: String = "gemini-1.5-flash-latest"
+    @Published private var _selectedModel: String = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
 
     // Public accessors that ensure initialization
     var geminiApiKey: String {
@@ -686,6 +709,10 @@ class SettingsManager: ObservableObject {
         self.saveAudioLocally = UserDefaults.standard.object(forKey: saveAudioLocallyKey) as? Bool ?? false
         self.audioFolderPath = UserDefaults.standard.string(forKey: audioFolderPathKey) ?? SettingsManager.defaultAudioFolderPath
 
+        // Initialize auto-run workflow settings
+        // Default: DISABLED - user must opt-in to auto-run workflows
+        self.autoRunWorkflowsEnabled = UserDefaults.standard.object(forKey: autoRunWorkflowsEnabledKey) as? Bool ?? false
+
         // Apply appearance mode on launch
         applyAppearanceMode()
 
@@ -710,16 +737,26 @@ class SettingsManager: ObservableObject {
         do {
             let results = try context.fetch(fetchRequest)
             if let settings = results.first {
-                self._geminiApiKey = settings.geminiApiKey ?? ""
-                self._openaiApiKey = settings.openaiApiKey
-                self._anthropicApiKey = settings.anthropicApiKey
-                self._groqApiKey = settings.groqApiKey
-                self._selectedModel = settings.selectedModel ?? "gemini-1.5-flash-latest"
-                print("✅ Loaded settings: model=\(_selectedModel)")
-                print("   - Gemini API key: \(_geminiApiKey.isEmpty ? "not set" : "set (\(_geminiApiKey.prefix(8))...)")")
-                print("   - OpenAI API key: \(_openaiApiKey == nil ? "not set" : "set")")
-                print("   - Anthropic API key: \(_anthropicApiKey == nil ? "not set" : "set")")
-                print("   - Groq API key: \(_groqApiKey == nil ? "not set" : "set")")
+                // Update @Published properties on main thread to avoid warnings
+                let gemini = settings.geminiApiKey ?? ""
+                let openai = settings.openaiApiKey
+                let anthropic = settings.anthropicApiKey
+                let groq = settings.groqApiKey
+                let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+
+                DispatchQueue.main.async {
+                    self._geminiApiKey = gemini
+                    self._openaiApiKey = openai
+                    self._anthropicApiKey = anthropic
+                    self._groqApiKey = groq
+                    self._selectedModel = model
+                }
+
+                print("✅ Loaded settings: model=\(model)")
+                print("   - Gemini API key: \(gemini.isEmpty ? "not set" : "set (\(gemini.prefix(8))...)")")
+                print("   - OpenAI API key: \(openai == nil ? "not set" : "set")")
+                print("   - Anthropic API key: \(anthropic == nil ? "not set" : "set")")
+                print("   - Groq API key: \(groq == nil ? "not set" : "set")")
             } else {
                 print("⚠️ No settings found in Core Data, creating defaults...")
                 createDefaultSettings()
@@ -761,16 +798,18 @@ class SettingsManager: ObservableObject {
 
     // MARK: - Create Default Settings
     private func createDefaultSettings() {
+        let defaultModel = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+
         let settings = AppSettings(context: context)
         settings.id = UUID()
         settings.geminiApiKey = ""
-        settings.selectedModel = "gemini-1.5-flash-latest"
+        settings.selectedModel = defaultModel
         settings.lastModified = Date()
 
         do {
             try context.save()
             self._geminiApiKey = ""
-            self._selectedModel = "gemini-1.5-flash-latest"
+            self._selectedModel = defaultModel
             print("✅ Created default settings")
         } catch {
             print("❌ Failed to create default settings: \(error)")

@@ -73,6 +73,23 @@ struct TalkieNavigationView: View {
             // Mark any new memos as received when they appear in the list
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .browseWorkflows)) { _ in
+            // Navigate to Workflows section when "MORE" button is clicked
+            selectedSection = .workflows
+        }
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) {
+            DebugToolbarOverlay {
+                MainDebugContent()
+            } debugInfo: {
+                [
+                    "Memos": "\(allMemos.count)",
+                    "Section": String(describing: selectedSection),
+                    "AutoRun": SettingsManager.shared.autoRunWorkflowsEnabled ? "ON" : "OFF"
+                ]
+            }
+        }
+        #endif
     }
 
     // MARK: - Status Bar View
@@ -1935,6 +1952,20 @@ struct WorkflowMemoSelectorSheet: View {
     let onSelect: (VoiceMemo) -> Void
     let onCancel: () -> Void
 
+    @State private var selectedMemo: VoiceMemo?
+    @State private var searchText = ""
+
+    private var filteredMemos: [VoiceMemo] {
+        if searchText.isEmpty {
+            return memos
+        }
+        let query = searchText.lowercased()
+        return memos.filter {
+            ($0.title?.lowercased().contains(query) ?? false) ||
+            ($0.transcription?.lowercased().contains(query) ?? false)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -1942,9 +1973,13 @@ struct WorkflowMemoSelectorSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Run Workflow")
                         .font(SettingsManager.shared.fontTitleBold)
-                    Text(workflow.name)
-                        .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Image(systemName: workflow.icon)
+                            .foregroundColor(workflow.color.color)
+                        Text(workflow.name)
+                            .font(SettingsManager.shared.fontBody)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 Spacer()
                 Button(action: onCancel) {
@@ -1955,6 +1990,31 @@ struct WorkflowMemoSelectorSheet: View {
                 .buttonStyle(.plain)
             }
             .padding(16)
+
+            // Search bar
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(SettingsManager.shared.fontSM)
+                    .foregroundColor(.secondary)
+
+                TextField("Search memos...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(SettingsManager.shared.fontBody)
+
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(SettingsManager.shared.fontSM)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
 
             Divider()
 
@@ -1973,48 +2033,61 @@ struct WorkflowMemoSelectorSheet: View {
                         .foregroundColor(.secondary.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(memos) { memo in
-                            Button(action: { onSelect(memo) }) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "waveform")
-                                        .font(SettingsManager.shared.fontTitle)
-                                        .foregroundColor(.blue)
-                                        .frame(width: 32)
+            } else if filteredMemos.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(SettingsManager.shared.fontTitle)
+                        .foregroundColor(.secondary.opacity(0.4))
 
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(memo.title ?? "Untitled")
-                                            .font(SettingsManager.shared.fontBodyMedium)
-                                            .foregroundColor(.primary)
-                                            .lineLimit(1)
-
-                                        if let date = memo.createdAt {
-                                            Text(date, style: .relative)
-                                                .font(SettingsManager.shared.fontXS)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .font(SettingsManager.shared.fontSM)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(12)
-                                .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(6)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(16)
+                    Text("No matching memos")
+                        .font(SettingsManager.shared.fontBody)
+                        .foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(selection: $selectedMemo) {
+                    ForEach(filteredMemos) { memo in
+                        MemoRowView(memo: memo)
+                            .tag(memo)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) {
+                                onSelect(memo)
+                            }
+                            .onTapGesture(count: 1) {
+                                selectedMemo = memo
+                            }
+                    }
+                }
+                .listStyle(.inset)
             }
+
+            Divider()
+
+            // Footer with action button
+            HStack {
+                Text("\(filteredMemos.count) memo\(filteredMemos.count == 1 ? "" : "s")")
+                    .font(SettingsManager.shared.fontXS)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button("Cancel") {
+                    onCancel()
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+
+                Button("Run") {
+                    if let memo = selectedMemo {
+                        onSelect(memo)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedMemo == nil)
+                .keyboardShortcut(.return, modifiers: [])
+            }
+            .padding(16)
         }
-        .frame(width: 400, height: 450)
+        .frame(width: 500, height: 500)
         .background(Color(NSColor.textBackgroundColor))
     }
 }

@@ -137,3 +137,86 @@ enum TalkieAnimation {
     static let slow = Animation.easeInOut(duration: 0.4)
     static let spring = Animation.spring(response: 0.4, dampingFraction: 0.8)
 }
+
+// MARK: - Semantic Colors
+/// Consistent colors for interactive elements and status indicators.
+enum SemanticColor {
+    /// Success/enabled state - active toggles, success messages
+    static let success: Color = .green
+
+    /// Warning state - caution messages, auto-run indicators
+    static let warning: Color = .orange
+
+    /// Error state - errors, destructive actions
+    static let error: Color = .red
+
+    /// Info/highlight state - notifications, info badges
+    static let info: Color = .cyan
+
+    /// Pin/favorite accent
+    static let pin: Color = .blue
+
+    /// Processing/activity state
+    static let processing: Color = .purple
+}
+
+// MARK: - Toggle Styles
+/// Custom colored toggle switch for consistent styling across the app.
+struct TalkieToggleStyle: ToggleStyle {
+    var onColor: Color = SemanticColor.success
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(configuration.isOn ? onColor : Color.secondary.opacity(0.25))
+                    .frame(width: 36, height: 20)
+
+                Circle()
+                    .fill(Color.white)
+                    .shadow(color: .black.opacity(0.15), radius: 1, x: 0, y: 1)
+                    .frame(width: 16, height: 16)
+                    .offset(x: configuration.isOn ? 8 : -8)
+            }
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isOn)
+            .onTapGesture {
+                configuration.isOn.toggle()
+            }
+        }
+    }
+}
+
+// Semantic toggle style extensions for easy access
+extension ToggleStyle where Self == TalkieToggleStyle {
+    /// Custom color toggle
+    static func talkie(_ color: Color) -> TalkieToggleStyle {
+        TalkieToggleStyle(onColor: color)
+    }
+
+    /// Default enabled/success toggle (green)
+    static var talkieSuccess: TalkieToggleStyle {
+        TalkieToggleStyle(onColor: SemanticColor.success)
+    }
+
+    /// Info/notification toggle (cyan)
+    static var talkieInfo: TalkieToggleStyle {
+        TalkieToggleStyle(onColor: SemanticColor.info)
+    }
+
+    /// Warning/auto-run toggle (orange)
+    static var talkieWarning: TalkieToggleStyle {
+        TalkieToggleStyle(onColor: SemanticColor.warning)
+    }
+
+    /// Pin/favorite toggle (blue)
+    static var talkiePin: TalkieToggleStyle {
+        TalkieToggleStyle(onColor: SemanticColor.pin)
+    }
+
+    /// Processing/activity toggle (purple)
+    static var talkieProcessing: TalkieToggleStyle {
+        TalkieToggleStyle(onColor: SemanticColor.processing)
+    }
+}

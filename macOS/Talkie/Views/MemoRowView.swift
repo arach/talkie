@@ -21,9 +21,6 @@ struct MemoRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Status indicator with sync status
-            syncStatusIndicator
-
             VStack(alignment: .leading, spacing: 2) {
                 // Title
                 Text(memoTitle)
@@ -84,23 +81,4 @@ struct MemoRowView: View {
         }
     }
 
-    // MARK: - Sync Status Indicator
-
-    /// Simple indicator: green checkmark = transcribed + synced, gray dot = not ready
-    @ViewBuilder
-    private var syncStatusIndicator: some View {
-        let isReady = memo.currentTranscript != nil && memo.cloudSyncedAt != nil
-
-        if isReady {
-            // Green checkmark = transcribed and synced to cloud
-            Image(systemName: "checkmark")
-                .font(settings.fontXSBold)
-                .foregroundColor(.green)
-        } else {
-            // Gray dot = not ready yet
-            Circle()
-                .fill(Color.secondary.opacity(0.3))
-                .frame(width: 6, height: 6)
-        }
-    }
 }

@@ -32,6 +32,7 @@ struct MemoDetailView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var workflowManager = WorkflowManager.shared
     @State private var processingWorkflowIDs: Set<UUID> = []
+    @State private var showingWorkflowPicker = false
 
     // MARK: - Quick Actions Logic
 
@@ -449,6 +450,18 @@ struct MemoDetailView: View {
                 isEditing = false
             }
         }
+        .sheet(isPresented: $showingWorkflowPicker) {
+            WorkflowPickerSheet(
+                memo: memo,
+                onSelect: { workflow in
+                    showingWorkflowPicker = false
+                    executeCustomWorkflow(workflow)
+                },
+                onCancel: {
+                    showingWorkflowPicker = false
+                }
+            )
+        }
     }
 
     private func toggleEditMode() {
@@ -639,11 +652,13 @@ struct MemoDetailView: View {
             return ("groq", selectedModel)
         } else if !settings.geminiApiKey.isEmpty {
             // Default to gemini if key is set
-            return ("gemini", selectedModel.hasPrefix("gemini") ? selectedModel : "gemini-1.5-flash-latest")
+            let defaultGemini = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+            return ("gemini", selectedModel.hasPrefix("gemini") ? selectedModel : defaultGemini)
         }
 
-        // Ultimate fallback
-        return ("gemini", "gemini-1.5-flash-latest")
+        // Ultimate fallback - use first configured provider from config
+        let defaultGemini = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+        return ("gemini", defaultGemini)
     }
 
     private func shareTranscript() {
@@ -704,9 +719,7 @@ struct MemoDetailView: View {
     }
 
     private func browseWorkflows() {
-        // Post notification to switch to Workflows tab and open workflow browser
-        NotificationCenter.default.post(name: .browseWorkflows, object: memo)
-        print("🔍 Browse workflows for memo: \(memo.title ?? "Untitled")")
+        showingWorkflowPicker = true
     }
 
     // MARK: - Quick Action Button Builder
@@ -1230,19 +1243,11 @@ struct WorkflowRunDetailView: View {
             // Header bar
             HStack(spacing: 10) {
                 Button(action: onBack) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(SettingsManager.shared.fontSM)
-                        Text("BACK")
-                            .font(SettingsManager.shared.fontSMBold)
-                            .tracking(0.5)
-                    }
-                    .foregroundColor(.secondary)
+                    Image(systemName: "chevron.left")
+                        .font(SettingsManager.shared.fontSM)
+                        .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-
-                Divider()
-                    .frame(height: 16)
 
                 Image(systemName: workflowIcon)
                     .font(SettingsManager.shared.fontBody)
@@ -1601,4 +1606,194 @@ struct OutputCard: View {
 // MARK: - Notification Names
 extension Notification.Name {
     static let browseWorkflows = Notification.Name("browseWorkflows")
+}
+
+// MARK: - Workflow Picker Sheet
+
+struct WorkflowPickerSheet: View {
+    let memo: VoiceMemo
+    let onSelect: (WorkflowDefinition) -> Void
+    let onCancel: () -> Void
+
+    @StateObject private var workflowManager = WorkflowManager.shared
+    @State private var selectedWorkflow: WorkflowDefinition?
+    @State private var searchText = ""
+
+    /// Workflows available to run (exclude system workflows like Hey Talkie)
+    private var availableWorkflows: [WorkflowDefinition] {
+        workflowManager.workflows.filter { workflow in
+            workflow.id != WorkflowDefinition.heyTalkieWorkflowId &&
+            workflow.isEnabled
+        }
+    }
+
+    private var filteredWorkflows: [WorkflowDefinition] {
+        if searchText.isEmpty {
+            return availableWorkflows
+        }
+        let query = searchText.lowercased()
+        return availableWorkflows.filter {
+            $0.name.lowercased().contains(query) ||
+            $0.description.lowercased().contains(query)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Run Workflow")
+                        .font(SettingsManager.shared.fontTitleBold)
+                    Text(memo.title ?? "Untitled Memo")
+                        .font(SettingsManager.shared.fontBody)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button(action: onCancel) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(SettingsManager.shared.fontHeadline)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+
+            // Search bar
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(SettingsManager.shared.fontSM)
+                    .foregroundColor(.secondary)
+
+                TextField("Search workflows...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(SettingsManager.shared.fontBody)
+
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(SettingsManager.shared.fontSM)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+
+            Divider()
+
+            if availableWorkflows.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "flowchart")
+                        .font(SettingsManager.shared.fontDisplay)
+                        .foregroundColor(.secondary.opacity(0.4))
+
+                    Text("No Workflows")
+                        .font(SettingsManager.shared.fontBodyMedium)
+                        .foregroundColor(.secondary)
+
+                    Text("Create a workflow in Settings → Workflows")
+                        .font(SettingsManager.shared.fontSM)
+                        .foregroundColor(.secondary.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredWorkflows.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(SettingsManager.shared.fontTitle)
+                        .foregroundColor(.secondary.opacity(0.4))
+
+                    Text("No matching workflows")
+                        .font(SettingsManager.shared.fontBody)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(selection: $selectedWorkflow) {
+                    ForEach(filteredWorkflows) { workflow in
+                        WorkflowPickerRow(workflow: workflow, isSelected: selectedWorkflow?.id == workflow.id)
+                            .tag(workflow)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) {
+                                onSelect(workflow)
+                            }
+                            .onTapGesture(count: 1) {
+                                selectedWorkflow = workflow
+                            }
+                    }
+                }
+                .listStyle(.inset)
+            }
+
+            Divider()
+
+            // Footer
+            HStack {
+                Text("\(filteredWorkflows.count) workflow\(filteredWorkflows.count == 1 ? "" : "s")")
+                    .font(SettingsManager.shared.fontXS)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button("Cancel") {
+                    onCancel()
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+
+                Button("Run") {
+                    if let workflow = selectedWorkflow {
+                        onSelect(workflow)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedWorkflow == nil)
+                .keyboardShortcut(.return, modifiers: [])
+            }
+            .padding(16)
+        }
+        .frame(width: 450, height: 450)
+        .background(Color(NSColor.textBackgroundColor))
+    }
+}
+
+struct WorkflowPickerRow: View {
+    let workflow: WorkflowDefinition
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Icon
+            Image(systemName: workflow.icon)
+                .font(SettingsManager.shared.fontTitle)
+                .foregroundColor(workflow.color.color)
+                .frame(width: 28)
+
+            // Info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workflow.name)
+                    .font(SettingsManager.shared.fontBodyMedium)
+                    .foregroundColor(.primary)
+
+                if !workflow.description.isEmpty {
+                    Text(workflow.description)
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            // Step count
+            Text("\(workflow.steps.count) step\(workflow.steps.count == 1 ? "" : "s")")
+                .font(SettingsManager.shared.fontXS)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
 }

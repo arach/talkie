@@ -488,18 +488,17 @@ struct PersistenceController {
 
                     logger.info("📋 Processing \(workflowIds.count) pending workflow(s) for memo: \(memo.title ?? "untitled")")
 
-                    // Run each pending workflow
-                    for workflowId in workflowIds {
-                        // Find the workflow definition
-                        if let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) {
-                            logger.info("▶️ Running workflow: \(workflow.name)")
-
-                            // Execute the workflow asynchronously
-                            Task { @MainActor in
-                                try? await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
+                    // Run each pending workflow on main actor
+                    let workflowIdsToRun = workflowIds
+                    Task { @MainActor in
+                        for workflowId in workflowIdsToRun {
+                            // Find the workflow definition
+                            if let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) {
+                                logger.info("▶️ Running workflow: \(workflow.name)")
+                                _ = try? await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
+                            } else {
+                                logger.warning("⚠️ Workflow not found: \(workflowId)")
                             }
-                        } else {
-                            logger.warning("⚠️ Workflow not found: \(workflowId)")
                         }
                     }
 
