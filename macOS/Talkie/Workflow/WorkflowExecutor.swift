@@ -191,11 +191,12 @@ class WorkflowExecutor: ObservableObject {
         // Track step-by-step execution for detailed view
         var stepExecutions: [StepExecution] = []
 
-        print("🚀 Starting workflow: \(workflow.name)")
+        // Log workflow start to console
+        await SystemEventManager.shared.log(.workflow, "Starting: \(workflow.name)", detail: "Memo: \(memo.title ?? "Untitled")")
 
         for (index, step) in workflow.steps.enumerated() {
             guard step.isEnabled else {
-                print("⏭️ Skipping disabled step \(index + 1)")
+                await SystemEventManager.shared.log(.workflow, "Skipping step \(index + 1) (disabled)", detail: workflow.name)
                 continue
             }
 
@@ -204,13 +205,13 @@ class WorkflowExecutor: ObservableObject {
                 let resolvedCondition = workflowContext.resolve(condition.expression)
                 if !evaluateCondition(resolvedCondition) {
                     if condition.skipOnFail {
-                        print("⏭️ Condition not met, skipping step \(index + 1)")
+                        await SystemEventManager.shared.log(.workflow, "Skipping step \(index + 1) (condition)", detail: workflow.name)
                         continue
                     }
                 }
             }
 
-            print("▶️ Executing step \(index + 1): \(step.type.rawValue)")
+            await SystemEventManager.shared.log(.workflow, "Step \(index + 1): \(step.type.rawValue)", detail: workflow.name)
 
             // Capture input for this step
             let stepInput: String
@@ -248,10 +249,10 @@ class WorkflowExecutor: ObservableObject {
                 outputKey: step.outputKey
             ))
 
-            print("✅ Step \(index + 1) completed")
+            await SystemEventManager.shared.log(.workflow, "Step \(index + 1) completed", detail: workflow.name)
         }
 
-        print("🎉 Workflow completed: \(workflow.name)")
+        await SystemEventManager.shared.log(.workflow, "Completed: \(workflow.name)", detail: "\(workflow.steps.count) steps")
 
         // Save workflow run to Core Data
         let finalOutput = workflowContext.outputs.values.joined(separator: "\n\n---\n\n")

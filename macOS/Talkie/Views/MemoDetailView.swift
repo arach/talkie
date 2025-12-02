@@ -800,9 +800,8 @@ struct MemoDetailView: View {
                     for: memo,
                     context: viewContext
                 )
-                print("✅ Workflow '\(workflow.name)' completed")
             } catch {
-                print("❌ Workflow error: \(error.localizedDescription)")
+                await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }
 
             _ = await MainActor.run {

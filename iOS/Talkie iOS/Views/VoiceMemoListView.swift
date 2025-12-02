@@ -492,9 +492,13 @@ struct VoiceMemoListView: View {
             deepLinkManager.clearAction()
 
         case .openSearch:
-            // Activate search mode and focus the field
+            // Dismiss any open detail sheet first, then activate search
+            deepLinkMemo = nil
             isSearching = true
-            isSearchFieldFocused = true
+            // Delay focus slightly to allow sheet dismissal
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isSearchFieldFocused = true
+            }
             deepLinkManager.clearAction()
 
         case .openAllMemos:

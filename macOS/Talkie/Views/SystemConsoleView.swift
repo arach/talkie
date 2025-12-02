@@ -312,48 +312,38 @@ struct ConsoleEventRow: View {
     private let bgColor = Color(red: 0.06, green: 0.06, blue: 0.08)
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Timestamp
+        HStack(alignment: .top, spacing: 6) {
+            // Timestamp (compact)
             Text(formatTime(event.timestamp))
-                .font(SettingsManager.shared.fontXS)
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .foregroundColor(.white.opacity(0.25))
-                .frame(width: 65, alignment: .leading)
+                .frame(width: 52, alignment: .leading)
 
-            // Separator
-            Text("│")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.white.opacity(0.1))
-                .padding(.horizontal, 4)
-
-            // Type badge
+            // Type badge (compact)
             Text(event.type.rawValue)
-                .font(SettingsManager.shared.fontXSBold)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .foregroundColor(event.type.color)
-                .frame(width: 55, alignment: .leading)
+                .frame(width: 60, alignment: .leading)
 
-            // Separator
-            Text("│")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.white.opacity(0.1))
-                .padding(.horizontal, 4)
-
-            // Message
+            // Message (takes remaining space)
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.message)
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                    .lineLimit(2)
 
                 if let detail = event.detail {
                     Text(detail)
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.white.opacity(0.35))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.4))
+                        .lineLimit(1)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 3)
         .background(isHovering ? Color.white.opacity(0.02) : Color.clear)
         .onHover { hovering in isHovering = hovering }
     }

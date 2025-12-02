@@ -191,6 +191,8 @@ class CloudKitSyncManager: ObservableObject {
             // Mark memos from other devices as received by Mac
             if let context = self.viewContext {
                 PersistenceController.markMemosAsReceivedByMac(context: context)
+                // Process any pending workflow requests from iOS
+                PersistenceController.processPendingWorkflows(context: context)
             }
 
             if changes > 0 {

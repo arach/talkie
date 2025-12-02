@@ -26,11 +26,13 @@ struct VoiceMemoDetailView: View {
     @State private var isGeneratingTitle = false
     @State private var aiError: String?
     @State private var reminderStatus: ReminderStatus = .idle
-    @State private var noteCopyStatus: NoteCopyStatus = .idle
     @State private var showingReminderSheet = false
     @State private var showingReminderToast = false
+    @State private var showingNoteShare = false
     @State private var reminderTitle: String = ""
     @State private var reminderDueDate: Date = Date().addingTimeInterval(3600) // 1 hour from now
+    @State private var showingMacWorkflowToast = false
+    @State private var tappedWorkflowName: String = ""
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var aiService = OnDeviceAIService.shared
 
@@ -41,10 +43,6 @@ struct VoiceMemoDetailView: View {
         case error(String)
     }
 
-    private enum NoteCopyStatus {
-        case idle
-        case copied
-    }
 
     private var memoURL: URL? {
         guard let filename = memo.fileURL else { return nil }
@@ -507,17 +505,55 @@ struct VoiceMemoDetailView: View {
                 TranscriptVersionHistorySheet(memo: memo)
             }
             .onAppear {
+                // Sync iCloud KVS to get latest pinned workflows from Mac
+                NSUbiquitousKeyValueStore.default.synchronize()
                 // Fetch latest from CloudKit
                 fetchLatestFromCloudKit()
             }
-            .overlay(alignment: .bottom) {
+            .overlay {
+                // Rising toast for Mac workflow
+                if showingMacWorkflowToast {
+                    RisingToast(isShowing: $showingMacWorkflowToast) {
+                        MacWorkflowToast(workflowName: tappedWorkflowName)
+                    }
+                }
+
+                // Rising toast for reminder
                 if showingReminderToast {
-                    ReminderToast()
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .padding(.bottom, 100)
+                    RisingToast(isShowing: $showingReminderToast, pauseDuration: 2.0) {
+                        ReminderToast()
+                    }
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingReminderToast)
+            #if DEBUG
+            .overlay(alignment: .bottomTrailing) {
+                DebugToolbarOverlay(
+                    content: {
+                        DetailViewDebugContent(
+                            memo: memo,
+                            onTriggerToast: {
+                                tappedWorkflowName = "Test Workflow"
+                                showingMacWorkflowToast = true
+                            },
+                            onTriggerReminderToast: {
+                                showingReminderToast = true
+                            }
+                        )
+                    },
+                    debugInfo: {
+                        var info: [String: String] = [:]
+                        info["Memo"] = memo.id?.uuidString.prefix(8).description ?? "-"
+                        info["Playing"] = audioPlayer.isPlaying ? "Yes" : "No"
+                        if let pending = memo.pendingWorkflowIds, !pending.isEmpty {
+                            let count = (try? JSONDecoder().decode([String].self, from: pending.data(using: .utf8) ?? Data()))?.count ?? 0
+                            info["Pending"] = "\(count) workflow(s)"
+                        }
+                        info["Synced"] = memo.cloudSyncedAt != nil ? "Yes" : "No"
+                        return info
+                    }
+                )
+            }
+            #endif
         }
     }
 
@@ -767,25 +803,42 @@ struct VoiceMemoDetailView: View {
     }
 
     private func createNote() {
-        // Apple Notes has no public API, so we copy content and let user paste
-        UIPasteboard.general.string = noteContent
-
-        // Haptic feedback
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
-
-        // Open Notes app
-        if let url = URL(string: "mobilenotes://") {
-            UIApplication.shared.open(url)
-        }
-
-        noteCopyStatus = .copied
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            noteCopyStatus = .idle
-        }
+        // Show share sheet with text + audio file for Notes/Quick Note
+        showingNoteShare = true
     }
 
-    /// Content to share to Notes app
+    /// Subtitle for share sheet (date + duration)
+    private var noteSubtitle: String {
+        let date = memo.createdAt ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return "\(formatter.string(from: date)) · \(formatDuration(memo.duration))"
+    }
+
+    /// Audio URL for sharing (with nice filename)
+    private var noteAudioURL: URL? {
+        let safeTitle = (memo.title ?? "Voice Memo")
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(safeTitle)
+            .appendingPathExtension("m4a")
+
+        // Get audio data from either audioData or file
+        if let audioData = memo.audioData {
+            try? audioData.write(to: tempURL)
+            return tempURL
+        } else if let originalURL = memoURL, FileManager.default.fileExists(atPath: originalURL.path) {
+            try? FileManager.default.removeItem(at: tempURL)
+            try? FileManager.default.copyItem(at: originalURL, to: tempURL)
+            return tempURL
+        }
+
+        return nil
+    }
+
+    /// Content to share to Notes app - includes transcript + all Mac workflow outputs
     private var noteContent: String {
         var content = ""
         let title = memo.title ?? "Voice Memo"
@@ -794,20 +847,41 @@ struct VoiceMemoDetailView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
 
-        content += "\(title)\n"
+        // Header
+        content += "# \(title)\n"
         content += "Recorded: \(formatter.string(from: date))\n"
-        content += String(repeating: "─", count: 30) + "\n\n"
+        content += "Duration: \(formatDuration(memo.duration))\n"
+        content += "\n"
 
-        if let transcript = memo.currentTranscript {
+        // Transcript
+        if let transcript = memo.currentTranscript, !transcript.isEmpty {
+            content += "## Transcript\n"
             content += transcript
+            content += "\n\n"
         }
 
+        // Summary (from Mac workflow)
         if let summary = memo.summary, !summary.isEmpty {
-            content += "\n\n" + String(repeating: "─", count: 30) + "\n"
-            content += "Summary:\n\(summary)"
+            content += "## Summary\n"
+            content += summary
+            content += "\n\n"
         }
 
-        return content
+        // Tasks (from Mac workflow)
+        if let tasks = memo.tasks, !tasks.isEmpty {
+            content += "## Tasks\n"
+            content += tasks
+            content += "\n\n"
+        }
+
+        // Reminders (from Mac workflow)
+        if let reminders = memo.reminders, !reminders.isEmpty {
+            content += "## Reminders\n"
+            content += reminders
+            content += "\n"
+        }
+
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Extracted View Sections
@@ -832,13 +906,13 @@ struct VoiceMemoDetailView: View {
                     showingShare = true
                 }
 
-                // Add to Notes (copies content and opens Notes app)
+                // Add to Notes (share sheet with text + audio)
                 QuickActionButton(
-                    icon: noteCopyStatus == .copied ? "checkmark.circle.fill" : "note.text",
-                    label: noteCopyStatus == .copied ? "Copied!" : "Note",
+                    icon: "note.text",
+                    label: "Note",
                     badge: .none,
                     isProcessing: false,
-                    hasContent: noteCopyStatus == .copied,
+                    hasContent: false,
                     isAvailable: memo.currentTranscript != nil
                 ) {
                     createNote()
@@ -879,6 +953,14 @@ struct VoiceMemoDetailView: View {
                 }
             )
             .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingNoteShare) {
+            NoteShareSheet(
+                title: memo.title ?? "Voice Memo",
+                subtitle: noteSubtitle,
+                textContent: noteContent,
+                audioURL: noteAudioURL
+            )
         }
     }
 
@@ -977,11 +1059,18 @@ struct VoiceMemoDetailView: View {
                             icon: icon,
                             label: name,
                             badge: .remote,
-                            isProcessing: false,
+                            isProcessing: isPendingWorkflow(workflowId: workflow["id"]),
                             hasContent: hasWorkflowOutput(workflowId: workflow["id"]),
                             isAvailable: memo.macReceivedAt != nil
                         ) {
-                            // Trigger this workflow on Mac
+                            // Add to pending queue
+                            if let idString = workflow["id"], let workflowId = UUID(uuidString: idString) {
+                                addPendingWorkflow(workflowId)
+                            }
+
+                            // Show feedback toast (RisingToast handles its own dismiss timing)
+                            tappedWorkflowName = name
+                            showingMacWorkflowToast = true
                         }
                     }
                 }
@@ -1007,6 +1096,42 @@ struct VoiceMemoDetailView: View {
             return false
         }
         return runs.contains { $0.workflowId == uuid && $0.status == "completed" }
+    }
+
+    /// Get pending workflow IDs as array
+    private var pendingWorkflowIdArray: [UUID] {
+        guard let jsonString = memo.pendingWorkflowIds,
+              let data = jsonString.data(using: .utf8),
+              let ids = try? JSONDecoder().decode([UUID].self, from: data) else {
+            return []
+        }
+        return ids
+    }
+
+    /// Check if a workflow is pending
+    private func isPendingWorkflow(workflowId: String?) -> Bool {
+        guard let idString = workflowId,
+              let uuid = UUID(uuidString: idString) else {
+            return false
+        }
+        return pendingWorkflowIdArray.contains(uuid)
+    }
+
+    /// Add a workflow to the pending queue
+    private func addPendingWorkflow(_ workflowId: UUID) {
+        var ids = pendingWorkflowIdArray
+
+        // Don't add duplicates
+        guard !ids.contains(workflowId) else { return }
+
+        ids.append(workflowId)
+
+        if let data = try? JSONEncoder().encode(ids),
+           let jsonString = String(data: data, encoding: .utf8) {
+            memo.pendingWorkflowIds = jsonString
+            try? memo.managedObjectContext?.save()
+            AppLogger.persistence.info("Added pending workflow: \(workflowId)")
+        }
     }
 
     private var macConnectionBadge: some View {
@@ -1134,13 +1259,20 @@ struct VoiceMemoDetailView: View {
                         didUpdate = true
                     }
 
+                    // Sync pending workflow queue (Mac clears this after running)
+                    let pendingWorkflowIds = record["CD_pendingWorkflowIds"] as? String
+                    if memo.pendingWorkflowIds != pendingWorkflowIds {
+                        memo.pendingWorkflowIds = pendingWorkflowIds
+                        didUpdate = true
+                    }
+
                     if didUpdate {
                         try? memo.managedObjectContext?.save()
-                        AppLogger.persistence.info("Updated memo from CloudKit: cloud=\(memo.cloudSyncedAt != nil), mac=\(memo.macReceivedAt != nil), summary=\(memo.summary != nil)")
+                        AppLogger.persistence.info("Updated memo from CloudKit: cloud=\(memo.cloudSyncedAt != nil), mac=\(memo.macReceivedAt != nil), summary=\(memo.summary != nil), pending=\(memo.pendingWorkflowIds ?? "nil")")
                     }
                 }
 
-                // Also fetch workflow runs for this memo
+                // Fetch WorkflowRuns for this memo
                 self.fetchWorkflowRuns(memoId: memoId, zoneID: zoneID, privateDB: privateDB)
 
             case .failure(let error):
@@ -1151,29 +1283,32 @@ struct VoiceMemoDetailView: View {
 
     /// Fetch workflow runs from CloudKit for this memo
     private func fetchWorkflowRuns(memoId: UUID, zoneID: CKRecordZone.ID, privateDB: CKDatabase) {
-        // WorkflowRun records are linked via CD_memo relationship
-        // Query all WorkflowRun records and filter by memo relationship
+        // Query all WorkflowRun records - we'll filter by memo relationship
         let predicate = NSPredicate(value: true)
         let query = CKQuery(recordType: "CD_WorkflowRun", predicate: predicate)
 
-        privateDB.fetch(withQuery: query, inZoneWith: zoneID) { result in
+        privateDB.fetch(withQuery: query, inZoneWith: zoneID, resultsLimit: 100) { result in
             switch result {
             case .success(let (matchResults, _)):
                 DispatchQueue.main.async {
                     guard let context = self.memo.managedObjectContext else { return }
 
                     // Get existing workflow run IDs to avoid duplicates
-                    let existingIds = (self.memo.workflowRuns as? Set<WorkflowRun>)?.compactMap { $0.id } ?? []
+                    let existingRuns = (self.memo.workflowRuns as? Set<WorkflowRun>) ?? []
+                    let existingIds = Set(existingRuns.compactMap { $0.id })
+
+                    var addedCount = 0
 
                     for matchResult in matchResults {
                         guard case .success(let record) = matchResult.1 else { continue }
 
                         // Check if this run belongs to our memo via the reference
-                        guard record["CD_memo"] is CKRecord.Reference else { continue }
+                        guard let memoRef = record["CD_memo"] as? CKRecord.Reference else { continue }
 
-                        // The reference recordID contains the memo's CloudKit record name
-                        // We need to match it - for Core Data + CloudKit, the record name format varies
-                        // Try matching by checking if the workflow run's memo reference points to a record with our memo's ID
+                        // The reference recordID should contain our memo's ID somewhere
+                        // Core Data + CloudKit uses format like "CD_VoiceMemo_<UUID>"
+                        let refName = memoRef.recordID.recordName
+                        guard refName.contains(memoId.uuidString) else { continue }
 
                         guard let runId = record["CD_id"] as? UUID else { continue }
 
@@ -1194,10 +1329,15 @@ struct VoiceMemoDetailView: View {
                         workflowRun.providerName = record["CD_providerName"] as? String
                         workflowRun.memo = self.memo
 
-                        AppLogger.persistence.info("Added workflow run: \(workflowRun.workflowName ?? "unknown")")
+                        addedCount += 1
                     }
 
-                    try? context.save()
+                    if addedCount > 0 {
+                        try? context.save()
+                        AppLogger.persistence.info("Added \(addedCount) workflow run(s) from CloudKit")
+                    } else {
+                        AppLogger.persistence.debug("No new workflow runs from CloudKit")
+                    }
                 }
 
             case .failure(let error):
@@ -1205,6 +1345,7 @@ struct VoiceMemoDetailView: View {
             }
         }
     }
+
 }
 
 // MARK: - Quick Action Button (compact, with local/remote badge)
@@ -1240,6 +1381,7 @@ struct QuickActionButton: View {
 
     private var statusColor: Color {
         if hasContent { return .success }
+        if isProcessing { return .blue }
         if isAvailable {
             switch badge {
             case .none: return .active
@@ -1250,48 +1392,97 @@ struct QuickActionButton: View {
         return .textTertiary.opacity(0.4)
     }
 
+    private var processingColor: Color {
+        switch badge {
+        case .remote: return .blue
+        default: return .active
+        }
+    }
+
     var body: some View {
         Button(action: {
-            if hasContent {
-                showingDetail = true
-            } else if isAvailable && !isProcessing {
+            // Tap: run action (or re-run if already has content)
+            if isAvailable && !isProcessing {
                 action()
             }
         }) {
             VStack(spacing: 3) {
-                // Icon
+                // Icon with processing state
                 ZStack {
+                    // Subtle glow when processing
+                    if isProcessing {
+                        Circle()
+                            .fill(processingColor.opacity(0.2))
+                            .frame(width: 32, height: 32)
+                    }
+
+                    // Icon
                     Image(systemName: icon)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(statusColor)
-
-                    if isProcessing {
-                        ProgressView()
-                            .scaleEffect(0.4)
-                    }
                 }
-                .frame(width: 24, height: 24)
+                .frame(width: 32, height: 32)
 
                 // Label
                 Text(label)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(hasContent ? .textPrimary : (isAvailable ? .textSecondary : .textTertiary.opacity(0.5)))
+                    .foregroundColor(isProcessing ? processingColor : (hasContent ? .textPrimary : (isAvailable ? .textSecondary : .textTertiary.opacity(0.5))))
                     .lineLimit(1)
 
-                // Status dot
-                Circle()
-                    .fill(hasContent ? Color.success : (isProcessing ? Color.transcribing : Color.clear))
-                    .frame(width: 4, height: 4)
+                // Status indicator
+                HStack(spacing: 3) {
+                    if isProcessing {
+                        // "Sending to Mac" indicator
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(processingColor)
+                        Text("PENDING")
+                            .font(.system(size: 7, weight: .bold))
+                            .tracking(0.5)
+                            .foregroundColor(processingColor)
+                    } else if hasContent {
+                        Circle()
+                            .fill(Color.success)
+                            .frame(width: 4, height: 4)
+                    } else {
+                        Circle()
+                            .fill(Color.clear)
+                            .frame(width: 4, height: 4)
+                    }
+                }
+                .frame(height: 10)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(hasContent ? statusColor.opacity(0.08) : Color.surfaceSecondary.opacity(isDisabled ? 0.5 : 1))
+            .frame(height: 60)
+            .background(
+                Group {
+                    if isProcessing {
+                        // Subtle animated gradient when processing
+                        LinearGradient(
+                            colors: [
+                                processingColor.opacity(0.08),
+                                processingColor.opacity(0.15),
+                                processingColor.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    } else if hasContent {
+                        statusColor.opacity(0.08)
+                    } else {
+                        Color.surfaceSecondary.opacity(isDisabled ? 0.5 : 1)
+                    }
+                }
+            )
             .cornerRadius(CornerRadius.sm)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(hasContent ? statusColor.opacity(0.3) : Color.borderPrimary.opacity(isDisabled ? 0.2 : 0.5), lineWidth: 0.5)
+                    .strokeBorder(
+                        isProcessing ? processingColor.opacity(0.5) : (hasContent ? statusColor.opacity(0.3) : Color.borderPrimary.opacity(isDisabled ? 0.2 : 0.5)),
+                        lineWidth: isProcessing ? 1 : 0.5
+                    )
             )
-            .opacity(isDisabled && !hasContent ? 0.5 : 1)
+            .opacity(isDisabled && !hasContent && !isProcessing ? 0.5 : 1)
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(isDisabled)
@@ -1911,6 +2102,9 @@ struct WorkflowRunRow: View {
     let run: WorkflowRun
     @State private var showCopied = false
     @State private var showDetails = false
+    @State private var isExpanded = false
+
+    private let collapsedLineLimit = 4
 
     private var statusColor: Color {
         switch run.status {
@@ -1928,64 +2122,105 @@ struct WorkflowRunRow: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
+    private var outputIsLong: Bool {
+        guard let output = run.output else { return false }
+        // Rough estimate: more than 4 lines worth of text
+        return output.count > 200 || output.components(separatedBy: .newlines).count > collapsedLineLimit
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Header: Workflow name + timestamp
-            HStack {
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: run.workflowIcon ?? "wand.and.stars")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(statusColor)
-
-                    Text(run.workflowName ?? "Workflow")
-                        .font(.techLabel)
-                        .tracking(1)
-                        .foregroundColor(.textSecondary)
+            // Header: Workflow name + timestamp - tap to expand/collapse
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
                 }
+            }) {
+                HStack {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: run.workflowIcon ?? "wand.and.stars")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(statusColor)
 
-                Spacer()
-
-                Text(formattedDate)
-                    .font(.techLabelSmall)
-                    .foregroundColor(.textTertiary)
-            }
-
-            // Output - primary content, tap to copy
-            if let output = run.output, !output.isEmpty {
-                Button(action: {
-                    UIPasteboard.general.string = output
-                    withAnimation {
-                        showCopied = true
+                        Text(run.workflowName ?? "Workflow")
+                            .font(.techLabel)
+                            .tracking(1)
+                            .foregroundColor(.textSecondary)
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        withAnimation {
-                            showCopied = false
+
+                    Spacer()
+
+                    HStack(spacing: Spacing.xs) {
+                        Text(formattedDate)
+                            .font(.techLabelSmall)
+                            .foregroundColor(.textTertiary)
+
+                        if outputIsLong {
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.textTertiary)
                         }
                     }
-                }) {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text(output)
-                            .font(.bodySmall)
-                            .foregroundColor(.textPrimary)
-                            .lineSpacing(4)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .multilineTextAlignment(.leading)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
 
-                        // Tap to copy hint
-                        HStack {
-                            Spacer()
+            // Output - primary content
+            if let output = run.output, !output.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(output)
+                        .font(.bodySmall)
+                        .foregroundColor(.textPrimary)
+                        .lineSpacing(4)
+                        .lineLimit(isExpanded ? nil : collapsedLineLimit)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+
+                    // Footer: expand hint or copy button
+                    HStack {
+                        if outputIsLong && !isExpanded {
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isExpanded = true
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Text("SHOW MORE")
+                                        .font(.techLabelSmall)
+                                        .tracking(0.5)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 8, weight: .semibold))
+                                }
+                                .foregroundColor(.active)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            UIPasteboard.general.string = output
+                            withAnimation {
+                                showCopied = true
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                withAnimation {
+                                    showCopied = false
+                                }
+                            }
+                        }) {
                             HStack(spacing: 4) {
                                 Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
                                     .font(.system(size: 9, weight: .medium))
-                                Text(showCopied ? "COPIED" : "TAP TO COPY")
+                                Text(showCopied ? "COPIED" : "COPY")
                                     .font(.techLabelSmall)
                                     .tracking(0.5)
                             }
                             .foregroundColor(showCopied ? .success : .textTertiary)
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .buttonStyle(PlainButtonStyle())
                 .padding(Spacing.sm)
                 .background(Color.surfacePrimary)
                 .cornerRadius(CornerRadius.sm)
@@ -2156,53 +2391,384 @@ struct QuickTimeButton: View {
     }
 }
 
-// MARK: - Reminder Toast
+// MARK: - Talkie Toast (Standardized)
 
-struct ReminderToast: View {
+enum ToastStyle {
+    case success
+    case info
+    case warning
+
+    var iconColor: Color {
+        switch self {
+        case .success: return .green
+        case .info: return .active
+        case .warning: return .orange
+        }
+    }
+}
+
+struct TalkieToast: View {
+    let icon: String
+    let title: String
+    let subtitle: String?
+    let style: ToastStyle
+    let action: (() -> Void)?
+    let actionLabel: String?
+
+    init(
+        icon: String,
+        title: String,
+        subtitle: String? = nil,
+        style: ToastStyle = .info,
+        actionLabel: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.style = style
+        self.actionLabel = actionLabel
+        self.action = action
+    }
+
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 20))
-                .foregroundColor(.green)
+            // Icon with style color
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundColor(style.iconColor)
 
+            // Text content
             VStack(alignment: .leading, spacing: 2) {
-                Text("Reminder added")
+                Text(title)
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundColor(.textPrimary)
 
-                Text("Find it in Reminders → Talkie")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.textSecondary)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+                }
             }
 
             Spacer()
 
-            // Open Reminders button
-            Button(action: {
-                if let url = URL(string: "x-apple-reminderkit://") {
-                    UIApplication.shared.open(url)
+            // Optional action button
+            if let actionLabel = actionLabel, let action = action {
+                Button(action: action) {
+                    Text(actionLabel)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.active)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
+                        .background(Color.active.opacity(0.15))
+                        .cornerRadius(CornerRadius.sm)
                 }
-            }) {
-                Text("Open")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.active)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, Spacing.xs)
-                    .background(Color.active.opacity(0.15))
-                    .cornerRadius(CornerRadius.sm)
             }
         }
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.md)
                 .fill(Color.surfaceSecondary)
-                .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
+                .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 4)
         )
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.md)
                 .strokeBorder(Color.borderPrimary.opacity(0.3), lineWidth: 0.5)
         )
         .padding(.horizontal, Spacing.md)
+    }
+}
+
+// MARK: - Reminder Toast (uses TalkieToast)
+
+struct ReminderToast: View {
+    var body: some View {
+        TalkieToast(
+            icon: "checkmark.circle.fill",
+            title: "Reminder added",
+            subtitle: "Find it in Reminders → Talkie",
+            style: .success,
+            actionLabel: "Open"
+        ) {
+            if let url = URL(string: "x-apple-reminderkit://") {
+                UIApplication.shared.open(url)
+            }
+        }
+    }
+}
+
+// MARK: - Rising Toast Animation
+
+/// A toast that rises from the bottom, pauses at center with dimmed backdrop, then continues up and fades out
+/// User can tap backdrop or swipe up to dismiss early
+struct RisingToast<Content: View>: View {
+    @Binding var isShowing: Bool
+    let pauseDuration: Double
+    let content: () -> Content
+
+    @State private var phase: AnimationPhase = .hidden
+    @State private var dragOffset: CGFloat = 0
+    @State private var dismissTimer: DispatchWorkItem?
+
+    private enum AnimationPhase {
+        case hidden      // Off screen at bottom
+        case rising      // Moving up to center
+        case paused      // Holding at center with backdrop
+        case exiting     // Moving up and fading out
+    }
+
+    init(isShowing: Binding<Bool>, pauseDuration: Double = 4.5, @ViewBuilder content: @escaping () -> Content) {
+        self._isShowing = isShowing
+        self.pauseDuration = pauseDuration
+        self.content = content
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let screenHeight = geometry.size.height
+
+            ZStack {
+                // Gradient backdrop behind toast area - tap to dismiss
+                VStack {
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(gradientOpacity),
+                            Color.black.opacity(gradientOpacity * 0.7),
+                            Color.black.opacity(gradientOpacity * 0.3),
+                            Color.black.opacity(0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 350)
+
+                    Spacer()
+                }
+                .ignoresSafeArea()
+                .onTapGesture {
+                    dismissEarly()
+                }
+
+                // Toast content - positioned absolutely from top
+                VStack(spacing: 0) {
+                    content()
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.top, 48) // Snug below nav bar
+
+                    Spacer()
+                }
+                .offset(y: yOffset(for: phase, screenHeight: screenHeight) + dragOffset)
+                .opacity(toastOpacity)
+                .scaleEffect(scale(for: phase))
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            // Only allow upward drag
+                            if value.translation.height < 0 {
+                                dragOffset = value.translation.height
+                            }
+                        }
+                        .onEnded { value in
+                            // If dragged up enough, dismiss
+                            if value.translation.height < -50 || value.predictedEndTranslation.height < -100 {
+                                dismissEarly()
+                            } else {
+                                // Snap back
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    dragOffset = 0
+                                }
+                            }
+                        }
+                )
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: phase)
+        .onAppear {
+            startAnimation()
+        }
+    }
+
+    private var gradientOpacity: Double {
+        switch phase {
+        case .hidden: return 0
+        case .rising: return 0.9
+        case .paused: return 1.0
+        case .exiting: return 0
+        }
+    }
+
+    private var toastOpacity: Double {
+        // Fade out as user drags up
+        let dragFade = max(0, 1 + Double(dragOffset) / 150)
+
+        switch phase {
+        case .hidden: return 0
+        case .rising: return 1
+        case .paused: return dragFade
+        case .exiting: return 0
+        }
+    }
+
+    private func yOffset(for phase: AnimationPhase, screenHeight: CGFloat) -> CGFloat {
+        switch phase {
+        case .hidden:
+            return screenHeight // Start from below screen
+        case .rising, .paused:
+            return 0 // Right at top, below nav bar
+        case .exiting:
+            return -150 // Exit above screen
+        }
+    }
+
+    private func scale(for phase: AnimationPhase) -> CGFloat {
+        switch phase {
+        case .hidden: return 0.8
+        case .rising: return 1.0
+        case .paused: return 1.0
+        case .exiting: return 0.9
+        }
+    }
+
+    private func startAnimation() {
+        // Phase 1: Rise to top (slower, smoother)
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
+            phase = .rising
+        }
+
+        // Phase 2: Settle into pause
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                phase = .paused
+            }
+        }
+
+        // Schedule auto-dismiss (cancellable)
+        let timer = DispatchWorkItem { [self] in
+            guard phase == .paused else { return }
+            exitAndHide()
+        }
+        dismissTimer = timer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8 + pauseDuration, execute: timer)
+    }
+
+    private func dismissEarly() {
+        // Cancel the auto-dismiss timer
+        dismissTimer?.cancel()
+        exitAndHide()
+    }
+
+    private func exitAndHide() {
+        // Phase 3: Exit upward
+        withAnimation(.easeIn(duration: 0.3)) {
+            phase = .exiting
+            dragOffset = 0
+        }
+
+        // Phase 4: Hide and reset
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            isShowing = false
+            phase = .hidden
+        }
+    }
+}
+
+// MARK: - Mac Workflow Toast
+
+struct MacWorkflowToast: View {
+    let workflowName: String
+
+    var body: some View {
+        TalkieToast(
+            icon: "desktopcomputer",
+            title: "Run on Mac",
+            subtitle: "\(workflowName) will run when your Mac receives this memo",
+            style: .info
+        )
+    }
+}
+
+// MARK: - Note Share Sheet
+
+/// Share sheet for adding content + audio to Notes
+struct NoteShareSheet: UIViewControllerRepresentable {
+    let title: String
+    let subtitle: String
+    let textContent: String
+    let audioURL: URL?
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        var items: [Any] = []
+
+        // Add rich text item with metadata
+        let textItem = ShareableTextItem(
+            text: textContent,
+            title: title,
+            subtitle: subtitle
+        )
+        items.append(textItem)
+
+        // Add audio file if available
+        if let audioURL = audioURL {
+            items.append(audioURL)
+        }
+
+        let activityVC = UIActivityViewController(
+            activityItems: items,
+            applicationActivities: nil
+        )
+
+        // Exclude activities that don't make sense for notes
+        activityVC.excludedActivityTypes = [
+            .assignToContact,
+            .saveToCameraRoll,
+            .addToReadingList
+        ]
+
+        return activityVC
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Shareable Text Item with Metadata
+
+import LinkPresentation
+
+/// Provides rich metadata for share sheet preview
+final class ShareableTextItem: NSObject, UIActivityItemSource {
+    private let text: String
+    private let title: String
+    private let subtitle: String
+
+    init(text: String, title: String, subtitle: String) {
+        self.text = text
+        self.title = title
+        self.subtitle = subtitle
+        super.init()
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        return text
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        return text
+    }
+
+    func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+        let metadata = LPLinkMetadata()
+        metadata.title = title
+
+        // Use originalURL to show subtitle (there's no subtitle property)
+        metadata.originalURL = URL(fileURLWithPath: subtitle)
+
+        // Set app icon as the preview icon
+        if let appIcon = UIImage(named: "AppIcon") ?? UIImage(systemName: "waveform.circle.fill") {
+            metadata.iconProvider = NSItemProvider(object: appIcon)
+        }
+
+        return metadata
     }
 }
 

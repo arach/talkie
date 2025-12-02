@@ -466,6 +466,53 @@ struct PersistenceController {
             }
         }
     }
+
+    /// Process pending workflow requests from iOS
+    /// Fetches memos with pendingWorkflowIds, runs the workflows, and clears the queue
+    static func processPendingWorkflows(context: NSManagedObjectContext) {
+        context.perform {
+            let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "pendingWorkflowIds != nil AND pendingWorkflowIds != %@", "")
+
+            do {
+                let memos = try context.fetch(fetchRequest)
+                guard !memos.isEmpty else { return }
+
+                for memo in memos {
+                    guard let jsonString = memo.pendingWorkflowIds,
+                          let data = jsonString.data(using: .utf8),
+                          let workflowIds = try? JSONDecoder().decode([UUID].self, from: data),
+                          !workflowIds.isEmpty else {
+                        continue
+                    }
+
+                    logger.info("📋 Processing \(workflowIds.count) pending workflow(s) for memo: \(memo.title ?? "untitled")")
+
+                    // Run each pending workflow
+                    for workflowId in workflowIds {
+                        // Find the workflow definition
+                        if let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) {
+                            logger.info("▶️ Running workflow: \(workflow.name)")
+
+                            // Execute the workflow asynchronously
+                            Task { @MainActor in
+                                try? await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
+                            }
+                        } else {
+                            logger.warning("⚠️ Workflow not found: \(workflowId)")
+                        }
+                    }
+
+                    // Clear the pending queue
+                    memo.pendingWorkflowIds = nil
+                }
+
+                try context.save()
+            } catch {
+                logger.error("❌ Failed to process pending workflows: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 // MARK: - Custom Notifications

@@ -793,9 +793,8 @@ struct WorkflowDetailColumn: View {
                     for: memo,
                     context: viewContext
                 )
-                print("✅ Workflow '\(workflow.name)' completed successfully")
             } catch {
-                print("❌ Workflow execution failed: \(error)")
+                await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }
         }
     }
@@ -1921,9 +1920,8 @@ struct WorkflowsContentView: View {
                     for: memo,
                     context: viewContext
                 )
-                print("✅ Workflow '\(workflow.name)' completed successfully")
             } catch {
-                print("❌ Workflow execution failed: \(error)")
+                await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }
         }
     }

@@ -31,6 +31,7 @@
         <attribute name="isTranscribing" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="macReceivedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="pendingWorkflowIds" optional="YES" attributeType="String"/>
         <attribute name="originDeviceId" optional="YES" attributeType="String"/>
         <attribute name="reminders" optional="YES" attributeType="String"/>
         <attribute name="sortOrder" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>

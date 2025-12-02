@@ -60,7 +60,16 @@ struct talkieApp: App {
                     }
 
                 #if DEBUG
-                DebugToolbarOverlay()
+                DebugToolbarOverlay(
+                    content: {
+                        ListViewDebugContent()
+                    },
+                    debugInfo: {
+                        [
+                            "View": "MemoList"
+                        ]
+                    }
+                )
                 #endif
             }
         }
