@@ -73,8 +73,14 @@ struct VoiceMemoRow: View {
                 }
 
                 HStack(spacing: 0) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 8))
+                    Text(" ")
                     Text(formatDateTime(memoCreatedAt))
                     Text(" · ").foregroundColor(.textTertiary.opacity(0.5))
+                    Image(systemName: "doc")
+                        .font(.system(size: 8))
+                    Text(" ")
                     Text(fileSize)
                     if isSeenByMac {
                         Text(" · ").foregroundColor(.textTertiary.opacity(0.5))

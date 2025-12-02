@@ -486,8 +486,14 @@ struct WidgetMemoRowView: View {
             }
 
             HStack(spacing: 0) {
+                Image(systemName: "clock")
+                    .font(.system(size: 6))
+                Text(" ")
                 Text(formatDateTime(memo.createdAt))
                 Text(" · ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                Image(systemName: "doc")
+                    .font(.system(size: 6))
+                Text(" ")
                 Text(formatFileSize(memo.fileSize))
                 if memo.isSeenByMac {
                     Text(" · ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
