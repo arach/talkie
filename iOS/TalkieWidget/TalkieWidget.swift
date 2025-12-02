@@ -490,13 +490,13 @@ struct WidgetMemoRowView: View {
                     .font(.system(size: 6))
                 Text(" ")
                 Text(formatDateTime(memo.createdAt))
-                Text(" · ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                Text("  ·  ").foregroundColor(colors.tertiaryForeground.opacity(0.6))
                 Image(systemName: "doc")
                     .font(.system(size: 6))
                 Text(" ")
                 Text(formatFileSize(memo.fileSize))
                 if memo.isSeenByMac {
-                    Text(" · ").foregroundColor(colors.tertiaryForeground.opacity(0.5))
+                    Text("  ·  ").foregroundColor(colors.tertiaryForeground.opacity(0.6))
                     Image(systemName: "desktopcomputer")
                         .font(.system(size: 7))
                 }

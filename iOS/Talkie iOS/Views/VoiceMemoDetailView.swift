@@ -121,13 +121,15 @@ struct VoiceMemoDetailView: View {
                                 Text("·").font(.labelSmall)
 
                                 HStack(spacing: 4) {
-                                    Image(systemName: memo.cloudSyncedAt != nil ? "checkmark.icloud.fill" : "icloud")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(memo.cloudSyncedAt != nil ? .success : .textTertiary)
+                                    if memo.cloudSyncedAt != nil {
+                                        Image(systemName: "checkmark.icloud.fill")
+                                            .font(.system(size: 10, weight: .medium))
+                                    }
 
-                                    Image(systemName: "desktopcomputer")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(memo.macReceivedAt != nil ? .success : .textTertiary)
+                                    if memo.macReceivedAt != nil {
+                                        Image(systemName: "desktopcomputer")
+                                            .font(.system(size: 10, weight: .medium))
+                                    }
                                 }
                             }
                             .foregroundColor(.textSecondary)

@@ -77,13 +77,13 @@ struct VoiceMemoRow: View {
                         .font(.system(size: 8))
                     Text(" ")
                     Text(formatDateTime(memoCreatedAt))
-                    Text(" · ").foregroundColor(.textTertiary.opacity(0.5))
+                    Text("  ·  ").foregroundColor(.textTertiary.opacity(0.6))
                     Image(systemName: "doc")
                         .font(.system(size: 8))
                     Text(" ")
                     Text(fileSize)
                     if isSeenByMac {
-                        Text(" · ").foregroundColor(.textTertiary.opacity(0.5))
+                        Text("  ·  ").foregroundColor(.textTertiary.opacity(0.6))
                         Image(systemName: "desktopcomputer")
                             .font(.system(size: 9))
                     }
