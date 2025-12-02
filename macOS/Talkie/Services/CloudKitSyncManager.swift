@@ -2,8 +2,12 @@
 //  CloudKitSyncManager.swift
 //  Talkie macOS
 //
-//  Simple CloudKit sync manager - syncs every minute while app is open.
-//  NSPersistentCloudKitContainer handles the actual sync; this is for UI feedback.
+//  CloudKit sync manager with background activity support.
+//  - Foreground: Timer-based sync every minute
+//  - Background (app running but not focused): Continues via disabled App Nap
+//  - Terminated: NSBackgroundActivityScheduler wakes app for periodic sync
+//
+//  NSPersistentCloudKitContainer handles the actual sync; this manages timing and UI.
 //
 
 import Foundation
@@ -41,23 +45,45 @@ class CloudKitSyncManager: ObservableObject {
     @Published var lastSyncDate: Date?
     @Published var lastChangeCount: Int = 0
 
+    // MARK: - Timers and Schedulers
     private var syncTimer: Timer?
     private var remoteChangeObserver: NSObjectProtocol?
     private var debounceTimer: Timer?
     private let syncInterval: TimeInterval = 60 // 1 minute - simple and predictable
     private let debounceInterval: TimeInterval = 3.0 // Coalesce rapid notifications
 
+    // Background activity scheduler - wakes app even when terminated
+    private var backgroundActivityScheduler: NSBackgroundActivityScheduler?
+    private let backgroundSyncInterval: TimeInterval = 2 * 60 // 2 minutes for background (tighter for testing)
+
+    // App Nap prevention - keeps sync running when app loses focus
+    private var appNapActivity: NSObjectProtocol?
+
     private init() {}
 
     func configure(with context: NSManagedObjectContext) {
         self.viewContext = context
 
-        // Start periodic sync timer (every minute while app is open)
+        let now = Date()
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm:ss"
+
+        // MARK: - Foreground Sync (Timer-based, every minute)
         syncTimer = Timer.scheduledTimer(withTimeInterval: syncInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.syncNow()
             }
         }
+        let nextForegroundSync = now.addingTimeInterval(syncInterval)
+        logger.info("Foreground timer started - next sync at \(timeFormatter.string(from: nextForegroundSync)) (every \(Int(self.syncInterval))s)")
+
+        // MARK: - Background Sync (App running but not focused)
+        // Disable App Nap so timers continue running when app loses focus
+        startAppNapPrevention()
+
+        // MARK: - Terminated Sync (App not running)
+        // NSBackgroundActivityScheduler can wake the app for periodic maintenance
+        setupBackgroundActivityScheduler()
 
         // Listen for remote store changes (real-time updates from other devices)
         // Only sync if there are actual transactions, not just CloudKit housekeeping
@@ -84,13 +110,97 @@ class CloudKitSyncManager: ObservableObject {
             }
         }
 
-        logger.info("CloudKitSyncManager configured (sync every \(Int(self.syncInterval))s)")
+        logger.info("CloudKitSyncManager configured - foreground: \(Int(self.syncInterval))s, background: \(Int(self.backgroundSyncInterval))s")
 
         if serverChangeToken != nil {
             logger.info("Existing server change token found - will fetch delta")
         } else {
             logger.info("No server change token - will perform full sync")
         }
+
+        // Run one-time migration to mark all existing memos as auto-processed
+        // This ensures auto-run only affects future memos
+        Task {
+            await migrateExistingMemosIfNeeded(context: context)
+        }
+    }
+
+    // MARK: - App Nap Prevention
+
+    /// Prevents App Nap from throttling the app when it loses focus.
+    /// This ensures sync timers continue running when user switches to another app.
+    private func startAppNapPrevention() {
+        // End any existing activity
+        if let existingActivity = appNapActivity {
+            ProcessInfo.processInfo.endActivity(existingActivity)
+        }
+
+        // Start an activity that FULLY prevents App Nap
+        // .latencyCritical tells macOS this activity needs timely execution
+        // .idleDisplaySleepDisabled keeps display awake (optional, can remove if not wanted)
+        // The key is NOT using .userInitiatedAllowingIdleSystemSleep which still allows throttling
+        appNapActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.latencyCritical, .automaticTerminationDisabled, .suddenTerminationDisabled],
+            reason: "Talkie needs to sync voice memos from iOS in real-time"
+        )
+
+        logger.info("App Nap FULLY disabled - timers will fire even when app loses focus")
+    }
+
+    /// Stops App Nap prevention (called on deinit or when explicitly disabled)
+    private func stopAppNapPrevention() {
+        if let activity = appNapActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            appNapActivity = nil
+            logger.info("App Nap prevention disabled")
+        }
+    }
+
+    // MARK: - Background Activity Scheduler
+
+    /// Sets up NSBackgroundActivityScheduler to wake the app periodically
+    /// even when it's been terminated. macOS will launch the app briefly to run the sync.
+    private func setupBackgroundActivityScheduler() {
+        let scheduler = NSBackgroundActivityScheduler(identifier: "com.jdi.talkie.background-sync")
+
+        // Configure the scheduler
+        scheduler.repeats = true
+        scheduler.interval = backgroundSyncInterval  // 2 minutes
+        scheduler.tolerance = 30  // Allow 30s flexibility for system optimization
+        scheduler.qualityOfService = .userInitiated  // Higher priority for faster response
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm:ss"
+
+        scheduler.schedule { [weak self] completion in
+            guard let self = self else {
+                completion(.finished)
+                return
+            }
+
+            let now = Date()
+            let nextExpected = now.addingTimeInterval(self.backgroundSyncInterval)
+            logger.info("Background scheduler fired at \(timeFormatter.string(from: now)) - next expected ~\(timeFormatter.string(from: nextExpected))")
+
+            // Perform sync on main actor
+            Task { @MainActor in
+                await self.performSync()
+                completion(.finished)
+            }
+        }
+
+        self.backgroundActivityScheduler = scheduler
+
+        let now = Date()
+        let firstExpected = now.addingTimeInterval(backgroundSyncInterval)
+        logger.info("Background scheduler started - first expected ~\(timeFormatter.string(from: firstExpected)) (every \(Int(self.backgroundSyncInterval))s +/- 30s)")
+    }
+
+    /// Invalidates the background activity scheduler
+    private func stopBackgroundActivityScheduler() {
+        backgroundActivityScheduler?.invalidate()
+        backgroundActivityScheduler = nil
+        logger.info("Background activity scheduler stopped")
     }
 
     /// Record user activity (called when user triggers manual sync)
@@ -104,6 +214,12 @@ class CloudKitSyncManager: ObservableObject {
             logger.info("Sync already in progress, skipping")
             return
         }
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm:ss"
+        let now = Date()
+        let nextSync = now.addingTimeInterval(syncInterval)
+        logger.info("Timer sync at \(timeFormatter.string(from: now)) - next at \(timeFormatter.string(from: nextSync))")
 
         Task {
             await performSync()
@@ -161,6 +277,10 @@ class CloudKitSyncManager: ObservableObject {
     }
 
     private func performSync() async {
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm:ss"
+        let startTime = Date()
+
         // Use DispatchQueue to defer @Published updates and avoid
         // "Publishing changes from within view updates" warnings
         DispatchQueue.main.async {
@@ -170,7 +290,7 @@ class CloudKitSyncManager: ObservableObject {
 
         NotificationCenter.default.post(name: .talkieSyncStarted, object: nil)
 
-        logger.info("Starting CloudKit sync...")
+        logger.info("Starting sync at \(timeFormatter.string(from: startTime))...")
 
         do {
             let changes = try await fetchChanges()
@@ -193,6 +313,8 @@ class CloudKitSyncManager: ObservableObject {
                 PersistenceController.markMemosAsReceivedByMac(context: context)
                 // Process any pending workflow requests from iOS
                 PersistenceController.processPendingWorkflows(context: context)
+                // Check for "Hey Talkie" triggers in newly synced memos
+                await self.processTriggers(context: context)
             }
 
             if changes > 0 {
@@ -208,6 +330,104 @@ class CloudKitSyncManager: ObservableObject {
                 self.isSyncing = false
                 SyncStatusManager.shared.setError(error.localizedDescription)
             }
+        }
+    }
+
+    // MARK: - Auto-Run Workflow Processing
+
+    /// Process auto-run workflows for newly synced memos
+    private func processTriggers(context: NSManagedObjectContext) async {
+        // One-time migration: mark all existing memos as processed
+        // This ensures we only process memos created after this feature shipped
+        await migrateExistingMemosIfNeeded(context: context)
+
+        // IMPORTANT: Refresh the context to see changes from NSPersistentCloudKitContainer
+        // Without this, the context may have stale data cached and miss new memos
+        context.refreshAllObjects()
+
+        // Find memos needing processing:
+        // 1. autoProcessed == false (new iOS app with schema fix)
+        // 2. OR recently created from iOS (within 10 min) that haven't been processed
+        //    This handles memos from old iOS app that didn't have autoProcessed attribute
+        let tenMinutesAgo = Date().addingTimeInterval(-10 * 60)
+
+        let request = VoiceMemo.fetchRequest()
+        // Memos explicitly marked as not processed, OR recent iOS memos
+        request.predicate = NSPredicate(
+            format: "autoProcessed == NO OR (createdAt > %@ AND originDeviceId != nil AND originDeviceId != %@)",
+            tenMinutesAgo as NSDate,
+            PersistenceController.deviceId
+        )
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
+        request.fetchLimit = 10
+
+        do {
+            let allCandidates = try context.fetch(request)
+
+            // Filter to only memos that actually need processing
+            // (recent iOS memos that haven't been auto-run yet)
+            let memos = allCandidates.filter { memo in
+                // If explicitly marked as not processed, include it
+                if !memo.autoProcessed {
+                    return true
+                }
+                // If it's a recent iOS memo, check if it has any workflow runs
+                // If no workflow runs, it needs processing
+                let hasWorkflowRuns = (memo.workflowRuns?.count ?? 0) > 0
+                return !hasWorkflowRuns
+            }
+
+            // Debug: check recent memos to understand what's happening
+            let recentRequest = VoiceMemo.fetchRequest()
+            recentRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
+            recentRequest.fetchLimit = 3
+            if let recentMemos = try? context.fetch(recentRequest) {
+                for memo in recentMemos {
+                    let origin = memo.originDeviceId ?? "local"
+                    let isFromiOS = origin != PersistenceController.deviceId && origin != "local"
+                    logger.info("Recent memo: '\(memo.title ?? "Untitled")' autoProcessed=\(memo.autoProcessed) hasTranscript=\(memo.currentTranscript != nil) origin=\(isFromiOS ? "iOS" : "local")")
+                }
+            }
+
+            logger.info("processTriggers: Found \(memos.count) unprocessed memo(s) (checked \(allCandidates.count) candidates)")
+
+            for memo in memos {
+                logger.info("Processing memo: '\(memo.title ?? "Untitled")' (hasTranscript: \(memo.currentTranscript != nil))")
+                // AutoRunProcessor handles all checks (transcript, settings, etc.)
+                await AutoRunProcessor.shared.processNewMemo(memo, context: context)
+            }
+
+            if !memos.isEmpty {
+                try context.save()
+                logger.info("Processed auto-run workflows for \(memos.count) memo(s)")
+            }
+        } catch {
+            logger.error("Failed to process auto-run workflows: \(error.localizedDescription)")
+        }
+    }
+
+    private static let autoRunMigrationKey = "autoRunMigrationCompleted"
+
+    /// One-time migration: mark all existing memos as trigger-processed
+    /// This ensures the auto-run feature is forward-only
+    private func migrateExistingMemosIfNeeded(context: NSManagedObjectContext) async {
+        guard !UserDefaults.standard.bool(forKey: Self.autoRunMigrationKey) else { return }
+
+        let request = VoiceMemo.fetchRequest()
+        request.predicate = NSPredicate(format: "autoProcessed == NO OR autoProcessed == nil")
+
+        do {
+            let memos = try context.fetch(request)
+            for memo in memos {
+                memo.autoProcessed = true
+            }
+            if !memos.isEmpty {
+                try context.save()
+                logger.info("Auto-run migration: marked \(memos.count) existing memo(s) as processed")
+            }
+            UserDefaults.standard.set(true, forKey: Self.autoRunMigrationKey)
+        } catch {
+            logger.error("Auto-run migration failed: \(error.localizedDescription)")
         }
     }
 

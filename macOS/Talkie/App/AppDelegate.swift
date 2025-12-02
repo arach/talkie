@@ -7,18 +7,59 @@
 
 import AppKit
 import CloudKit
+import UserNotifications
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "AppDelegate")
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Set notification delegate to show notifications while app is in foreground
+        UNUserNotificationCenter.current().delegate = self
+
+        // Request local notification permissions for workflow notifications
+        requestNotificationPermissions()
+
         // Register for remote notifications
         NSApplication.shared.registerForRemoteNotifications()
 
         // Set up CloudKit subscription for instant sync
         setupCloudKitSubscription()
+    }
+
+    private func requestNotificationPermissions() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                logger.info("✅ Local notification permissions granted")
+            } else if let error = error {
+                logger.warning("⚠️ Notification permission error: \(error.localizedDescription)")
+            } else {
+                logger.info("ℹ️ Local notification permissions denied")
+            }
+        }
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    /// Show notifications even when app is in foreground
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Show banner and play sound even when app is active
+        completionHandler([.banner, .sound])
+    }
+
+    /// Handle notification tap
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        logger.info("📬 User tapped notification: \(response.notification.request.identifier)")
+        completionHandler()
     }
 
     func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
