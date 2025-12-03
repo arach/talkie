@@ -506,6 +506,207 @@ class SettingsManager: ObservableObject {
     var contentFontLargeMedium: Font { contentFont(baseSize: 15, weight: .medium) }
     var contentFontLargeBold: Font { contentFont(baseSize: 15, weight: .bold) }
 
+    // MARK: - Surface System (Talkie Pro)
+    // Layered background surfaces from deepest to topmost
+    // Other themes can override these tokens for their own look
+
+    /// Surface Level 0: Window/App background (deepest layer)
+    var surfaceBase: Color {
+        Color(NSColor.windowBackgroundColor)
+    }
+
+    /// Surface Level 1: Primary content areas (sidebar, main content)
+    var surface1: Color {
+        Color(NSColor.controlBackgroundColor)
+    }
+
+    /// Surface Level 2: Cards, panels, modals
+    var surface2: Color {
+        Color(NSColor.controlBackgroundColor).opacity(0.7)
+    }
+
+    /// Surface Level 3: Elevated elements (popovers, tooltips, menus)
+    var surface3: Color {
+        Color(NSColor.controlBackgroundColor).opacity(0.9)
+    }
+
+    /// Surface Overlay: Dark tint for premium depth effect
+    var surfaceOverlay: Color {
+        Color.black.opacity(0.12)
+    }
+
+    /// Surface Gradient: Subtle top highlight
+    var surfaceGradientTop: Color {
+        Color.primary.opacity(0.03)
+    }
+
+    /// Text/Input background
+    var surfaceInput: Color {
+        Color(NSColor.textBackgroundColor)
+    }
+
+    // MARK: - Interactive Surface States
+
+    /// Hover state overlay
+    var surfaceHover: Color {
+        Color.primary.opacity(0.05)
+    }
+
+    /// Active/pressed state overlay
+    var surfaceActive: Color {
+        Color.primary.opacity(0.08)
+    }
+
+    /// Selected state overlay
+    var surfaceSelected: Color {
+        Color.primary.opacity(0.1)
+    }
+
+    /// Alternating row background (for lists)
+    var surfaceAlternate: Color {
+        Color.primary.opacity(0.02)
+    }
+
+    // MARK: - Semantic Surface Colors
+
+    /// Success background tint
+    var surfaceSuccess: Color {
+        Color.green.opacity(0.08)
+    }
+
+    /// Warning background tint
+    var surfaceWarning: Color {
+        Color.orange.opacity(0.1)
+    }
+
+    /// Error background tint
+    var surfaceError: Color {
+        Color.red.opacity(0.1)
+    }
+
+    /// Info background tint
+    var surfaceInfo: Color {
+        Color.blue.opacity(0.1)
+    }
+
+    // MARK: - Border & Divider Colors
+
+    /// Default border (subtle)
+    var borderDefault: Color {
+        Color.primary.opacity(0.08)
+    }
+
+    /// Strong border (more visible)
+    var borderStrong: Color {
+        Color.primary.opacity(0.15)
+    }
+
+    /// Divider for separating content
+    var divider: Color {
+        Color.primary.opacity(0.06)
+    }
+
+    /// Success border
+    var borderSuccess: Color {
+        Color.green.opacity(0.25)
+    }
+
+    /// Ready/info border
+    var borderInfo: Color {
+        Color.blue.opacity(0.3)
+    }
+
+    // MARK: - Status Colors
+
+    var statusActive: Color { Color.green }
+    var statusReady: Color { Color.blue.opacity(0.7) }
+    var statusOffline: Color { Color.secondary.opacity(0.4) }
+    var statusWarning: Color { Color.orange }
+    var statusError: Color { Color.red.opacity(0.7) }
+
+    // MARK: - Shadow Intensities
+
+    var shadowLight: Color { Color.black.opacity(0.04) }
+    var shadowMedium: Color { Color.black.opacity(0.08) }
+    var shadowStrong: Color { Color.black.opacity(0.15) }
+
+    // MARK: - Typography Tokens
+
+    /// Monospaced fonts for technical data
+    var monoXS: Font { .system(size: 7, weight: .semibold, design: .monospaced) }
+    var monoSM: Font { .system(size: 9, weight: .medium, design: .monospaced) }
+    var monoBody: Font { .system(size: 12, weight: .medium, design: .monospaced) }
+    var monoLarge: Font { .system(size: 14, weight: .medium, design: .monospaced) }
+
+    /// Tracking values
+    var trackingTight: CGFloat { 0.3 }
+    var trackingNormal: CGFloat { 0.5 }
+    var trackingWide: CGFloat { 0.8 }
+    var trackingExtraWide: CGFloat { 1.5 }
+
+    // MARK: - Spec/Label Colors (for data displays)
+
+    var specLabelColor: Color { Color.secondary.opacity(0.5) }
+    var specValueColor: Color { Color.primary.opacity(0.85) }
+    var specUnitColor: Color { Color.secondary.opacity(0.6) }
+
+    // MARK: - Midnight Theme Colors (Website Aesthetic)
+    // True black backgrounds with high contrast white text
+    // Used for Models page and premium UI sections
+
+    /// Midnight base: True black background
+    var midnightBase: Color { Color(white: 0.04) }
+
+    /// Midnight surface: Slightly elevated cards
+    var midnightSurface: Color { Color(white: 0.08) }
+
+    /// Midnight surface elevated: Hover/expanded states
+    var midnightSurfaceElevated: Color { Color(white: 0.11) }
+
+    /// Midnight border: Subtle card outlines
+    var midnightBorder: Color { Color.white.opacity(0.06) }
+
+    /// Midnight border active: Expanded/focused states
+    var midnightBorderActive: Color { Color.white.opacity(0.12) }
+
+    /// Midnight text primary: High contrast white
+    var midnightTextPrimary: Color { Color.white.opacity(0.92) }
+
+    /// Midnight text secondary: Muted labels
+    var midnightTextSecondary: Color { Color.white.opacity(0.5) }
+
+    /// Midnight text tertiary: Very subtle hints
+    var midnightTextTertiary: Color { Color.white.opacity(0.3) }
+
+    /// Midnight accent bar: Section header vertical accent
+    var midnightAccentBar: Color { Color(red: 1.0, green: 0.6, blue: 0.2) }  // Orange/amber
+
+    /// Midnight recommended badge
+    var midnightBadgeRecommended: Color { Color(red: 1.0, green: 0.85, blue: 0.2) }  // Gold/yellow
+
+    /// Midnight active status
+    var midnightStatusActive: Color { Color(red: 0.3, green: 0.85, blue: 0.4) }  // Bright green
+
+    /// Midnight ready status
+    var midnightStatusReady: Color { Color(red: 0.3, green: 0.7, blue: 0.35) }  // Muted green
+
+    /// Midnight download button
+    var midnightButtonPrimary: Color { Color.white.opacity(0.12) }
+
+    /// Midnight download button hover
+    var midnightButtonHover: Color { Color.white.opacity(0.18) }
+
+    // MARK: - Legacy Aliases (for backwards compatibility)
+    // TODO: Migrate views to use new surface tokens, then remove these
+
+    var cardBackground: Color { surface2 }
+    var cardBackgroundHover: Color { surface3 }
+    var cardBackgroundDark: Color { surfaceOverlay }
+    var cardBorderDefault: Color { borderDefault }
+    var cardBorderActive: Color { borderSuccess }
+    var cardBorderReady: Color { borderInfo }
+    var specDividerOpacity: Double { 0.08 }
+
     /// Apply a curated theme preset
     func applyTheme(_ theme: ThemePreset) {
         currentTheme = theme
@@ -760,11 +961,7 @@ class SettingsManager: ObservableObject {
                     DispatchQueue.main.sync { updateBlock() }
                 }
 
-                print("✅ Loaded settings: model=\(model)")
-                print("   - Gemini API key: \(gemini.isEmpty ? "not set" : "set (\(gemini.prefix(8))...)")")
-                print("   - OpenAI API key: \(openai == nil || openai!.isEmpty ? "not set" : "set")")
-                print("   - Anthropic API key: \(anthropic == nil || anthropic!.isEmpty ? "not set" : "set")")
-                print("   - Groq API key: \(groq == nil || groq!.isEmpty ? "not set" : "set")")
+                // Settings loaded silently - API key status visible in Models UI
             } else {
                 print("⚠️ No settings found in Core Data, creating defaults...")
                 createDefaultSettings()

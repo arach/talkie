@@ -89,6 +89,9 @@ class MLXModelManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var loadProgress: Double = 0
 
+    /// Cached set of installed model IDs - updated on download/delete
+    @Published private(set) var installedModelIds: Set<String> = []
+
     private var loadedContainer: ModelContainer?
 
     private let modelsDirectory: URL = {
@@ -102,8 +105,20 @@ class MLXModelManager: ObservableObject {
             .appendingPathComponent("MLX")
     }()
 
+    /// All model IDs from the centralized catalog
+    private var catalogModelIds: [String] {
+        MLXModelCatalog.allIds
+    }
+
     private init() {
         createModelsDirectoryIfNeeded()
+        refreshInstalledModels()
+    }
+
+    /// Refresh the cached installed models state
+    func refreshInstalledModels() {
+        installedModelIds = Set(catalogModelIds.filter { checkModelExists(id: $0) })
+        print("[MLX] Refreshed installed models: \(installedModelIds)")
     }
 
     private func createModelsDirectoryIfNeeded() {
@@ -114,79 +129,28 @@ class MLXModelManager: ObservableObject {
     }
 
     func availableModels() -> [LLMModel] {
-        // Built-in model catalog
-        let catalog: [LLMModel] = [
-            // Ultra-fast 1B models - perfect for quick tasks
+        // Build from centralized catalog
+        return MLXModelCatalog.models.map { def in
             LLMModel(
-                id: "mlx-community/Llama-3.2-1B-Instruct-4bit",
-                name: "Llama-3.2-1B-Instruct-4bit",
-                displayName: "Llama 3.2 1B (4-bit) ⚡️",
-                size: "1B",
+                id: def.id,
+                name: def.name,
+                displayName: def.displayName,
+                size: def.size,
                 type: .local,
                 provider: "mlx",
-                downloadURL: URL(string: "https://huggingface.co/mlx-community/Llama-3.2-1B-Instruct-4bit"),
-                isInstalled: isModelInstalled(id: "mlx-community/Llama-3.2-1B-Instruct-4bit")
-            ),
-            LLMModel(
-                id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
-                name: "Qwen2.5-1.5B-Instruct-4bit",
-                displayName: "Qwen 2.5 1.5B (4-bit) ⚡️",
-                size: "1.5B",
-                type: .local,
-                provider: "mlx",
-                downloadURL: URL(string: "https://huggingface.co/mlx-community/Qwen2.5-1.5B-Instruct-4bit"),
-                isInstalled: isModelInstalled(id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit")
-            ),
-
-            // Balanced 3B models - great quality/speed tradeoff
-            LLMModel(
-                id: "mlx-community/Qwen2.5-3B-Instruct-4bit",
-                name: "Qwen2.5-3B-Instruct-4bit",
-                displayName: "Qwen 2.5 3B (4-bit)",
-                size: "3B",
-                type: .local,
-                provider: "mlx",
-                downloadURL: URL(string: "https://huggingface.co/mlx-community/Qwen2.5-3B-Instruct-4bit"),
-                isInstalled: isModelInstalled(id: "mlx-community/Qwen2.5-3B-Instruct-4bit")
-            ),
-            LLMModel(
-                id: "mlx-community/Llama-3.2-3B-Instruct-4bit",
-                name: "Llama-3.2-3B-Instruct-4bit",
-                displayName: "Llama 3.2 3B (4-bit)",
-                size: "3B",
-                type: .local,
-                provider: "mlx",
-                downloadURL: URL(string: "https://huggingface.co/mlx-community/Llama-3.2-3B-Instruct-4bit"),
-                isInstalled: isModelInstalled(id: "mlx-community/Llama-3.2-3B-Instruct-4bit")
-            ),
-            LLMModel(
-                id: "mlx-community/Phi-3.5-mini-instruct-4bit",
-                name: "Phi-3.5-mini-instruct-4bit",
-                displayName: "Phi 3.5 Mini (4-bit)",
-                size: "3.8B",
-                type: .local,
-                provider: "mlx",
-                downloadURL: URL(string: "https://huggingface.co/mlx-community/Phi-3.5-mini-instruct-4bit"),
-                isInstalled: isModelInstalled(id: "mlx-community/Phi-3.5-mini-instruct-4bit")
-            ),
-
-            // Powerful 7B model - best quality
-            LLMModel(
-                id: "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
-                name: "Mistral-7B-Instruct-v0.3-4bit",
-                displayName: "Mistral 7B v0.3 (4-bit) 🚀",
-                size: "7B",
-                type: .local,
-                provider: "mlx",
-                downloadURL: URL(string: "https://huggingface.co/mlx-community/Mistral-7B-Instruct-v0.3-4bit"),
-                isInstalled: isModelInstalled(id: "mlx-community/Mistral-7B-Instruct-v0.3-4bit")
+                downloadURL: def.huggingFaceURL,
+                isInstalled: isModelInstalled(id: def.id)
             )
-        ]
-
-        return catalog
+        }
     }
 
+    /// Check if a model is installed (uses cached state)
     func isModelInstalled(id: String) -> Bool {
+        installedModelIds.contains(id)
+    }
+
+    /// Actually check filesystem for model existence (used internally)
+    private func checkModelExists(id: String) -> Bool {
         // Check our local models directory first
         let localPath = modelsDirectory.appendingPathComponent(id.replacingOccurrences(of: "/", with: "_"))
         if FileManager.default.fileExists(atPath: localPath.path) {
@@ -268,6 +232,7 @@ class MLXModelManager: ObservableObject {
             }
 
             progress(1.0)
+            installedModelIds.insert(id) // Update cached state
             print("✅ Successfully downloaded model: \(id)")
         } catch {
             print("❌ Failed to download model: \(error)")
@@ -295,6 +260,9 @@ class MLXModelManager: ObservableObject {
                 try FileManager.default.removeItem(at: hubPath)
             }
         }
+
+        // Update cached state
+        installedModelIds.remove(id)
 
         // Unload if this was the loaded model
         if loadedModelId == id {

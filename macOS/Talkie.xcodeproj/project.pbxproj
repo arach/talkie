@@ -40,6 +40,9 @@
 		LLMCONFIG_BUILDFILE /* LLMConfig.json in Resources */ = {isa = PBXBuildFile; fileRef = LLMCONFIG_FILEREF /* LLMConfig.json */; };
 		WHISPERSERVICE_BUILDFILE /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WHISPERSERVICE_FILEREF /* WhisperService.swift */; };
 		WHISPERKIT_BUILDFILE /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = WHISPERKIT_PRODUCTREF /* WhisperKit */; };
+		PARAKEETSERVICE_BUILDFILE /* ParakeetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PARAKEETSERVICE_FILEREF /* ParakeetService.swift */; };
+		FLUIDAUDIO_BUILDFILE /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = FLUIDAUDIO_PRODUCTREF /* FluidAudio */; };
+		MODELSCATALOG_BUILDFILE /* ModelsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = MODELSCATALOG_FILEREF /* ModelsCatalog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -75,6 +78,8 @@
 		DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugToolbar.swift; sourceTree = "<group>"; };
 		LLMCONFIG_FILEREF /* LLMConfig.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LLMConfig.json; sourceTree = "<group>"; };
 		WHISPERSERVICE_FILEREF /* WhisperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperService.swift; sourceTree = "<group>"; };
+		PARAKEETSERVICE_FILEREF /* ParakeetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParakeetService.swift; sourceTree = "<group>"; };
+		MODELSCATALOG_FILEREF /* ModelsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsCatalog.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +90,7 @@
 				MLXLLM_BUILDFILE /* MLXLLM in Frameworks */,
 				MLXLMCOMMON_BUILDFILE /* MLXLMCommon in Frameworks */,
 				WHISPERKIT_BUILDFILE /* WhisperKit in Frameworks */,
+				FLUIDAUDIO_BUILDFILE /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,9 +148,11 @@
 			children = (
 				CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */,
 				DESIGNSYS_FILEREF /* DesignSystem.swift */,
+				MODELSCATALOG_FILEREF /* ModelsCatalog.swift */,
 				86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */,
 				TFMGR_FILEREF /* TranscriptFileManager.swift */,
 				WHISPERSERVICE_FILEREF /* WhisperService.swift */,
+				PARAKEETSERVICE_FILEREF /* ParakeetService.swift */,
 				28D24438172D1EDE9F6C188D /* LLM */,
 			);
 			path = Services;
@@ -221,6 +229,7 @@
 				MLXLLM_PRODUCTREF /* MLXLLM */,
 				MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */,
 				WHISPERKIT_PRODUCTREF /* WhisperKit */,
+				FLUIDAUDIO_PRODUCTREF /* FluidAudio */,
 			);
 			productName = Talkie;
 			productReference = 92173E2C177853E5ADD8A345 /* Talkie.app */;
@@ -248,6 +257,7 @@
 			packageReferences = (
 				MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				WHISPERKIT_PACKAGE /* XCRemoteSwiftPackageReference "WhisperKit" */,
+				FLUIDAUDIO_PACKAGE /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
@@ -301,6 +311,8 @@
 				694FB95D3C8FBDE6C5468854 /* WorkflowViews.swift in Sources */,
 				AUTORUN_BUILDFILE /* AutoRunProcessor.swift in Sources */,
 				WHISPERSERVICE_BUILDFILE /* WhisperService.swift in Sources */,
+				PARAKEETSERVICE_BUILDFILE /* ParakeetService.swift in Sources */,
+				MODELSCATALOG_BUILDFILE /* ModelsCatalog.swift in Sources */,
 				FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -537,6 +549,14 @@
 				minimumVersion = 0.9.0;
 			};
 		};
+		FLUIDAUDIO_PACKAGE /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.7.9;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -554,6 +574,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = WHISPERKIT_PACKAGE /* XCRemoteSwiftPackageReference "WhisperKit" */;
 			productName = WhisperKit;
+		};
+		FLUIDAUDIO_PRODUCTREF /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FLUIDAUDIO_PACKAGE /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
 
