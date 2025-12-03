@@ -493,10 +493,18 @@ struct SystemConsoleView: View {
                 .padding(.vertical, 4)
             }
             .onChange(of: eventManager.events.count) {
-                if autoScroll, let lastEvent = filteredEvents.last {
+                // filteredEvents is newest-first, reversed() makes it oldest-first for display
+                // So the newest event (first in array) appears at bottom after reverse
+                if autoScroll, let newestEvent = filteredEvents.first {
                     withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(lastEvent.id, anchor: .bottom)
+                        proxy.scrollTo(newestEvent.id, anchor: .bottom)
                     }
+                }
+            }
+            .onAppear {
+                // Scroll to bottom on appear (tail mode)
+                if autoScroll, let newestEvent = filteredEvents.first {
+                    proxy.scrollTo(newestEvent.id, anchor: .bottom)
                 }
             }
         }

@@ -58,16 +58,33 @@ class AutoRunProcessor: ObservableObject {
         await SystemEventManager.shared.log(.workflow, "Auto-run processing started", detail: memo.title)
 
         // Get all enabled auto-run workflows, sorted by order
-        let autoRunWorkflows = getAutoRunWorkflows()
+        var autoRunWorkflows = getAutoRunWorkflows()
 
         if autoRunWorkflows.isEmpty {
             logger.info("AutoRunProcessor: No auto-run workflows configured")
-            // Still mark as processed to avoid re-processing
+            // Mark as processed since there's nothing to do
             markMemoAsProcessed(memo, context: context)
             return
         }
 
-        logger.info("AutoRunProcessor: Found \(autoRunWorkflows.count) auto-run workflow(s)")
+        // Filter out workflows that have already run on this memo (deduplication)
+        var existingRunIds = Set<UUID>()
+        if let runs = memo.workflowRuns as? Set<WorkflowRun> {
+            for run in runs {
+                if let workflowId = run.workflowId {
+                    existingRunIds.insert(workflowId)
+                }
+            }
+        }
+        autoRunWorkflows = autoRunWorkflows.filter { !existingRunIds.contains($0.id) }
+
+        if autoRunWorkflows.isEmpty {
+            logger.info("AutoRunProcessor: All auto-run workflows already ran on this memo")
+            markMemoAsProcessed(memo, context: context)
+            return
+        }
+
+        logger.info("AutoRunProcessor: Found \(autoRunWorkflows.count) auto-run workflow(s) to run")
 
         // Execute each auto-run workflow
         var successCount = 0
@@ -93,12 +110,15 @@ class AutoRunProcessor: ObservableObject {
             }
         }
 
-        // Mark memo as processed
-        markMemoAsProcessed(memo, context: context)
-        lastProcessedMemoId = memo.id
+        // Only mark as processed if at least one workflow succeeded (atomic)
+        // If all failed, we'll retry on next sync
+        if successCount > 0 {
+            markMemoAsProcessed(memo, context: context)
+            lastProcessedMemoId = memo.id
+        }
 
         // Log summary
-        let summary = "Auto-run complete: \(successCount) succeeded, \(failureCount) failed"
+        let summary = "Auto-run: \(successCount) succeeded, \(failureCount) failed"
         logger.info("AutoRunProcessor: \(summary)")
         await SystemEventManager.shared.log(.workflow, summary, detail: memo.title)
     }

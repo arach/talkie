@@ -60,7 +60,8 @@ class OpenAIProvider: LLMProvider {
     
     var isAvailable: Bool {
         get async {
-            return SettingsManager.shared.openaiApiKey != nil
+            guard let key = SettingsManager.shared.openaiApiKey else { return false }
+            return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
     
@@ -69,7 +70,8 @@ class OpenAIProvider: LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> String {
-        guard let apiKey = SettingsManager.shared.openaiApiKey else {
+        guard let apiKey = SettingsManager.shared.openaiApiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LLMError.configurationError("OpenAI API key not configured")
         }
         
@@ -114,7 +116,8 @@ class OpenAIProvider: LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> AsyncThrowingStream<String, Error> {
-        guard let apiKey = SettingsManager.shared.openaiApiKey else {
+        guard let apiKey = SettingsManager.shared.openaiApiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LLMError.configurationError("OpenAI API key not configured")
         }
         

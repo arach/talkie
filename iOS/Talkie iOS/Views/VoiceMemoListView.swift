@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import CloudKit
 
 enum SortOption: String, CaseIterable {
     case dateNewest = "Newest First"
@@ -213,6 +214,7 @@ struct VoiceMemoListView: View {
                                     memo: memo,
                                     audioPlayer: audioPlayer
                                 )
+                                .id("\(memo.id?.uuidString ?? "")-\((memo.workflowRuns as? Set<WorkflowRun>)?.count ?? 0)")
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(themeManager.colors.tableCellBackground)
                                 .listRowSeparatorTint(themeManager.colors.tableDivider)
@@ -542,19 +544,136 @@ struct VoiceMemoListView: View {
     // MARK: - Pull to Refresh
 
     private func refreshMemos() async {
-        AppLogger.persistence.info("📲 Pull-to-refresh - refreshing all memos")
+        AppLogger.persistence.info("📲 Pull-to-refresh - fetching from CloudKit")
 
-        // Refresh all registered VoiceMemo objects to get latest from store
-        await MainActor.run {
-            for object in viewContext.registeredObjects {
-                if object is VoiceMemo {
-                    viewContext.refresh(object, mergeChanges: true)
+        let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
+        let privateDB = container.privateCloudDatabase
+        let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
+
+        // Fetch WorkflowRun records using zone fetch (no query needed)
+        do {
+            var allRecords: [CKRecord] = []
+            var cursor: CKQueryOperation.Cursor? = nil
+
+            // First, get all record IDs of type CD_WorkflowRun
+            let query = CKQuery(recordType: "CD_WorkflowRun", predicate: NSPredicate(value: true))
+
+            repeat {
+                let result: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?)
+                if let cursor = cursor {
+                    result = try await privateDB.records(continuingMatchFrom: cursor)
+                } else {
+                    result = try await privateDB.records(matching: query, inZoneWith: zoneID, resultsLimit: 100)
                 }
+
+                for (_, recordResult) in result.matchResults {
+                    if case .success(let record) = recordResult {
+                        allRecords.append(record)
+                    }
+                }
+                cursor = result.queryCursor
+            } while cursor != nil
+
+            AppLogger.persistence.info("📲 CloudKit returned \(allRecords.count) workflow run records")
+
+            // Import workflow runs into Core Data
+            if !allRecords.isEmpty {
+                await MainActor.run {
+                    importWorkflowRuns(allRecords)
+                }
+            }
+        } catch {
+            AppLogger.persistence.error("📲 WorkflowRun fetch error: \(error.localizedDescription)")
+        }
+
+        await MainActor.run {
+            viewContext.refreshAllObjects()
+            for memo in voiceMemos {
+                viewContext.refresh(memo, mergeChanges: true)
             }
         }
 
-        // Small delay so user sees the refresh indicator
         try? await Task.sleep(nanoseconds: 300_000_000)
+    }
+
+    private func importWorkflowRuns(_ records: [CKRecord]) {
+        var addedCount = 0
+        var skippedExisting = 0
+        var skippedNoMemo = 0
+        var updatedCount = 0
+
+        // Fetch all local workflow runs once
+        let existingRunsRequest: NSFetchRequest<WorkflowRun> = WorkflowRun.fetchRequest()
+        let existingRuns = (try? viewContext.fetch(existingRunsRequest)) ?? []
+        let existingRunIds = Set(existingRuns.compactMap { $0.id })
+
+        // Fetch all memos once
+        let memoFetch: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+        let allMemos = (try? viewContext.fetch(memoFetch)) ?? []
+
+        let runsWithMemo = existingRuns.filter { $0.memo != nil }.count
+        let completedRuns = existingRuns.filter { $0.status == "completed" }.count
+        AppLogger.persistence.info("📲 Processing \(records.count) records, have \(existingRuns.count) local runs (\(runsWithMemo) with memo, \(completedRuns) completed), \(allMemos.count) memos")
+
+        for record in records {
+            // CD_id can be UUID or String depending on how it was stored
+            var runUUID: UUID?
+            if let uuid = record["CD_id"] as? UUID {
+                runUUID = uuid
+            } else if let str = record["CD_id"] as? String, let uuid = UUID(uuidString: str) {
+                runUUID = uuid
+            }
+            guard let runId = runUUID else { continue }
+
+            // Find the memo this run belongs to
+            guard let memoRef = record["CD_memo"] as? CKRecord.Reference else { continue }
+            let memoRecordName = memoRef.recordID.recordName
+
+            var targetMemo: VoiceMemo?
+            for memo in allMemos {
+                if let memoId = memo.id, memoRecordName.contains(memoId.uuidString) {
+                    targetMemo = memo
+                    break
+                }
+            }
+
+            guard let memo = targetMemo else {
+                skippedNoMemo += 1
+                continue
+            }
+
+            // Check if we already have this run
+            if existingRunIds.contains(runId) {
+                // Update existing run's memo relationship if needed
+                if let existingRun = existingRuns.first(where: { $0.id == runId }) {
+                    if existingRun.memo == nil {
+                        existingRun.memo = memo
+                        updatedCount += 1
+                    }
+                }
+                skippedExisting += 1
+                continue
+            }
+
+            // Create WorkflowRun
+            let workflowRun = WorkflowRun(context: viewContext)
+            workflowRun.id = runId
+            workflowRun.workflowId = record["CD_workflowId"] as? UUID
+            workflowRun.workflowName = record["CD_workflowName"] as? String
+            workflowRun.workflowIcon = record["CD_workflowIcon"] as? String
+            workflowRun.runDate = record["CD_runDate"] as? Date
+            workflowRun.status = record["CD_status"] as? String
+            workflowRun.output = record["CD_output"] as? String
+            workflowRun.memo = memo
+
+            addedCount += 1
+        }
+
+        AppLogger.persistence.info("📲 Import summary: added=\(addedCount), updated=\(updatedCount), skippedExisting=\(skippedExisting), skippedNoMemo=\(skippedNoMemo)")
+
+        if addedCount > 0 || updatedCount > 0 {
+            try? viewContext.save()
+        }
     }
 
     private func deleteMemo(_ memo: VoiceMemo) {

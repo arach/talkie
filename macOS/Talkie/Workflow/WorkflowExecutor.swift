@@ -811,6 +811,7 @@ class WorkflowExecutor: ObservableObject {
             script = """
             tell application "Notes"
                 activate
+                delay 0.5
                 set theAccount to first account
                 set theFolder to folder "\(escapedFolder)" of theAccount
                 make new note at theFolder with properties {name:"\(escapedTitle)", body:"<html><body>\(escapedHtmlBody)</body></html>"}
@@ -820,6 +821,7 @@ class WorkflowExecutor: ObservableObject {
             script = """
             tell application "Notes"
                 activate
+                delay 0.5
                 set theAccount to first account
                 make new note at theAccount with properties {name:"\(escapedTitle)", body:"<html><body>\(escapedHtmlBody)</body></html>"}
             end tell
@@ -839,6 +841,9 @@ class WorkflowExecutor: ObservableObject {
 
                 if errorNumber == -1743 {
                     throw WorkflowError.executionFailed("Permission denied. Go to System Settings > Privacy & Security > Automation and enable Notes for Talkie")
+                }
+                if errorNumber == -600 {
+                    throw WorkflowError.executionFailed("Notes app couldn't be launched. Try opening Notes manually first, or check System Settings > Privacy & Security > Automation")
                 }
                 throw WorkflowError.executionFailed("Apple Notes error: \(errorMessage)")
             }

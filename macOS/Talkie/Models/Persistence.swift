@@ -469,15 +469,17 @@ struct PersistenceController {
 
     /// Process pending workflow requests from iOS
     /// Fetches memos with pendingWorkflowIds, runs the workflows, and clears the queue
+    /// Important: Clears pendingWorkflowIds BEFORE running to prevent duplicate runs from CloudKit sync race
     static func processPendingWorkflows(context: NSManagedObjectContext) {
-        context.perform {
+        // Collect pending work and IMMEDIATELY clear pendingWorkflowIds to prevent re-runs
+        var pendingWork: [(memo: VoiceMemo, workflowIds: [UUID])] = []
+
+        context.performAndWait {
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "pendingWorkflowIds != nil AND pendingWorkflowIds != %@", "")
 
             do {
                 let memos = try context.fetch(fetchRequest)
-                guard !memos.isEmpty else { return }
-
                 for memo in memos {
                     guard let jsonString = memo.pendingWorkflowIds,
                           let data = jsonString.data(using: .utf8),
@@ -486,29 +488,62 @@ struct PersistenceController {
                         continue
                     }
 
-                    logger.info("📋 Processing \(workflowIds.count) pending workflow(s) for memo: \(memo.title ?? "untitled")")
-
-                    // Run each pending workflow on main actor
-                    let workflowIdsToRun = workflowIds
-                    Task { @MainActor in
-                        for workflowId in workflowIdsToRun {
-                            // Find the workflow definition
-                            if let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) {
-                                logger.info("▶️ Running workflow: \(workflow.name)")
-                                _ = try? await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
-                            } else {
-                                logger.warning("⚠️ Workflow not found: \(workflowId)")
+                    // Filter out workflows that have already run on this memo
+                    var existingRunIds = Set<UUID>()
+                    if let runs = memo.workflowRuns as? Set<WorkflowRun> {
+                        for run in runs {
+                            if let workflowId = run.workflowId {
+                                existingRunIds.insert(workflowId)
                             }
                         }
                     }
+                    let newWorkflowIds = workflowIds.filter { !existingRunIds.contains($0) }
 
-                    // Clear the pending queue
+                    if newWorkflowIds.isEmpty {
+                        logger.info("📋 Skipping \(memo.title ?? "untitled") - all workflows already ran")
+                        memo.pendingWorkflowIds = nil
+                        continue
+                    }
+
+                    // Clear IMMEDIATELY before async execution to prevent CloudKit sync race
                     memo.pendingWorkflowIds = nil
+                    pendingWork.append((memo: memo, workflowIds: newWorkflowIds))
                 }
 
-                try context.save()
+                // Save the cleared pendingWorkflowIds right away
+                if !memos.isEmpty {
+                    try context.save()
+                }
             } catch {
-                logger.error("❌ Failed to process pending workflows: \(error.localizedDescription)")
+                logger.error("❌ Failed to fetch pending workflows: \(error.localizedDescription)")
+            }
+        }
+
+        guard !pendingWork.isEmpty else { return }
+
+        logger.info("📋 Found \(pendingWork.count) memo(s) with pending iOS workflows")
+
+        // Run workflows on main actor
+        Task { @MainActor in
+            for (memo, workflowIds) in pendingWork {
+                logger.info("📋 Processing \(workflowIds.count) workflow(s) for: \(memo.title ?? "untitled")")
+
+                var successCount = 0
+                for workflowId in workflowIds {
+                    if let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) {
+                        logger.info("▶️ Running iOS-requested workflow: \(workflow.name)")
+                        do {
+                            _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
+                            successCount += 1
+                        } catch {
+                            logger.error("❌ Workflow '\(workflow.name)' failed: \(error.localizedDescription)")
+                        }
+                    } else {
+                        logger.warning("⚠️ Workflow not found: \(workflowId)")
+                    }
+                }
+
+                logger.info("✅ Completed iOS workflows for: \(memo.title ?? "untitled") (\(successCount)/\(workflowIds.count) succeeded)")
             }
         }
     }

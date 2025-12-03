@@ -60,16 +60,18 @@ class GroqProvider: LLMProvider {
     
     var isAvailable: Bool {
         get async {
-            return SettingsManager.shared.groqApiKey != nil
+            guard let key = SettingsManager.shared.groqApiKey else { return false }
+            return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
-    
+
     func generate(
         prompt: String,
         model: String,
         options: GenerationOptions
     ) async throws -> String {
-        guard let apiKey = SettingsManager.shared.groqApiKey else {
+        guard let apiKey = SettingsManager.shared.groqApiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LLMError.configurationError("Groq API key not configured")
         }
         
@@ -114,7 +116,8 @@ class GroqProvider: LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> AsyncThrowingStream<String, Error> {
-        guard let apiKey = SettingsManager.shared.groqApiKey else {
+        guard let apiKey = SettingsManager.shared.groqApiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LLMError.configurationError("Groq API key not configured")
         }
         

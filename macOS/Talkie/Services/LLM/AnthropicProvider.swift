@@ -50,16 +50,18 @@ class AnthropicProvider: LLMProvider {
     
     var isAvailable: Bool {
         get async {
-            return SettingsManager.shared.anthropicApiKey != nil
+            guard let key = SettingsManager.shared.anthropicApiKey else { return false }
+            return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
-    
+
     func generate(
         prompt: String,
         model: String,
         options: GenerationOptions
     ) async throws -> String {
-        guard let apiKey = SettingsManager.shared.anthropicApiKey else {
+        guard let apiKey = SettingsManager.shared.anthropicApiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LLMError.configurationError("Anthropic API key not configured")
         }
         
@@ -104,7 +106,8 @@ class AnthropicProvider: LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> AsyncThrowingStream<String, Error> {
-        guard let apiKey = SettingsManager.shared.anthropicApiKey else {
+        guard let apiKey = SettingsManager.shared.anthropicApiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LLMError.configurationError("Anthropic API key not configured")
         }
         

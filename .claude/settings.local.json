@@ -81,7 +81,13 @@
       "Bash(/Users/arach/dev/talkie/macOS/run.sh:*)",
       "Bash(/Users/arach/dev/talkie/iOS/run.sh:*)",
       "Bash(for dir in /Users/arach/dev/talkie/macOS/Talkie/Assets.xcassets/AppIcon.appiconset /Users/arach/dev/talkie/iOS/TalkieWidget/Assets.xcassets/AppIcon.appiconset '/Users/arach/dev/talkie/iOS/Talkie iOS/Resources/Assets.xcassets/AppIcon.appiconset')",
-      "Bash(do echo '=== $dir ===' cat $dir/Contents.json)"
+      "Bash(do echo '=== $dir ===' cat $dir/Contents.json)",
+      "Bash(python3:*)",
+      "Bash(magick:*)",
+      "Bash(pkill:*)",
+      "Bash(log show --predicate 'subsystem == \"\"\"\"jdi.talkie-os-mac\"\"\"\"' --last 2m --info --style compact)",
+      "Bash(log show:*)",
+      "Bash(/usr/bin/log show:*)"
     ],
     "deny": [],
     "ask": []

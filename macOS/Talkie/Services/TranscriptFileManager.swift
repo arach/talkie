@@ -20,7 +20,46 @@ class TranscriptFileManager {
     private let fileManager = FileManager.default
     private var remoteChangeObserver: NSObjectProtocol?
 
-    private init() {}
+    /// Cache of memo IDs to hash of last-written content
+    /// Persisted to disk so it survives app restarts
+    private var lastWrittenHashes: [UUID: Int] = [:] {
+        didSet { saveHashCache() }
+    }
+
+    private let hashCacheURL: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appDir = appSupport.appendingPathComponent("Talkie", isDirectory: true)
+        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
+        return appDir.appendingPathComponent("transcript_hashes.json")
+    }()
+
+    private init() {
+        loadHashCache()
+    }
+
+    private func loadHashCache() {
+        guard let data = try? Data(contentsOf: hashCacheURL),
+              let dict = try? JSONDecoder().decode([String: Int].self, from: data) else {
+            return
+        }
+        // Convert string keys back to UUIDs
+        lastWrittenHashes = dict.reduce(into: [:]) { result, pair in
+            if let uuid = UUID(uuidString: pair.key) {
+                result[uuid] = pair.value
+            }
+        }
+        logger.debug("Loaded \(self.lastWrittenHashes.count) transcript hashes from cache")
+    }
+
+    private func saveHashCache() {
+        // Convert UUID keys to strings for JSON
+        let dict = lastWrittenHashes.reduce(into: [String: Int]()) { result, pair in
+            result[pair.key.uuidString] = pair.value
+        }
+        if let data = try? JSONEncoder().encode(dict) {
+            try? data.write(to: hashCacheURL)
+        }
+    }
 
     // MARK: - Setup
 
@@ -127,8 +166,13 @@ class TranscriptFileManager {
                     }
                 }
 
+                // Only log if something actually changed
                 if transcriptsCreated > 0 || transcriptsUpdated > 0 || audioCreated > 0 {
-                    logger.info("Local files synced: \(transcriptsCreated) transcripts created, \(transcriptsUpdated) updated, \(audioCreated) audio files")
+                    var parts: [String] = []
+                    if transcriptsCreated > 0 { parts.append("\(transcriptsCreated) new") }
+                    if transcriptsUpdated > 0 { parts.append("\(transcriptsUpdated) updated") }
+                    if audioCreated > 0 { parts.append("\(audioCreated) audio") }
+                    logger.info("Local files: \(parts.joined(separator: ", "))")
                 }
             } catch {
                 logger.error("Failed to fetch memos for local file sync: \(error.localizedDescription)")
@@ -142,35 +186,35 @@ class TranscriptFileManager {
     func writeTranscriptFile(for memo: VoiceMemo) -> WriteResult {
         guard SettingsManager.shared.saveTranscriptsLocally else { return .skipped }
         guard let transcript = memo.currentTranscript, !transcript.isEmpty else { return .skipped }
-        guard memo.id != nil else { return .skipped }
+        guard let memoId = memo.id else { return .skipped }
 
-        let fileURL = transcriptFileURL(for: memo)
         let content = generateMarkdownContent(for: memo)
+        let contentHash = content.hashValue
+        let fileURL = transcriptFileURL(for: memo)
 
-        // Check if file exists and has same content
-        if fileManager.fileExists(atPath: fileURL.path) {
-            if let existingContent = try? String(contentsOf: fileURL, encoding: .utf8),
-               existingContent == content {
+        // Check if content has changed since last write
+        if let lastHash = lastWrittenHashes[memoId], lastHash == contentHash {
+            // Content unchanged - skip unless file was deleted
+            if fileManager.fileExists(atPath: fileURL.path) {
                 return .unchanged
-            }
-            // File exists but content changed - update it
-            do {
-                try content.write(to: fileURL, atomically: true, encoding: .utf8)
-                logger.debug("Updated transcript file: \(fileURL.lastPathComponent)")
-                return .updated
-            } catch {
-                logger.error("Failed to update transcript file: \(error.localizedDescription)")
-                return .skipped
             }
         }
 
-        // New file
+        let isUpdate = fileManager.fileExists(atPath: fileURL.path)
+
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            logger.debug("Created transcript file: \(fileURL.lastPathComponent)")
-            return .created
+            lastWrittenHashes[memoId] = contentHash
+
+            if isUpdate {
+                logger.info("Updated transcript: \(fileURL.lastPathComponent)")
+                return .updated
+            } else {
+                logger.info("Created transcript: \(fileURL.lastPathComponent)")
+                return .created
+            }
         } catch {
-            logger.error("Failed to write transcript file: \(error.localizedDescription)")
+            logger.error("Failed to write transcript: \(error.localizedDescription)")
             return .skipped
         }
     }

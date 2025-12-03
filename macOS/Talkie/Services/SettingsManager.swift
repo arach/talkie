@@ -737,14 +737,16 @@ class SettingsManager: ObservableObject {
         do {
             let results = try context.fetch(fetchRequest)
             if let settings = results.first {
-                // Update @Published properties on main thread to avoid warnings
+                // Store values locally first
                 let gemini = settings.geminiApiKey ?? ""
                 let openai = settings.openaiApiKey
                 let anthropic = settings.anthropicApiKey
                 let groq = settings.groqApiKey
                 let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
 
-                DispatchQueue.main.async {
+                // Update @Published properties on main thread
+                // Use sync if already on main, async otherwise
+                let updateBlock = {
                     self._geminiApiKey = gemini
                     self._openaiApiKey = openai
                     self._anthropicApiKey = anthropic
@@ -752,11 +754,17 @@ class SettingsManager: ObservableObject {
                     self._selectedModel = model
                 }
 
+                if Thread.isMainThread {
+                    updateBlock()
+                } else {
+                    DispatchQueue.main.sync { updateBlock() }
+                }
+
                 print("✅ Loaded settings: model=\(model)")
                 print("   - Gemini API key: \(gemini.isEmpty ? "not set" : "set (\(gemini.prefix(8))...)")")
-                print("   - OpenAI API key: \(openai == nil ? "not set" : "set")")
-                print("   - Anthropic API key: \(anthropic == nil ? "not set" : "set")")
-                print("   - Groq API key: \(groq == nil ? "not set" : "set")")
+                print("   - OpenAI API key: \(openai == nil || openai!.isEmpty ? "not set" : "set")")
+                print("   - Anthropic API key: \(anthropic == nil || anthropic!.isEmpty ? "not set" : "set")")
+                print("   - Groq API key: \(groq == nil || groq!.isEmpty ? "not set" : "set")")
             } else {
                 print("⚠️ No settings found in Core Data, creating defaults...")
                 createDefaultSettings()

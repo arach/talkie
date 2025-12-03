@@ -178,9 +178,7 @@ class CloudKitSyncManager: ObservableObject {
                 return
             }
 
-            let now = Date()
-            let nextExpected = now.addingTimeInterval(self.backgroundSyncInterval)
-            logger.info("Background scheduler fired at \(timeFormatter.string(from: now)) - next expected ~\(timeFormatter.string(from: nextExpected))")
+            // Background scheduler fired - sync silently
 
             // Perform sync on main actor
             Task { @MainActor in
@@ -214,12 +212,6 @@ class CloudKitSyncManager: ObservableObject {
             logger.info("Sync already in progress, skipping")
             return
         }
-
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "HH:mm:ss"
-        let now = Date()
-        let nextSync = now.addingTimeInterval(syncInterval)
-        logger.info("Timer sync at \(timeFormatter.string(from: now)) - next at \(timeFormatter.string(from: nextSync))")
 
         Task {
             await performSync()
@@ -289,8 +281,7 @@ class CloudKitSyncManager: ObservableObject {
         }
 
         NotificationCenter.default.post(name: .talkieSyncStarted, object: nil)
-
-        logger.info("Starting sync at \(timeFormatter.string(from: startTime))...")
+        logger.info("[\(timeFormatter.string(from: startTime))] Sync starting...")
 
         do {
             let changes = try await fetchChanges()
@@ -310,26 +301,29 @@ class CloudKitSyncManager: ObservableObject {
 
             // Mark memos from other devices as received by Mac
             if let context = self.viewContext {
-                // If we detected changes, wait a moment for NSPersistentCloudKitContainer
-                // to import them into Core Data. Our manual fetch is just for tracking -
-                // the actual import is done asynchronously by the container.
+                // If we detected changes, give Core Data a moment to import them
+                // NSPersistentCloudKitContainer handles import automatically; we just need to refresh
                 if changes > 0 {
-                    logger.info("Waiting for Core Data import...")
-                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-                    context.refreshAllObjects() // Refresh after import
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                    context.refreshAllObjects()
                 }
 
+                // Process auto-run workflows for unprocessed memos
+                await self.processTriggers(context: context)
+
+                // Mark iOS memos as received (for UI display purposes)
                 PersistenceController.markMemosAsReceivedByMac(context: context)
                 // Process any pending workflow requests from iOS
                 PersistenceController.processPendingWorkflows(context: context)
-                // Check for "Hey Talkie" triggers in newly synced memos
-                await self.processTriggers(context: context)
             }
 
+            // Log completion with duration
+            let duration = Date().timeIntervalSince(startTime)
+            let durationStr = String(format: "%.1fs", duration)
             if changes > 0 {
-                logger.info("Sync completed: \(changes) change(s)")
+                logger.info("[\(timeFormatter.string(from: Date()))] Sync complete: \(changes) change(s) in \(durationStr)")
             } else {
-                logger.info("Sync completed: no changes")
+                logger.info("[\(timeFormatter.string(from: Date()))] Sync complete: no changes (\(durationStr))")
             }
 
         } catch {
@@ -344,71 +338,29 @@ class CloudKitSyncManager: ObservableObject {
 
     // MARK: - Auto-Run Workflow Processing
 
-    /// Process auto-run workflows for newly synced memos
+    /// Process auto-run workflows for unprocessed memos
+    /// Simple logic: autoProcessed == false means needs processing
     private func processTriggers(context: NSManagedObjectContext) async {
-        // One-time migration: mark all existing memos as processed
-        // This ensures we only process memos created after this feature shipped
-        await migrateExistingMemosIfNeeded(context: context)
-
-        // IMPORTANT: Refresh the context to see changes from NSPersistentCloudKitContainer
-        // Without this, the context may have stale data cached and miss new memos
         context.refreshAllObjects()
 
-        // Find memos needing processing:
-        // 1. autoProcessed == false (new iOS app with schema fix)
-        // 2. OR recently created from iOS (within 10 min) that haven't been processed
-        //    This handles memos from old iOS app that didn't have autoProcessed attribute
-        let tenMinutesAgo = Date().addingTimeInterval(-10 * 60)
-
+        // Simple query: unprocessed memos with transcripts
         let request = VoiceMemo.fetchRequest()
-        // Memos explicitly marked as not processed, OR recent iOS memos
-        request.predicate = NSPredicate(
-            format: "autoProcessed == NO OR (createdAt > %@ AND originDeviceId != nil AND originDeviceId != %@)",
-            tenMinutesAgo as NSDate,
-            PersistenceController.deviceId
-        )
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            NSPredicate(format: "transcription != nil AND transcription != ''"),
+            NSPredicate(format: "autoProcessed == NO")
+        ])
         request.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
         request.fetchLimit = 10
 
         do {
-            let allCandidates = try context.fetch(request)
-
-            // Filter to only memos that actually need processing
-            // (recent iOS memos that haven't been auto-run yet)
-            let memos = allCandidates.filter { memo in
-                // If explicitly marked as not processed, include it
-                if !memo.autoProcessed {
-                    return true
-                }
-                // If it's a recent iOS memo, check if it has any workflow runs
-                // If no workflow runs, it needs processing
-                let hasWorkflowRuns = (memo.workflowRuns?.count ?? 0) > 0
-                return !hasWorkflowRuns
-            }
-
-            // Debug: check recent memos to understand what's happening
-            let recentRequest = VoiceMemo.fetchRequest()
-            recentRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
-            recentRequest.fetchLimit = 3
-            if let recentMemos = try? context.fetch(recentRequest) {
-                for memo in recentMemos {
-                    let origin = memo.originDeviceId ?? "local"
-                    let isFromiOS = origin != PersistenceController.deviceId && origin != "local"
-                    logger.info("Recent memo: '\(memo.title ?? "Untitled")' autoProcessed=\(memo.autoProcessed) hasTranscript=\(memo.currentTranscript != nil) origin=\(isFromiOS ? "iOS" : "local")")
-                }
-            }
-
-            logger.info("processTriggers: Found \(memos.count) unprocessed memo(s) (checked \(allCandidates.count) candidates)")
-
-            for memo in memos {
-                logger.info("Processing memo: '\(memo.title ?? "Untitled")' (hasTranscript: \(memo.currentTranscript != nil))")
-                // AutoRunProcessor handles all checks (transcript, settings, etc.)
-                await AutoRunProcessor.shared.processNewMemo(memo, context: context)
-            }
+            let memos = try context.fetch(request)
 
             if !memos.isEmpty {
-                try context.save()
-                logger.info("Processed auto-run workflows for \(memos.count) memo(s)")
+                logger.info("Found \(memos.count) unprocessed memo(s)")
+                for memo in memos {
+                    logger.info("Auto-run: '\(memo.title ?? "Untitled")'")
+                    await AutoRunProcessor.shared.processNewMemo(memo, context: context)
+                }
             }
         } catch {
             logger.error("Failed to process auto-run workflows: \(error.localizedDescription)")
@@ -500,7 +452,23 @@ class CloudKitSyncManager: ObservableObject {
                     let totalChanges = changedRecords.count + deletedRecordIDs.count
 
                     if totalChanges > 0 {
-                        logger.info("Fetched \(changedRecords.count) changed, \(deletedRecordIDs.count) deleted")
+                        // Group changed records by type for useful logging
+                        var typeCount: [String: Int] = [:]
+                        for record in changedRecords {
+                            let typeName = record.recordType.replacingOccurrences(of: "CD_", with: "")
+                            typeCount[typeName, default: 0] += 1
+                        }
+                        let typeSummary = typeCount.map { "\($0.value) \($0.key)" }.joined(separator: ", ")
+                        logger.info("Fetched: \(typeSummary)\(deletedRecordIDs.count > 0 ? ", \(deletedRecordIDs.count) deleted" : "")")
+
+                        // Debug: print top 3 records
+                        for (i, record) in changedRecords.prefix(3).enumerated() {
+                            let typeName = record.recordType.replacingOccurrences(of: "CD_", with: "")
+                            let title = record["CD_title"] as? String ?? "?"
+                            let modDate = record.modificationDate.map { "\($0)" } ?? "?"
+                            logger.info("  [\(i+1)] \(typeName): '\(title)' modified: \(modDate)")
+                        }
+
                     }
 
                     // Note: NSPersistentCloudKitContainer handles the actual Core Data import
@@ -534,7 +502,11 @@ class CloudKitSyncManager: ObservableObject {
 
     #if DEBUG
     /// Log details about remote change notifications for debugging (dev builds only)
+    /// Only logs when there are actual changes to reduce noise
     private func logRemoteChangeNotification(_ notification: Notification, hasRealChanges: Bool) {
+        // Skip logging housekeeping notifications - too noisy
+        guard hasRealChanges else { return }
+
         var details: [String] = []
 
         // Extract store URL if available
@@ -542,18 +514,10 @@ class CloudKitSyncManager: ObservableObject {
             details.append("store: \(storeURL.lastPathComponent)")
         }
 
-        // Extract store UUID
-        if let storeUUID = notification.userInfo?["NSStoreUUID"] as? String {
-            details.append("uuid: \(storeUUID.prefix(8))...")
-        }
-
-        // Show whether this will trigger a sync
-        details.append(hasRealChanges ? "→ SYNC" : "→ skip")
-
         let detailString = details.joined(separator: " | ")
-        logger.info("📡 RemoteChange: \(detailString)")
+        logger.info("RemoteChange: \(detailString)")
 
-        // Now fetch actual persistent history to see what changed
+        // Fetch actual persistent history to see what changed
         if let token = notification.userInfo?[NSPersistentHistoryTokenKey] as? NSPersistentHistoryToken,
            let context = viewContext {
             fetchHistoryDetails(since: token, context: context)
@@ -567,13 +531,9 @@ class CloudKitSyncManager: ObservableObject {
 
             do {
                 guard let result = try context.execute(request) as? NSPersistentHistoryResult,
-                      let transactions = result.result as? [NSPersistentHistoryTransaction] else {
-                    logger.info("   └─ History: no transactions")
-                    return
-                }
-
-                if transactions.isEmpty {
-                    logger.info("   └─ History: 0 transactions (housekeeping only)")
+                      let transactions = result.result as? [NSPersistentHistoryTransaction],
+                      !transactions.isEmpty else {
+                    // No transactions - skip logging
                     return
                 }
 
