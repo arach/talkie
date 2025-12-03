@@ -332,8 +332,8 @@ export function SecurityInfographic() {
                 }}
              >
                  {/* Visual Line */}
-                 <div className={`absolute inset-y-0 w-[8px] border-l border-r shadow-[0_0_15px_rgba(0,0,0,0.8)] transition-colors duration-300 ${
-                     isBarrier ? 'bg-amber-950/50 border-amber-500/50' : 'bg-zinc-200 dark:bg-zinc-950 border-zinc-400 dark:border-zinc-700'
+                 <div className={`absolute inset-y-0 w-[8px] border-l border-r transition-colors duration-300 ${
+                     isBarrier ? 'bg-amber-950/50 border-amber-500/50 shadow-[0_0_15px_rgba(0,0,0,0.8)]' : 'bg-zinc-100/80 dark:bg-zinc-950 border-zinc-300/60 dark:border-zinc-700 shadow-[0_0_10px_rgba(0,0,0,0.05)] dark:shadow-[0_0_15px_rgba(0,0,0,0.8)]'
                  }`}></div>
 
                  {/* Hatch Pattern */}
