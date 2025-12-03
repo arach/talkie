@@ -38,6 +38,8 @@
 		AUTORUN_BUILDFILE /* AutoRunProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUTORUN_FILEREF /* AutoRunProcessor.swift */; };
 		DEBUGTOOLBAR_BUILDFILE /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */; };
 		LLMCONFIG_BUILDFILE /* LLMConfig.json in Resources */ = {isa = PBXBuildFile; fileRef = LLMCONFIG_FILEREF /* LLMConfig.json */; };
+		WHISPERSERVICE_BUILDFILE /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WHISPERSERVICE_FILEREF /* WhisperService.swift */; };
+		WHISPERKIT_BUILDFILE /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = WHISPERKIT_PRODUCTREF /* WhisperKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +74,7 @@
 		AUTORUN_FILEREF /* AutoRunProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRunProcessor.swift; sourceTree = "<group>"; };
 		DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugToolbar.swift; sourceTree = "<group>"; };
 		LLMCONFIG_FILEREF /* LLMConfig.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LLMConfig.json; sourceTree = "<group>"; };
+		WHISPERSERVICE_FILEREF /* WhisperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +84,7 @@
 			files = (
 				MLXLLM_BUILDFILE /* MLXLLM in Frameworks */,
 				MLXLMCOMMON_BUILDFILE /* MLXLMCommon in Frameworks */,
+				WHISPERKIT_BUILDFILE /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -140,6 +144,7 @@
 				DESIGNSYS_FILEREF /* DesignSystem.swift */,
 				86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */,
 				TFMGR_FILEREF /* TranscriptFileManager.swift */,
+				WHISPERSERVICE_FILEREF /* WhisperService.swift */,
 				28D24438172D1EDE9F6C188D /* LLM */,
 			);
 			path = Services;
@@ -215,6 +220,7 @@
 			packageProductDependencies = (
 				MLXLLM_PRODUCTREF /* MLXLLM */,
 				MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */,
+				WHISPERKIT_PRODUCTREF /* WhisperKit */,
 			);
 			productName = Talkie;
 			productReference = 92173E2C177853E5ADD8A345 /* Talkie.app */;
@@ -241,6 +247,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				WHISPERKIT_PACKAGE /* XCRemoteSwiftPackageReference "WhisperKit" */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
@@ -293,6 +300,7 @@
 				14A7C2FC561959C8A828FDDC /* WorkflowExecutor.swift in Sources */,
 				694FB95D3C8FBDE6C5468854 /* WorkflowViews.swift in Sources */,
 				AUTORUN_BUILDFILE /* AutoRunProcessor.swift in Sources */,
+				WHISPERSERVICE_BUILDFILE /* WhisperService.swift in Sources */,
 				FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -521,6 +529,14 @@
 				version = 2.29.2;
 			};
 		};
+		WHISPERKIT_PACKAGE /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -533,6 +549,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
+		};
+		WHISPERKIT_PRODUCTREF /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = WHISPERKIT_PACKAGE /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 

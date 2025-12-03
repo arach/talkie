@@ -396,6 +396,9 @@ class WorkflowExecutor: ObservableObject {
         case .transform(let config):
             return try executeTransformStep(config, context: context)
 
+        case .transcribe(let config):
+            return try await executeTranscribeStep(config, memo: memo, context: context)
+
         case .trigger(let config):
             return try executeTriggerStep(config, context: context)
 
@@ -1063,6 +1066,65 @@ class WorkflowExecutor: ObservableObject {
         }
     }
 
+    // MARK: - Transcribe Step Execution
+    private func executeTranscribeStep(_ config: TranscribeStepConfig, memo: VoiceMemo, context: WorkflowContext) async throws -> String {
+        logger.info("Executing transcribe step with model: \(config.model)")
+
+        // Check if memo already has a transcript and we're not overwriting
+        if let existingTranscript = memo.currentTranscript, !existingTranscript.isEmpty, !config.overwriteExisting {
+            logger.info("Memo already has transcript, skipping transcription (overwriteExisting=false)")
+            return existingTranscript
+        }
+
+        // Get audio data from memo
+        guard let audioData = memo.audioData else {
+            throw WorkflowError.executionFailed("No audio data available for transcription")
+        }
+
+        logger.info("Transcribing audio (\(audioData.count) bytes)")
+        await SystemEventManager.shared.log(.workflow, "Transcribing audio locally", detail: "Model: \(config.model)")
+
+        // Convert model string to WhisperModel enum
+        let whisperModel: WhisperModel
+        switch config.model {
+        case "openai_whisper-tiny":
+            whisperModel = .tiny
+        case "openai_whisper-base":
+            whisperModel = .base
+        case "openai_whisper-small":
+            whisperModel = .small
+        case "distil-whisper_distil-large-v3":
+            whisperModel = .distilLargeV3
+        default:
+            whisperModel = .small
+        }
+
+        do {
+            let transcript = try await WhisperService.shared.transcribe(audioData: audioData, model: whisperModel)
+
+            // Save transcript to memo if configured
+            if config.saveAsVersion, let context = memo.managedObjectContext {
+                await MainActor.run {
+                    memo.addSystemTranscript(
+                        content: transcript,
+                        fromMacOS: true,
+                        engine: TranscriptEngines.mlxWhisper
+                    )
+                    try? context.save()
+                }
+                logger.info("Saved transcript as new version")
+            }
+
+            logger.info("Transcription complete: \(transcript.prefix(100))...")
+            await SystemEventManager.shared.log(.workflow, "Transcription complete", detail: "\(transcript.count) characters")
+
+            return transcript
+        } catch {
+            logger.error("Transcription failed: \(error.localizedDescription)")
+            throw WorkflowError.executionFailed("Transcription failed: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Condition Evaluation
     private func evaluateCondition(_ condition: String) -> Bool {
         // Simple condition evaluation
@@ -1237,11 +1299,6 @@ class WorkflowExecutor: ObservableObject {
         let threshold = config.confidenceThreshold
         extractedIntents = extractedIntents.filter { ($0.confidence ?? 1.0) >= threshold }
 
-        // Send iOS push notification if configured
-        if config.notifyOnExtraction {
-            await sendIntentExtractionPushNotification(intents: extractedIntents, context: context)
-        }
-
         // Encode as JSON
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
@@ -1251,52 +1308,6 @@ class WorkflowExecutor: ObservableObject {
         }
 
         return "[]"
-    }
-
-    /// Send iOS push notification with extracted intents via CloudKit
-    private func sendIntentExtractionPushNotification(intents: [ExtractedIntent], context: WorkflowContext) async {
-        let title: String
-        let body: String
-
-        if intents.isEmpty {
-            title = "Intent Extraction"
-            body = "No intents detected"
-        } else {
-            let intentSummary = intents.map { intent in
-                let confidence = intent.confidence.map { String(format: "%.0f%%", $0 * 100) } ?? ""
-                let param = intent.parameter.map { " (\($0))" } ?? ""
-                return "• \(intent.action)\(param) \(confidence)"
-            }.joined(separator: "\n")
-
-            title = "Extracted \(intents.count) Intent\(intents.count == 1 ? "" : "s")"
-            body = intentSummary
-        }
-
-        // Create PushNotification record via Core Data → CloudKit → iOS
-        let coreDataContext = PersistenceController.shared.container.viewContext
-
-        await coreDataContext.perform {
-            let pushNotification = PushNotification(context: coreDataContext)
-            pushNotification.id = UUID()
-            pushNotification.title = title
-            pushNotification.body = body
-            pushNotification.createdAt = Date()
-            pushNotification.soundEnabled = true
-            pushNotification.isRead = false
-            pushNotification.workflowName = "Extract Intents"
-
-            // Link to memo if available
-            if let memoId = UUID(uuidString: context.outputs["MEMO_ID"] ?? "") {
-                pushNotification.memoId = memoId
-            }
-
-            do {
-                try coreDataContext.save()
-                logger.info("📱 Sent iOS push for intent extraction: \(intents.count) intents")
-            } catch {
-                logger.warning("⚠️ Failed to save push notification: \(error.localizedDescription)")
-            }
-        }
     }
 
     /// Extract intents using keyword matching
@@ -1455,7 +1466,6 @@ class WorkflowExecutor: ObservableObject {
         coreDataContext: NSManagedObjectContext
     ) async throws -> String {
         logger.info("📋 executeWorkflowsStep started")
-        logger.info("📋 notifyOnComplete: \(config.notifyOnComplete)")
 
         // Get intents from previous step
         let intentsJson = context.resolve(config.intentsKey)
@@ -1464,11 +1474,6 @@ class WorkflowExecutor: ObservableObject {
         guard let data = intentsJson.data(using: .utf8),
               let intents = try? JSONDecoder().decode([ExtractedIntent].self, from: data) else {
             logger.warning("📋 Failed to decode intents JSON: \(intentsJson.prefix(200))")
-            // Still send notification if configured
-            if config.notifyOnComplete {
-                logger.info("📋 Sending 'no intents' notification...")
-                await sendNoIntentsNotification()
-            }
             return "No intents to execute"
         }
 
@@ -1479,6 +1484,13 @@ class WorkflowExecutor: ObservableObject {
 
         for intent in intents {
             logger.info("📋 Processing intent: \(intent.action)")
+
+            // Check if this intent is configured for "detect only" (no execution)
+            if intent.workflowId == IntentDefinition.doNothingId {
+                logger.info("📋 Intent '\(intent.action)' detected (detect only mode)")
+                results.append("\(intent.action): detected (no action)")
+                continue
+            }
 
             // Find workflow by ID first, then fallback to name matching
             var workflow: WorkflowDefinition?
@@ -1531,61 +1543,8 @@ class WorkflowExecutor: ObservableObject {
         \(errors.isEmpty ? "" : "\nErrors:\n\(errors.joined(separator: "\n"))")
         """
 
-        // Send notification if configured
-        logger.info("📋 Checking notification: notifyOnComplete=\(config.notifyOnComplete), intents.count=\(intents.count)")
-        if config.notifyOnComplete && !intents.isEmpty {
-            logger.info("📋 Sending completion notification...")
-            await sendCompletionNotification(intents: intents, results: results)
-        } else {
-            logger.info("📋 Skipping notification (notifyOnComplete=\(config.notifyOnComplete), intents.isEmpty=\(intents.isEmpty))")
-        }
-
         logger.info("📋 executeWorkflowsStep finished")
         return summary
-    }
-
-    /// Send a notification when no intents were found/decoded
-    private func sendNoIntentsNotification() async {
-        let content = UNMutableNotificationContent()
-        content.title = "Hey Talkie"
-        content.body = "No intents detected"
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-            logger.info("🔔 Sent 'no intents' notification")
-        } catch {
-            logger.warning("⚠️ Failed to send notification: \(error.localizedDescription)")
-        }
-    }
-
-    /// Send a notification summarizing completed intents
-    private func sendCompletionNotification(intents: [ExtractedIntent], results: [String]) async {
-        let intentNames = intents.map { $0.action }.joined(separator: ", ")
-
-        let content = UNMutableNotificationContent()
-        content.title = "Hey Talkie Complete"
-        content.body = "Executed: \(intentNames)"
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-            logger.info("🔔 Sent completion notification for intents: \(intentNames)")
-        } catch {
-            logger.warning("⚠️ Failed to send notification: \(error.localizedDescription)")
-        }
     }
 
     // MARK: - Execute Action Chain (legacy)

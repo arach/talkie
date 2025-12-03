@@ -266,6 +266,27 @@ struct MemoDetailView: View {
                     }
                 }
 
+                // Transcribe Action (only if no transcript yet)
+                #if arch(arm64)
+                if (memo.currentTranscript == nil || memo.currentTranscript?.isEmpty == true) && memo.audioData != nil {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("ACTIONS")
+                            .font(.techLabel)
+                            .tracking(Tracking.wide)
+                            .foregroundColor(.secondary)
+
+                        ActionButtonMac(
+                            icon: "waveform.and.mic",
+                            title: "TRANSCRIBE",
+                            isProcessing: memo.isTranscribing,
+                            isCompleted: memo.currentTranscript != nil,
+                            runCount: 0,
+                            action: { executeTranscribeAction() }
+                        )
+                    }
+                }
+                #endif
+
                 // Quick Actions (3x2 grid)
                 if memo.currentTranscript != nil && !memo.isTranscribing {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -630,6 +651,50 @@ struct MemoDetailView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(transcript, forType: .string)
+    }
+
+    /// Transcribe audio using local WhisperKit (Apple Silicon only)
+    private func executeTranscribeAction() {
+        #if arch(arm64)
+        Task {
+            do {
+                guard let audioData = memo.audioData else {
+                    print("[Transcribe] No audio data available")
+                    return
+                }
+
+                // Set transcribing state
+                await MainActor.run {
+                    memo.isTranscribing = true
+                    try? viewContext.save()
+                }
+
+                // Transcribe using WhisperKit (using small model as default)
+                let transcript = try await WhisperService.shared.transcribe(
+                    audioData: audioData,
+                    model: .small
+                )
+
+                // Save the transcript
+                await MainActor.run {
+                    memo.addSystemTranscript(
+                        content: transcript,
+                        fromMacOS: true,
+                        engine: TranscriptEngines.whisperKit
+                    )
+                    memo.isTranscribing = false
+                    try? viewContext.save()
+                    // Force SwiftUI to pick up Core Data relationship changes
+                    viewContext.refresh(memo, mergeChanges: true)
+                }
+            } catch {
+                await MainActor.run {
+                    memo.isTranscribing = false
+                    try? viewContext.save()
+                }
+            }
+        }
+        #endif
     }
 
     private func deleteMemo() {

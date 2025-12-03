@@ -10,10 +10,13 @@ import SwiftUI
 struct ModelsContentView: View {
     @StateObject private var registry = LLMProviderRegistry.shared
     @StateObject private var settingsManager = SettingsManager.shared
+    @StateObject private var whisperService = WhisperService.shared
     @State private var selectedProviderId: String = "gemini"
     @State private var downloadingModelId: String?
     @State private var downloadProgress: Double = 0
     @State private var downloadTask: Task<Void, Never>?
+    @State private var downloadingWhisperModel: WhisperModel?
+    @State private var whisperDownloadTask: Task<Void, Never>?
 
     var body: some View {
         ScrollView {
@@ -56,6 +59,19 @@ struct ModelsContentView: View {
                         .padding(.horizontal, 24)
 
                     localProvidersSection
+                }
+
+                Divider()
+
+                // Speech-to-Text Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("🎙️ SPEECH-TO-TEXT")
+                        .font(settingsManager.fontSMBold)
+                        .tracking(1.5)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 24)
+
+                    speechToTextSection
                 }
 
                 Spacer()
@@ -253,6 +269,120 @@ struct ModelsContentView: View {
         .padding(.horizontal, 24)
     }
 
+    // MARK: - Speech-to-Text Section
+
+    private var speechToTextSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            #if arch(arm64)
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ], spacing: 8) {
+                ForEach(WhisperModel.allCases, id: \.rawValue) { model in
+                    WhisperModelCard(
+                        model: model,
+                        isDownloaded: whisperService.isModelDownloaded(model),
+                        isDownloading: downloadingWhisperModel == model,
+                        downloadProgress: whisperService.downloadProgress,
+                        isLoaded: whisperService.loadedModel == model,
+                        onDownload: { downloadWhisperModel(model) },
+                        onDelete: { deleteWhisperModel(model) },
+                        onCancel: { cancelWhisperDownload() }
+                    )
+                }
+            }
+            #else
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("WhisperKit requires Apple Silicon (M1/M2/M3)")
+                        .font(settingsManager.fontXS)
+                        .foregroundColor(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(6)
+            }
+            #endif
+        }
+        .padding(.horizontal, 24)
+    }
+
+    // MARK: - Whisper Actions
+
+    private func downloadWhisperModel(_ model: WhisperModel) {
+        print("[Whisper] Download button clicked for: \(model.displayName)")
+
+        #if arch(arm64)
+        guard !whisperService.isModelDownloaded(model) else {
+            print("[Whisper] Model already downloaded: \(model.displayName)")
+            return
+        }
+
+        print("[Whisper] Starting download for: \(model.rawValue)")
+        downloadingWhisperModel = model
+
+        whisperDownloadTask = Task {
+            do {
+                try await whisperService.downloadModel(model)
+                await MainActor.run {
+                    downloadingWhisperModel = nil
+                    whisperDownloadTask = nil
+                }
+                print("[Whisper] Downloaded: \(model.displayName)")
+            } catch is CancellationError {
+                await MainActor.run {
+                    downloadingWhisperModel = nil
+                    whisperDownloadTask = nil
+                }
+                print("[Whisper] Download cancelled")
+            } catch {
+                await MainActor.run {
+                    downloadingWhisperModel = nil
+                    whisperDownloadTask = nil
+                }
+                print("[Whisper] Download failed: \(error)")
+            }
+        }
+        #else
+        print("[Whisper] Download requires Apple Silicon (arm64)")
+        #endif
+    }
+
+    private func cancelWhisperDownload() {
+        whisperDownloadTask?.cancel()
+        downloadingWhisperModel = nil
+        whisperDownloadTask = nil
+    }
+
+    private func deleteWhisperModel(_ model: WhisperModel) {
+        #if arch(arm64)
+        // Delete from WhisperKit's storage location
+        // Path: ~/Library/Application Support/Talkie/WhisperModels/models/argmaxinc/whisperkit-coreml/{modelName}/
+        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let modelPath = supportDir
+            .appendingPathComponent("Talkie/WhisperModels/models/argmaxinc/whisperkit-coreml")
+            .appendingPathComponent(model.rawValue)
+
+        do {
+            if FileManager.default.fileExists(atPath: modelPath.path) {
+                try FileManager.default.removeItem(at: modelPath)
+            }
+            // Unload if this was the loaded model
+            if whisperService.loadedModel == model {
+                whisperService.unloadModel()
+            }
+            print("[Whisper] Deleted: \(model.displayName)")
+        } catch {
+            print("[Whisper] Delete failed: \(error)")
+        }
+        #endif
+    }
+
     // MARK: - Actions
 
     private func downloadModel(_ model: LLMModel) {
@@ -274,15 +404,15 @@ struct ModelsContentView: View {
                 await registry.refreshModels()
                 downloadingModelId = nil
                 downloadTask = nil
-                print("✅ Downloaded model: \(model.displayName)")
+                print("[MLX] Downloaded: \(model.displayName)")
             } catch is CancellationError {
                 downloadingModelId = nil
                 downloadTask = nil
-                print("⏸️ Download cancelled")
+                print("[MLX] Download cancelled")
             } catch {
                 downloadingModelId = nil
                 downloadTask = nil
-                print("❌ Failed to download model: \(error)")
+                print("[MLX] Download failed: \(error)")
             }
         }
         #endif
@@ -304,9 +434,9 @@ struct ModelsContentView: View {
                 let manager = MLXModelManager.shared
                 try manager.deleteModel(id: model.id)
                 await registry.refreshModels()
-                print("🗑️ Deleted model: \(model.displayName)")
+                print("[MLX] Deleted: \(model.displayName)")
             } catch {
-                print("❌ Failed to delete model: \(error)")
+                print("[MLX] Delete failed: \(error)")
             }
         }
         #endif
@@ -696,5 +826,111 @@ struct CompactProviderCard: View {
             .zIndex(isConfiguring ? 0 : 1)
         }
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isConfiguring)
+    }
+}
+
+// MARK: - Whisper Model Card
+
+struct WhisperModelCard: View {
+    let model: WhisperModel
+    let isDownloaded: Bool
+    let isDownloading: Bool
+    let downloadProgress: Float
+    let isLoaded: Bool
+    let onDownload: () -> Void
+    let onDelete: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Icon + Name
+            HStack(spacing: 8) {
+                Image(systemName: isDownloaded ? "checkmark.circle.fill" : "waveform")
+                    .font(SettingsManager.shared.fontTitle)
+                    .foregroundColor(isDownloaded ? .green : .secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.displayName)
+                        .font(SettingsManager.shared.fontXS)
+                        .lineLimit(1)
+
+                    Text(model.description)
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+
+            Spacer()
+
+            // Status badge for loaded model
+            if isLoaded {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 5, height: 5)
+                    Text("ACTIVE")
+                        .font(SettingsManager.shared.fontXSBold)
+                        .tracking(0.3)
+                        .foregroundColor(.blue)
+                }
+            }
+
+            // Action button
+            if isDownloading {
+                VStack(spacing: 4) {
+                    ProgressView(value: Double(downloadProgress))
+                    HStack {
+                        Text("\(Int(downloadProgress * 100))%")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button(action: onCancel) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(SettingsManager.shared.fontXS)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.orange)
+                    }
+                }
+            } else if isDownloaded {
+                Button(action: onDelete) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash")
+                            .font(SettingsManager.shared.fontXS)
+                        Text("Delete")
+                            .font(SettingsManager.shared.fontXS)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.small)
+            } else {
+                Button(action: onDownload) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle")
+                            .font(SettingsManager.shared.fontXS)
+                        Text("Download")
+                            .font(SettingsManager.shared.fontXS)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(10)
+        .frame(height: 100)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isLoaded ? Color.blue.opacity(0.5) : Color.primary.opacity(0.1), lineWidth: 1)
+        )
     }
 }
