@@ -372,9 +372,7 @@ struct DebugActionButton: View {
 /// Debug content for the main memo list view
 struct ListViewDebugContent: View {
     var body: some View {
-        DebugSection(title: "STATUS") {
-            CombinedStatusRow()
-        }
+        EmptyView()
     }
 }
 

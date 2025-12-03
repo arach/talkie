@@ -155,7 +155,7 @@ struct talkieApp: App {
 
     func scheduleAppRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 minutes
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // 1 hour (reduced from 15 min)
 
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -167,8 +167,8 @@ struct talkieApp: App {
     func scheduleSync() {
         let request = BGProcessingTaskRequest(identifier: Self.syncTaskIdentifier)
         request.requiresNetworkConnectivity = true
-        request.requiresExternalPower = false
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // 1 hour
+        request.requiresExternalPower = true // Only sync when charging
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 4 * 60 * 60) // 4 hours (reduced from 1 hour)
 
         do {
             try BGTaskScheduler.shared.submit(request)

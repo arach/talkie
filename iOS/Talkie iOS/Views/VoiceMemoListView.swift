@@ -66,27 +66,34 @@ struct VoiceMemoListView: View {
     @State private var deepLinkMemo: VoiceMemo? = nil
     @State private var scrollToActivity: Bool = false
 
-
-    private var filteredMemos: [VoiceMemo] {
-        if searchText.isEmpty {
-            return Array(allVoiceMemos)
-        }
-        return allVoiceMemos.filter { memo in
-            let titleMatch = memo.title?.localizedCaseInsensitiveContains(searchText) ?? false
-            let transcriptionMatch = memo.transcription?.localizedCaseInsensitiveContains(searchText) ?? false
-            return titleMatch || transcriptionMatch
-        }
-    }
-
-    private var voiceMemos: [VoiceMemo] {
-        Array(filteredMemos.prefix(displayLimit))
-    }
-
-    private var hasMore: Bool {
-        filteredMemos.count > displayLimit
+    // Helper for action handlers (delete, move) - not used during rendering
+    private var displayedMemos: [VoiceMemo] {
+        let filtered: [VoiceMemo] = searchText.isEmpty
+            ? Array(allVoiceMemos)
+            : allVoiceMemos.filter { memo in
+                let titleMatch = memo.title?.localizedCaseInsensitiveContains(searchText) ?? false
+                let transcriptionMatch = memo.transcription?.localizedCaseInsensitiveContains(searchText) ?? false
+                return titleMatch || transcriptionMatch
+            }
+        return Array(filtered.prefix(displayLimit))
     }
 
     var body: some View {
+        // Compute filtered results once per render to avoid repeated recalculation
+        let filteredMemos: [VoiceMemo] = {
+            if searchText.isEmpty {
+                return Array(allVoiceMemos)
+            }
+            return allVoiceMemos.filter { memo in
+                let titleMatch = memo.title?.localizedCaseInsensitiveContains(searchText) ?? false
+                let transcriptionMatch = memo.transcription?.localizedCaseInsensitiveContains(searchText) ?? false
+                return titleMatch || transcriptionMatch
+            }
+        }()
+        let voiceMemos = Array(filteredMemos.prefix(displayLimit))
+        let hasMore = filteredMemos.count > displayLimit
+
+        return
         NavigationView {
             ZStack(alignment: .bottom) {
                 Color.surfacePrimary
@@ -588,7 +595,7 @@ struct VoiceMemoListView: View {
 
         await MainActor.run {
             viewContext.refreshAllObjects()
-            for memo in voiceMemos {
+            for memo in allVoiceMemos {
                 viewContext.refresh(memo, mergeChanges: true)
             }
         }
@@ -702,7 +709,7 @@ struct VoiceMemoListView: View {
 
     private func deleteMemos(offsets: IndexSet) {
         withAnimation {
-            offsets.map { voiceMemos[$0] }.forEach { memo in
+            offsets.map { displayedMemos[$0] }.forEach { memo in
                 deleteMemo(memo)
             }
         }
@@ -710,7 +717,7 @@ struct VoiceMemoListView: View {
 
     private func moveMemos(from source: IndexSet, to destination: Int) {
         // Get memos to move
-        var memos = voiceMemos
+        var memos = displayedMemos
         memos.move(fromOffsets: source, toOffset: destination)
 
         // Update sortOrder for all memos

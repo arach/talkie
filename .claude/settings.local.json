@@ -87,7 +87,8 @@
       "Bash(pkill:*)",
       "Bash(log show --predicate 'subsystem == \"\"\"\"jdi.talkie-os-mac\"\"\"\"' --last 2m --info --style compact)",
       "Bash(log show:*)",
-      "Bash(/usr/bin/log show:*)"
+      "Bash(/usr/bin/log show:*)",
+      "Bash(xctrace export:*)"
     ],
     "deny": [],
     "ask": []

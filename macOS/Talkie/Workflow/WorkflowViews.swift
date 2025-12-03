@@ -4808,9 +4808,9 @@ struct IntentDefinitionRow: View {
                         onUpdate(updated)
                     }
                 ))
-                .toggleStyle(.talkieSuccess)
+                .toggleStyle(.switch)
+                .controlSize(.small)
                 .labelsHidden()
-                .scaleEffect(0.7)
 
                 Text(intent.name)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))

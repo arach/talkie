@@ -141,9 +141,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     private func createZoneSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
         let subscription = CKRecordZoneSubscription(zoneID: zoneID, subscriptionID: subscriptionID)
 
-        // Silent push for background sync
+        // Minimal notification - just badge update, no background wake
+        // NSPersistentCloudKitContainer handles sync automatically when app launches
         let notificationInfo = CKSubscription.NotificationInfo()
-        notificationInfo.shouldSendContentAvailable = true
+        notificationInfo.shouldSendContentAvailable = false // Don't wake app for every change
+        notificationInfo.shouldBadge = false
         subscription.notificationInfo = notificationInfo
 
         database.save(subscription) { savedSubscription, error in
