@@ -231,8 +231,8 @@ class WorkflowExecutor: ObservableObject {
             // Capture input for this step
             let stepInput: String
             if case .llm(let config) = step.config {
-                usedProvider = config.provider.displayName
-                usedModel = config.modelId
+                usedProvider = config.provider?.displayName ?? "auto-route"
+                usedModel = config.modelId ?? "auto"
                 stepInput = workflowContext.resolve(config.prompt)
             } else if case .shell(let config) = step.config {
                 // For shell steps, show the command that will be executed
@@ -412,9 +412,23 @@ class WorkflowExecutor: ObservableObject {
 
     // MARK: - LLM Step Execution
     private func executeLLMStep(_ config: LLMStepConfig, context: WorkflowContext) async throws -> String {
-        guard let provider = registry.provider(for: config.provider.registryId) else {
-            throw WorkflowError.executionFailed("Provider '\(config.provider.displayName)' not found")
+        // Build set of available WorkflowLLMProviders from registry
+        let availableProviders = await buildAvailableProviders()
+
+        // Resolve provider and model using auto-routing or explicit config
+        guard let resolved = config.resolveProviderAndModel(
+            availableProviders: availableProviders,
+            globalTier: settings.llmCostTier
+        ) else {
+            throw WorkflowError.executionFailed("No LLM provider available. Please configure API keys in Settings.")
         }
+
+        // Get the actual LLMProvider instance
+        guard let provider = registry.provider(for: resolved.provider.registryId) else {
+            throw WorkflowError.executionFailed("Provider '\(resolved.provider.displayName)' not found in registry")
+        }
+
+        logger.info("🤖 LLM Step: Using \(resolved.provider.displayName) / \(resolved.modelId) (tier: \(config.costTier?.rawValue ?? self.settings.llmCostTier.rawValue))")
 
         let resolvedPrompt = context.resolve(config.prompt)
         let systemPrompt = config.systemPrompt.map { context.resolve($0) }
@@ -435,9 +449,25 @@ class WorkflowExecutor: ObservableObject {
 
         return try await provider.generate(
             prompt: fullPrompt,
-            model: config.modelId,
+            model: resolved.modelId,
             options: options
         )
+    }
+
+    /// Build set of WorkflowLLMProviders that have API keys configured
+    private func buildAvailableProviders() async -> Set<WorkflowLLMProvider> {
+        var available = Set<WorkflowLLMProvider>()
+
+        for provider in registry.providers {
+            if await provider.isAvailable {
+                // Map registry provider ID to WorkflowLLMProvider enum
+                if let workflowProvider = WorkflowLLMProvider(rawValue: provider.id) {
+                    available.insert(workflowProvider)
+                }
+            }
+        }
+
+        return available
     }
 
     // MARK: - Shell Step Execution

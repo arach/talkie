@@ -523,8 +523,8 @@ struct LLMStepDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                DetailBadge(label: config.provider.displayName.uppercased(), color: .blue)
-                DetailBadge(label: config.selectedModel?.name ?? config.modelId, color: .purple)
+                DetailBadge(label: (config.provider?.displayName ?? "AUTO").uppercased(), color: .blue)
+                DetailBadge(label: config.selectedModel?.name ?? config.modelId ?? "auto", color: .purple)
             }
 
             if !config.prompt.isEmpty {
@@ -1974,22 +1974,32 @@ struct LLMStepReadView: View {
 
     private var modelDisplayName: String {
         // Try to get a friendly name for the model
-        if let model = config.provider.models.first(where: { $0.id == config.modelId }) {
+        if let provider = config.provider,
+           let modelId = config.modelId,
+           let model = provider.models.first(where: { $0.id == modelId }) {
             return model.name
         }
-        // Fallback: extract last component of model ID
-        return config.modelId.components(separatedBy: "/").last ?? config.modelId
+        // Fallback: extract last component of model ID or show "Auto"
+        if let modelId = config.modelId {
+            return modelId.components(separatedBy: "/").last ?? modelId
+        }
+        return "Auto"
     }
 
     private var modelContextWindow: String? {
-        if let model = config.provider.models.first(where: { $0.id == config.modelId }) {
+        if let provider = config.provider,
+           let modelId = config.modelId,
+           let model = provider.models.first(where: { $0.id == modelId }) {
             return model.formattedContext
         }
         return nil
     }
 
     private var providerColor: Color {
-        switch config.provider {
+        guard let provider = config.provider else {
+            return .gray  // Gray for auto-route
+        }
+        switch provider {
         case .mlx:
             return SemanticColor.processing  // Purple for local AI
         case .anthropic:
@@ -2029,9 +2039,9 @@ struct LLMStepReadView: View {
             HStack(spacing: Spacing.sm) {
                 // Provider badge with local/external indicator
                 HStack(spacing: 4) {
-                    Image(systemName: config.provider == .mlx ? "cpu" : "globe")
+                    Image(systemName: config.provider == .mlx ? "cpu" : (config.provider == nil ? "arrow.triangle.branch" : "globe"))
                         .font(.system(size: 9))
-                    Text(config.provider.displayName)
+                    Text(config.provider?.displayName ?? "Auto")
                         .font(.techLabelSmall)
                 }
                 .padding(.horizontal, Spacing.xs)
@@ -3218,7 +3228,11 @@ struct LLMStepConfigEditor: View {
     // Get available models for the current provider
     // For MLX (local), only show installed models
     private var availableModels: [WorkflowModelOption] {
-        if config.provider == .mlx {
+        guard let provider = config.provider else {
+            // Auto-route mode - return empty for now (model selected at runtime)
+            return []
+        }
+        if provider == .mlx {
             // Get installed MLX models dynamically
             let installedModels = MLXModelManager.shared.availableModels()
                 .filter { $0.isInstalled }
@@ -3231,15 +3245,15 @@ struct LLMStepConfigEditor: View {
                 }
             return installedModels
         }
-        return config.provider.models
+        return provider.models
     }
 
     // Validated model ID - ensures selection is always valid
     private var validatedModelId: String {
         let models = availableModels
         // If current modelId is in available models, use it
-        if models.contains(where: { $0.id == config.modelId }) {
-            return config.modelId
+        if let modelId = config.modelId, models.contains(where: { $0.id == modelId }) {
+            return modelId
         }
         // Otherwise return first available model's ID, or empty string
         return models.first?.id ?? ""
@@ -3248,6 +3262,11 @@ struct LLMStepConfigEditor: View {
     // Check if current provider is local
     private var isLocalProvider: Bool {
         config.provider == .mlx
+    }
+
+    // Check if in auto-route mode
+    private var isAutoRoute: Bool {
+        config.provider == nil
     }
 
     // Local providers
@@ -3271,7 +3290,7 @@ struct LLMStepConfigEditor: View {
                         .foregroundColor(.secondary)
 
                     Picker("", selection: Binding(
-                        get: { config.provider },
+                        get: { config.provider ?? .gemini },
                         set: { newProvider in
                             var newConfig = config
                             newConfig.provider = newProvider

@@ -219,8 +219,199 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         autoRunOrder: 0
     )
 
+    // MARK: - Brain Dump Processor (Canonical Test Workflow)
+
+    /// Comprehensive workflow for testing WFKit visualization
+    /// Processes freeform brainstorms into structured ideas with actions
+    static let brainDumpProcessor = WorkflowDefinition(
+        id: UUID(uuidString: "00000000-7E57-F100-0000-000000000001")!,
+        name: "Brain Dump Processor",
+        description: "Capture freeform brainstorms, extract ideas, create next actions, and save to your idea garden",
+        icon: "brain.head.profile",
+        color: .purple,
+        steps: [
+            // Step 1: Transcribe the voice brainstorm locally
+            WorkflowStep(
+                id: UUID(uuidString: "57E90001-0000-0000-0000-000000000001")!,
+                type: .transcribe,
+                config: .transcribe(TranscribeStepConfig(
+                    model: "openai_whisper-small",
+                    overwriteExisting: false,
+                    saveAsVersion: true
+                )),
+                outputKey: "transcript"
+            ),
+            // Step 2: Extract distinct ideas and categorize them
+            WorkflowStep(
+                id: UUID(uuidString: "57E90002-0000-0000-0000-000000000002")!,
+                type: .llm,
+                config: .llm(LLMStepConfig(
+                    provider: .gemini,
+                    modelId: "gemini-2.0-flash",
+                    prompt: """
+                    You are a personal thinking partner. Analyze this voice brainstorm and extract the distinct ideas.
+
+                    Transcript:
+                    {{transcript}}
+
+                    For each idea found, categorize it as: project, someday, reference, or actionable.
+
+                    Return as JSON:
+                    {
+                      "ideas": [{"title": "short title", "description": "1-2 sentences", "category": "project|someday|reference|actionable"}],
+                      "nextActions": ["specific next step to take"],
+                      "connections": "any interesting connections between ideas"
+                    }
+                    """,
+                    systemPrompt: "You help people capture and organize their creative thinking. Be concise but insightful.",
+                    temperature: 0.5,
+                    maxTokens: 2048
+                )),
+                outputKey: "extracted"
+            ),
+            // Step 3: Parse the JSON output
+            WorkflowStep(
+                id: UUID(uuidString: "57E90003-0000-0000-0000-000000000003")!,
+                type: .transform,
+                config: .transform(TransformStepConfig(
+                    operation: .extractJSON,
+                    parameters: ["path": "$", "fallback": "{\"ideas\": [], \"nextActions\": []}"]
+                )),
+                outputKey: "parsed"
+            ),
+            // Step 4: Check if there are actionable next steps
+            WorkflowStep(
+                id: UUID(uuidString: "57E90004-0000-0000-0000-000000000004")!,
+                type: .conditional,
+                config: .conditional(ConditionalStepConfig(
+                    condition: "{{parsed.nextActions.length}} > 0",
+                    thenSteps: [UUID(uuidString: "57E90005-0000-0000-0000-000000000005")!],
+                    elseSteps: []
+                )),
+                outputKey: "hasActions"
+            ),
+            // Step 5: Create reminder for first next action (runs if conditional true)
+            WorkflowStep(
+                id: UUID(uuidString: "57E90005-0000-0000-0000-000000000005")!,
+                type: .appleReminders,
+                config: .appleReminders(AppleRemindersStepConfig(
+                    listName: "Inbox",
+                    title: "{{parsed.nextActions[0]}}",
+                    notes: "From brainstorm: {{TITLE}}\n\nRelated ideas: {{parsed.ideas[0].title}}",
+                    dueDate: "{{NOW+1d}}",
+                    priority: .medium
+                )),
+                outputKey: "reminder"
+            ),
+            // Step 6: Use jq to format ideas for display
+            WorkflowStep(
+                id: UUID(uuidString: "57E90006-0000-0000-0000-000000000006")!,
+                type: .shell,
+                config: .shell(ShellStepConfig(
+                    executable: "/opt/homebrew/bin/jq",
+                    arguments: ["-r", ".ideas | map(\"- **\" + .title + \"** (\" + .category + \"): \" + .description) | join(\"\\n\")"],
+                    stdin: "{{extracted}}",
+                    timeout: 10
+                )),
+                outputKey: "formattedIdeas"
+            ),
+            // Step 7: Polish into a nice note format
+            WorkflowStep(
+                id: UUID(uuidString: "57E90007-0000-0000-0000-000000000007")!,
+                type: .llm,
+                config: .llm(LLMStepConfig(
+                    provider: .gemini,
+                    modelId: "gemini-2.0-flash",
+                    prompt: """
+                    Format this into a clean markdown note for my idea garden:
+
+                    Ideas:
+                    {{formattedIdeas}}
+
+                    Connections:
+                    {{parsed.connections}}
+
+                    Next Actions:
+                    {{parsed.nextActions}}
+
+                    Create a brief, scannable note with emoji headers. Keep it concise.
+                    """,
+                    temperature: 0.3,
+                    maxTokens: 1024
+                )),
+                outputKey: "polished"
+            ),
+            // Step 8: Use OpenAI to research and expand on the ideas
+            WorkflowStep(
+                id: UUID(uuidString: "57E90008-0000-0000-0000-000000000008")!,
+                type: .llm,
+                config: .llm(LLMStepConfig(
+                    provider: .openai,
+                    modelId: "gpt-5.1",
+                    prompt: """
+                    Based on these brainstormed ideas, suggest:
+                    1. Related concepts worth exploring
+                    2. Potential connections to other fields
+                    3. One actionable experiment to test the most promising idea
+
+                    Ideas:
+                    {{parsed.ideas}}
+
+                    Be concise and practical. Focus on sparking further thinking.
+                    """,
+                    systemPrompt: "You are a creative thinking partner who helps expand ideas with cross-disciplinary insights.",
+                    temperature: 0.7,
+                    maxTokens: 1024
+                )),
+                outputKey: "research"
+            ),
+            // Step 9: Save markdown file to Obsidian/Notion vault
+            WorkflowStep(
+                id: UUID(uuidString: "57E90009-0000-0000-0000-000000000009")!,
+                type: .saveFile,
+                config: .saveFile(SaveFileStepConfig(
+                    filename: "{{DATE}}-{{TITLE}}.md",
+                    directory: "@Obsidian/Ideas",
+                    content: """
+                    ---
+                    created: {{DATE}}
+                    tags: [braindump, ideas]
+                    ---
+
+                    # {{TITLE}}
+
+                    {{polished}}
+
+                    ## 🔬 Research Notes
+                    {{research}}
+
+                    ---
+                    *Captured via Talkie*
+                    """,
+                    appendIfExists: false
+                )),
+                outputKey: "savedFile"
+            ),
+            // Step 10: Notify iPhone that ideas were captured
+            WorkflowStep(
+                id: UUID(uuidString: "57E90010-0000-0000-0000-000000000010")!,
+                type: .iOSPush,
+                config: .iOSPush(iOSPushStepConfig(
+                    title: "💡 Ideas Captured",
+                    body: "{{parsed.ideas.length}} ideas saved to your garden",
+                    sound: true,
+                    includeOutput: false
+                )),
+                outputKey: "notified"
+            )
+        ],
+        isEnabled: true,
+        isPinned: false,
+        autoRun: false
+    )
+
     // MARK: - Default Workflows (Initial set)
-    static let defaultWorkflows = [summarize, extractTasks, keyInsights]
+    static let defaultWorkflows = [summarize, extractTasks, keyInsights, brainDumpProcessor]
 }
 
 // MARK: - Workflow Step
@@ -455,6 +646,48 @@ enum StepConfig: Codable {
     }
 }
 
+// MARK: - LLM Cost Tier
+
+/// Cost tier for LLM calls - controls expense/capability tradeoff
+enum LLMCostTier: String, Codable, CaseIterable {
+    case budget     // Cheapest, fastest - simple extraction, formatting
+    case balanced   // Good cost/capability ratio (DEFAULT)
+    case capable    // Higher capability - complex reasoning, research
+
+    var displayName: String {
+        switch self {
+        case .budget: return "Budget"
+        case .balanced: return "Balanced"
+        case .capable: return "Capable"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .budget: return "Fast & cheap - simple tasks"
+        case .balanced: return "Good balance - most workflows"
+        case .capable: return "Higher capability - complex reasoning"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .budget: return "leaf"
+        case .balanced: return "scale.3d"
+        case .capable: return "brain"
+        }
+    }
+
+    /// Approximate relative cost multiplier (budget = 1x)
+    var costMultiplier: Double {
+        switch self {
+        case .budget: return 1.0
+        case .balanced: return 5.0
+        case .capable: return 20.0
+        }
+    }
+}
+
 // MARK: - LLM Provider and Model Definitions for Workflows
 
 enum WorkflowLLMProvider: String, Codable, CaseIterable {
@@ -483,38 +716,73 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
         switch self {
         case .gemini:
             return [
-                WorkflowModelOption(id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", contextWindow: 1000000),
-                WorkflowModelOption(id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash", contextWindow: 1000000),
-                WorkflowModelOption(id: "gemini-1.5-pro-latest", name: "Gemini 1.5 Pro", contextWindow: 2000000),
+                // Budget tier - Flash models are very cheap
+                WorkflowModelOption(id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash", contextWindow: 1000000,
+                                   costTier: .budget, inputCostPer1M: 0.075, outputCostPer1M: 0.30),
+                WorkflowModelOption(id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", contextWindow: 1000000,
+                                   costTier: .balanced, inputCostPer1M: 0.10, outputCostPer1M: 0.40),
+                // Capable tier - Pro models for complex tasks
+                WorkflowModelOption(id: "gemini-1.5-pro-latest", name: "Gemini 1.5 Pro", contextWindow: 2000000,
+                                   costTier: .capable, inputCostPer1M: 1.25, outputCostPer1M: 5.00),
             ]
         case .openai:
             return [
-                WorkflowModelOption(id: "gpt-4o", name: "GPT-4o", contextWindow: 128000),
-                WorkflowModelOption(id: "gpt-4o-mini", name: "GPT-4o Mini", contextWindow: 128000),
-                WorkflowModelOption(id: "gpt-4-turbo", name: "GPT-4 Turbo", contextWindow: 128000),
-                WorkflowModelOption(id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", contextWindow: 16385),
+                // Budget tier - Mini models
+                WorkflowModelOption(id: "gpt-4.1-mini", name: "GPT-4.1 Mini", contextWindow: 1000000,
+                                   costTier: .budget, inputCostPer1M: 0.15, outputCostPer1M: 0.60, maxOutputTokens: 32768),
+                // Balanced tier - Standard models
+                WorkflowModelOption(id: "gpt-4.1", name: "GPT-4.1", contextWindow: 1000000,
+                                   costTier: .balanced, inputCostPer1M: 2.00, outputCostPer1M: 8.00, maxOutputTokens: 32768),
+                WorkflowModelOption(id: "gpt-5-mini", name: "GPT-5 Mini", contextWindow: 400000,
+                                   costTier: .balanced, inputCostPer1M: 1.50, outputCostPer1M: 6.00, maxOutputTokens: 32768),
+                // Capable tier - Flagship models
+                WorkflowModelOption(id: "gpt-5.1", name: "GPT-5.1", contextWindow: 128000,
+                                   costTier: .capable, inputCostPer1M: 5.00, outputCostPer1M: 15.00, maxOutputTokens: 32768),
+                WorkflowModelOption(id: "gpt-5", name: "GPT-5", contextWindow: 400000,
+                                   costTier: .capable, inputCostPer1M: 5.00, outputCostPer1M: 15.00, maxOutputTokens: 32768),
+                // Reasoning models (special tier)
+                WorkflowModelOption(id: "o4-mini", name: "o4-mini (Reasoning)", contextWindow: 200000,
+                                   costTier: .capable, inputCostPer1M: 1.10, outputCostPer1M: 4.40, maxOutputTokens: 100000),
             ]
         case .anthropic:
             return [
-                WorkflowModelOption(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200000),
-                WorkflowModelOption(id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", contextWindow: 200000),
-                WorkflowModelOption(id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", contextWindow: 200000),
-                WorkflowModelOption(id: "claude-3-opus-20240229", name: "Claude 3 Opus", contextWindow: 200000),
+                // Budget tier - Haiku
+                WorkflowModelOption(id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", contextWindow: 200000,
+                                   costTier: .budget, inputCostPer1M: 0.80, outputCostPer1M: 4.00, maxOutputTokens: 8192),
+                // Balanced tier - Sonnet
+                WorkflowModelOption(id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", contextWindow: 200000,
+                                   costTier: .balanced, inputCostPer1M: 3.00, outputCostPer1M: 15.00, maxOutputTokens: 8192),
+                WorkflowModelOption(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200000,
+                                   costTier: .balanced, inputCostPer1M: 3.00, outputCostPer1M: 15.00, maxOutputTokens: 8192),
+                // Capable tier - Opus
+                WorkflowModelOption(id: "claude-3-opus-20240229", name: "Claude 3 Opus", contextWindow: 200000,
+                                   costTier: .capable, inputCostPer1M: 15.00, outputCostPer1M: 75.00, maxOutputTokens: 4096),
             ]
         case .groq:
+            // Groq is free/very cheap - all budget tier
             return [
-                WorkflowModelOption(id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", contextWindow: 128000),
-                WorkflowModelOption(id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", contextWindow: 128000),
-                WorkflowModelOption(id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", contextWindow: 32768),
-                WorkflowModelOption(id: "gemma2-9b-it", name: "Gemma 2 9B", contextWindow: 8192),
+                WorkflowModelOption(id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", contextWindow: 128000,
+                                   costTier: .budget, inputCostPer1M: 0.05, outputCostPer1M: 0.08),
+                WorkflowModelOption(id: "gemma2-9b-it", name: "Gemma 2 9B", contextWindow: 8192,
+                                   costTier: .budget, inputCostPer1M: 0.20, outputCostPer1M: 0.20),
+                WorkflowModelOption(id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", contextWindow: 32768,
+                                   costTier: .balanced, inputCostPer1M: 0.24, outputCostPer1M: 0.24),
+                WorkflowModelOption(id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", contextWindow: 128000,
+                                   costTier: .capable, inputCostPer1M: 0.59, outputCostPer1M: 0.79),
             ]
         case .mlx:
+            // Local models - no API cost, tier based on capability
             return [
-                WorkflowModelOption(id: "mlx-community/Llama-3.2-1B-Instruct-4bit", name: "Llama 3.2 1B", contextWindow: 8192),
-                WorkflowModelOption(id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit", name: "Qwen 2.5 1.5B", contextWindow: 8192),
-                WorkflowModelOption(id: "mlx-community/Llama-3.2-3B-Instruct-4bit", name: "Llama 3.2 3B", contextWindow: 8192),
-                WorkflowModelOption(id: "mlx-community/Qwen2.5-3B-Instruct-4bit", name: "Qwen 2.5 3B", contextWindow: 8192),
-                WorkflowModelOption(id: "mlx-community/Mistral-7B-Instruct-v0.3-4bit", name: "Mistral 7B", contextWindow: 32768),
+                WorkflowModelOption(id: "mlx-community/Llama-3.2-1B-Instruct-4bit", name: "Llama 3.2 1B", contextWindow: 8192,
+                                   costTier: .budget),
+                WorkflowModelOption(id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit", name: "Qwen 2.5 1.5B", contextWindow: 8192,
+                                   costTier: .budget),
+                WorkflowModelOption(id: "mlx-community/Llama-3.2-3B-Instruct-4bit", name: "Llama 3.2 3B", contextWindow: 8192,
+                                   costTier: .balanced),
+                WorkflowModelOption(id: "mlx-community/Qwen2.5-3B-Instruct-4bit", name: "Qwen 2.5 3B", contextWindow: 8192,
+                                   costTier: .balanced),
+                WorkflowModelOption(id: "mlx-community/Mistral-7B-Instruct-v0.3-4bit", name: "Mistral 7B", contextWindow: 32768,
+                                   costTier: .capable),
             ]
         }
     }
@@ -522,12 +790,67 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
     var defaultModel: WorkflowModelOption {
         models.first!
     }
+
+    /// Get the recommended model for a given cost tier
+    /// Uses the model's declared costTier to find the best match
+    func model(for tier: LLMCostTier) -> WorkflowModelOption {
+        // First try to find exact tier match
+        if let match = models.first(where: { $0.costTier == tier }) {
+            return match
+        }
+        // Fall back to closest available tier
+        switch tier {
+        case .budget:
+            // If no budget, try balanced
+            return models.first(where: { $0.costTier == .balanced }) ?? defaultModel
+        case .balanced:
+            // If no balanced, prefer budget over capable
+            return models.first(where: { $0.costTier == .budget })
+                ?? models.first(where: { $0.costTier == .capable })
+                ?? defaultModel
+        case .capable:
+            // If no capable, try balanced
+            return models.first(where: { $0.costTier == .balanced }) ?? defaultModel
+        }
+    }
+
+    /// Model ID for a given cost tier
+    func modelId(for tier: LLMCostTier) -> String {
+        model(for: tier).id
+    }
+
+    /// Get all models for a given cost tier
+    func models(for tier: LLMCostTier) -> [WorkflowModelOption] {
+        models.filter { $0.costTier == tier }
+    }
 }
 
 struct WorkflowModelOption: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let contextWindow: Int
+    let costTier: LLMCostTier          // Which cost tier this model belongs to
+    let inputCostPer1M: Double?        // Cost per 1M input tokens (USD), nil if free/unknown
+    let outputCostPer1M: Double?       // Cost per 1M output tokens (USD), nil if free/unknown
+    let maxOutputTokens: Int?          // Max output tokens, nil if same as context
+
+    init(
+        id: String,
+        name: String,
+        contextWindow: Int,
+        costTier: LLMCostTier = .balanced,
+        inputCostPer1M: Double? = nil,
+        outputCostPer1M: Double? = nil,
+        maxOutputTokens: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.contextWindow = contextWindow
+        self.costTier = costTier
+        self.inputCostPer1M = inputCostPer1M
+        self.outputCostPer1M = outputCostPer1M
+        self.maxOutputTokens = maxOutputTokens
+    }
 
     var formattedContext: String {
         if contextWindow >= 1000000 {
@@ -537,13 +860,27 @@ struct WorkflowModelOption: Codable, Identifiable, Hashable {
         }
         return "\(contextWindow)"
     }
+
+    /// Formatted cost string for display (e.g., "$0.15/$0.60")
+    var formattedCost: String? {
+        guard let input = inputCostPer1M, let output = outputCostPer1M else { return nil }
+        return String(format: "$%.2f/$%.2f", input, output)
+    }
+
+    /// Estimated cost for a typical workflow step (1K input, 500 output tokens)
+    var estimatedStepCost: Double? {
+        guard let input = inputCostPer1M, let output = outputCostPer1M else { return nil }
+        return (input * 0.001) + (output * 0.0005)  // 1K in, 500 out
+    }
 }
 
 // MARK: - Step-Specific Configurations
 
 struct LLMStepConfig: Codable {
-    var provider: WorkflowLLMProvider
-    var modelId: String
+    var provider: WorkflowLLMProvider?  // nil = auto-route based on available providers
+    var modelId: String?                // Explicit model ID (used if costTier is nil and autoRoute is false)
+    var costTier: LLMCostTier?          // If set, overrides modelId with tier-based selection
+    var autoRoute: Bool                 // If true, picks best available provider at runtime
     var prompt: String
     var systemPrompt: String?
     var temperature: Double
@@ -551,25 +888,102 @@ struct LLMStepConfig: Codable {
     var topP: Double
 
     init(
-        provider: WorkflowLLMProvider = .gemini,
+        provider: WorkflowLLMProvider? = nil,
         modelId: String? = nil,
+        costTier: LLMCostTier? = nil,
+        autoRoute: Bool = true,         // Default: auto-route for flexibility
         prompt: String,
         systemPrompt: String? = nil,
         temperature: Double = 0.7,
         maxTokens: Int = 1024,
         topP: Double = 0.9
     ) {
-        self.provider = provider
-        self.modelId = modelId ?? provider.defaultModel.id
+        self.autoRoute = autoRoute
+        self.costTier = costTier
         self.prompt = prompt
         self.systemPrompt = systemPrompt
         self.temperature = temperature
         self.maxTokens = maxTokens
         self.topP = topP
+
+        // If explicit provider given, use it
+        if let provider = provider {
+            self.provider = provider
+            if let tier = costTier {
+                self.modelId = provider.modelId(for: tier)
+            } else {
+                self.modelId = modelId ?? provider.defaultModel.id
+            }
+        } else {
+            // Auto-route mode - provider/model resolved at runtime
+            self.provider = nil
+            self.modelId = modelId
+        }
+    }
+
+    /// Resolve the effective provider and model for execution
+    /// - Parameters:
+    ///   - availableProviders: Providers that have API keys configured
+    ///   - globalTier: The global cost tier setting (from SettingsManager)
+    /// - Returns: Tuple of (provider, modelId) to use, or nil if no provider available
+    func resolveProviderAndModel(
+        availableProviders: Set<WorkflowLLMProvider>,
+        globalTier: LLMCostTier
+    ) -> (provider: WorkflowLLMProvider, modelId: String)? {
+        let tier = costTier ?? globalTier
+
+        // If explicit provider specified, use it (even if not in available list - will fail at runtime)
+        if let explicitProvider = provider {
+            return (explicitProvider, explicitProvider.modelId(for: tier))
+        }
+
+        // Auto-route: pick best available provider for this tier
+        // Priority: Groq (free) > Gemini (cheap) > OpenAI > Anthropic
+        let priorityOrder: [WorkflowLLMProvider] = [.groq, .gemini, .openai, .anthropic, .mlx]
+
+        for candidate in priorityOrder {
+            if availableProviders.contains(candidate) {
+                return (candidate, candidate.modelId(for: tier))
+            }
+        }
+
+        // No provider available
+        return nil
+    }
+
+    /// Get the effective model option for a specific provider/tier
+    func effectiveModel(provider: WorkflowLLMProvider, globalTier: LLMCostTier) -> WorkflowModelOption {
+        let tier = costTier ?? globalTier
+        return provider.model(for: tier)
     }
 
     var selectedModel: WorkflowModelOption? {
-        provider.models.first { $0.id == modelId }
+        guard let provider = provider, let modelId = modelId else { return nil }
+        return provider.models.first { $0.id == modelId }
+    }
+
+    /// Get the display name for the current configuration
+    var displayName: String {
+        if autoRoute {
+            if let tier = costTier {
+                return "Auto (\(tier.displayName))"
+            }
+            return "Auto (uses global tier)"
+        }
+        if let tier = costTier {
+            return tier.displayName
+        }
+        return selectedModel?.name ?? modelId ?? "Unknown"
+    }
+
+    /// Estimated cost for this step (nil if auto-routing or no explicit model)
+    var estimatedCost: Double? {
+        selectedModel?.estimatedStepCost
+    }
+
+    /// Whether this step uses auto-routing (provider-agnostic)
+    var isAutoRouted: Bool {
+        autoRoute && provider == nil
     }
 }
 
@@ -1434,6 +1848,7 @@ class WorkflowManager: ObservableObject {
 
     private init() {
         loadWorkflows()
+        loadStarterWorkflowsFromTWF()
     }
 
     func addWorkflow(_ workflow: WorkflowDefinition) {
@@ -1519,5 +1934,59 @@ class WorkflowManager: ObservableObject {
             NSUbiquitousKeyValueStore.default.set(data, forKey: iCloudPinnedKey)
             NSUbiquitousKeyValueStore.default.synchronize()
         }
+    }
+
+    // MARK: - TWF Starter Workflows
+
+    /// Load starter workflows from bundled TWF files
+    /// Only adds workflows that don't already exist (by ID)
+    private func loadStarterWorkflowsFromTWF() {
+        let starterWorkflows = TWFLoader.loadStarterWorkflows()
+        var added = 0
+
+        for starter in starterWorkflows {
+            // Check if workflow with this ID already exists
+            if !workflows.contains(where: { $0.id == starter.id }) {
+                workflows.append(starter)
+                added += 1
+            }
+        }
+
+        if added > 0 {
+            print("[WorkflowManager] Added \(added) starter workflows from TWF")
+            saveWorkflows()
+        }
+    }
+
+    /// Force reload all starter workflows from TWF files (replaces existing ones with same slug)
+    func reloadStarterWorkflowsFromTWF() {
+        let starterWorkflows = TWFLoader.loadStarterWorkflows()
+
+        for starter in starterWorkflows {
+            if let index = workflows.firstIndex(where: { $0.id == starter.id }) {
+                // Preserve user customizations like isPinned and autoRun
+                var updated = starter
+                updated = WorkflowDefinition(
+                    id: starter.id,
+                    name: starter.name,
+                    description: starter.description,
+                    icon: starter.icon,
+                    color: starter.color,
+                    steps: starter.steps,
+                    isEnabled: workflows[index].isEnabled,  // Preserve
+                    isPinned: workflows[index].isPinned,    // Preserve
+                    autoRun: workflows[index].autoRun,      // Preserve
+                    autoRunOrder: workflows[index].autoRunOrder,  // Preserve
+                    createdAt: workflows[index].createdAt,  // Preserve
+                    modifiedAt: Date()
+                )
+                workflows[index] = updated
+            } else {
+                workflows.append(starter)
+            }
+        }
+
+        print("[WorkflowManager] Reloaded \(starterWorkflows.count) starter workflows from TWF")
+        saveWorkflows()
     }
 }

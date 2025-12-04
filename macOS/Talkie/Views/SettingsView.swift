@@ -1029,7 +1029,66 @@ struct APISettingsView: View {
                     )
                 }
 
+            Divider()
+                .background(MidnightSurface.divider)
+                .padding(.vertical, 8)
+
+            // LLM Cost Tier Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gauge.with.dots.needle.33percent")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text("LLM COST TIER")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+
+                Text("Controls the default model quality for workflow LLM steps. Budget uses cheaper/faster models, Capable uses more powerful models.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary.opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Picker("Cost Tier", selection: $settingsManager.llmCostTier) {
+                    ForEach(LLMCostTier.allCases, id: \.self) { tier in
+                        Text(tier.displayName).tag(tier)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                // Tier description
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(tierColor(settingsManager.llmCostTier))
+                        .frame(width: 6, height: 6)
+                    Text(tierDescription(settingsManager.llmCostTier))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 4)
+
             Spacer()
+        }
+    }
+
+    private func tierColor(_ tier: LLMCostTier) -> Color {
+        switch tier {
+        case .budget: return .green
+        case .balanced: return .orange
+        case .capable: return .purple
+        }
+    }
+
+    private func tierDescription(_ tier: LLMCostTier) -> String {
+        switch tier {
+        case .budget:
+            return "Uses Groq (free) or Gemini Flash. Fastest, lowest cost."
+        case .balanced:
+            return "Uses Gemini 2.0 Flash or GPT-4o-mini. Good balance of quality and cost."
+        case .capable:
+            return "Uses Claude Sonnet or GPT-4o. Best quality for complex reasoning."
         }
     }
 }

@@ -1,0 +1,57 @@
+{
+  "slug": "tweet-summary",
+  "name": "Tweet Summary",
+  "description": "280-character summary, perfect for sharing or notifications",
+  "icon": "text.bubble",
+  "color": "cyan",
+  "isEnabled": true,
+  "isPinned": true,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "summarize",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "budget",
+          "prompt": "Summarize this voice memo in 280 characters or less. Output ONLY the summary, no quotes, no labels, no explanation.\n\n{{TRANSCRIPT}}",
+          "temperature": 0.5,
+          "maxTokens": 100
+        }
+      }
+    },
+    {
+      "id": "polish",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "budget",
+          "prompt": "Clean up this summary. Keep it under 280 characters. Fix any awkward phrasing. Output ONLY the final text, nothing else.\n\n{{summarize}}",
+          "temperature": 0.3,
+          "maxTokens": 100
+        }
+      }
+    },
+    {
+      "id": "copy",
+      "type": "Copy to Clipboard",
+      "config": {
+        "clipboard": {
+          "content": "{{polish}}"
+        }
+      }
+    },
+    {
+      "id": "notify-ios",
+      "type": "Notify iPhone",
+      "config": {
+        "iOSPush": {
+          "title": "{{TITLE}}",
+          "body": "{{polish}}",
+          "sound": true,
+          "includeOutput": false
+        }
+      }
+    }
+  ]
+}

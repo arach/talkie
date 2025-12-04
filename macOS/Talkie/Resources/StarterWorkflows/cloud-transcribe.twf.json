@@ -1,0 +1,90 @@
+{
+  "slug": "cloud-transcribe",
+  "name": "Cloud Transcribe",
+  "description": "High-quality transcription using OpenAI Whisper API",
+  "icon": "cloud",
+  "color": "mint",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "transcribe-cloud",
+      "type": "Run Shell Command",
+      "config": {
+        "shell": {
+          "executable": "/usr/bin/curl",
+          "arguments": [
+            "-s",
+            "https://api.openai.com/v1/audio/transcriptions",
+            "-H", "Authorization: Bearer {{OPENAI_API_KEY}}",
+            "-F", "file=@{{AUDIO_PATH}}",
+            "-F", "model=whisper-1",
+            "-F", "response_format=verbose_json",
+            "-F", "timestamp_granularities[]=word"
+          ],
+          "timeout": 120,
+          "captureStderr": true
+        }
+      }
+    },
+    {
+      "id": "parse-response",
+      "type": "Transform Data",
+      "config": {
+        "transform": {
+          "operation": "Extract JSON",
+          "parameters": {
+            "path": "$.text",
+            "fallback": ""
+          }
+        }
+      }
+    },
+    {
+      "id": "check-success",
+      "type": "Conditional Branch",
+      "config": {
+        "conditional": {
+          "condition": "{{parse-response}}.length > 0",
+          "thenSteps": ["format-transcript", "notify-success"],
+          "elseSteps": ["notify-failure"]
+        }
+      }
+    },
+    {
+      "id": "format-transcript",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "budget",
+          "prompt": "Clean up this transcript. Fix obvious errors, add punctuation, format into paragraphs. Keep the original meaning exactly.\n\n{{parse-response}}",
+          "temperature": 0.2,
+          "maxTokens": 4096
+        }
+      }
+    },
+    {
+      "id": "notify-success",
+      "type": "Send Notification",
+      "config": {
+        "notification": {
+          "title": "Cloud transcription complete",
+          "body": "{{TITLE}} transcribed with Whisper API",
+          "sound": true
+        }
+      }
+    },
+    {
+      "id": "notify-failure",
+      "type": "Send Notification",
+      "config": {
+        "notification": {
+          "title": "Transcription failed",
+          "body": "Check API key or try again",
+          "sound": true
+        }
+      }
+    }
+  ]
+}

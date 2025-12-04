@@ -812,6 +812,19 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    // MARK: - LLM Quality Tier Settings (UserDefaults - device-specific)
+    // Controls the default quality/cost tier for LLM calls in workflows
+
+    private let llmQualityTierKey = "llmQualityTier"
+
+    /// Global default cost tier for LLM calls (default: .budget for cost-consciousness)
+    /// Individual workflow steps can override this with their own tier setting
+    @Published var llmCostTier: LLMCostTier {
+        didSet {
+            UserDefaults.standard.set(llmCostTier.rawValue, forKey: llmQualityTierKey)
+        }
+    }
+
     // Internal storage
     @Published private var _geminiApiKey: String = ""
     @Published private var _openaiApiKey: String?
@@ -927,6 +940,15 @@ class SettingsManager: ObservableObject {
         // Initialize auto-run workflow settings
         // Default: DISABLED - user must opt-in to auto-run workflows
         self.autoRunWorkflowsEnabled = UserDefaults.standard.object(forKey: autoRunWorkflowsEnabledKey) as? Bool ?? false
+
+        // Initialize LLM cost tier
+        // Default: .budget for cost-consciousness
+        if let tierString = UserDefaults.standard.string(forKey: llmQualityTierKey),
+           let tier = LLMCostTier(rawValue: tierString) {
+            self.llmCostTier = tier
+        } else {
+            self.llmCostTier = .budget
+        }
 
         // Apply appearance mode on launch
         applyAppearanceMode()
