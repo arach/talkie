@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import WFKit
 
 // MARK: - Workflow List Item
 
@@ -164,6 +165,8 @@ struct WorkflowDetailView: View {
     let onDelete: () -> Void
     let onRun: () -> Void
 
+    @State private var showingVisualizer = false
+
     init(
         workflow: WorkflowDefinition,
         isSystem: Bool,
@@ -240,6 +243,23 @@ struct WorkflowDetailView: View {
                         }
                         .buttonStyle(.plain)
 
+                        Button(action: { showingVisualizer = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "point.3.connected.trianglepath.dotted")
+                                    .font(.system(size: 9))
+                                Text("VIEW")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .tracking(0.5)
+                            }
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(workflow.steps.isEmpty)
+
                         Button(action: onEdit) {
                             HStack(spacing: 4) {
                                 Image(systemName: "pencil")
@@ -309,6 +329,76 @@ struct WorkflowDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.textBackgroundColor))
+        .sheet(isPresented: $showingVisualizer) {
+            WorkflowVisualizerSheet(workflow: workflow)
+        }
+    }
+}
+
+// MARK: - Workflow Visualizer Sheet
+
+struct WorkflowVisualizerSheet: View {
+    let workflow: WorkflowDefinition
+    @Environment(\.dismiss) private var dismiss
+    @State private var canvasState: CanvasState
+    @State private var showInspector: Bool = true
+
+    init(workflow: WorkflowDefinition) {
+        self.workflow = workflow
+        // Initialize canvas state once
+        self._canvasState = State(initialValue: TalkieWorkflowConverter.convert(workflow: workflow))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Custom header (full-width, outside inspector scope)
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(workflow.name)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    Text("Workflow Visualization")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Inspector toggle
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showInspector.toggle()
+                    }
+                }) {
+                    Image(systemName: "sidebar.right")
+                        .symbolVariant(showInspector ? .fill : .none)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(showInspector ? "Hide Inspector" : "Show Inspector")
+
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            .background(Color(NSColor.windowBackgroundColor))
+
+            Divider()
+
+            // WFKit Editor with inline inspector (works in modal context)
+            WFWorkflowEditor(
+                state: canvasState,
+                schema: TalkieWorkflowSchema.shared,
+                isReadOnly: true,
+                inspectorStyle: .inline,
+                showInspector: $showInspector
+            )
+        }
+        .frame(minWidth: 1200, idealWidth: 1400, minHeight: 800, idealHeight: 900)
     }
 }
 
@@ -883,6 +973,7 @@ struct WorkflowInlineEditor: View {
     @ObservedObject private var workflowManager = WorkflowManager.shared
     @State private var showingStepTypePicker = false
     @State private var isEditing = false
+    @State private var showingVisualizer = false
 
     // Get the current workflow from manager (source of truth)
     private var currentWorkflow: WorkflowDefinition? {
@@ -993,6 +1084,24 @@ struct WorkflowInlineEditor: View {
                         .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
+
+                    // View button (WFKit visualization)
+                    Button(action: { showingVisualizer = true }) {
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "point.3.connected.trianglepath.dotted")
+                                .font(.techLabelSmall)
+                            Text("VIEW")
+                                .font(.techLabelSmall)
+                                .tracking(Tracking.tight)
+                        }
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, 5)
+                        .background(Color.blue.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(editedWorkflow.wrappedValue.steps.isEmpty)
 
                     // Run button
                     Button(action: onRun) {
@@ -1247,6 +1356,9 @@ struct WorkflowInlineEditor: View {
             } onCancel: {
                 showingStepTypePicker = false
             }
+        }
+        .sheet(isPresented: $showingVisualizer) {
+            WorkflowVisualizerSheet(workflow: editedWorkflow.wrappedValue)
         }
     }
 

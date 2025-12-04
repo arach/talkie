@@ -43,6 +43,9 @@
 		PARAKEETSERVICE_BUILDFILE /* ParakeetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PARAKEETSERVICE_FILEREF /* ParakeetService.swift */; };
 		FLUIDAUDIO_BUILDFILE /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = FLUIDAUDIO_PRODUCTREF /* FluidAudio */; };
 		MODELSCATALOG_BUILDFILE /* ModelsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = MODELSCATALOG_FILEREF /* ModelsCatalog.swift */; };
+		WFCONVERTER_BUILDFILE /* TalkieWorkflowConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = WFCONVERTER_FILEREF /* TalkieWorkflowConverter.swift */; };
+		WFKIT_BUILDFILE /* WFKit in Frameworks */ = {isa = PBXBuildFile; productRef = WFKIT_PRODUCTREF /* WFKit */; };
+		WFSCHEMA_BUILDFILE /* TalkieWorkflowSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = WFSCHEMA_FILEREF /* TalkieWorkflowSchema.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +83,8 @@
 		WHISPERSERVICE_FILEREF /* WhisperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperService.swift; sourceTree = "<group>"; };
 		PARAKEETSERVICE_FILEREF /* ParakeetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParakeetService.swift; sourceTree = "<group>"; };
 		MODELSCATALOG_FILEREF /* ModelsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsCatalog.swift; sourceTree = "<group>"; };
+		WFCONVERTER_FILEREF /* TalkieWorkflowConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowConverter.swift; sourceTree = "<group>"; };
+		WFSCHEMA_FILEREF /* TalkieWorkflowSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowSchema.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +96,7 @@
 				MLXLMCOMMON_BUILDFILE /* MLXLMCommon in Frameworks */,
 				WHISPERKIT_BUILDFILE /* WhisperKit in Frameworks */,
 				FLUIDAUDIO_BUILDFILE /* FluidAudio in Frameworks */,
+				WFKIT_BUILDFILE /* WFKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -170,6 +176,8 @@
 			isa = PBXGroup;
 			children = (
 				AUTORUN_FILEREF /* AutoRunProcessor.swift */,
+				WFCONVERTER_FILEREF /* TalkieWorkflowConverter.swift */,
+				WFSCHEMA_FILEREF /* TalkieWorkflowSchema.swift */,
 				7F55812343FAF92F60D28E19 /* WorkflowAction.swift */,
 				FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */,
 				16995DFF4C857FB2F39D5A6D /* WorkflowExecutor.swift */,
@@ -230,6 +238,7 @@
 				MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */,
 				WHISPERKIT_PRODUCTREF /* WhisperKit */,
 				FLUIDAUDIO_PRODUCTREF /* FluidAudio */,
+				WFKIT_PRODUCTREF /* WFKit */,
 			);
 			productName = Talkie;
 			productReference = 92173E2C177853E5ADD8A345 /* Talkie.app */;
@@ -258,6 +267,7 @@
 				MLXSWIFTLM_PACKAGE /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				WHISPERKIT_PACKAGE /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				FLUIDAUDIO_PACKAGE /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				WFKIT_PACKAGE /* XCLocalSwiftPackageReference "WFKit" */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
@@ -313,6 +323,8 @@
 				WHISPERSERVICE_BUILDFILE /* WhisperService.swift in Sources */,
 				PARAKEETSERVICE_BUILDFILE /* ParakeetService.swift in Sources */,
 				MODELSCATALOG_BUILDFILE /* ModelsCatalog.swift in Sources */,
+				WFCONVERTER_BUILDFILE /* TalkieWorkflowConverter.swift in Sources */,
+				WFSCHEMA_BUILDFILE /* TalkieWorkflowSchema.swift in Sources */,
 				FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -559,6 +571,13 @@
 		};
 /* End XCRemoteSwiftPackageReference section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		WFKIT_PACKAGE /* XCLocalSwiftPackageReference "WFKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../WFKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		MLXLLM_PRODUCTREF /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -579,6 +598,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FLUIDAUDIO_PACKAGE /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		WFKIT_PRODUCTREF /* WFKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = WFKIT_PACKAGE /* XCLocalSwiftPackageReference "WFKit" */;
+			productName = WFKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 
