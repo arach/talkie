@@ -387,7 +387,7 @@ struct TalkieNavigationView: View {
         .background(SettingsManager.shared.tacticalBackground)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .frame(minWidth: 900, maxWidth: .infinity, minHeight: 600, maxHeight: .infinity, alignment: .topLeading)
+                .frame(width: 900, height: 640, alignment: .topLeading)
         }
     }
 

@@ -31,7 +31,7 @@ struct TalkieApp: App {
 
         Settings {
             SettingsView()
-                .frame(minWidth: 800, minHeight: 600)
+                .frame(width: 900, height: 640)
                 .tint(settingsManager.accentColor.color)
         }
     }
