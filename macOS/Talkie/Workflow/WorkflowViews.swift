@@ -413,6 +413,8 @@ struct WorkflowStepCard: View {
             ConditionalStepDetails(config: config)
         case .transform(let config):
             TransformStepDetails(config: config)
+        case .transcribe(let config):
+            TranscribeStepDetails(config: config)
         case .trigger(let config):
             TriggerStepDetails(config: config)
         case .intentExtract(let config):
@@ -770,6 +772,28 @@ struct TransformStepDetails: View {
     }
 }
 
+struct TranscribeStepDetails: View {
+    let config: TranscribeStepConfig
+
+    private var modelName: String {
+        TranscribeStepConfig.availableModels.first { $0.id == config.model }?.name ?? config.model
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                DetailBadge(label: "WHISPER", color: .purple)
+                DetailBadge(label: modelName.uppercased(), color: .secondary)
+            }
+            if config.overwriteExisting {
+                Text("Will overwrite existing transcript")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.orange)
+            }
+        }
+    }
+}
+
 struct TriggerStepDetails: View {
     let config: TriggerStepConfig
 
@@ -825,11 +849,6 @@ struct ExecuteWorkflowsStepDetails: View {
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(.orange)
             }
-            if config.notifyOnComplete {
-                Text("🔔 Notifies on completion")
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundColor(.secondary)
-            }
         }
     }
 }
@@ -861,13 +880,27 @@ struct WorkflowInlineEditor: View {
     let onDuplicate: () -> Void
     let onRun: () -> Void
 
+    @ObservedObject private var workflowManager = WorkflowManager.shared
     @State private var showingStepTypePicker = false
     @State private var isEditing = false
 
+    // Get the current workflow from manager (source of truth)
+    private var currentWorkflow: WorkflowDefinition? {
+        guard let id = workflow?.id else { return nil }
+        return workflowManager.workflows.first { $0.id == id }
+    }
+
     private var editedWorkflow: Binding<WorkflowDefinition> {
         Binding(
-            get: { workflow ?? WorkflowDefinition(name: "", description: "") },
-            set: { workflow = $0 }
+            get: {
+                // Use manager as source of truth
+                currentWorkflow ?? workflow ?? WorkflowDefinition(name: "", description: "")
+            },
+            set: { newValue in
+                // Update both manager and binding
+                workflowManager.updateWorkflow(newValue)
+                workflow = workflowManager.workflows.first { $0.id == newValue.id }
+            }
         )
     }
 
@@ -1145,7 +1178,8 @@ struct WorkflowInlineEditor: View {
                             }
                         }
 
-                        if editedWorkflow.wrappedValue.steps.isEmpty {
+                        let displaySteps = currentWorkflow?.steps ?? []
+                        if displaySteps.isEmpty {
                             // Empty state
                             VStack(spacing: Spacing.sm) {
                                 Image(systemName: "rectangle.stack.badge.plus")
@@ -1184,17 +1218,17 @@ struct WorkflowInlineEditor: View {
                             .background(Color(NSColor.controlBackgroundColor).opacity(Opacity.half))
                             .cornerRadius(CornerRadius.sm)
                         } else {
-                            ForEach(Array(editedWorkflow.wrappedValue.steps.enumerated()), id: \.element.id) { index, step in
+                            ForEach(Array(displaySteps.enumerated()), id: \.element.id) { index, step in
                                 WorkflowStepEditor(
                                     step: stepBinding(at: index),
                                     stepNumber: index + 1,
                                     isEditing: isEditing,
                                     onDelete: { deleteStep(at: index) },
                                     onMoveUp: index > 0 ? { moveStep(from: index, to: index - 1) } : nil,
-                                    onMoveDown: index < editedWorkflow.wrappedValue.steps.count - 1 ? { moveStep(from: index, to: index + 1) } : nil
+                                    onMoveDown: index < displaySteps.count - 1 ? { moveStep(from: index, to: index + 1) } : nil
                                 )
 
-                                if index < editedWorkflow.wrappedValue.steps.count - 1 {
+                                if index < displaySteps.count - 1 {
                                     StepConnector()
                                 }
                             }
@@ -1219,36 +1253,53 @@ struct WorkflowInlineEditor: View {
     private func stepBinding(at index: Int) -> Binding<WorkflowStep> {
         Binding(
             get: {
-                guard let wf = workflow, index < wf.steps.count else {
+                guard let wf = currentWorkflow, index < wf.steps.count else {
                     return WorkflowStep(type: .llm, config: .llm(LLMStepConfig(provider: .gemini, prompt: "")), outputKey: "")
                 }
                 return wf.steps[index]
             },
             set: { newValue in
-                workflow?.steps[index] = newValue
+                guard var wf = currentWorkflow, index < wf.steps.count else { return }
+                wf.steps[index] = newValue
+                wf.modifiedAt = Date()
+                workflowManager.updateWorkflow(wf)
             }
         )
     }
 
     private func addStep(of type: WorkflowStep.StepType) {
-        let stepCount = workflow?.steps.count ?? 0
+        // Use currentWorkflow from manager as source of truth
+        guard var wf = currentWorkflow else { return }
         let newStep = WorkflowStep(
             type: type,
             config: StepConfig.defaultConfig(for: type),
-            outputKey: "output_\(stepCount + 1)"
+            outputKey: "output_\(wf.steps.count + 1)"
         )
-        workflow?.steps.append(newStep)
+        wf.steps.append(newStep)
+        wf.modifiedAt = Date()
+        workflowManager.updateWorkflow(wf)
+        workflow = workflowManager.workflows.first { $0.id == wf.id }
     }
 
     private func deleteStep(at index: Int) {
-        workflow?.steps.remove(at: index)
+        // Use currentWorkflow from manager as source of truth
+        guard var wf = currentWorkflow else { return }
+        guard index < wf.steps.count else { return }
+        wf.steps.remove(at: index)
+        wf.modifiedAt = Date()
+        workflowManager.updateWorkflow(wf)
+        workflow = workflowManager.workflows.first { $0.id == wf.id }
     }
 
     private func moveStep(from source: Int, to destination: Int) {
-        guard var wf = workflow else { return }
+        // Use currentWorkflow from manager as source of truth
+        guard var wf = currentWorkflow else { return }
+        guard source < wf.steps.count else { return }
         let step = wf.steps.remove(at: source)
         wf.steps.insert(step, at: destination)
-        workflow = wf
+        wf.modifiedAt = Date()
+        workflowManager.updateWorkflow(wf)
+        workflow = workflowManager.workflows.first { $0.id == wf.id }
     }
 }
 
@@ -1716,6 +1767,8 @@ struct WorkflowStepEditor: View {
                 ConditionalStepReadView(config: config)
             case .transform(let config):
                 TransformStepReadView(config: config)
+            case .transcribe(let config):
+                TranscribeStepReadView(config: config)
             case .trigger(let config):
                 TriggerStepReadView(config: config)
             case .intentExtract(let config):
@@ -1770,6 +1823,8 @@ struct WorkflowStepEditor: View {
                 ConditionalStepConfigEditor(step: $step)
             case .transform:
                 TransformStepConfigEditor(step: $step)
+            case .transcribe:
+                TranscribeStepConfigEditor(step: $step)
             case .trigger:
                 TriggerStepConfigEditor(step: $step)
             case .intentExtract:
@@ -2297,17 +2352,6 @@ struct IntentExtractStepReadView: View {
                         .font(.monoXSmall)
                 }
                 .foregroundColor(.secondary)
-
-                // Notify indicator
-                if config.notifyOnExtraction {
-                    HStack(spacing: 2) {
-                        Image(systemName: "bell.fill")
-                            .font(.system(size: 9))
-                        Text("Notify")
-                            .font(.monoXSmall)
-                    }
-                    .foregroundColor(SemanticColor.info)
-                }
 
                 Spacer()
             }
@@ -2888,6 +2932,64 @@ struct TransformStepReadView: View {
     }
 }
 
+struct TranscribeStepReadView: View {
+    let config: TranscribeStepConfig
+
+    private var modelName: String {
+        TranscribeStepConfig.availableModels.first { $0.id == config.model }?.name ?? config.model
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Model info
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "waveform.and.mic")
+                    .font(.system(size: 10))
+                    .foregroundColor(SemanticColor.processing)
+
+                Text("Whisper")
+                    .font(.techLabelSmall)
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, 2)
+                    .background(SemanticColor.processing.opacity(0.2))
+                    .foregroundColor(SemanticColor.processing)
+                    .cornerRadius(CornerRadius.xs)
+
+                Text(modelName)
+                    .font(.monoSmall)
+                    .foregroundColor(.primary)
+
+                Spacer()
+            }
+
+            // Row 2: Options
+            HStack(spacing: Spacing.sm) {
+                if config.overwriteExisting {
+                    HStack(spacing: 2) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 9))
+                        Text("Overwrite")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(.orange)
+                }
+
+                if config.saveAsVersion {
+                    HStack(spacing: 2) {
+                        Image(systemName: "doc.badge.plus")
+                            .font(.system(size: 9))
+                        Text("Save version")
+                            .font(.monoXSmall)
+                    }
+                    .foregroundColor(SemanticColor.success)
+                }
+
+                Spacer()
+            }
+        }
+    }
+}
+
 struct TriggerStepReadView: View {
     let config: TriggerStepConfig
 
@@ -2987,12 +3089,6 @@ struct ExecuteWorkflowsStepReadView: View {
                 .background(SemanticColor.info.opacity(0.2))
                 .foregroundColor(SemanticColor.info)
                 .cornerRadius(CornerRadius.xs)
-
-            if config.notifyOnComplete {
-                Image(systemName: "bell.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(SemanticColor.info)
-            }
         }
     }
 }
@@ -4319,6 +4415,109 @@ struct TransformStepConfigEditor: View {
     }
 }
 
+// MARK: - Transcribe Step Config Editor
+
+struct TranscribeStepConfigEditor: View {
+    @Binding var step: WorkflowStep
+
+    private var config: TranscribeStepConfig {
+        if case .transcribe(let c) = step.config { return c }
+        return TranscribeStepConfig()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Model selection
+            VStack(alignment: .leading, spacing: 6) {
+                Text("WHISPER MODEL")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                Picker("", selection: Binding(
+                    get: { config.model },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.model = newValue
+                        step.config = .transcribe(newConfig)
+                    }
+                )) {
+                    ForEach(TranscribeStepConfig.availableModels, id: \.id) { model in
+                        Text(model.name).tag(model.id)
+                    }
+                }
+                .labelsHidden()
+
+                // Model description
+                if let model = TranscribeStepConfig.availableModels.first(where: { $0.id == config.model }) {
+                    Text(model.description)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Divider()
+                .opacity(0.3)
+
+            // Options
+            VStack(alignment: .leading, spacing: 8) {
+                Text("OPTIONS")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                Toggle(isOn: Binding(
+                    get: { config.overwriteExisting },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.overwriteExisting = newValue
+                        step.config = .transcribe(newConfig)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Overwrite existing transcript")
+                            .font(.system(size: 10, design: .monospaced))
+                        Text("Re-transcribe even if memo already has a transcript")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                Toggle(isOn: Binding(
+                    get: { config.saveAsVersion },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.saveAsVersion = newValue
+                        step.config = .transcribe(newConfig)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Save as transcript version")
+                            .font(.system(size: 10, design: .monospaced))
+                        Text("Store the transcript in memo's version history")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            // Info note
+            HStack(spacing: 4) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 9))
+                Text("Model will be downloaded on first use (~40MB-750MB)")
+                    .font(.system(size: 8, design: .monospaced))
+            }
+            .foregroundColor(.secondary)
+            .padding(.top, 4)
+        }
+    }
+}
+
 // MARK: - Trigger Step Config Editor
 
 struct TriggerStepConfigEditor: View {
@@ -4667,34 +4866,6 @@ struct IntentExtractStepConfigEditor: View {
 
             Divider()
 
-            // Notification toggle
-            VStack(alignment: .leading, spacing: 6) {
-                Text("NOTIFICATIONS")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
-                    .foregroundColor(.secondary)
-
-                Toggle(isOn: Binding(
-                    get: { config.notifyOnExtraction },
-                    set: { newValue in
-                        var newConfig = config
-                        newConfig.notifyOnExtraction = newValue
-                        step.config = .intentExtract(newConfig)
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Notify on Extraction")
-                            .font(.system(size: 9, design: .monospaced))
-                        Text("Show notification with detected intents and confidence")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .toggleStyle(.talkieInfo)
-            }
-
-            Divider()
-
             // Recognized intents
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -4794,7 +4965,19 @@ struct IntentDefinitionRow: View {
     /// Get workflow name for display
     private func workflowName(for id: UUID?) -> String {
         guard let id = id else { return "None (use name matching)" }
+        if id == IntentDefinition.doNothingId { return "Detect only" }
         return availableWorkflows.first { $0.id == id }?.name ?? "Unknown"
+    }
+
+    /// Description for the current target workflow selection
+    private var targetWorkflowDescription: String {
+        if intent.targetWorkflowId == nil {
+            return "Will try to find a workflow matching '\(intent.name)'"
+        } else if intent.targetWorkflowId == IntentDefinition.doNothingId {
+            return "Intent will be logged but no workflow will execute"
+        } else {
+            return "When this intent is detected, the selected workflow will execute"
+        }
     }
 
     var body: some View {
@@ -4937,8 +5120,11 @@ struct IntentDefinitionRow: View {
                                 onUpdate(updated)
                             }
                         )) {
-                            Text("None (use name matching)")
+                            Text("Auto (match by name)")
                                 .tag(nil as UUID?)
+
+                            Text("Detect only")
+                                .tag(IntentDefinition.doNothingId as UUID?)
 
                             Divider()
 
@@ -4953,7 +5139,7 @@ struct IntentDefinitionRow: View {
                         .pickerStyle(.menu)
                         .labelsHidden()
 
-                        Text("When this intent is detected, the selected workflow will execute")
+                        Text(targetWorkflowDescription)
                             .font(.system(size: 8, design: .monospaced))
                             .foregroundColor(.secondary.opacity(0.7))
                     }
@@ -5087,24 +5273,6 @@ struct ExecuteWorkflowsStepConfigEditor: View {
                     }
                     .toggleStyle(.switch)
                 }
-
-                Toggle(isOn: Binding(
-                    get: { config.notifyOnComplete },
-                    set: { newValue in
-                        var newConfig = config
-                        newConfig.notifyOnComplete = newValue
-                        step.config = .executeWorkflows(newConfig)
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Notify on Completion")
-                            .font(.system(size: 9, design: .monospaced))
-                        Text("Show notification with execution summary")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .toggleStyle(.switch)
             }
 
             // Info box

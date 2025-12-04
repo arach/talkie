@@ -24,156 +24,242 @@ struct SettingsView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
-    @State private var selectedSection: SettingsSection? = .appearance  // Default to first item
+    @State private var selectedSection: SettingsSection = .apiKeys  // Default to API Keys
+
+    // Use DesignSystem colors for Midnight theme consistency
+    // Sidebar is slightly elevated, content is true black, cards pop out slightly
+    private let sidebarBackground = MidnightSurface.elevated
+    private let contentBackground = MidnightSurface.content
+    private let bottomBarBackground = MidnightSurface.sidebar
 
     var body: some View {
-        NavigationSplitView {
-            // Sidebar
-            List(selection: $selectedSection) {
-                Section("APPEARANCE") {
-                    NavigationLink(value: SettingsSection.appearance) {
-                        Label {
-                            Text("Theme & Colors")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "paintbrush")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
-                        }
-                    }
-                }
+        HStack(spacing: 0) {
+            // MARK: - Sidebar
+            VStack(spacing: 0) {
+                // Settings Header - with breathing room at top
+                Text("SETTINGS")
+                    .font(.system(size: 10, weight: .bold, design: .default))
+                    .tracking(Tracking.wide)
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 20)
+                    .padding(.bottom, 12)
 
-                Section("WORKFLOWS") {
-                    NavigationLink(value: SettingsSection.quickActions) {
-                        Label {
-                            Text("Quick Actions")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "bolt.circle")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
+                // Menu Sections
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        // APPEARANCE
+                        SettingsSidebarSection(title: "APPEARANCE", isActive: selectedSection == .appearance) {
+                            SettingsSidebarItem(
+                                icon: "moon.stars",
+                                title: "THEME & COLORS",
+                                isSelected: selectedSection == .appearance
+                            ) {
+                                selectedSection = .appearance
+                            }
                         }
-                    }
 
-                    NavigationLink(value: SettingsSection.autoRun) {
-                        Label {
-                            Text("Auto-Run")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "bolt.circle")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
+                        // WORKFLOWS
+                        SettingsSidebarSection(title: "WORKFLOWS", isActive: selectedSection == .quickActions || selectedSection == .autoRun) {
+                            SettingsSidebarItem(
+                                icon: "bolt",
+                                title: "QUICK ACTIONS",
+                                isSelected: selectedSection == .quickActions
+                            ) {
+                                selectedSection = .quickActions
+                            }
+                            SettingsSidebarItem(
+                                icon: "play.circle",
+                                title: "AUTO-RUN",
+                                isSelected: selectedSection == .autoRun
+                            ) {
+                                selectedSection = .autoRun
+                            }
                         }
-                    }
-                }
 
-                Section("API & PROVIDERS") {
-                    NavigationLink(value: SettingsSection.apiKeys) {
-                        Label {
-                            Text("API Keys")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "key")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
+                        // API & PROVIDERS
+                        SettingsSidebarSection(title: "API & PROVIDERS", isActive: selectedSection == .apiKeys) {
+                            SettingsSidebarItem(
+                                icon: "key",
+                                title: "API KEYS",
+                                isSelected: selectedSection == .apiKeys
+                            ) {
+                                selectedSection = .apiKeys
+                            }
                         }
-                    }
-                }
 
-                Section("SHELL & OUTPUT") {
-                    NavigationLink(value: SettingsSection.allowedCommands) {
-                        Label {
-                            Text("Allowed Commands")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "terminal")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
+                        // SHELL & OUTPUT
+                        SettingsSidebarSection(title: "SHELL & OUTPUT", isActive: selectedSection == .allowedCommands || selectedSection == .outputSettings) {
+                            SettingsSidebarItem(
+                                icon: "terminal",
+                                title: "ALLOWED COMMANDS",
+                                isSelected: selectedSection == .allowedCommands
+                            ) {
+                                selectedSection = .allowedCommands
+                            }
+                            SettingsSidebarItem(
+                                icon: "arrow.right.doc.on.clipboard",
+                                title: "OUTPUT & ALIASES",
+                                isSelected: selectedSection == .outputSettings
+                            ) {
+                                selectedSection = .outputSettings
+                            }
                         }
-                    }
 
-                    NavigationLink(value: SettingsSection.outputSettings) {
-                        Label {
-                            Text("Output & Aliases")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "folder")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
+                        // DATA & FILES
+                        SettingsSidebarSection(title: "DATA & FILES", isActive: selectedSection == .localFiles) {
+                            SettingsSidebarItem(
+                                icon: "folder",
+                                title: "LOCAL FILES",
+                                isSelected: selectedSection == .localFiles
+                            ) {
+                                selectedSection = .localFiles
+                            }
                         }
-                    }
-                }
 
-                Section("DATA & FILES") {
-                    NavigationLink(value: SettingsSection.localFiles) {
-                        Label {
-                            Text("Local Files")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "folder.badge.person.crop")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
+                        // DEBUG
+                        SettingsSidebarSection(title: "DEBUG", isActive: selectedSection == .debugInfo) {
+                            SettingsSidebarItem(
+                                icon: "ladybug",
+                                title: "DEBUG INFO",
+                                isSelected: selectedSection == .debugInfo
+                            ) {
+                                selectedSection = .debugInfo
+                            }
                         }
                     }
-                }
-
-                Section("DEBUG") {
-                    NavigationLink(value: SettingsSection.debugInfo) {
-                        Label {
-                            Text("Debug Info")
-                                .font(SettingsManager.shared.fontXSMedium)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "info.circle")
-                                .font(SettingsManager.shared.fontXS)
-                                .frame(width: 16)
-                        }
-                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 12)
                 }
             }
-            .listStyle(.sidebar)
-            .frame(minWidth: 180)
-        } detail: {
-            // Detail view based on selection
-            switch selectedSection {
-            case .appearance:
-                AppearanceSettingsView()
-            case .quickActions:
-                QuickActionsSettingsView()
-            case .autoRun:
-                AutoRunSettingsView()
-            case .apiKeys:
-                APISettingsView(settingsManager: settingsManager)
-            case .allowedCommands:
-                AllowedCommandsView()
-            case .outputSettings:
-                OutputSettingsView()
-            case .localFiles:
-                LocalFilesSettingsView()
-            case .debugInfo:
-                DebugInfoView()
-            case .none:
-                AppearanceSettingsView()  // Default to appearance
+            .frame(width: 220)
+            .background(sidebarBackground)
+
+            // Divider
+            Rectangle()
+                .fill(MidnightSurface.divider)
+                .frame(width: 1)
+
+            // MARK: - Content Area
+            VStack(spacing: 0) {
+                // Content based on selection
+                Group {
+                    switch selectedSection {
+                    case .appearance:
+                        AppearanceSettingsView()
+                    case .quickActions:
+                        QuickActionsSettingsView()
+                    case .autoRun:
+                        AutoRunSettingsView()
+                    case .apiKeys:
+                        APISettingsView(settingsManager: settingsManager)
+                    case .allowedCommands:
+                        AllowedCommandsView()
+                    case .outputSettings:
+                        OutputSettingsView()
+                    case .localFiles:
+                        LocalFilesSettingsView()
+                    case .debugInfo:
+                        DebugInfoView()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Bottom bar with Done button
+                HStack {
+                    Spacer()
+                    Button("DONE") {
+                        dismiss()
+                    }
+                    .buttonStyle(SettingsDoneButtonStyle())
+                    .keyboardShortcut(.return, modifiers: .command)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(bottomBarBackground)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(contentBackground)
         }
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.return, modifiers: .command)
-            }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Settings Sidebar Components
+
+struct SettingsSidebarSection<Content: View>: View {
+    let title: String
+    var isActive: Bool = false
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(Tracking.normal)
+                .foregroundColor(isActive ? .white.opacity(0.7) : .white.opacity(0.4))
+                .padding(.leading, 6)
+                .padding(.bottom, 2)
+
+            content
+                .frame(maxWidth: .infinity)
         }
-        .frame(width: 750, height: 550)
-        .frame(minWidth: 650, minHeight: 450)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct SettingsSidebarItem: View {
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+                .foregroundColor(isSelected ? .white : .white.opacity(0.5))
+                .frame(width: 14)
+
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(isSelected ? .white : .white.opacity(0.7))
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(isSelected ? Color.accentColor : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            action()
+        }
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+struct SettingsDoneButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(Tracking.normal)
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(Color.accentColor)
+            .cornerRadius(CornerRadius.xs)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(TalkieAnimation.fast, value: configuration.isPressed)
     }
 }
 
@@ -187,27 +273,14 @@ struct AppearanceSettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "paintbrush")
-                            .font(SettingsManager.shared.fontTitle)
-                        Text("APPEARANCE")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                    }
-                    .foregroundColor(.primary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "paintbrush",
+                title: "APPEARANCE",
+                subtitle: "Customize how Talkie looks on your Mac."
+            )
 
-                    Text("Customize how Talkie looks on your Mac.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-
-                Divider()
-
-                // MARK: - Theme Presets
+            // MARK: - Theme Presets
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK THEMES")
                         .font(SettingsManager.shared.fontXSBold)
@@ -343,7 +416,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .background(SettingsManager.shared.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Theme Mode
@@ -364,7 +437,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .background(SettingsManager.shared.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Accent Color
@@ -389,7 +462,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .background(SettingsManager.shared.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Typography
@@ -458,7 +531,7 @@ struct AppearanceSettingsView: View {
                         .controlSize(.mini)
                     }
                     .padding(10)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(SettingsManager.shared.surface1)
                     .cornerRadius(6)
 
                     // Content: Font + Size together
@@ -505,7 +578,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     .padding(10)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(SettingsManager.shared.surface1)
                     .cornerRadius(6)
 
                     // Preview
@@ -541,7 +614,7 @@ struct AppearanceSettingsView: View {
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.textBackgroundColor))
+                        .background(settingsManager.surfaceInput)
                         .cornerRadius(6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
@@ -550,7 +623,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .background(SettingsManager.shared.surface2)
                 .cornerRadius(8)
 
                 // Note about accent color
@@ -565,13 +638,7 @@ struct AppearanceSettingsView: View {
                 .padding(8)
                 .background(Color.blue.opacity(0.1))
                 .cornerRadius(6)
-
-                Spacer()
-            }
-            .padding(32)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
     }
 }
 
@@ -588,7 +655,7 @@ struct AppearanceModeButton: View {
                     .font(SettingsManager.shared.fontHeadline)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 48, height: 48)
-                    .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
+                    .background(isSelected ? Color.accentColor.opacity(0.15) : SettingsManager.shared.surface1)
                     .cornerRadius(10)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
@@ -648,7 +715,7 @@ struct AccentColorButton: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.accentColor.opacity(0.1) : Color(NSColor.controlBackgroundColor))
+            .background(isSelected ? Color.accentColor.opacity(0.1) : SettingsManager.shared.surface1)
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
@@ -672,7 +739,7 @@ struct FontStyleButton: View {
                     .font(SettingsManager.shared.fontSM)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 28, height: 28)
-                    .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
+                    .background(isSelected ? Color.accentColor.opacity(0.15) : SettingsManager.shared.surface1)
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
@@ -708,7 +775,7 @@ struct FontSizeButton: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Color(NSColor.controlBackgroundColor))
+            .background(isSelected ? Color.accentColor.opacity(0.15) : SettingsManager.shared.surface1)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -782,7 +849,7 @@ struct ThemePresetCard: View {
                 }
             }
             .padding(10)
-            .background(isActive ? Color.accentColor.opacity(0.1) : Color(NSColor.controlBackgroundColor))
+            .background(isActive ? Color.accentColor.opacity(0.1) : SettingsManager.shared.surface1)
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -801,28 +868,18 @@ struct APISettingsView: View {
     @State private var revealedKeys: Set<String> = []
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "key")
-                            .font(SettingsManager.shared.fontTitle)
-                        Text("API KEYS")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                    }
-                    .foregroundColor(.primary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "key",
+                title: "API KEYS",
+                subtitle: "Manage API keys for cloud AI providers. Keys are stored securely in the macOS Keychain."
+            )
 
-                    Text("Manage API keys for cloud AI providers. Keys are stored securely in the macOS Keychain.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
+            Divider()
+                .background(MidnightSurface.divider)
 
-                Divider()
-
-                // Provider API Keys
-                VStack(spacing: 16) {
+            // Provider API Keys
+            VStack(spacing: 16) {
                     APIKeyRow(
                         provider: "OpenAI",
                         icon: "brain.head.profile",
@@ -972,12 +1029,8 @@ struct APISettingsView: View {
                     )
                 }
 
-                Spacer()
-            }
-            .padding(32)
+            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
     }
 }
 
@@ -1040,7 +1093,7 @@ struct APIKeyRow: View {
                         .font(.system(size: 11, design: .monospaced))
                         .textFieldStyle(.plain)
                         .padding(10)
-                        .background(Color(NSColor.controlBackgroundColor))
+                        .background(SettingsManager.shared.surface1)
                         .cornerRadius(6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
@@ -1060,13 +1113,13 @@ struct APIKeyRow: View {
                     .buttonStyle(.borderedProminent)
                 }
             } else if isConfigured {
-                // Display mode with key
+                // Display mode with key - passive text field style
                 HStack(spacing: 8) {
-                    // Key display
+                    // Key display styled as disabled text field
                     HStack(spacing: 8) {
                         Text(isRevealed ? (currentKey ?? "") : maskedKey)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.white.opacity(0.5))
                             .lineLimit(1)
                             .truncationMode(.middle)
 
@@ -1076,14 +1129,19 @@ struct APIKeyRow: View {
                         Button(action: onReveal) {
                             Image(systemName: isRevealed ? "eye.slash" : "eye")
                                 .font(SettingsManager.shared.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.white.opacity(0.4))
                         }
                         .buttonStyle(.plain)
                         .help(isRevealed ? "Hide API key" : "Reveal API key")
                     }
-                    .padding(10)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color.black.opacity(0.3))
+                    .cornerRadius(CornerRadius.xs)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
 
                     Button(action: onEdit) {
                         Text("Edit")
@@ -1126,7 +1184,7 @@ struct APIKeyRow: View {
             }
         }
         .padding(16)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .background(SettingsManager.shared.surface2)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -1177,7 +1235,7 @@ struct ModelLibraryView: View {
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(settingsManager.surfaceInput)
     }
 }
 
@@ -1193,7 +1251,7 @@ struct ModelCard: View {
                 .font(SettingsManager.shared.fontHeadline)
                 .foregroundColor(installed ? .blue : .secondary)
                 .frame(width: 32, height: 32)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(SettingsManager.shared.surface1)
                 .cornerRadius(8)
 
             // Info
@@ -1248,7 +1306,7 @@ struct ModelCard: View {
             }
         }
         .padding(16)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(SettingsManager.shared.surface1)
         .cornerRadius(8)
     }
 }
@@ -1285,7 +1343,7 @@ struct WorkflowsView: View {
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(SettingsManager.shared.surfaceInput)
     }
 }
 
@@ -1321,7 +1379,7 @@ struct ActivityLogView: View {
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(SettingsManager.shared.surfaceInput)
     }
 }
 
@@ -1332,27 +1390,14 @@ struct AllowedCommandsView: View {
     @State private var showingWhichResult: String?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "terminal")
-                            .font(SettingsManager.shared.fontTitle)
-                        Text("ALLOWED COMMANDS")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                    }
-                    .foregroundColor(.primary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "terminal",
+                title: "ALLOWED COMMANDS",
+                subtitle: "Manage which CLI tools can be executed by workflow shell steps."
+            )
 
-                    Text("Manage which CLI tools can be executed by workflow shell steps.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-
-                Divider()
-
-                // Add new command
+            // Add new command
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ADD COMMAND")
                         .font(SettingsManager.shared.fontXSBold)
@@ -1364,7 +1409,7 @@ struct AllowedCommandsView: View {
                             .font(.system(size: 11, design: .monospaced))
                             .textFieldStyle(.plain)
                             .padding(10)
-                            .background(Color(NSColor.controlBackgroundColor))
+                            .background(SettingsManager.shared.surface1)
                             .cornerRadius(6)
 
                         Button(action: findCommand) {
@@ -1445,7 +1490,7 @@ struct AllowedCommandsView: View {
                                 .buttonStyle(.plain)
                             }
                             .padding(10)
-                            .background(Color(NSColor.controlBackgroundColor))
+                            .background(SettingsManager.shared.surface1)
                             .cornerRadius(6)
                         }
                     }
@@ -1475,13 +1520,7 @@ struct AllowedCommandsView: View {
                             .foregroundColor(.blue)
                     }
                 }
-
-                Spacer()
-            }
-            .padding(32)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
         .onAppear {
             loadCustomCommands()
         }
@@ -1555,21 +1594,14 @@ struct OutputSettingsView: View {
     @State private var showingAliasFolderPicker = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("OUTPUT SETTINGS")
-                        .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
-                        .foregroundColor(.secondary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "arrow.down.doc",
+                title: "OUTPUT",
+                subtitle: "Configure default output location and path aliases for workflows."
+            )
 
-                    Text("Configure default output location and path aliases for workflows.")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary)
-                }
-
-                // Directory picker
+            // Directory picker
                 VStack(alignment: .leading, spacing: 12) {
                     Text("DEFAULT OUTPUT FOLDER")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
@@ -1713,7 +1745,7 @@ struct OutputSettingsView: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(Color(NSColor.controlBackgroundColor))
+                                .background(SettingsManager.shared.surface1)
                                 .cornerRadius(6)
                             }
                         }
@@ -1770,12 +1802,7 @@ struct OutputSettingsView: View {
                     .cornerRadius(6)
                 }
 
-                Spacer()
-            }
-            .padding(24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(NSColor.textBackgroundColor))
         .fileImporter(
             isPresented: $showingFolderPicker,
             allowedContentTypes: [.folder],
@@ -1907,84 +1934,72 @@ struct QuickActionsSettingsView: View {
     @State private var showingWorkflowEditor = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("QUICK ACTIONS")
-                        .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
-                        .foregroundColor(.secondary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "bolt",
+                title: "QUICK ACTIONS",
+                subtitle: "Pin workflows to show them as quick actions when viewing a memo. Pinned workflows sync to iOS via iCloud."
+            )
 
-                    Text("Pin workflows to show them as quick actions when viewing a memo. Pinned workflows sync to iOS via iCloud.")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary)
-                }
+            // Pinned workflows
+            VStack(alignment: .leading, spacing: 12) {
+                Text("PINNED WORKFLOWS")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(MidnightSurface.Text.secondary)
 
-                // Pinned workflows
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("PINNED WORKFLOWS")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
-                        .foregroundColor(.secondary)
-
-                    if pinnedWorkflows.isEmpty {
-                        HStack(spacing: 8) {
-                            Image(systemName: "pin.slash")
-                                .foregroundColor(.secondary)
-                            Text("No workflows pinned")
-                                .foregroundColor(.secondary)
-                        }
-                        .font(.system(size: 11, design: .monospaced))
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(8)
-                    } else {
-                        VStack(spacing: 4) {
-                            ForEach(pinnedWorkflows) { workflow in
-                                workflowRow(workflow)
-                            }
+                if pinnedWorkflows.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "pin.slash")
+                            .foregroundColor(MidnightSurface.Text.secondary)
+                        Text("No workflows pinned")
+                            .foregroundColor(MidnightSurface.Text.secondary)
+                    }
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(MidnightSurface.card)
+                    .cornerRadius(8)
+                } else {
+                    VStack(spacing: 4) {
+                        ForEach(pinnedWorkflows) { workflow in
+                            workflowRow(workflow)
                         }
                     }
                 }
-
-                Divider()
-
-                // Available workflows
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("AVAILABLE WORKFLOWS")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
-                        .foregroundColor(.secondary)
-
-                    if unpinnedWorkflows.isEmpty {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle")
-                                .foregroundColor(.green)
-                            Text("All workflows are pinned")
-                                .foregroundColor(.secondary)
-                        }
-                        .font(.system(size: 11, design: .monospaced))
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(8)
-                    } else {
-                        VStack(spacing: 4) {
-                            ForEach(unpinnedWorkflows) { workflow in
-                                workflowRow(workflow)
-                            }
-                        }
-                    }
-                }
-
-                Spacer()
             }
-            .padding(24)
+
+            Divider()
+                .background(MidnightSurface.divider)
+
+            // Available workflows
+            VStack(alignment: .leading, spacing: 12) {
+                Text("AVAILABLE WORKFLOWS")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(MidnightSurface.Text.secondary)
+
+                if unpinnedWorkflows.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle")
+                            .foregroundColor(.green)
+                        Text("All workflows are pinned")
+                            .foregroundColor(MidnightSurface.Text.secondary)
+                    }
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(MidnightSurface.card)
+                    .cornerRadius(8)
+                } else {
+                    VStack(spacing: 4) {
+                        ForEach(unpinnedWorkflows) { workflow in
+                            workflowRow(workflow)
+                        }
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(NSColor.textBackgroundColor))
         .sheet(isPresented: $showingWorkflowEditor) {
             if let workflow = selectedWorkflow {
                 WorkflowEditorSheet(
@@ -2053,7 +2068,7 @@ struct QuickActionsSettingsView: View {
             .help(workflow.isPinned ? "Unpin from quick actions" : "Pin to quick actions")
         }
         .padding(10)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(SettingsManager.shared.surface1)
         .cornerRadius(8)
     }
 
@@ -2102,66 +2117,49 @@ struct DebugInfoView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "info.circle")
-                            .font(SettingsManager.shared.fontTitle)
-                        Text("DEBUG INFO")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                    }
-                    .foregroundColor(.primary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "info.circle",
+                title: "DEBUG INFO",
+                subtitle: "Diagnostic information about the app environment."
+            )
 
-                    Text("Diagnostic information about the app environment.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
+            Divider()
 
-                Divider()
-
-                // Info rows
-                VStack(spacing: 12) {
-                    debugRow(label: "Environment", value: environment, valueColor: environment == "Development" ? .orange : .green)
-                    debugRow(label: "iCloud Status", value: iCloudStatus)
-                    debugRow(label: "CloudKit Container", value: "iCloud.com.jdi.talkie")
-                    debugRow(label: "Bundle ID", value: bundleID)
-                    debugRow(label: "Version", value: "\(version) (\(build))")
-                    debugRow(label: "Voice Memos", value: "\(allVoiceMemos.count)")
-                    debugRow(label: "Last Sync", value: SyncStatusManager.shared.lastSyncAgo)
-                }
-
-                Divider()
-
-                // Sync status section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("SYNC STATUS")
-                        .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(syncStatusColor)
-                            .frame(width: 8, height: 8)
-                        Text(syncStatusText)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.primary)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(8)
-                }
-
-                Spacer()
+            // Info rows
+            VStack(spacing: 12) {
+                debugRow(label: "Environment", value: environment, valueColor: environment == "Development" ? .orange : .green)
+                debugRow(label: "iCloud Status", value: iCloudStatus)
+                debugRow(label: "CloudKit Container", value: "iCloud.com.jdi.talkie")
+                debugRow(label: "Bundle ID", value: bundleID)
+                debugRow(label: "Version", value: "\(version) (\(build))")
+                debugRow(label: "Voice Memos", value: "\(allVoiceMemos.count)")
+                debugRow(label: "Last Sync", value: SyncStatusManager.shared.lastSyncAgo)
             }
-            .padding(32)
+
+            Divider()
+
+            // Sync status section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("SYNC STATUS")
+                    .font(SettingsManager.shared.fontXSBold)
+                    .tracking(1)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(syncStatusColor)
+                        .frame(width: 8, height: 8)
+                    Text(syncStatusText)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.primary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(SettingsManager.shared.surface1)
+                .cornerRadius(8)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
         .onAppear {
             checkiCloudStatus()
         }
@@ -2183,7 +2181,7 @@ struct DebugInfoView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .background(SettingsManager.shared.surface2)
         .cornerRadius(6)
     }
 
@@ -2243,25 +2241,14 @@ struct LocalFilesSettingsView: View {
     @State private var stats: (transcripts: Int, audioFiles: Int, totalSize: Int64) = (0, 0, 0)
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder.badge.person.crop")
-                            .font(SettingsManager.shared.fontTitle)
-                        Text("LOCAL FILES")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                    }
-                    .foregroundColor(.primary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "folder.badge.person.crop",
+                title: "LOCAL FILES",
+                subtitle: "Store your transcripts and audio files locally on your Mac."
+            )
 
-                    Text("Store your transcripts and audio files locally on your Mac.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-
-                // Value proposition - always visible
+            // Value proposition - always visible
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.shield")
@@ -2347,7 +2334,7 @@ struct LocalFilesSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .background(SettingsManager.shared.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Audio Section
@@ -2418,7 +2405,7 @@ struct LocalFilesSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .background(SettingsManager.shared.surface2)
                 .cornerRadius(8)
 
                 // Stats and actions (only show if any local files enabled)
@@ -2462,7 +2449,7 @@ struct LocalFilesSettingsView: View {
                         }
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .background(SettingsManager.shared.surface2)
                         .cornerRadius(8)
                     }
 
@@ -2508,12 +2495,7 @@ struct LocalFilesSettingsView: View {
                     }
                 }
 
-                Spacer()
-            }
-            .padding(32)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
         .fileImporter(
             isPresented: $showingTranscriptsFolderPicker,
             allowedContentTypes: [.folder],
@@ -2587,27 +2569,14 @@ struct AutoRunSettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "bolt.circle")
-                            .font(SettingsManager.shared.fontTitle)
-                        Text("AUTO-RUN")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                    }
-                    .foregroundColor(.primary)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "bolt.circle",
+                title: "AUTO-RUN",
+                subtitle: "Configure workflows that run automatically when memos sync."
+            )
 
-                    Text("Configure workflows that run automatically when memos sync.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-
-                Divider()
-
-                // Master toggle
+            // Master toggle
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle(isOn: $settingsManager.autoRunWorkflowsEnabled) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -2621,7 +2590,7 @@ struct AutoRunSettingsView: View {
                     .toggleStyle(.switch)
                 }
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(SettingsManager.shared.surface1)
                 .cornerRadius(8)
 
                 if settingsManager.autoRunWorkflowsEnabled {
@@ -2684,7 +2653,7 @@ struct AutoRunSettingsView: View {
                                         .cornerRadius(4)
                                 }
                                 .padding(12)
-                                .background(Color(NSColor.controlBackgroundColor))
+                                .background(SettingsManager.shared.surface1)
                                 .cornerRadius(8)
 
                                 Text("The default Hey Talkie workflow runs automatically. Add your own workflows to customize.")
@@ -2720,14 +2689,10 @@ struct AutoRunSettingsView: View {
                             howItWorksRow(number: "5", text: "Universal workflows (like indexers) run on all memos")
                         }
                         .padding(12)
-                        .background(Color(NSColor.controlBackgroundColor))
+                        .background(SettingsManager.shared.surface1)
                         .cornerRadius(8)
                     }
-                }
-
-                Spacer()
             }
-            .padding(24)
         }
     }
 
@@ -2867,7 +2832,7 @@ struct AutoRunWorkflowRow: View {
             .help("Remove from auto-run")
         }
         .padding(12)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(SettingsManager.shared.surface1)
         .cornerRadius(8)
     }
 }

@@ -160,6 +160,34 @@ enum SemanticColor {
     static let processing: Color = .purple
 }
 
+// MARK: - Midnight Theme Surface Colors
+/// Core background colors for the Midnight (Talkie Pro) dark theme.
+/// These provide a consistent, true-black aesthetic across the UI.
+enum MidnightSurface {
+    /// True black - primary content area (RGB: 0.02, 0.02, 0.03)
+    static let content = Color(NSColor(red: 0.02, green: 0.02, blue: 0.03, alpha: 1.0))
+
+    /// Near-black - sidebar, secondary panels (RGB: 0.06, 0.06, 0.07)
+    static let sidebar = Color(NSColor(red: 0.06, green: 0.06, blue: 0.07, alpha: 1.0))
+
+    /// Elevated - bottom bars, toolbars (RGB: 0.08, 0.08, 0.09)
+    static let elevated = Color(NSColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1.0))
+
+    /// Card - card backgrounds, hover states (RGB: 0.10, 0.10, 0.11)
+    static let card = Color(NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1.0))
+
+    /// Subtle divider color
+    static let divider = Color.white.opacity(0.1)
+
+    /// Text colors for Midnight theme
+    enum Text {
+        static let primary = Color.white
+        static let secondary = Color.white.opacity(0.7)
+        static let tertiary = Color.white.opacity(0.5)
+        static let quaternary = Color.white.opacity(0.3)
+    }
+}
+
 // MARK: - Toggle Styles
 /// Custom colored toggle switch for consistent styling across the app.
 struct TalkieToggleStyle: ToggleStyle {
@@ -218,5 +246,270 @@ extension ToggleStyle where Self == TalkieToggleStyle {
     /// Processing/activity toggle (purple)
     static var talkieProcessing: TalkieToggleStyle {
         TalkieToggleStyle(onColor: SemanticColor.processing)
+    }
+}
+
+// MARK: - Icon Button Style
+/// Circular hover highlight for small icon buttons (delete, settings, etc.)
+struct IconButtonStyle: ButtonStyle {
+    var hoverColor: Color = .primary
+    var size: CGFloat = 24
+
+    func makeBody(configuration: Configuration) -> some View {
+        IconButtonStyleView(configuration: configuration, hoverColor: hoverColor, size: size)
+    }
+}
+
+private struct IconButtonStyleView: View {
+    let configuration: ButtonStyleConfiguration
+    let hoverColor: Color
+    let size: CGFloat
+
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .frame(width: size, height: size)
+            .background(
+                Circle()
+                    .fill(isHovered ? hoverColor.opacity(Opacity.light) : Color.clear)
+            )
+            .contentShape(Circle())
+            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
+            .animation(TalkieAnimation.fast, value: configuration.isPressed)
+            .animation(TalkieAnimation.fast, value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+}
+
+extension ButtonStyle where Self == IconButtonStyle {
+    /// Default icon button with subtle hover
+    static var icon: IconButtonStyle {
+        IconButtonStyle()
+    }
+
+    /// Icon button with custom hover color
+    static func icon(color: Color, size: CGFloat = 24) -> IconButtonStyle {
+        IconButtonStyle(hoverColor: color, size: size)
+    }
+
+    /// Destructive icon button (red hover)
+    static var iconDestructive: IconButtonStyle {
+        IconButtonStyle(hoverColor: SemanticColor.error, size: 24)
+    }
+
+    /// Small icon button (20pt)
+    static var iconSmall: IconButtonStyle {
+        IconButtonStyle(size: 20)
+    }
+
+    /// Tiny icon button (16pt)
+    static var iconTiny: IconButtonStyle {
+        IconButtonStyle(size: 16)
+    }
+}
+
+// MARK: - Tiny Text Button Style
+/// Small text button with background highlight on hover
+struct TinyButtonStyle: ButtonStyle {
+    var foregroundColor: Color = .secondary
+    var hoverForeground: Color? = nil
+    var hoverBackground: Color = .primary
+
+    func makeBody(configuration: Configuration) -> some View {
+        TinyButtonStyleView(
+            configuration: configuration,
+            foregroundColor: foregroundColor,
+            hoverForeground: hoverForeground,
+            hoverBackground: hoverBackground
+        )
+    }
+}
+
+private struct TinyButtonStyleView: View {
+    let configuration: ButtonStyleConfiguration
+    let foregroundColor: Color
+    let hoverForeground: Color?
+    let hoverBackground: Color
+
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .foregroundColor(isHovered ? (hoverForeground ?? foregroundColor) : foregroundColor)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(isHovered ? hoverBackground.opacity(Opacity.light) : Color.clear)
+            )
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(TalkieAnimation.fast, value: configuration.isPressed)
+            .animation(TalkieAnimation.fast, value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+}
+
+extension ButtonStyle where Self == TinyButtonStyle {
+    /// Default tiny button
+    static var tiny: TinyButtonStyle {
+        TinyButtonStyle()
+    }
+
+    /// Destructive tiny button (red)
+    static var tinyDestructive: TinyButtonStyle {
+        TinyButtonStyle(
+            foregroundColor: .secondary,
+            hoverForeground: SemanticColor.error,
+            hoverBackground: SemanticColor.error
+        )
+    }
+
+    /// Primary tiny button
+    static var tinyPrimary: TinyButtonStyle {
+        TinyButtonStyle(
+            foregroundColor: .primary,
+            hoverBackground: .primary
+        )
+    }
+}
+
+// MARK: - Chevron/Expand Button Style
+/// Rounded square hover highlight for expand/collapse chevrons
+struct ChevronButtonStyle: ButtonStyle {
+    var size: CGFloat = 28
+
+    func makeBody(configuration: Configuration) -> some View {
+        ChevronButtonStyleView(configuration: configuration, size: size)
+    }
+}
+
+private struct ChevronButtonStyleView: View {
+    let configuration: ButtonStyleConfiguration
+    let size: CGFloat
+
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .frame(width: size, height: size)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(isHovered ? Color.primary.opacity(Opacity.light) : Color.clear)
+            )
+            .contentShape(Rectangle())
+            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+            .animation(TalkieAnimation.fast, value: configuration.isPressed)
+            .animation(TalkieAnimation.fast, value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+}
+
+extension ButtonStyle where Self == ChevronButtonStyle {
+    /// Default chevron button
+    static var chevron: ChevronButtonStyle {
+        ChevronButtonStyle()
+    }
+
+    /// Small chevron button (24pt)
+    static var chevronSmall: ChevronButtonStyle {
+        ChevronButtonStyle(size: 24)
+    }
+
+    /// Large chevron button (32pt)
+    static var chevronLarge: ChevronButtonStyle {
+        ChevronButtonStyle(size: 32)
+    }
+}
+
+// MARK: - Expandable Row Style
+/// Full-width hover highlight for clickable card headers/rows
+struct ExpandableRowStyle: ButtonStyle {
+    var cornerRadius: CGFloat = CornerRadius.sm
+
+    func makeBody(configuration: Configuration) -> some View {
+        ExpandableRowStyleView(configuration: configuration, cornerRadius: cornerRadius)
+    }
+}
+
+private struct ExpandableRowStyleView: View {
+    let configuration: ButtonStyleConfiguration
+    let cornerRadius: CGFloat
+
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+            )
+            .scaleEffect(configuration.isPressed ? 0.995 : 1.0)
+            .animation(TalkieAnimation.fast, value: configuration.isPressed)
+            .animation(TalkieAnimation.fast, value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+}
+
+extension ButtonStyle where Self == ExpandableRowStyle {
+    /// Default expandable row style
+    static var expandableRow: ExpandableRowStyle {
+        ExpandableRowStyle()
+    }
+
+    /// Expandable row with custom corner radius
+    static func expandableRow(cornerRadius: CGFloat) -> ExpandableRowStyle {
+        ExpandableRowStyle(cornerRadius: cornerRadius)
+    }
+}
+
+// MARK: - Settings Page Components
+
+/// Standardized header for all settings pages
+struct SettingsPageHeader: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                Text(title)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .tracking(Tracking.wide)
+            }
+            .foregroundColor(MidnightSurface.Text.primary)
+
+            Text(subtitle)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(MidnightSurface.Text.secondary)
+        }
+    }
+}
+
+/// Container for settings page content with consistent background and minimum height
+struct SettingsPageContainer<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                content
+            }
+            .padding(Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .frame(minHeight: 500, maxHeight: .infinity)
+        .background(MidnightSurface.content)
     }
 }

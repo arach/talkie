@@ -211,3 +211,41 @@ enum ParakeetModelCatalog {
         metadata.first { $0.model == model }
     }
 }
+
+// MARK: - Cloud Provider Metadata (UI enrichment for LLMConfig)
+// Note: Cloud model definitions live in LLMConfig.json - this provides UI-only metadata
+
+enum CloudProviderMetadata {
+    struct Info {
+        let tagline: String
+        let docsURL: URL?
+        let pricingURL: URL?
+    }
+
+    static let providers: [String: Info] = [
+        "openai": Info(
+            tagline: "Industry standard for reasoning and vision",
+            docsURL: URL(string: "https://platform.openai.com/docs"),
+            pricingURL: URL(string: "https://openai.com/pricing")
+        ),
+        "anthropic": Info(
+            tagline: "Extended thinking and nuanced understanding",
+            docsURL: URL(string: "https://docs.anthropic.com"),
+            pricingURL: URL(string: "https://anthropic.com/pricing")
+        ),
+        "gemini": Info(
+            tagline: "Multimodal powerhouse with massive context",
+            docsURL: URL(string: "https://ai.google.dev/docs"),
+            pricingURL: URL(string: "https://ai.google.dev/pricing")
+        ),
+        "groq": Info(
+            tagline: "Ultra-fast inference at scale",
+            docsURL: URL(string: "https://console.groq.com/docs"),
+            pricingURL: URL(string: "https://groq.com/pricing")
+        )
+    ]
+
+    static func info(for providerId: String) -> Info? {
+        providers[providerId]
+    }
+}

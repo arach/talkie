@@ -508,26 +508,26 @@ class SettingsManager: ObservableObject {
 
     // MARK: - Surface System (Talkie Pro)
     // Layered background surfaces from deepest to topmost
-    // Other themes can override these tokens for their own look
+    // Using Midnight theme colors for consistent dark aesthetic
 
-    /// Surface Level 0: Window/App background (deepest layer)
+    /// Surface Level 0: Window/App background (deepest layer - true black)
     var surfaceBase: Color {
-        Color(NSColor.windowBackgroundColor)
+        MidnightSurface.content
     }
 
-    /// Surface Level 1: Primary content areas (sidebar, main content)
+    /// Surface Level 1: Primary content areas (slightly elevated)
     var surface1: Color {
-        Color(NSColor.controlBackgroundColor)
+        MidnightSurface.sidebar
     }
 
-    /// Surface Level 2: Cards, panels, modals
+    /// Surface Level 2: Cards, panels, modals (more elevated)
     var surface2: Color {
-        Color(NSColor.controlBackgroundColor).opacity(0.7)
+        MidnightSurface.elevated
     }
 
     /// Surface Level 3: Elevated elements (popovers, tooltips, menus)
     var surface3: Color {
-        Color(NSColor.controlBackgroundColor).opacity(0.9)
+        MidnightSurface.card
     }
 
     /// Surface Overlay: Dark tint for premium depth effect
@@ -537,12 +537,12 @@ class SettingsManager: ObservableObject {
 
     /// Surface Gradient: Subtle top highlight
     var surfaceGradientTop: Color {
-        Color.primary.opacity(0.03)
+        Color.white.opacity(0.02)
     }
 
-    /// Text/Input background
+    /// Text/Input background (slightly elevated from base)
     var surfaceInput: Color {
-        Color(NSColor.textBackgroundColor)
+        MidnightSurface.sidebar
     }
 
     // MARK: - Interactive Surface States
@@ -657,11 +657,14 @@ class SettingsManager: ObservableObject {
     /// Midnight base: True black background
     var midnightBase: Color { Color(white: 0.04) }
 
-    /// Midnight surface: Slightly elevated cards
-    var midnightSurface: Color { Color(white: 0.08) }
+    /// Midnight surface: Slightly elevated cards (very transparent)
+    var midnightSurface: Color { Color.white.opacity(0.02) }
 
-    /// Midnight surface elevated: Hover/expanded states
-    var midnightSurfaceElevated: Color { Color(white: 0.11) }
+    /// Midnight surface hover: Mouse hover state
+    var midnightSurfaceHover: Color { Color.white.opacity(0.05) }
+
+    /// Midnight surface elevated: Expanded states
+    var midnightSurfaceElevated: Color { Color.white.opacity(0.04) }
 
     /// Midnight border: Subtle card outlines
     var midnightBorder: Color { Color.white.opacity(0.06) }
@@ -678,11 +681,22 @@ class SettingsManager: ObservableObject {
     /// Midnight text tertiary: Very subtle hints
     var midnightTextTertiary: Color { Color.white.opacity(0.3) }
 
-    /// Midnight accent bar: Section header vertical accent
+    /// Midnight accent bar: Section header vertical accent (default)
     var midnightAccentBar: Color { Color(red: 1.0, green: 0.6, blue: 0.2) }  // Orange/amber
 
-    /// Midnight recommended badge
-    var midnightBadgeRecommended: Color { Color(red: 1.0, green: 0.85, blue: 0.2) }  // Gold/yellow
+    /// Section accent: Local Models - Purple/violet
+    var midnightAccentLocalModels: Color { Color(red: 0.6, green: 0.4, blue: 1.0) }  // Purple
+
+    /// Section accent: Speech-to-Text - Green
+    var midnightAccentSTT: Color { Color(red: 0.3, green: 0.85, blue: 0.5) }  // Green
+
+    /// Section accent: Cloud Providers - Blue
+    var midnightAccentCloud: Color { Color(red: 0.4, green: 0.6, blue: 1.0) }  // Blue
+
+    /// Midnight recommended badge (transparent yellow with border)
+    var midnightBadgeRecommended: Color { Color(red: 1.0, green: 0.85, blue: 0.2).opacity(0.15) }  // Transparent gold
+    var midnightBadgeRecommendedBorder: Color { Color(red: 1.0, green: 0.85, blue: 0.2).opacity(0.5) }  // Gold border
+    var midnightBadgeRecommendedText: Color { Color(red: 1.0, green: 0.85, blue: 0.2) }  // Gold text
 
     /// Midnight active status
     var midnightStatusActive: Color { Color(red: 0.3, green: 0.85, blue: 0.4) }  // Bright green

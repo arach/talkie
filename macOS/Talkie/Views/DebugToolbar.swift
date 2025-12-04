@@ -19,6 +19,7 @@ struct DebugToolbarOverlay<Content: View>: View {
     @State private var showToolbar = false
     @State private var showingLogs = false
     @State private var showCopiedFeedback = false
+    @ObservedObject private var settings = SettingsManager.shared
 
     let contextContent: () -> Content
     let debugInfo: () -> [String: String]
@@ -64,7 +65,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                    .background(settings.surface2)
 
                     Divider()
 
@@ -102,8 +103,8 @@ struct DebugToolbarOverlay<Content: View>: View {
                 .frame(width: 300)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(NSColor.windowBackgroundColor).opacity(0.98))
-                        .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 4)
+                        .fill(settings.surfaceBase)
+                        .shadow(color: settings.shadowMedium, radius: 12, x: 0, y: 4)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
@@ -126,8 +127,8 @@ struct DebugToolbarOverlay<Content: View>: View {
                     .frame(width: 32, height: 32)
                     .background(
                         Circle()
-                            .fill(Color(NSColor.controlBackgroundColor))
-                            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+                            .fill(settings.surface1)
+                            .shadow(color: settings.shadowLight, radius: 4, x: 0, y: 2)
                     )
                     .overlay(
                         Circle()
@@ -194,6 +195,7 @@ struct DebugToolbarOverlay<Content: View>: View {
 
 struct DebugConsoleSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var settings = SettingsManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -209,7 +211,7 @@ struct DebugConsoleSheet: View {
                 }
             }
             .padding()
-            .background(Color(NSColor.windowBackgroundColor))
+            .background(settings.surfaceBase)
 
             Divider()
 
@@ -267,7 +269,7 @@ struct DebugActionButton: View {
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 6)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .background(SettingsManager.shared.surface2)
             .cornerRadius(4)
         }
         .buttonStyle(.plain)
@@ -277,6 +279,7 @@ struct DebugActionButton: View {
 /// Table-style state display for debug toolbar
 struct DebugStateTable: View {
     let info: [String: String]
+    @ObservedObject private var settings = SettingsManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -294,10 +297,10 @@ struct DebugStateTable: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(index % 2 == 0 ? Color(NSColor.controlBackgroundColor).opacity(0.3) : Color.clear)
+                .background(index % 2 == 0 ? settings.surfaceAlternate : Color.clear)
             }
         }
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.15))
+        .background(settings.surface1)
         .cornerRadius(4)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
@@ -488,6 +491,7 @@ typealias MemoDetailDebugContent = DetailViewDebugContent
 struct ManagedObjectInspector: View {
     @ObservedObject var object: NSManagedObject
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var settings = SettingsManager.shared
     @State private var showCopied = false
     @State private var expandedRelationship: String? = nil
 
@@ -549,7 +553,7 @@ struct ManagedObjectInspector: View {
                 }
             }
             .padding()
-            .background(Color(NSColor.windowBackgroundColor))
+            .background(settings.surfaceBase)
 
             Divider()
 
@@ -594,7 +598,7 @@ struct ManagedObjectInspector: View {
             VStack(spacing: 0) {
                 content()
             }
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+            .background(settings.surface2)
             .cornerRadius(6)
         }
     }
@@ -681,7 +685,7 @@ struct ManagedObjectInspector: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .background(settings.surface2)
         .cornerRadius(4)
     }
 

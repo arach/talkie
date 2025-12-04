@@ -31,6 +31,11 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     var createdAt: Date
     var modifiedAt: Date
 
+    /// Returns true if this is a system workflow (like Hey Talkie)
+    var isSystem: Bool {
+        id == WorkflowDefinition.heyTalkieWorkflowId
+    }
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -203,8 +208,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
                 config: .executeWorkflows(ExecuteWorkflowsStepConfig(
                     intentsKey: "{{intents}}",
                     stopOnError: false,
-                    parallel: false,
-                    notifyOnComplete: true
+                    parallel: false
                 )),
                 outputKey: "results"
             )
@@ -259,6 +263,7 @@ struct WorkflowStep: Identifiable, Codable {
         case saveFile = "Save to File"
         case conditional = "Conditional Branch"
         case transform = "Transform Data"
+        case transcribe = "Transcribe Audio"  // Local speech-to-text
         // Trigger-related step types
         case trigger = "Trigger Detection"
         case intentExtract = "Extract Intents"
@@ -279,6 +284,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .saveFile: return "doc.badge.plus"
             case .conditional: return "arrow.triangle.branch"
             case .transform: return "wand.and.rays"
+            case .transcribe: return "waveform.and.mic"
             case .trigger: return "waveform.badge.mic"
             case .intentExtract: return "text.magnifyingglass"
             case .executeWorkflows: return "arrow.triangle.2.circlepath"
@@ -300,6 +306,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .saveFile: return "Save to local file"
             case .conditional: return "Branch based on condition"
             case .transform: return "Transform or filter data"
+            case .transcribe: return "Convert audio to text locally"
             case .trigger: return "Detect keywords to trigger workflow"
             case .intentExtract: return "Extract intents from text"
             case .executeWorkflows: return "Run workflows for each intent"
@@ -316,6 +323,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .appleNotes, .appleReminders, .appleCalendar: return .apple
             case .clipboard, .saveFile: return .output
             case .conditional, .transform: return .logic
+            case .transcribe: return .ai
             case .trigger, .intentExtract, .executeWorkflows: return .trigger
             }
         }
@@ -336,6 +344,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .saveFile: return "Save File"
             case .conditional: return "Conditional"
             case .transform: return "Transform"
+            case .transcribe: return "Transcribe"
             case .trigger: return "Trigger"
             case .intentExtract: return "Extract Intents"
             case .executeWorkflows: return "Execute Workflows"
@@ -399,6 +408,7 @@ enum StepConfig: Codable {
     case saveFile(SaveFileStepConfig)
     case conditional(ConditionalStepConfig)
     case transform(TransformStepConfig)
+    case transcribe(TranscribeStepConfig)
     // Trigger-related configs
     case trigger(TriggerStepConfig)
     case intentExtract(IntentExtractStepConfig)
@@ -433,6 +443,8 @@ enum StepConfig: Codable {
             return .conditional(ConditionalStepConfig(condition: "", thenSteps: [], elseSteps: []))
         case .transform:
             return .transform(TransformStepConfig(operation: .extractJSON, parameters: [:]))
+        case .transcribe:
+            return .transcribe(TranscribeStepConfig())
         case .trigger:
             return .trigger(TriggerStepConfig())
         case .intentExtract:
@@ -1166,6 +1178,33 @@ struct TransformStepConfig: Codable {
     }
 }
 
+// MARK: - Transcribe Step Configuration
+
+/// Configuration for local speech-to-text transcription using WhisperKit
+struct TranscribeStepConfig: Codable {
+    var model: String               // Whisper model ID
+    var overwriteExisting: Bool     // Overwrite if transcript already exists
+    var saveAsVersion: Bool         // Save as new transcript version
+
+    init(
+        model: String = "openai_whisper-small",
+        overwriteExisting: Bool = false,
+        saveAsVersion: Bool = true
+    ) {
+        self.model = model
+        self.overwriteExisting = overwriteExisting
+        self.saveAsVersion = saveAsVersion
+    }
+
+    /// Available Whisper models
+    static let availableModels: [(id: String, name: String, description: String)] = [
+        ("openai_whisper-tiny", "Tiny (~40MB)", "Fastest, basic quality"),
+        ("openai_whisper-base", "Base (~75MB)", "Fast, good quality"),
+        ("openai_whisper-small", "Small (~250MB)", "Balanced speed/quality"),
+        ("distil-whisper_distil-large-v3", "Large V3 (~750MB)", "Best quality, slower")
+    ]
+}
+
 // MARK: - Trigger Step Configurations
 
 /// Configuration for keyword trigger detection
@@ -1212,22 +1251,19 @@ struct IntentExtractStepConfig: Codable {
     var recognizedIntents: [IntentDefinition]
     var llmPromptTemplate: String      // Customizable prompt for LLM extraction
     var confidenceThreshold: Double    // Minimum confidence to accept (0.0-1.0)
-    var notifyOnExtraction: Bool       // Send notification with extracted intents
 
     init(
         inputKey: String = "{{PREVIOUS_OUTPUT}}",
         extractionMethod: ExtractionMethod = .hybrid,
         recognizedIntents: [IntentDefinition] = IntentDefinition.defaults,
         llmPromptTemplate: String = Self.defaultPromptTemplate,
-        confidenceThreshold: Double = 0.5,
-        notifyOnExtraction: Bool = true
+        confidenceThreshold: Double = 0.5
     ) {
         self.inputKey = inputKey
         self.extractionMethod = extractionMethod
         self.recognizedIntents = recognizedIntents
         self.llmPromptTemplate = llmPromptTemplate
         self.confidenceThreshold = confidenceThreshold
-        self.notifyOnExtraction = notifyOnExtraction
     }
 
     // Custom decoder for migration from configs saved without newer fields
@@ -1238,11 +1274,11 @@ struct IntentExtractStepConfig: Codable {
         recognizedIntents = try container.decode([IntentDefinition].self, forKey: .recognizedIntents)
         llmPromptTemplate = try container.decodeIfPresent(String.self, forKey: .llmPromptTemplate) ?? Self.defaultPromptTemplate
         confidenceThreshold = try container.decodeIfPresent(Double.self, forKey: .confidenceThreshold) ?? 0.5
-        notifyOnExtraction = try container.decodeIfPresent(Bool.self, forKey: .notifyOnExtraction) ?? true
+        // notifyOnExtraction removed - use explicit notification step instead
     }
 
     private enum CodingKeys: String, CodingKey {
-        case inputKey, extractionMethod, recognizedIntents, llmPromptTemplate, confidenceThreshold, notifyOnExtraction
+        case inputKey, extractionMethod, recognizedIntents, llmPromptTemplate, confidenceThreshold
     }
 
     /// Default prompt template with placeholders
@@ -1280,8 +1316,16 @@ struct IntentDefinition: Identifiable, Codable {
     let id: UUID
     var name: String                   // Canonical name (e.g., "summarize")
     var synonyms: [String]             // Alternative words (e.g., ["summary", "sum up"])
-    var targetWorkflowId: UUID?        // Workflow to execute for this intent
+    var targetWorkflowId: UUID?        // Workflow to execute for this intent (nil = name matching, doNothingId = detect only)
     var isEnabled: Bool
+
+    /// Special UUID for "detect only" mode - log the intent but don't execute any workflow
+    static let doNothingId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+
+    /// Returns true if this intent is in "detect only" mode (no execution)
+    var shouldSkipExecution: Bool {
+        targetWorkflowId == Self.doNothingId
+    }
 
     init(
         id: UUID = UUID(),
@@ -1329,18 +1373,15 @@ struct ExecuteWorkflowsStepConfig: Codable {
     var intentsKey: String             // Key containing intents array
     var stopOnError: Bool              // Stop loop if a workflow fails
     var parallel: Bool                 // Run workflows in parallel
-    var notifyOnComplete: Bool         // Send notification when all complete
 
     init(
         intentsKey: String = "{{PREVIOUS_OUTPUT}}",
         stopOnError: Bool = false,
-        parallel: Bool = false,
-        notifyOnComplete: Bool = true
+        parallel: Bool = false
     ) {
         self.intentsKey = intentsKey
         self.stopOnError = stopOnError
         self.parallel = parallel
-        self.notifyOnComplete = notifyOnComplete
     }
 }
 
@@ -1447,6 +1488,17 @@ class WorkflowManager: ObservableObject {
         } else {
             // Initialize with default workflows
             workflows = WorkflowDefinition.defaultWorkflows
+            saveWorkflows()
+        }
+
+        // Ensure Hey Talkie is always in the list (system workflow)
+        ensureHeyTalkieExists()
+    }
+
+    /// Ensure Hey Talkie workflow is always present
+    private func ensureHeyTalkieExists() {
+        if !workflows.contains(where: { $0.id == WorkflowDefinition.heyTalkieWorkflowId }) {
+            workflows.insert(WorkflowDefinition.heyTalkie, at: 0)
             saveWorkflows()
         }
     }

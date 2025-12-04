@@ -50,19 +50,33 @@ class WhisperService: ObservableObject {
     @Published var isDownloading = false
     @Published var lastError: String?
 
+    /// Cached set of downloaded models - updated on download/delete
+    @Published private(set) var downloadedModels: Set<WhisperModel> = []
+
     private var whisperKit: WhisperKit?
     private var currentModelId: String?
 
-    private init() {}
+    private init() {
+        refreshDownloadedModels()
+    }
+
+    /// Refresh the cached downloaded models state
+    func refreshDownloadedModels() {
+        downloadedModels = Set(WhisperModel.allCases.filter { checkModelExists($0) })
+        logger.debug("Refreshed downloaded models: \(self.downloadedModels.map { $0.rawValue })")
+    }
 
     // MARK: - Model Management
 
-    /// Check if a model is downloaded locally
+    /// Check if a model is downloaded locally (uses cached state)
     func isModelDownloaded(_ model: WhisperModel) -> Bool {
+        downloadedModels.contains(model)
+    }
+
+    /// Actually check filesystem for model existence (used internally)
+    private func checkModelExists(_ model: WhisperModel) -> Bool {
         let modelPath = getWhisperKitModelPath(for: model)
-        let exists = FileManager.default.fileExists(atPath: modelPath)
-        logger.debug("Checking model at: \(modelPath) - exists: \(exists)")
-        return exists
+        return FileManager.default.fileExists(atPath: modelPath)
     }
 
     /// Get WhisperKit model storage path (matches WhisperKit's internal structure)
@@ -114,6 +128,7 @@ class WhisperService: ObservableObject {
             )
 
             downloadProgress = 1.0
+            downloadedModels.insert(model) // Update cached state
             logger.info("Model \(model.rawValue) downloaded successfully to \(baseURL.path)")
             await SystemEventManager.shared.log(.workflow, "Whisper model ready", detail: model.displayName)
         } catch {
@@ -215,6 +230,25 @@ class WhisperService: ObservableObject {
         currentModelId = nil
         loadedModel = nil
         logger.info("Whisper model unloaded")
+    }
+
+    /// Delete a downloaded model
+    func deleteModel(_ model: WhisperModel) throws {
+        let modelPath = getWhisperKitModelPath(for: model)
+
+        if FileManager.default.fileExists(atPath: modelPath) {
+            try FileManager.default.removeItem(atPath: modelPath)
+        }
+
+        // Update cached state
+        downloadedModels.remove(model)
+
+        // Unload if this was the loaded model
+        if loadedModel == model {
+            unloadModel()
+        }
+
+        logger.info("Deleted Whisper model: \(model.rawValue)")
     }
 }
 

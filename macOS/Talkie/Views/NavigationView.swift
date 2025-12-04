@@ -147,7 +147,7 @@ struct TalkieNavigationView: View {
                 .foregroundColor(.orange.opacity(0.7))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.orange.opacity(0.1))
+                .background(settings.surfaceWarning)
                 .cornerRadius(3)
             #endif
         }
@@ -387,7 +387,7 @@ struct TalkieNavigationView: View {
         .background(SettingsManager.shared.tacticalBackground)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .frame(minWidth: 900, minHeight: 600)
+                .frame(minWidth: 900, maxWidth: .infinity, minHeight: 600, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
@@ -464,7 +464,7 @@ struct TalkieNavigationView: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.textBackgroundColor))
+                .background(settings.surfaceInput)
             }
         }
     }
@@ -630,6 +630,7 @@ struct WorkflowListColumn: View {
     @Binding var selectedWorkflowID: UUID?
     @Binding var editingWorkflow: WorkflowDefinition?
     @StateObject private var workflowManager = WorkflowManager.shared
+    @ObservedObject private var settings = SettingsManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -649,13 +650,13 @@ struct WorkflowListColumn: View {
                         .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.primary)
                         .frame(width: 24, height: 24)
-                        .background(Color.primary.opacity(0.1))
+                        .background(settings.surfaceSelected)
                         .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
             }
             .padding(12)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(settings.surface1)
 
             Divider()
 
@@ -700,7 +701,8 @@ struct WorkflowDetailColumn: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Binding var editingWorkflow: WorkflowDefinition?
     @Binding var selectedWorkflowID: UUID?
-    @StateObject private var workflowManager = WorkflowManager.shared
+    @ObservedObject private var workflowManager = WorkflowManager.shared
+    @ObservedObject private var settings = SettingsManager.shared
     @State private var showingMemoSelector = false
 
     @FetchRequest(
@@ -711,6 +713,12 @@ struct WorkflowDetailColumn: View {
 
     private var transcribedMemos: [VoiceMemo] {
         allMemos.filter { $0.transcription != nil && !$0.transcription!.isEmpty }
+    }
+
+    // Get fresh workflow from manager (source of truth)
+    private var currentWorkflow: WorkflowDefinition? {
+        guard let id = editingWorkflow?.id else { return nil }
+        return workflowManager.workflows.first { $0.id == id }
     }
 
     var body: some View {
@@ -745,17 +753,18 @@ struct WorkflowDetailColumn: View {
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.primary.opacity(0.1))
+                        .background(settings.surfaceSelected)
                         .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.textBackgroundColor))
+                .background(settings.surfaceInput)
             }
         }
         .sheet(isPresented: $showingMemoSelector) {
-            if let workflow = editingWorkflow {
+            // Use currentWorkflow from manager for fresh data
+            if let workflow = currentWorkflow ?? editingWorkflow {
                 WorkflowMemoSelectorSheet(
                     workflow: workflow,
                     memos: transcribedMemos,
@@ -781,7 +790,8 @@ struct WorkflowDetailColumn: View {
     }
 
     private func saveWorkflow() {
-        guard var workflow = editingWorkflow else { return }
+        // Use currentWorkflow from manager if available, otherwise fall back to binding
+        guard var workflow = currentWorkflow ?? editingWorkflow else { return }
         workflow.modifiedAt = Date()
 
         if workflowManager.workflows.contains(where: { $0.id == workflow.id }) {
@@ -789,18 +799,19 @@ struct WorkflowDetailColumn: View {
         } else {
             workflowManager.addWorkflow(workflow)
         }
-        editingWorkflow = workflow
+        // Sync binding from manager
+        editingWorkflow = workflowManager.workflows.first { $0.id == workflow.id }
     }
 
     private func deleteCurrentWorkflow() {
-        guard let workflow = editingWorkflow else { return }
+        guard let workflow = currentWorkflow ?? editingWorkflow else { return }
         workflowManager.deleteWorkflow(workflow)
         editingWorkflow = nil
         selectedWorkflowID = nil
     }
 
     private func duplicateCurrentWorkflow() {
-        guard let workflow = editingWorkflow else { return }
+        guard let workflow = currentWorkflow ?? editingWorkflow else { return }
         let duplicate = workflowManager.duplicateWorkflow(workflow)
         editingWorkflow = duplicate
         selectedWorkflowID = duplicate.id
@@ -833,6 +844,7 @@ enum ActivitySortField: String, CaseIterable {
 
 struct AIResultsListColumn: View {
     @Binding var selectedRun: WorkflowRun?
+    @ObservedObject private var settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
@@ -914,7 +926,7 @@ struct AIResultsListColumn: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(settings.surface1)
 
             Divider()
 
@@ -983,6 +995,7 @@ struct ActivityTableHeader: View {
     @Binding var workflowWidth: CGFloat
     @Binding var memoWidth: CGFloat
     @Binding var durationWidth: CGFloat
+    @ObservedObject private var settings = SettingsManager.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1020,7 +1033,7 @@ struct ActivityTableHeader: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .frame(height: 28)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .background(settings.surface2)
     }
 }
 
@@ -1065,7 +1078,7 @@ struct SortableColumnHeader: View {
             }
             .frame(width: width, alignment: alignment)
             .padding(.vertical, 2)
-            .background(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+            .background(isHovering ? settings.surfaceHover : Color.clear)
             .cornerRadius(3)
         }
         .buttonStyle(.plain)
@@ -1079,13 +1092,14 @@ struct ColumnResizer: View {
     @Binding var width: CGFloat
     let minWidth: CGFloat
     let maxWidth: CGFloat
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var isHovering = false
     @State private var isDragging = false
 
     var body: some View {
         Rectangle()
-            .fill(isDragging ? Color.blue : (isHovering ? Color.secondary.opacity(0.3) : Color.clear))
+            .fill(isDragging ? .blue : (isHovering ? settings.surfaceHover : Color.clear))
             .frame(width: 4)
             .contentShape(Rectangle().inset(by: -4))
             .onHover { hovering in
@@ -1122,6 +1136,7 @@ struct ActivityTableRow: View {
     let workflowWidth: CGFloat
     let memoWidth: CGFloat
     let durationWidth: CGFloat
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var isHovering = false
 
@@ -1207,8 +1222,8 @@ struct ActivityTableRow: View {
             .padding(.vertical, 4)
             .frame(height: 32)
             .background(
-                isSelected ? Color.blue.opacity(0.1) :
-                    (isHovering ? Color.primary.opacity(0.03) : Color.clear)
+                isSelected ? settings.surfaceInfo :
+                    (isHovering ? settings.surfaceAlternate : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -1238,6 +1253,7 @@ struct ActivityTableRow: View {
 
 struct ActivityLogFullView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject private var settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
@@ -1339,7 +1355,7 @@ struct ActivityLogFullView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(settings.surface1)
 
                 Divider()
 
@@ -1400,7 +1416,7 @@ struct ActivityLogFullView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(NSColor.textBackgroundColor))
+            .background(settings.surfaceInput)
 
             // Inspector Panel (overlays from right, anchored to right edge)
             if showInspector, let run = selectedRun {
@@ -1454,6 +1470,7 @@ struct ActivityInspectorPanel: View {
     let run: WorkflowRun
     let onClose: () -> Void
     let onDelete: () -> Void
+    @ObservedObject private var settings = SettingsManager.shared
 
     private var workflowName: String { run.workflowName ?? "Workflow" }
     private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
@@ -1477,7 +1494,7 @@ struct ActivityInspectorPanel: View {
                     .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.blue)
                     .frame(width: 24, height: 24)
-                    .background(Color.blue.opacity(0.1))
+                    .background(settings.surfaceInfo)
                     .cornerRadius(4)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -1504,7 +1521,7 @@ struct ActivityInspectorPanel: View {
                     .help("Close inspector")
             }
             .padding(12)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(settings.surface1)
 
             Divider()
 
@@ -1524,14 +1541,14 @@ struct ActivityInspectorPanel: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.1))
+                        .background(settings.surfaceAlternate)
                         .cornerRadius(3)
                 }
             }
             .foregroundColor(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .background(settings.surface2)
 
             Divider()
 
@@ -1554,7 +1571,7 @@ struct ActivityInspectorPanel: View {
                                     .lineSpacing(2)
                                     .padding(10)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .background(settings.surface1)
                                     .cornerRadius(6)
                             }
                         }
@@ -1586,9 +1603,9 @@ struct ActivityInspectorPanel: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+            .background(settings.surface2)
         }
-        .background(Color(NSColor.textBackgroundColor))
+        .background(settings.surfaceInput)
     }
 
     private func formatFullDate(_ date: Date) -> String {
@@ -1604,6 +1621,7 @@ struct ActivityInspectorPanel: View {
 struct InspectorStepCard: View {
     let step: WorkflowExecutor.StepExecution
     let isLast: Bool
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var showInput = false
 
@@ -1649,7 +1667,7 @@ struct InspectorStepCard: View {
                         .lineLimit(6)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.secondary.opacity(0.05))
+                        .background(settings.surfaceAlternate)
                         .cornerRadius(4)
                 }
             }
@@ -1672,7 +1690,7 @@ struct InspectorStepCard: View {
                     .lineSpacing(2)
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(settings.surface1)
                     .cornerRadius(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
@@ -1681,7 +1699,7 @@ struct InspectorStepCard: View {
             }
         }
         .padding(10)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+        .background(settings.surface2)
         .cornerRadius(6)
     }
 }
@@ -1690,6 +1708,7 @@ struct InspectorStepCard: View {
 
 struct InspectorResizeHandle: View {
     @Binding var width: CGFloat
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var isHovering = false
     @State private var isDragging = false
@@ -1699,7 +1718,7 @@ struct InspectorResizeHandle: View {
 
     var body: some View {
         Rectangle()
-            .fill(isDragging ? Color.blue.opacity(0.5) : (isHovering ? Color.secondary.opacity(0.2) : Color(NSColor.separatorColor)))
+            .fill(isDragging ? settings.surfaceInfo : (isHovering ? settings.surfaceHover : settings.divider))
             .frame(width: isDragging ? 3 : 1)
             .contentShape(Rectangle().inset(by: -4))
             .onHover { hovering in
@@ -1729,6 +1748,7 @@ struct InspectorResizeHandle: View {
 struct AIResultsDetailColumn: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Binding var selectedRun: WorkflowRun?
+    @ObservedObject private var settings = SettingsManager.shared
 
     var body: some View {
         if let run = selectedRun {
@@ -1750,7 +1770,7 @@ struct AIResultsDetailColumn: View {
                     .foregroundColor(.secondary.opacity(0.5))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(NSColor.textBackgroundColor))
+            .background(settings.surfaceInput)
         }
     }
 
@@ -1767,6 +1787,7 @@ struct AIResultsDetailColumn: View {
 struct WorkflowsContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var workflowManager = WorkflowManager.shared
+    @ObservedObject private var settings = SettingsManager.shared
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?
     @State private var showingMemoSelector = false
@@ -1801,7 +1822,7 @@ struct WorkflowsContentView: View {
                             .font(SettingsManager.shared.fontBody)
                             .foregroundColor(.primary)
                             .frame(width: 24, height: 24)
-                            .background(Color.primary.opacity(0.1))
+                            .background(settings.surfaceSelected)
                             .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
@@ -1828,7 +1849,7 @@ struct WorkflowsContentView: View {
                 }
             }
             .frame(minWidth: 240, idealWidth: 280, maxWidth: 320)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(settings.surface1)
 
             Divider()
                 .opacity(0.5)
@@ -1866,13 +1887,13 @@ struct WorkflowsContentView: View {
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.primary.opacity(0.1))
+                        .background(settings.surfaceSelected)
                         .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.textBackgroundColor))
+                .background(settings.surfaceInput)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1959,6 +1980,7 @@ struct WorkflowMemoSelectorSheet: View {
     let memos: [VoiceMemo]
     let onSelect: (VoiceMemo) -> Void
     let onCancel: () -> Void
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
@@ -2019,7 +2041,7 @@ struct WorkflowMemoSelectorSheet: View {
                 }
             }
             .padding(10)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(settings.surface1)
             .cornerRadius(8)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
@@ -2096,12 +2118,13 @@ struct WorkflowMemoSelectorSheet: View {
             .padding(16)
         }
         .frame(width: 500, height: 500)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(settings.surfaceInput)
     }
 }
 
 struct WorkflowCard: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject private var settings = SettingsManager.shared
     let icon: String
     let title: String
     let description: String
@@ -2136,7 +2159,7 @@ struct WorkflowCard: View {
                     .font(SettingsManager.shared.fontTitle)
                     .foregroundColor(.primary.opacity(0.7))
                     .frame(width: 32, height: 32)
-                    .background(Color.primary.opacity(0.05))
+                    .background(settings.surfaceHover)
                     .cornerRadius(4)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -2167,7 +2190,7 @@ struct WorkflowCard: View {
                     .foregroundColor(.secondary.opacity(0.3))
             }
             .padding(12)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(settings.surface1)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -2222,6 +2245,7 @@ struct WorkflowCard: View {
 
 struct MemoSelectorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var settings = SettingsManager.shared
     let memos: [VoiceMemo]
     let actionType: WorkflowActionType
     let provider: String
@@ -2279,7 +2303,7 @@ struct MemoSelectorSheet: View {
                                     .foregroundColor(.secondary)
                             }
                             .padding(12)
-                            .background(Color(NSColor.controlBackgroundColor))
+                            .background(settings.surface1)
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
@@ -2289,7 +2313,7 @@ struct MemoSelectorSheet: View {
             }
         }
         .frame(width: 400, height: 500)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(settings.surfaceInput)
     }
 }
 
@@ -2297,6 +2321,7 @@ struct MemoSelectorSheet: View {
 
 struct AIResultsContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject private var settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
@@ -2337,7 +2362,7 @@ struct AIResultsContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(settings.surface1)
 
                 Divider()
 
@@ -2381,7 +2406,7 @@ struct AIResultsContentView: View {
                 }
             }
             .frame(minWidth: 280, maxWidth: 350)
-            .background(Color(NSColor.textBackgroundColor))
+            .background(settings.surfaceInput)
 
             // Right: Detail view
             if let run = selectedRun {
@@ -2403,7 +2428,7 @@ struct AIResultsContentView: View {
                         .foregroundColor(.secondary.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.textBackgroundColor))
+                .background(settings.surfaceInput)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2421,6 +2446,7 @@ struct AIResultsContentView: View {
 struct AIMemoHeaderView: View {
     let memo: VoiceMemo
     let runCount: Int
+    @ObservedObject private var settings = SettingsManager.shared
 
     var body: some View {
         HStack(spacing: 10) {
@@ -2440,12 +2466,12 @@ struct AIMemoHeaderView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.1))
+                .background(settings.surfaceAlternate)
                 .cornerRadius(4)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+        .background(settings.surface2)
     }
 }
 
@@ -2454,6 +2480,7 @@ struct AIRunRowView: View {
     let run: WorkflowRun
     let isSelected: Bool
     let onSelect: () -> Void
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var isHovering = false
 
@@ -2501,7 +2528,7 @@ struct AIRunRowView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .frame(height: 44)
-            .background(isSelected ? Color.blue : (isHovering ? Color.primary.opacity(0.05) : Color.clear))
+            .background(isSelected ? Color.blue : (isHovering ? settings.surfaceHover : Color.clear))
             .cornerRadius(6)
         }
         .buttonStyle(.plain)
@@ -2521,6 +2548,7 @@ struct AIRunRowView: View {
 struct AIRunDetailView: View {
     let run: WorkflowRun
     let onDelete: () -> Void
+    @ObservedObject private var settings = SettingsManager.shared
 
     private var workflowName: String { run.workflowName ?? "Workflow" }
     private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
@@ -2547,7 +2575,7 @@ struct AIRunDetailView: View {
                         .font(SettingsManager.shared.fontTitle)
                         .foregroundColor(.blue)
                         .frame(width: 32, height: 32)
-                        .background(Color.blue.opacity(0.1))
+                        .background(settings.surfaceInfo)
                         .cornerRadius(6)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -2561,7 +2589,7 @@ struct AIRunDetailView: View {
                                     .foregroundColor(.secondary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color.secondary.opacity(0.1))
+                                    .background(settings.surfaceAlternate)
                                     .cornerRadius(3)
                             }
 
@@ -2597,7 +2625,7 @@ struct AIRunDetailView: View {
                 .foregroundColor(.secondary.opacity(0.7))
             }
             .padding(16)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(settings.surface1)
 
             Divider()
 
@@ -2620,7 +2648,7 @@ struct AIRunDetailView: View {
                                     .lineSpacing(3)
                                     .padding(12)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .background(settings.surface1)
                                     .cornerRadius(6)
                             }
                         }
@@ -2647,7 +2675,7 @@ struct AIRunDetailView: View {
                 .padding(16)
             }
         }
-        .background(Color(NSColor.textBackgroundColor))
+        .background(settings.surfaceInput)
     }
 
     private func formatFullDate(_ date: Date) -> String {
@@ -2662,6 +2690,7 @@ struct AIRunDetailView: View {
 struct AIStepCard: View {
     let step: WorkflowExecutor.StepExecution
     let isLast: Bool
+    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var showInput = false
 
@@ -2713,7 +2742,7 @@ struct AIStepCard: View {
                         .lineLimit(10)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.secondary.opacity(0.05))
+                        .background(settings.surfaceAlternate)
                         .cornerRadius(4)
                 }
             }
@@ -2737,7 +2766,7 @@ struct AIStepCard: View {
                     .lineSpacing(3)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(settings.surface1)
                     .cornerRadius(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
@@ -2746,7 +2775,7 @@ struct AIStepCard: View {
             }
         }
         .padding(12)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .background(settings.surface2)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -2756,6 +2785,8 @@ struct AIStepCard: View {
 }
 
 struct ActivityLogContentView: View {
+    @ObservedObject private var settings = SettingsManager.shared
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -2787,7 +2818,7 @@ struct ActivityLogContentView: View {
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(settings.surfaceInput)
     }
 }
 
@@ -2806,6 +2837,7 @@ enum MemoSortField: String, CaseIterable {
 
 struct MemoTableFullView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject private var settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -3079,7 +3111,7 @@ struct MemoSortableColumnHeader: View {
             }
             .frame(width: width, alignment: alignment)
             .padding(.vertical, 2)
-            .background(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+            .background(isHovering ? settings.surfaceHover : Color.clear)
             .cornerRadius(3)
         }
         .buttonStyle(.plain)

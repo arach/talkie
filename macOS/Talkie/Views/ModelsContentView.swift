@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+// MARK: - Notifications
+
+extension NSNotification.Name {
+    static let navigateToSettings = NSNotification.Name("navigateToSettings")
+}
+
 struct ModelsContentView: View {
     @StateObject private var registry = LLMProviderRegistry.shared
     @StateObject private var settingsManager = SettingsManager.shared
@@ -52,13 +58,14 @@ struct ModelsContentView: View {
                 .padding(.top, 16)
 
                 // Two-column layout: Local Models | Speech-to-Text
+                // Each column expands independently without affecting the other
                 HStack(alignment: .top, spacing: 16) {
                     // Left column: Local Models
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
-                            // Vertical accent bar
+                            // Vertical accent bar - Purple
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(settingsManager.midnightAccentBar)
+                                .fill(settingsManager.midnightAccentLocalModels)
                                 .frame(width: 3, height: 14)
 
                             Text("LOCAL MODELS")
@@ -73,14 +80,15 @@ struct ModelsContentView: View {
 
                         localModelsColumn
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: true)  // Don't stretch to match sibling
 
                     // Right column: Speech-to-Text
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
-                            // Vertical accent bar
+                            // Vertical accent bar - Green
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(settingsManager.midnightAccentBar)
+                                .fill(settingsManager.midnightAccentSTT)
                                 .frame(width: 3, height: 14)
 
                             Text("SPEECH-TO-TEXT")
@@ -95,7 +103,8 @@ struct ModelsContentView: View {
 
                         speechToTextColumn
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: true)  // Don't stretch to match sibling
                 }
                 .padding(.horizontal, 24)
 
@@ -105,9 +114,9 @@ struct ModelsContentView: View {
                 // Cloud Providers Section
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
-                        // Vertical accent bar
+                        // Vertical accent bar - Blue
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(settingsManager.midnightAccentBar)
+                            .fill(settingsManager.midnightAccentCloud)
                             .frame(width: 3, height: 14)
 
                         Text("CLOUD PROVIDERS")
@@ -276,92 +285,78 @@ struct ModelsContentView: View {
         .padding(.horizontal, 24)
     }
 
-    // MARK: - Cloud Providers Grid (New Design)
+    // MARK: - Cloud Providers Grid (Showcase Style)
+
+    @State private var expandedCloudProvider: String?
 
     private var cloudProvidersGrid: some View {
         LazyVGrid(columns: [
             GridItem(.flexible(), spacing: 12),
             GridItem(.flexible(), spacing: 12)
-        ], spacing: 0) {
-            CompactCloudProviderRow(
+        ], spacing: 8) {
+            ExpandableCloudProviderCard(
+                providerId: "openai",
                 name: "OpenAI",
-                provider: "OpenAI",
-                description: "The industry standard for reasoning and general-purpose AI tasks.",
-                contextSize: "128K",
-                ttft: "~1.2s",
+                tagline: "Industry standard for reasoning and vision",
                 isConfigured: settingsManager.openaiApiKey != nil,
-                isRecommended: false,
-                isExpanded: configuringProvider == "openai",
-                apiKeyBinding: Binding(
-                    get: { settingsManager.openaiApiKey ?? "" },
-                    set: { settingsManager.openaiApiKey = $0.isEmpty ? nil : $0 }
-                ),
+                isExpanded: expandedCloudProvider == "openai",
                 onToggle: {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        configuringProvider = configuringProvider == "openai" ? nil : "openai"
+                        expandedCloudProvider = expandedCloudProvider == "openai" ? nil : "openai"
                     }
                 },
-                onSave: { settingsManager.saveSettings() }
+                onConfigure: {
+                    // Deep link to Settings - API Keys section
+                    NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                }
             )
 
-            CompactCloudProviderRow(
+            ExpandableCloudProviderCard(
+                providerId: "anthropic",
                 name: "Anthropic",
-                provider: "Anthropic",
-                description: "Claude 3 offers near-instant responses with extended thinking capabilities.",
-                contextSize: "200K",
-                ttft: "~1.5s",
+                tagline: "Extended thinking and nuanced understanding",
                 isConfigured: settingsManager.anthropicApiKey != nil,
-                isRecommended: true,
-                isExpanded: configuringProvider == "anthropic",
-                apiKeyBinding: Binding(
-                    get: { settingsManager.anthropicApiKey ?? "" },
-                    set: { settingsManager.anthropicApiKey = $0.isEmpty ? nil : $0 }
-                ),
+                isExpanded: expandedCloudProvider == "anthropic",
                 onToggle: {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        configuringProvider = configuringProvider == "anthropic" ? nil : "anthropic"
+                        expandedCloudProvider = expandedCloudProvider == "anthropic" ? nil : "anthropic"
                     }
                 },
-                onSave: { settingsManager.saveSettings() }
+                onConfigure: {
+                    NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                }
             )
 
-            CompactCloudProviderRow(
+            ExpandableCloudProviderCard(
+                providerId: "gemini",
                 name: "Gemini",
-                provider: "Google",
-                description: "Google's multimodal powerhouse. Features massive context windows.",
-                contextSize: "2M",
-                ttft: "~0.8s",
+                tagline: "Multimodal powerhouse with massive context",
                 isConfigured: settingsManager.hasValidApiKey,
-                isRecommended: false,
-                isExpanded: configuringProvider == "gemini",
-                apiKeyBinding: $settingsManager.geminiApiKey,
+                isExpanded: expandedCloudProvider == "gemini",
                 onToggle: {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        configuringProvider = configuringProvider == "gemini" ? nil : "gemini"
+                        expandedCloudProvider = expandedCloudProvider == "gemini" ? nil : "gemini"
                     }
                 },
-                onSave: { settingsManager.saveSettings() }
+                onConfigure: {
+                    NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                }
             )
 
-            CompactCloudProviderRow(
+            ExpandableCloudProviderCard(
+                providerId: "groq",
                 name: "Groq",
-                provider: "Groq",
-                description: "LPU Inference Engine designed for real-time AI at scale.",
-                contextSize: "128K",
-                ttft: "~0.1s",
+                tagline: "Ultra-fast inference at scale",
                 isConfigured: settingsManager.groqApiKey != nil,
-                isRecommended: false,
-                isExpanded: configuringProvider == "groq",
-                apiKeyBinding: Binding(
-                    get: { settingsManager.groqApiKey ?? "" },
-                    set: { settingsManager.groqApiKey = $0.isEmpty ? nil : $0 }
-                ),
+                isExpanded: expandedCloudProvider == "groq",
                 onToggle: {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        configuringProvider = configuringProvider == "groq" ? nil : "groq"
+                        expandedCloudProvider = expandedCloudProvider == "groq" ? nil : "groq"
                     }
                 },
-                onSave: { settingsManager.saveSettings() }
+                onConfigure: {
+                    NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                }
             )
         }
     }
@@ -391,7 +386,7 @@ struct ModelsContentView: View {
     }
 
     private var localModelsColumn: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             #if arch(arm64)
             ForEach(modelFamilies, id: \.name) { family in
                 let familyModels = modelsForFamily(family.prefix)
@@ -434,7 +429,7 @@ struct ModelsContentView: View {
     @State private var expandedSTT: String? = nil
 
     private var speechToTextColumn: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             #if arch(arm64)
             // Parakeet card
             ExpandableSTTCard(
@@ -2224,27 +2219,14 @@ struct ExpandableModelFamilyCard: View {
                         )
 
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 8) {
-                            Text(family.name.uppercased())
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(settings.midnightTextPrimary)
-
-                            if family.isRecommended {
-                                Text("RECOMMENDED")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(settings.midnightBadgeRecommended)
-                                    .foregroundColor(.black)
-                                    .cornerRadius(3)
-                            }
-                        }
+                        Text(family.name.uppercased())
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(settings.midnightTextPrimary)
                         Text(family.provider)
                             .font(.system(size: 10))
                             .foregroundColor(settings.midnightTextTertiary)
                     }
-
-                    Spacer()
+                    .frame(width: 70, alignment: .leading)
 
                     // Description (truncated)
                     Text(family.description)
@@ -2276,25 +2258,28 @@ struct ExpandableModelFamilyCard: View {
                         }
                     }
 
-                    // Status
-                    if hasInstalledModel {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(settings.midnightStatusActive)
-                                .frame(width: 6, height: 6)
-                            Text("ACTIVE")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(settings.midnightStatusActive)
+                    // Status - Fixed width to prevent layout shift
+                    Group {
+                        if hasInstalledModel {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(settings.midnightStatusReady)
+                                    .frame(width: 6, height: 6)
+                                Text("READY")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(settings.midnightStatusReady)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(settings.midnightStatusReady.opacity(0.12))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(settings.midnightStatusReady.opacity(0.25), lineWidth: 1))
+                        } else {
+                            // Empty space when not installed
+                            Color.clear
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(settings.midnightStatusActive.opacity(0.15))
-                        .cornerRadius(4)
-                    } else {
-                        Text("NOT INSTALLED")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(settings.midnightTextTertiary)
                     }
+                    .frame(width: 70, alignment: .trailing)
 
                     // Expand chevron
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -2304,9 +2289,9 @@ struct ExpandableModelFamilyCard: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.expandableRow)
 
-            // Expanded content - variant table
+            // Expanded content - variant list with table header
             if isExpanded {
                 VStack(alignment: .leading, spacing: 0) {
                     Divider()
@@ -2316,13 +2301,13 @@ struct ExpandableModelFamilyCard: View {
                     // Table header
                     HStack(spacing: 0) {
                         Text("VARIANT")
-                            .frame(width: 140, alignment: .leading)
+                            .frame(width: 120, alignment: .leading)
                         Text("SIZE")
-                            .frame(width: 80, alignment: .leading)
-                        Text("SPECS")
                             .frame(width: 60, alignment: .leading)
+                        Text("SPECS")
+                            .frame(width: 50, alignment: .leading)
                         Text("FEATURES")
-                            .frame(width: 80, alignment: .leading)
+                            .frame(width: 60, alignment: .leading)
                         Spacer()
                         Text("ACTION")
                             .frame(width: 100, alignment: .trailing)
@@ -2332,7 +2317,7 @@ struct ExpandableModelFamilyCard: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
 
-                    // Table rows
+                    // Variant rows
                     ForEach(models, id: \.id) { model in
                         ModelVariantRow(
                             model: model,
@@ -2348,12 +2333,12 @@ struct ExpandableModelFamilyCard: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(settings.midnightSurface)
+                .fill(isHovered ? settings.midnightSurfaceHover : settings.midnightSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(
-                    isExpanded ? settings.midnightBorderActive : settings.midnightBorder,
+                    isExpanded ? settings.midnightBorderActive : (isHovered ? settings.midnightBorderActive : settings.midnightBorder),
                     lineWidth: 1
                 )
         )
@@ -2365,7 +2350,7 @@ struct ExpandableModelFamilyCard: View {
     }
 }
 
-// MARK: - Model Variant Row
+// MARK: - Model Variant Row (Simplified)
 
 struct ModelVariantRow: View {
     let model: LLMModel
@@ -2393,7 +2378,8 @@ struct ModelVariantRow: View {
     }
 
     private var variantSubtitle: String {
-        if model.id.contains("1B") { return "Mobile friendly" }
+        if model.id.contains("1B") && !model.id.contains("1.5B") { return "Mobile friendly" }
+        if model.id.contains("1.5B") { return "Compact" }
         if model.id.contains("3B") || model.id.contains("3.5") { return "Entry level" }
         if model.id.contains("7B") || model.id.contains("8B") { return "Standard" }
         if model.id.contains("70B") { return "High capabilities" }
@@ -2402,91 +2388,87 @@ struct ModelVariantRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Variant name
+            // VARIANT column - name with subtitle
             VStack(alignment: .leading, spacing: 1) {
                 Text(variantName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(model.isInstalled ? settings.midnightStatusReady : settings.midnightTextPrimary)
-                Text(variantSubtitle)
-                    .font(.system(size: 9))
-                    .foregroundColor(settings.midnightTextTertiary)
+                if !variantSubtitle.isEmpty {
+                    Text(variantSubtitle)
+                        .font(.system(size: 9))
+                        .foregroundColor(settings.midnightTextTertiary)
+                }
             }
-            .frame(width: 140, alignment: .leading)
+            .frame(width: 120, alignment: .leading)
 
-            // Size
-            HStack(spacing: 4) {
-                Image(systemName: "internaldrive")
-                    .font(.system(size: 9))
-                    .foregroundColor(settings.midnightTextTertiary)
-                Text(catalogDef?.diskSize ?? "—")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(settings.midnightTextSecondary)
-            }
-            .frame(width: 80, alignment: .leading)
+            // SIZE column - plain text, no icons
+            Text(catalogDef?.diskSize ?? "—")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(settings.midnightTextSecondary)
+                .frame(width: 60, alignment: .leading)
 
-            // Specs
-            HStack(spacing: 4) {
-                Image(systemName: "cpu")
-                    .font(.system(size: 9))
-                    .foregroundColor(settings.midnightTextTertiary)
-                Text("—")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(settings.midnightTextSecondary)
-            }
-            .frame(width: 60, alignment: .leading)
+            // SPECS column
+            Text("—")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(settings.midnightTextTertiary)
+                .frame(width: 50, alignment: .leading)
 
-            // Features
-            HStack(spacing: 4) {
-                Image(systemName: "cube")
-                    .font(.system(size: 9))
-                    .foregroundColor(settings.midnightTextTertiary)
-                Text(catalogDef?.quantization ?? "4-bit")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(settings.midnightTextSecondary)
-            }
-            .frame(width: 80, alignment: .leading)
+            // FEATURES column
+            Text(catalogDef?.quantization ?? "4-bit")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(settings.midnightTextSecondary)
+                .frame(width: 60, alignment: .leading)
 
             Spacer()
 
-            // Action
-            if isDownloading {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                    Text("\(Int(downloadProgress * 100))%")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(settings.midnightTextSecondary)
-                }
-                .frame(width: 100, alignment: .trailing)
-            } else if model.isInstalled {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .semibold))
-                    Text("READY")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .foregroundColor(settings.midnightStatusReady)
-                .frame(width: 100, alignment: .trailing)
-            } else {
-                Button(action: onDownload) {
-                    HStack(spacing: 4) {
-                        Text("DOWNLOAD")
-                            .font(.system(size: 10, weight: .semibold))
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 10))
+            // ACTION column
+            Group {
+                if isDownloading {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                        Text("\(Int(downloadProgress * 100))%")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(settings.midnightTextTertiary)
                     }
-                    .foregroundColor(settings.midnightTextSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(settings.midnightButtonPrimary)
-                    .cornerRadius(4)
+                } else if model.isInstalled {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 8, weight: .bold))
+                            Text("READY")
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                        .foregroundColor(settings.midnightStatusReady)
+
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10))
+                                .foregroundColor(settings.midnightTextTertiary)
+                        }
+                        .buttonStyle(.iconDestructive)
+                    }
+                } else {
+                    Button(action: onDownload) {
+                        HStack(spacing: 4) {
+                            Text("DOWNLOAD")
+                                .font(.system(size: 9, weight: .semibold))
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 9))
+                        }
+                        .foregroundColor(settings.midnightTextSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(settings.midnightButtonPrimary)
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .frame(width: 100, alignment: .trailing)
             }
+            .frame(width: 100, alignment: .trailing)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .background(isHovered ? settings.midnightSurfaceElevated : Color.clear)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.1)) {
@@ -2510,6 +2492,7 @@ struct ExpandableSTTCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @StateObject private var settings = SettingsManager.shared
+    @State private var isHovered = false
 
     private func specValues() -> (size: String, rtf: String) {
         if name == "Whisper" {
@@ -2535,25 +2518,14 @@ struct ExpandableSTTCard<Content: View>: View {
                         )
 
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 8) {
-                            Text(name.uppercased())
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(settings.midnightTextPrimary)
-
-                            if isRecommended {
-                                Text("RECOMMENDED")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(settings.midnightBadgeRecommended)
-                                    .foregroundColor(.black)
-                                    .cornerRadius(3)
-                            }
-                        }
+                        Text(name.uppercased())
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(settings.midnightTextPrimary)
                         Text(provider)
                             .font(.system(size: 10))
                             .foregroundColor(settings.midnightTextTertiary)
                     }
+                    .frame(width: 70, alignment: .leading)
 
                     Text(description)
                         .font(.system(size: 11))
@@ -2582,29 +2554,43 @@ struct ExpandableSTTCard<Content: View>: View {
                         }
                     }
 
-                    // Status
-                    if isActive {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(settings.midnightStatusActive)
-                                .frame(width: 6, height: 6)
-                            Text("ACTIVE")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(settings.midnightStatusActive)
+                    // Status - Fixed width with consistent pill treatment
+                    Group {
+                        if isActive {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(settings.midnightStatusActive)
+                                    .frame(width: 6, height: 6)
+                                    .shadow(color: settings.midnightStatusActive.opacity(0.5), radius: 3, x: 0, y: 0)
+                                Text("ACTIVE")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(settings.midnightStatusActive)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(settings.midnightStatusActive.opacity(0.12))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(settings.midnightStatusActive.opacity(0.3), lineWidth: 1))
+                        } else if hasInstalledModel {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(settings.midnightStatusReady)
+                                    .frame(width: 6, height: 6)
+                                Text("READY")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(settings.midnightStatusReady)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(settings.midnightStatusReady.opacity(0.12))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(settings.midnightStatusReady.opacity(0.25), lineWidth: 1))
+                        } else {
+                            // Empty space when not installed
+                            Color.clear
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(settings.midnightStatusActive.opacity(0.15))
-                        .cornerRadius(4)
-                    } else if hasInstalledModel {
-                        Text("READY")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(settings.midnightStatusReady)
-                    } else {
-                        Text("NOT INSTALLED")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(settings.midnightTextTertiary)
                     }
+                    .frame(width: 70, alignment: .trailing)
 
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
@@ -2613,7 +2599,7 @@ struct ExpandableSTTCard<Content: View>: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.expandableRow)
 
             if isExpanded {
                 Divider()
@@ -2625,15 +2611,20 @@ struct ExpandableSTTCard<Content: View>: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(settings.midnightSurface)
+                .fill(isHovered ? settings.midnightSurfaceHover : settings.midnightSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(
-                    isExpanded ? settings.midnightBorderActive : settings.midnightBorder,
+                    isExpanded ? settings.midnightBorderActive : (isHovered ? settings.midnightBorderActive : settings.midnightBorder),
                     lineWidth: 1
                 )
         )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 }
 
@@ -2693,7 +2684,7 @@ struct ParakeetVariantTable: View {
     }
 }
 
-// MARK: - STT Variant Row
+// MARK: - STT Variant Row (Simplified)
 
 struct STTVariantRow: View {
     let name: String
@@ -2710,74 +2701,331 @@ struct STTVariantRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 0) {
+            // Name column - fixed width for table alignment
             Text(name)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isInstalled ? settings.midnightStatusReady : settings.midnightTextPrimary)
-                .frame(width: 60, alignment: .leading)
-
-            Text(size)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(settings.midnightTextSecondary)
-                .frame(width: 60, alignment: .leading)
-
-            Text(accuracy)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(settings.midnightTextSecondary)
-                .frame(width: 40, alignment: .leading)
-
-            Text(rtf)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(settings.midnightTextSecondary)
+                .foregroundColor(settings.midnightTextPrimary)
                 .frame(width: 50, alignment: .leading)
+
+            // Specs column - fixed position after name
+            HStack(spacing: 6) {
+                Text("·")
+                    .foregroundColor(settings.midnightTextTertiary)
+
+                Text("\(size) · \(rtf)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(settings.midnightTextTertiary)
+            }
 
             Spacer()
 
-            if isDownloading {
-                ProgressView()
-                    .scaleEffect(0.6)
-            } else if isInstalled {
-                if isActive {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(settings.midnightStatusActive)
-                            .frame(width: 5, height: 5)
-                        Text("ACTIVE")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(settings.midnightStatusActive)
+            // Status/Action - fixed width
+            Group {
+                if isDownloading {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                        Text("...")
+                            .font(.system(size: 10))
+                            .foregroundColor(settings.midnightTextTertiary)
+                    }
+                } else if isInstalled {
+                    if isActive {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(settings.midnightStatusActive)
+                                .frame(width: 5, height: 5)
+                                .shadow(color: settings.midnightStatusActive.opacity(0.5), radius: 2, x: 0, y: 0)
+                            Text("ACTIVE")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(settings.midnightStatusActive)
+                        }
+                    } else {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(settings.midnightStatusReady)
+                                .frame(width: 5, height: 5)
+                            Text("READY")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(settings.midnightStatusReady)
+                        }
                     }
                 } else {
-                    Text("READY")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(settings.midnightStatusReady)
-                }
-            } else {
-                Button(action: onDownload) {
-                    HStack(spacing: 4) {
-                        Text("DOWNLOAD")
-                            .font(.system(size: 9, weight: .semibold))
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 9))
+                    Button(action: onDownload) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 10))
+                            Text("GET")
+                                .font(.system(size: 9, weight: .semibold))
+                        }
+                        .foregroundColor(settings.midnightTextSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(settings.midnightButtonPrimary)
+                        .cornerRadius(4)
                     }
-                    .foregroundColor(settings.midnightTextSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(settings.midnightButtonPrimary)
-                    .cornerRadius(4)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .frame(width: 70, alignment: .trailing)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(isHovered ? settings.midnightSurfaceElevated : Color.clear)
         .onHover { hovering in
-            isHovered = hovering
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isHovered = hovering
+            }
         }
     }
 }
 
-// MARK: - Compact Cloud Provider Row
+// MARK: - Expandable Cloud Provider Card (Showcase Style)
+
+struct ExpandableCloudProviderCard: View {
+    let providerId: String  // "openai", "anthropic", "gemini", "groq"
+    let name: String
+    let tagline: String
+    let isConfigured: Bool
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    let onConfigure: () -> Void  // Deep link to Settings
+
+    @StateObject private var settings = SettingsManager.shared
+    @State private var isHovered = false
+
+    /// Models from centralized LLMConfig.json
+    private var models: [LLMConfig.ModelConfig] {
+        LLMConfig.shared.config(for: providerId)?.models ?? []
+    }
+
+    /// Default model ID for this provider
+    private var defaultModelId: String? {
+        LLMConfig.shared.config(for: providerId)?.defaultModel
+    }
+
+    /// Provider metadata (taglines, URLs)
+    private var metadata: CloudProviderMetadata.Info? {
+        CloudProviderMetadata.info(for: providerId)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row
+            Button(action: onToggle) {
+                HStack(spacing: 12) {
+                    // Provider icon
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(providerColor.opacity(0.2))
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Text(String(name.prefix(1)))
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(providerColor)
+                        )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name.uppercased())
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(settings.midnightTextPrimary)
+                        Text("\(models.count) models")
+                            .font(.system(size: 10))
+                            .foregroundColor(settings.midnightTextTertiary)
+                    }
+                    .frame(width: 85, alignment: .leading)
+
+                    Text(tagline)
+                        .font(.system(size: 11))
+                        .foregroundColor(settings.midnightTextSecondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // Status pill
+                    Group {
+                        if isConfigured {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(settings.midnightStatusReady)
+                                    .frame(width: 6, height: 6)
+                                Text("READY")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(settings.midnightStatusReady)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(settings.midnightStatusReady.opacity(0.12))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(settings.midnightStatusReady.opacity(0.25), lineWidth: 1))
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .frame(width: 70, alignment: .trailing)
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(settings.midnightTextTertiary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.expandableRow)
+
+            // Expanded content - model showcase
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    Divider()
+                        .background(settings.midnightBorder)
+                        .padding(.horizontal, 16)
+
+                    // Model rows
+                    ForEach(models, id: \.id) { model in
+                        CloudModelRow(
+                            model: model,
+                            isDefault: model.id == defaultModelId,
+                            isConfigured: isConfigured,
+                            providerColor: providerColor
+                        )
+                    }
+
+                    // Footer with links and configure button
+                    HStack {
+                        // Links from CloudProviderMetadata
+                        if let docsURL = metadata?.docsURL {
+                            Button(action: { NSWorkspace.shared.open(docsURL) }) {
+                                HStack(spacing: 4) {
+                                    Text("Docs")
+                                        .font(.system(size: 10))
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.system(size: 8))
+                                }
+                                .foregroundColor(settings.midnightTextTertiary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if let pricingURL = metadata?.pricingURL {
+                            Button(action: { NSWorkspace.shared.open(pricingURL) }) {
+                                HStack(spacing: 4) {
+                                    Text("Pricing")
+                                        .font(.system(size: 10))
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.system(size: 8))
+                                }
+                                .foregroundColor(settings.midnightTextTertiary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Spacer()
+
+                        // Configure button
+                        if !isConfigured {
+                            Button(action: onConfigure) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "key")
+                                        .font(.system(size: 9))
+                                    Text("Configure")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .foregroundColor(settings.midnightTextSecondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(settings.midnightButtonPrimary)
+                                .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovered ? settings.midnightSurfaceHover : settings.midnightSurface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    isExpanded ? settings.midnightBorderActive : (isHovered ? settings.midnightBorderActive : settings.midnightBorder),
+                    lineWidth: 1
+                )
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)  // Don't stretch in grid rows
+    }
+
+    private var providerColor: Color {
+        switch providerId {
+        case "openai": return .green
+        case "anthropic": return .orange
+        case "gemini": return .blue
+        case "groq": return .red
+        default: return .gray
+        }
+    }
+}
+
+// MARK: - Cloud Model Row
+
+struct CloudModelRow: View {
+    let model: LLMConfig.ModelConfig
+    let isDefault: Bool
+    let isConfigured: Bool
+    let providerColor: Color
+
+    @StateObject private var settings = SettingsManager.shared
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Model name column - fixed width for table alignment
+            HStack(spacing: 6) {
+                Text(model.displayName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(settings.midnightTextPrimary)
+
+                if isDefault {
+                    Text("★")
+                        .font(.system(size: 9))
+                        .foregroundColor(providerColor)
+                }
+            }
+            .frame(width: 140, alignment: .leading)
+
+            // Description column - fills remaining space
+            if let description = model.description {
+                Text("·")
+                    .foregroundColor(settings.midnightTextTertiary)
+                    .padding(.trailing, 8)
+
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundColor(settings.midnightTextTertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(isHovered ? settings.midnightSurfaceElevated : Color.clear)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+// MARK: - Legacy Compact Cloud Provider Row (kept for reference)
 
 struct CompactCloudProviderRow: View {
     let name: String
@@ -2795,140 +3043,7 @@ struct CompactCloudProviderRow: View {
     @StateObject private var settings = SettingsManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header row
-            Button(action: onToggle) {
-                HStack(spacing: 12) {
-                    // Provider icon
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(providerColor.opacity(0.2))
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            Text(String(name.prefix(1)))
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(providerColor)
-                        )
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
-                            Text(name.uppercased())
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(settings.midnightTextPrimary)
-
-                            if isRecommended {
-                                Text("RECOMMENDED")
-                                    .font(.system(size: 7, weight: .bold))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(settings.midnightBadgeRecommended)
-                                    .foregroundColor(.black)
-                                    .cornerRadius(2)
-                            }
-                        }
-                        Text(provider)
-                            .font(.system(size: 9))
-                            .foregroundColor(settings.midnightTextTertiary)
-                    }
-
-                    Text(description)
-                        .font(.system(size: 10))
-                        .foregroundColor(settings.midnightTextSecondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    // Specs
-                    HStack(spacing: 10) {
-                        VStack(spacing: 0) {
-                            Text("CTX")
-                                .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                .foregroundColor(settings.midnightTextTertiary)
-                            Text(contextSize)
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundColor(settings.midnightTextSecondary)
-                        }
-
-                        VStack(spacing: 0) {
-                            Text("TTFT")
-                                .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                .foregroundColor(settings.midnightTextTertiary)
-                            Text(ttft)
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundColor(settings.midnightTextSecondary)
-                        }
-                    }
-
-                    // Status
-                    if isConfigured {
-                        Text("CONFIGURED")
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(settings.midnightStatusReady)
-                    } else {
-                        Text("NOT CONFIGURED")
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(settings.midnightTextTertiary)
-                    }
-
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(settings.midnightTextTertiary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-            }
-            .buttonStyle(.plain)
-
-            // Expanded content - API key input
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 8) {
-                    Divider()
-                        .background(settings.midnightBorder)
-
-                    Text("API KEY")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(settings.midnightTextTertiary)
-
-                    HStack(spacing: 8) {
-                        SecureField("Enter API key...", text: $apiKeyBinding)
-                            .font(.system(size: 11, design: .monospaced))
-                            .textFieldStyle(.plain)
-                            .padding(8)
-                            .background(settings.midnightSurfaceElevated)
-                            .cornerRadius(4)
-
-                        Button(action: onSave) {
-                            Text("SAVE")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(settings.midnightTextPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(settings.midnightButtonPrimary)
-                                .cornerRadius(4)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(settings.midnightSurface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isExpanded ? settings.midnightBorderActive : settings.midnightBorder, lineWidth: 1)
-        )
-    }
-
-    private var providerColor: Color {
-        switch name.lowercased() {
-        case "openai": return .green
-        case "anthropic": return .orange
-        case "gemini": return .blue
-        case "groq": return .red
-        default: return .gray
-        }
+        EmptyView()  // Deprecated - use ExpandableCloudProviderCard instead
     }
 }
 

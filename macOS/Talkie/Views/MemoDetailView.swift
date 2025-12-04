@@ -214,10 +214,10 @@ struct MemoDetailView: View {
                     .frame(height: 40)
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
-                    .background(Color.secondary.opacity(0.05))
+                    .background(settings.surfaceAlternate)
                     .overlay(
                         Rectangle()
-                            .strokeBorder(Color.secondary.opacity(0.08), lineWidth: 0.5)
+                            .strokeBorder(settings.borderDefault, lineWidth: 0.5)
                     )
 
                     // Controls: start time, play button, end time - aligned with waveform edges
@@ -924,11 +924,11 @@ struct MemoDetailView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity)
-            .background(Color.primary.opacity(0.03))
+            .background(settings.surfaceAlternate)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                    .strokeBorder(settings.borderDefault, lineWidth: 0.5)
             )
         } else if let transcript = memo.currentTranscript {
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -1119,11 +1119,11 @@ struct AIResultSection<Content: View>: View {
             content()
                 .padding(Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(SettingsManager.shared.surface1)
                 .cornerRadius(CornerRadius.xs)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .strokeBorder(Color.primary.opacity(Opacity.light), lineWidth: 0.5)
+                        .strokeBorder(SettingsManager.shared.borderDefault, lineWidth: 0.5)
                 )
         }
     }
@@ -1179,7 +1179,7 @@ struct ActionButtonMac: View {
                     .foregroundColor(.primary.opacity(0.7))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Color.primary.opacity(0.1))
+                    .background(SettingsManager.shared.surfaceSelected)
                     .clipShape(Capsule())
                     .offset(x: -4, y: 4)
             }
@@ -1225,7 +1225,7 @@ struct WorkflowRunListItem: View {
                     .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.secondary)
                     .frame(width: 24, height: 24)
-                    .background(Color.primary.opacity(0.05))
+                    .background(SettingsManager.shared.surfaceAlternate)
                     .cornerRadius(4)
 
                 // Workflow name (clickable to navigate)
@@ -1244,7 +1244,7 @@ struct WorkflowRunListItem: View {
                         .foregroundColor(.secondary.opacity(0.7))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.08))
+                        .background(SettingsManager.shared.surfaceAlternate)
                         .cornerRadius(3)
                 }
 
@@ -1262,11 +1262,11 @@ struct WorkflowRunListItem: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(isHovering ? Color.primary.opacity(0.05) : Color(NSColor.controlBackgroundColor))
+            .background(isHovering ? SettingsManager.shared.surfaceHover : SettingsManager.shared.surface1)
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.secondary.opacity(0.1), lineWidth: 0.5)
+                    .strokeBorder(SettingsManager.shared.borderDefault, lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -1331,7 +1331,7 @@ struct WorkflowRunDetailView: View {
                         .foregroundColor(.secondary.opacity(0.7))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.08))
+                        .background(SettingsManager.shared.surfaceAlternate)
                         .cornerRadius(3)
                 }
 
@@ -1350,7 +1350,7 @@ struct WorkflowRunDetailView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(SettingsManager.shared.surface1)
 
             Divider()
                 .opacity(0.5)
@@ -1374,7 +1374,7 @@ struct WorkflowRunDetailView: View {
                                     .lineSpacing(3)
                                     .padding(12)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .background(SettingsManager.shared.surface1)
                                     .cornerRadius(6)
                             }
                         }
@@ -1390,7 +1390,7 @@ struct WorkflowRunDetailView: View {
                                     VStack(spacing: 2) {
                                         ForEach(0..<3, id: \.self) { _ in
                                             Circle()
-                                                .fill(Color.secondary.opacity(0.2))
+                                                .fill(SettingsManager.shared.surfaceAlternate)
                                                 .frame(width: 3, height: 3)
                                         }
                                     }
@@ -1403,7 +1403,7 @@ struct WorkflowRunDetailView: View {
                 .padding(16)
             }
         }
-        .background(Color(NSColor.textBackgroundColor))
+        .background(SettingsManager.shared.surfaceInput)
     }
 
     private func formatFullDate(_ date: Date) -> String {
@@ -1450,7 +1450,7 @@ struct StepExecutionCard: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Color.secondary.opacity(0.08))
+                        .background(SettingsManager.shared.surfaceAlternate)
                         .cornerRadius(3)
                 }
                 .buttonStyle(.plain)
@@ -1471,7 +1471,7 @@ struct StepExecutionCard: View {
                         .lineLimit(10)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.secondary.opacity(0.05))
+                        .background(SettingsManager.shared.surfaceAlternate)
                         .cornerRadius(4)
                 }
             }
@@ -1480,11 +1480,11 @@ struct StepExecutionCard: View {
             OutputCard(step.output, label: "output → {{\(step.outputKey)}}", isHighlighted: isLast)
         }
         .padding(12)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .background(SettingsManager.shared.surface2)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.secondary.opacity(0.1), lineWidth: 0.5)
+                .strokeBorder(SettingsManager.shared.borderDefault, lineWidth: 0.5)
         )
     }
 }
@@ -1613,7 +1613,7 @@ struct OutputCard: View {
                         .foregroundColor(copied ? .green : .secondary.opacity(0.5))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Color.secondary.opacity(copied ? 0.1 : 0.05))
+                        .background(copied ? SettingsManager.shared.surfaceSuccess : SettingsManager.shared.surfaceAlternate)
                         .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
@@ -1644,11 +1644,11 @@ struct OutputCard: View {
             }
         }
         .padding(Spacing.md)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(SettingsManager.shared.surface1)
         .cornerRadius(CornerRadius.sm)
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .strokeBorder(isHighlighted ? Color.green.opacity(0.3) : Color.secondary.opacity(0.1), lineWidth: isHighlighted ? 1 : 0.5)
+                .strokeBorder(isHighlighted ? SettingsManager.shared.surfaceSuccess : SettingsManager.shared.borderDefault, lineWidth: isHighlighted ? 1 : 0.5)
         )
     }
 
@@ -1745,7 +1745,7 @@ struct WorkflowPickerSheet: View {
                 }
             }
             .padding(10)
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(SettingsManager.shared.surface1)
             .cornerRadius(8)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
@@ -1822,7 +1822,7 @@ struct WorkflowPickerSheet: View {
             .padding(16)
         }
         .frame(width: 450, height: 450)
-        .background(Color(NSColor.textBackgroundColor))
+        .background(SettingsManager.shared.surfaceInput)
     }
 }
 

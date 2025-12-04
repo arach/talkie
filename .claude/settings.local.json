@@ -88,7 +88,12 @@
       "Bash(log show --predicate 'subsystem == \"\"\"\"jdi.talkie-os-mac\"\"\"\"' --last 2m --info --style compact)",
       "Bash(log show:*)",
       "Bash(/usr/bin/log show:*)",
-      "Bash(xctrace export:*)"
+      "Bash(xctrace export:*)",
+      "Bash(top:*)",
+      "Bash(./macOS/run.sh:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:openai.com)",
+      "WebFetch(domain:www.argmaxinc.com)"
     ],
     "deny": [],
     "ask": []
