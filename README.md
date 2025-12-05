@@ -2,7 +2,11 @@
 
 A multi-platform voice memo application with intelligent workflow automation.
 
-**[Security Model](SECURITY.md)** | **[Implementation Notes](IMPLEMENTATION_SUMMARY.md)**
+**[Security Model](SECURITY.md)** | **[Implementation Notes](IMPLEMENTATION_SUMMARY.md)** | **[Website](https://usetalkie.com)**
+
+<p align="center">
+  <img src="Landing/public/screenshots/iphone-16-pro-max-1.png" alt="Talkie - Voice Memos + AI" width="280"/>
+</p>
 
 ## Overview
 
