@@ -18,6 +18,7 @@ enum DeepLinkAction: Equatable {
     case openSearch      // Just open search UI
     case openAllMemos    // Open main memo list
     case openSettings    // Open settings view
+    case importAudio(url: URL)  // Import audio file from share sheet
 }
 
 class DeepLinkManager: ObservableObject {
@@ -27,7 +28,22 @@ class DeepLinkManager: ObservableObject {
 
     private init() {}
 
+    /// Supported audio file extensions for import
+    private static let audioExtensions = ["m4a", "mp3", "wav", "aiff", "aif", "caf", "mp4", "3gp"]
+
     func handle(url: URL) {
+        // Handle file:// URLs for audio import
+        if url.isFileURL {
+            let ext = url.pathExtension.lowercased()
+            if Self.audioExtensions.contains(ext) {
+                AppLogger.app.info("Deep link: import audio from \(url.lastPathComponent)")
+                pendingAction = .importAudio(url: url)
+            } else {
+                AppLogger.app.warning("Unsupported file type: \(ext)")
+            }
+            return
+        }
+
         guard url.scheme == "talkie" else { return }
 
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)

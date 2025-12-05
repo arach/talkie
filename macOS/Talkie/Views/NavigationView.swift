@@ -10,13 +10,11 @@ import CoreData
 
 enum NavigationSection: Hashable {
     case allMemos
-    case recent
-    case processed
-    case archived
     case aiResults
     case workflows
     case activityLog
     case systemConsole
+    case pendingActions
     case models
     case allowedCommands
     case smartFolder(String)
@@ -36,39 +34,62 @@ struct TalkieNavigationView: View {
     private var allMemos: FetchedResults<VoiceMemo>
 
     @State private var selectedSection: NavigationSection? = .allMemos
+    @State private var previousSection: NavigationSection? = .allMemos
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
+    @State private var showConsolePopover = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @StateObject private var eventManager = SystemEventManager.shared
+    @StateObject private var pendingActionsManager = PendingActionsManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
             // Main content area
-            Group {
-                if isTwoColumnSection {
-                    // 2-column layout for Models, etc.
-                    NavigationSplitView {
-                        sidebarView
-                    } detail: {
-                        twoColumnDetailView
+            ZStack(alignment: .topLeading) {
+                Group {
+                    if isTwoColumnSection {
+                        // 2-column layout for Models, etc.
+                        NavigationSplitView(columnVisibility: $columnVisibility) {
+                            sidebarView
+                        } detail: {
+                            twoColumnDetailView
+                        }
+                    } else {
+                        // 3-column layout for Memos, Workflows, AI Results
+                        NavigationSplitView(columnVisibility: $columnVisibility) {
+                            sidebarView
+                        } content: {
+                            contentColumnView
+                                .frame(minWidth: 280, idealWidth: 320)
+                        } detail: {
+                            detailColumnView
+                        }
+                        .navigationSplitViewStyle(.prominentDetail)
                     }
-                    .toolbar(.hidden)
-                } else {
-                    // 3-column layout for Memos, Workflows, AI Results
-                    NavigationSplitView {
-                        sidebarView
-                    } content: {
-                        contentColumnView
-                            .frame(minWidth: 280, idealWidth: 320)
-                    } detail: {
-                        detailColumnView
+                }
+
+                // Floating sidebar toggle button (shows when sidebar is collapsed)
+                if columnVisibility == .detailOnly {
+                    Button(action: { toggleSidebar() }) {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
                     }
-                    .navigationSplitViewStyle(.prominentDetail)
-                    .toolbar(.hidden)
+                    .buttonStyle(.plain)
+                    .help("Show Sidebar")
+                    .padding(.top, 8)
+                    .padding(.leading, 12)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
 
             // Full-width status bar (like VS Code/Cursor)
             statusBarView
         }
+        .animation(.easeInOut(duration: 0.2), value: columnVisibility)
+        .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .onChange(of: allMemos.count) { _, _ in
             // Mark any new memos as received when they appear in the list
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
@@ -95,6 +116,15 @@ struct TalkieNavigationView: View {
     // MARK: - Status Bar View
 
     @StateObject private var syncManager = SyncStatusManager.shared
+
+    // Console event counts (for status bar indicators)
+    private var consoleErrorCount: Int {
+        eventManager.events.prefix(100).filter { $0.type == .error }.count
+    }
+
+    private var consoleWorkflowCount: Int {
+        eventManager.events.prefix(100).filter { $0.type == .workflow }.count
+    }
 
     private var statusBarView: some View {
         HStack(spacing: 12) {
@@ -138,6 +168,51 @@ struct TalkieNavigationView: View {
             }
 
             Spacer()
+
+            // Console button - opens log popover with error/warning counts
+            Button(action: { showConsolePopover.toggle() }) {
+                HStack(spacing: 6) {
+                    // Error count (red)
+                    if consoleErrorCount > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 9))
+                            Text("\(consoleErrorCount)")
+                                .font(SettingsManager.shared.fontXS)
+                        }
+                        .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                    }
+
+                    // Workflow count (amber)
+                    if consoleWorkflowCount > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 9))
+                            Text("\(consoleWorkflowCount)")
+                                .font(SettingsManager.shared.fontXS)
+                        }
+                        .foregroundColor(Color(red: 1.0, green: 0.7, blue: 0.3))
+                    }
+
+                    // Terminal icon
+                    Image(systemName: "terminal")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(3)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showConsolePopover, arrowEdge: .bottom) {
+                SystemConsoleView(onPopOut: {
+                    showConsolePopover = false
+                    previousSection = selectedSection  // Remember where we were
+                    selectedSection = .systemConsole
+                })
+                .frame(width: 600, height: 350)
+            }
 
             // Right side - DEV indicator (only in debug builds)
             #if DEBUG
@@ -248,7 +323,7 @@ struct TalkieNavigationView: View {
 
             // Navigation sections
             List(selection: $selectedSection) {
-                Section(header: Text("Library")
+                Section(header: Text("Memos")
                     .font(SettingsManager.shared.fontXSMedium)
                     .textCase(SettingsManager.shared.uiTextCase)
                     .foregroundColor(.secondary.opacity(0.6))
@@ -269,56 +344,18 @@ struct TalkieNavigationView: View {
                                 .font(SettingsManager.shared.fontXS)
                         }
                     }
-
-                    NavigationLink(value: NavigationSection.recent) {
-                        Label {
-                            Text("Recent")
-                                .font(SettingsManager.shared.fontSM)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "clock")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
-
-                    NavigationLink(value: NavigationSection.processed) {
-                        Label {
-                            HStack {
-                                Text("Processed")
-                                    .font(SettingsManager.shared.fontSM)
-                                    .textCase(SettingsManager.shared.uiTextCase)
-                                Spacer()
-                                Text("\(processedCount)")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "checkmark.circle")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
-
-                    NavigationLink(value: NavigationSection.archived) {
-                        Label {
-                            Text("Archived")
-                                .font(SettingsManager.shared.fontSM)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "archivebox")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
                 }
                 .collapsible(false)
 
-                Section(header: Text("Tools")
+                // Activity section - Actions + Pending Actions
+                Section(header: Text("Activity")
                     .font(SettingsManager.shared.fontXSMedium)
                     .textCase(SettingsManager.shared.uiTextCase)
                     .foregroundColor(.secondary.opacity(0.6))
                 ) {
                     NavigationLink(value: NavigationSection.aiResults) {
                         Label {
-                            Text("Activity Log")
+                            Text("Actions")
                                 .font(SettingsManager.shared.fontSM)
                                 .textCase(SettingsManager.shared.uiTextCase)
                         } icon: {
@@ -327,6 +364,43 @@ struct TalkieNavigationView: View {
                         }
                     }
 
+                    NavigationLink(value: NavigationSection.pendingActions) {
+                        Label {
+                            HStack {
+                                Text("Pending Actions")
+                                    .font(SettingsManager.shared.fontSM)
+                                    .textCase(SettingsManager.shared.uiTextCase)
+                                Spacer()
+                                // Show count badge if there are active actions
+                                if pendingActionsManager.hasActiveActions {
+                                    HStack(spacing: 3) {
+                                        ProgressView()
+                                            .scaleEffect(0.4)
+                                            .frame(width: 10, height: 10)
+                                        Text("\(pendingActionsManager.activeCount)")
+                                            .font(SettingsManager.shared.fontXS)
+                                    }
+                                    .foregroundColor(.accentColor)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.15))
+                                    .cornerRadius(8)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(SettingsManager.shared.fontXS)
+                        }
+                    }
+                }
+                .collapsible(false)
+
+                // Tools section - Workflows, Models, Console
+                Section(header: Text("Tools")
+                    .font(SettingsManager.shared.fontXSMedium)
+                    .textCase(SettingsManager.shared.uiTextCase)
+                    .foregroundColor(.secondary.opacity(0.6))
+                ) {
                     NavigationLink(value: NavigationSection.workflows) {
                         Label {
                             Text("Workflows")
@@ -351,9 +425,22 @@ struct TalkieNavigationView: View {
 
                     NavigationLink(value: NavigationSection.systemConsole) {
                         Label {
-                            Text("Console")
-                                .font(SettingsManager.shared.fontSM)
-                                .textCase(SettingsManager.shared.uiTextCase)
+                            HStack {
+                                Text("Console")
+                                    .font(SettingsManager.shared.fontSM)
+                                    .textCase(SettingsManager.shared.uiTextCase)
+                                Spacer()
+                                // Show indicator if there are recent errors
+                                if consoleErrorCount > 0 {
+                                    Text("\(consoleErrorCount)")
+                                        .font(SettingsManager.shared.fontXS)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(Color.orange)
+                                        .cornerRadius(8)
+                                }
+                            }
                         } icon: {
                             Image(systemName: "terminal")
                                 .font(SettingsManager.shared.fontXS)
@@ -387,7 +474,7 @@ struct TalkieNavigationView: View {
         .background(SettingsManager.shared.tacticalBackground)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .frame(width: 900, height: 640, alignment: .topLeading)
+                .frame(width: 900, height: 750, alignment: .topLeading)
         }
     }
 
@@ -405,7 +492,12 @@ struct TalkieNavigationView: View {
         case .allMemos:
             MemoTableFullView()
         case .systemConsole:
-            SystemConsoleView()
+            SystemConsoleView(onClose: {
+                // Return to previous section, or allMemos if none
+                selectedSection = previousSection ?? .allMemos
+            })
+        case .pendingActions:
+            PendingActionsView()
         default:
             EmptyView()
         }
@@ -413,11 +505,25 @@ struct TalkieNavigationView: View {
 
     // MARK: - Column Views
 
+    /// Toggle sidebar visibility
+    private func toggleSidebar() {
+        withAnimation {
+            switch columnVisibility {
+            case .all:
+                columnVisibility = .detailOnly
+            case .detailOnly:
+                columnVisibility = .all
+            default:
+                columnVisibility = .all
+            }
+        }
+    }
+
     /// Whether the current section uses a 2-column layout (sidebar + full content)
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole:
+        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole, .pendingActions:
             return true
         default:
             return false
@@ -433,7 +539,7 @@ struct TalkieNavigationView: View {
                 editingWorkflow: $editingWorkflow
             )
         case .aiResults:
-            AIResultsListColumn(selectedRun: $selectedRun)
+            ActivityLogFullView()
         default:
             memoListView
         }
@@ -448,7 +554,8 @@ struct TalkieNavigationView: View {
                 selectedWorkflowID: $selectedWorkflowID
             )
         case .aiResults:
-            AIResultsDetailColumn(selectedRun: $selectedRun)
+            // ActivityLogFullView has its own built-in inspector via HSplitView
+            EmptyView()
         default:
             if let memo = selectedMemo {
                 MemoDetailView(memo: memo)
@@ -471,20 +578,17 @@ struct TalkieNavigationView: View {
 
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?
-    @State private var selectedRun: WorkflowRun?
 
     // MARK: - Computed Properties
 
     private var sectionTitle: String {
         switch selectedSection {
         case .allMemos: return "ALL MEMOS"
-        case .recent: return "RECENT"
-        case .processed: return "PROCESSED"
-        case .archived: return "ARCHIVED"
         case .aiResults: return "ACTIVITY LOG"
         case .workflows: return "WORKFLOWS"
         case .activityLog: return "ACTIVITY LOG"
         case .systemConsole: return "CONSOLE"
+        case .pendingActions: return "PENDING ACTIONS"
         case .models: return "MODELS"
         case .allowedCommands: return "ALLOWED COMMANDS"
         case .smartFolder(let name): return name.uppercased()
@@ -495,8 +599,6 @@ struct TalkieNavigationView: View {
     private var sectionSubtitle: String? {
         switch selectedSection {
         case .allMemos: return "\(allMemos.count) total"
-        case .recent: return "Last 7 days"
-        case .processed: return "\(processedCount) memos"
         default: return nil
         }
     }
@@ -514,14 +616,6 @@ struct TalkieNavigationView: View {
 
         // Filter by section
         switch selectedSection {
-        case .recent:
-            let sevenDaysAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
-            memos = memos.filter { ($0.createdAt ?? Date()) > sevenDaysAgo }
-        case .processed:
-            memos = memos.filter { $0.summary != nil || $0.tasks != nil || $0.reminders != nil }
-        case .archived:
-            // Future: filter archived memos
-            memos = []
         case .smartFolder(let name):
             // Future: filter by tags or smart criteria
             memos = memos.filter { memo in
@@ -532,10 +626,6 @@ struct TalkieNavigationView: View {
         }
 
         return memos
-    }
-
-    private var processedCount: Int {
-        allMemos.filter { $0.summary != nil || $0.tasks != nil || $0.reminders != nil }.count
     }
 
     private var isToolSection: Bool {
@@ -839,274 +929,19 @@ struct WorkflowDetailColumn: View {
     }
 }
 
-// MARK: - Activity Log Column Views (Activity Log Table)
-
-enum ActivitySortField: String, CaseIterable {
-    case status = "STATUS"
-    case timestamp = "TIMESTAMP"
-    case workflow = "WORKFLOW"
-    case memo = "MEMO"
-    case duration = "DURATION"
-}
-
-struct AIResultsListColumn: View {
-    @Binding var selectedRun: WorkflowRun?
-    @ObservedObject private var settings = SettingsManager.shared
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
-        animation: .default
-    )
-    private var allRuns: FetchedResults<WorkflowRun>
-
-    // Sorting state
-    @State private var sortField: ActivitySortField = .timestamp
-    @State private var sortAscending: Bool = false
-
-    // Column widths (resizable)
-    @State private var statusWidth: CGFloat = 30
-    @State private var timestampWidth: CGFloat = 150
-    @State private var workflowWidth: CGFloat = 140
-    @State private var memoWidth: CGFloat = 180
-    @State private var durationWidth: CGFloat = 90
-
-    // Sorted runs based on current sort state, deduplicated by run ID
-    private var sortedRuns: [WorkflowRun] {
-        // Deduplicate by workflow run ID (CloudKit sync can create duplicates with same ID)
-        var seen = Set<UUID>()
-        let dedupedRuns = allRuns.filter { run in
-            guard let runId = run.id else { return true } // Keep runs without ID
-            if seen.contains(runId) {
-                return false
-            }
-            seen.insert(runId)
-            return true
-        }
-
-        return dedupedRuns.sorted { a, b in
-            let result: Bool
-            switch sortField {
-            case .status:
-                let aSuccess = a.output != nil && !(a.output?.isEmpty ?? true)
-                let bSuccess = b.output != nil && !(b.output?.isEmpty ?? true)
-                result = aSuccess && !bSuccess
-            case .timestamp:
-                result = (a.runDate ?? .distantPast) > (b.runDate ?? .distantPast)
-            case .workflow:
-                result = (a.workflowName ?? "") < (b.workflowName ?? "")
-            case .memo:
-                result = (a.memo?.title ?? "") < (b.memo?.title ?? "")
-            case .duration:
-                result = estimateDuration(a) > estimateDuration(b)
-            }
-            return sortAscending ? !result : result
-        }
-    }
-
-    private func estimateDuration(_ run: WorkflowRun) -> Int {
-        guard let json = run.stepOutputsJSON,
-              let data = json.data(using: .utf8),
-              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
-              !steps.isEmpty
-        else { return 0 }
-        let totalChars = steps.reduce(0) { $0 + $1.output.count }
-        return max(100, totalChars * 2)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 8) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.primary)
-
-                Text("Activity Log")
-                    .font(SettingsManager.shared.fontTitleMedium)
-                    .foregroundColor(.primary)
-
-                Text("\(allRuns.count) events")
-                    .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.secondary)
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(settings.surface1)
-
-            Divider()
-
-            if allRuns.isEmpty {
-                VStack(spacing: 16) {
-                    Spacer()
-                    Image(systemName: "wand.and.rays")
-                        .font(SettingsManager.shared.fontDisplay)
-                        .foregroundColor(.secondary.opacity(0.3))
-
-                    Text("NO ACTIVITY YET")
-                        .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
-                        .foregroundColor(.secondary)
-
-                    Text("Run workflows on your memos")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.6))
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // Table header with sortable columns
-                ActivityTableHeader(
-                    sortField: $sortField,
-                    sortAscending: $sortAscending,
-                    statusWidth: $statusWidth,
-                    timestampWidth: $timestampWidth,
-                    workflowWidth: $workflowWidth,
-                    memoWidth: $memoWidth,
-                    durationWidth: $durationWidth
-                )
-
-                Divider()
-
-                // Table rows
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(sortedRuns, id: \.objectID) { run in
-                            ActivityTableRow(
-                                run: run,
-                                isSelected: selectedRun?.objectID == run.objectID,
-                                onSelect: { selectedRun = run },
-                                statusWidth: statusWidth,
-                                timestampWidth: timestampWidth,
-                                workflowWidth: workflowWidth,
-                                memoWidth: memoWidth,
-                                durationWidth: durationWidth
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        .frame(minWidth: 550, idealWidth: 700)
-    }
-}
-
-// MARK: - Activity Table Header (Sortable + Resizable)
-
-struct ActivityTableHeader: View {
-    @Binding var sortField: ActivitySortField
-    @Binding var sortAscending: Bool
-    @Binding var statusWidth: CGFloat
-    @Binding var timestampWidth: CGFloat
-    @Binding var workflowWidth: CGFloat
-    @Binding var memoWidth: CGFloat
-    @Binding var durationWidth: CGFloat
-    @ObservedObject private var settings = SettingsManager.shared
-
-    var body: some View {
-        HStack(spacing: 0) {
-            // Timestamp
-            Text("TIMESTAMP")
-                .font(SettingsManager.shared.fontXSBold)
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(width: timestampWidth, alignment: .leading)
-
-            // Workflow
-            Text("WORKFLOW")
-                .font(SettingsManager.shared.fontXSBold)
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(width: workflowWidth, alignment: .leading)
-
-            // Memo
-            Text("MEMO")
-                .font(SettingsManager.shared.fontXSBold)
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(width: memoWidth, alignment: .leading)
-
-            // Duration
-            Text("DURATION")
-                .font(SettingsManager.shared.fontXSBold)
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(width: durationWidth, alignment: .trailing)
-
-            Spacer()
-
-            // Status header on the right
-            Text("STATUS")
-                .font(SettingsManager.shared.fontXSBold)
-                .foregroundColor(.secondary.opacity(0.6))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .frame(height: 28)
-        .background(settings.surface2)
-    }
-}
-
-// MARK: - Sortable Column Header
-
-struct SortableColumnHeader: View {
-    let title: String
-    let field: ActivitySortField
-    @Binding var currentSort: ActivitySortField
-    @Binding var ascending: Bool
-    let width: CGFloat
-    var alignment: Alignment = .leading
-
-    @ObservedObject private var settings = SettingsManager.shared
-    @State private var isHovering = false
-
-    private var isSorted: Bool { currentSort == field }
-
-    var body: some View {
-        Button(action: {
-            if currentSort == field {
-                ascending.toggle()
-            } else {
-                currentSort = field
-                ascending = false
-            }
-        }) {
-            HStack(spacing: 4) {
-                if alignment == .trailing { Spacer() }
-
-                Text(title)
-                    .font(SettingsManager.shared.fontSMMedium)
-                    .foregroundColor(isSorted ? .primary : .secondary)
-
-                if isSorted {
-                    Image(systemName: ascending ? "chevron.up" : "chevron.down")
-                        .font(SettingsManager.shared.fontXSBold)
-                        .foregroundColor(.blue)
-                }
-
-                if alignment == .leading { Spacer() }
-            }
-            .frame(width: width, alignment: alignment)
-            .padding(.vertical, 2)
-            .background(isHovering ? settings.surfaceHover : Color.clear)
-            .cornerRadius(3)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in isHovering = hovering }
-    }
-}
-
 // MARK: - Column Resizer
 
 struct ColumnResizer: View {
     @Binding var width: CGFloat
     let minWidth: CGFloat
     let maxWidth: CGFloat
-    @ObservedObject private var settings = SettingsManager.shared
 
     @State private var isHovering = false
     @State private var isDragging = false
 
     var body: some View {
         Rectangle()
-            .fill(isDragging ? .blue : (isHovering ? settings.surfaceHover : Color.clear))
+            .fill(isDragging ? Color.blue : (isHovering ? Color.secondary.opacity(0.3) : Color.clear))
             .frame(width: 4)
             .contentShape(Rectangle().inset(by: -4))
             .onHover { hovering in
@@ -1132,131 +967,41 @@ struct ColumnResizer: View {
     }
 }
 
-// MARK: - Activity Table Row
+// MARK: - Activity Run Row Model (for native Table)
 
-struct ActivityTableRow: View {
+struct ActivityRunRow: Identifiable {
+    let id: NSManagedObjectID
+    let runId: UUID?
+    let timestamp: Date
+    let workflowName: String
+    let memoTitle: String
+    let isSuccess: Bool
+    let durationMs: Int?
     let run: WorkflowRun
-    let isSelected: Bool
-    let onSelect: () -> Void
-    let statusWidth: CGFloat
-    let timestampWidth: CGFloat
-    let workflowWidth: CGFloat
-    let memoWidth: CGFloat
-    let durationWidth: CGFloat
-    @ObservedObject private var settings = SettingsManager.shared
 
-    @State private var isHovering = false
+    init(from run: WorkflowRun) {
+        self.id = run.objectID
+        self.runId = run.id
+        self.timestamp = run.runDate ?? Date.distantPast
+        self.workflowName = run.workflowName ?? "Workflow"
+        self.memoTitle = run.memo?.title ?? "Unknown"
+        self.isSuccess = run.output != nil && !(run.output?.isEmpty ?? true)
+        self.run = run
 
-    private var isSuccess: Bool {
-        run.output != nil && !(run.output?.isEmpty ?? true)
-    }
-
-    private var workflowName: String { run.workflowName ?? "Workflow" }
-    private var memoTitle: String { run.memo?.title ?? "Unknown" }
-    private var runDate: Date { run.runDate ?? Date() }
-
-    // Calculate duration from step outputs if available
-    private var durationMs: Int? {
-        guard let json = run.stepOutputsJSON,
-              let data = json.data(using: .utf8),
-              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
-              !steps.isEmpty
-        else { return nil }
-
-        // Sum up estimated durations (rough estimate based on output length)
-        let totalChars = steps.reduce(0) { $0 + $1.output.count }
-        return max(100, totalChars * 2) // Rough estimate
-    }
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 0) {
-                // Timestamp
-                Text(formatTimestamp(runDate))
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary)
-                    .frame(width: timestampWidth, alignment: .leading)
-
-                // Workflow
-                Text(workflowName)
-                    .font(SettingsManager.shared.fontBodyBold)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                    .frame(width: workflowWidth, alignment: .leading)
-
-                // Memo
-                Text(memoTitle)
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .frame(width: memoWidth, alignment: .leading)
-
-                // Duration
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.6))
-
-                    if let ms = durationMs {
-                        Text(formatDurationMs(ms))
-                            .font(.monoSmall)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("--")
-                            .font(.monoSmall)
-                            .foregroundColor(.secondary.opacity(0.5))
-                    }
-                }
-                .frame(width: durationWidth, alignment: .trailing)
-
-                Spacer()
-
-                // Run ID (truncated, shown on hover)
-                if isHovering || isSelected, let runId = run.id {
-                    Text(runId.uuidString.prefix(8).uppercased())
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.5))
-                        .padding(.trailing, 6)
-                }
-
-                // Status (dot on the right)
-                Circle()
-                    .fill(isSuccess ? Color.green : Color.red)
-                    .frame(width: 6, height: 6)
-                    .padding(.leading, 4)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-            .frame(height: 32)
-            .background(
-                isSelected ? settings.surfaceInfo :
-                    (isHovering ? settings.surfaceAlternate : Color.clear)
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in isHovering = hovering }
-        .overlay(alignment: .bottom) {
-            Divider().padding(.leading, 16)
-        }
-    }
-
-    private func formatTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, hh:mm a"
-        return formatter.string(from: date)
-    }
-
-    private func formatDurationMs(_ ms: Int) -> String {
-        if ms >= 1000 {
-            let seconds = Double(ms) / 1000.0
-            return String(format: "%.2fs", seconds)
+        // Calculate duration from step outputs
+        if let json = run.stepOutputsJSON,
+           let data = json.data(using: .utf8),
+           let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
+           !steps.isEmpty {
+            let totalChars = steps.reduce(0) { $0 + $1.output.count }
+            self.durationMs = max(100, totalChars * 2)
         } else {
-            return "\(ms)ms"
+            self.durationMs = nil
         }
     }
 }
 
-// MARK: - Activity Log Full View (with Inspector Panel)
+// MARK: - Activity Log Full View (with Native Table)
 
 struct ActivityLogFullView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -1269,69 +1014,35 @@ struct ActivityLogFullView: View {
     private var allRuns: FetchedResults<WorkflowRun>
 
     // Selection & Inspector state
-    @State private var selectedRun: WorkflowRun?
+    @State private var selectedRunId: NSManagedObjectID?
     @State private var showInspector: Bool = false
 
-    // Sorting state
-    @State private var sortField: ActivitySortField = .timestamp
-    @State private var sortAscending: Bool = false
-
-    // Column widths (resizable)
-    @State private var statusWidth: CGFloat = 30
-    @State private var timestampWidth: CGFloat = 150
-    @State private var workflowWidth: CGFloat = 140
-    @State private var memoWidth: CGFloat = 180
-    @State private var durationWidth: CGFloat = 90
+    // Sorting state for Table
+    @State private var sortOrder = [KeyPathComparator(\ActivityRunRow.timestamp, order: .reverse)]
 
     // Inspector panel width (resizable)
     @State private var inspectorWidth: CGFloat = 380
 
-    // Sorted runs based on current sort state, deduplicated by run ID
-    private var sortedRuns: [WorkflowRun] {
-        // Deduplicate by workflow run ID (CloudKit sync can create duplicates with same ID)
+    // Convert FetchedResults to row models, deduplicated
+    private var tableRows: [ActivityRunRow] {
         var seen = Set<UUID>()
-        let dedupedRuns = allRuns.filter { run in
-            guard let runId = run.id else { return true } // Keep runs without ID
-            if seen.contains(runId) {
-                return false
+        return allRuns.compactMap { run -> ActivityRunRow? in
+            if let runId = run.id {
+                if seen.contains(runId) { return nil }
+                seen.insert(runId)
             }
-            seen.insert(runId)
-            return true
-        }
-
-        return dedupedRuns.sorted { a, b in
-            let result: Bool
-            switch sortField {
-            case .status:
-                let aSuccess = a.output != nil && !(a.output?.isEmpty ?? true)
-                let bSuccess = b.output != nil && !(b.output?.isEmpty ?? true)
-                result = aSuccess && !bSuccess
-            case .timestamp:
-                result = (a.runDate ?? .distantPast) > (b.runDate ?? .distantPast)
-            case .workflow:
-                result = (a.workflowName ?? "") < (b.workflowName ?? "")
-            case .memo:
-                result = (a.memo?.title ?? "") < (b.memo?.title ?? "")
-            case .duration:
-                result = estimateDuration(a) > estimateDuration(b)
-            }
-            return sortAscending ? !result : result
-        }
+            return ActivityRunRow(from: run)
+        }.sorted(using: sortOrder)
     }
 
-    private func estimateDuration(_ run: WorkflowRun) -> Int {
-        guard let json = run.stepOutputsJSON,
-              let data = json.data(using: .utf8),
-              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
-              !steps.isEmpty
-        else { return 0 }
-        let totalChars = steps.reduce(0) { $0 + $1.output.count }
-        return max(100, totalChars * 2)
+    private var selectedRun: WorkflowRun? {
+        guard let selectedId = selectedRunId else { return nil }
+        return allRuns.first { $0.objectID == selectedId }
     }
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            // Main table content (full width, always visible)
+        HSplitView {
+            // Left side: Table
             VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 8) {
@@ -1339,7 +1050,7 @@ struct ActivityLogFullView: View {
                         .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.primary)
 
-                    Text("Activity Log")
+                    Text("Actions")
                         .font(SettingsManager.shared.fontTitleMedium)
                         .foregroundColor(.primary)
 
@@ -1348,17 +1059,6 @@ struct ActivityLogFullView: View {
                         .foregroundColor(.secondary)
 
                     Spacer()
-
-                    // Inspector toggle button
-                    if selectedRun != nil {
-                        Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
-                            Image(systemName: showInspector ? "sidebar.right" : "sidebar.right")
-                                .font(SettingsManager.shared.fontBody)
-                                .foregroundColor(showInspector ? .blue : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help(showInspector ? "Hide Details" : "Show Details")
-                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -1385,81 +1085,115 @@ struct ActivityLogFullView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // Table header with sortable columns
-                    ActivityTableHeader(
-                        sortField: $sortField,
-                        sortAscending: $sortAscending,
-                        statusWidth: $statusWidth,
-                        timestampWidth: $timestampWidth,
-                        workflowWidth: $workflowWidth,
-                        memoWidth: $memoWidth,
-                        durationWidth: $durationWidth
-                    )
+                    // Native SwiftUI Table with resizable columns
+                    Table(tableRows, selection: $selectedRunId, sortOrder: $sortOrder) {
+                        TableColumn("Timestamp", value: \.timestamp) { row in
+                            Text(formatTimestamp(row.timestamp))
+                                .font(SettingsManager.shared.fontSM)
+                                .foregroundColor(.secondary)
+                        }
+                        .width(min: 100, ideal: 150, max: 200)
 
-                    Divider()
+                        TableColumn("Workflow", value: \.workflowName) { row in
+                            Text(row.workflowName)
+                                .font(SettingsManager.shared.fontBodyBold)
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                        }
+                        .width(min: 80, ideal: 140, max: 250)
 
-                    // Table rows
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(sortedRuns, id: \.objectID) { run in
-                                ActivityTableRow(
-                                    run: run,
-                                    isSelected: selectedRun?.objectID == run.objectID,
-                                    onSelect: {
-                                        selectedRun = run
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            showInspector = true
-                                        }
-                                    },
-                                    statusWidth: statusWidth,
-                                    timestampWidth: timestampWidth,
-                                    workflowWidth: workflowWidth,
-                                    memoWidth: memoWidth,
-                                    durationWidth: durationWidth
-                                )
+                        TableColumn("Memo", value: \.memoTitle) { row in
+                            Text(row.memoTitle)
+                                .font(SettingsManager.shared.fontSM)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        .width(min: 80, ideal: 180, max: 300)
+
+                        TableColumn("Status") { row in
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(row.isSuccess ? Color.green : Color.red)
+                                    .frame(width: 6, height: 6)
+
+                                if let ms = row.durationMs {
+                                    Text(formatDurationMs(ms))
+                                        .font(.monoSmall)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("--")
+                                        .font(.monoSmall)
+                                        .foregroundColor(.secondary.opacity(0.5))
+                                }
                             }
                         }
+                        .width(min: 60, ideal: 90, max: 120)
                     }
+                    .tableStyle(.inset(alternatesRowBackgrounds: true))
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 400, idealWidth: 550)
             .background(settings.surfaceInput)
 
-            // Inspector Panel (overlays from right, anchored to right edge)
-            if showInspector, let run = selectedRun {
-                HStack(spacing: 0) {
-                    // Resizable divider (on left side of inspector)
-                    InspectorResizeHandle(width: $inspectorWidth)
-
+            // Right side: Inspector (always visible)
+            VStack(spacing: 0) {
+                if let run = selectedRun {
+                    // Show inspector content
                     ActivityInspectorPanel(
                         run: run,
-                        onClose: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showInspector = false
-                            }
-                        },
+                        onClose: { selectedRunId = nil },
                         onDelete: {
                             deleteRun(run)
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showInspector = false
-                                selectedRun = nil
-                            }
+                            selectedRunId = nil
                         }
                     )
-                    .frame(width: inspectorWidth)
+                } else {
+                    // Empty state
+                    VStack(spacing: 16) {
+                        Spacer()
+
+                        Image(systemName: "square.stack.3d.up")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary.opacity(0.3))
+
+                        Text("SELECT AN ACTION")
+                            .font(SettingsManager.shared.fontXSBold)
+                            .tracking(1)
+                            .foregroundColor(.secondary)
+
+                        Text("Click a row to see details")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.secondary.opacity(0.6))
+
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(settings.surface1)
                 }
-                .shadow(color: Color.black.opacity(0.08), radius: 3, x: -1, y: 0)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+            .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
         }
         .onKeyPress(.escape) {
-            if showInspector {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showInspector = false
-                }
+            if selectedRunId != nil {
+                selectedRunId = nil
                 return .handled
             }
             return .ignored
+        }
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, hh:mm a"
+        return formatter.string(from: date)
+    }
+
+    private func formatDurationMs(_ ms: Int) -> String {
+        if ms >= 1000 {
+            let seconds = Double(ms) / 1000.0
+            return String(format: "%.2fs", seconds)
+        } else {
+            return "\(ms)ms"
         }
     }
 
@@ -1749,43 +1483,6 @@ struct InspectorResizeHandle: View {
                         NSCursor.pop()
                     }
             )
-    }
-}
-
-struct AIResultsDetailColumn: View {
-    @Environment(\.managedObjectContext) private var viewContext
-    @Binding var selectedRun: WorkflowRun?
-    @ObservedObject private var settings = SettingsManager.shared
-
-    var body: some View {
-        if let run = selectedRun {
-            AIRunDetailView(run: run, onDelete: {
-                deleteRun(run)
-                selectedRun = nil
-            })
-        } else {
-            VStack(spacing: 12) {
-                Image(systemName: "sidebar.right")
-                    .font(SettingsManager.shared.fontDisplay)
-                    .foregroundColor(.secondary.opacity(0.3))
-                Text("SELECT A RUN")
-                    .font(SettingsManager.shared.fontXSBold)
-                    .tracking(1)
-                    .foregroundColor(.secondary)
-                Text("Choose a workflow run to view details")
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.secondary.opacity(0.5))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(settings.surfaceInput)
-        }
-    }
-
-    private func deleteRun(_ run: WorkflowRun) {
-        viewContext.perform {
-            viewContext.delete(run)
-            try? viewContext.save()
-        }
     }
 }
 

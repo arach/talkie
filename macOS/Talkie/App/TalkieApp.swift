@@ -8,6 +8,23 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Sidebar Toggle Action
+
+struct SidebarToggleAction {
+    let toggle: () -> Void
+}
+
+struct SidebarToggleKey: FocusedValueKey {
+    typealias Value = SidebarToggleAction
+}
+
+extension FocusedValues {
+    var sidebarToggle: SidebarToggleAction? {
+        get { self[SidebarToggleKey.self] }
+        set { self[SidebarToggleKey.self] = newValue }
+    }
+}
+
 @main
 struct TalkieApp: App {
     // Wire up AppDelegate for push notification handling
@@ -15,6 +32,7 @@ struct TalkieApp: App {
 
     let persistenceController = PersistenceController.shared
     @ObservedObject private var settingsManager = SettingsManager.shared
+    @FocusedValue(\.sidebarToggle) var sidebarToggle
 
     var body: some Scene {
         WindowGroup {
@@ -27,11 +45,19 @@ struct TalkieApp: App {
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) {}
+
+            // Add sidebar toggle to View menu
+            CommandGroup(after: .sidebar) {
+                Button("Toggle Sidebar") {
+                    sidebarToggle?.toggle()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .control])
+            }
         }
 
         Settings {
             SettingsView()
-                .frame(width: 900, height: 640)
+                .frame(width: 900, height: 750)
                 .tint(settingsManager.accentColor.color)
         }
     }

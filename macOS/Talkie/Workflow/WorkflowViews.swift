@@ -511,6 +511,8 @@ struct WorkflowStepCard: View {
             IntentExtractStepDetails(config: config)
         case .executeWorkflows(let config):
             ExecuteWorkflowsStepDetails(config: config)
+        case .speak(let config):
+            SpeakStepDetails(config: config)
         }
     }
 }
@@ -880,6 +882,27 @@ struct TranscribeStepDetails: View {
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(.orange)
             }
+        }
+    }
+}
+
+struct SpeakStepDetails: View {
+    let config: SpeakStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                DetailBadge(label: "SPEAK", color: .cyan)
+                if config.playImmediately {
+                    DetailBadge(label: "PLAY NOW", color: .green)
+                }
+                if config.saveToFile {
+                    DetailBadge(label: "SAVE", color: .secondary)
+                }
+            }
+            Text(config.text.prefix(50) + (config.text.count > 50 ? "..." : ""))
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -1887,6 +1910,8 @@ struct WorkflowStepEditor: View {
                 IntentExtractStepReadView(config: config)
             case .executeWorkflows(let config):
                 ExecuteWorkflowsStepReadView(config: config)
+            case .speak(let config):
+                SpeakStepReadView(config: config)
             }
 
             // Output key (always shown in read mode)
@@ -1943,6 +1968,8 @@ struct WorkflowStepEditor: View {
                 IntentExtractStepConfigEditor(step: $step)
             case .executeWorkflows:
                 ExecuteWorkflowsStepConfigEditor(step: $step)
+            case .speak:
+                SpeakStepConfigEditor(step: $step)
             }
 
             // Output key editor
@@ -3108,6 +3135,49 @@ struct TranscribeStepReadView: View {
 
                 Spacer()
             }
+        }
+    }
+}
+
+struct SpeakStepReadView: View {
+    let config: SpeakStepConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Row 1: Speak mode info
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "speaker.wave.2")
+                    .font(.system(size: 10))
+                    .foregroundColor(.cyan)
+
+                Text("Walkie-Talkie")
+                    .font(.techLabelSmall)
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, 2)
+                    .background(Color.cyan.opacity(0.2))
+                    .foregroundColor(.cyan)
+                    .cornerRadius(2)
+
+                if config.playImmediately {
+                    Text("PLAY NOW")
+                        .font(.techLabelSmall)
+                        .foregroundColor(SemanticColor.success)
+                }
+
+                if config.saveToFile {
+                    Text("SAVE")
+                        .font(.techLabelSmall)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            // Row 2: Text preview
+            Text(config.text.prefix(80) + (config.text.count > 80 ? "..." : ""))
+                .font(.monoXSmall)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
         }
     }
 }
@@ -4644,6 +4714,131 @@ struct TranscribeStepConfigEditor: View {
                     .font(.system(size: 8, design: .monospaced))
             }
             .foregroundColor(.secondary)
+            .padding(.top, 4)
+        }
+    }
+}
+
+// MARK: - Speak Step Config Editor (Walkie-Talkie!)
+
+struct SpeakStepConfigEditor: View {
+    @Binding var step: WorkflowStep
+
+    private var config: SpeakStepConfig {
+        if case .speak(let c) = step.config { return c }
+        return SpeakStepConfig()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Text to speak
+            VStack(alignment: .leading, spacing: 6) {
+                Text("TEXT TO SPEAK")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                TextEditor(text: Binding(
+                    get: { config.text },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.text = newValue
+                        step.config = .speak(newConfig)
+                    }
+                ))
+                .font(.system(size: 11, design: .monospaced))
+                .frame(minHeight: 60, maxHeight: 100)
+                .padding(4)
+                .background(Color.black.opacity(0.2))
+                .cornerRadius(4)
+
+                Text("Use {{OUTPUT}} for previous step result, {{TRANSCRIPT}} for memo text")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+                .opacity(0.3)
+
+            // Rate slider
+            VStack(alignment: .leading, spacing: 6) {
+                Text("SPEECH RATE")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Text("Slow")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    Slider(value: Binding(
+                        get: { Double(config.rate) },
+                        set: { newValue in
+                            var newConfig = config
+                            newConfig.rate = Float(newValue)
+                            step.config = .speak(newConfig)
+                        }
+                    ), in: 0.1...1.0)
+
+                    Text("Fast")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Divider()
+                .opacity(0.3)
+
+            // Options
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: { config.playImmediately },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.playImmediately = newValue
+                        step.config = .speak(newConfig)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Play immediately")
+                            .font(.system(size: 10, design: .monospaced))
+                        Text("Speak the text when step executes")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                Toggle(isOn: Binding(
+                    get: { config.saveToFile },
+                    set: { newValue in
+                        var newConfig = config
+                        newConfig.saveToFile = newValue
+                        step.config = .speak(newConfig)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Save to file")
+                            .font(.system(size: 10, design: .monospaced))
+                        Text("Also save speech as audio file")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            // Info note
+            HStack(spacing: 4) {
+                Image(systemName: "speaker.wave.2")
+                    .font(.system(size: 9))
+                Text("Walkie-Talkie mode: Talkie speaks back to you!")
+                    .font(.system(size: 8, design: .monospaced))
+            }
+            .foregroundColor(.cyan)
             .padding(.top, 4)
         }
     }

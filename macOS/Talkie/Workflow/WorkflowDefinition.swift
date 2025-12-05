@@ -31,9 +31,10 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     var createdAt: Date
     var modifiedAt: Date
 
-    /// Returns true if this is a system workflow (like Hey Talkie)
+    /// Returns true if this is a system workflow (Transcribe, Hey Talkie)
     var isSystem: Bool {
-        id == WorkflowDefinition.heyTalkieWorkflowId
+        id == WorkflowDefinition.heyTalkieWorkflowId ||
+        id == WorkflowDefinition.systemTranscribeWorkflowId
     }
 
     /// Returns true if this workflow starts with a transcription step
@@ -223,7 +224,37 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         isEnabled: true,
         isPinned: false,
         autoRun: true,
-        autoRunOrder: 0
+        autoRunOrder: 1  // Runs after system transcription
+    )
+
+    // MARK: - System Transcribe Workflow
+
+    /// Fixed UUID for system Transcribe workflow (stable across updates)
+    static let systemTranscribeWorkflowId = UUID(uuidString: "00000000-7A1C-1E00-0000-000000000002")!
+
+    /// System "Transcribe" workflow - uses Apple Speech (no download required)
+    /// Runs first on every new memo to ensure transcription exists
+    static let systemTranscribe = WorkflowDefinition(
+        id: systemTranscribeWorkflowId,
+        name: "Transcribe",
+        description: "On-device transcription using Apple Speech (no download required)",
+        icon: "waveform.and.mic",
+        color: .blue,
+        steps: [
+            WorkflowStep(
+                type: .transcribe,
+                config: .transcribe(TranscribeStepConfig(
+                    model: "apple_speech",
+                    overwriteExisting: false,  // Don't overwrite existing transcripts
+                    saveAsVersion: true
+                )),
+                outputKey: "transcript"
+            )
+        ],
+        isEnabled: true,
+        isPinned: false,
+        autoRun: true,
+        autoRunOrder: 0  // Runs FIRST - before Hey Talkie and other workflows
     )
 
     // MARK: - Brain Dump Processor (Canonical Test Workflow)
@@ -462,6 +493,7 @@ struct WorkflowStep: Identifiable, Codable {
         case conditional = "Conditional Branch"
         case transform = "Transform Data"
         case transcribe = "Transcribe Audio"  // Local speech-to-text
+        case speak = "Speak Response"  // Text-to-speech reply (Walkie-Talkie mode!)
         // Trigger-related step types
         case trigger = "Trigger Detection"
         case intentExtract = "Extract Intents"
@@ -483,6 +515,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .conditional: return "arrow.triangle.branch"
             case .transform: return "wand.and.rays"
             case .transcribe: return "waveform.and.mic"
+            case .speak: return "speaker.wave.2"
             case .trigger: return "waveform.badge.mic"
             case .intentExtract: return "text.magnifyingglass"
             case .executeWorkflows: return "arrow.triangle.2.circlepath"
@@ -505,6 +538,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .conditional: return "Branch based on condition"
             case .transform: return "Transform or filter data"
             case .transcribe: return "Convert audio to text locally"
+            case .speak: return "Speak text aloud (Walkie-Talkie reply)"
             case .trigger: return "Detect keywords to trigger workflow"
             case .intentExtract: return "Extract intents from text"
             case .executeWorkflows: return "Run workflows for each intent"
@@ -522,6 +556,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .clipboard, .saveFile: return .output
             case .conditional, .transform: return .logic
             case .transcribe: return .ai
+            case .speak: return .communication
             case .trigger, .intentExtract, .executeWorkflows: return .trigger
             }
         }
@@ -543,6 +578,7 @@ struct WorkflowStep: Identifiable, Codable {
             case .conditional: return "Conditional"
             case .transform: return "Transform"
             case .transcribe: return "Transcribe"
+            case .speak: return "Speak"
             case .trigger: return "Trigger"
             case .intentExtract: return "Extract Intents"
             case .executeWorkflows: return "Execute Workflows"
@@ -607,6 +643,7 @@ enum StepConfig: Codable {
     case conditional(ConditionalStepConfig)
     case transform(TransformStepConfig)
     case transcribe(TranscribeStepConfig)
+    case speak(SpeakStepConfig)
     // Trigger-related configs
     case trigger(TriggerStepConfig)
     case intentExtract(IntentExtractStepConfig)
@@ -643,6 +680,8 @@ enum StepConfig: Codable {
             return .transform(TransformStepConfig(operation: .extractJSON, parameters: [:]))
         case .transcribe:
             return .transcribe(TranscribeStepConfig())
+        case .speak:
+            return .speak(SpeakStepConfig())
         case .trigger:
             return .trigger(TriggerStepConfig())
         case .intentExtract:
@@ -941,7 +980,9 @@ struct LLMStepConfig: Codable {
 
         // If explicit provider specified, use it (even if not in available list - will fail at runtime)
         if let explicitProvider = provider {
-            return (explicitProvider, explicitProvider.modelId(for: tier))
+            // Use explicitly selected model if set, otherwise fall back to tier default
+            let resolvedModelId = modelId ?? explicitProvider.modelId(for: tier)
+            return (explicitProvider, resolvedModelId)
         }
 
         // Auto-route: pick best available provider for this tier
@@ -1070,7 +1111,9 @@ struct ShellStepConfig: Codable {
         "/usr/bin/python3",
         "/opt/homebrew/bin/python3",
         "/opt/homebrew/bin/node",
+        "/opt/homebrew/Cellar/node/24.1.0/bin/node",  // Direct Cellar path for sandbox
         "/usr/local/bin/node",
+        "/Users/arach/.bun/bin/bun",  // Bun runtime (faster than Node)
 
         // macOS automation
         "/usr/bin/osascript",
@@ -1601,14 +1644,14 @@ struct TransformStepConfig: Codable {
 
 // MARK: - Transcribe Step Configuration
 
-/// Configuration for local speech-to-text transcription using WhisperKit
+/// Configuration for local speech-to-text transcription
 struct TranscribeStepConfig: Codable {
-    var model: String               // Whisper model ID
+    var model: String               // Transcription model ID
     var overwriteExisting: Bool     // Overwrite if transcript already exists
     var saveAsVersion: Bool         // Save as new transcript version
 
     init(
-        model: String = "openai_whisper-small",
+        model: String = "apple_speech",  // Default to Apple Speech (no download required)
         overwriteExisting: Bool = false,
         saveAsVersion: Bool = true
     ) {
@@ -1617,13 +1660,104 @@ struct TranscribeStepConfig: Codable {
         self.saveAsVersion = saveAsVersion
     }
 
-    /// Available Whisper models
+    /// Available transcription models
+    /// Apple Speech is first (no download), then Whisper models (require download)
     static let availableModels: [(id: String, name: String, description: String)] = [
-        ("openai_whisper-tiny", "Tiny (~40MB)", "Fastest, basic quality"),
-        ("openai_whisper-base", "Base (~75MB)", "Fast, good quality"),
-        ("openai_whisper-small", "Small (~250MB)", "Balanced speed/quality"),
-        ("distil-whisper_distil-large-v3", "Large V3 (~750MB)", "Best quality, slower")
+        ("apple_speech", "Apple Speech", "Built-in, no download required"),
+        ("openai_whisper-tiny", "Whisper Tiny (~40MB)", "Fast, requires download"),
+        ("openai_whisper-base", "Whisper Base (~75MB)", "Good quality, requires download"),
+        ("openai_whisper-small", "Whisper Small (~250MB)", "Balanced, requires download"),
+        ("distil-whisper_distil-large-v3", "Whisper Large V3 (~750MB)", "Best quality, requires download")
     ]
+}
+
+// MARK: - Speech Synthesis (TTS) Configuration
+
+/// TTS provider for Walkie speech synthesis
+enum TTSProvider: String, Codable, CaseIterable {
+    case system = "system"          // macOS built-in AVSpeechSynthesizer
+    case speakeasy = "speakeasy"    // SpeakEasy CLI (supports openai, elevenlabs, etc.)
+    case openai = "openai"          // OpenAI TTS via SpeakEasy
+    case elevenlabs = "elevenlabs"  // ElevenLabs via SpeakEasy
+
+    var displayName: String {
+        switch self {
+        case .system: return "System (macOS)"
+        case .speakeasy: return "SpeakEasy (Default)"
+        case .openai: return "OpenAI"
+        case .elevenlabs: return "ElevenLabs"
+        }
+    }
+}
+
+/// Configuration for text-to-speech output (Walkie-Talkie mode!)
+struct SpeakStepConfig: Codable {
+    var text: String                    // Text to speak (supports variables like {{OUTPUT}})
+    var provider: TTSProvider           // TTS provider to use
+    var voice: String?                  // Voice name/ID (depends on provider)
+    var rate: Float                     // Speech rate (0.0 - 1.0, default ~0.5)
+    var pitch: Float                    // Voice pitch (0.5 - 2.0, default 1.0)
+    var playImmediately: Bool           // Play now vs just generate audio
+    var saveToFile: Bool                // Also save as audio file
+    var uploadToWalkie: Bool            // Upload to CloudKit for iOS playback (Walkie-Talkie!)
+    var useCache: Bool                  // Use SpeakEasy's caching
+
+    init(
+        text: String = "{{OUTPUT}}",
+        provider: TTSProvider = .speakeasy,
+        voice: String? = nil,
+        rate: Float = 0.5,
+        pitch: Float = 1.0,
+        playImmediately: Bool = true,
+        saveToFile: Bool = false,
+        uploadToWalkie: Bool = true,    // Default ON - send response to iOS!
+        useCache: Bool = true           // Cache for repeated phrases
+    ) {
+        self.text = text
+        self.provider = provider
+        self.voice = voice
+        self.rate = rate
+        self.pitch = pitch
+        self.playImmediately = playImmediately
+        self.saveToFile = saveToFile
+        self.uploadToWalkie = uploadToWalkie
+        self.useCache = useCache
+    }
+
+    // Legacy support - map old voiceIdentifier to new voice
+    var voiceIdentifier: String? {
+        get { voice }
+        set { voice = newValue }
+    }
+
+    /// Available voices by provider
+    static func availableVoices(for provider: TTSProvider) -> [(id: String, name: String)] {
+        switch provider {
+        case .system:
+            return [
+                ("com.apple.voice.compact.en-US.Samantha", "Samantha (Default)"),
+                ("com.apple.voice.enhanced.en-US.Samantha", "Samantha (Enhanced)"),
+                ("com.apple.voice.compact.en-US.Alex", "Alex"),
+                ("com.apple.voice.enhanced.en-US.Alex", "Alex (Enhanced)")
+            ]
+        case .speakeasy, .openai:
+            return [
+                ("alloy", "Alloy"),
+                ("echo", "Echo"),
+                ("fable", "Fable"),
+                ("onyx", "Onyx"),
+                ("nova", "Nova"),
+                ("shimmer", "Shimmer")
+            ]
+        case .elevenlabs:
+            return [
+                ("EXAVITQu4vr4xnSDxMaL", "Sarah"),
+                ("21m00Tcm4TlvDq8ikWAM", "Rachel"),
+                ("AZnzlk1XvdvUeBnXmlld", "Domi"),
+                ("MF3mGyEYCl7XYWbV9V6O", "Elli")
+            ]
+        }
+    }
 }
 
 // MARK: - Trigger Step Configurations
@@ -1852,10 +1986,16 @@ class WorkflowManager: ObservableObject {
 
     private let userDefaultsKey = "workflows_v2"
     private let iCloudPinnedKey = "pinnedWorkflows"
+    private let twfMigrationKey = "twf_starter_migration_v1"
 
     private init() {
         loadWorkflows()
-        loadStarterWorkflowsFromTWF()
+
+        // Only load starter workflows ONCE (migration-style)
+        if !UserDefaults.standard.bool(forKey: twfMigrationKey) {
+            loadStarterWorkflowsFromTWF()
+            UserDefaults.standard.set(true, forKey: twfMigrationKey)
+        }
     }
 
     func addWorkflow(_ workflow: WorkflowDefinition) {
@@ -1913,14 +2053,29 @@ class WorkflowManager: ObservableObject {
             saveWorkflows()
         }
 
-        // Ensure Hey Talkie is always in the list (system workflow)
-        ensureHeyTalkieExists()
+        // Ensure system workflows are always in the list
+        ensureSystemWorkflowsExist()
     }
 
-    /// Ensure Hey Talkie workflow is always present
-    private func ensureHeyTalkieExists() {
+    /// Ensure system workflows (Transcribe, Hey Talkie) are always present
+    private func ensureSystemWorkflowsExist() {
+        var needsSave = false
+
+        // Ensure System Transcribe exists (runs first)
+        if !workflows.contains(where: { $0.id == WorkflowDefinition.systemTranscribeWorkflowId }) {
+            workflows.insert(WorkflowDefinition.systemTranscribe, at: 0)
+            needsSave = true
+        }
+
+        // Ensure Hey Talkie exists (runs after transcription)
         if !workflows.contains(where: { $0.id == WorkflowDefinition.heyTalkieWorkflowId }) {
-            workflows.insert(WorkflowDefinition.heyTalkie, at: 0)
+            // Insert after System Transcribe if it exists, otherwise at 0
+            let insertIndex = workflows.firstIndex(where: { $0.id == WorkflowDefinition.systemTranscribeWorkflowId }).map { $0 + 1 } ?? 0
+            workflows.insert(WorkflowDefinition.heyTalkie, at: insertIndex)
+            needsSave = true
+        }
+
+        if needsSave {
             saveWorkflows()
         }
     }

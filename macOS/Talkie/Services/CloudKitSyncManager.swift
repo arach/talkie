@@ -118,11 +118,8 @@ class CloudKitSyncManager: ObservableObject {
             logger.info("No server change token - will perform full sync")
         }
 
-        // Run one-time migration to mark all existing memos as auto-processed
-        // This ensures auto-run only affects future memos
-        Task {
-            await migrateExistingMemosIfNeeded(context: context)
-        }
+        // Run one-time migrations
+        MigrationRunner.shared.runPending(context: context)
     }
 
     // MARK: - App Nap Prevention
@@ -339,14 +336,15 @@ class CloudKitSyncManager: ObservableObject {
     // MARK: - Auto-Run Workflow Processing
 
     /// Process auto-run workflows for unprocessed memos
-    /// Simple logic: autoProcessed == false means needs processing
+    /// Includes memos without transcripts (System Transcribe will handle them)
     private func processTriggers(context: NSManagedObjectContext) async {
         context.refreshAllObjects()
 
-        // Simple query: unprocessed memos with transcripts
+        // Query: unprocessed memos with audio data
+        // Note: We include memos WITHOUT transcripts because System Transcribe (Phase 1) handles those
         let request = VoiceMemo.fetchRequest()
         request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-            NSPredicate(format: "transcription != nil AND transcription != ''"),
+            NSPredicate(format: "audioData != nil"),  // Has audio to process
             NSPredicate(format: "autoProcessed == NO")
         ])
         request.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
@@ -358,37 +356,13 @@ class CloudKitSyncManager: ObservableObject {
             if !memos.isEmpty {
                 logger.info("Found \(memos.count) unprocessed memo(s)")
                 for memo in memos {
-                    logger.info("Auto-run: '\(memo.title ?? "Untitled")'")
+                    let hasTranscript = memo.transcription != nil && !memo.transcription!.isEmpty
+                    logger.info("Auto-run: '\(memo.title ?? "Untitled")' (has transcript: \(hasTranscript))")
                     await AutoRunProcessor.shared.processNewMemo(memo, context: context)
                 }
             }
         } catch {
             logger.error("Failed to process auto-run workflows: \(error.localizedDescription)")
-        }
-    }
-
-    private static let autoRunMigrationKey = "autoRunMigrationCompleted"
-
-    /// One-time migration: mark all existing memos as trigger-processed
-    /// This ensures the auto-run feature is forward-only
-    private func migrateExistingMemosIfNeeded(context: NSManagedObjectContext) async {
-        guard !UserDefaults.standard.bool(forKey: Self.autoRunMigrationKey) else { return }
-
-        let request = VoiceMemo.fetchRequest()
-        request.predicate = NSPredicate(format: "autoProcessed == NO OR autoProcessed == nil")
-
-        do {
-            let memos = try context.fetch(request)
-            for memo in memos {
-                memo.autoProcessed = true
-            }
-            if !memos.isEmpty {
-                try context.save()
-                logger.info("Auto-run migration: marked \(memos.count) existing memo(s) as processed")
-            }
-            UserDefaults.standard.set(true, forKey: Self.autoRunMigrationKey)
-        } catch {
-            logger.error("Auto-run migration failed: \(error.localizedDescription)")
         }
     }
 

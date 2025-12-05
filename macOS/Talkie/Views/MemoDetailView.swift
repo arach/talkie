@@ -413,6 +413,11 @@ struct MemoDetailView: View {
                     }
                 }
 
+                // Walkie Conversation (AI responses and user replies)
+                if let memoId = memo.id?.uuidString {
+                    WalkieConversationView(memoId: memoId)
+                }
+
                 // Danger Zone
                 Divider()
 

@@ -33,6 +33,8 @@ struct VoiceMemoDetailView: View {
     @State private var reminderDueDate: Date = Date().addingTimeInterval(3600) // 1 hour from now
     @State private var showingMacWorkflowToast = false
     @State private var tappedWorkflowName: String = ""
+    @State private var showingCopiedToast = false
+    @State private var isTranscriptExpanded = false
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var aiService = OnDeviceAIService.shared
 
@@ -227,7 +229,7 @@ struct VoiceMemoDetailView: View {
                             .padding(.horizontal, Spacing.md)
                         } else if let transcription = memo.currentTranscript {
                             VStack(alignment: .leading, spacing: Spacing.sm) {
-                                // Header with title and edit indicator
+                                // Header with title, copy button, and edit indicator
                                 HStack {
                                     Text("TRANSCRIPT")
                                         .font(.techLabel)
@@ -242,6 +244,47 @@ struct VoiceMemoDetailView: View {
                                     }
 
                                     Spacer()
+
+                                    // Quick copy button
+                                    Button(action: {
+                                        UIPasteboard.general.string = transcription
+                                        showingCopiedToast = true
+                                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                        impactFeedback.impactOccurred()
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                            showingCopiedToast = false
+                                        }
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: showingCopiedToast ? "checkmark" : "doc.on.doc")
+                                                .font(.system(size: 11, weight: .medium))
+                                            Text(showingCopiedToast ? "COPIED" : "COPY")
+                                                .font(.techLabelSmall)
+                                                .tracking(1)
+                                        }
+                                        .foregroundColor(showingCopiedToast ? .success : .textSecondary)
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, Spacing.xs)
+                                        .background(Color.surfaceSecondary)
+                                        .cornerRadius(CornerRadius.sm)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .animation(.easeInOut(duration: 0.2), value: showingCopiedToast)
+
+                                    // Expand/collapse button
+                                    Button(action: {
+                                        withAnimation(.easeInOut(duration: 0.25)) {
+                                            isTranscriptExpanded.toggle()
+                                        }
+                                    }) {
+                                        Image(systemName: isTranscriptExpanded ? "chevron.up" : "chevron.down")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.textSecondary)
+                                            .padding(Spacing.xs)
+                                            .background(Color.surfaceSecondary)
+                                            .cornerRadius(CornerRadius.sm)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
 
                                 // Transcript content or editor
@@ -291,39 +334,44 @@ struct VoiceMemoDetailView: View {
                                         }
                                     }
                                 } else {
-                                    Text(transcription)
-                                        .font(.bodySmall)
-                                        .foregroundColor(.textPrimary)
-                                        .textSelection(.enabled)
-                                        .lineSpacing(4)
-                                        .padding(Spacing.md)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color.surfaceSecondary)
-                                        .cornerRadius(CornerRadius.sm)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                                .strokeBorder(isEditMode ? Color.active.opacity(0.5) : Color.borderPrimary, lineWidth: isEditMode ? 1 : 0.5)
-                                        )
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            if isEditMode {
-                                                editedTranscript = transcription
-                                                isEditingTranscript = true
+                                    // Scrollable transcript with conditional height
+                                    ScrollView {
+                                        Text(transcription)
+                                            .font(.bodySmall)
+                                            .foregroundColor(.textPrimary)
+                                            .textSelection(.enabled)
+                                            .lineSpacing(4)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(Spacing.md)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(maxHeight: isTranscriptExpanded ? .infinity : 200)
+                                    .background(Color.surfaceSecondary)
+                                    .cornerRadius(CornerRadius.sm)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                            .strokeBorder(isEditMode ? Color.active.opacity(0.5) : Color.borderPrimary, lineWidth: isEditMode ? 1 : 0.5)
+                                    )
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if isEditMode {
+                                            editedTranscript = transcription
+                                            isEditingTranscript = true
+                                        }
+                                    }
+                                    .contextMenu {
+                                        // Power user: access version history via long-press
+                                        if memo.sortedTranscriptVersions.count > 1 {
+                                            Button(action: { showingVersionHistory = true }) {
+                                                Label("Version History", systemImage: "clock.arrow.circlepath")
                                             }
                                         }
-                                        .contextMenu {
-                                            // Power user: access version history via long-press
-                                            if memo.sortedTranscriptVersions.count > 1 {
-                                                Button(action: { showingVersionHistory = true }) {
-                                                    Label("Version History", systemImage: "clock.arrow.circlepath")
-                                                }
-                                            }
-                                            Button(action: {
-                                                UIPasteboard.general.string = transcription
-                                            }) {
-                                                Label("Copy", systemImage: "doc.on.doc")
-                                            }
+                                        Button(action: {
+                                            UIPasteboard.general.string = transcription
+                                        }) {
+                                            Label("Copy", systemImage: "doc.on.doc")
                                         }
+                                    }
                                 }
                             }
                             .padding(.horizontal, Spacing.md)
@@ -392,6 +440,12 @@ struct VoiceMemoDetailView: View {
                                 }
                             }
                             .padding(.horizontal, Spacing.md)
+                        }
+
+                        // Walkie Conversation Thread
+                        if let memoId = memo.id?.uuidString {
+                            WalkieConversationView(memoId: memoId)
+                                .padding(.top, Spacing.sm)
                         }
 
                         // Delete button

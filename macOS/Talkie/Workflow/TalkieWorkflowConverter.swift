@@ -27,7 +27,7 @@ struct TalkieWorkflowConverter {
             return .condition
         case .shell, .webhook:
             return .action
-        case .notification, .iOSPush, .email:
+        case .notification, .iOSPush, .email, .speak:
             return .notification
         case .appleNotes, .appleReminders, .appleCalendar, .clipboard, .saveFile:
             return .output

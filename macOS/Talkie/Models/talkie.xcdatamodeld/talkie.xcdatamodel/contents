@@ -47,6 +47,7 @@
     </entity>
     <entity name="WorkflowRun" representedClassName="WorkflowRun" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="memoId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="modelId" optional="YES" attributeType="String"/>
         <attribute name="output" optional="YES" attributeType="String"/>
         <attribute name="providerName" optional="YES" attributeType="String"/>

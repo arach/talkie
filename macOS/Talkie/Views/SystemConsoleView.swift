@@ -320,6 +320,12 @@ struct SystemConsoleView: View {
     @State private var filterType: SystemEventType? = nil
     @State private var searchQuery = ""
 
+    /// Optional callback to pop the console into the main window
+    var onPopOut: (() -> Void)? = nil
+
+    /// Optional callback to close/navigate away from the console
+    var onClose: (() -> Void)? = nil
+
     private let bgColor = Color(red: 0.06, green: 0.06, blue: 0.08)
     private let borderColor = Color(red: 0.15, green: 0.15, blue: 0.18)
     private let subtleGreen = Color(red: 0.4, green: 0.8, blue: 0.4)
@@ -408,6 +414,36 @@ struct SystemConsoleView: View {
                     .cornerRadius(2)
             }
             .buttonStyle(.plain)
+
+            // Pop-out button (only shown when in popover mode)
+            if let onPopOut = onPopOut {
+                Button(action: onPopOut) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.white.opacity(0.4))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(2)
+                }
+                .buttonStyle(.plain)
+                .help("Open in main window")
+            }
+
+            // Close button (only shown when in main window mode)
+            if let onClose = onClose {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.white.opacity(0.4))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(2)
+                }
+                .buttonStyle(.plain)
+                .help("Close console")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

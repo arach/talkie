@@ -47,6 +47,7 @@ struct TWFStepConfig: Codable {
     let trigger: TWFTriggerConfig?
     let intentExtract: TWFIntentExtractConfig?
     let executeWorkflows: TWFExecuteWorkflowsConfig?
+    let speak: TWFSpeakConfig?  // Walkie-Talkie mode!
 }
 
 // MARK: - TWF Config Types
@@ -66,6 +67,19 @@ struct TWFTranscribeConfig: Codable {
     let model: String?  // e.g., "openai_whisper-small", "distil-whisper_distil-large-v3"
     let overwriteExisting: Bool?
     let saveAsVersion: Bool?
+}
+
+struct TWFSpeakConfig: Codable {
+    let text: String?               // Text to speak (supports variables like {{OUTPUT}})
+    let provider: String?           // TTS provider: system, speakeasy, openai, elevenlabs
+    let voice: String?              // Voice name/ID (depends on provider)
+    let voiceIdentifier: String?    // Legacy: same as voice
+    let rate: Float?                // Speech rate (0.0 - 1.0)
+    let pitch: Float?               // Voice pitch (0.5 - 2.0)
+    let playImmediately: Bool?      // Play now vs just generate audio
+    let saveToFile: Bool?           // Also save as audio file
+    let uploadToWalkie: Bool?       // Upload to CloudKit for iOS playback
+    let useCache: Bool?             // Use SpeakEasy's caching
 }
 
 struct TWFTransformConfig: Codable {
@@ -412,6 +426,28 @@ struct TWFLoader {
         case .executeWorkflows:
             let executeWorkflows = twfConfig.executeWorkflows ?? TWFExecuteWorkflowsConfig(intentsKey: nil, stopOnError: nil, parallel: nil)
             return .executeWorkflows(convertExecuteWorkflowsConfig(executeWorkflows))
+
+        case .speak:
+            // Speak config from TWF (or use defaults)
+            let speak = twfConfig.speak
+            // Map TWF provider string to TTSProvider
+            let provider: TTSProvider
+            if let providerStr = speak?.provider {
+                provider = TTSProvider(rawValue: providerStr) ?? .speakeasy
+            } else {
+                provider = .speakeasy  // Default to SpeakEasy
+            }
+            return .speak(SpeakStepConfig(
+                text: speak?.text ?? "{{OUTPUT}}",
+                provider: provider,
+                voice: speak?.voiceIdentifier ?? speak?.voice,
+                rate: speak?.rate ?? 0.5,
+                pitch: speak?.pitch ?? 1.0,
+                playImmediately: speak?.playImmediately ?? true,
+                saveToFile: speak?.saveToFile ?? false,
+                uploadToWalkie: speak?.uploadToWalkie ?? true,
+                useCache: speak?.useCache ?? true
+            ))
 
         case .webhook, .email, .appleNotes, .appleCalendar:
             // These types need their configs implemented

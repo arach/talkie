@@ -33,12 +33,16 @@
 		MLXLLM_BUILDFILE /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = MLXLLM_PRODUCTREF /* MLXLLM */; };
 		MLXLMCOMMON_BUILDFILE /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = MLXLMCOMMON_PRODUCTREF /* MLXLMCommon */; };
 		SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SYSCONSOLE_FILEREF /* SystemConsoleView.swift */; };
+		WALKIECONVO_BUILDFILE /* WalkieConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WALKIECONVO_FILEREF /* WalkieConversationView.swift */; };
 		TFMGR_BUILDFILE /* TranscriptFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFMGR_FILEREF /* TranscriptFileManager.swift */; };
 		VMTRANS_BUILDFILE /* VoiceMemo+Transcripts.swift in Sources */ = {isa = PBXBuildFile; fileRef = VMTRANS_FILEREF /* VoiceMemo+Transcripts.swift */; };
 		AUTORUN_BUILDFILE /* AutoRunProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUTORUN_FILEREF /* AutoRunProcessor.swift */; };
 		DEBUGTOOLBAR_BUILDFILE /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */; };
 		LLMCONFIG_BUILDFILE /* LLMConfig.json in Resources */ = {isa = PBXBuildFile; fileRef = LLMCONFIG_FILEREF /* LLMConfig.json */; };
 		WHISPERSERVICE_BUILDFILE /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WHISPERSERVICE_FILEREF /* WhisperService.swift */; };
+		APPLESPEECH_BUILDFILE /* AppleSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = APPLESPEECH_FILEREF /* AppleSpeechService.swift */; };
+		SPEECHSYNTH_BUILDFILE /* SpeechSynthesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPEECHSYNTH_FILEREF /* SpeechSynthesisService.swift */; };
+		WALKIESERVICE_BUILDFILE /* WalkieService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WALKIESERVICE_FILEREF /* WalkieService.swift */; };
 		WHISPERKIT_BUILDFILE /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = WHISPERKIT_PRODUCTREF /* WhisperKit */; };
 		PARAKEETSERVICE_BUILDFILE /* ParakeetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PARAKEETSERVICE_FILEREF /* ParakeetService.swift */; };
 		FLUIDAUDIO_BUILDFILE /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = FLUIDAUDIO_PRODUCTREF /* FluidAudio */; };
@@ -48,6 +52,10 @@
 		WFSCHEMA_BUILDFILE /* TalkieWorkflowSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = WFSCHEMA_FILEREF /* TalkieWorkflowSchema.swift */; };
 		TWFLOADER_BUILDFILE /* TWFLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = TWFLOADER_FILEREF /* TWFLoader.swift */; };
 		STARTERWORKFLOWS_BUILDFILE /* StarterWorkflows in Resources */ = {isa = PBXBuildFile; fileRef = STARTERWORKFLOWS_FILEREF /* StarterWorkflows */; };
+		PENDINGMGR_BUILDFILE /* PendingActionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = PENDINGMGR_FILEREF /* PendingActionsManager.swift */; };
+		PENDINGVIEW_BUILDFILE /* PendingActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PENDINGVIEW_FILEREF /* PendingActionsView.swift */; };
+		MIGRUNNER_BUILDFILE /* MigrationRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIGRUNNER_FILEREF /* MigrationRunner.swift */; };
+		MIGRATIONS_BUILDFILE /* Migrations.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIGRATIONS_FILEREF /* Migrations.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,18 +85,26 @@
 		EA047104B464861CD52728B0 /* NavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationView.swift; sourceTree = "<group>"; };
 		FB25A6F72F79A3FC99C29F68 /* WorkflowDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowDefinition.swift; sourceTree = "<group>"; };
 		SYSCONSOLE_FILEREF /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
+		WALKIECONVO_FILEREF /* WalkieConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieConversationView.swift; sourceTree = "<group>"; };
 		TFMGR_FILEREF /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
 		VMTRANS_FILEREF /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		AUTORUN_FILEREF /* AutoRunProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRunProcessor.swift; sourceTree = "<group>"; };
 		DEBUGTOOLBAR_FILEREF /* DebugToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugToolbar.swift; sourceTree = "<group>"; };
 		LLMCONFIG_FILEREF /* LLMConfig.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LLMConfig.json; sourceTree = "<group>"; };
 		WHISPERSERVICE_FILEREF /* WhisperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperService.swift; sourceTree = "<group>"; };
+		APPLESPEECH_FILEREF /* AppleSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechService.swift; sourceTree = "<group>"; };
+		SPEECHSYNTH_FILEREF /* SpeechSynthesisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechSynthesisService.swift; sourceTree = "<group>"; };
+		WALKIESERVICE_FILEREF /* WalkieService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieService.swift; sourceTree = "<group>"; };
 		PARAKEETSERVICE_FILEREF /* ParakeetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParakeetService.swift; sourceTree = "<group>"; };
 		MODELSCATALOG_FILEREF /* ModelsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsCatalog.swift; sourceTree = "<group>"; };
 		WFCONVERTER_FILEREF /* TalkieWorkflowConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowConverter.swift; sourceTree = "<group>"; };
 		WFSCHEMA_FILEREF /* TalkieWorkflowSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowSchema.swift; sourceTree = "<group>"; };
 		TWFLOADER_FILEREF /* TWFLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TWFLoader.swift; sourceTree = "<group>"; };
 		STARTERWORKFLOWS_FILEREF /* StarterWorkflows */ = {isa = PBXFileReference; lastKnownFileType = folder; path = StarterWorkflows; sourceTree = "<group>"; };
+		PENDINGMGR_FILEREF /* PendingActionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingActionsManager.swift; sourceTree = "<group>"; };
+		PENDINGVIEW_FILEREF /* PendingActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingActionsView.swift; sourceTree = "<group>"; };
+		MIGRUNNER_FILEREF /* MigrationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationRunner.swift; sourceTree = "<group>"; };
+		MIGRATIONS_FILEREF /* Migrations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Migrations.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,8 +131,10 @@
 				6919ADEAE61E04AD110C560F /* MemoRowView.swift */,
 				188CA5DE9A579392B40A7C29 /* ModelsContentView.swift */,
 				EA047104B464861CD52728B0 /* NavigationView.swift */,
+				PENDINGVIEW_FILEREF /* PendingActionsView.swift */,
 				D422F2CF033DE6FEF9728A4A /* SettingsView.swift */,
 				SYSCONSOLE_FILEREF /* SystemConsoleView.swift */,
+				WALKIECONVO_FILEREF /* WalkieConversationView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -156,16 +174,30 @@
 		6B1BD9F1258C9847A6B79B56 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				APPLESPEECH_FILEREF /* AppleSpeechService.swift */,
+				SPEECHSYNTH_FILEREF /* SpeechSynthesisService.swift */,
+				WALKIESERVICE_FILEREF /* WalkieService.swift */,
 				CKSYNCMGR_FILEREF /* CloudKitSyncManager.swift */,
 				DESIGNSYS_FILEREF /* DesignSystem.swift */,
 				MODELSCATALOG_FILEREF /* ModelsCatalog.swift */,
+				PENDINGMGR_FILEREF /* PendingActionsManager.swift */,
 				86EFFC973E6F6EBCCBE542B2 /* SettingsManager.swift */,
 				TFMGR_FILEREF /* TranscriptFileManager.swift */,
 				WHISPERSERVICE_FILEREF /* WhisperService.swift */,
 				PARAKEETSERVICE_FILEREF /* ParakeetService.swift */,
 				28D24438172D1EDE9F6C188D /* LLM */,
+				MIGRATIONS_GROUP /* Migrations */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		MIGRATIONS_GROUP /* Migrations */ = {
+			isa = PBXGroup;
+			children = (
+				MIGRUNNER_FILEREF /* MigrationRunner.swift */,
+				MIGRATIONS_FILEREF /* Migrations.swift */,
+			);
+			path = Migrations;
 			sourceTree = "<group>";
 		};
 		BBEF53A431CD4D10F1B0ABF4 = {
@@ -317,6 +349,7 @@
 				107202AA66E5A24B8044CDCB /* SettingsManager.swift in Sources */,
 				CB1E8AFB85D7BF1074DA6826 /* SettingsView.swift in Sources */,
 				SYSCONSOLE_BUILDFILE /* SystemConsoleView.swift in Sources */,
+				WALKIECONVO_BUILDFILE /* WalkieConversationView.swift in Sources */,
 				DEBUGTOOLBAR_BUILDFILE /* DebugToolbar.swift in Sources */,
 				CKSYNCMGR_BUILDFILE /* CloudKitSyncManager.swift in Sources */,
 				TFMGR_BUILDFILE /* TranscriptFileManager.swift in Sources */,
@@ -328,12 +361,19 @@
 				694FB95D3C8FBDE6C5468854 /* WorkflowViews.swift in Sources */,
 				AUTORUN_BUILDFILE /* AutoRunProcessor.swift in Sources */,
 				WHISPERSERVICE_BUILDFILE /* WhisperService.swift in Sources */,
+				APPLESPEECH_BUILDFILE /* AppleSpeechService.swift in Sources */,
+				SPEECHSYNTH_BUILDFILE /* SpeechSynthesisService.swift in Sources */,
+				WALKIESERVICE_BUILDFILE /* WalkieService.swift in Sources */,
 				PARAKEETSERVICE_BUILDFILE /* ParakeetService.swift in Sources */,
 				MODELSCATALOG_BUILDFILE /* ModelsCatalog.swift in Sources */,
 				WFCONVERTER_BUILDFILE /* TalkieWorkflowConverter.swift in Sources */,
 				WFSCHEMA_BUILDFILE /* TalkieWorkflowSchema.swift in Sources */,
 				TWFLOADER_BUILDFILE /* TWFLoader.swift in Sources */,
 				FA761A80D997E4963F5E7140 /* talkie.xcdatamodeld in Sources */,
+				PENDINGMGR_BUILDFILE /* PendingActionsManager.swift in Sources */,
+				PENDINGVIEW_BUILDFILE /* PendingActionsView.swift in Sources */,
+				MIGRUNNER_BUILDFILE /* MigrationRunner.swift in Sources */,
+				MIGRATIONS_BUILDFILE /* Migrations.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -425,6 +465,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie needs to communicate with Notes, Reminders, and Calendar to save your voice memo content.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie uses speech recognition to transcribe your voice memos on-device.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -515,6 +556,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie needs to communicate with Notes, Reminders, and Calendar to save your voice memo content.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie uses speech recognition to transcribe your voice memos on-device.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

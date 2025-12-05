@@ -170,7 +170,12 @@ class WorkflowExecutor: ObservableObject {
         for memo: VoiceMemo,
         context: NSManagedObjectContext
     ) async throws -> [String: String] {
-        guard let transcript = memo.currentTranscript, !transcript.isEmpty else {
+        // Check if workflow starts with transcription - if so, we don't need a transcript yet
+        let startsWithTranscribe = workflow.steps.first?.type == .transcribe
+
+        // Require transcript for non-transcription workflows
+        let transcript = memo.currentTranscript ?? ""
+        if !startsWithTranscribe && transcript.isEmpty {
             throw WorkflowError.noTranscript
         }
 
@@ -185,7 +190,7 @@ class WorkflowExecutor: ObservableObject {
         }
 
         var workflowContext = WorkflowContext(
-            transcript: transcript,
+            transcript: transcript,  // May be empty for transcription-first workflows
             title: memo.title ?? "Untitled",
             date: memo.createdAt ?? Date()
         )
@@ -202,6 +207,16 @@ class WorkflowExecutor: ObservableObject {
 
         // Log workflow start to console
         await SystemEventManager.shared.log(.workflow, "Starting: \(workflow.name)", detail: "Memo: \(memo.title ?? "Untitled")")
+
+        // Register with pending actions manager
+        let pendingActionId = PendingActionsManager.shared.startAction(
+            workflowId: workflow.id,
+            workflowName: workflow.name,
+            workflowIcon: workflow.icon,
+            memoId: memo.id,
+            memoTitle: memo.title ?? "Untitled",
+            totalSteps: workflow.steps.filter { $0.isEnabled }.count
+        )
 
         logger.info("🔄 Starting workflow loop with \(workflow.steps.count) steps")
 
@@ -227,6 +242,13 @@ class WorkflowExecutor: ObservableObject {
             }
 
             await SystemEventManager.shared.log(.workflow, "Step \(index + 1): \(step.type.rawValue)", detail: workflow.name)
+
+            // Update pending action progress
+            PendingActionsManager.shared.updateAction(
+                id: pendingActionId,
+                currentStep: step.type.rawValue,
+                stepIndex: index
+            )
 
             // Capture input for this step
             let stepInput: String
@@ -260,9 +282,13 @@ class WorkflowExecutor: ObservableObject {
                 // Trigger step didn't match - stop workflow gracefully (not an error)
                 logger.info("🛑 Trigger not matched at step \(index + 1), stopping workflow '\(workflow.name)' gracefully")
                 await SystemEventManager.shared.log(.workflow, "Trigger not matched, stopping", detail: workflow.name)
+                // Complete the pending action (graceful stop is success)
+                PendingActionsManager.shared.completeAction(id: pendingActionId)
                 break
             } catch {
                 logger.error("❌ Step \(index + 1) failed with error: \(error.localizedDescription)")
+                // Mark pending action as failed
+                PendingActionsManager.shared.failAction(id: pendingActionId, error: error.localizedDescription)
                 throw error
             }
             workflowContext.outputs[step.outputKey] = output
@@ -283,6 +309,9 @@ class WorkflowExecutor: ObservableObject {
         }
 
         logger.info("🏁 Workflow loop finished, executed \(stepExecutions.count) steps")
+
+        // Mark pending action as completed
+        PendingActionsManager.shared.completeAction(id: pendingActionId)
 
         await SystemEventManager.shared.log(.workflow, "Completed: \(workflow.name)", detail: "\(workflow.steps.count) steps")
 
@@ -333,6 +362,7 @@ class WorkflowExecutor: ObservableObject {
             run.runDate = Date()
             run.status = "completed"
             run.memo = memo
+            run.memoId = memo.id  // Denormalized for CloudKit querying
 
             // Encode step executions as JSON
             if let jsonData = try? JSONEncoder().encode(stepExecutions),
@@ -399,6 +429,9 @@ class WorkflowExecutor: ObservableObject {
         case .transcribe(let config):
             return try await executeTranscribeStep(config, memo: memo, context: context)
 
+        case .speak(let config):
+            return try await executeSpeakStep(config, memo: memo, context: context)
+
         case .trigger(let config):
             return try executeTriggerStep(config, context: context)
 
@@ -429,6 +462,7 @@ class WorkflowExecutor: ObservableObject {
         }
 
         logger.info("🤖 LLM Step: Using \(resolved.provider.displayName) / \(resolved.modelId) (tier: \(config.costTier?.rawValue ?? self.settings.llmCostTier.rawValue))")
+        await SystemEventManager.shared.log(.workflow, "LLM generating", detail: "\(resolved.provider.displayName) / \(resolved.modelId)")
 
         let resolvedPrompt = context.resolve(config.prompt)
         let systemPrompt = config.systemPrompt.map { context.resolve($0) }
@@ -447,11 +481,24 @@ class WorkflowExecutor: ObservableObject {
             fullPrompt = resolvedPrompt
         }
 
-        return try await provider.generate(
-            prompt: fullPrompt,
-            model: resolved.modelId,
-            options: options
-        )
+        logger.info("🤖 LLM: Starting generation (prompt: \(fullPrompt.prefix(100))...)")
+
+        do {
+            let result = try await provider.generate(
+                prompt: fullPrompt,
+                model: resolved.modelId,
+                options: options
+            )
+
+            logger.info("🤖 LLM: Generation complete (\(result.count) chars)")
+            await SystemEventManager.shared.log(.workflow, "LLM complete", detail: "\(result.count) chars")
+            return result
+
+        } catch {
+            logger.error("🤖 LLM: Generation failed - \(error.localizedDescription)")
+            await SystemEventManager.shared.log(.error, "LLM failed", detail: error.localizedDescription)
+            throw error
+        }
     }
 
     /// Build set of WorkflowLLMProviders that have API keys configured
@@ -1112,7 +1159,48 @@ class WorkflowExecutor: ObservableObject {
         }
 
         logger.info("Transcribing audio (\(audioData.count) bytes)")
-        await SystemEventManager.shared.log(.workflow, "Transcribing audio locally", detail: "Model: \(config.model)")
+
+        // Use Apple Speech for "apple_speech" model, Whisper for others
+        if config.model == "apple_speech" {
+            return try await transcribeWithAppleSpeech(audioData: audioData, memo: memo, config: config)
+        } else {
+            return try await transcribeWithWhisper(audioData: audioData, memo: memo, config: config)
+        }
+    }
+
+    /// Transcribe using Apple Speech (no download required)
+    private func transcribeWithAppleSpeech(audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
+        await SystemEventManager.shared.log(.workflow, "Transcribing with Apple Speech", detail: "On-device, no download")
+
+        do {
+            let transcript = try await AppleSpeechService.shared.transcribe(audioData: audioData)
+
+            // Save transcript to memo if configured
+            if config.saveAsVersion, let context = memo.managedObjectContext {
+                await MainActor.run {
+                    memo.addSystemTranscript(
+                        content: transcript,
+                        fromMacOS: true,
+                        engine: TranscriptEngines.appleSpeech
+                    )
+                    try? context.save()
+                }
+                logger.info("Saved Apple Speech transcript as new version")
+            }
+
+            logger.info("Apple Speech transcription complete: \(transcript.prefix(100))...")
+            await SystemEventManager.shared.log(.workflow, "Transcription complete", detail: "\(transcript.count) characters")
+
+            return transcript
+        } catch {
+            logger.error("Apple Speech transcription failed: \(error.localizedDescription)")
+            throw WorkflowError.executionFailed("Apple Speech transcription failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Transcribe using Whisper (requires model download)
+    private func transcribeWithWhisper(audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
+        await SystemEventManager.shared.log(.workflow, "Transcribing with Whisper", detail: "Model: \(config.model)")
 
         // Convert model string to WhisperModel enum
         let whisperModel: WhisperModel
@@ -1142,16 +1230,266 @@ class WorkflowExecutor: ObservableObject {
                     )
                     try? context.save()
                 }
-                logger.info("Saved transcript as new version")
+                logger.info("Saved Whisper transcript as new version")
             }
 
-            logger.info("Transcription complete: \(transcript.prefix(100))...")
+            logger.info("Whisper transcription complete: \(transcript.prefix(100))...")
             await SystemEventManager.shared.log(.workflow, "Transcription complete", detail: "\(transcript.count) characters")
 
             return transcript
         } catch {
-            logger.error("Transcription failed: \(error.localizedDescription)")
-            throw WorkflowError.executionFailed("Transcription failed: \(error.localizedDescription)")
+            logger.error("Whisper transcription failed: \(error.localizedDescription)")
+            throw WorkflowError.executionFailed("Whisper transcription failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Speak Step Execution (Walkie-Talkie Mode!)
+
+    private func executeSpeakStep(_ config: SpeakStepConfig, memo: VoiceMemo, context: WorkflowContext) async throws -> String {
+        logger.info("Executing speak step (Walkie-Talkie mode) with provider: \(config.provider.rawValue)")
+
+        // Resolve text with variables
+        let textToSpeak = context.resolve(config.text)
+
+        guard !textToSpeak.isEmpty else {
+            logger.warning("Speak step: no text to speak after variable resolution")
+            return ""
+        }
+
+        await SystemEventManager.shared.log(.workflow, "Speaking response", detail: "\(textToSpeak.prefix(50))...")
+
+        // Generate audio file path
+        let fileManager = FileManager.default
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let audioDir = documentsURL.appendingPathComponent("TalkieAudio")
+        try? fileManager.createDirectory(at: audioDir, withIntermediateDirectories: true)
+
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let filename = "walkie-\(timestamp).mp3"
+        let fileURL = audioDir.appendingPathComponent(filename)
+
+        var audioFileURL: URL?
+
+        // Use appropriate TTS provider
+        switch config.provider {
+        case .system:
+            // Use built-in macOS AVSpeechSynthesizer
+            audioFileURL = try await generateWithSystemTTS(text: textToSpeak, config: config, outputURL: fileURL)
+
+        case .speakeasy, .openai, .elevenlabs:
+            // Use SpeakEasy CLI
+            audioFileURL = try await generateWithSpeakEasy(
+                text: textToSpeak,
+                provider: config.provider,
+                voice: config.voice,
+                useCache: config.useCache,
+                playImmediately: config.playImmediately,
+                outputURL: fileURL
+            )
+        }
+
+        // Play audio file immediately (non-blocking)
+        if config.playImmediately, let url = audioFileURL {
+            // Fire-and-forget playback using NSSound - doesn't block workflow
+            if let sound = NSSound(contentsOf: url, byReference: true) {
+                sound.play()
+                logger.info("🔊 Started audio playback (non-blocking)")
+            } else {
+                logger.warning("🔊 Failed to create NSSound from \(url.path)")
+            }
+        } else if config.provider == .system && config.playImmediately {
+            // System TTS fallback (blocking for now, but system TTS is rarely used)
+            let speechService = await SpeechSynthesisService.shared
+            if let voiceId = config.voice {
+                await MainActor.run { speechService.selectedVoiceIdentifier = voiceId }
+            }
+            await MainActor.run {
+                speechService.speechRate = config.rate
+                speechService.speechPitch = config.pitch
+            }
+            logger.info("🔊 Starting system speech...")
+            await speechService.speakAsync(textToSpeak)
+            logger.info("🔊 System speech playback complete")
+        }
+
+        // Log if saving
+        if config.saveToFile, let url = audioFileURL {
+            await SystemEventManager.shared.log(.workflow, "Audio saved", detail: url.lastPathComponent)
+        }
+
+        // Upload to CloudKit as Walkie (send audio to iOS!)
+        if config.uploadToWalkie, let fileURL = audioFileURL {
+            let memoId = memo.id?.uuidString ?? UUID().uuidString
+            logger.info("📤 Uploading Walkie for memo: \(memoId)")
+
+            do {
+                let walkieId = try await WalkieService.shared.uploadWalkie(
+                    audioURL: fileURL,
+                    memoId: memoId,
+                    transcript: textToSpeak
+                )
+                logger.info("📤 Walkie uploaded: \(walkieId)")
+                await SystemEventManager.shared.log(.workflow, "Walkie sent to iOS", detail: "ID: \(walkieId.prefix(8))...")
+            } catch {
+                logger.error("📤 Walkie upload failed: \(error.localizedDescription)")
+                await SystemEventManager.shared.log(.workflow, "Walkie upload failed", detail: error.localizedDescription)
+            }
+        }
+
+        logger.info("🔊 Speak step complete")
+        await SystemEventManager.shared.log(.workflow, "Speak complete", detail: "Walkie-Talkie reply delivered")
+
+        return textToSpeak
+    }
+
+    /// Generate audio using built-in macOS TTS
+    private func generateWithSystemTTS(text: String, config: SpeakStepConfig, outputURL: URL) async throws -> URL? {
+        let speechService = await SpeechSynthesisService.shared
+
+        if let voiceId = config.voice {
+            await MainActor.run { speechService.selectedVoiceIdentifier = voiceId }
+        }
+        await MainActor.run {
+            speechService.speechRate = config.rate
+            speechService.speechPitch = config.pitch
+        }
+
+        // Generate to file with .caf extension for system TTS
+        let cafURL = outputURL.deletingPathExtension().appendingPathExtension("caf")
+        try await speechService.generateAudioFile(from: text, to: cafURL)
+        logger.info("Generated system TTS audio: \(cafURL.lastPathComponent)")
+        return cafURL
+    }
+
+    /// Generate audio using SpeakEasy CLI
+    private func generateWithSpeakEasy(
+        text: String,
+        provider: TTSProvider,
+        voice: String?,
+        useCache: Bool,
+        playImmediately: Bool,
+        outputURL: URL
+    ) async throws -> URL? {
+        logger.info("🗣️ Generating audio with SpeakEasy (provider: \(provider.rawValue))")
+
+        // Build SpeakEasy command
+        var args: [String] = []
+
+        // Add text
+        args.append("--text")
+        args.append(text)
+
+        // Provider mapping
+        let speakeasyProvider: String
+        switch provider {
+        case .speakeasy:
+            speakeasyProvider = "openai"  // Default SpeakEasy uses OpenAI
+        case .openai:
+            speakeasyProvider = "openai"
+        case .elevenlabs:
+            speakeasyProvider = "elevenlabs"
+        case .system:
+            speakeasyProvider = "system"
+        }
+        args.append("--provider")
+        args.append(speakeasyProvider)
+
+        // Voice - use a nice default if not specified
+        let voiceToUse = voice ?? (speakeasyProvider == "openai" ? "echo" : nil)
+        if let voiceToUse = voiceToUse {
+            args.append("--voice")
+            args.append(voiceToUse)
+        }
+
+        // Speech rate - default to 200 WPM for snappy responses
+        if speakeasyProvider == "openai" {
+            args.append("--rate")
+            args.append("200")
+        }
+
+        // Silent mode - don't play audio, just generate the file
+        // We'll handle playback ourselves for better UI control
+        args.append("--silent")
+
+        // Caching
+        if useCache {
+            args.append("--cache")
+        }
+
+        // Output file (--out saves to file in addition to playing)
+        args.append("--out")
+        args.append(outputURL.path)
+
+        // Use node (bun crashes on better-sqlite3 native module)
+        let nodePath = "/opt/homebrew/bin/node"
+        let speakeasyScript = "/Users/arach/dev/speakeasy/dist/bin/speakeasy-cli.js"
+
+        logger.info("🗣️ Node path: \(nodePath)")
+        logger.info("🗣️ SpeakEasy script: \(speakeasyScript)")
+        logger.info("🗣️ Output URL: \(outputURL.path)")
+
+        // Verify files exist
+        guard FileManager.default.fileExists(atPath: nodePath) else {
+            logger.error("🗣️ Node not found at: \(nodePath)")
+            throw NSError(domain: "SpeakEasy", code: 1, userInfo: [NSLocalizedDescriptionKey: "Node not found at \(nodePath)"])
+        }
+        guard FileManager.default.fileExists(atPath: speakeasyScript) else {
+            logger.error("🗣️ SpeakEasy script not found at: \(speakeasyScript)")
+            throw NSError(domain: "SpeakEasy", code: 1, userInfo: [NSLocalizedDescriptionKey: "SpeakEasy script not found at \(speakeasyScript)"])
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: nodePath)
+        process.arguments = [speakeasyScript] + args
+
+        // Set environment for node
+        var env = ProcessInfo.processInfo.environment
+        env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+        env["NODE_PATH"] = "/Users/arach/dev/speakeasy/node_modules"
+        env["HOME"] = NSHomeDirectory()
+        process.environment = env
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        let commandPreview = "node speakeasy-cli.js " + args.map { $0.contains(" ") ? "\"\($0.prefix(50))...\"" : $0 }.joined(separator: " ")
+        logger.info("🗣️ Running: \(commandPreview)")
+
+        do {
+            try process.run()
+            process.waitUntilExit()  // Fast with --silent (no playback)
+
+            let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+            logger.info("🗣️ Exit code: \(process.terminationStatus)")
+            if !stdout.isEmpty { logger.info("🗣️ stdout: \(stdout.prefix(500))") }
+            if !stderr.isEmpty { logger.warning("🗣️ stderr: \(stderr.prefix(500))") }
+
+            if process.terminationStatus == 0 {
+                logger.info("🗣️ SpeakEasy completed successfully")
+                if FileManager.default.fileExists(atPath: outputURL.path) {
+                    return outputURL
+                } else {
+                    // Check if file was created with different extension
+                    let mp3URL = outputURL.deletingPathExtension().appendingPathExtension("mp3")
+                    if FileManager.default.fileExists(atPath: mp3URL.path) {
+                        logger.info("🗣️ Found output at \(mp3URL.path)")
+                        return mp3URL
+                    }
+                    logger.warning("🗣️ SpeakEasy succeeded but output file not found")
+                    return nil
+                }
+            } else {
+                let errorMsg = stderr.isEmpty ? stdout : stderr
+                logger.error("🗣️ SpeakEasy failed (exit \(process.terminationStatus)): \(errorMsg)")
+                throw NSError(domain: "SpeakEasy", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errorMsg])
+            }
+        } catch {
+            logger.error("🗣️ Failed to launch SpeakEasy: \(error.localizedDescription)")
+            throw error
         }
     }
 

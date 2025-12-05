@@ -497,19 +497,47 @@ struct SettingsPageHeader: View {
     }
 }
 
-/// Container for settings page content with consistent background and minimum height
-struct SettingsPageContainer<Content: View>: View {
-    @ViewBuilder let content: Content
+/// Container for settings page content with consistent background and sticky header
+struct SettingsPageContainer<Header: View, Content: View>: View {
+    let header: Header
+    let content: Content
+
+    init(@ViewBuilder header: () -> Header, @ViewBuilder content: () -> Content) {
+        self.header = header()
+        self.content = content()
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                content
+        VStack(alignment: .leading, spacing: 0) {
+            // Sticky header area
+            header
+                .padding(.horizontal, Spacing.lg)
+                .padding(.top, Spacing.lg)
+                .padding(.bottom, Spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(MidnightSurface.content)
+
+            Divider()
+                .opacity(0.3)
+
+            // Scrollable content
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    content
+                }
+                .padding(Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .frame(minHeight: 500, maxHeight: .infinity)
         .background(MidnightSurface.content)
+    }
+}
+
+// Convenience init for backward compatibility (no sticky header)
+extension SettingsPageContainer where Header == EmptyView {
+    init(@ViewBuilder content: () -> Content) {
+        self.header = EmptyView()
+        self.content = content()
     }
 }

@@ -42,6 +42,12 @@ class MLXProvider: LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> String {
+        // Validate model is installed before attempting to load
+        let isInstalled = await modelManager.isModelInstalled(id: model)
+        if !isInstalled {
+            throw LLMError.modelNotFound("MLX model '\(model)' is not installed. Please download it first in Settings > Models.")
+        }
+
         // Load model if not already loaded
         let container = try await modelManager.loadModel(id: model)
 
