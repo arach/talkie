@@ -36,6 +36,13 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         id == WorkflowDefinition.heyTalkieWorkflowId
     }
 
+    /// Returns true if this workflow starts with a transcription step
+    /// Used to determine whether to show untranscribed or transcribed memos in the picker
+    var startsWithTranscribe: Bool {
+        guard let firstStep = steps.first else { return false }
+        return firstStep.type == .transcribe
+    }
+
     init(
         id: UUID = UUID(),
         name: String,

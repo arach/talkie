@@ -265,10 +265,12 @@ class SettingsManager: ObservableObject {
     /// The currently active theme preset
     @Published var currentTheme: ThemePreset? {
         didSet {
-            if let theme = currentTheme {
-                UserDefaults.standard.set(theme.rawValue, forKey: currentThemeKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: currentThemeKey)
+            DispatchQueue.main.async {
+                if let theme = self.currentTheme {
+                    UserDefaults.standard.set(theme.rawValue, forKey: self.currentThemeKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: self.currentThemeKey)
+                }
             }
         }
     }
@@ -295,14 +297,20 @@ class SettingsManager: ObservableObject {
 
     @Published var appearanceMode: AppearanceMode {
         didSet {
-            UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceModeKey)
+            let mode = appearanceMode
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(mode.rawValue, forKey: self.appearanceModeKey)
+            }
             applyAppearanceMode()
         }
     }
 
     @Published var accentColor: AccentColorOption {
         didSet {
-            UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
+            let color = accentColor
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(color.rawValue, forKey: self.accentColorKey)
+            }
         }
     }
 
@@ -314,14 +322,20 @@ class SettingsManager: ObservableObject {
     /// Font style for UI chrome: labels, headers, buttons, badges, navigation
     @Published var uiFontStyle: FontStyleOption {
         didSet {
-            UserDefaults.standard.set(uiFontStyle.rawValue, forKey: uiFontStyleKey)
+            let style = uiFontStyle
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(style.rawValue, forKey: self.uiFontStyleKey)
+            }
         }
     }
 
     /// Font style for content: transcripts, notes, markdown, user-generated text
     @Published var contentFontStyle: FontStyleOption {
         didSet {
-            UserDefaults.standard.set(contentFontStyle.rawValue, forKey: contentFontStyleKey)
+            let style = contentFontStyle
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(style.rawValue, forKey: self.contentFontStyleKey)
+            }
         }
     }
 
@@ -334,21 +348,30 @@ class SettingsManager: ObservableObject {
     /// UI chrome font size (labels, headers, buttons, badges)
     @Published var uiFontSize: FontSizeOption {
         didSet {
-            UserDefaults.standard.set(uiFontSize.rawValue, forKey: uiFontSizeKey)
+            let size = uiFontSize
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(size.rawValue, forKey: self.uiFontSizeKey)
+            }
         }
     }
 
     /// Content font size (transcripts, notes, markdown)
     @Published var contentFontSize: FontSizeOption {
         didSet {
-            UserDefaults.standard.set(contentFontSize.rawValue, forKey: contentFontSizeKey)
+            let size = contentFontSize
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(size.rawValue, forKey: self.contentFontSizeKey)
+            }
         }
     }
 
     /// Whether UI chrome labels should be ALL CAPS (tactical style)
     @Published var uiAllCaps: Bool {
         didSet {
-            UserDefaults.standard.set(uiAllCaps, forKey: uiAllCapsKey)
+            let value = uiAllCaps
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(value, forKey: self.uiAllCapsKey)
+            }
         }
     }
 
@@ -768,28 +791,40 @@ class SettingsManager: ObservableObject {
     /// Whether to save transcripts as Markdown files locally (default: false)
     @Published var saveTranscriptsLocally: Bool {
         didSet {
-            UserDefaults.standard.set(saveTranscriptsLocally, forKey: saveTranscriptsLocallyKey)
+            let value = saveTranscriptsLocally
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(value, forKey: self.saveTranscriptsLocallyKey)
+            }
         }
     }
 
     /// Where transcript files are saved
     @Published var transcriptsFolderPath: String {
         didSet {
-            UserDefaults.standard.set(transcriptsFolderPath, forKey: transcriptsFolderPathKey)
+            let path = transcriptsFolderPath
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(path, forKey: self.transcriptsFolderPathKey)
+            }
         }
     }
 
     /// Whether to save M4A audio files locally (default: false)
     @Published var saveAudioLocally: Bool {
         didSet {
-            UserDefaults.standard.set(saveAudioLocally, forKey: saveAudioLocallyKey)
+            let value = saveAudioLocally
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(value, forKey: self.saveAudioLocallyKey)
+            }
         }
     }
 
     /// Where audio files are saved
     @Published var audioFolderPath: String {
         didSet {
-            UserDefaults.standard.set(audioFolderPath, forKey: audioFolderPathKey)
+            let path = audioFolderPath
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(path, forKey: self.audioFolderPathKey)
+            }
         }
     }
 
@@ -808,7 +843,10 @@ class SettingsManager: ObservableObject {
     /// Note: Only memos created in the last 5 minutes are processed (forward-only behavior)
     @Published var autoRunWorkflowsEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(autoRunWorkflowsEnabled, forKey: autoRunWorkflowsEnabledKey)
+            let value = autoRunWorkflowsEnabled
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(value, forKey: self.autoRunWorkflowsEnabledKey)
+            }
         }
     }
 
@@ -821,7 +859,10 @@ class SettingsManager: ObservableObject {
     /// Individual workflow steps can override this with their own tier setting
     @Published var llmCostTier: LLMCostTier {
         didSet {
-            UserDefaults.standard.set(llmCostTier.rawValue, forKey: llmQualityTierKey)
+            let tier = llmCostTier
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(tier.rawValue, forKey: self.llmQualityTierKey)
+            }
         }
     }
 

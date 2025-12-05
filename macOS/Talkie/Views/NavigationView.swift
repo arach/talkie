@@ -715,6 +715,11 @@ struct WorkflowDetailColumn: View {
         allMemos.filter { $0.transcription != nil && !$0.transcription!.isEmpty }
     }
 
+    /// Memos that need transcription (for TRANSCRIBE workflows like HQ Transcribe)
+    private var untranscribedMemos: [VoiceMemo] {
+        allMemos.filter { ($0.transcription == nil || $0.transcription!.isEmpty) && !$0.isTranscribing }
+    }
+
     // Get fresh workflow from manager (source of truth)
     private var currentWorkflow: WorkflowDefinition? {
         guard let id = editingWorkflow?.id else { return nil }
@@ -765,9 +770,11 @@ struct WorkflowDetailColumn: View {
         .sheet(isPresented: $showingMemoSelector) {
             // Use currentWorkflow from manager for fresh data
             if let workflow = currentWorkflow ?? editingWorkflow {
+                // Use untranscribed memos for TRANSCRIBE workflows, transcribed for others
+                let memosToShow = workflow.startsWithTranscribe ? untranscribedMemos : transcribedMemos
                 WorkflowMemoSelectorSheet(
                     workflow: workflow,
-                    memos: transcribedMemos,
+                    memos: memosToShow,
                     onSelect: { memo in
                         runWorkflow(workflow, on: memo)
                         showingMemoSelector = false
@@ -1802,6 +1809,11 @@ struct WorkflowsContentView: View {
         allMemos.filter { $0.transcription != nil && !$0.transcription!.isEmpty }
     }
 
+    /// Memos that need transcription (for TRANSCRIBE workflows like HQ Transcribe)
+    private var untranscribedMemos: [VoiceMemo] {
+        allMemos.filter { ($0.transcription == nil || $0.transcription!.isEmpty) && !$0.isTranscribing }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Left: Workflow List
@@ -1899,9 +1911,11 @@ struct WorkflowsContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $showingMemoSelector) {
             if let workflow = editingWorkflow {
+                // Use untranscribed memos for TRANSCRIBE workflows, transcribed for others
+                let memosToShow = workflow.startsWithTranscribe ? untranscribedMemos : transcribedMemos
                 WorkflowMemoSelectorSheet(
                     workflow: workflow,
-                    memos: transcribedMemos,
+                    memos: memosToShow,
                     onSelect: { memo in
                         runWorkflow(workflow, on: memo)
                         showingMemoSelector = false

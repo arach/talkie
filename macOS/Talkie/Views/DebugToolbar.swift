@@ -350,6 +350,9 @@ struct ListViewDebugContent: View {
             // 3. Utilities
             DebugSection(title: "UTILITIES") {
                 VStack(spacing: 4) {
+                    DebugActionButton(icon: "waveform.slash", label: "Reset Transcription") {
+                        resetTranscriptionState()
+                    }
                     DebugActionButton(icon: "bell.badge", label: "Test Notification") {
                         sendTestNotification()
                     }
@@ -383,6 +386,32 @@ struct ListViewDebugContent: View {
     }
 
     // MARK: - Actions
+
+    private func resetTranscriptionState() {
+        // Reset service states
+        WhisperService.shared.resetTranscriptionState()
+        ParakeetService.shared.resetTranscriptionState()
+
+        // Reset any memos stuck in transcribing state
+        let context = PersistenceController.shared.container.viewContext
+        let request = VoiceMemo.fetchRequest()
+        request.predicate = NSPredicate(format: "isTranscribing == YES")
+
+        do {
+            let stuckMemos = try context.fetch(request)
+            if stuckMemos.count > 0 {
+                for memo in stuckMemos {
+                    memo.isTranscribing = false
+                }
+                try context.save()
+                SystemEventManager.shared.logSync(.system, "Reset transcription state", detail: "Services + \(stuckMemos.count) stuck memo(s)")
+            } else {
+                SystemEventManager.shared.logSync(.system, "Transcription state reset", detail: "WhisperKit + Parakeet (no stuck memos)")
+            }
+        } catch {
+            SystemEventManager.shared.logSync(.error, "Failed to reset memo states", detail: error.localizedDescription)
+        }
+    }
 
     private func markAllMemosAsProcessed() {
         let context = PersistenceController.shared.container.viewContext

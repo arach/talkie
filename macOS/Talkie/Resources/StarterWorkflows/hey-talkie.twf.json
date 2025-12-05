@@ -24,7 +24,7 @@
     },
     {
       "id": "extract-intent",
-      "type": "Intent Extraction",
+      "type": "Extract Intents",
       "config": {
         "intentExtract": {
           "inputKey": "{{detect-trigger}}",

@@ -60,6 +60,13 @@ class WhisperService: ObservableObject {
         refreshDownloadedModels()
     }
 
+    /// Force reset the transcription state if it gets stuck
+    func resetTranscriptionState() {
+        logger.warning("Force resetting transcription state (was: \(self.isTranscribing))")
+        isTranscribing = false
+        lastError = nil
+    }
+
     /// Refresh the cached downloaded models state
     func refreshDownloadedModels() {
         downloadedModels = Set(WhisperModel.allCases.filter { checkModelExists($0) })

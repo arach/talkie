@@ -62,6 +62,13 @@ class ParakeetService: ObservableObject {
         refreshDownloadedModels()
     }
 
+    /// Force reset the transcription state if it gets stuck
+    func resetTranscriptionState() {
+        logger.warning("Force resetting Parakeet transcription state (was: \(self.isTranscribing))")
+        isTranscribing = false
+        lastError = nil
+    }
+
     /// Refresh the cached downloaded models state
     func refreshDownloadedModels() {
         downloadedModels = Set(ParakeetModel.allCases.filter { checkModelExists($0) })
