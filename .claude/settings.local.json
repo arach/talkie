@@ -116,7 +116,16 @@
       "Bash(bun:*)",
       "Bash(/Users/arach/.bun/bin/bun:*)",
       "Bash(/opt/homebrew/bin/node:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(for:*)",
+      "Bash(do sips -s format png -s formatOptions 100 \"$f\" --out \"$f\")",
+      "Bash(done)",
+      "Bash(rm:*)",
+      "Bash(do if sips -g hasAlpha $f)",
+      "Bash(then echo 'Processing: $f' sips -s format jpeg $f --out $f%.png_temp.jpg 2)",
+      "Bash(/dev/null sips -s format png $f%.png_temp.jpg --out $f 2)",
+      "Bash(/dev/null rm -f $f%.png_temp.jpg fi done)",
+      "Bash(do sips -g hasAlpha $f)"
     ],
     "deny": [],
     "ask": []

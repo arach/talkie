@@ -279,7 +279,7 @@ struct AppearanceSettingsView: View {
                 title: "APPEARANCE",
                 subtitle: "Customize how Talkie looks on your Mac."
             )
-
+        } content: {
             // MARK: - Theme Presets
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK THEMES")
@@ -874,10 +874,7 @@ struct APISettingsView: View {
                 title: "API KEYS",
                 subtitle: "Manage API keys for cloud AI providers. Keys are stored securely in the macOS Keychain."
             )
-
-            Divider()
-                .background(MidnightSurface.divider)
-
+        } content: {
             // Provider API Keys
             VStack(spacing: 16) {
                     APIKeyRow(
@@ -1455,7 +1452,7 @@ struct AllowedCommandsView: View {
                 title: "ALLOWED COMMANDS",
                 subtitle: "Manage which CLI tools can be executed by workflow shell steps."
             )
-
+        } content: {
             // Add new command
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ADD COMMAND")
@@ -1659,7 +1656,7 @@ struct OutputSettingsView: View {
                 title: "OUTPUT",
                 subtitle: "Configure default output location and path aliases for workflows."
             )
-
+        } content: {
             // Directory picker
                 VStack(alignment: .leading, spacing: 12) {
                     Text("DEFAULT OUTPUT FOLDER")
@@ -1999,7 +1996,7 @@ struct QuickActionsSettingsView: View {
                 title: "QUICK ACTIONS",
                 subtitle: "Pin workflows to show them as quick actions when viewing a memo. Pinned workflows sync to iOS via iCloud."
             )
-
+        } content: {
             // Pinned workflows
             VStack(alignment: .leading, spacing: 12) {
                 Text("PINNED WORKFLOWS")
@@ -2182,7 +2179,7 @@ struct DebugInfoView: View {
                 title: "DEBUG INFO",
                 subtitle: "Diagnostic information about the app environment."
             )
-
+        } content: {
             Divider()
 
             // Info rows
@@ -2306,7 +2303,7 @@ struct LocalFilesSettingsView: View {
                 title: "LOCAL FILES",
                 subtitle: "Store your transcripts and audio files locally on your Mac."
             )
-
+        } content: {
             // Value proposition - always visible
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
@@ -2634,7 +2631,7 @@ struct AutoRunSettingsView: View {
                 title: "AUTO-RUN",
                 subtitle: "Configure workflows that run automatically when memos sync."
             )
-
+        } content: {
             // Master toggle
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle(isOn: $settingsManager.autoRunWorkflowsEnabled) {
