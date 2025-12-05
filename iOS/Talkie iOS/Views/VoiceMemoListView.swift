@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreData
 import CloudKit
+import AVFoundation
 
 enum SortOption: String, CaseIterable {
     case dateNewest = "Newest First"
@@ -520,8 +521,58 @@ struct VoiceMemoListView: View {
             showingSettings = true
             deepLinkManager.clearAction()
 
+        case .importAudio(let url):
+            importAudioFile(from: url)
+            deepLinkManager.clearAction()
+
         case .none:
             break
+        }
+    }
+
+    /// Import an audio file from external source (e.g., Voice Memos share sheet)
+    private func importAudioFile(from url: URL) {
+        // Security-scoped access for files from other apps
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            // Read audio data
+            let audioData = try Data(contentsOf: url)
+
+            // Get audio duration
+            let audioFile = try AVAudioFile(forReading: url)
+            let duration = Double(audioFile.length) / audioFile.fileFormat.sampleRate
+
+            // Create filename without extension for title
+            let filename = url.deletingPathExtension().lastPathComponent
+
+            // Create new VoiceMemo
+            let newMemo = VoiceMemo(context: viewContext)
+            newMemo.id = UUID()
+            newMemo.title = filename
+            newMemo.audioData = audioData
+            newMemo.duration = duration
+            newMemo.createdAt = Date()
+            newMemo.lastModified = Date()
+            newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
+            newMemo.originDeviceId = PersistenceController.deviceId
+            newMemo.autoProcessed = false  // Mark for macOS auto-processing
+
+            // Save context
+            try viewContext.save()
+
+            AppLogger.app.info("Imported audio file: \(filename), duration: \(duration)s, size: \(audioData.count) bytes")
+
+            // Open the imported memo
+            deepLinkMemo = newMemo
+
+        } catch {
+            AppLogger.app.error("Failed to import audio file: \(error.localizedDescription)")
         }
     }
 
@@ -551,42 +602,129 @@ struct VoiceMemoListView: View {
     // MARK: - Pull to Refresh
 
     private func refreshMemos() async {
-        AppLogger.persistence.info("📲 Pull-to-refresh - fetching from CloudKit")
+        AppLogger.persistence.info("📲 Pull-to-refresh - fetching latest 10 memos from CloudKit")
 
         let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
         let privateDB = container.privateCloudDatabase
         let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
 
-        // Fetch WorkflowRun records using zone fetch (no query needed)
-        do {
-            var allRecords: [CKRecord] = []
-            var cursor: CKQueryOperation.Cursor? = nil
+        // Step 1: Fetch latest 10 VoiceMemo records from CloudKit
+        var cloudMemoIds: Set<UUID> = []
+        var cloudMemoRecordIds: [CKRecord.ID] = []
 
-            // First, get all record IDs of type CD_WorkflowRun
-            let query = CKQuery(recordType: "CD_WorkflowRun", predicate: NSPredicate(value: true))
+        do {
+            let memoQuery = CKQuery(recordType: "CD_VoiceMemo", predicate: NSPredicate(value: true))
+            memoQuery.sortDescriptors = [NSSortDescriptor(key: "CD_createdAt", ascending: false)]
+
+            let memoResult = try await privateDB.records(matching: memoQuery, inZoneWith: zoneID, resultsLimit: 10)
+
+            for (recordId, recordResult) in memoResult.matchResults {
+                if case .success(let record) = recordResult {
+                    // Extract UUID from CD_id field
+                    if let uuid = record["CD_id"] as? UUID {
+                        cloudMemoIds.insert(uuid)
+                    } else if let str = record["CD_id"] as? String, let uuid = UUID(uuidString: str) {
+                        cloudMemoIds.insert(uuid)
+                    }
+                    cloudMemoRecordIds.append(recordId)
+                }
+            }
+
+            AppLogger.persistence.info("📲 CloudKit returned \(cloudMemoIds.count) memo(s)")
+
+        } catch {
+            AppLogger.persistence.error("📲 VoiceMemo fetch error: \(error.localizedDescription)")
+            // Don't proceed with deletion if we couldn't fetch from CloudKit
+            await MainActor.run {
+                viewContext.refreshAllObjects()
+            }
+            return
+        }
+
+        // Step 2: Compare with local memos and delete any not in CloudKit
+        // Only delete memos that SHOULD be in the top 10 by createdAt but aren't
+        await MainActor.run {
+            // Sort local memos by createdAt (same as CloudKit query) to compare apples to apples
+            let localMemosByDate = allVoiceMemos.sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+            let localTop10 = Array(localMemosByDate.prefix(10))
+            var deletedCount = 0
+
+            for memo in localTop10 {
+                guard let memoId = memo.id else { continue }
+
+                // If this memo is in our local top 10 by date but NOT in CloudKit's top 10, it was deleted
+                if !cloudMemoIds.contains(memoId) {
+                    AppLogger.persistence.info("📲 Deleting memo not found in CloudKit: \(memo.title ?? "Untitled")")
+
+                    // Delete associated audio file
+                    if let filename = memo.fileURL {
+                        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        let filePath = documentsPath.appendingPathComponent(filename)
+                        if FileManager.default.fileExists(atPath: filePath.path) {
+                            try? FileManager.default.removeItem(at: filePath)
+                        }
+                    }
+
+                    viewContext.delete(memo)
+                    deletedCount += 1
+                }
+            }
+
+            if deletedCount > 0 {
+                do {
+                    try viewContext.save()
+                    AppLogger.persistence.info("📲 Deleted \(deletedCount) memo(s) not found in CloudKit")
+                    PersistenceController.refreshWidgetData(context: viewContext)
+                } catch {
+                    AppLogger.persistence.error("📲 Failed to save after deleting memos: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        // Step 3: Fetch WorkflowRun records for the memos we have
+        // Uses denormalized memoId field for efficient IN query
+        guard !cloudMemoIds.isEmpty else {
+            await MainActor.run {
+                viewContext.refreshAllObjects()
+            }
+            return
+        }
+
+        do {
+            // Query by memoId (UUID) which supports IN predicate
+            let memoIdStrings = cloudMemoIds.map { $0.uuidString }
+            let workflowQuery = CKQuery(
+                recordType: "CD_WorkflowRun",
+                predicate: NSPredicate(format: "CD_memoId IN %@", memoIdStrings)
+            )
+
+            // Only fetch the fields we need for display (skip large output field)
+            let desiredKeys = ["CD_id", "CD_memoId", "CD_workflowId", "CD_workflowName", "CD_workflowIcon", "CD_runDate", "CD_status"]
+
+            var workflowRecords: [CKRecord] = []
+            var cursor: CKQueryOperation.Cursor? = nil
 
             repeat {
                 let result: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?)
                 if let cursor = cursor {
-                    result = try await privateDB.records(continuingMatchFrom: cursor)
+                    result = try await privateDB.records(continuingMatchFrom: cursor, desiredKeys: desiredKeys)
                 } else {
-                    result = try await privateDB.records(matching: query, inZoneWith: zoneID, resultsLimit: 100)
+                    result = try await privateDB.records(matching: workflowQuery, inZoneWith: zoneID, desiredKeys: desiredKeys, resultsLimit: 200)
                 }
 
                 for (_, recordResult) in result.matchResults {
                     if case .success(let record) = recordResult {
-                        allRecords.append(record)
+                        workflowRecords.append(record)
                     }
                 }
                 cursor = result.queryCursor
             } while cursor != nil
 
-            AppLogger.persistence.info("📲 CloudKit returned \(allRecords.count) workflow run records")
+            AppLogger.persistence.info("📲 CloudKit returned \(workflowRecords.count) workflow run(s) for \(cloudMemoIds.count) memo(s)")
 
-            // Import workflow runs into Core Data
-            if !allRecords.isEmpty {
+            if !workflowRecords.isEmpty {
                 await MainActor.run {
-                    importWorkflowRuns(allRecords)
+                    importWorkflowRuns(workflowRecords)
                 }
             }
         } catch {
@@ -594,9 +732,10 @@ struct VoiceMemoListView: View {
         }
 
         await MainActor.run {
+            // Force refresh from store (mergeChanges: false) to pick up all relationship changes
             viewContext.refreshAllObjects()
             for memo in allVoiceMemos {
-                viewContext.refresh(memo, mergeChanges: true)
+                viewContext.refresh(memo, mergeChanges: false)
             }
         }
 
@@ -608,22 +747,25 @@ struct VoiceMemoListView: View {
         var skippedExisting = 0
         var skippedNoMemo = 0
         var updatedCount = 0
+        var affectedMemos: Set<NSManagedObjectID> = []
 
         // Fetch all local workflow runs once
         let existingRunsRequest: NSFetchRequest<WorkflowRun> = WorkflowRun.fetchRequest()
         let existingRuns = (try? viewContext.fetch(existingRunsRequest)) ?? []
         let existingRunIds = Set(existingRuns.compactMap { $0.id })
 
-        // Fetch all memos once
+        // Fetch all memos once, indexed by ID for fast lookup
         let memoFetch: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
         let allMemos = (try? viewContext.fetch(memoFetch)) ?? []
+        let memoById: [UUID: VoiceMemo] = Dictionary(uniqueKeysWithValues: allMemos.compactMap { memo in
+            guard let id = memo.id else { return nil }
+            return (id, memo)
+        })
 
-        let runsWithMemo = existingRuns.filter { $0.memo != nil }.count
-        let completedRuns = existingRuns.filter { $0.status == "completed" }.count
-        AppLogger.persistence.info("📲 Processing \(records.count) records, have \(existingRuns.count) local runs (\(runsWithMemo) with memo, \(completedRuns) completed), \(allMemos.count) memos")
+        AppLogger.persistence.info("📲 Processing \(records.count) workflow runs, have \(existingRuns.count) local runs, \(allMemos.count) memos")
 
         for record in records {
-            // CD_id can be UUID or String depending on how it was stored
+            // Extract run ID
             var runUUID: UUID?
             if let uuid = record["CD_id"] as? UUID {
                 runUUID = uuid
@@ -632,19 +774,15 @@ struct VoiceMemoListView: View {
             }
             guard let runId = runUUID else { continue }
 
-            // Find the memo this run belongs to
-            guard let memoRef = record["CD_memo"] as? CKRecord.Reference else { continue }
-            let memoRecordName = memoRef.recordID.recordName
-
-            var targetMemo: VoiceMemo?
-            for memo in allMemos {
-                if let memoId = memo.id, memoRecordName.contains(memoId.uuidString) {
-                    targetMemo = memo
-                    break
-                }
+            // Find memo by memoId (denormalized UUID field)
+            var memoUUID: UUID?
+            if let uuid = record["CD_memoId"] as? UUID {
+                memoUUID = uuid
+            } else if let str = record["CD_memoId"] as? String, let uuid = UUID(uuidString: str) {
+                memoUUID = uuid
             }
 
-            guard let memo = targetMemo else {
+            guard let memoId = memoUUID, let memo = memoById[memoId] else {
                 skippedNoMemo += 1
                 continue
             }
@@ -655,6 +793,8 @@ struct VoiceMemoListView: View {
                 if let existingRun = existingRuns.first(where: { $0.id == runId }) {
                     if existingRun.memo == nil {
                         existingRun.memo = memo
+                        existingRun.memoId = memoId
+                        affectedMemos.insert(memo.objectID)
                         updatedCount += 1
                     }
                 }
@@ -662,24 +802,37 @@ struct VoiceMemoListView: View {
                 continue
             }
 
-            // Create WorkflowRun
+            // Create WorkflowRun (without output - we didn't fetch it)
             let workflowRun = WorkflowRun(context: viewContext)
             workflowRun.id = runId
+            workflowRun.memoId = memoId
             workflowRun.workflowId = record["CD_workflowId"] as? UUID
             workflowRun.workflowName = record["CD_workflowName"] as? String
             workflowRun.workflowIcon = record["CD_workflowIcon"] as? String
             workflowRun.runDate = record["CD_runDate"] as? Date
             workflowRun.status = record["CD_status"] as? String
-            workflowRun.output = record["CD_output"] as? String
             workflowRun.memo = memo
 
+            affectedMemos.insert(memo.objectID)
             addedCount += 1
         }
 
         AppLogger.persistence.info("📲 Import summary: added=\(addedCount), updated=\(updatedCount), skippedExisting=\(skippedExisting), skippedNoMemo=\(skippedNoMemo)")
 
         if addedCount > 0 || updatedCount > 0 {
-            try? viewContext.save()
+            do {
+                try viewContext.save()
+
+                // Refresh affected memos so their workflowRuns relationship updates
+                for objectID in affectedMemos {
+                    if let memo = try? viewContext.existingObject(with: objectID) {
+                        viewContext.refresh(memo, mergeChanges: true)
+                    }
+                }
+                AppLogger.persistence.info("📲 Refreshed \(affectedMemos.count) memo(s) with new workflow runs")
+            } catch {
+                AppLogger.persistence.error("📲 Failed to save workflow runs: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -773,46 +926,54 @@ struct VoiceMemoListView: View {
     }
 
     private func savePushToTalkRecording(url: URL) {
-        let newMemo = VoiceMemo(context: viewContext)
-        newMemo.id = UUID()
-        newMemo.title = "Quick memo \(formatPushToTalkDate(Date()))"
-        newMemo.createdAt = Date()
-        newMemo.duration = pushToTalkRecorder.recordingDuration
-        newMemo.fileURL = url.lastPathComponent
-        newMemo.isTranscribing = false
-        newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
-        newMemo.autoProcessed = false  // Mark for macOS auto-run processing
+        // Small delay to ensure audio file is fully flushed to disk after stop()
+        // audioRecorder.stop() writes asynchronously
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms for file flush
 
-        // Load audio data
-        do {
-            let audioData = try Data(contentsOf: url)
-            newMemo.audioData = audioData
-        } catch {
-            AppLogger.recording.warning("Failed to load audio data: \(error.localizedDescription)")
-        }
+            let newMemo = VoiceMemo(context: viewContext)
+            newMemo.id = UUID()
+            newMemo.title = "Quick memo \(formatPushToTalkDate(Date()))"
+            newMemo.createdAt = Date()
+            newMemo.duration = pushToTalkRecorder.recordingDuration
+            newMemo.fileURL = url.lastPathComponent
+            newMemo.isTranscribing = false
+            newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
+            newMemo.originDeviceId = PersistenceController.deviceId
+            newMemo.autoProcessed = false  // Mark for macOS auto-run processing
 
-        // Save waveform
-        if let waveformData = try? JSONEncoder().encode(pushToTalkRecorder.audioLevels) {
-            newMemo.waveformData = waveformData
-        }
+            // Load audio data
+            do {
+                let audioData = try Data(contentsOf: url)
+                newMemo.audioData = audioData
+                AppLogger.recording.info("Push-to-talk audio data loaded: \(audioData.count) bytes")
+            } catch {
+                AppLogger.recording.warning("Failed to load audio data: \(error.localizedDescription)")
+            }
 
-        do {
-            try viewContext.save()
-            AppLogger.persistence.info("Push-to-talk memo saved")
+            // Save waveform
+            if let waveformData = try? JSONEncoder().encode(pushToTalkRecorder.audioLevels) {
+                newMemo.waveformData = waveformData
+            }
 
-            // Update widget with new memo
-            PersistenceController.refreshWidgetData(context: viewContext)
+            do {
+                try viewContext.save()
+                AppLogger.persistence.info("Push-to-talk memo saved")
 
-            let memoObjectID = newMemo.objectID
+                // Update widget with new memo
+                PersistenceController.refreshWidgetData(context: viewContext)
 
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                let memoObjectID = newMemo.objectID
+
+                // Start transcription after brief delay for Core Data to sync
+                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
                 if let savedMemo = viewContext.object(with: memoObjectID) as? VoiceMemo {
+                    AppLogger.transcription.info("Starting transcription for push-to-talk memo")
                     TranscriptionService.shared.transcribeVoiceMemo(savedMemo, context: viewContext)
                 }
+            } catch {
+                AppLogger.persistence.error("Error saving push-to-talk memo: \(error.localizedDescription)")
             }
-        } catch {
-            AppLogger.persistence.error("Error saving push-to-talk memo: \(error.localizedDescription)")
         }
     }
 
