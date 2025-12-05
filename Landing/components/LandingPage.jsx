@@ -367,6 +367,7 @@ export default function LandingPage() {
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition-colors">Twitter</a>
             <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition-colors">Discord</a>
             <a href="mailto:hello@talkie.arach.dev" className="hover:text-black dark:hover:text-white transition-colors">Email</a>
+            <a href="/privacypolicy" className="hover:text-black dark:hover:text-white transition-colors">Privacy</a>
           </div>
           <p className="text-[10px] font-mono uppercase text-zinc-400">© {new Date().getFullYear()} Talkie Systems Inc.</p>
         </Container>

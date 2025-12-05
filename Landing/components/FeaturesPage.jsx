@@ -27,6 +27,7 @@ import {
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
 import { SecurityInfographic } from './SecurityInfographic'
+import ScreenshotsSection from './ScreenshotsSection'
 
 const SectionHeader = ({ label, icon: Icon }) => (
   <div className="flex items-center gap-3 mb-8 pt-8 border-t border-zinc-200 dark:border-zinc-800">
@@ -230,11 +231,16 @@ export default function FeaturesPage() {
           {/* 5. Voice Recording */}
           <section className="mb-20">
             <SectionHeader label="Voice Recording & Transcription" icon={Mic} />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <FeatureCard title="One-Tap Capture" description="Instant recording startup time. No lag. No loading screens." />
-              <FeatureCard title="Auto-Transcribe" description="Local, high-accuracy transcription running on-device via Apple's Neural Engine." />
-              <FeatureCard title="iCloud Sync" description="Seamless, encrypted synchronization across iPhone, iPad, and Mac." />
-              <FeatureCard title="Smart Library" description="Organize with Recent, Processed, Archived, and custom Smart Folders." />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FeatureCard title="One-Tap Capture" description="Instant recording startup time. No lag. No loading screens." />
+                <FeatureCard title="Auto-Transcribe" description="Local, high-accuracy transcription running on-device via Apple's Neural Engine." />
+                <FeatureCard title="iCloud Sync" description="Seamless, encrypted synchronization across iPhone, iPad, and Mac." />
+                <FeatureCard title="Smart Library" description="Organize with Recent, Processed, Archived, and custom Smart Folders." />
+              </div>
+              <div className="bg-zinc-100 dark:bg-zinc-900 rounded border border-zinc-200 dark:border-zinc-800">
+                <ScreenshotsSection />
+              </div>
             </div>
           </section>
 
