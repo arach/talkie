@@ -125,7 +125,13 @@
       "Bash(then echo 'Processing: $f' sips -s format jpeg $f --out $f%.png_temp.jpg 2)",
       "Bash(/dev/null sips -s format png $f%.png_temp.jpg --out $f 2)",
       "Bash(/dev/null rm -f $f%.png_temp.jpg fi done)",
-      "Bash(do sips -g hasAlpha $f)"
+      "Bash(do sips -g hasAlpha $f)",
+      "WebFetch(domain:www.hackingwithswift.com)",
+      "WebFetch(domain:wwdcnotes.com)",
+      "WebFetch(domain:differ.blog)",
+      "WebFetch(domain:agents.md)",
+      "Bash(git rm:*)",
+      "WebFetch(domain:superwhisper.com)"
     ],
     "deny": [],
     "ask": []
