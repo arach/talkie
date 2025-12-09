@@ -8,10 +8,10 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "live.talkie.live", category: "Engine")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
 
 /// Mach service name for XPC connection (must match TalkieEngine)
-private let kTalkieEngineServiceName = "live.talkie.engine.xpc"
+private let kTalkieEngineServiceName = "jdi.talkie.engine.xpc"
 
 /// XPC protocol for TalkieEngine (must match TalkieEngine's protocol)
 @objc protocol TalkieEngineProtocol {
@@ -31,14 +31,93 @@ private let kTalkieEngineServiceName = "live.talkie.engine.xpc"
     func getStatus(reply: @escaping (_ statusJSON: Data?) -> Void)
 
     func ping(reply: @escaping (_ pong: Bool) -> Void)
+
+    // Download management
+    func downloadModel(_ modelId: String, reply: @escaping (_ error: String?) -> Void)
+    func getDownloadProgress(reply: @escaping (_ progressJSON: Data?) -> Void)
+    func cancelDownload(reply: @escaping () -> Void)
+    func getAvailableModels(reply: @escaping (_ modelsJSON: Data?) -> Void)
 }
 
 /// Engine status (matches TalkieEngine's EngineStatus)
 public struct EngineStatus: Codable, Sendable {
+    // Process info
+    public let pid: Int32
+    public let version: String
+    public let startedAt: Date
+    public let bundleId: String
+
+    // Model state
     public let loadedModelId: String?
     public let isTranscribing: Bool
     public let isWarmingUp: Bool
     public let downloadedModels: [String]
+
+    // Stats
+    public let totalTranscriptions: Int
+    public let memoryUsageMB: Int?
+
+    /// Computed: Engine uptime
+    public var uptime: TimeInterval {
+        Date().timeIntervalSince(startedAt)
+    }
+
+    /// Computed: Formatted uptime string
+    public var uptimeFormatted: String {
+        let seconds = Int(uptime)
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        return "\(hours)h \(minutes % 60)m"
+    }
+
+    /// Computed: Memory usage formatted
+    public var memoryFormatted: String? {
+        guard let mb = memoryUsageMB else { return nil }
+        if mb < 1024 { return "\(mb) MB" }
+        return String(format: "%.1f GB", Double(mb) / 1024.0)
+    }
+}
+
+/// Download progress (matches TalkieEngine's DownloadProgress)
+public struct DownloadProgress: Codable, Sendable {
+    public let modelId: String
+    public let progress: Double  // 0.0 to 1.0
+    public let downloadedBytes: Int64
+    public let totalBytes: Int64?
+    public let isDownloading: Bool
+
+    /// Formatted progress string (e.g., "45%")
+    public var progressFormatted: String {
+        "\(Int(progress * 100))%"
+    }
+
+    /// Formatted size string (e.g., "150 MB / 300 MB")
+    public var sizeFormatted: String {
+        let downloaded = formatBytes(downloadedBytes)
+        if let total = totalBytes {
+            return "\(downloaded) / \(formatBytes(total))"
+        }
+        return downloaded
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let mb = Double(bytes) / 1_000_000
+        if mb < 1000 {
+            return String(format: "%.0f MB", mb)
+        }
+        return String(format: "%.1f GB", mb / 1000)
+    }
+}
+
+/// Model info for display (matches TalkieEngine's ModelInfo)
+public struct ModelInfo: Codable, Sendable, Identifiable {
+    public let id: String
+    public let displayName: String
+    public let sizeDescription: String
+    public let isDownloaded: Bool
+    public let isLoaded: Bool
 }
 
 /// Connection state for UI display
@@ -63,6 +142,10 @@ public final class EngineClient: ObservableObject {
     @Published public private(set) var connectedAt: Date?
     @Published public private(set) var transcriptionCount: Int = 0
     @Published public private(set) var lastTranscriptionAt: Date?
+
+    // MARK: - Download State
+    @Published public private(set) var downloadProgress: DownloadProgress?
+    @Published public private(set) var availableModels: [ModelInfo] = []
 
     /// Computed property for backwards compatibility
     public var isConnected: Bool { connectionState == .connected }
@@ -311,6 +394,87 @@ public final class EngineClient: ObservableObject {
             }
         }
     }
+
+    // MARK: - Download Management
+
+    /// Download a model by ID
+    public func downloadModel(_ modelId: String) async throws {
+        logger.info("[Engine] Downloading model '\(modelId)'...")
+
+        guard let proxy = engineProxy else {
+            logger.error("[Engine] Cannot download - not connected")
+            throw EngineClientError.notConnected
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            proxy.downloadModel(modelId) { error in
+                if let error = error {
+                    logger.error("[Engine] Download failed: \(error)")
+                    continuation.resume(throwing: EngineClientError.downloadFailed(error))
+                } else {
+                    logger.info("[Engine] ✓ Model '\(modelId)' downloaded")
+                    continuation.resume()
+                }
+            }
+        }
+
+        // Refresh available models after download
+        await refreshAvailableModels()
+        refreshStatus()
+    }
+
+    /// Get current download progress
+    public func getDownloadProgress() async -> DownloadProgress? {
+        guard let proxy = engineProxy else { return nil }
+
+        return await withCheckedContinuation { continuation in
+            proxy.getDownloadProgress { progressJSON in
+                if let data = progressJSON,
+                   let progress = try? JSONDecoder().decode(DownloadProgress.self, from: data) {
+                    continuation.resume(returning: progress)
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    /// Cancel any ongoing download
+    public func cancelDownload() async {
+        logger.info("[Engine] Cancelling download...")
+
+        guard let proxy = engineProxy else {
+            logger.warning("[Engine] Cannot cancel - not connected")
+            return
+        }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            proxy.cancelDownload {
+                logger.info("[Engine] ✓ Download cancelled")
+                continuation.resume()
+            }
+        }
+
+        downloadProgress = nil
+    }
+
+    /// Refresh available models list
+    public func refreshAvailableModels() async {
+        guard let proxy = engineProxy else { return }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            proxy.getAvailableModels { [weak self] modelsJSON in
+                Task { @MainActor in
+                    if let data = modelsJSON,
+                       let models = try? JSONDecoder().decode([ModelInfo].self, from: data) {
+                        self?.availableModels = models
+                        logger.debug("[Engine] Available models: \(models.map { $0.id })")
+                    }
+                    continuation.resume()
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Errors
@@ -319,6 +483,7 @@ public enum EngineClientError: LocalizedError {
     case notConnected
     case transcriptionFailed(String)
     case preloadFailed(String)
+    case downloadFailed(String)
     case emptyResponse
 
     public var errorDescription: String? {
@@ -329,6 +494,8 @@ public enum EngineClientError: LocalizedError {
             return "Transcription failed: \(message)"
         case .preloadFailed(let message):
             return "Failed to preload model: \(message)"
+        case .downloadFailed(let message):
+            return "Failed to download model: \(message)"
         case .emptyResponse:
             return "Empty response from engine"
         }

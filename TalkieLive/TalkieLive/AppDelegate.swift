@@ -18,8 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = LiveSettings.shared
         let audio = MicrophoneCapture()
 
-        // Use EngineTranscriptionService - it will try XPC to TalkieEngine first,
-        // then fall back to local WhisperService if Engine is unavailable
+        // Use EngineTranscriptionService - requires TalkieEngine to be running (no fallback)
         let transcription = EngineTranscriptionService(modelId: settings.whisperModel.rawValue)
         let router = TranscriptRouter(mode: settings.routingMode)
 
@@ -29,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             router: router
         )
 
-        // Pre-load model - try Engine first, fall back to local
+        // Pre-load model via Engine (no fallback)
         Task {
             await preloadModel(settings: settings)
         }
@@ -228,52 +227,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Model Preloading
 
+    /// Preload model via TalkieEngine - NO FALLBACK
+    /// Engine must be running for TalkieLive to work
     private func preloadModel(settings: LiveSettings) async {
         let modelId = settings.whisperModel.rawValue
         SystemEventManager.shared.log(.system, "Loading model", detail: settings.whisperModel.displayName)
         let loadStart = Date()
 
-        // Try to connect to TalkieEngine first
+        // Connect to TalkieEngine - NO FALLBACK
         let client = EngineClient.shared
         let engineConnected = await client.ensureConnected()
 
-        if engineConnected {
-            // Use Engine for model preloading
-            SystemEventManager.shared.log(.system, "Using TalkieEngine", detail: "XPC connection established")
-
-            do {
-                try await client.preloadModel(modelId)
-                let totalTime = Date().timeIntervalSince(loadStart)
-                SystemEventManager.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
-                return
-            } catch {
-                SystemEventManager.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
-                // Fall through to local
-            }
-        } else {
-            SystemEventManager.shared.log(.system, "Engine unavailable", detail: "Using local WhisperService")
+        guard engineConnected else {
+            SystemEventManager.shared.log(.error, "═══════════════════════════════════════════════════")
+            SystemEventManager.shared.log(.error, "  ❌ TALKIE ENGINE NOT RUNNING")
+            SystemEventManager.shared.log(.error, "  TalkieLive requires TalkieEngine to be running.")
+            SystemEventManager.shared.log(.error, "  Please start the Engine service.")
+            SystemEventManager.shared.log(.error, "═══════════════════════════════════════════════════")
+            return
         }
 
-        // Fallback: local WhisperService
-        var warmupLogged = false
-        let warmupObserver = WhisperService.shared.$isWarmingUp
-            .receive(on: DispatchQueue.main)
-            .sink { isWarmingUp in
-                if isWarmingUp && !warmupLogged {
-                    warmupLogged = true
-                    let loadTime = Date().timeIntervalSince(loadStart)
-                    SystemEventManager.shared.log(.system, "Warming up (local)", detail: String(format: "loaded in %.1fs", loadTime))
-                }
-            }
+        SystemEventManager.shared.log(.system, "═══════════════════════════════════════════════════")
+        SystemEventManager.shared.log(.system, "  🔗 CONNECTED TO TALKIE ENGINE (XPC)")
+        SystemEventManager.shared.log(.system, "═══════════════════════════════════════════════════")
 
         do {
-            try await WhisperService.shared.preloadModel(settings.whisperModel)
+            try await client.preloadModel(modelId)
             let totalTime = Date().timeIntervalSince(loadStart)
-            SystemEventManager.shared.log(.system, "Model ready (local)", detail: String(format: "%.1fs total", totalTime))
+            SystemEventManager.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
         } catch {
-            SystemEventManager.shared.log(.error, "Model load failed", detail: error.localizedDescription)
+            SystemEventManager.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
         }
-
-        warmupObserver.cancel()
     }
 }

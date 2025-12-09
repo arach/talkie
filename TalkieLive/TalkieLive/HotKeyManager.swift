@@ -7,7 +7,7 @@ import Cocoa
 import Carbon.HIToolbox
 import os.log
 
-private let logger = Logger(subsystem: "live.talkie", category: "HotKeyManager")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "HotKeyManager")
 
 // MARK: - Global Registry
 

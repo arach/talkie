@@ -30,6 +30,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		536BA7FE2EE8040A00C0132C /* Talkie.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Talkie.xcodeproj; path = ../macOS/Talkie.xcodeproj; sourceTree = SOURCE_ROOT; };
 		539FB5B92EE6785C004EEAF4 /* TalkieLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		539FB5CC2EE6785D004EEAF4 /* TalkieLiveTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieLiveTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		539FB5D62EE6785D004EEAF4 /* TalkieLiveUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieLiveUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -90,6 +91,7 @@
 				539FB5CF2EE6785D004EEAF4 /* TalkieLiveTests */,
 				539FB5D92EE6785D004EEAF4 /* TalkieLiveUITests */,
 				539FB5BA2EE6785C004EEAF4 /* Products */,
+				536BA7FE2EE8040A00C0132C /* Talkie.xcodeproj */,
 			);
 			sourceTree = "<group>";
 		};
@@ -428,7 +430,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieLive;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -457,7 +459,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieLive;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -475,7 +477,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieLiveTests;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -493,7 +495,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieLiveTests;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -509,7 +511,7 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieLiveUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -525,7 +527,7 @@
 				DEVELOPMENT_TEAM = 2U83JFPW66;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jdi.TalkieLiveUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;

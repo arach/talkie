@@ -9,7 +9,7 @@ import AVFoundation
 import Combine
 import os.log
 
-private let logger = Logger(subsystem: "live.talkie", category: "AudioCapture")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioCapture")
 
 /// Shared audio level for UI visualization
 @MainActor

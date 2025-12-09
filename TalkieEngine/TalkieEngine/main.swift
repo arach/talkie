@@ -8,7 +8,7 @@
 import Cocoa
 import os
 
-private let logger = Logger(subsystem: "live.talkie.engine", category: "Main")
+private let logger = Logger(subsystem: "jdi.talkie.engine", category: "Main")
 
 // Global references to prevent deallocation
 var xpcListener: NSXPCListener!

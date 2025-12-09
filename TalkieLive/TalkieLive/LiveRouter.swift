@@ -9,7 +9,7 @@ import AppKit
 import Carbon.HIToolbox
 import os.log
 
-private let logger = Logger(subsystem: "live.talkie", category: "LiveRouter")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "LiveRouter")
 
 enum RoutingMode: String, CaseIterable {
     case clipboardOnly = "clipboardOnly"  // Copy to clipboard only

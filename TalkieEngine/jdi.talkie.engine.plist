@@ -3,14 +3,14 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>live.talkie.engine</string>
+    <string>jdi.talkie.engine</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Users/arach/Library/Developer/Xcode/DerivedData/TalkieEngine-cmecdpfodydvvictztemgqrzuwij/Build/Products/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
     </array>
     <key>MachServices</key>
     <dict>
-        <key>live.talkie.engine.xpc</key>
+        <key>jdi.talkie.engine.xpc</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>

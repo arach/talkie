@@ -1618,14 +1618,34 @@ struct EngineSettingsSection: View {
                                     .foregroundColor(.white)
                             }
 
-                            if engineClient.isConnected {
-                                Text("TalkieEngine XPC service")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.white.opacity(0.5))
+                            if engineClient.isConnected, let status = engineClient.status {
+                                HStack(spacing: 6) {
+                                    Text("PID \(String(status.pid))")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text("•")
+                                        .foregroundColor(.white.opacity(0.3))
+                                    Text(status.bundleId)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    #if DEBUG
+                                    Text("DEBUG")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundColor(.orange)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(Color.orange.opacity(0.2))
+                                        .cornerRadius(3)
+                                    #endif
+                                }
                             } else if let error = engineClient.lastError {
                                 Text(error)
                                     .font(.system(size: 10))
                                     .foregroundColor(.red.opacity(0.8))
+                            } else {
+                                Text("TalkieEngine daemon not running")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.5))
                             }
                         }
 
@@ -1650,30 +1670,58 @@ struct EngineSettingsSection: View {
                         .buttonStyle(.plain)
                     }
 
-                    if engineClient.isConnected {
+                    if engineClient.isConnected, let status = engineClient.status {
                         Divider()
                             .background(Color.white.opacity(0.1))
 
-                        // Session stats
+                        // Engine process stats (from Engine itself)
                         HStack(spacing: Spacing.lg) {
                             EngineStatBadge(
                                 icon: "clock",
-                                label: "Uptime",
-                                value: formatUptime(engineClient.connectedAt)
+                                label: "Engine Uptime",
+                                value: status.uptimeFormatted
                             )
 
                             EngineStatBadge(
                                 icon: "text.bubble",
                                 label: "Transcriptions",
-                                value: "\(engineClient.transcriptionCount)"
+                                value: "\(status.totalTranscriptions)"
                             )
 
-                            if let lastAt = engineClient.lastTranscriptionAt {
+                            if let memory = status.memoryFormatted {
                                 EngineStatBadge(
-                                    icon: "checkmark.circle",
-                                    label: "Last",
-                                    value: formatTimeAgo(lastAt)
+                                    icon: "memorychip",
+                                    label: "Memory",
+                                    value: memory
                                 )
+                            }
+                        }
+
+                        // Client session stats
+                        if engineClient.transcriptionCount > 0 {
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+
+                            HStack(spacing: Spacing.lg) {
+                                EngineStatBadge(
+                                    icon: "link",
+                                    label: "Session",
+                                    value: formatUptime(engineClient.connectedAt)
+                                )
+
+                                EngineStatBadge(
+                                    icon: "waveform",
+                                    label: "This Session",
+                                    value: "\(engineClient.transcriptionCount)"
+                                )
+
+                                if let lastAt = engineClient.lastTranscriptionAt {
+                                    EngineStatBadge(
+                                        icon: "checkmark.circle",
+                                        label: "Last",
+                                        value: formatTimeAgo(lastAt)
+                                    )
+                                }
                             }
                         }
                     }

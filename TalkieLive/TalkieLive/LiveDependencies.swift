@@ -3,7 +3,7 @@ import os.log
 import TalkieCore
 import TalkieServices
 
-private let logger = Logger(subsystem: "live.talkie", category: "Dependencies")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "Dependencies")
 
 // MARK: - Protocols
 
@@ -51,7 +51,7 @@ struct StubTranscriptionService: TranscriptionService {
 // MARK: - Engine Transcription Service
 
 /// TranscriptionService that uses TalkieEngine via XPC
-/// Falls back to local WhisperService if Engine is unavailable
+/// NO FALLBACK - requires Engine to be running
 struct EngineTranscriptionService: TranscriptionService {
     private let modelId: String
 
@@ -62,30 +62,46 @@ struct EngineTranscriptionService: TranscriptionService {
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
         let client = await EngineClient.shared
 
-        // Try to connect to engine
+        // Connect to Engine - NO FALLBACK
         let connected = await client.ensureConnected()
 
-        if connected {
-            logger.info("Using TalkieEngine for transcription")
-            do {
-                let text = try await client.transcribe(audioData: request.audioData, modelId: modelId)
-                return Transcript(text: text, confidence: nil)
-            } catch {
-                logger.warning("Engine transcription failed, falling back to local: \(error.localizedDescription)")
-                // Fall through to local transcription
-            }
-        } else {
-            logger.info("TalkieEngine not available, using local transcription")
+        guard connected else {
+            logger.error("═══════════════════════════════════════════════════════════")
+            logger.error("  ❌ TALKIE ENGINE NOT RUNNING")
+            logger.error("  TalkieLive requires TalkieEngine to be running.")
+            logger.error("  Please ensure the Engine is installed and started.")
+            logger.error("═══════════════════════════════════════════════════════════")
+            throw EngineTranscriptionError.engineNotRunning
         }
 
-        // Fallback to local WhisperService
-        return try await fallbackToLocal(request)
-    }
+        logger.notice("═══════════════════════════════════════════════════════════")
+        logger.notice("  🎙️ TRANSCRIBING VIA TALKIE ENGINE (XPC)")
+        logger.notice("  Model: \(self.modelId)")
+        logger.notice("  Audio: \(request.audioData.count) bytes")
+        logger.notice("═══════════════════════════════════════════════════════════")
 
-    private func fallbackToLocal(_ request: TranscriptionRequest) async throws -> Transcript {
-        // Use local WhisperService as fallback
-        let whisperService = WhisperTranscriptionService(model: .small)
-        return try await whisperService.transcribe(request)
+        let startTime = Date()
+        let text = try await client.transcribe(audioData: request.audioData, modelId: modelId)
+        let elapsed = Date().timeIntervalSince(startTime)
+
+        logger.notice("═══════════════════════════════════════════════════════════")
+        logger.notice("  ✅ ENGINE TRANSCRIPTION COMPLETE")
+        logger.notice("  Time: \(String(format: "%.2f", elapsed))s")
+        logger.notice("  Result: \(text.prefix(80))...")
+        logger.notice("═══════════════════════════════════════════════════════════")
+
+        return Transcript(text: text, confidence: nil)
+    }
+}
+
+enum EngineTranscriptionError: LocalizedError {
+    case engineNotRunning
+
+    var errorDescription: String? {
+        switch self {
+        case .engineNotRunning:
+            return "Talkie Engine is not running. Please start the Engine service."
+        }
     }
 }
 

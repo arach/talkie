@@ -162,7 +162,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = live.talkie.engine;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.engine;
 				PRODUCT_NAME = TalkieEngine;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
@@ -303,7 +303,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = live.talkie.engine;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.engine;
 				PRODUCT_NAME = TalkieEngine;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;

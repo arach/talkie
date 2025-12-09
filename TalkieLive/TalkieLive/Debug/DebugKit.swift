@@ -499,7 +499,7 @@ final class SystemEventManager: ObservableObject {
         }
 
         // Also log to os_log
-        let logger = Logger(subsystem: "live.talkie", category: type.rawValue)
+        let logger = Logger(subsystem: "jdi.talkie.live", category: type.rawValue)
         if let detail = detail {
             logger.info("\(message): \(detail)")
         } else {
@@ -1980,7 +1980,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                 // Stats section
                 DebugSection(title: "STATE") {
                     VStack(spacing: 0) {
-                        debugInfoRow("Past Lives", "\(PastLivesDatabase.count())")
+                        debugInfoRow("Echoes", "\(PastLivesDatabase.count())")
                         debugInfoRow("Events", "\(events.events.count)")
                         debugInfoRow("Errors", "\(events.events.filter { $0.type == .error }.count)")
                     }
@@ -2093,7 +2093,7 @@ struct DebugToolbarOverlay<Content: View>: View {
 
         // State
         lines.append("State:")
-        lines.append("  Past Lives: \(PastLivesDatabase.count())")
+        lines.append("  Echoes: \(PastLivesDatabase.count())")
         lines.append("  Events: \(events.events.count)")
         lines.append("  Errors: \(events.events.filter { $0.type == .error }.count)")
         lines.append("")

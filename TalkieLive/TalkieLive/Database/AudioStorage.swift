@@ -8,7 +8,7 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "live.talkie", category: "AudioStorage")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioStorage")
 
 enum AudioStorage {
     /// Directory where audio files are stored

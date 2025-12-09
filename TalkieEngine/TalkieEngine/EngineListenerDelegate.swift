@@ -8,7 +8,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "live.talkie.engine", category: "ListenerDelegate")
+private let logger = Logger(subsystem: "jdi.talkie.engine", category: "ListenerDelegate")
 
 class EngineListenerDelegate: NSObject, NSXPCListenerDelegate {
     private let serviceWrapper: XPCServiceWrapper

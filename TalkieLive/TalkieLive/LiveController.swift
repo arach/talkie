@@ -3,7 +3,7 @@ import os.log
 import TalkieCore
 import TalkieServices
 
-private let logger = Logger(subsystem: "live.talkie", category: "LiveController")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "LiveController")
 
 enum LiveState: String {
     case idle

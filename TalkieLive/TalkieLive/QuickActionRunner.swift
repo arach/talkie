@@ -10,7 +10,7 @@ import Foundation
 import AppKit
 import os.log
 
-private let logger = Logger(subsystem: "live.talkie", category: "QuickAction")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "QuickAction")
 
 // MARK: - Quick Action Runner
 

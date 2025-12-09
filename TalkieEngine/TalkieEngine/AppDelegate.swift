@@ -8,7 +8,7 @@
 import Cocoa
 import os
 
-private let logger = Logger(subsystem: "live.talkie.engine", category: "AppDelegate")
+private let logger = Logger(subsystem: "jdi.talkie.engine", category: "AppDelegate")
 
 // Note: @main is in main.swift which sets up XPC before NSApplication
 class AppDelegate: NSObject, NSApplicationDelegate {

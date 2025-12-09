@@ -118,7 +118,7 @@ struct LiveNavigationView: View {
                     sidebarItem(
                         section: .history,
                         icon: "sparkles",
-                        title: "Past Lives",
+                        title: "Echoes",
                         badge: store.utterances.count > 0 ? "\(store.utterances.count)" : nil,
                         badgeColor: .secondary
                     )
@@ -331,7 +331,7 @@ struct LiveNavigationView: View {
                 .frame(height: 0.5)
 
             HStack {
-                Text("\(store.utterances.count) past \(store.utterances.count == 1 ? "life" : "lives")")
+                Text("\(store.utterances.count) \(store.utterances.count == 1 ? "echo" : "echoes")")
                     .font(Design.fontXS)
                     .foregroundColor(Design.foregroundMuted)
 
@@ -368,7 +368,7 @@ struct LiveNavigationView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 36))
                 .foregroundColor(Design.foregroundMuted.opacity(0.5))
-            Text("No Past Lives Yet")
+            Text("No Echoes Yet")
                 .font(Design.fontBodyMedium)
                 .foregroundColor(Design.foregroundSecondary)
             Text("Press \(LiveSettings.shared.hotkey.displayString) to start recording")

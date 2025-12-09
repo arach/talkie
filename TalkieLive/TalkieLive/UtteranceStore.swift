@@ -9,7 +9,7 @@ import Foundation
 import AppKit
 import os.log
 
-private let logger = Logger(subsystem: "live.talkie", category: "UtteranceStore")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "UtteranceStore")
 
 // MARK: - Utterance Metadata
 
