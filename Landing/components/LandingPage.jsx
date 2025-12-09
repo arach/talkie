@@ -102,12 +102,6 @@ export default function LandingPage() {
               Pricing
             </a>
           </div>
-          <button
-            onClick={handleLaunch}
-            className="hidden md:flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/60 dark:focus-visible:ring-zinc-600/50"
-          >
-            Launch Web Demo <ArrowRight className="w-3 h-3" />
-          </button>
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
