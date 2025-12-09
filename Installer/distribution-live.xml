@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Talkie Live</title>
+
+    <!-- Custom branding - light and dark mode backgrounds -->
+    <background file="background.png" alignment="bottomleft" scaling="proportional"/>
+    <background-darkAqua file="background-dark.png" alignment="bottomleft" scaling="proportional"/>
+
+    <!-- Content pages -->
+    <welcome file="welcome-live.html"/>
+    <license file="license.html"/>
+    <conclusion file="conclusion-live.html"/>
+
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+
+    <!-- Single choice containing both packages -->
+    <choice id="default"
+            title="Talkie Live"
+            description="Includes Talkie Engine and Talkie Live."
+            visible="false">
+        <pkg-ref id="jdi.talkie.engine"/>
+        <pkg-ref id="jdi.talkie.live"/>
+    </choice>
+
+    <pkg-ref id="jdi.talkie.engine" version="1.0.0" installKBytes="1400">TalkieEngine.pkg</pkg-ref>
+    <pkg-ref id="jdi.talkie.live" version="1.0.0" installKBytes="7400">TalkieLive.pkg</pkg-ref>
+
+</installer-gui-script>

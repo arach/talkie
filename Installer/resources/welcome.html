@@ -1,27 +1,157 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; }
-        h1 { color: #333; }
-        p { color: #666; line-height: 1.6; }
-        .feature { margin: 10px 0; }
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-card: rgba(0,0,0,0.03);
+            --border-card: rgba(0,0,0,0.08);
+            --text-primary: #1a1a1a;
+            --text-secondary: #525252;
+            --text-muted: #71717a;
+            --logo-bg: #1a1a1a;
+            --logo-fill: #ffffff;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-primary: #ffffff;
+                --bg-card: rgba(255,255,255,0.05);
+                --border-card: rgba(255,255,255,0.1);
+                --text-primary: #ffffff;
+                --text-secondary: rgba(255,255,255,0.7);
+                --text-muted: rgba(255,255,255,0.5);
+                --logo-bg: #ffffff;
+                --logo-fill: #0a0a0a;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            padding: 24px 28px;
+            background: transparent;
+            color: var(--text-primary);
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: var(--logo-bg);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--logo-fill);
+        }
+
+        .brand {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+        }
+
+        .tagline {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .section-label {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .features {
+            margin: 0;
+        }
+
+        .feature {
+            margin-bottom: 18px;
+            line-height: 1.5;
+        }
+
+        .feature-icon {
+            display: inline;
+            font-size: 10px;
+            margin-right: 10px;
+        }
+
+        .feature-icon.live { color: #34c759; }
+        .feature-icon.core { color: #ff9500; }
+        .feature-icon.engine { color: #af52de; }
+
+        .feature-name {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .cta {
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
-    <h1>Welcome to Talkie</h1>
-    <p>Talkie is a powerful voice capture and transcription suite for macOS.</p>
-    
-    <div class="feature">
-        <strong>🎙 Talkie Live</strong> - Quick voice capture from your menu bar
+    <div class="header">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+        </div>
+        <span class="brand">Talkie_OS</span>
     </div>
-    <div class="feature">
-        <strong>📚 Talkie Core</strong> - Full library with CloudKit sync and workflows
+
+    <p class="tagline">Voice capture and transcription suite for macOS. Fast, private, and powered by on-device AI.</p>
+
+    <div class="section-label">Components</div>
+
+    <div class="features">
+        <div class="feature">
+            <span class="feature-icon engine">◆</span> <span class="feature-name">Talkie Engine:</span> <span class="feature-desc">Shared background service powering fast local transcription. Private and offline. Used by Talkie and Talkie Live.</span>
+        </div>
+
+        <div class="feature">
+            <span class="feature-icon core">■</span> <span class="feature-name">Talkie:</span> <span class="feature-desc">Full library with iCloud sync, workflows, and AI-powered actions.</span>
+        </div>
+
+        <div class="feature">
+            <span class="feature-icon live">●</span> <span class="feature-name">Talkie Live:</span> <span class="feature-desc">Menu bar app for quick voice capture. Press Option+Command+L to record.</span>
+        </div>
     </div>
-    <div class="feature">
-        <strong>⚡️ Talkie Engine</strong> - Fast local transcription powered by WhisperKit
-    </div>
-    
-    <p>Click Continue to proceed with the installation.</p>
 </body>
 </html>

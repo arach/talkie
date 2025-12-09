@@ -2,56 +2,161 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Talkie for Mac - License Agreement</title>
+    <title>License Agreement</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; font-size: 12px; line-height: 1.6; }
-        h1 { font-size: 16px; margin-bottom: 16px; }
-        h2 { font-size: 13px; margin-top: 16px; margin-bottom: 8px; }
-        p, li { font-size: 12px; }
-        ul { padding-left: 20px; }
+        :root {
+            --bg-card: rgba(0,0,0,0.03);
+            --border-card: rgba(0,0,0,0.08);
+            --border-intro: #a1a1aa;
+            --text-primary: #1a1a1a;
+            --text-body: #3f3f46;
+            --text-secondary: #525252;
+            --text-muted: #71717a;
+            --highlight-bg: rgba(34,197,94,0.08);
+            --highlight-border: #22c55e;
+            --highlight-heading: #16a34a;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-card: rgba(255,255,255,0.05);
+                --border-card: rgba(255,255,255,0.1);
+                --border-intro: rgba(255,255,255,0.3);
+                --text-primary: #ffffff;
+                --text-body: rgba(255,255,255,0.8);
+                --text-secondary: rgba(255,255,255,0.7);
+                --text-muted: rgba(255,255,255,0.4);
+                --highlight-bg: rgba(52,199,89,0.1);
+                --highlight-border: #34c759;
+                --highlight-heading: #34c759;
+            }
+        }
+
+        body {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            padding: 20px 24px;
+            background: transparent;
+            color: var(--text-body);
+            font-size: 11px;
+            line-height: 1.7;
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-primary);
+            margin: 0 0 4px 0;
+        }
+
+        .updated {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .intro {
+            font-size: 11px;
+            color: var(--text-body);
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            background: var(--bg-card);
+            border-radius: 6px;
+            border-left: 3px solid var(--border-intro);
+        }
+
+        h2 {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+            margin-top: 16px;
+            margin-bottom: 6px;
+        }
+
+        p {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        ul {
+            padding-left: 16px;
+            margin: 6px 0;
+        }
+
+        li {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin: 4px 0;
+        }
+
+        .highlight {
+            background: var(--highlight-bg);
+            padding: 12px 14px;
+            border-radius: 6px;
+            margin: 14px 0;
+            border-left: 3px solid var(--highlight-border);
+        }
+
+        .highlight h2 {
+            margin-top: 0;
+            color: var(--highlight-heading);
+        }
+
+        .highlight p {
+            font-size: 10px;
+            margin: 0;
+            color: var(--text-body);
+        }
+
+        .footer {
+            margin-top: 20px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-card);
+            font-size: 9px;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
-    <h1>Talkie for Mac - End User License Agreement</h1>
+    <h1>End User License Agreement</h1>
+    <p class="updated">Last Updated: December 2025</p>
 
-    <p><strong>Last Updated:</strong> December 2024</p>
-
-    <p>By installing, copying, or otherwise using Talkie for Mac ("Software"), you agree to be bound by the terms of this End User License Agreement ("Agreement"). If you do not agree to these terms, do not install or use the Software.</p>
+    <p class="intro">By installing or using Talkie for Mac, you agree to the terms of this Agreement.</p>
 
     <h2>1. License Grant</h2>
-    <p>Subject to the terms of this Agreement, you are granted a limited, non-exclusive, non-transferable license to install and use the Software on devices that you own or control, for personal, non-commercial purposes.</p>
+    <p>You are granted a limited, non-exclusive, non-transferable license to install and use the Software on devices you own or control, for personal, non-commercial purposes.</p>
 
     <h2>2. Restrictions</h2>
     <p>You may not:</p>
     <ul>
-        <li>Copy, modify, or distribute the Software except as expressly permitted</li>
+        <li>Copy, modify, or distribute the Software except as permitted</li>
         <li>Reverse engineer, decompile, or disassemble the Software</li>
         <li>Rent, lease, or lend the Software to third parties</li>
         <li>Use the Software for any unlawful purpose</li>
-        <li>Remove or alter any proprietary notices or labels</li>
     </ul>
 
-    <h2>3. Privacy &amp; Data</h2>
-    <p>The Software processes audio recordings locally on your device using on-device machine learning. Your voice recordings and transcriptions are stored locally and are not transmitted to external servers unless you explicitly enable cloud sync features. We do not collect, store, or have access to your audio or transcription data.</p>
+    <div class="highlight">
+        <h2>3. Privacy and Data</h2>
+        <p>Your recordings and transcriptions are processed locally using on-device machine learning. We do not collect or access your audio data. Cloud sync is optional and uses your personal iCloud account.</p>
+    </div>
 
     <h2>4. Third-Party Components</h2>
-    <p>The Software includes third-party open source components, including WhisperKit for speech recognition. These components are subject to their respective licenses.</p>
+    <p>The Software includes open source components, including WhisperKit for speech recognition, subject to their respective licenses.</p>
 
-    <h2>5. Disclaimer of Warranties</h2>
-    <p>THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH YOU.</p>
+    <h2>5. Disclaimer</h2>
+    <p>THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.</p>
 
     <h2>6. Limitation of Liability</h2>
-    <p>IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+    <p>IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY DAMAGES ARISING FROM USE OF THE SOFTWARE.</p>
 
-    <h2>7. Termination</h2>
-    <p>This license is effective until terminated. Your rights under this license will terminate automatically without notice if you fail to comply with any of its terms. Upon termination, you must destroy all copies of the Software.</p>
+    <h2>7. Contact</h2>
+    <p>Questions: support@usetalkie.com</p>
 
-    <h2>8. Governing Law</h2>
-    <p>This Agreement shall be governed by and construed in accordance with the laws of the jurisdiction in which you reside, without regard to its conflict of law provisions.</p>
-
-    <h2>9. Contact</h2>
-    <p>For questions about this license, please contact: support@talkie.live</p>
-
-    <p style="margin-top: 20px; color: #666;">&copy; 2024 Talkie. All rights reserved.</p>
+    <p class="footer">Copyright 2025 JDI.sh. All rights reserved.</p>
 </body>
 </html>

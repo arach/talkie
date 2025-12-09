@@ -4,34 +4,26 @@
     <meta charset="UTF-8">
     <style>
         :root {
+            --bg-primary: #1a1a1a;
             --bg-card: rgba(0,0,0,0.03);
-            --bg-step: rgba(0,0,0,0.06);
             --border-card: rgba(0,0,0,0.08);
-            --border-hotkey: rgba(0,0,0,0.12);
             --text-primary: #1a1a1a;
-            --text-body: #3f3f46;
             --text-secondary: #525252;
             --text-muted: #71717a;
             --logo-bg: #1a1a1a;
             --logo-fill: #ffffff;
-            --badge-bg: rgba(34,197,94,0.12);
-            --badge-text: #16a34a;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
+                --bg-primary: #ffffff;
                 --bg-card: rgba(255,255,255,0.05);
-                --bg-step: rgba(255,255,255,0.1);
                 --border-card: rgba(255,255,255,0.1);
-                --border-hotkey: rgba(255,255,255,0.2);
                 --text-primary: #ffffff;
-                --text-body: rgba(255,255,255,0.8);
-                --text-secondary: rgba(255,255,255,0.6);
+                --text-secondary: rgba(255,255,255,0.7);
                 --text-muted: rgba(255,255,255,0.5);
                 --logo-bg: #ffffff;
                 --logo-fill: #0a0a0a;
-                --badge-bg: rgba(52,199,89,0.2);
-                --badge-text: #34c759;
             }
         }
 
@@ -48,7 +40,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 8px;
+            margin-bottom: 20px;
         }
 
         .logo {
@@ -76,20 +68,6 @@
             color: var(--text-primary);
         }
 
-        .status-badge {
-            display: inline-block;
-            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            padding: 4px 10px;
-            background: var(--badge-bg);
-            color: var(--badge-text);
-            border-radius: 4px;
-            margin-bottom: 16px;
-        }
-
         .tagline {
             font-size: 13px;
             color: var(--text-secondary);
@@ -107,25 +85,25 @@
             margin-bottom: 12px;
         }
 
-        .steps {
+        .features {
             margin: 0;
         }
 
-        .step {
+        .feature {
             margin-bottom: 18px;
             line-height: 1.5;
         }
 
-        .step-number {
+        .feature-icon {
             display: inline;
-            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-primary);
+            font-size: 10px;
             margin-right: 10px;
         }
 
-        .step-label {
+        .feature-icon.live { color: #34c759; }
+        .feature-icon.engine { color: #af52de; }
+
+        .feature-name {
             font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
             font-size: 11px;
             font-weight: 600;
@@ -134,21 +112,11 @@
             letter-spacing: 0.5px;
         }
 
-        .step-desc {
+        .feature-desc {
             font-size: 12px;
             color: var(--text-secondary);
         }
 
-        .footer {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 24px;
-        }
-
-        strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
     </style>
 </head>
 <body>
@@ -159,31 +127,21 @@
                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
             </svg>
         </div>
-        <span class="brand">Talkie_OS</span>
+        <span class="brand">Talkie Live</span>
     </div>
 
-    <span class="status-badge">Installation Complete</span>
+    <p class="tagline">Quick voice capture from your menu bar. Fast, private, and powered by on-device AI.</p>
 
-    <p class="tagline">Talkie has been installed successfully. You're ready to start capturing voice memos.</p>
+    <div class="section-label">Components</div>
 
-    <div class="section-label">Getting Started</div>
-
-    <div class="steps">
-        <div class="step">
-            <span class="step-number">1</span> <span class="step-label">Talkie Engine:</span> <span class="step-desc">Running in the background, ready to transcribe.</span>
+    <div class="features">
+        <div class="feature">
+            <span class="feature-icon engine">◆</span> <span class="feature-name">Talkie Engine:</span> <span class="feature-desc">Shared background service powering fast local transcription. Private and offline.</span>
         </div>
 
-        <div class="step">
-            <span class="step-number">2</span> <span class="step-label">Talkie Live:</span> <span class="step-desc">Find it in your menu bar for quick capture.</span>
-        </div>
-
-        <div class="step">
-            <span class="step-number">3</span> <span class="step-label">Record:</span> <span class="step-desc">Press Option + Command + L to start.</span>
+        <div class="feature">
+            <span class="feature-icon live">●</span> <span class="feature-name">Talkie Live:</span> <span class="feature-desc">Menu bar app for quick voice capture. Press Option+Command+L to record.</span>
         </div>
     </div>
-
-    <p class="footer">
-        Open <strong>Talkie</strong> from Applications for full library access with iCloud sync.
-    </p>
 </body>
 </html>

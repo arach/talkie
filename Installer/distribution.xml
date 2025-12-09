@@ -1,31 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
     <title>Talkie for Mac</title>
+
+    <!-- Custom branding - light and dark mode backgrounds -->
+    <background file="background.png" alignment="bottomleft" scaling="proportional"/>
+    <background-darkAqua file="background-dark.png" alignment="bottomleft" scaling="proportional"/>
+
+    <!-- Content pages -->
     <welcome file="welcome.html"/>
     <license file="license.html"/>
     <conclusion file="conclusion.html"/>
-    
+
     <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
-    
+
     <choices-outline>
         <line choice="engine"/>
         <line choice="live"/>
         <line choice="core"/>
     </choices-outline>
-    
+
     <!-- TalkieEngine - Required -->
-    <choice id="engine" 
-            title="Talkie Engine (Required)" 
-            description="The shared transcription service powered by WhisperKit. Runs in the background and provides fast local speech-to-text."
+    <choice id="engine"
+            title="Talkie Engine"
+            description="Required. Background transcription service powered by WhisperKit. Provides fast, private, on-device speech-to-text."
             enabled="false"
             selected="true">
         <pkg-ref id="jdi.talkie.engine"/>
     </choice>
-    
+
     <!-- TalkieLive - Optional but requires Engine -->
     <choice id="live"
             title="Talkie Live"
-            description="Lightweight menu bar app for quick voice capture. Press ⌥Space to record and transcribe instantly. Requires Talkie Engine."
+            description="Menu bar app for quick voice capture. Press Option+Space to record and transcribe instantly."
             selected="true">
         <pkg-ref id="jdi.talkie.live"/>
     </choice>
@@ -33,7 +39,7 @@
     <!-- Talkie Core - Optional but requires Engine -->
     <choice id="core"
             title="Talkie"
-            description="Full-featured voice memo app with library management, iCloud sync, workflows, and AI-powered actions. Requires Talkie Engine."
+            description="Full-featured voice memo app with library management, iCloud sync, workflows, and AI-powered actions."
             selected="true">
         <pkg-ref id="jdi.talkie.core"/>
     </choice>
@@ -43,9 +49,9 @@
 
     <!-- Dependency: Core requires Engine -->
     <choice-attribute id="core" selected="choices.engine.selected"/>
-    
+
     <pkg-ref id="jdi.talkie.engine" version="1.0.0" installKBytes="1400">TalkieEngine.pkg</pkg-ref>
     <pkg-ref id="jdi.talkie.live" version="1.0.0" installKBytes="7400">TalkieLive.pkg</pkg-ref>
     <pkg-ref id="jdi.talkie.core" version="1.1.0" installKBytes="15000">TalkieCore.pkg</pkg-ref>
-    
+
 </installer-gui-script>
