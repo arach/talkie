@@ -104,10 +104,10 @@ export default function LivePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-start gap-4">
-              <button className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl">
+              <a href="https://github.com/arach/talkie/releases/latest/download/TalkieLive-Installer.pkg" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl">
                 <Download className="w-4 h-4" />
                 <span>Download for Mac</span>
-              </button>
+              </a>
               <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
                 <Laptop className="w-3 h-3" />
                 macOS 13+ required
@@ -388,10 +388,10 @@ export default function LivePage() {
           <p className="text-zinc-600 dark:text-zinc-400 mb-8 max-w-md mx-auto">
             Download Talkie Live for free. No account needed, no credit card, no catch.
           </p>
-          <button className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl mx-auto">
+          <a href="https://github.com/arach/talkie/releases/latest/download/TalkieLive-Installer.pkg" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl mx-auto">
             <Download className="w-4 h-4" />
             <span>Download for Mac</span>
-          </button>
+          </a>
           <p className="mt-6 text-[10px] font-mono uppercase text-zinc-400">macOS 13+ • Apple Silicon optimized</p>
         </Container>
       </section>
