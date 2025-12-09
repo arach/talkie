@@ -15,7 +15,7 @@ import CloudKit
 import CoreData
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "CloudKitSync")
+private let logger = Logger(subsystem: "live.talkie.core", category: "CloudKitSync")
 
 @MainActor
 class CloudKitSyncManager: ObservableObject {

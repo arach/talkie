@@ -10,7 +10,7 @@ import CloudKit
 import UserNotifications
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "AppDelegate")
+private let logger = Logger(subsystem: "live.talkie.core", category: "AppDelegate")
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 

@@ -10,7 +10,7 @@ import SwiftUI
 import Combine
 import os
 
-private let fileLogger = Logger(subsystem: "jdi.talkie-os-mac", category: "LogFile")
+private let fileLogger = Logger(subsystem: "live.talkie.core", category: "LogFile")
 
 // MARK: - System Event Model
 

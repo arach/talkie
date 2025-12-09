@@ -10,7 +10,7 @@ import FluidAudio
 import AVFoundation
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "ParakeetService")
+private let logger = Logger(subsystem: "live.talkie.core", category: "ParakeetService")
 
 // MARK: - Parakeet Model Options
 

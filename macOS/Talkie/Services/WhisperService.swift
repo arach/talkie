@@ -2,14 +2,17 @@
 //  WhisperService.swift
 //  Talkie
 //
-//  Local speech-to-text transcription using WhisperKit
+//  Speech-to-text transcription - uses TalkieEngine when available, falls back to local WhisperKit
 //
 
 import Foundation
 import WhisperKit
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "WhisperService")
+private let logger = Logger(subsystem: "live.talkie.core", category: "WhisperService")
+
+/// Whether to prefer TalkieEngine for transcription (when available)
+private let kPreferEngine = true
 
 // MARK: - Whisper Model Options
 
@@ -153,6 +156,40 @@ class WhisperService: ObservableObject {
     ///   - model: Which Whisper model to use
     /// - Returns: Transcribed text
     func transcribe(audioData: Data, model: WhisperModel = .small) async throws -> String {
+        // Try TalkieEngine first if preferred and available
+        if kPreferEngine {
+            do {
+                let transcript = try await transcribeViaEngine(audioData: audioData, model: model)
+                return transcript
+            } catch {
+                logger.warning("[Engine] Transcription failed, falling back to local: \(error.localizedDescription)")
+                await SystemEventManager.shared.log(.transcribe, "Engine fallback", detail: "Using local WhisperKit")
+            }
+        }
+
+        // Fall back to local WhisperKit
+        return try await transcribeLocally(audioData: audioData, model: model)
+    }
+
+    /// Transcribe using TalkieEngine XPC service
+    private func transcribeViaEngine(audioData: Data, model: WhisperModel) async throws -> String {
+        let engine = EngineClient.shared
+
+        // Ensure connected
+        let connected = await engine.ensureConnected()
+        guard connected else {
+            throw WhisperError.engineNotAvailable
+        }
+
+        logger.info("[Engine] Transcribing \(audioData.count / 1024)KB via TalkieEngine")
+        await SystemEventManager.shared.log(.transcribe, "Using TalkieEngine", detail: model.displayName)
+
+        let transcript = try await engine.transcribe(audioData: audioData, modelId: model.rawValue)
+        return transcript
+    }
+
+    /// Transcribe using local WhisperKit (fallback)
+    private func transcribeLocally(audioData: Data, model: WhisperModel) async throws -> String {
         // Wait for any ongoing transcription (up to 60 seconds)
         let maxWaitTime: TimeInterval = 60
         let startTime = Date()
@@ -173,12 +210,12 @@ class WhisperService: ObservableObject {
             isTranscribing = false
         }
 
-        logger.info("Starting transcription with model: \(model.rawValue)")
-        await SystemEventManager.shared.log(.transcribe, "Transcription started", detail: model.displayName)
+        logger.info("[Local] Starting transcription with model: \(model.rawValue)")
+        await SystemEventManager.shared.log(.transcribe, "Local transcription", detail: model.displayName)
 
         // Load model if needed or if different model requested
         if whisperKit == nil || currentModelId != model.rawValue {
-            logger.info("Loading Whisper model: \(model.rawValue)")
+            logger.info("[Local] Loading Whisper model: \(model.rawValue)")
 
             do {
                 whisperKit = try await WhisperKit(
@@ -190,7 +227,7 @@ class WhisperService: ObservableObject {
                 loadedModel = model
             } catch {
                 lastError = "Failed to load model: \(error.localizedDescription)"
-                logger.error("Failed to load Whisper model: \(error.localizedDescription)")
+                logger.error("[Local] Failed to load Whisper model: \(error.localizedDescription)")
                 await SystemEventManager.shared.log(.error, "Model load failed", detail: error.localizedDescription)
                 throw WhisperError.modelLoadFailed(error)
             }
@@ -219,13 +256,13 @@ class WhisperService: ObservableObject {
             // Combine all segments into full transcript
             let transcript = results.map { $0.text }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
 
-            logger.info("Transcription complete: \(transcript.prefix(100))...")
+            logger.info("[Local] Transcription complete: \(transcript.prefix(100))...")
             await SystemEventManager.shared.log(.transcribe, "Transcription complete", detail: "\(transcript.count) chars")
 
             return transcript
         } catch {
             lastError = "Transcription failed: \(error.localizedDescription)"
-            logger.error("Transcription failed: \(error.localizedDescription)")
+            logger.error("[Local] Transcription failed: \(error.localizedDescription)")
             await SystemEventManager.shared.log(.error, "Transcription failed", detail: error.localizedDescription)
             throw WhisperError.transcriptionFailed(error)
         }
@@ -267,6 +304,7 @@ enum WhisperError: LocalizedError {
     case modelLoadFailed(Error)
     case transcriptionFailed(Error)
     case noAudioData
+    case engineNotAvailable
 
     var errorDescription: String? {
         switch self {
@@ -280,6 +318,8 @@ enum WhisperError: LocalizedError {
             return "Transcription failed: \(error.localizedDescription)"
         case .noAudioData:
             return "No audio data available"
+        case .engineNotAvailable:
+            return "TalkieEngine is not available"
         }
     }
 }

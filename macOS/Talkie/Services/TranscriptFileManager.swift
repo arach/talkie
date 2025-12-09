@@ -12,7 +12,7 @@ import CoreData
 import AppKit
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "LocalFiles")
+private let logger = Logger(subsystem: "live.talkie.core", category: "LocalFiles")
 
 class TranscriptFileManager {
     static let shared = TranscriptFileManager()

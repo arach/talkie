@@ -11,7 +11,7 @@ import AppKit
 import UserNotifications
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "WorkflowExecutor")
+private let logger = Logger(subsystem: "live.talkie.core", category: "WorkflowExecutor")
 
 // MARK: - Workflow Execution Context
 

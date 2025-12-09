@@ -11,7 +11,7 @@ import AppKit
 import os
 import Combine
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "Persistence")
+private let logger = Logger(subsystem: "live.talkie.core", category: "Persistence")
 
 // MARK: - WAL Management
 

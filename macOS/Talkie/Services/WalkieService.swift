@@ -15,7 +15,7 @@ import Foundation
 import CloudKit
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie-os-mac", category: "Walkie")
+private let logger = Logger(subsystem: "live.talkie.core", category: "Walkie")
 
 // MARK: - Walkie Model
 
