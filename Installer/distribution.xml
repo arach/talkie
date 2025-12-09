@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Talkie for Mac</title>
+    <welcome file="welcome.html"/>
+    <license file="license.html"/>
+    <conclusion file="conclusion.html"/>
+    
+    <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    
+    <choices-outline>
+        <line choice="engine"/>
+        <line choice="live"/>
+        <line choice="core"/>
+    </choices-outline>
+    
+    <!-- TalkieEngine - Required -->
+    <choice id="engine" 
+            title="Talkie Engine (Required)" 
+            description="The shared transcription service powered by WhisperKit. Runs in the background and provides fast local speech-to-text."
+            enabled="false"
+            selected="true">
+        <pkg-ref id="jdi.talkie.engine"/>
+    </choice>
+    
+    <!-- TalkieLive - Optional but requires Engine -->
+    <choice id="live"
+            title="Talkie Live"
+            description="Lightweight menu bar app for quick voice capture. Press ⌥Space to record and transcribe instantly. Requires Talkie Engine."
+            selected="true">
+        <pkg-ref id="jdi.talkie.live"/>
+    </choice>
+
+    <!-- Talkie Core - Optional but requires Engine -->
+    <choice id="core"
+            title="Talkie"
+            description="Full-featured voice memo app with library management, iCloud sync, workflows, and AI-powered actions. Requires Talkie Engine."
+            selected="true">
+        <pkg-ref id="jdi.talkie.core"/>
+    </choice>
+
+    <!-- Dependency: Live requires Engine -->
+    <choice-attribute id="live" selected="choices.engine.selected"/>
+
+    <!-- Dependency: Core requires Engine -->
+    <choice-attribute id="core" selected="choices.engine.selected"/>
+    
+    <pkg-ref id="jdi.talkie.engine" version="1.0.0" installKBytes="1400">TalkieEngine.pkg</pkg-ref>
+    <pkg-ref id="jdi.talkie.live" version="1.0.0" installKBytes="7400">TalkieLive.pkg</pkg-ref>
+    <pkg-ref id="jdi.talkie.core" version="1.1.0" installKBytes="15000">TalkieCore.pkg</pkg-ref>
+    
+</installer-gui-script>

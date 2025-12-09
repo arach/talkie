@@ -1,0 +1,12 @@
+#!/bin/bash
+# Stop existing TalkieEngine before upgrading
+
+CONSOLE_USER=$(stat -f "%Su" /dev/console)
+CONSOLE_UID=$(id -u "$CONSOLE_USER")
+
+if [ "$CONSOLE_USER" != "root" ]; then
+    launchctl bootout gui/$CONSOLE_UID/jdi.talkie.engine 2>/dev/null || true
+    launchctl bootout gui/$CONSOLE_UID/live.talkie.engine 2>/dev/null || true
+fi
+
+exit 0
