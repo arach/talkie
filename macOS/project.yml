@@ -11,6 +11,19 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
 
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit.git
+    version: 0.15.0
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio.git
+    version: 0.7.11
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    version: 7.8.0
+  TalkieServices:
+    path: ../TalkieServices
+
 targets:
   Talkie:
     type: application
@@ -19,6 +32,11 @@ targets:
       - path: Talkie
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: WhisperKit
+      - package: FluidAudio
+      - package: GRDB
+      - package: TalkieServices
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie-os-mac

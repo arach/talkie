@@ -4,8 +4,16 @@
 //
 //  MLX-based local LLM provider for Apple Silicon using mlx-swift-lm
 //
+//  NOTE: MLX package must be added to project dependencies to enable this.
+//  Add the following SPM packages:
+//  - https://github.com/ml-explore/mlx-swift
+//  - https://github.com/ml-explore/mlx-swift-lm
+//
 
 import Foundation
+
+// Check if MLX is available before importing
+#if canImport(MLXLMCommon) && canImport(MLX) && canImport(MLXLLM)
 import MLXLMCommon
 import MLX
 import MLXLLM
@@ -285,6 +293,61 @@ class MLXModelManager: ObservableObject {
             id.replacingOccurrences(of: "/", with: "_")
         )
     }
+}
+
+#else
+
+// MARK: - Intel Stub (MLX not available on x86_64)
+
+/// Stub MLXModelManager for Intel Macs where MLX is not available
+@MainActor
+class MLXModelManager: ObservableObject {
+    static let shared = MLXModelManager()
+
+    @Published var loadedModelId: String?
+    @Published var isLoading: Bool = false
+    @Published var loadProgress: Double = 0
+    @Published private(set) var installedModelIds: Set<String> = []
+
+    private init() {}
+
+    func availableModels() -> [LLMModel] {
+        return []
+    }
+
+    func isModelInstalled(id: String) -> Bool {
+        return false
+    }
+}
+
+#endif // arch(arm64) else
+#endif // canImport(MLXLMCommon)
+
+// MARK: - Fallback when MLX packages not available
+
+#if !canImport(MLXLMCommon)
+
+/// Stub MLXModelManager when MLX packages are not installed
+@MainActor
+class MLXModelManager: ObservableObject {
+    static let shared = MLXModelManager()
+
+    @Published var loadedModelId: String?
+    @Published var isLoading: Bool = false
+    @Published var loadProgress: Double = 0
+    @Published private(set) var installedModelIds: Set<String> = []
+
+    private init() {}
+
+    func availableModels() -> [LLMModel] {
+        return []
+    }
+
+    func isModelInstalled(id: String) -> Bool {
+        return false
+    }
+
+    func refreshInstalledModels() {}
 }
 
 #endif
