@@ -103,7 +103,71 @@ enum SemanticColor {
     static let processing: Color = .purple
 }
 
-// MARK: - Midnight Theme Surface Colors
+// MARK: - Adaptive Theme Colors (Light/Dark)
+
+enum TalkieTheme {
+    // Backgrounds - adapt to system appearance
+    static let background = Color(NSColor.windowBackgroundColor)
+    static let secondaryBackground = Color(NSColor.controlBackgroundColor)
+    static let tertiaryBackground = Color(NSColor.underPageBackgroundColor)
+
+    // Adaptive surface colors
+    static var surface: Color {
+        Color(light: Color(white: 0.98), dark: Color(white: 0.06))
+    }
+    static var surfaceElevated: Color {
+        Color(light: Color(white: 0.95), dark: Color(white: 0.10))
+    }
+    static var surfaceCard: Color {
+        Color(light: Color.white, dark: Color(white: 0.12))
+    }
+
+    // Text colors
+    static var textPrimary: Color {
+        Color(light: Color(white: 0.1), dark: Color.white)
+    }
+    static var textSecondary: Color {
+        Color(light: Color(white: 0.4), dark: Color(white: 0.7))
+    }
+    static var textTertiary: Color {
+        Color(light: Color(white: 0.55), dark: Color(white: 0.5))
+    }
+    static var textMuted: Color {
+        Color(light: Color(white: 0.7), dark: Color(white: 0.35))
+    }
+
+    // Borders and dividers
+    static var border: Color {
+        Color(light: Color(white: 0.88), dark: Color(white: 0.15))
+    }
+    static var divider: Color {
+        Color(light: Color(white: 0.92), dark: Color(white: 0.1))
+    }
+
+    // Interactive states
+    static var hover: Color {
+        Color(light: Color(white: 0.94), dark: Color(white: 0.12))
+    }
+    static var selected: Color {
+        Color(light: Color.accentColor.opacity(0.12), dark: Color.accentColor.opacity(0.2))
+    }
+}
+
+// Helper for light/dark adaptive colors
+extension Color {
+    init(light: Color, dark: Color) {
+        self.init(NSColor(name: nil, dynamicProvider: { appearance in
+            switch appearance.bestMatch(from: [.aqua, .darkAqua]) {
+            case .darkAqua:
+                return NSColor(dark)
+            default:
+                return NSColor(light)
+            }
+        }))
+    }
+}
+
+// MARK: - Midnight Theme Surface Colors (Legacy - for dark-only contexts)
 
 enum MidnightSurface {
     static let content = Color(NSColor(red: 0.02, green: 0.02, blue: 0.03, alpha: 1.0))
@@ -245,22 +309,22 @@ struct SidebarNavButton: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 12))
-                    .foregroundColor(isSelected ? .accentColor : Color(white: 0.6))
+                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textSecondary)
                     .frame(width: 18)
 
                 Text(title)
                     .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-                    .foregroundColor(isSelected ? .white : Color(white: 0.8))
+                    .foregroundColor(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
 
                 Spacer()
 
                 if let count = count, count > 0 {
                     Text("\(count)")
                         .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(Color(white: 0.5))
+                        .foregroundColor(TalkieTheme.textTertiary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color(white: 0.15))
+                        .background(TalkieTheme.surfaceElevated)
                         .cornerRadius(4)
                 }
             }
@@ -268,7 +332,7 @@ struct SidebarNavButton: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color(white: 0.12) : Color.clear))
+                    .fill(isSelected ? TalkieTheme.selected : (isHovered ? TalkieTheme.hover : Color.clear))
             )
         }
         .buttonStyle(.plain)

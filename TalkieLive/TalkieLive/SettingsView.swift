@@ -107,10 +107,10 @@ struct EmbeddedSettingsView: View {
                 }
             }
             .frame(width: 180)
-            .background(MidnightSurface.sidebar)
+            .background(TalkieTheme.secondaryBackground)
 
             Rectangle()
-                .fill(Design.divider)
+                .fill(TalkieTheme.divider)
                 .frame(width: 0.5)
 
             // MARK: - Settings Content (right column)
@@ -135,9 +135,9 @@ struct EmbeddedSettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(MidnightSurface.content)
+            .background(TalkieTheme.surface)
         }
-        .background(MidnightSurface.content)
+        .background(TalkieTheme.surface)
         .ignoresSafeArea(.all, edges: .all)
     }
 }
@@ -244,9 +244,9 @@ struct SettingsView: View {
     @ObservedObject private var settings = LiveSettings.shared
     @State private var selectedSection: SettingsSection = .appearance
 
-    private let sidebarBackground = MidnightSurface.elevated
-    private let contentBackground = MidnightSurface.content
-    private let bottomBarBackground = MidnightSurface.sidebar
+    private var sidebarBackground: Color { TalkieTheme.surfaceElevated }
+    private var contentBackground: Color { TalkieTheme.surface }
+    private var bottomBarBackground: Color { TalkieTheme.secondaryBackground }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -256,7 +256,7 @@ struct SettingsView: View {
                 Text("SETTINGS")
                     .font(.system(size: 10, weight: .bold, design: .default))
                     .tracking(Tracking.wide)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(TalkieTheme.textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.top, 20)
@@ -351,7 +351,7 @@ struct SettingsView: View {
 
             // Divider
             Rectangle()
-                .fill(MidnightSurface.divider)
+                .fill(TalkieTheme.divider)
                 .frame(width: 1)
 
             // MARK: - Content Area
@@ -542,7 +542,7 @@ struct SettingsCard<Content: View>: View {
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(MidnightSurface.card)
+            .background(TalkieTheme.surfaceCard)
             .cornerRadius(CornerRadius.sm)
         }
     }
@@ -1711,6 +1711,7 @@ struct WhisperModelRow: View {
 struct EngineSettingsSection: View {
     @ObservedObject private var settings = LiveSettings.shared
     @ObservedObject private var engineClient = EngineClient.shared
+    @ObservedObject private var audioDevices = AudioDeviceManager.shared
     @StateObject private var whisperService = WhisperService.shared
     @State private var downloadingModel: WhisperModel?
     @State private var downloadTask: Task<Void, Never>?
@@ -1848,6 +1849,60 @@ struct EngineSettingsSection: View {
                 }
             }
 
+            // Microphone Selection
+            SettingsCard(title: "MICROPHONE") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Input Device")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                            Text("Select which microphone to use for recording")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+
+                        Spacer()
+
+                        Menu {
+                            ForEach(audioDevices.inputDevices) { device in
+                                Button(action: {
+                                    audioDevices.selectDevice(device.id)
+                                }) {
+                                    HStack {
+                                        Text(device.name)
+                                        if device.isDefault {
+                                            Text("(System Default)")
+                                                .foregroundColor(.secondary)
+                                        }
+                                        if device.id == audioDevices.selectedDeviceID {
+                                            Spacer()
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(selectedDeviceName)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(CornerRadius.xs)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                    }
+                }
+            }
+
             // Loaded Model Status
             SettingsCard(title: "ACTIVE MODEL") {
                 HStack {
@@ -1976,6 +2031,18 @@ struct EngineSettingsSection: View {
         case .disconnected: return .gray
         case .error: return .red
         }
+    }
+
+    private var selectedDeviceName: String {
+        let selectedID = audioDevices.selectedDeviceID
+        if let device = audioDevices.inputDevices.first(where: { $0.id == selectedID }) {
+            return device.name
+        }
+        // Fallback to default device name
+        if let defaultDevice = audioDevices.inputDevices.first(where: { $0.isDefault }) {
+            return "\(defaultDevice.name) (Default)"
+        }
+        return "System Default"
     }
 
     private func formatUptime(_ date: Date?) -> String {

@@ -44,6 +44,7 @@ struct VoiceMemoListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var deepLinkManager: DeepLinkManager
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var iCloudStatus = iCloudStatusManager.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -395,6 +396,17 @@ struct VoiceMemoListView: View {
                     }
                     .animation(.easeInOut(duration: 0.2), value: isPushToTalkActive)
                 }
+
+                // Floating iCloud status banner - pinned to top of protected area, full bleed
+                if !iCloudStatus.status.isAvailable && !iCloudStatus.isDismissed && !isPushToTalkActive {
+                    VStack {
+                        Spacer()
+                        iCloudStatusBanner
+                            .padding(.bottom, 88) // Pinned just above record button area
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .allowsHitTesting(true)
+                }
             }
             .navigationTitle("TALKIE")
             .navigationBarTitleDisplayMode(.inline)
@@ -439,6 +451,13 @@ struct VoiceMemoListView: View {
         }
         .navigationViewStyle(.stack)
         .preferredColorScheme(themeManager.appearanceMode.colorScheme)
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) {
+            DebugToolbarOverlay {
+                ListViewDebugContent()
+            }
+        }
+        #endif
         .onChange(of: deepLinkManager.pendingAction) { _, action in
             handleDeepLinkAction(action)
         }
@@ -988,6 +1007,110 @@ struct VoiceMemoListView: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    // MARK: - iCloud Status Banner
+
+    private var iCloudStatusBanner: some View {
+        Group {
+            if iCloudStatus.status == .noAccount {
+                // Marketing message for users not signed in
+                iCloudPromoView
+            } else {
+                // Warning for error states
+                iCloudWarningView
+            }
+        }
+    }
+
+    /// Promotional banner encouraging sign-in (for .noAccount)
+    private var iCloudPromoView: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "icloud")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+
+            Text("Sign into iCloud to sync with Talkie for Mac")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+
+            Spacer(minLength: 0)
+
+            Button(action: openICloudSettings) {
+                Text("Sign In")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(6)
+            }
+
+            Button(action: {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    iCloudStatus.dismissBanner()
+                }
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(4)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .background(
+            ZStack {
+                Color.black
+                Color.blue.opacity(0.35)
+            }
+        )
+    }
+
+    /// Warning banner for error states (restricted, unavailable, etc.)
+    private var iCloudWarningView: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "icloud")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+
+            Text("Recordings won't sync right now, but we'll catch up when connectivity returns")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.9))
+
+            Spacer(minLength: 0)
+
+            Button(action: {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    iCloudStatus.dismissBanner()
+                }
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(4)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .background(
+            ZStack {
+                Color.black
+                Color.blue.opacity(0.35)
+            }
+        )
+    }
+
+    private func openICloudSettings() {
+        // Deep link to iCloud settings
+        if let url = URL(string: "App-Prefs:root=APPLE_ACCOUNT") {
+            UIApplication.shared.open(url)
+        } else if let url = URL(string: UIApplication.openSettingsURLString) {
+            // Fallback to app settings if iCloud URL doesn't work
+            UIApplication.shared.open(url)
+        }
     }
 }
 

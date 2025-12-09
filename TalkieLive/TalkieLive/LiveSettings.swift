@@ -351,6 +351,7 @@ final class LiveSettings: ObservableObject {
     private let accentColorKey = "accentColor"
     private let primaryContextSourceKey = "primaryContextSource"
     private let returnToOriginAfterPasteKey = "returnToOriginAfterPaste"
+    private let selectedMicrophoneIDKey = "selectedMicrophoneID"
     // Legacy key for migration
     private let legacyThemeKey = "theme"
 
@@ -365,6 +366,11 @@ final class LiveSettings: ObservableObject {
     }
 
     @Published var routingMode: RoutingMode {
+        didSet { save() }
+    }
+
+    /// Selected microphone device ID (0 = system default)
+    @Published var selectedMicrophoneID: UInt32 {
         didSet { save() }
     }
 
@@ -472,6 +478,9 @@ final class LiveSettings: ObservableObject {
         // Load routing mode
         let routingRaw = UserDefaults.standard.string(forKey: routingModeKey) ?? "paste"
         self.routingMode = routingRaw == "clipboardOnly" ? .clipboardOnly : .paste
+
+        // Load selected microphone (0 = system default)
+        self.selectedMicrophoneID = UInt32(UserDefaults.standard.integer(forKey: selectedMicrophoneIDKey))
 
         // Load TTL (default 48 hours)
         let ttl = UserDefaults.standard.integer(forKey: utteranceTTLKey)
@@ -593,6 +602,7 @@ final class LiveSettings: ObservableObject {
         }
         UserDefaults.standard.set(whisperModel.rawValue, forKey: whisperModelKey)
         UserDefaults.standard.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: routingModeKey)
+        UserDefaults.standard.set(Int(selectedMicrophoneID), forKey: selectedMicrophoneIDKey)
         UserDefaults.standard.set(utteranceTTLHours, forKey: utteranceTTLKey)
         UserDefaults.standard.set(overlayStyle.rawValue, forKey: overlayStyleKey)
         UserDefaults.standard.set(overlayPosition.rawValue, forKey: overlayPositionKey)

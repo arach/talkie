@@ -144,7 +144,7 @@ struct LiveNavigationView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
         }
-        .background(MidnightSurface.sidebar)
+        .background(TalkieTheme.secondaryBackground)
     }
 
     /// Sidebar header with app branding and collapse toggle
@@ -266,7 +266,7 @@ struct LiveNavigationView: View {
             consoleContentView
                 .padding(16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(MidnightSurface.content)
+                .background(TalkieTheme.surface)
         case .settings:
             settingsContentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -320,6 +320,19 @@ struct LiveNavigationView: View {
                 List(filteredUtterances, selection: $selectedUtterance) { utterance in
                     UtteranceRowView(utterance: utterance)
                         .tag(utterance)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                withAnimation {
+                                    // Clear selection if deleting selected item
+                                    if selectedUtterance == utterance {
+                                        selectedUtterance = nil
+                                    }
+                                    store.delete(utterance)
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
@@ -404,7 +417,7 @@ struct LiveNavigationView: View {
                 .foregroundColor(Design.foregroundMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(MidnightSurface.content)
+        .background(TalkieTheme.surface)
     }
 
     private var consoleDetailPlaceholder: some View {
@@ -417,7 +430,7 @@ struct LiveNavigationView: View {
                 .foregroundColor(Design.foregroundMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(MidnightSurface.content)
+        .background(TalkieTheme.surface)
     }
 
     private var emptyDetailState: some View {
@@ -430,7 +443,7 @@ struct LiveNavigationView: View {
                 .foregroundColor(Design.foregroundMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(MidnightSurface.content)
+        .background(TalkieTheme.surface)
     }
 }
 

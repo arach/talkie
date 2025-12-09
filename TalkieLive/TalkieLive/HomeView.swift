@@ -26,11 +26,11 @@ struct HomeView: View {
                     Text("TALKIE LIVE")
                         .font(.system(size: 10, weight: .bold))
                         .tracking(1.5)
-                        .foregroundColor(Color(white: 0.5))
+                        .foregroundColor(TalkieTheme.textTertiary)
 
                     Text("Activity")
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(TalkieTheme.textPrimary)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
@@ -65,7 +65,7 @@ struct HomeView: View {
                 Spacer(minLength: 40)
             }
         }
-        .background(MidnightSurface.content)
+        .background(TalkieTheme.surface)
         .onAppear {
             loadActivityData()
         }
@@ -361,7 +361,7 @@ enum ActivityLevel: Int {
 
     var color: Color {
         switch self {
-        case .none: return Color(white: 0.1)
+        case .none: return Color(light: Color(white: 0.9), dark: Color(white: 0.1))
         case .low: return Color.green.opacity(0.3)
         case .medium: return Color.green.opacity(0.5)
         case .high: return Color.green.opacity(0.7)
@@ -383,11 +383,11 @@ struct InsightBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(insight.message)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(TalkieTheme.textPrimary)
 
                 Text(insight.detail)
                     .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.6))
+                    .foregroundColor(TalkieTheme.textSecondary)
             }
 
             Spacer()
@@ -395,16 +395,10 @@ struct InsightBanner: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(white: 0.08), Color(white: 0.06)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(TalkieTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(white: 0.15), lineWidth: 1)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
                 )
         )
     }
@@ -425,7 +419,7 @@ struct ActivityGraphCard: View {
             HStack {
                 Text("\(stats.weekCount) recordings in the last 7 days")
                     .font(.system(size: 12))
-                    .foregroundColor(Color(white: 0.6))
+                    .foregroundColor(TalkieTheme.textSecondary)
 
                 Spacer()
 
@@ -433,7 +427,7 @@ struct ActivityGraphCard: View {
                 HStack(spacing: 4) {
                     Text("Less")
                         .font(.system(size: 9))
-                        .foregroundColor(Color(white: 0.4))
+                        .foregroundColor(TalkieTheme.textTertiary)
 
                     ForEach(ActivityLevel.allCases, id: \.rawValue) { level in
                         RoundedRectangle(cornerRadius: 2)
@@ -443,7 +437,7 @@ struct ActivityGraphCard: View {
 
                     Text("More")
                         .font(.system(size: 9))
-                        .foregroundColor(Color(white: 0.4))
+                        .foregroundColor(TalkieTheme.textTertiary)
                 }
             }
 
@@ -459,10 +453,10 @@ struct ActivityGraphCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(white: 0.06))
+                .fill(TalkieTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(white: 0.12), lineWidth: 1)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
                 )
         )
     }
@@ -483,13 +477,13 @@ struct ActivityGrid: View {
         HStack(alignment: .top, spacing: spacing) {
             // Day labels (all 7 days)
             VStack(alignment: .trailing, spacing: spacing) {
-                Text("Sun").font(.system(size: 9)).foregroundColor(Color(white: 0.4)).frame(height: cellSize)
-                Text("Mon").font(.system(size: 9)).foregroundColor(Color(white: 0.4)).frame(height: cellSize)
-                Text("Tue").font(.system(size: 9)).foregroundColor(Color(white: 0.4)).frame(height: cellSize)
-                Text("Wed").font(.system(size: 9)).foregroundColor(Color(white: 0.4)).frame(height: cellSize)
-                Text("Thu").font(.system(size: 9)).foregroundColor(Color(white: 0.4)).frame(height: cellSize)
-                Text("Fri").font(.system(size: 9)).foregroundColor(Color(white: 0.4)).frame(height: cellSize)
-                Text("Sat").font(.system(size: 9)).foregroundColor(Color(white: 0.4)).frame(height: cellSize)
+                Text("Sun").font(.system(size: 9)).foregroundColor(TalkieTheme.textTertiary).frame(height: cellSize)
+                Text("Mon").font(.system(size: 9)).foregroundColor(TalkieTheme.textTertiary).frame(height: cellSize)
+                Text("Tue").font(.system(size: 9)).foregroundColor(TalkieTheme.textTertiary).frame(height: cellSize)
+                Text("Wed").font(.system(size: 9)).foregroundColor(TalkieTheme.textTertiary).frame(height: cellSize)
+                Text("Thu").font(.system(size: 9)).foregroundColor(TalkieTheme.textTertiary).frame(height: cellSize)
+                Text("Fri").font(.system(size: 9)).foregroundColor(TalkieTheme.textTertiary).frame(height: cellSize)
+                Text("Sat").font(.system(size: 9)).foregroundColor(TalkieTheme.textTertiary).frame(height: cellSize)
             }
             .frame(width: dayLabelWidth)
 
@@ -573,7 +567,7 @@ struct ActivityCell: View {
             .frame(width: size, height: size)
             .overlay(
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(isHovered && !isFutureDate ? Color.white.opacity(0.5) : Color.clear, lineWidth: 1)
+                    .stroke(isHovered && !isFutureDate ? TalkieTheme.textSecondary : Color.clear, lineWidth: 1)
             )
             .onHover { hovering in
                 if !isFutureDate {
@@ -593,7 +587,7 @@ struct ActivityTooltip: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(formattedDate)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(TalkieTheme.textPrimary)
 
             HStack(spacing: 4) {
                 RoundedRectangle(cornerRadius: 2)
@@ -602,11 +596,11 @@ struct ActivityTooltip: View {
 
                 Text(countText)
                     .font(.system(size: 10))
-                    .foregroundColor(Color(white: 0.7))
+                    .foregroundColor(TalkieTheme.textSecondary)
             }
         }
         .padding(8)
-        .background(Color(white: 0.12))
+        .background(TalkieTheme.surfaceElevated)
     }
 
     private var formattedDate: String {
@@ -646,7 +640,7 @@ struct MonthLabelsFixed: View {
             ForEach(Array(months.enumerated()), id: \.offset) { _, month in
                 Text(month)
                     .font(.system(size: 9))
-                    .foregroundColor(Color(white: 0.4))
+                    .foregroundColor(TalkieTheme.textTertiary)
                     .frame(width: weeksPerMonth * weekWidth, alignment: .leading)
             }
         }
@@ -742,21 +736,21 @@ struct QuickStatCard: View {
 
             Text(value)
                 .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(TalkieTheme.textPrimary)
 
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(Color(white: 0.5))
+                .foregroundColor(TalkieTheme.textTertiary)
                 .textCase(.uppercase)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isHovered ? Color(white: 0.08) : Color(white: 0.06))
+                .fill(isHovered ? TalkieTheme.hover : TalkieTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(isHovered ? color.opacity(0.3) : Color(white: 0.12), lineWidth: 1)
+                        .stroke(isHovered ? color.opacity(0.3) : TalkieTheme.border, lineWidth: 1)
                 )
         )
         .onHover { hovering in
@@ -779,14 +773,14 @@ struct TopAppsCard: View {
                 Text("TOP APPS")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(1)
-                    .foregroundColor(Color(white: 0.5))
+                    .foregroundColor(TalkieTheme.textTertiary)
 
                 Spacer()
 
                 if !apps.isEmpty {
                     Text("this week")
                         .font(.system(size: 10))
-                        .foregroundColor(Color(white: 0.4))
+                        .foregroundColor(TalkieTheme.textMuted)
                 }
             }
 
@@ -796,10 +790,10 @@ struct TopAppsCard: View {
                     VStack(spacing: 8) {
                         Image(systemName: "app.dashed")
                             .font(.system(size: 24))
-                            .foregroundColor(Color(white: 0.3))
+                            .foregroundColor(TalkieTheme.textMuted)
                         Text("No app data yet")
                             .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.4))
+                            .foregroundColor(TalkieTheme.textTertiary)
                     }
                     .padding(.vertical, 24)
                     Spacer()
@@ -822,10 +816,10 @@ struct TopAppsCard: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(white: 0.06))
+                .fill(TalkieTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(white: 0.12), lineWidth: 1)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
                 )
         )
     }
@@ -847,7 +841,7 @@ struct TopAppRow: View {
             HStack(spacing: 10) {
                 Text("\(rank)")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(white: 0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
                     .frame(width: 14)
 
                 // Show actual app icon if bundle ID available
@@ -863,27 +857,27 @@ struct TopAppRow: View {
 
                 Text(name)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(isHovered ? Color(white: 0.95) : Color(white: 0.85))
+                    .foregroundColor(isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
                     .lineLimit(1)
 
                 Spacer()
 
                 Text("\(count)")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundColor(Color(white: 0.5))
+                    .foregroundColor(TalkieTheme.textTertiary)
 
                 // Arrow indicator on hover
                 if isHovered {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(Color(white: 0.5))
+                        .foregroundColor(TalkieTheme.textTertiary)
                 }
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color(white: 0.1) : Color.clear)
+                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -907,13 +901,13 @@ struct RecentActivityCard: View {
                 Text("RECENT")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(1)
-                    .foregroundColor(Color(white: 0.5))
+                    .foregroundColor(TalkieTheme.textTertiary)
 
                 Spacer()
 
                 Text("\(utterances.count) latest")
                     .font(.system(size: 10))
-                    .foregroundColor(Color(white: 0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
             }
 
             if utterances.isEmpty {
@@ -922,10 +916,10 @@ struct RecentActivityCard: View {
                     VStack(spacing: 8) {
                         Image(systemName: "waveform.badge.plus")
                             .font(.system(size: 24))
-                            .foregroundColor(Color(white: 0.3))
+                            .foregroundColor(TalkieTheme.textMuted)
                         Text("No recordings yet")
                             .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.4))
+                            .foregroundColor(TalkieTheme.textTertiary)
                     }
                     .padding(.vertical, 24)
                     Spacer()
@@ -941,10 +935,10 @@ struct RecentActivityCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(white: 0.06))
+                .fill(TalkieTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(white: 0.12), lineWidth: 1)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
                 )
         )
     }
@@ -969,7 +963,7 @@ struct RecentActivityRow: View {
                 // Text preview
                 Text(utterance.text.prefix(60) + (utterance.text.count > 60 ? "..." : ""))
                     .font(.system(size: 11))
-                    .foregroundColor(isHovered ? Color(white: 0.95) : Color(white: 0.8))
+                    .foregroundColor(isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
                     .lineLimit(1)
 
                 Spacer()
@@ -977,20 +971,20 @@ struct RecentActivityRow: View {
                 // Time ago
                 Text(timeAgo(from: utterance.timestamp))
                     .font(.system(size: 10))
-                    .foregroundColor(Color(white: 0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
 
                 // Arrow indicator on hover
                 if isHovered {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(Color(white: 0.5))
+                        .foregroundColor(TalkieTheme.textTertiary)
                 }
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color(white: 0.1) : Color.clear)
+                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
             )
         }
         .buttonStyle(.plain)

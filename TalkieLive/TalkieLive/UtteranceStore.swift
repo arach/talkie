@@ -242,6 +242,12 @@ final class UtteranceStore: ObservableObject {
         }
     }
 
+    func delete(_ utterance: Utterance) {
+        utterances.removeAll { $0.id == utterance.id }
+        save()
+        logger.info("Deleted utterance: \(utterance.text.prefix(30))...")
+    }
+
     func clear() {
         utterances.removeAll()
         save()

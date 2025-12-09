@@ -7,6 +7,7 @@
 
 import AVFoundation
 import Combine
+import CoreAudio
 import os.log
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioCapture")
@@ -35,6 +36,9 @@ final class MicrophoneCapture: LiveAudioCapture {
 
         self.onChunk = onChunk
         self.fileCreated = false
+
+        // Set the selected input device before accessing inputNode
+        setInputDevice()
 
         let inputNode = engine.inputNode
 
@@ -154,5 +158,41 @@ final class MicrophoneCapture: LiveAudioCapture {
         onChunk = nil
         fileCreated = false
         logger.info("Microphone capture stopped")
+    }
+
+    /// Set the input device on the audio engine's input node
+    private func setInputDevice() {
+        // Read directly from UserDefaults to avoid MainActor isolation
+        let selectedID = UInt32(UserDefaults.standard.integer(forKey: "selectedMicrophoneID"))
+        guard selectedID != 0 else {
+            logger.info("Using system default microphone")
+            return
+        }
+
+        // Get the audio unit from the engine's input node
+        let inputNode = engine.inputNode
+        let audioUnit = inputNode.audioUnit
+
+        guard let audioUnit = audioUnit else {
+            logger.warning("Could not get audio unit from input node")
+            return
+        }
+
+        // Set the input device
+        var deviceID = selectedID
+        let status = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &deviceID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+
+        if status == noErr {
+            logger.info("Set input device to: \(selectedID)")
+        } else {
+            logger.warning("Failed to set input device: \(status)")
+        }
     }
 }

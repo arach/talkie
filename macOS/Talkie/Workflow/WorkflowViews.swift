@@ -1158,9 +1158,6 @@ struct WorkflowInlineEditor: View {
             .padding(.vertical, Spacing.sm)
             .background(Color(NSColor.controlBackgroundColor))
 
-            Divider()
-                .opacity(Opacity.half)
-
             // Editor content
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.md) {

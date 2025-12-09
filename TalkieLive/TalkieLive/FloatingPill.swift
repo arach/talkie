@@ -383,9 +383,10 @@ struct FloatingPillView: View {
     private var timeString: String {
         // Show processing time during transcribing, recording time during listening
         let time = controller.state == .transcribing ? controller.processingTime : controller.elapsedTime
-        let seconds = Int(time)
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
         let tenths = Int((time * 10).truncatingRemainder(dividingBy: 10))
-        return String(format: "%d.%d", seconds, tenths)
+        return String(format: "%d:%02d.%d", minutes, seconds, tenths)
     }
 
     private func startPulseAnimation() {

@@ -371,8 +371,127 @@ struct DebugActionButton: View {
 
 /// Debug content for the main memo list view
 struct ListViewDebugContent: View {
+    @ObservedObject var iCloudStatus = iCloudStatusManager.shared
+    @State private var showingStatusPicker = false
+
     var body: some View {
-        EmptyView()
+        DebugSection(title: "iCLOUD") {
+            VStack(spacing: 4) {
+                // Current status indicator
+                HStack(spacing: 6) {
+                    Image(systemName: iCloudStatus.status.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(iCloudStatus.status.isAvailable ? .green : .orange)
+
+                    Text(statusLabel)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if iCloudStatus.isSimulating {
+                        Text("SIM")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.2))
+                            .cornerRadius(3)
+                    }
+                }
+
+                // Simulate button
+                DebugActionButton(
+                    icon: "icloud.slash",
+                    label: iCloudStatus.isSimulating ? "Stop Simulation" : "Simulate Status"
+                ) {
+                    if iCloudStatus.isSimulating {
+                        iCloudStatus.simulate(nil)
+                    } else {
+                        showingStatusPicker = true
+                    }
+                }
+
+                // Reset dismissal if banner was dismissed
+                if iCloudStatus.isDismissed {
+                    DebugActionButton(icon: "arrow.counterclockwise", label: "Reset Banner") {
+                        iCloudStatus.resetDismissal()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingStatusPicker) {
+            iCloudStatusPickerSheet()
+        }
+    }
+
+    private var statusLabel: String {
+        switch iCloudStatus.status {
+        case .available: return "Available"
+        case .noAccount: return "No Account"
+        case .restricted: return "Restricted"
+        case .temporarilyUnavailable: return "Temp Unavail"
+        case .couldNotDetermine: return "Unknown"
+        case .checking: return "Checking..."
+        case .error: return "Error"
+        }
+    }
+}
+
+/// Sheet for picking iCloud status to simulate
+struct iCloudStatusPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var iCloudStatus = iCloudStatusManager.shared
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    ForEach(iCloudStatusManager.allStatuses, id: \.title) { status in
+                        Button(action: {
+                            iCloudStatus.simulate(status)
+                            dismiss()
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: status.icon)
+                                    .font(.system(size: 16))
+                                    .foregroundColor(status.isAvailable ? .green : .orange)
+                                    .frame(width: 24)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(status.title)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.textPrimary)
+
+                                    Text(status.message)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.textTertiary)
+                                        .lineLimit(2)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                } header: {
+                    Text("SELECT STATUS TO SIMULATE")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Simulate iCloud")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 
