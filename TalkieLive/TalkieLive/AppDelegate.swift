@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var liveController: LiveController!
     private let hotKeyManager = HotKeyManager()
+    private let queuePickerHotKeyManager = HotKeyManager(signature: "TLQP", hotkeyID: 2)
     private let overlayController = RecordingOverlayController.shared
     private let floatingPill = FloatingPillController.shared
     private var cancellables = Set<AnyCancellable>()
@@ -16,7 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settings = LiveSettings.shared
         let audio = MicrophoneCapture()
-        let transcription = WhisperTranscriptionService(model: settings.whisperModel)
+
+        // Use EngineTranscriptionService - it will try XPC to TalkieEngine first,
+        // then fall back to local WhisperService if Engine is unavailable
+        let transcription = EngineTranscriptionService(modelId: settings.whisperModel.rawValue)
         let router = TranscriptRouter(mode: settings.routingMode)
 
         liveController = LiveController(
@@ -25,9 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             router: router
         )
 
-        // Pre-load Whisper model so first transcription is fast
+        // Pre-load model - try Engine first, fall back to local
         Task {
-            try? await WhisperService.shared.preloadModel(settings.whisperModel)
+            await preloadModel(settings: settings)
         }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -97,6 +101,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Register hotkey from settings
         registerHotkey()
+
+        // Register queue picker hotkey: ⌥⌘V (Option + Command + V)
+        // keyCode 9 = V key
+        queuePickerHotKeyManager.registerHotKey(
+            modifiers: UInt32(cmdKey | optionKey),
+            keyCode: 9
+        ) { [weak self] in
+            self?.showQueuePicker()
+        }
 
         // Listen for hotkey changes
         NotificationCenter.default.addObserver(
@@ -200,5 +213,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .routing:
             button.title = "🎙→"
         }
+    }
+
+    private func showQueuePicker() {
+        // Only show if there are queued items
+        let queuedCount = PastLivesDatabase.countQueued()
+        guard queuedCount > 0 else {
+            // Could play a "nothing queued" sound here
+            return
+        }
+
+        QueuePickerController.shared.show()
+    }
+
+    // MARK: - Model Preloading
+
+    private func preloadModel(settings: LiveSettings) async {
+        let modelId = settings.whisperModel.rawValue
+        SystemEventManager.shared.log(.system, "Loading model", detail: settings.whisperModel.displayName)
+        let loadStart = Date()
+
+        // Try to connect to TalkieEngine first
+        let client = EngineClient.shared
+        let engineConnected = await client.ensureConnected()
+
+        if engineConnected {
+            // Use Engine for model preloading
+            SystemEventManager.shared.log(.system, "Using TalkieEngine", detail: "XPC connection established")
+
+            do {
+                try await client.preloadModel(modelId)
+                let totalTime = Date().timeIntervalSince(loadStart)
+                SystemEventManager.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
+                return
+            } catch {
+                SystemEventManager.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
+                // Fall through to local
+            }
+        } else {
+            SystemEventManager.shared.log(.system, "Engine unavailable", detail: "Using local WhisperService")
+        }
+
+        // Fallback: local WhisperService
+        var warmupLogged = false
+        let warmupObserver = WhisperService.shared.$isWarmingUp
+            .receive(on: DispatchQueue.main)
+            .sink { isWarmingUp in
+                if isWarmingUp && !warmupLogged {
+                    warmupLogged = true
+                    let loadTime = Date().timeIntervalSince(loadStart)
+                    SystemEventManager.shared.log(.system, "Warming up (local)", detail: String(format: "loaded in %.1fs", loadTime))
+                }
+            }
+
+        do {
+            try await WhisperService.shared.preloadModel(settings.whisperModel)
+            let totalTime = Date().timeIntervalSince(loadStart)
+            SystemEventManager.shared.log(.system, "Model ready (local)", detail: String(format: "%.1fs total", totalTime))
+        } catch {
+            SystemEventManager.shared.log(.error, "Model load failed", detail: error.localizedDescription)
+        }
+
+        warmupObserver.cancel()
     }
 }

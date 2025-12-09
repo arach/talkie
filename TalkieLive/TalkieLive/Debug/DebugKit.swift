@@ -7,6 +7,7 @@
 
 import SwiftUI
 import os.log
+import TalkieServices
 
 // MARK: - Particle Preset
 
@@ -202,10 +203,9 @@ final class WaveformTuning: ObservableObject {
     }
 
     private func log(_ param: String, _ value: Double) {
-        // Defer to avoid publishing during view updates
-        DispatchQueue.main.async {
-            SystemEventManager.shared.log(.ui, "Waveform: \(param)", detail: String(format: "%.3f", value))
-        }
+        #if DEBUG
+        print("🔧 Waveform: \(param) = \(String(format: "%.3f", value))")
+        #endif
     }
 }
 
@@ -278,10 +278,9 @@ final class OverlayTuning: ObservableObject {
     }
 
     private func log(_ param: String, _ value: Double) {
-        // Defer to avoid publishing during view updates
-        DispatchQueue.main.async {
-            SystemEventManager.shared.log(.ui, "Overlay: \(param)", detail: String(format: "%.1f", value))
-        }
+        #if DEBUG
+        print("🔧 Overlay: \(param) = \(String(format: "%.1f", value))")
+        #endif
     }
 }
 
@@ -338,10 +337,12 @@ final class ParticleTuning: ObservableObject {
     private let settingsKey = "ParticleTuningSettings"
     private let presetsKey = "ParticleTuningPresets"
     private var isSaving = false
+    private var isInitializing = true
 
     private init() {
         loadSettings()
         loadCustomPresets()
+        isInitializing = false
     }
 
     // MARK: - Preset Management
@@ -416,7 +417,7 @@ final class ParticleTuning: ObservableObject {
     // MARK: - Persistence
 
     private func saveCurrentSettings() {
-        guard !isSaving else { return }
+        guard !isSaving, !isInitializing else { return }
 
         let settings: [String: Any] = [
             "baseSpeed": baseSpeed,
@@ -467,14 +468,14 @@ final class ParticleTuning: ObservableObject {
     }
 
     private func log(_ param: String, _ value: Double) {
-        // Mark as no longer matching a preset when user tweaks values
-        if !isSaving {
+        if !isSaving && !isInitializing {
             activePresetId = nil
         }
-        // Defer to avoid publishing during view updates
-        DispatchQueue.main.async {
-            SystemEventManager.shared.log(.ui, "Tuning: \(param)", detail: String(format: "%.3f", value))
+        #if DEBUG
+        if !isInitializing {
+            print("🔧 Particle: \(param) = \(String(format: "%.3f", value))")
         }
+        #endif
     }
 }
 
@@ -532,9 +533,9 @@ enum EventType: String {
         switch self {
         case .system: return .secondary
         case .audio: return .cyan
-        case .transcription: return .purple
+        case .transcription: return .orange
         case .database: return .blue
-        case .file: return .orange
+        case .file: return .purple
         case .error: return .red
         case .ui: return .green
         }
@@ -706,9 +707,12 @@ struct StatusBar: View {
     @ObservedObject private var events = SystemEventManager.shared
     @ObservedObject private var controller = RecordingOverlayController.shared
     @ObservedObject private var milestones = ProcessingMilestones.shared
+    @ObservedObject private var whisperService = WhisperService.shared
     @State private var recordingDuration: TimeInterval = 0
     @State private var processingDuration: TimeInterval = 0
+    @State private var warmupDuration: TimeInterval = 0
     @State private var durationTimer: Timer?
+    @State private var warmupTimer: Timer?
     @State private var pulseScale: CGFloat = 1.0
     @State private var showSuccess: Bool = false
     @State private var successTimer: Timer?
@@ -725,7 +729,19 @@ struct StatusBar: View {
         events.events.filter { $0.type == .system || $0.type == .transcription || $0.type == .ui }.count
     }
 
+    /// Estimated warmup time based on model size
+    private var estimatedWarmupTime: String {
+        switch LiveSettings.shared.whisperModel {
+        case .tiny: return "~10s"
+        case .base: return "~15s"
+        case .small: return "~25s"
+        case .distilLargeV3: return "~45s"
+        }
+    }
+
     private var statusText: String {
+        // Warmup takes priority
+        if whisperService.isWarmingUp { return "Warming up" }
         if showSuccess { return "Done" }
         switch controller.state {
         case .idle: return "Ready"
@@ -736,6 +752,7 @@ struct StatusBar: View {
     }
 
     private var statusColor: Color {
+        if whisperService.isWarmingUp { return .cyan }
         if showSuccess { return .green }
         switch controller.state {
         case .idle: return Design.foregroundMuted
@@ -746,7 +763,7 @@ struct StatusBar: View {
     }
 
     private var isActive: Bool {
-        controller.state != .idle || showSuccess
+        whisperService.isWarmingUp || controller.state != .idle || showSuccess
     }
 
     var body: some View {
@@ -794,6 +811,13 @@ struct StatusBar: View {
         .animation(.easeInOut(duration: 0.2), value: isActive)
         .onChange(of: controller.state) { oldState, newState in
             handleStateChange(from: oldState, to: newState)
+        }
+        .onChange(of: whisperService.isWarmingUp) { _, isWarmingUp in
+            if isWarmingUp {
+                startWarmupTimer()
+            } else {
+                stopWarmupTimer()
+            }
         }
     }
 
@@ -894,6 +918,33 @@ struct StatusBar: View {
 
     @ViewBuilder
     private var rightSideContent: some View {
+        // Warmup takes priority
+        if whisperService.isWarmingUp {
+            HStack(spacing: 6) {
+                // Model name
+                Text(LiveSettings.shared.whisperModel.displayName)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(statusColor.opacity(0.6))
+
+                // Timer and estimate
+                HStack(spacing: 4) {
+                    Text(formatDuration(warmupDuration))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(statusColor.opacity(0.7))
+
+                    Text("(expect \(estimatedWarmupTime))")
+                        .font(.system(size: 9))
+                        .foregroundColor(statusColor.opacity(0.4))
+                }
+            }
+            .padding(.trailing, 4)
+        } else {
+            regularRightContent
+        }
+    }
+
+    @ViewBuilder
+    private var regularRightContent: some View {
         switch controller.state {
         case .listening:
             // Timer on the right during recording - muted to not distract
@@ -986,6 +1037,22 @@ struct StatusBar: View {
         durationTimer?.invalidate()
         durationTimer = nil
         processingDuration = 0
+    }
+
+    private func startWarmupTimer() {
+        warmupDuration = 0
+        warmupTimer?.invalidate()
+        warmupTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            Task { @MainActor in
+                warmupDuration += 0.1
+            }
+        }
+    }
+
+    private func stopWarmupTimer() {
+        warmupTimer?.invalidate()
+        warmupTimer = nil
+        warmupDuration = 0
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -1387,7 +1454,7 @@ struct ConsoleEventRow: View {
     }
 }
 
-// MARK: - Embedded Console View (Talkie tactical dark style)
+// MARK: - Embedded Console View (matches Settings styling)
 
 struct EmbeddedConsoleView: View {
     @ObservedObject private var events = SystemEventManager.shared
@@ -1395,11 +1462,10 @@ struct EmbeddedConsoleView: View {
     @State private var searchText = ""
     @State private var autoScroll = true
 
-    // Tactical dark theme colors
-    private let bgColor = Color(red: 0.06, green: 0.06, blue: 0.08)
-    private let headerBg = Color(red: 0.08, green: 0.08, blue: 0.1)
-    private let borderColor = Color(red: 0.15, green: 0.15, blue: 0.18)
-    private let subtleGreen = Color(red: 0.4, green: 0.8, blue: 0.4)
+    // Column widths for consistent alignment
+    private let timestampWidth: CGFloat = 85
+    private let typeWidth: CGFloat = 75
+    private let messageMinWidth: CGFloat = 150
 
     private var filteredEvents: [SystemEvent] {
         var result = events.events
@@ -1421,87 +1487,50 @@ struct EmbeddedConsoleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            consoleHeader
-
-            // Filter bar
-            filterBar
+            // Toolbar row: filters + search + clear
+            consoleToolbar
 
             Rectangle()
-                .fill(borderColor)
-                .frame(height: 1)
+                .fill(MidnightSurface.divider)
+                .frame(height: 0.5)
 
-            // Log output (tail view - newest at bottom)
+            // Column headers
+            columnHeaders
+
+            Rectangle()
+                .fill(MidnightSurface.divider)
+                .frame(height: 0.5)
+
+            // Log output - full bleed
             consoleOutput
+
+            Rectangle()
+                .fill(MidnightSurface.divider)
+                .frame(height: 0.5)
 
             // Status bar
             statusBar
         }
-        .background(bgColor)
+        .background(MidnightSurface.content)
     }
 
-    // MARK: - Header
+    // MARK: - Toolbar
 
-    private var consoleHeader: some View {
-        HStack(spacing: 8) {
-            // Terminal icon
-            Image(systemName: "terminal")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(subtleGreen.opacity(0.7))
-
-            Text("SYSTEM CONSOLE")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(1.5)
-                .foregroundColor(.white.opacity(0.9))
-
-            Text("v1.0")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.white.opacity(0.3))
-
-            Spacer()
-
-            // Live indicator
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(subtleGreen)
-                    .frame(width: 5, height: 5)
-                    .shadow(color: subtleGreen.opacity(0.5), radius: 3)
-
-                Text("LIVE")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(subtleGreen.opacity(0.8))
+    private var consoleToolbar: some View {
+        HStack(spacing: Spacing.sm) {
+            // Filter chips with category colors
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    filterChip(nil, label: "All", color: .white)
+                    filterChip(.error, label: "Errors", color: EventType.error.color)
+                    filterChip(.audio, label: "Audio", color: EventType.audio.color)
+                    filterChip(.transcription, label: "Trans", color: EventType.transcription.color)
+                    filterChip(.database, label: "DB", color: EventType.database.color)
+                    filterChip(.file, label: "File", color: EventType.file.color)
+                    filterChip(.ui, label: "UI", color: EventType.ui.color)
+                    filterChip(.system, label: "Sys", color: EventType.system.color)
+                }
             }
-
-            // Clear button
-            Button(action: { events.clear() }) {
-                Text("CLEAR")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(2)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(headerBg)
-    }
-
-    // MARK: - Filter Bar
-
-    private var filterBar: some View {
-        HStack(spacing: 6) {
-            // Type filter chips
-            filterChip(nil, label: "ALL")
-            filterChip(.error, label: "ERR")
-            filterChip(.audio, label: "AUDIO")
-            filterChip(.transcription, label: "TRANS")
-            filterChip(.file, label: "FILE")
-            filterChip(.database, label: "DB")
-            filterChip(.ui, label: "UI")
-            filterChip(.system, label: "SYS")
 
             Spacer()
 
@@ -1509,70 +1538,112 @@ struct EmbeddedConsoleView: View {
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(MidnightSurface.Text.tertiary)
 
                 TextField("Search...", text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 100)
+                    .foregroundColor(MidnightSurface.Text.primary)
+                    .frame(width: 120)
 
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(MidnightSurface.Text.tertiary)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(4)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, 5)
+            .background(MidnightSurface.elevated)
+            .cornerRadius(CornerRadius.xs)
 
-            // Event count
-            Text("\(filteredEvents.count)")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.white.opacity(0.3))
+            // Clear button
+            Button(action: { events.clear() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9))
+                    Text("Clear")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(MidnightSurface.Text.secondary)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 5)
+                .background(MidnightSurface.elevated)
+                .cornerRadius(CornerRadius.xs)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(bgColor)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .background(MidnightSurface.sidebar)
     }
 
-    private func filterChip(_ type: EventType?, label: String) -> some View {
+    private func filterChip(_ type: EventType?, label: String, color: Color) -> some View {
         let isSelected = filterType == type
-        let chipColor = type?.color ?? .white
 
         return Button(action: { filterType = type }) {
             Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(isSelected ? bgColor : chipColor.opacity(0.6))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(isSelected ? chipColor : chipColor.opacity(0.1))
-                .cornerRadius(2)
+                .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .white : color.opacity(0.8))
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .fill(isSelected ? color.opacity(0.8) : color.opacity(0.15))
+                )
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Console Output (tail view)
+    // MARK: - Column Headers
+
+    private var columnHeaders: some View {
+        HStack(alignment: .center, spacing: 0) {
+            Text("TIME")
+                .frame(width: timestampWidth, alignment: .leading)
+
+            Text("TYPE")
+                .frame(width: typeWidth, alignment: .leading)
+
+            Text("MESSAGE")
+                .frame(minWidth: messageMinWidth, alignment: .leading)
+
+            Spacer(minLength: Spacing.sm)
+
+            Text("DETAILS")
+                .frame(alignment: .leading)
+
+            Spacer(minLength: Spacing.md)
+        }
+        .font(.system(size: 8, weight: .bold, design: .monospaced))
+        .tracking(0.5)
+        .foregroundColor(MidnightSurface.Text.quaternary)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.xs)
+        .background(MidnightSurface.sidebar.opacity(0.5))
+    }
+
+    // MARK: - Console Output
 
     private var consoleOutput: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // Reversed so newest appears at bottom (tail mode)
                     ForEach(filteredEvents.reversed()) { event in
-                        TacticalEventRow(event: event)
-                            .id(event.id)
+                        ConsoleEventRowStyled(
+                            event: event,
+                            timestampWidth: timestampWidth,
+                            typeWidth: typeWidth,
+                            messageMinWidth: messageMinWidth
+                        )
+                        .id(event.id)
                     }
                 }
-                .padding(.vertical, 4)
             }
             .onChange(of: events.events.count) { _, _ in
-                // Scroll to newest (at bottom)
                 if autoScroll, let newestEvent = filteredEvents.first {
                     withAnimation(.easeOut(duration: 0.15)) {
                         proxy.scrollTo(newestEvent.id, anchor: .bottom)
@@ -1580,27 +1651,27 @@ struct EmbeddedConsoleView: View {
                 }
             }
             .onAppear {
-                // Initial scroll to bottom
                 if autoScroll, let newestEvent = filteredEvents.first {
                     proxy.scrollTo(newestEvent.id, anchor: .bottom)
                 }
             }
         }
-        .background(bgColor)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(MidnightSurface.content)
     }
 
     // MARK: - Status Bar
 
     private var statusBar: some View {
-        HStack(spacing: 12) {
-            // Snapshot indicator
+        HStack(spacing: Spacing.md) {
+            // Event count
             HStack(spacing: 4) {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 5))
-                    .foregroundColor(.white.opacity(0.3))
-                Text("IN-MEMORY")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 9))
+                    .foregroundColor(MidnightSurface.Text.quaternary)
+                Text("\(filteredEvents.count) events")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(MidnightSurface.Text.tertiary)
             }
 
             Spacer()
@@ -1610,11 +1681,11 @@ struct EmbeddedConsoleView: View {
             if errorCount > 0 {
                 HStack(spacing: 3) {
                     Circle()
-                        .fill(Color.red)
+                        .fill(SemanticColor.error)
                         .frame(width: 5, height: 5)
-                    Text("\(errorCount) ERR")
+                    Text("\(errorCount) errors")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.red.opacity(0.8))
+                        .foregroundColor(SemanticColor.error.opacity(0.8))
                 }
             }
 
@@ -1623,22 +1694,92 @@ struct EmbeddedConsoleView: View {
                 HStack(spacing: 3) {
                     Image(systemName: autoScroll ? "arrow.down.circle.fill" : "arrow.down.circle")
                         .font(.system(size: 10))
-                    Text("TAIL")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    Text("Auto-scroll")
+                        .font(.system(size: 9, weight: .medium))
                 }
-                .foregroundColor(autoScroll ? subtleGreen : .white.opacity(0.3))
+                .foregroundColor(autoScroll ? .accentColor : MidnightSurface.Text.tertiary)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(headerBg)
-        .overlay(
-            Rectangle()
-                .frame(height: 1)
-                .foregroundColor(borderColor),
-            alignment: .top
-        )
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.xs)
+        .background(MidnightSurface.sidebar)
+    }
+}
+
+// MARK: - Console Event Row (styled to match settings)
+
+struct ConsoleEventRowStyled: View {
+    let event: SystemEvent
+    let timestampWidth: CGFloat
+    let typeWidth: CGFloat
+    let messageMinWidth: CGFloat
+
+    @State private var isHovered = false
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Timestamp
+            Text(Self.timeFormatter.string(from: event.timestamp))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(MidnightSurface.Text.quaternary)
+                .frame(width: timestampWidth, alignment: .leading)
+
+            // Type badge
+            HStack(spacing: 3) {
+                Image(systemName: event.type.icon)
+                    .font(.system(size: 8))
+                Text(event.type.shortLabel)
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            }
+            .foregroundColor(event.type.color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(event.type.color.opacity(0.15))
+            .cornerRadius(3)
+            .frame(width: typeWidth, alignment: .leading)
+
+            // Message - left aligned
+            Text(event.message)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(MidnightSurface.Text.primary)
+                .lineLimit(1)
+                .frame(minWidth: messageMinWidth, alignment: .leading)
+
+            Spacer(minLength: Spacing.sm)
+
+            // Detail - left aligned (not right)
+            if let detail = event.detail {
+                Text(detail)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(MidnightSurface.Text.tertiary)
+                    .lineLimit(1)
+                    .frame(alignment: .leading)
+            }
+
+            Spacer(minLength: Spacing.md)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(rowBackground)
+        .onHover { isHovered = $0 }
+    }
+
+    private var rowBackground: Color {
+        if isHovered {
+            return MidnightSurface.elevated
+        } else if event.type == .error {
+            return SemanticColor.error.opacity(0.08)
+        } else {
+            return Color.clear
+        }
     }
 }
 

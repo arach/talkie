@@ -92,6 +92,15 @@ struct Utterance: Identifiable, Codable, Hashable {
 
 @MainActor
 struct ContextCapture {
+    /// Our own bundle identifier
+    static let talkieLiveBundleID = Bundle.main.bundleIdentifier ?? "live.talkie.TalkieLive"
+
+    /// Check if Talkie Live is the frontmost app
+    static func isTalkieLiveFrontmost() -> Bool {
+        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return false }
+        return frontApp.bundleIdentifier == talkieLiveBundleID
+    }
+
     static func captureCurrentContext() -> UtteranceMetadata {
         var metadata = UtteranceMetadata()
 

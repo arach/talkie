@@ -61,6 +61,14 @@ enum PastLivesDatabase {
                 }
             }
 
+            // Migration 4: Add implicit queue columns
+            migrator.registerMigration("addQueueFields") { db in
+                try db.alter(table: "live_utterance") { t in
+                    t.add(column: "createdInTalkieView", .integer).notNull().defaults(to: 0)
+                    t.add(column: "pasteTimestamp", .double)
+                }
+            }
+
             try migrator.migrate(dbQueue)
             return dbQueue
         } catch {
@@ -262,5 +270,49 @@ extension PastLivesDatabase {
                 .filter(LiveUtterance.Columns.promotionStatus == PromotionStatus.none.rawValue)
                 .fetchCount(db)
         }) ?? 0
+    }
+
+    // MARK: - Implicit Queue Methods
+
+    /// Fetch queued Lives (created in Talkie, never pasted, not promoted)
+    static func fetchQueued() -> [LiveUtterance] {
+        (try? shared.read { db in
+            try LiveUtterance
+                .filter(LiveUtterance.Columns.createdInTalkieView == 1)
+                .filter(LiveUtterance.Columns.pasteTimestamp == nil)
+                .filter(LiveUtterance.Columns.promotionStatus == PromotionStatus.none.rawValue)
+                .order(LiveUtterance.Columns.createdAt.desc)
+                .fetchAll(db)
+        }) ?? []
+    }
+
+    /// Count queued Lives
+    static func countQueued() -> Int {
+        (try? shared.read { db in
+            try LiveUtterance
+                .filter(LiveUtterance.Columns.createdInTalkieView == 1)
+                .filter(LiveUtterance.Columns.pasteTimestamp == nil)
+                .filter(LiveUtterance.Columns.promotionStatus == PromotionStatus.none.rawValue)
+                .fetchCount(db)
+        }) ?? 0
+    }
+
+    /// Mark a Live as pasted (exits the queue)
+    static func markPasted(id: Int64?) {
+        guard let id else { return }
+        let now = Date().timeIntervalSince1970
+        try? shared.write { db in
+            try db.execute(
+                sql: "UPDATE live_utterance SET pasteTimestamp = ? WHERE id = ?",
+                arguments: [now, id]
+            )
+        }
+    }
+
+    /// Fetch a single Live by ID
+    static func fetch(id: Int64) -> LiveUtterance? {
+        try? shared.read { db in
+            try LiveUtterance.fetchOne(db, id: id)
+        }
     }
 }

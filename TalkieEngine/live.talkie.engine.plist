@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>live.talkie.engine</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/arach/Library/Developer/Xcode/DerivedData/TalkieEngine-cmecdpfodydvvictztemgqrzuwij/Build/Products/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
+    </array>
+    <key>MachServices</key>
+    <dict>
+        <key>live.talkie.engine.xpc</key>
+        <true/>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

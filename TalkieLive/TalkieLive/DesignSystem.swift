@@ -140,9 +140,10 @@ struct Design {
 
     static let fontHeadline = Font.system(size: 18, weight: .medium)
 
-    static var background: Color { Color(NSColor.windowBackgroundColor) }
-    static var backgroundSecondary: Color { Color(NSColor.controlBackgroundColor) }
-    static var backgroundTertiary: Color { Color.primary.opacity(0.04) }
+    // Use MidnightSurface colors for consistent dark theme
+    static var background: Color { MidnightSurface.content }
+    static var backgroundSecondary: Color { MidnightSurface.sidebar }
+    static var backgroundTertiary: Color { MidnightSurface.elevated }
 
     static var foreground: Color { Color.primary }
     static var foregroundSecondary: Color { Color.secondary }
@@ -227,6 +228,51 @@ struct SidebarRow: View {
             Image(systemName: icon)
                 .font(Design.fontXS)
         }
+    }
+}
+
+struct SidebarNavButton: View {
+    let icon: String
+    let title: String
+    var count: Int? = nil
+    var isSelected: Bool = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(isSelected ? .accentColor : Color(white: 0.6))
+                    .frame(width: 18)
+
+                Text(title)
+                    .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                    .foregroundColor(isSelected ? .white : Color(white: 0.8))
+
+                Spacer()
+
+                if let count = count, count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundColor(Color(white: 0.5))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(white: 0.15))
+                        .cornerRadius(4)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovered ? Color(white: 0.12) : Color.clear))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 

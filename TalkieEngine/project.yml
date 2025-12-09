@@ -1,0 +1,31 @@
+name: TalkieEngine
+options:
+  bundleIdPrefix: live.talkie
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit.git
+    from: "0.9.0"
+
+targets:
+  TalkieEngine:
+    type: application
+    platform: macOS
+    sources:
+      - path: TalkieEngine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: live.talkie.engine
+        INFOPLIST_FILE: TalkieEngine/Info.plist
+        CODE_SIGN_ENTITLEMENTS: TalkieEngine/TalkieEngine.entitlements
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "5.9"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        PRODUCT_NAME: TalkieEngine
+        ENABLE_HARDENED_RUNTIME: YES
+    dependencies:
+      - package: WhisperKit

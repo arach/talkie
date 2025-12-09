@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import TalkieServices
 
 // MARK: - Overlay Window Controller
 
@@ -78,11 +79,6 @@ final class RecordingOverlayController: ObservableObject {
                     x: screenFrame.maxX - panelWidth - margin,
                     y: screenFrame.maxY - panelHeight - margin
                 )
-            case .bottomCenter:
-                origin = NSPoint(
-                    x: screenFrame.midX - panelWidth / 2,
-                    y: screenFrame.minY + margin
-                )
             }
 
             panel.setFrameOrigin(origin)
@@ -152,8 +148,14 @@ struct RecordingOverlayView: View {
     @EnvironmentObject var controller: RecordingOverlayController
     @ObservedObject private var settings = LiveSettings.shared
     @ObservedObject private var overlayTuning = OverlayTuning.shared
+    @ObservedObject private var whisperService = WhisperService.shared
     @State private var isOverlayHovered: Bool = false  // Track hover state for controls
     @State private var showCheckmark: Bool = false  // For transcribing → success transition
+
+    // Colors matching status bar / floating pill
+    private let processingOrange = Color(red: 1.0, green: 0.6, blue: 0.2)
+    private let successGreen = Color(red: 0.3, green: 0.85, blue: 0.4)
+    private let warmupCyan = Color.cyan
 
     var body: some View {
         ZStack {
@@ -196,27 +198,38 @@ struct RecordingOverlayView: View {
                 }
             }
 
-            // Processing state - simple ellipsis animation
+            // Processing state - simple ellipsis animation with orange tint
+            // Shows warmup message if model is still warming up
             if controller.state == .transcribing {
-                ProcessingDotsView()
+                VStack(spacing: 8) {
+                    ProcessingDotsView(tint: whisperService.isWarmingUp ? warmupCyan : processingOrange)
+
+                    // Contextual warmup message
+                    if whisperService.isWarmingUp {
+                        Text(warmupStatusMessage)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(warmupCyan.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
             }
 
             // Success state - checkmark that fades
             if controller.state == .routing || showCheckmark {
-                SuccessCheckmarkView()
+                SuccessCheckmarkView(tint: successGreen)
             }
         }
         .frame(width: processingWidth, height: processingHeight)
         .background(
-            RoundedRectangle(cornerRadius: CGFloat(overlayTuning.cornerRadius))
+            RoundedRectangle(cornerRadius: cornerRadiusForState)
                 .fill(backgroundFill)
-                .background(
-                    RoundedRectangle(cornerRadius: CGFloat(overlayTuning.cornerRadius))
-                        .fill(.ultraThinMaterial.opacity(controller.state == .transcribing ? 0.15 : 0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadiusForState)
+                        .stroke(borderColor, lineWidth: 0.5)
                 )
         )
-        .scaleEffect(scaleForState)
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: controller.state)
+        .animation(.easeOut(duration: 0.3), value: controller.state)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isOverlayHovered = hovering
@@ -228,16 +241,40 @@ struct RecordingOverlayView: View {
 
             // Show checkmark briefly when transitioning to routing
             if newState == .routing {
-                showCheckmark = true
+                withAnimation(.easeOut(duration: 0.25)) {
+                    showCheckmark = true
+                }
             } else if newState == .idle {
-                // Hide checkmark after a delay
+                // Hide checkmark after a delay with smooth fade
                 Task {
-                    try? await Task.sleep(for: .milliseconds(300))
-                    withAnimation(.easeOut(duration: 0.2)) {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    withAnimation(.easeOut(duration: 0.35)) {
                         showCheckmark = false
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Warmup Status Message
+
+    /// Contextual message based on how long warmup has been running
+    private var warmupStatusMessage: String {
+        guard let startTime = whisperService.warmupStartTime else {
+            return "Model warming up..."
+        }
+
+        let elapsed = Date().timeIntervalSince(startTime)
+
+        // Heuristics based on elapsed time
+        if elapsed < 15 {
+            return "Warming up model... ~1-2 min"
+        } else if elapsed < 45 {
+            return "Still warming up... almost there"
+        } else if elapsed < 90 {
+            return "Should be ready soon..."
+        } else {
+            return "Almost ready, hang tight"
         }
     }
 
@@ -246,8 +283,10 @@ struct RecordingOverlayView: View {
         let baseWidth = CGFloat(overlayTuning.overlayWidth)
         switch controller.state {
         case .listening: return baseWidth
-        case .transcribing: return 64  // Small pill
-        case .routing: return 44  // Even smaller
+        case .transcribing:
+            // Wider if showing warmup message
+            return whisperService.isWarmingUp ? 160 : 56
+        case .routing: return 40  // Smaller for checkmark
         case .idle: return baseWidth
         }
     }
@@ -256,27 +295,50 @@ struct RecordingOverlayView: View {
         let baseHeight = CGFloat(overlayTuning.overlayHeight)
         switch controller.state {
         case .listening: return baseHeight
-        case .transcribing: return 28  // Small pill
-        case .routing: return 28  // Same height
+        case .transcribing:
+            // Taller if showing warmup message
+            return whisperService.isWarmingUp ? 48 : 24
+        case .routing: return 24  // Same height
         case .idle: return baseHeight
         }
     }
 
-    private var scaleForState: CGFloat {
+    private var cornerRadiusForState: CGFloat {
         switch controller.state {
-        case .listening: return 1.0
-        case .transcribing: return 1.0
-        case .routing: return 0.9  // Slight shrink as it completes
-        case .idle: return 1.0
+        case .listening: return CGFloat(overlayTuning.cornerRadius)
+        case .transcribing, .routing: return 12  // Pill shape
+        case .idle: return CGFloat(overlayTuning.cornerRadius)
         }
     }
 
     private var backgroundFill: Color {
         switch controller.state {
-        case .listening: return Color(white: 0, opacity: overlayTuning.backgroundOpacity)
-        case .transcribing: return Color(white: 0.05, opacity: overlayTuning.backgroundOpacity * 0.8)
-        case .routing: return Color(white: 0.05, opacity: overlayTuning.backgroundOpacity * 0.6)
-        case .idle: return Color(white: 0, opacity: overlayTuning.backgroundOpacity)
+        case .listening:
+            return Color(white: 0, opacity: overlayTuning.backgroundOpacity * 0.7)
+        case .transcribing:
+            // Cyan tint during warmup, orange otherwise
+            if whisperService.isWarmingUp {
+                return warmupCyan.opacity(0.1)
+            }
+            return processingOrange.opacity(0.08)
+        case .routing:
+            // Very subtle green tint
+            return successGreen.opacity(0.1)
+        case .idle:
+            return Color.clear
+        }
+    }
+
+    private var borderColor: Color {
+        switch controller.state {
+        case .listening:
+            return Color.white.opacity(0.1)
+        case .transcribing:
+            return processingOrange.opacity(0.25)
+        case .routing:
+            return successGreen.opacity(0.3)
+        case .idle:
+            return Color.clear
         }
     }
 }
@@ -284,20 +346,21 @@ struct RecordingOverlayView: View {
 // MARK: - Processing Dots (simple ellipsis animation)
 
 struct ProcessingDotsView: View {
+    let tint: Color
     @State private var animationPhase: Int = 0
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
-                    .fill(Color.white.opacity(dotOpacity(for: i)))
-                    .frame(width: 4, height: 4)
+                    .fill(tint.opacity(dotOpacity(for: i)))
+                    .frame(width: 3, height: 3)
             }
         }
         .onAppear {
-            // Cycle through dots
-            Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
-                withAnimation(.easeInOut(duration: 0.2)) {
+            // Cycle through dots with smooth animation
+            Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
                     animationPhase = (animationPhase + 1) % 4
                 }
             }
@@ -307,28 +370,27 @@ struct ProcessingDotsView: View {
     private func dotOpacity(for index: Int) -> Double {
         // animationPhase 0: all dim, 1: first bright, 2: second bright, 3: third bright
         if animationPhase == 0 {
-            return 0.3
+            return 0.4
         }
-        return index == (animationPhase - 1) ? 0.9 : 0.3
+        return index == (animationPhase - 1) ? 1.0 : 0.4
     }
 }
 
 // MARK: - Success Checkmark (minimal completion indicator)
 
 struct SuccessCheckmarkView: View {
-    @State private var scale: CGFloat = 0.5
+    let tint: Color
+    @State private var scale: CGFloat = 0.6
     @State private var opacity: Double = 0
-
-    private let successGreen = Color(red: 0.4, green: 1.0, blue: 0.5)
 
     var body: some View {
         Image(systemName: "checkmark")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(successGreen)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(tint)
             .scaleEffect(scale)
             .opacity(opacity)
             .onAppear {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                withAnimation(.easeOut(duration: 0.25)) {
                     scale = 1.0
                     opacity = 1.0
                 }

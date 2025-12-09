@@ -47,21 +47,57 @@ enum OverlayStyle: String, CaseIterable, Codable {
     }
 }
 
-enum OverlayPosition: String, CaseIterable, Codable {
+/// Position for the recording indicator (particles/waveform overlay)
+enum IndicatorPosition: String, CaseIterable, Codable {
     case topCenter = "topCenter"
     case topLeft = "topLeft"
     case topRight = "topRight"
-    case bottomCenter = "bottomCenter"
 
     var displayName: String {
         switch self {
         case .topCenter: return "Top Center"
         case .topLeft: return "Top Left"
         case .topRight: return "Top Right"
-        case .bottomCenter: return "Bottom Center"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .topCenter: return "Centered at top of screen"
+        case .topLeft: return "Upper left corner"
+        case .topRight: return "Upper right corner"
         }
     }
 }
+
+/// Position for the floating pill widget
+enum PillPosition: String, CaseIterable, Codable {
+    case bottomCenter = "bottomCenter"
+    case bottomLeft = "bottomLeft"
+    case bottomRight = "bottomRight"
+    case topCenter = "topCenter"
+
+    var displayName: String {
+        switch self {
+        case .bottomCenter: return "Bottom Center"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomRight: return "Bottom Right"
+        case .topCenter: return "Top Center"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .bottomCenter: return "Centered at bottom edge"
+        case .bottomLeft: return "Lower left corner"
+        case .bottomRight: return "Lower right corner"
+        case .topCenter: return "Centered at top edge"
+        }
+    }
+}
+
+// Legacy compatibility alias
+typealias OverlayPosition = IndicatorPosition
 
 enum AppTheme: String, CaseIterable, Codable {
     case system = "system"
@@ -265,6 +301,9 @@ final class LiveSettings: ObservableObject {
     private let utteranceTTLKey = "utteranceTTLHours"
     private let overlayStyleKey = "overlayStyle"
     private let overlayPositionKey = "overlayPosition"
+    private let pillPositionKey = "pillPosition"
+    private let pillShowOnAllScreensKey = "pillShowOnAllScreens"
+    private let pillExpandsDuringRecordingKey = "pillExpandsDuringRecording"
     private let startSoundKey = "startSound"
     private let finishSoundKey = "finishSound"
     private let pastedSoundKey = "pastedSound"
@@ -298,6 +337,19 @@ final class LiveSettings: ObservableObject {
     }
 
     @Published var overlayPosition: OverlayPosition {
+        didSet { save() }
+    }
+
+    // Floating Pill Settings
+    @Published var pillPosition: PillPosition {
+        didSet { save() }
+    }
+
+    @Published var pillShowOnAllScreens: Bool {
+        didSet { save() }
+    }
+
+    @Published var pillExpandsDuringRecording: Bool {
         didSet { save() }
     }
 
@@ -371,6 +423,18 @@ final class LiveSettings: ObservableObject {
             self.overlayPosition = .topCenter
         }
 
+        // Load pill position
+        if let rawValue = UserDefaults.standard.string(forKey: pillPositionKey),
+           let position = PillPosition(rawValue: rawValue) {
+            self.pillPosition = position
+        } else {
+            self.pillPosition = .bottomCenter
+        }
+
+        // Load pill settings
+        self.pillShowOnAllScreens = UserDefaults.standard.object(forKey: pillShowOnAllScreensKey) as? Bool ?? true
+        self.pillExpandsDuringRecording = UserDefaults.standard.object(forKey: pillExpandsDuringRecordingKey) as? Bool ?? true
+
         // Load sounds (default to pop for start/finish, tink for pasted)
         if let rawValue = UserDefaults.standard.string(forKey: startSoundKey),
            let sound = TalkieSound(rawValue: rawValue) {
@@ -432,6 +496,9 @@ final class LiveSettings: ObservableObject {
         UserDefaults.standard.set(utteranceTTLHours, forKey: utteranceTTLKey)
         UserDefaults.standard.set(overlayStyle.rawValue, forKey: overlayStyleKey)
         UserDefaults.standard.set(overlayPosition.rawValue, forKey: overlayPositionKey)
+        UserDefaults.standard.set(pillPosition.rawValue, forKey: pillPositionKey)
+        UserDefaults.standard.set(pillShowOnAllScreens, forKey: pillShowOnAllScreensKey)
+        UserDefaults.standard.set(pillExpandsDuringRecording, forKey: pillExpandsDuringRecordingKey)
         UserDefaults.standard.set(startSound.rawValue, forKey: startSoundKey)
         UserDefaults.standard.set(finishSound.rawValue, forKey: finishSoundKey)
         UserDefaults.standard.set(pastedSound.rawValue, forKey: pastedSoundKey)

@@ -49,6 +49,13 @@ struct EmbeddedSettingsView: View {
                         // BEHAVIOR
                         EmbeddedSettingsSectionHeader(title: "BEHAVIOR")
                         EmbeddedSettingsRow(
+                            icon: "command",
+                            title: "Shortcuts",
+                            isSelected: selectedSection == .shortcuts
+                        ) {
+                            selectedSection = .shortcuts
+                        }
+                        EmbeddedSettingsRow(
                             icon: "speaker.wave.2",
                             title: "Sounds",
                             isSelected: selectedSection == .sounds
@@ -70,8 +77,15 @@ struct EmbeddedSettingsView: View {
                             selectedSection = .overlay
                         }
 
-                        // STORAGE
-                        EmbeddedSettingsSectionHeader(title: "STORAGE")
+                        // SYSTEM
+                        EmbeddedSettingsSectionHeader(title: "SYSTEM")
+                        EmbeddedSettingsRow(
+                            icon: "server.rack",
+                            title: "Engine",
+                            isSelected: selectedSection == .engine
+                        ) {
+                            selectedSection = .engine
+                        }
                         EmbeddedSettingsRow(
                             icon: "folder",
                             title: "Files & Data",
@@ -84,7 +98,7 @@ struct EmbeddedSettingsView: View {
                 }
             }
             .frame(width: 180)
-            .background(Design.backgroundSecondary)
+            .background(MidnightSurface.sidebar)
 
             Rectangle()
                 .fill(Design.divider)
@@ -95,19 +109,25 @@ struct EmbeddedSettingsView: View {
                 switch selectedSection {
                 case .appearance:
                     AppearanceSettingsSection()
+                case .shortcuts:
+                    ShortcutsSettingsSection()
                 case .sounds:
                     SoundsSettingsSection()
                 case .output:
                     OutputSettingsSection()
                 case .overlay:
                     OverlaySettingsSection()
+                case .engine:
+                    EngineSettingsSection()
                 case .storage:
                     StorageSettingsSection()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Design.background)
+            .background(MidnightSurface.content)
         }
+        .background(MidnightSurface.content)
+        .ignoresSafeArea(.all, edges: .all)
     }
 }
 
@@ -170,18 +190,22 @@ enum SettingsSection: String, Hashable, CaseIterable {
     // Appearance
     case appearance
     // Behavior
+    case shortcuts
     case sounds
     case output
     case overlay
-    // Storage
+    // System
+    case engine
     case storage
 
     var title: String {
         switch self {
         case .appearance: return "APPEARANCE"
+        case .shortcuts: return "SHORTCUTS"
         case .sounds: return "SOUNDS"
         case .output: return "OUTPUT"
         case .overlay: return "OVERLAY"
+        case .engine: return "ENGINE"
         case .storage: return "STORAGE"
         }
     }
@@ -189,9 +213,11 @@ enum SettingsSection: String, Hashable, CaseIterable {
     var icon: String {
         switch self {
         case .appearance: return "paintbrush"
+        case .shortcuts: return "command"
         case .sounds: return "speaker.wave.2"
         case .output: return "arrow.right.doc.on.clipboard"
         case .overlay: return "rectangle.inset.topright.filled"
+        case .engine: return "server.rack"
         case .storage: return "folder"
         }
     }
@@ -242,8 +268,15 @@ struct SettingsView: View {
                         // BEHAVIOR
                         SettingsSidebarSection(
                             title: "BEHAVIOR",
-                            isActive: selectedSection == .sounds || selectedSection == .output || selectedSection == .overlay
+                            isActive: selectedSection == .shortcuts || selectedSection == .sounds || selectedSection == .output || selectedSection == .overlay
                         ) {
+                            SettingsSidebarItem(
+                                icon: "command",
+                                title: "SHORTCUTS",
+                                isSelected: selectedSection == .shortcuts
+                            ) {
+                                selectedSection = .shortcuts
+                            }
                             SettingsSidebarItem(
                                 icon: "speaker.wave.2",
                                 title: "SOUNDS",
@@ -267,11 +300,18 @@ struct SettingsView: View {
                             }
                         }
 
-                        // STORAGE
+                        // SYSTEM
                         SettingsSidebarSection(
-                            title: "STORAGE",
-                            isActive: selectedSection == .storage
+                            title: "SYSTEM",
+                            isActive: selectedSection == .engine || selectedSection == .storage
                         ) {
+                            SettingsSidebarItem(
+                                icon: "server.rack",
+                                title: "ENGINE",
+                                isSelected: selectedSection == .engine
+                            ) {
+                                selectedSection = .engine
+                            }
                             SettingsSidebarItem(
                                 icon: "folder",
                                 title: "FILES & DATA",
@@ -300,12 +340,16 @@ struct SettingsView: View {
                     switch selectedSection {
                     case .appearance:
                         AppearanceSettingsSection()
+                    case .shortcuts:
+                        ShortcutsSettingsSection()
                     case .sounds:
                         SoundsSettingsSection()
                     case .output:
                         OutputSettingsSection()
                     case .overlay:
                         OverlaySettingsSection()
+                    case .engine:
+                        EngineSettingsSection()
                     case .storage:
                         StorageSettingsSection()
                     }
@@ -735,11 +779,6 @@ struct OverlayPositionSelector: View {
                         PositionDot(position: .topRight, selection: $selection)
                     }
                     Spacer()
-                    HStack {
-                        Spacer()
-                        PositionDot(position: .bottomCenter, selection: $selection)
-                        Spacer()
-                    }
                 }
                 .padding(8)
                 .frame(width: 120, height: 75)
@@ -1083,6 +1122,83 @@ struct OverlayStyleRow: View {
     }
 }
 
+// MARK: - Shortcuts Settings Section
+
+struct ShortcutsSettingsSection: View {
+    @ObservedObject private var settings = LiveSettings.shared
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "command",
+                title: "SHORTCUTS",
+                subtitle: "Configure global keyboard shortcuts."
+            )
+        } content: {
+            // Record shortcut
+            SettingsCard(title: "RECORD") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Quick Capture")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+                            Text("Press and hold to record, release to transcribe and paste")
+                                .font(.system(size: 9))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+
+                        Spacer()
+
+                        Text(settings.hotkey.displayString)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.accentColor)
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.sm)
+                            .background(
+                                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                    .fill(Color.accentColor.opacity(0.15))
+                            )
+                    }
+                }
+            }
+
+            // Queue Paste shortcut
+            SettingsCard(title: "QUEUE PASTE") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Paste from Queue")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+                            Text("Show picker to paste queued transcriptions")
+                                .font(.system(size: 9))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+
+                        Spacer()
+
+                        Text("⌥⌘V")
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.purple)
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.sm)
+                            .background(
+                                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                    .fill(Color.purple.opacity(0.15))
+                            )
+                    }
+
+                    Text("Recordings made while Talkie Live is the active app are queued instead of auto-pasted. Use this shortcut to select and paste from your queue.")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.4))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Sounds Settings Section
 
 struct SoundsSettingsSection: View {
@@ -1200,52 +1316,18 @@ struct OverlaySettingsSection: View {
             SettingsPageHeader(
                 icon: "rectangle.inset.topright.filled",
                 title: "OVERLAY",
-                subtitle: "Configure the recording overlay and transcription."
+                subtitle: "Configure the recording indicator and floating pill."
             )
         } content: {
-            // Hotkey
-            SettingsCard(title: "GLOBAL SHORTCUT") {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack {
-                        Text("Current hotkey:")
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.7))
+            // SECTION 1: Recording Indicator
+            OverlaySectionHeader(
+                icon: "sparkles",
+                title: "RECORDING INDICATOR",
+                description: "Visual feedback shown while recording audio"
+            )
 
-                        Spacer()
-
-                        Text(settings.hotkey.displayString)
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.accentColor)
-                            .padding(.horizontal, Spacing.sm)
-                            .padding(.vertical, Spacing.xs)
-                            .background(
-                                RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                    .fill(Color.accentColor.opacity(0.15))
-                            )
-                    }
-
-                    Text("Press and hold to record. Release to transcribe.")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-            }
-
-            // Overlay Position
-            SettingsCard(title: "OVERLAY POSITION") {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    ForEach(OverlayPosition.allCases, id: \.rawValue) { position in
-                        OverlayPositionRow(
-                            position: position,
-                            isSelected: settings.overlayPosition == position
-                        ) {
-                            settings.overlayPosition = position
-                        }
-                    }
-                }
-            }
-
-            // Overlay Style
-            SettingsCard(title: "OVERLAY STYLE") {
+            // Indicator Style
+            SettingsCard(title: "INDICATOR STYLE") {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     ForEach(OverlayStyle.allCases, id: \.rawValue) { style in
                         OverlayStyleRow(
@@ -1258,20 +1340,212 @@ struct OverlaySettingsSection: View {
                 }
             }
 
-            // Whisper Model
-            SettingsCard(title: "WHISPER MODEL") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    ForEach(WhisperModel.allCases, id: \.rawValue) { model in
-                        WhisperModelRow(
-                            model: model,
-                            isSelected: settings.whisperModel == model
+            // Indicator Position
+            SettingsCard(title: "INDICATOR POSITION") {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    ForEach(IndicatorPosition.allCases, id: \.rawValue) { position in
+                        IndicatorPositionRow(
+                            position: position,
+                            isSelected: settings.overlayPosition == position
                         ) {
-                            settings.whisperModel = model
+                            settings.overlayPosition = position
                         }
                     }
                 }
             }
+
+            // SECTION 2: Floating Pill
+            OverlaySectionHeader(
+                icon: "capsule.fill",
+                title: "FLOATING PILL",
+                description: "Persistent widget for quick access and status"
+            )
+            .padding(.top, Spacing.lg)
+
+            // Pill Position
+            SettingsCard(title: "PILL POSITION") {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    ForEach(PillPosition.allCases, id: \.rawValue) { position in
+                        PillPositionRow(
+                            position: position,
+                            isSelected: settings.pillPosition == position
+                        ) {
+                            settings.pillPosition = position
+                        }
+                    }
+                }
+            }
+
+            // Pill Options
+            SettingsCard(title: "PILL OPTIONS") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    // Show on all screens toggle
+                    SettingsToggleRow(
+                        icon: "display.2",
+                        title: "Show on all screens",
+                        description: "Display pill on every connected monitor",
+                        isOn: $settings.pillShowOnAllScreens
+                    )
+
+                    Rectangle()
+                        .fill(Design.divider)
+                        .frame(height: 0.5)
+
+                    // Expand during recording toggle
+                    SettingsToggleRow(
+                        icon: "timer",
+                        title: "Expand during recording",
+                        description: "Show timer and controls while recording",
+                        isOn: $settings.pillExpandsDuringRecording
+                    )
+                }
+            }
         }
+    }
+}
+
+// MARK: - Overlay Section Header
+
+struct OverlaySectionHeader: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(.cyan)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(Color(white: 0.9))
+
+                Text(description)
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(white: 0.5))
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, Spacing.xs)
+    }
+}
+
+// MARK: - Indicator Position Row
+
+struct IndicatorPositionRow: View {
+    let position: IndicatorPosition
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(position.displayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+
+                Text(position.description)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.accentColor)
+            }
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { action() }
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Pill Position Row
+
+struct PillPositionRow: View {
+    let position: PillPosition
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(position.displayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+
+                Text(position.description)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.accentColor)
+            }
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { action() }
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Settings Toggle Row
+
+struct SettingsToggleRow: View {
+    let icon: String
+    let title: String
+    let description: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(isOn ? .cyan : Color(white: 0.5))
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+
+                Text(description)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .scaleEffect(0.75)
+        }
+        .padding(.vertical, Spacing.xs)
     }
 }
 
@@ -1309,6 +1583,411 @@ struct WhisperModelRow: View {
         .contentShape(Rectangle())
         .onTapGesture { action() }
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Engine Settings Section
+
+struct EngineSettingsSection: View {
+    @ObservedObject private var settings = LiveSettings.shared
+    @ObservedObject private var engineClient = EngineClient.shared
+    @StateObject private var whisperService = WhisperService.shared
+    @State private var downloadingModel: WhisperModel?
+    @State private var downloadTask: Task<Void, Never>?
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "server.rack",
+                title: "ENGINE",
+                subtitle: "Transcription engine status and model management."
+            )
+        } content: {
+            // Engine Connection Status
+            SettingsCard(title: "ENGINE STATUS") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    // Connection state
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(engineStatusColor)
+                                    .frame(width: 8, height: 8)
+                                Text(engineClient.connectionState.rawValue)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+
+                            if engineClient.isConnected {
+                                Text("TalkieEngine XPC service")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.5))
+                            } else if let error = engineClient.lastError {
+                                Text(error)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red.opacity(0.8))
+                            }
+                        }
+
+                        Spacer()
+
+                        // Reconnect button
+                        Button(action: {
+                            engineClient.reconnect()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 10))
+                                Text(engineClient.isConnected ? "Refresh" : "Connect")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .foregroundColor(.accentColor)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, 6)
+                            .background(Color.accentColor.opacity(0.15))
+                            .cornerRadius(CornerRadius.xs)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if engineClient.isConnected {
+                        Divider()
+                            .background(Color.white.opacity(0.1))
+
+                        // Session stats
+                        HStack(spacing: Spacing.lg) {
+                            EngineStatBadge(
+                                icon: "clock",
+                                label: "Uptime",
+                                value: formatUptime(engineClient.connectedAt)
+                            )
+
+                            EngineStatBadge(
+                                icon: "text.bubble",
+                                label: "Transcriptions",
+                                value: "\(engineClient.transcriptionCount)"
+                            )
+
+                            if let lastAt = engineClient.lastTranscriptionAt {
+                                EngineStatBadge(
+                                    icon: "checkmark.circle",
+                                    label: "Last",
+                                    value: formatTimeAgo(lastAt)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Loaded Model Status
+            SettingsCard(title: "ACTIVE MODEL") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let status = engineClient.status, let modelId = status.loadedModelId {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                                Text(modelId.replacingOccurrences(of: "openai_whisper-", with: "Whisper ").capitalized)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            Text(status.isTranscribing ? "Currently transcribing..." : "Ready for transcription")
+                                .font(.system(size: 10))
+                                .foregroundColor(status.isTranscribing ? .orange : .white.opacity(0.5))
+                        } else if let status = engineClient.status, status.isWarmingUp {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .scaleEffect(0.5)
+                                Text("Loading model...")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.orange)
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 6, height: 6)
+                                Text("No model loaded")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            Text("Model will load on first transcription")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                    }
+
+                    Spacer()
+
+                    // Preload/Unload buttons
+                    if engineClient.isConnected {
+                        if engineClient.status?.loadedModelId != nil {
+                            Button(action: {
+                                Task { await engineClient.unloadModel() }
+                            }) {
+                                Text("Unload")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(.orange)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.orange.opacity(0.15))
+                                    .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button(action: {
+                                Task {
+                                    try? await engineClient.preloadModel(settings.whisperModel.rawValue)
+                                }
+                            }) {
+                                Text("Preload")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(.green)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green.opacity(0.15))
+                                    .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            // Whisper Models
+            SettingsCard(title: "WHISPER MODELS") {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(WhisperModel.allCases, id: \.rawValue) { model in
+                        WhisperModelManagementRow(
+                            model: model,
+                            isInstalled: whisperService.isModelDownloaded(model),
+                            isActive: engineClient.status?.loadedModelId == model.rawValue,
+                            isSelected: settings.whisperModel == model,
+                            isDownloading: downloadingModel == model,
+                            downloadProgress: whisperService.downloadProgress,
+                            onSelect: { settings.whisperModel = model },
+                            onDownload: { downloadModel(model) },
+                            onDelete: { deleteModel(model) }
+                        )
+
+                        if model != WhisperModel.allCases.last {
+                            Divider()
+                                .background(Color.white.opacity(0.08))
+                        }
+                    }
+                }
+            }
+
+            // Info
+            SettingsCard(title: "ABOUT ENGINE") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("TalkieEngine runs as a separate process to keep ML models warm in memory across app restarts. It uses Whisper, OpenAI's speech recognition system, running locally via Apple's Neural Engine.")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: Spacing.md) {
+                        ModelInfoBadge(icon: "lock.shield", label: "Private")
+                        ModelInfoBadge(icon: "bolt", label: "On-device")
+                        ModelInfoBadge(icon: "memorychip", label: "Persistent")
+                    }
+                }
+            }
+        }
+        .onAppear {
+            engineClient.refreshStatus()
+        }
+    }
+
+    private var engineStatusColor: Color {
+        switch engineClient.connectionState {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .disconnected: return .gray
+        case .error: return .red
+        }
+    }
+
+    private func formatUptime(_ date: Date?) -> String {
+        guard let date = date else { return "--" }
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        return "\(hours)h \(minutes % 60)m"
+    }
+
+    private func formatTimeAgo(_ date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 5 { return "just now" }
+        if seconds < 60 { return "\(seconds)s ago" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m ago" }
+        return "1h+ ago"
+    }
+
+    private func downloadModel(_ model: WhisperModel) {
+        guard !whisperService.isModelDownloaded(model) else { return }
+
+        downloadingModel = model
+        downloadTask = Task {
+            do {
+                try await whisperService.downloadModel(model)
+                await MainActor.run {
+                    downloadingModel = nil
+                    downloadTask = nil
+                }
+            } catch {
+                await MainActor.run {
+                    downloadingModel = nil
+                    downloadTask = nil
+                }
+            }
+        }
+    }
+
+    private func deleteModel(_ model: WhisperModel) {
+        do {
+            try whisperService.deleteModel(model)
+        } catch {
+            // Handle error silently
+        }
+    }
+}
+
+// MARK: - Engine Stat Badge
+
+struct EngineStatBadge: View {
+    let icon: String
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundColor(.accentColor.opacity(0.8))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label.uppercased())
+                    .font(.system(size: 7, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundColor(.white.opacity(0.4))
+
+                Text(value)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.9))
+            }
+        }
+    }
+}
+
+struct WhisperModelManagementRow: View {
+    let model: WhisperModel
+    let isInstalled: Bool
+    let isActive: Bool
+    let isSelected: Bool
+    let isDownloading: Bool
+    let downloadProgress: Float
+    let onSelect: () -> Void
+    let onDownload: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            // Selection indicator
+            Button(action: onSelect) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14))
+                    .foregroundColor(isSelected ? .accentColor : .white.opacity(0.3))
+            }
+            .buttonStyle(.plain)
+            .disabled(!isInstalled)
+
+            // Model info
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(model.displayName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(isInstalled ? .white : .white.opacity(0.5))
+
+                    if isActive {
+                        Text("LOADED")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.green.opacity(0.2))
+                            .cornerRadius(3)
+                    }
+                }
+
+                Text(model.description)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+
+            Spacer()
+
+            // Action buttons
+            if isDownloading {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .frame(width: 60)
+            } else if isInstalled {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10))
+                        .foregroundColor(isHovered ? .red : .white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .opacity(isHovered ? 1 : 0.5)
+            } else {
+                Button(action: onDownload) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.system(size: 10))
+                        Text("Download")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, Spacing.sm)
+        .padding(.horizontal, Spacing.xs)
+        .background(isHovered ? Color.white.opacity(0.03) : Color.clear)
+        .onHover { isHovered = $0 }
+    }
+}
+
+struct ModelInfoBadge: View {
+    let icon: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+            Text(label)
+                .font(.system(size: 9))
+        }
+        .foregroundColor(.white.opacity(0.5))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(4)
     }
 }
 

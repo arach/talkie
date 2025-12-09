@@ -129,6 +129,10 @@ struct LiveUtterance: Identifiable, Hashable {
     var talkieMemoID: String?   // ID of the memo if promoted to memo
     var commandID: String?       // ID of the command/workflow if promoted to command
 
+    // Queue tracking (implicit queue)
+    var createdInTalkieView: Bool   // Was this recorded inside Talkie Live UI?
+    var pasteTimestamp: Date?       // When was this pasted? (nil = still queued)
+
     static let databaseTableName = "live_utterance"
 
     enum Columns: String, ColumnExpression {
@@ -136,6 +140,7 @@ struct LiveUtterance: Identifiable, Hashable {
         case durationSeconds, wordCount, whisperModel, transcriptionMs
         case sessionID, metadata, audioFilename
         case promotionStatus, talkieMemoID, commandID
+        case createdInTalkieView, pasteTimestamp
     }
 
     /// Full URL to the audio file if it exists
@@ -160,6 +165,11 @@ struct LiveUtterance: Identifiable, Hashable {
         promotionStatus == .none
     }
 
+    /// Whether this Live is queued (created in Talkie, never pasted, not promoted)
+    var isQueued: Bool {
+        createdInTalkieView && pasteTimestamp == nil && promotionStatus == .none
+    }
+
     init(
         id: Int64? = nil,
         createdAt: Date = Date(),
@@ -177,7 +187,9 @@ struct LiveUtterance: Identifiable, Hashable {
         audioFilename: String? = nil,
         promotionStatus: PromotionStatus = .none,
         talkieMemoID: String? = nil,
-        commandID: String? = nil
+        commandID: String? = nil,
+        createdInTalkieView: Bool = false,
+        pasteTimestamp: Date? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -196,6 +208,8 @@ struct LiveUtterance: Identifiable, Hashable {
         self.promotionStatus = promotionStatus
         self.talkieMemoID = talkieMemoID
         self.commandID = commandID
+        self.createdInTalkieView = createdInTalkieView
+        self.pasteTimestamp = pasteTimestamp
     }
 }
 
@@ -228,6 +242,15 @@ extension LiveUtterance: FetchableRecord {
         talkieMemoID = row[Columns.talkieMemoID]
         commandID = row[Columns.commandID]
 
+        // Queue fields
+        let createdInTalkieViewInt: Int? = row[Columns.createdInTalkieView]
+        createdInTalkieView = (createdInTalkieViewInt ?? 0) == 1
+        if let pasteTs: Double = row[Columns.pasteTimestamp] {
+            pasteTimestamp = Date(timeIntervalSince1970: pasteTs)
+        } else {
+            pasteTimestamp = nil
+        }
+
         if let json: String = row[Columns.metadata],
            let data = json.data(using: .utf8),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
@@ -258,6 +281,10 @@ extension LiveUtterance: PersistableRecord {
         container[Columns.promotionStatus] = promotionStatus.rawValue
         container[Columns.talkieMemoID] = talkieMemoID
         container[Columns.commandID] = commandID
+
+        // Queue fields
+        container[Columns.createdInTalkieView] = createdInTalkieView ? 1 : 0
+        container[Columns.pasteTimestamp] = pasteTimestamp?.timeIntervalSince1970
 
         if let metadata {
             let data = try? JSONEncoder().encode(metadata)

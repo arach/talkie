@@ -27,6 +27,7 @@ final class LiveController: ObservableObject {
     // Metadata captured at recording start
     private var recordingStartTime: Date?
     private var capturedContext: UtteranceMetadata?
+    private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
 
     init(
         audio: LiveAudioCapture,
@@ -62,6 +63,10 @@ final class LiveController: ObservableObject {
     }
 
     private func start() async {
+        // Check if Talkie Live is frontmost BEFORE capturing context
+        // This determines if the Live goes into the implicit queue
+        createdInTalkieView = ContextCapture.isTalkieLiveFrontmost()
+
         // Capture context BEFORE recording starts (user is in their target app)
         capturedContext = ContextCapture.captureCurrentContext()
         recordingStartTime = Date()
@@ -69,7 +74,8 @@ final class LiveController: ObservableObject {
         // Log context capture
         let appName = capturedContext?.activeAppName ?? "Unknown"
         let windowTitle = capturedContext?.activeWindowTitle ?? ""
-        SystemEventManager.shared.log(.system, "Context captured", detail: "\(appName) — \(windowTitle.prefix(30))")
+        let queueNote = createdInTalkieView ? " [will queue]" : ""
+        SystemEventManager.shared.log(.system, "Context captured", detail: "\(appName) — \(windowTitle.prefix(30))\(queueNote)")
 
         // Play start sound
         SoundManager.shared.playStart()
@@ -168,33 +174,62 @@ final class LiveController: ObservableObject {
 
             state = .routing
 
-            // Log routing action
-            let routingMode = settings.routingMode == .paste ? "Paste" : "Clipboard"
-            SystemEventManager.shared.log(.system, "Routing transcript", detail: "\(routingMode) mode")
-
             // Track milestone
             ProcessingMilestones.shared.markRouting()
 
-            await router.handle(transcript: result.text)
-            metadata.wasRouted = true
+            // Decide: queue or paste immediately?
+            if createdInTalkieView {
+                // Created inside Talkie Live → queue it (don't paste)
+                SystemEventManager.shared.log(.system, "Queueing transcript", detail: "Created in Talkie Live")
 
-            // Play pasted sound
-            SoundManager.shared.playPasted()
-            SystemEventManager.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...")
+                // Play a different sound for queued (reuse pasted for now)
+                SoundManager.shared.playPasted()
+                SystemEventManager.shared.log(.ui, "Transcript queued", detail: "\(result.text.prefix(40))...")
 
-            // Store in GRDB database with audio reference
-            let utterance = LiveUtterance(
-                text: result.text,
-                mode: settings.routingMode == .paste ? "paste" : "clipboard",
-                appBundleID: metadata.activeAppBundleID,
-                appName: metadata.activeAppName,
-                windowTitle: metadata.activeWindowTitle,
-                durationSeconds: durationSeconds,
-                whisperModel: metadata.whisperModel,
-                transcriptionMs: transcriptionMs,
-                audioFilename: audioFilename
-            )
-            PastLivesDatabase.store(utterance)
+                // Store in GRDB with createdInTalkieView = true, pasteTimestamp = nil
+                let utterance = LiveUtterance(
+                    text: result.text,
+                    mode: "queued",
+                    appBundleID: metadata.activeAppBundleID,
+                    appName: metadata.activeAppName,
+                    windowTitle: metadata.activeWindowTitle,
+                    durationSeconds: durationSeconds,
+                    whisperModel: metadata.whisperModel,
+                    transcriptionMs: transcriptionMs,
+                    audioFilename: audioFilename,
+                    createdInTalkieView: true,
+                    pasteTimestamp: nil  // Not pasted yet → queued
+                )
+                PastLivesDatabase.store(utterance)
+
+            } else {
+                // Normal flow: paste immediately
+                let routingMode = settings.routingMode == .paste ? "Paste" : "Clipboard"
+                SystemEventManager.shared.log(.system, "Routing transcript", detail: "\(routingMode) mode")
+
+                await router.handle(transcript: result.text)
+                metadata.wasRouted = true
+
+                // Play pasted sound
+                SoundManager.shared.playPasted()
+                SystemEventManager.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...")
+
+                // Store in GRDB with pasteTimestamp = now (already pasted)
+                let utterance = LiveUtterance(
+                    text: result.text,
+                    mode: settings.routingMode == .paste ? "paste" : "clipboard",
+                    appBundleID: metadata.activeAppBundleID,
+                    appName: metadata.activeAppName,
+                    windowTitle: metadata.activeWindowTitle,
+                    durationSeconds: durationSeconds,
+                    whisperModel: metadata.whisperModel,
+                    transcriptionMs: transcriptionMs,
+                    audioFilename: audioFilename,
+                    createdInTalkieView: false,
+                    pasteTimestamp: Date()  // Already pasted
+                )
+                PastLivesDatabase.store(utterance)
+            }
 
             let dbRecordCount = PastLivesDatabase.count()
             SystemEventManager.shared.log(.database, "Record stored", detail: "Total: \(dbRecordCount) utterances")
@@ -227,6 +262,7 @@ final class LiveController: ObservableObject {
 
         recordingStartTime = nil
         capturedContext = nil
+        createdInTalkieView = false
         state = .idle
     }
 }

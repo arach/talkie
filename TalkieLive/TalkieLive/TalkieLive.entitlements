@@ -16,5 +16,9 @@
 	<array>
 		<string>com.apple.systemevents</string>
 	</array>
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>live.talkie.engine.xpc</string>
+	</array>
 </dict>
 </plist>

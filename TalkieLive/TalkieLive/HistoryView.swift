@@ -12,6 +12,7 @@ import Carbon.HIToolbox
 // MARK: - Navigation
 
 enum LiveNavigationSection: Hashable {
+    case home
     case history
     case console
     case settings
@@ -23,56 +24,72 @@ struct LiveNavigationView: View {
     @ObservedObject private var store = UtteranceStore.shared
     @ObservedObject private var settings = LiveSettings.shared
 
-    @State private var selectedSection: LiveNavigationSection? = .history
+    @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedUtterance: Utterance?
     @State private var searchText = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var isSidebarCollapsed: Bool = false
+    @State private var isChevronHovered: Bool = false
+    @State private var isChevronPressed: Bool = false
+    @State private var appFilter: String? = nil  // Filter by app name
 
     private var filteredUtterances: [Utterance] {
-        if searchText.isEmpty {
-            return store.utterances
+        var result = store.utterances
+
+        // Apply app filter
+        if let appFilter = appFilter {
+            result = result.filter { $0.metadata.activeAppName == appFilter }
         }
-        return store.utterances.filter {
-            $0.text.localizedCaseInsensitiveContains(searchText)
+
+        // Apply search filter
+        if !searchText.isEmpty {
+            result = result.filter { $0.text.localizedCaseInsensitiveContains(searchText) }
         }
+
+        return result
     }
 
     /// Sections that need full-width (no detail column)
     private var needsFullWidth: Bool {
-        selectedSection == .console || selectedSection == .settings
+        selectedSection == .home || selectedSection == .console || selectedSection == .settings
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if needsFullWidth {
-                // Two-column layout for Console and Settings
-                NavigationSplitView {
-                    sidebarView
-                        .frame(minWidth: 180, idealWidth: 200)
-                } detail: {
-                    fullWidthContentView
-                }
-                .navigationSplitViewStyle(.balanced)
-            } else {
-                // Three-column layout for History (list + detail)
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    sidebarView
-                        .frame(minWidth: 180, idealWidth: 200)
-                } content: {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                // Sidebar - toggleable between icon-only and full labels
+                // Use fixed width (min=max) to prevent sidebar from resizing when content column is dragged
+                sidebarContent
+                    .navigationSplitViewColumnWidth(
+                        min: isSidebarCollapsed ? 56 : 180,
+                        ideal: isSidebarCollapsed ? 56 : 180,
+                        max: isSidebarCollapsed ? 56 : 180
+                    )
+            } content: {
+                // Content column - shows list for history, minimal for full-width views
+                if needsFullWidth {
+                    // Minimal placeholder - content renders in detail column
+                    Color.clear
+                        .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
+                } else {
                     historyListView
-                        .frame(minWidth: 260, idealWidth: 300)
-                } detail: {
+                        .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
+                }
+            } detail: {
+                // Detail column - shows utterance detail or full-width content
+                if needsFullWidth {
+                    fullWidthContentView
+                } else {
                     detailColumnView
                 }
-                .navigationSplitViewStyle(.balanced)
             }
+            .navigationSplitViewStyle(.prominentDetail)
 
-            // Full-width status bar at bottom (includes its own top border)
+            // Full-width status bar at bottom
             StatusBar()
         }
-        .frame(minWidth: 700, minHeight: 450)
+        .frame(minWidth: 700, minHeight: 500)
         .onAppear {
-            // Apply theme on launch
             LiveSettings.shared.applyTheme()
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToConsole)) { _ in
@@ -80,55 +97,179 @@ struct LiveNavigationView: View {
         }
     }
 
-    // MARK: - Sidebar
+    // MARK: - Sidebar Content (Collapsible)
 
-    private var sidebarView: some View {
+    private var sidebarContent: some View {
         VStack(spacing: 0) {
-            // Navigation sections
+            // App branding header with collapse toggle
+            sidebarHeader
+
+            // Navigation list
             List(selection: $selectedSection) {
-                Section(header: SectionHeader(title: "Library")) {
-                    NavigationLink(value: LiveNavigationSection.history) {
-                        SidebarRow(
-                            icon: "sparkles",
-                            title: "Past Lives",
-                            count: store.utterances.count
-                        )
-                    }
+                Section {
+                    sidebarItem(
+                        section: .home,
+                        icon: "house",
+                        title: "Home"
+                    )
                 }
-                .collapsible(false)
 
-                Section(header: SectionHeader(title: "System")) {
-                    NavigationLink(value: LiveNavigationSection.console) {
-                        SidebarRow(
-                            icon: "terminal",
-                            title: "Console",
-                            count: SystemEventManager.shared.events.filter { $0.type == .error }.count > 0
-                                ? SystemEventManager.shared.events.filter { $0.type == .error }.count
-                                : nil
-                        )
-                    }
-
-                    NavigationLink(value: LiveNavigationSection.settings) {
-                        SidebarRow(icon: "gearshape", title: "Settings")
-                    }
+                Section(isSidebarCollapsed ? "" : "Library") {
+                    sidebarItem(
+                        section: .history,
+                        icon: "sparkles",
+                        title: "Past Lives",
+                        badge: store.utterances.count > 0 ? "\(store.utterances.count)" : nil,
+                        badgeColor: .secondary
+                    )
                 }
-                .collapsible(false)
+
+                Section(isSidebarCollapsed ? "" : "System") {
+                    let errorCount = SystemEventManager.shared.events.filter { $0.type == .error }.count
+                    sidebarItem(
+                        section: .console,
+                        icon: "terminal",
+                        title: "Console",
+                        badge: errorCount > 0 ? "\(errorCount)" : nil,
+                        badgeColor: .red
+                    )
+
+                    sidebarItem(
+                        section: .settings,
+                        icon: "gearshape",
+                        title: "Settings"
+                    )
+                }
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
         }
-        .background(Design.backgroundSecondary)
+        .background(MidnightSurface.sidebar)
     }
 
-    // MARK: - Full Width Content (for Console and Settings)
+    /// Sidebar header with app branding and collapse toggle
+    private var sidebarHeader: some View {
+        HStack {
+            if isSidebarCollapsed {
+                // Collapsed: show expand chevron centered
+                chevronButton(icon: "chevron.right", help: "Expand Sidebar")
+            } else {
+                // Expanded: show app name and collapse button
+                Text("TALKIE LIVE")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(3)
+                    .foregroundColor(Color(white: 0.45))
+
+                Spacer()
+
+                chevronButton(icon: "chevron.left", help: "Collapse Sidebar")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
+        .padding(.horizontal, isSidebarCollapsed ? 0 : 12)
+        .padding(.top, 8) // Clear traffic light buttons
+    }
+
+    /// Interactive chevron button with hover and press feedback
+    private func chevronButton(icon: String, help: String) -> some View {
+        Button(action: {
+            // Haptic-like press feedback
+            withAnimation(.easeOut(duration: 0.1)) {
+                isChevronPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isChevronPressed = false
+                toggleSidebarCollapse()
+            }
+        }) {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(isChevronHovered ? Color(white: 0.9) : Color(white: 0.5))
+                .frame(width: 20, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isChevronHovered ? Color(white: 0.2) : Color.clear)
+                )
+                .scaleEffect(isChevronPressed ? 0.85 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isChevronHovered = hovering
+            }
+        }
+        .help(help)
+    }
+
+    private func toggleSidebarCollapse() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSidebarCollapsed.toggle()
+        }
+    }
+
+    /// Adaptive sidebar item - shows icon only when collapsed, full label when expanded
+    @ViewBuilder
+    private func sidebarItem(
+        section: LiveNavigationSection,
+        icon: String,
+        title: String,
+        badge: String? = nil,
+        badgeColor: Color = .secondary
+    ) -> some View {
+        if isSidebarCollapsed {
+            // Icon-only mode
+            Image(systemName: icon)
+                .frame(maxWidth: .infinity)
+                .tag(section)
+                .help(title) // Tooltip on hover
+        } else {
+            // Full label mode
+            Label {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    if let badge = badge {
+                        Text(badge)
+                            .font(.caption)
+                            .foregroundColor(badgeColor)
+                    }
+                }
+            } icon: {
+                Image(systemName: icon)
+            }
+            .tag(section)
+        }
+    }
+
+    // MARK: - Full Width Content (for Home, Console and Settings)
 
     @ViewBuilder
     private var fullWidthContentView: some View {
         switch selectedSection {
+        case .home:
+            HomeView(
+                onSelectUtterance: { utterance in
+                    // Navigate to history and select this utterance
+                    selectedSection = .history
+                    selectedUtterance = utterance
+                },
+                onSelectApp: { appName, _ in
+                    // Navigate to history filtered by this app
+                    appFilter = appName
+                    selectedSection = .history
+                    selectedUtterance = nil
+                }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .console:
             consoleContentView
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(MidnightSurface.content)
         case .settings:
             settingsContentView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         default:
             EmptyView()
         }
@@ -138,6 +279,36 @@ struct LiveNavigationView: View {
         VStack(spacing: 0) {
             // Search
             SidebarSearchField(text: $searchText, placeholder: "Search transcripts...")
+
+            // Active filter indicator
+            if let appFilter = appFilter {
+                HStack(spacing: 8) {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.cyan)
+
+                    Text("App: \(appFilter)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(white: 0.8))
+
+                    Spacer()
+
+                    Button(action: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            self.appFilter = nil
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(white: 0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear filter")
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.cyan.opacity(0.1))
+            }
 
             Rectangle()
                 .fill(Design.divider)
@@ -233,7 +404,7 @@ struct LiveNavigationView: View {
                 .foregroundColor(Design.foregroundMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Design.backgroundSecondary.opacity(0.5))
+        .background(MidnightSurface.content)
     }
 
     private var consoleDetailPlaceholder: some View {
@@ -246,7 +417,7 @@ struct LiveNavigationView: View {
                 .foregroundColor(Design.foregroundMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Design.backgroundSecondary.opacity(0.5))
+        .background(MidnightSurface.content)
     }
 
     private var emptyDetailState: some View {
@@ -259,7 +430,7 @@ struct LiveNavigationView: View {
                 .foregroundColor(Design.foregroundMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Design.backgroundSecondary.opacity(0.5))
+        .background(MidnightSurface.content)
     }
 }
 
@@ -295,9 +466,16 @@ struct UtteranceRowView: View {
                         .font(Design.fontXS)
                         .foregroundColor(Design.foregroundMuted)
 
-                    Text(appName)
-                        .font(Design.fontXS)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        if let bundleID = utterance.metadata.activeAppBundleID {
+                            AppIconView(bundleIdentifier: bundleID, size: 12)
+                                .frame(width: 12, height: 12)
+                        }
+
+                        Text(appName)
+                            .font(Design.fontXS)
+                            .lineLimit(1)
+                    }
                 }
             }
             .foregroundColor(Design.foregroundSecondary)
@@ -345,10 +523,10 @@ struct UtteranceDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     // Header: Date + actions
-                    MinimalHeader(utterance: utterance, copied: $copied, onCopy: copyToClipboard)
+                    MinimalHeader(utterance: utterance)
 
                     // Combined transcript + stats container
-                    TranscriptContainer(utterance: utterance, showJSON: $showJSON)
+                    TranscriptContainer(utterance: utterance, showJSON: $showJSON, copied: $copied, onCopy: copyToClipboard)
 
                     // Info cards row
                     MinimalInfoCards(utterance: utterance)
@@ -356,13 +534,13 @@ struct UtteranceDetailView: View {
                     // Audio asset
                     MinimalAudioCard(utterance: utterance)
 
-                    // Process section
-                    MinimalProcessSection(utterance: utterance)
+                    // Actions section
+                    ActionsSection(utterance: utterance)
                 }
                 .padding(24)
             }
         }
-        .background(Design.background)
+        .background(Color(white: 0.04))  // Near black background
     }
 
     private func copyToClipboard() {
@@ -392,8 +570,6 @@ struct UtteranceDetailView: View {
 
 private struct MinimalHeader: View {
     let utterance: Utterance
-    @Binding var copied: Bool
-    let onCopy: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -417,15 +593,9 @@ private struct MinimalHeader: View {
 
                 Spacer()
 
-                // Actions: Copy + Export
-                HStack(spacing: 8) {
-                    GhostButton(icon: "doc.on.doc", label: "Copy", isActive: copied, accentColor: nil) {
-                        onCopy()
-                    }
-
-                    GhostButton(icon: "square.and.arrow.up", label: "Export", isActive: false, accentColor: .cyan) {
-                        // Export action
-                    }
+                // Export action only (Copy moved to text area)
+                GhostButton(icon: "square.and.arrow.up", label: "Export", isActive: false, accentColor: .cyan) {
+                    // Export action
                 }
             }
 
@@ -548,6 +718,11 @@ private struct ToggleSegment: View {
 private struct TranscriptContainer: View {
     let utterance: Utterance
     @Binding var showJSON: Bool
+    @Binding var copied: Bool
+    let onCopy: () -> Void
+
+    @State private var isHovered = false
+    @State private var isCopyHovered = false
 
     // Crisp text colors - solid grays instead of opacity
     private static let textPrimary = Color(white: 0.93)
@@ -561,9 +736,51 @@ private struct TranscriptContainer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Top bar: Stats on left, Toggle + Token estimate on right
+            // Transcript content with copy button overlay
+            ZStack(alignment: .topTrailing) {
+                HStack(spacing: 0) {
+                    // Left accent bar
+                    Rectangle()
+                        .fill(showJSON ? Color.cyan.opacity(0.5) : Color(white: 0.3))
+                        .frame(width: 3)
+
+                    // Text content
+                    if showJSON {
+                        JSONContentView(utterance: utterance)
+                    } else {
+                        Text(utterance.text)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(Self.textPrimary)
+                            .lineSpacing(6)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                            .padding(.trailing, 36)
+                    }
+                }
+
+                // Copy button inside text area
+                if isHovered || copied {
+                    Button(action: onCopy) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11))
+                            .foregroundColor(copied ? .green : (isCopyHovered ? .white : Color(white: 0.5)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(isCopyHovered ? Color(white: 0.15) : Color.clear)
+                    )
+                    .onHover { isCopyHovered = $0 }
+                    .padding(8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    .animation(.easeOut(duration: 0.15), value: isCopyHovered)
+                }
+            }
+
+            // Bottom bar: Stats left, Toggle center, Tokens right
             HStack(alignment: .center) {
-                // Left: Word and char counts
                 HStack(spacing: 16) {
                     StatPill(label: "WORDS", value: "\(utterance.wordCount)")
                     StatPill(label: "CHARS", value: "\(utterance.characterCount)")
@@ -571,70 +788,43 @@ private struct TranscriptContainer: View {
 
                 Spacer()
 
-                // Right: Toggle + Token estimate
-                HStack(spacing: 12) {
-                    ContentToggle(showJSON: $showJSON)
+                ContentToggle(showJSON: $showJSON)
 
-                    // Token estimate (right aligned)
-                    HStack(spacing: 4) {
-                        Text("~\(tokenEstimate)")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundColor(Self.textPrimary)
-                        Text("tokens")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Self.textMuted)
-                    }
-                }
+                Spacer()
+
+                StatPill(label: "TOKENS", value: "~\(tokenEstimate)", color: .cyan)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
-            // Divider
-            Rectangle()
-                .fill(Color(white: 0.2))
-                .frame(height: 1)
-
-            // Transcript content
-            HStack(spacing: 0) {
-                // Left accent bar
-                Rectangle()
-                    .fill(showJSON ? Color.cyan.opacity(0.5) : Color(white: 0.35))
-                    .frame(width: 3)
-
-                // Text content - crisp rendering with proper font
-                if showJSON {
-                    JSONContentView(utterance: utterance)
-                } else {
-                    Text(utterance.text)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(Self.textPrimary)
-                        .lineSpacing(6)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                }
-            }
+            .padding(.vertical, 10)
+            .background(Color(white: 0.04))
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(white: 0.18), lineWidth: 1)
+                .fill(Color(white: 0.06))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(white: 0.12), lineWidth: 1)
+        )
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
     }
 }
 
 private struct StatPill: View {
     let label: String
     let value: String
+    var color: Color? = nil
 
     var body: some View {
         HStack(spacing: 6) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(white: 0.45))
+                .foregroundColor(color?.opacity(0.6) ?? Color(white: 0.45))
 
             Text(value)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundColor(Color(white: 0.93))
+                .foregroundColor(color ?? Color(white: 0.93))
         }
     }
 }
@@ -668,13 +858,14 @@ private struct MinimalInfoCards: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Input source - purple
+            // Input source - purple (with app icon)
             if let appName = utterance.metadata.activeAppName {
                 InfoCard(
                     label: "INPUT SOURCE",
                     icon: "chevron.left.forwardslash.chevron.right",
                     value: appName,
-                    iconColor: .purple
+                    iconColor: .purple,
+                    appBundleID: utterance.metadata.activeAppBundleID
                 )
             }
 
@@ -698,18 +889,29 @@ private struct MinimalInfoCards: View {
                 )
             }
 
-            // Pipeline status - green icon, white text
-            InfoCard(
-                label: "PIPELINE",
-                icon: "circle.fill",
-                value: "SYNCED",
-                iconColor: .green
-            )
+            // Transcription time - green (shows processing speed)
+            if let transcriptionMs = utterance.metadata.transcriptionDurationMs {
+                InfoCard(
+                    label: "TRANSCRIBED",
+                    icon: "bolt",
+                    value: formatTranscriptionTime(transcriptionMs),
+                    iconColor: .green
+                )
+            }
         }
     }
 
     private func formatDuration(_ d: Double) -> String {
         String(format: "%.2fs", d)
+    }
+
+    private func formatTranscriptionTime(_ ms: Int) -> String {
+        if ms < 1000 {
+            return "\(ms)ms"
+        } else {
+            let seconds = Double(ms) / 1000.0
+            return String(format: "%.1fs", seconds)
+        }
     }
 }
 
@@ -718,21 +920,29 @@ private struct InfoCard: View {
     let icon: String
     let value: String
     var iconColor: Color = .white
+    var appBundleID: String? = nil
+
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(white: 0.45))
+                .foregroundColor(isHovered ? Color(white: 0.6) : Color(white: 0.45))
 
             HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 10))
-                    .foregroundColor(iconColor)
+                if let bundleID = appBundleID {
+                    AppIconView(bundleIdentifier: bundleID, size: 14)
+                        .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(isHovered ? iconColor : iconColor.opacity(0.8))
+                }
 
                 Text(value)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(white: 0.88))
+                    .foregroundColor(isHovered ? Color(white: 0.95) : Color(white: 0.88))
                     .lineLimit(1)
             }
         }
@@ -740,16 +950,22 @@ private struct InfoCard: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(white: 0.18), lineWidth: 1)
+                .fill(isHovered ? Color(white: 0.09) : Color(white: 0.06))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isHovered ? iconColor.opacity(0.3) : Color(white: 0.12), lineWidth: 1)
+        )
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
     }
 }
 
 private struct MinimalAudioCard: View {
     let utterance: Utterance
     @ObservedObject private var playback = AudioPlaybackManager.shared
-    @State private var isHoveringAsset = false
-    @State private var isHoveringWaveform = false
+    @State private var isHovering = false
+    @State private var isPlayButtonHovered = false
 
     private var isThisPlaying: Bool {
         playback.currentAudioID == utterance.id.uuidString && playback.isPlaying
@@ -775,24 +991,18 @@ private struct MinimalAudioCard: View {
         utterance.metadata.hasAudio
     }
 
-    /// Truncated filename: show "...{last-segment}" after the last dash
-    private var truncatedFilename: String {
-        guard let url = utterance.metadata.audioURL else { return "No audio" }
+    /// Short ID for display (last 8 chars of filename before extension)
+    private var shortFileId: String {
+        guard let url = utterance.metadata.audioURL else { return "—" }
         let filename = url.deletingPathExtension().lastPathComponent
-        // Find last dash and show portion after it
-        if let lastDashIndex = filename.lastIndex(of: "-") {
-            let suffix = String(filename[filename.index(after: lastDashIndex)...])
-            return "…\(suffix)"
-        }
-        // Fallback: show last 8 chars
-        if filename.count > 12 {
-            return "…\(filename.suffix(8))"
+        if filename.count > 8 {
+            return String(filename.suffix(8))
         }
         return filename
     }
 
     private var fullFilename: String {
-        utterance.metadata.audioURL?.lastPathComponent ?? "No audio"
+        utterance.metadata.audioURL?.deletingPathExtension().lastPathComponent ?? "No audio"
     }
 
     private var fileSize: String {
@@ -811,94 +1021,112 @@ private struct MinimalAudioCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left column: Play button + current time (compact)
-            VStack(spacing: 4) {
+        VStack(spacing: 0) {
+            // Main playback row
+            HStack(spacing: 12) {
+                // Play button with hover effect
                 Button(action: togglePlayback) {
                     ZStack {
                         Circle()
-                            .fill(hasAudio ? Color(white: 0.15) : Color(white: 0.1))
-                            .frame(width: 32, height: 32)
+                            .fill(playButtonBackground)
+                            .frame(width: 36, height: 36)
 
                         Image(systemName: isThisPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(hasAudio ? Color(white: 0.85) : Color(white: 0.35))
+                            .font(.system(size: 12))
+                            .foregroundColor(playButtonForeground)
                     }
                 }
                 .buttonStyle(.plain)
                 .disabled(!hasAudio)
+                .onHover { isPlayButtonHovered = $0 }
+                .animation(.easeOut(duration: 0.12), value: isPlayButtonHovered)
 
-                // Current time under button
-                Text(formatTime(displayCurrentTime))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(white: 0.55))
-            }
-            .frame(width: 44)
+                // Waveform + timeline (fills available space)
+                VStack(spacing: 6) {
+                    MinimalWaveformBars(progress: displayProgress, isPlaying: isThisPlaying)
+                        .frame(height: 32)
 
-            // Center: Waveform (takes most space ~3:1 ratio)
-            VStack(alignment: .leading, spacing: 4) {
-                MinimalWaveformBars(progress: displayProgress, isPlaying: isThisPlaying)
-                    .frame(height: 28)
-                    .onHover { isHoveringWaveform = $0 }
-                    .help("Duration: \(formatTime(totalDuration))")
+                    // Time row - aligned with waveform edges
+                    HStack {
+                        Text(formatTime(displayCurrentTime))
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color(white: 0.5))
 
-                // Time markers row
-                HStack {
-                    Text("0:00")
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                        .foregroundColor(Color(white: 0.35))
+                        Spacer()
 
-                    Spacer()
-
-                    Text(formatTime(totalDuration))
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                        .foregroundColor(Color(white: 0.35))
+                        Text(formatTime(totalDuration))
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color(white: 0.35))
+                    }
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
 
-            // Right column: Audio asset info (aligned with pipeline card width)
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("AUDIO")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(Color(white: 0.4))
+            // Divider
+            Rectangle()
+                .fill(Color(white: 0.12))
+                .frame(height: 1)
 
-                // Filename (truncated, expands on hover)
-                Text(isHoveringAsset ? fullFilename : truncatedFilename)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(isHoveringAsset ? Color(white: 0.88) : Color(white: 0.55))
+            // File info row - Cmd+click to reveal
+            HStack {
+                // File ID (truncated, full on hover)
+                Text(isHovering ? fullFilename : shortFileId)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color(white: isHovering ? 0.7 : 0.4))
                     .lineLimit(1)
+                    .animation(.easeOut(duration: 0.15), value: isHovering)
+
+                Spacer()
 
                 // File size
                 if !fileSize.isEmpty {
                     Text(fileSize)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(Color(white: 0.4))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color(white: 0.35))
                 }
 
-                // Reveal link
-                if hasAudio {
-                    Button(action: revealInFinder) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "folder")
-                                .font(.system(size: 9))
-                            Text("Reveal")
-                                .font(.system(size: 9, weight: .medium))
-                        }
-                        .foregroundColor(isHoveringAsset ? .cyan : Color(white: 0.5))
-                    }
-                    .buttonStyle(.plain)
+                // Cmd+click hint on hover
+                if isHovering && hasAudio {
+                    Text("⌘ click to reveal")
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(white: 0.45))
                 }
             }
-            .frame(width: 100, alignment: .trailing)
-            .onHover { isHoveringAsset = $0 }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                // Check for Cmd key
+                if NSEvent.modifierFlags.contains(.command) && hasAudio {
+                    revealInFinder()
+                }
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(white: 0.18), lineWidth: 1)
+                .fill(Color(white: 0.06))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(white: 0.12), lineWidth: 1)
+        )
+        .onHover { isHovering = $0 }
+    }
+
+    private var playButtonBackground: Color {
+        if !hasAudio { return Color(white: 0.08) }
+        if isThisPlaying { return Color.accentColor.opacity(0.25) }
+        if isPlayButtonHovered { return Color(white: 0.18) }
+        return Color(white: 0.12)
+    }
+
+    private var playButtonForeground: Color {
+        if !hasAudio { return Color(white: 0.3) }
+        if isThisPlaying { return .white }
+        if isPlayButtonHovered { return .white }
+        return Color(white: 0.85)
     }
 
     private func togglePlayback() {
@@ -1028,78 +1256,99 @@ private struct WaveformBar: View {
     }
 }
 
-private struct MinimalProcessSection: View {
+private struct ActionsSection: View {
     let utterance: Utterance
+
+    // Grid columns adapt to available width
+    private let columns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("PROCESS")
+            Text("ACTIONS")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(Color(white: 0.45))
 
-            HStack(spacing: 12) {
-                ProcessCard(
-                    icon: "arrow.triangle.2.circlepath",
-                    title: "Enhance",
-                    subtitle: "Upscale with Pro Model",
-                    shortcut: "⌘ R"
+            LazyVGrid(columns: columns, spacing: 10) {
+                ActionCard(
+                    icon: "waveform.badge.magnifyingglass",
+                    title: "Enhance Audio",
+                    subtitle: "Pro model",
+                    color: .cyan
                 )
 
-                ProcessCard(
-                    icon: "chevron.left.forwardslash.chevron.right",
-                    title: "Memo",
-                    subtitle: "Convert to Talkie",
-                    shortcut: "⌘ M"
+                ActionCard(
+                    icon: "arrow.up.doc",
+                    title: "Promote to Memo",
+                    subtitle: "Full features",
+                    color: .green
+                )
+
+                ActionCard(
+                    icon: "square.and.arrow.up",
+                    title: "Share",
+                    subtitle: "Export",
+                    color: .blue
+                )
+
+                ActionCard(
+                    icon: "ellipsis",
+                    title: "More",
+                    subtitle: "Options",
+                    color: .gray
                 )
             }
         }
     }
 }
 
-private struct ProcessCard: View {
+private struct ActionCard: View {
     let icon: String
     let title: String
-    let subtitle: String
-    let shortcut: String
+    var subtitle: String? = nil
+    var color: Color = .white
 
     @State private var isHovered = false
 
     var body: some View {
         Button(action: {}) {
-            HStack {
+            VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(Color(white: 0.55))
-                    .frame(width: 32, height: 32)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(white: 0.12))
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(white: 0.93))
-
-                    Text(subtitle)
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(white: 0.5))
-                }
-
-                Spacer()
-
-                Text(shortcut)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(Color(white: 0.4))
-            }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isHovered ? Color(white: 0.25) : Color(white: 0.18), lineWidth: 1)
+                    .font(.system(size: 16))
+                    .foregroundColor(isHovered ? color : Color(white: 0.55))
+                    .frame(width: 36, height: 36)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(isHovered ? Color(white: 0.08) : Color.clear)
+                            .fill(isHovered ? color.opacity(0.12) : Color(white: 0.1))
                     )
+
+                VStack(spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(isHovered ? Color(white: 0.93) : Color(white: 0.6))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    if let subtitle = subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 8))
+                            .foregroundColor(isHovered ? color.opacity(0.7) : Color(white: 0.4))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isHovered ? Color(white: 0.08) : Color(white: 0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isHovered ? color.opacity(0.3) : Color(white: 0.12), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -2094,6 +2343,45 @@ class KeyCaptureView: NSView {
 
 extension Notification.Name {
     static let hotkeyDidChange = Notification.Name("hotkeyDidChange")
+}
+
+// MARK: - Collapsed Navigation Button
+
+struct CollapsedNavButton: View {
+    let icon: String
+    var isSelected: Bool = false
+    var badge: Int? = nil
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(isSelected ? .white : (isHovered ? Color(white: 0.8) : Color(white: 0.5)))
+                    .frame(width: 36, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? Color(white: 0.15) : Color.clear))
+                    )
+
+                if let badge = badge, badge > 0 {
+                    Text(badge > 99 ? "99+" : "\(badge)")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.accentColor)
+                        .cornerRadius(6)
+                        .offset(x: 4, y: -4)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
 }
 
 // MARK: - Sound Picker Row

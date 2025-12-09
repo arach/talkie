@@ -25,6 +25,7 @@ final class MicrophoneCapture: LiveAudioCapture {
     private var tempFileURL: URL?
     private var onChunk: ((Data) -> Void)?
     private var isCapturing = false
+    private var fileCreated = false
 
     func startCapture(onChunk: @escaping (Data) -> Void) {
         guard !isCapturing else {
@@ -33,33 +34,25 @@ final class MicrophoneCapture: LiveAudioCapture {
         }
 
         self.onChunk = onChunk
+        self.fileCreated = false
 
         let inputNode = engine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
 
-        // Create temp file for recording
+        // Prepare temp file URL
         let tempDir = FileManager.default.temporaryDirectory
         let fileURL = tempDir.appendingPathComponent(UUID().uuidString).appendingPathExtension("m4a")
         self.tempFileURL = fileURL
 
-        // Set up audio file with AAC encoding (m4a)
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: recordingFormat.sampleRate,
-            AVNumberOfChannelsKey: recordingFormat.channelCount,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
+        // Install tap with nil format - we'll create the file lazily based on actual buffer format
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
+            guard let self = self else { return }
 
-        do {
-            audioFile = try AVAudioFile(forWriting: fileURL, settings: settings)
-        } catch {
-            logger.error("Failed to create audio file: \(error.localizedDescription)")
-            return
-        }
+            // Create file lazily on first buffer - ensures format matches exactly
+            if !self.fileCreated {
+                self.createAudioFile(matching: buffer)
+            }
 
-        // Install tap to capture audio and measure levels
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            guard let self = self, let audioFile = self.audioFile else { return }
+            guard let audioFile = self.audioFile else { return }
 
             // Write to file
             do {
@@ -82,6 +75,29 @@ final class MicrophoneCapture: LiveAudioCapture {
         } catch {
             logger.error("Failed to start audio engine: \(error.localizedDescription)")
             inputNode.removeTap(onBus: 0)
+        }
+    }
+
+    private func createAudioFile(matching buffer: AVAudioPCMBuffer) {
+        guard let fileURL = tempFileURL else { return }
+
+        let format = buffer.format
+        logger.info("Actual buffer format: \(format.sampleRate)Hz, \(format.channelCount)ch, \(format.commonFormat.rawValue)")
+
+        // Create file with AAC encoding matching the actual buffer format
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: format.sampleRate,
+            AVNumberOfChannelsKey: format.channelCount,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+
+        do {
+            audioFile = try AVAudioFile(forWriting: fileURL, settings: settings)
+            fileCreated = true
+            logger.info("Created audio file: \(format.sampleRate)Hz, \(format.channelCount)ch")
+        } catch {
+            logger.error("Failed to create audio file: \(error.localizedDescription)")
         }
     }
 
@@ -118,17 +134,25 @@ final class MicrophoneCapture: LiveAudioCapture {
             do {
                 let audioData = try Data(contentsOf: fileURL)
                 logger.info("Captured \(audioData.count) bytes of audio")
-                onChunk?(audioData)
+
+                if audioData.count > 1000 {
+                    onChunk?(audioData)
+                } else {
+                    logger.warning("Audio file too small (\(audioData.count) bytes), likely empty recording")
+                }
 
                 // Clean up temp file
                 try? FileManager.default.removeItem(at: fileURL)
             } catch {
                 logger.error("Failed to read audio file: \(error.localizedDescription)")
             }
+        } else {
+            logger.warning("No temp file URL - file may not have been created")
         }
 
         tempFileURL = nil
         onChunk = nil
+        fileCreated = false
         logger.info("Microphone capture stopped")
     }
 }

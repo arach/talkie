@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import Combine
 
 // MARK: - Floating Pill Controller
 
@@ -19,6 +20,8 @@ final class FloatingPillController: ObservableObject {
     private var mouseMonitor: Any?
     private var magneticTimer: Timer?
     private var recordingStartTime: Date?
+    private var processingStartTime: Date?
+    private var settingsCancellables = Set<AnyCancellable>()
 
     // Proximity detection settings (for expansion trigger)
     private let proximityRadius: CGFloat = 80   // Distance at which pill expands
@@ -29,6 +32,7 @@ final class FloatingPillController: ObservableObject {
     @Published var isVisible: Bool = true
     @Published var proximity: CGFloat = 0  // 0 = far, 1 = very close (for view to react)
     @Published var elapsedTime: TimeInterval = 0
+    @Published var processingTime: TimeInterval = 0
 
     private init() {
         // Listen for screen configuration changes
@@ -43,6 +47,29 @@ final class FloatingPillController: ObservableObject {
                 }
             }
         }
+
+        // Listen for pill settings changes
+        LiveSettings.shared.$pillPosition
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    if self?.isVisible == true {
+                        self?.repositionAllPills()
+                    }
+                }
+            }
+            .store(in: &settingsCancellables)
+
+        LiveSettings.shared.$pillShowOnAllScreens
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    if self?.isVisible == true {
+                        self?.show()  // Recreate to add/remove pills on screens
+                    }
+                }
+            }
+            .store(in: &settingsCancellables)
     }
 
     func show() {
@@ -55,8 +82,11 @@ final class FloatingPillController: ObservableObject {
         windows.removeAll()
         homePositions.removeAll()
 
-        // Create a pill on each screen
-        for screen in NSScreen.screens {
+        // Create pills based on settings
+        let showOnAllScreens = LiveSettings.shared.pillShowOnAllScreens
+        let screens = showOnAllScreens ? NSScreen.screens : [NSScreen.main].compactMap { $0 }
+
+        for screen in screens {
             createPill(on: screen)
         }
 
@@ -98,12 +128,30 @@ final class FloatingPillController: ObservableObject {
     private func calculateHomePosition(for panel: NSWindow, on screen: NSScreen) -> NSPoint {
         let screenFrame = screen.visibleFrame
         let panelSize = panel.frame.size
-        let bottomMargin: CGFloat = 2  // Flush to bottom
+        let margin: CGFloat = 8
 
-        return NSPoint(
-            x: screenFrame.midX - panelSize.width / 2,
-            y: screenFrame.minY + bottomMargin
-        )
+        switch LiveSettings.shared.pillPosition {
+        case .bottomCenter:
+            return NSPoint(
+                x: screenFrame.midX - panelSize.width / 2,
+                y: screenFrame.minY + 2  // Flush to bottom
+            )
+        case .bottomLeft:
+            return NSPoint(
+                x: screenFrame.minX + margin,
+                y: screenFrame.minY + 2
+            )
+        case .bottomRight:
+            return NSPoint(
+                x: screenFrame.maxX - panelSize.width - margin,
+                y: screenFrame.minY + 2
+            )
+        case .topCenter:
+            return NSPoint(
+                x: screenFrame.midX - panelSize.width / 2,
+                y: screenFrame.maxY - panelSize.height - margin
+            )
+        }
     }
 
     private func positionPill(_ panel: NSWindow, on screen: NSScreen) {
@@ -146,6 +194,9 @@ final class FloatingPillController: ObservableObject {
     private func updateElapsedTime() {
         if let start = recordingStartTime {
             elapsedTime = Date().timeIntervalSince(start)
+        }
+        if let start = processingStartTime {
+            processingTime = Date().timeIntervalSince(start)
         }
     }
 
@@ -218,9 +269,17 @@ final class FloatingPillController: ObservableObject {
         if state == .listening {
             recordingStartTime = Date()
             elapsedTime = 0
+            processingStartTime = nil
+            processingTime = 0
+        } else if state == .transcribing {
+            // Reset timer for processing phase
+            processingStartTime = Date()
+            processingTime = 0
         } else if state == .idle {
             recordingStartTime = nil
             elapsedTime = 0
+            processingStartTime = nil
+            processingTime = 0
         }
     }
 
@@ -322,8 +381,10 @@ struct FloatingPillView: View {
     }
 
     private var timeString: String {
-        let seconds = Int(controller.elapsedTime)
-        let tenths = Int((controller.elapsedTime * 10).truncatingRemainder(dividingBy: 10))
+        // Show processing time during transcribing, recording time during listening
+        let time = controller.state == .transcribing ? controller.processingTime : controller.elapsedTime
+        let seconds = Int(time)
+        let tenths = Int((time * 10).truncatingRemainder(dividingBy: 10))
         return String(format: "%d.%d", seconds, tenths)
     }
 

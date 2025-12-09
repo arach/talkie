@@ -1,0 +1,356 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		04FA816DA64246EDAD5A6356 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 930497E959A78E2E572D7F9B /* WhisperKit */; };
+		12DD200A43D294C5523EE021 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB26F22F9D507243DB479766 /* AppDelegate.swift */; };
+		1E8ACC6E34F3FE16FF2D9F95 /* EngineListenerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */; };
+		2EE2C5A649FB1DE1A536887B /* XPCServiceWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */; };
+		B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309C8ED6550F5436C180F21E /* main.swift */; };
+		D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3345200BF5B8343E77A15413 /* EngineService.swift */; };
+		D92C5024D36DB3573FEDADC7 /* EngineProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		071A5BB5F9E02D438B1F4900 /* TalkieEngine.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkieEngine.entitlements; sourceTree = "<group>"; };
+		2A4E812D358408E68A034368 /* TalkieEngine.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieEngine.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		309C8ED6550F5436C180F21E /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		3345200BF5B8343E77A15413 /* EngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineService.swift; sourceTree = "<group>"; };
+		4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineProtocol.swift; sourceTree = "<group>"; };
+		8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineListenerDelegate.swift; sourceTree = "<group>"; };
+		A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPCServiceWrapper.swift; sourceTree = "<group>"; };
+		BB26F22F9D507243DB479766 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		D04B99055A71871474300365 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8241F25777B3728534E76120 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				04FA816DA64246EDAD5A6356 /* WhisperKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CB95BE4375EE9C1CD8073A5E = {
+			isa = PBXGroup;
+			children = (
+				D9C01A083B04BE1B82451546 /* TalkieEngine */,
+				CD3FA8D6B179540DACCAE229 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CD3FA8D6B179540DACCAE229 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2A4E812D358408E68A034368 /* TalkieEngine.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D9C01A083B04BE1B82451546 /* TalkieEngine */ = {
+			isa = PBXGroup;
+			children = (
+				BB26F22F9D507243DB479766 /* AppDelegate.swift */,
+				8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */,
+				4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */,
+				3345200BF5B8343E77A15413 /* EngineService.swift */,
+				D04B99055A71871474300365 /* Info.plist */,
+				309C8ED6550F5436C180F21E /* main.swift */,
+				071A5BB5F9E02D438B1F4900 /* TalkieEngine.entitlements */,
+				A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */,
+			);
+			path = TalkieEngine;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		69D76C993AFA8FB20AC2458D /* TalkieEngine */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2B1C22AAC6EEB7DD81C0855 /* Build configuration list for PBXNativeTarget "TalkieEngine" */;
+			buildPhases = (
+				82150A47A9A7BBA9732F261D /* Sources */,
+				8241F25777B3728534E76120 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TalkieEngine;
+			packageProductDependencies = (
+				930497E959A78E2E572D7F9B /* WhisperKit */,
+			);
+			productName = TalkieEngine;
+			productReference = 2A4E812D358408E68A034368 /* TalkieEngine.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		45A1439C92997ACA94101D20 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					69D76C993AFA8FB20AC2458D = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 42CBE7E742A2B6A97CCFE73B /* Build configuration list for PBXProject "TalkieEngine" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CB95BE4375EE9C1CD8073A5E;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FF2ED19578BD9F627F92241F /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				69D76C993AFA8FB20AC2458D /* TalkieEngine */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		82150A47A9A7BBA9732F261D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				12DD200A43D294C5523EE021 /* AppDelegate.swift in Sources */,
+				1E8ACC6E34F3FE16FF2D9F95 /* EngineListenerDelegate.swift in Sources */,
+				D92C5024D36DB3573FEDADC7 /* EngineProtocol.swift in Sources */,
+				D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */,
+				2EE2C5A649FB1DE1A536887B /* XPCServiceWrapper.swift in Sources */,
+				B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1C152698FBD84D2C57646A63 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TalkieEngine/TalkieEngine.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = TalkieEngine/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = live.talkie.engine;
+				PRODUCT_NAME = TalkieEngine;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		4FDED3CA1A4E342C861449B5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		6B3EFC7276EDC6F6EAD5BFA8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		CE2496CE6215C873CC0D9B76 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TalkieEngine/TalkieEngine.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = TalkieEngine/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = live.talkie.engine;
+				PRODUCT_NAME = TalkieEngine;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		42CBE7E742A2B6A97CCFE73B /* Build configuration list for PBXProject "TalkieEngine" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6B3EFC7276EDC6F6EAD5BFA8 /* Debug */,
+				4FDED3CA1A4E342C861449B5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A2B1C22AAC6EEB7DD81C0855 /* Build configuration list for PBXNativeTarget "TalkieEngine" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1C152698FBD84D2C57646A63 /* Debug */,
+				CE2496CE6215C873CC0D9B76 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FF2ED19578BD9F627F92241F /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		930497E959A78E2E572D7F9B /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF2ED19578BD9F627F92241F /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 45A1439C92997ACA94101D20 /* Project object */;
+}
