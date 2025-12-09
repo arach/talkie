@@ -83,6 +83,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		536BA8012EE8107F00C0132C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		539FB5B02EE6785C004EEAF4 = {
 			isa = PBXGroup;
 			children = (
@@ -218,6 +225,12 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 539FB5BA2EE6785C004EEAF4 /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 536BA8012EE8107F00C0132C /* Products */;
+					ProjectRef = 536BA7FE2EE8040A00C0132C /* Talkie.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				539FB5B82EE6785C004EEAF4 /* TalkieLive */,

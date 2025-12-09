@@ -144,9 +144,61 @@ cp -R "$CORE_APP" "$STAGING_DIR/core/Applications/"
 echo ""
 echo "📦 Creating component packages..."
 
+# Create component plists to prevent relocation
+# (macOS will otherwise "relocate" apps back to their original build location)
+
+# TalkieEngine component plist
+cat > "$STAGING_DIR/engine-components.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+    <dict>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/TalkieEngine.app</string>
+    </dict>
+</array>
+</plist>
+PLIST
+
+# TalkieLive component plist
+cat > "$STAGING_DIR/live-components.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+    <dict>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/TalkieLive.app</string>
+    </dict>
+</array>
+</plist>
+PLIST
+
+# TalkieCore component plist
+cat > "$STAGING_DIR/core-components.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+    <dict>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/Talkie.app</string>
+    </dict>
+</array>
+</plist>
+PLIST
+
 # TalkieEngine package (with scripts for LaunchAgent)
 pkgbuild --root "$STAGING_DIR/engine" \
     --scripts "$SCRIPT_DIR/scripts/engine" \
+    --component-plist "$STAGING_DIR/engine-components.plist" \
     --identifier "jdi.talkie.engine" \
     --version "$VERSION" \
     --install-location "/" \
@@ -155,6 +207,7 @@ echo "  ✅ TalkieEngine.pkg"
 
 # TalkieLive package
 pkgbuild --root "$STAGING_DIR/live" \
+    --component-plist "$STAGING_DIR/live-components.plist" \
     --identifier "jdi.talkie.live" \
     --version "$VERSION" \
     --install-location "/" \
@@ -163,6 +216,7 @@ echo "  ✅ TalkieLive.pkg"
 
 # TalkieCore package
 pkgbuild --root "$STAGING_DIR/core" \
+    --component-plist "$STAGING_DIR/core-components.plist" \
     --identifier "jdi.talkie.core" \
     --version "$VERSION" \
     --install-location "/" \

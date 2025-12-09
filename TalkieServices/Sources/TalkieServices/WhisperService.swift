@@ -53,6 +53,8 @@ public final class WhisperService: ObservableObject {
     @Published public var lastError: String?
 
     @Published public private(set) var downloadedModels: Set<WhisperModel> = []
+    @Published public private(set) var isWarmingUp = false
+    @Published public private(set) var warmupStartTime: Date?
 
     private var whisperKit: WhisperKit?
     private var currentModelId: String?
@@ -272,11 +274,37 @@ public final class WhisperService: ObservableObject {
             )
             currentModelId = model.rawValue
             loadedModel = model
-            logger.info("Model \(model.rawValue) pre-loaded and ready")
+            logger.info("Model \(model.rawValue) loaded, running warmup inference...")
+
+            // Run warmup inference with 1 second of silence
+            // This compiles Metal shaders so first real transcription is fast
+            warmupStartTime = Date()
+            isWarmingUp = true
+            await warmup()
+            isWarmingUp = false
+            warmupStartTime = nil
+
+            logger.info("Model \(model.rawValue) pre-loaded and warmed up")
         } catch {
             lastError = "Failed to preload model: \(error.localizedDescription)"
             logger.error("Failed to preload Whisper model: \(error.localizedDescription)")
             throw WhisperError.modelLoadFailed(error)
+        }
+    }
+
+    /// Run a tiny inference to compile Metal shaders
+    private func warmup() async {
+        guard let whisperKit else { return }
+
+        // 1 second of silence at 16kHz (Whisper's expected sample rate)
+        let silentAudio = [Float](repeating: 0.0, count: 16000)
+
+        do {
+            _ = try await whisperKit.transcribe(audioArray: silentAudio)
+            logger.info("Warmup inference complete")
+        } catch {
+            // Warmup failure is not fatal - first real transcription will just be slower
+            logger.warning("Warmup inference failed: \(error.localizedDescription)")
         }
     }
 

@@ -107,7 +107,7 @@ struct HomeView: View {
             return Insight(
                 emoji: "👋",
                 message: "Welcome back!",
-                detail: "Ready to capture your thoughts? Just hold your hotkey to start."
+                detail: "Ready to get things done? Hold your hotkey to start."
             )
         }
 
@@ -165,7 +165,7 @@ struct HomeView: View {
             return Insight(
                 emoji: "✍️",
                 message: "Writing mode!",
-                detail: "Lots of thoughts captured this week. Keep the ideas flowing!"
+                detail: "You've been getting a lot done in writing apps. Keep it up!"
             )
         }
 
@@ -183,7 +183,7 @@ struct HomeView: View {
             return Insight(
                 emoji: "🔥",
                 message: "\(streak) day streak!",
-                detail: "You're on fire! Consistent voice capture is a great habit."
+                detail: "You're on fire! Using voice to get things done is a superpower."
             )
         }
 
@@ -195,13 +195,25 @@ struct HomeView: View {
             )
         }
 
-        // Volume-based insights
+        // Time-based insights
+        let hour = calendar.component(.hour, from: Date())
         let todayCount = recentUtterances.filter { calendar.isDateInToday($0.timestamp) }.count
+
+        // "Productive morning" - before noon with good activity
+        if hour < 12 && todayCount >= 8 {
+            return Insight(
+                emoji: "☀️",
+                message: "Productive morning!",
+                detail: "\(todayCount) actions already and it's not even noon."
+            )
+        }
+
+        // Volume-based insights (afternoon/evening)
         if todayCount >= 10 {
             return Insight(
                 emoji: "🚀",
                 message: "Productive day!",
-                detail: "You've captured \(todayCount) thoughts today. Impressive!"
+                detail: "You've driven \(todayCount) actions today. Impressive!"
             )
         }
 
@@ -209,7 +221,7 @@ struct HomeView: View {
         return Insight(
             emoji: "✨",
             message: "Keep going!",
-            detail: "\(recentUtterances.count) recordings this week. Every thought counts!"
+            detail: "\(recentUtterances.count) actions this week. You're getting things done!"
         )
     }
 

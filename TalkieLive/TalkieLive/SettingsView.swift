@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import AppKit
+import Carbon.HIToolbox
 import TalkieServices
 
 // MARK: - Embedded Settings View (for main app navigation)
@@ -93,6 +95,13 @@ struct EmbeddedSettingsView: View {
                         ) {
                             selectedSection = .storage
                         }
+                        EmbeddedSettingsRow(
+                            icon: "info.circle",
+                            title: "About",
+                            isSelected: selectedSection == .about
+                        ) {
+                            selectedSection = .about
+                        }
                     }
                     .padding(Spacing.sm)
                 }
@@ -121,6 +130,8 @@ struct EmbeddedSettingsView: View {
                     EngineSettingsSection()
                 case .storage:
                     StorageSettingsSection()
+                case .about:
+                    AboutSettingsSection()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -197,6 +208,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
     // System
     case engine
     case storage
+    case about
 
     var title: String {
         switch self {
@@ -207,6 +219,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .overlay: return "OVERLAY"
         case .engine: return "ENGINE"
         case .storage: return "STORAGE"
+        case .about: return "ABOUT"
         }
     }
 
@@ -219,6 +232,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .overlay: return "rectangle.inset.topright.filled"
         case .engine: return "server.rack"
         case .storage: return "folder"
+        case .about: return "info.circle"
         }
     }
 }
@@ -303,7 +317,7 @@ struct SettingsView: View {
                         // SYSTEM
                         SettingsSidebarSection(
                             title: "SYSTEM",
-                            isActive: selectedSection == .engine || selectedSection == .storage
+                            isActive: selectedSection == .engine || selectedSection == .storage || selectedSection == .about
                         ) {
                             SettingsSidebarItem(
                                 icon: "server.rack",
@@ -318,6 +332,13 @@ struct SettingsView: View {
                                 isSelected: selectedSection == .storage
                             ) {
                                 selectedSection = .storage
+                            }
+                            SettingsSidebarItem(
+                                icon: "info.circle",
+                                title: "ABOUT",
+                                isSelected: selectedSection == .about
+                            ) {
+                                selectedSection = .about
                             }
                         }
                     }
@@ -352,6 +373,8 @@ struct SettingsView: View {
                         EngineSettingsSection()
                     case .storage:
                         StorageSettingsSection()
+                    case .about:
+                        AboutSettingsSection()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -538,25 +561,39 @@ struct AppearanceSettingsSection: View {
                 subtitle: "Customize how Talkie Live looks."
             )
         } content: {
-            // Theme with preview
-            SettingsCard(title: "THEME") {
+            // Appearance Mode
+            SettingsCard(title: "APPEARANCE") {
                 HStack(alignment: .top, spacing: Spacing.md) {
-                    // Theme list (left)
+                    // Appearance mode list (left)
                     VStack(spacing: Spacing.xs) {
-                        ForEach(AppTheme.allCases, id: \.rawValue) { theme in
+                        ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                             CompactThemeRow(
-                                theme: theme,
-                                isSelected: settings.theme == theme
+                                theme: mode,
+                                isSelected: settings.appearanceMode == mode
                             ) {
-                                settings.theme = theme
+                                settings.appearanceMode = mode
                             }
                         }
                     }
                     .frame(width: 100)
 
                     // Preview table (right)
-                    ThemePreviewTable(theme: settings.theme)
+                    ThemePreviewTable(theme: settings.appearanceMode)
                         .frame(maxWidth: .infinity)
+                }
+            }
+
+            // Visual Theme
+            SettingsCard(title: "COLOR THEME") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: Spacing.sm) {
+                    ForEach(VisualTheme.allCases, id: \.rawValue) { theme in
+                        VisualThemeButton(
+                            theme: theme,
+                            isSelected: settings.visualTheme == theme
+                        ) {
+                            settings.applyVisualTheme(theme)
+                        }
+                    }
                 }
             }
 
@@ -626,7 +663,7 @@ struct AppearanceSettingsSection: View {
 // MARK: - Compact Theme Row
 
 struct CompactThemeRow: View {
-    let theme: AppTheme
+    let theme: AppearanceMode
     let isSelected: Bool
     let action: () -> Void
 
@@ -659,18 +696,18 @@ struct CompactThemeRow: View {
 // MARK: - Theme Preview Table
 
 struct ThemePreviewTable: View {
-    let theme: AppTheme
+    let theme: AppearanceMode
 
     private var bgColor: Color {
         switch theme {
-        case .system, .dark, .midnight: return Color(white: 0.1)
+        case .system, .dark: return Color(white: 0.1)
         case .light: return Color(white: 0.95)
         }
     }
 
     private var fgColor: Color {
         switch theme {
-        case .system, .dark, .midnight: return .white
+        case .system, .dark: return .white
         case .light: return .black
         }
     }
@@ -945,7 +982,7 @@ struct OverlayPreviewAnimation: View {
 }
 
 struct ThemeOptionRow: View {
-    let theme: AppTheme
+    let theme: AppearanceMode
     let isSelected: Bool
     let action: () -> Void
 
@@ -981,8 +1018,8 @@ struct ThemeOptionRow: View {
     }
 }
 
-struct ThemePresetButton: View {
-    let preset: ThemePreset
+struct VisualThemeButton: View {
+    let theme: VisualTheme
     let isSelected: Bool
     let action: () -> Void
 
@@ -992,10 +1029,10 @@ struct ThemePresetButton: View {
         VStack(spacing: Spacing.xs) {
             // Preview swatch
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(preset.previewColors.bg)
+                .fill(theme.previewColors.bg)
                 .overlay(
                     Circle()
-                        .fill(preset.previewColors.accent)
+                        .fill(theme.previewColors.accent)
                         .frame(width: 12, height: 12)
                 )
                 .frame(width: 50, height: 36)
@@ -1004,7 +1041,7 @@ struct ThemePresetButton: View {
                         .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
                 )
 
-            Text(preset.displayName)
+            Text(theme.displayName)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(isSelected ? .accentColor : .white.opacity(0.7))
         }
@@ -1126,6 +1163,7 @@ struct OverlayStyleRow: View {
 
 struct ShortcutsSettingsSection: View {
     @ObservedObject private var settings = LiveSettings.shared
+    @State private var isRecordingHotkey = false
 
     var body: some View {
         SettingsPageContainer {
@@ -1150,15 +1188,16 @@ struct ShortcutsSettingsSection: View {
 
                         Spacer()
 
-                        Text(settings.hotkey.displayString)
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.accentColor)
-                            .padding(.horizontal, Spacing.md)
-                            .padding(.vertical, Spacing.sm)
-                            .background(
-                                RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                    .fill(Color.accentColor.opacity(0.15))
-                            )
+                        HotkeyRecorderButton(
+                            hotkey: $settings.hotkey,
+                            isRecording: $isRecordingHotkey
+                        )
+                    }
+
+                    if isRecordingHotkey {
+                        Text("Press any key combination with ⌘, ⌥, ⌃, or ⇧")
+                            .font(.system(size: 10))
+                            .foregroundColor(.accentColor.opacity(0.8))
                     }
                 }
             }
@@ -1265,7 +1304,88 @@ struct OutputSettingsSection: View {
                     }
                 }
             }
+
+            // Context Settings
+            SettingsCard(title: "APP CONTEXT") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    // Primary Context Source
+                    Text("Show app from")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                        .textCase(.uppercase)
+
+                    ForEach(PrimaryContextSource.allCases, id: \.rawValue) { source in
+                        PrimaryContextRow(
+                            source: source,
+                            isSelected: settings.primaryContextSource == source
+                        ) {
+                            settings.primaryContextSource = source
+                        }
+                    }
+
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+                        .padding(.vertical, Spacing.xs)
+
+                    // Return to Origin Toggle
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Return to Origin")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+
+                            Text("After pasting, switch back to where you started")
+                                .font(.system(size: 9))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: $settings.returnToOriginAfterPaste)
+                            .toggleStyle(.switch)
+                            .scaleEffect(0.7)
+                    }
+                    .padding(.top, Spacing.xs)
+                }
+            }
         }
+    }
+}
+
+struct PrimaryContextRow: View {
+    let source: PrimaryContextSource
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(source.displayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+
+                Text(source.description)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.accentColor)
+            }
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { action() }
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -2490,6 +2610,210 @@ struct StorageActionButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - About Settings Section
+
+struct AboutSettingsSection: View {
+    @ObservedObject private var engineClient = EngineClient.shared
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+    }
+
+    private var bundleID: String {
+        Bundle.main.bundleIdentifier ?? "Unknown"
+    }
+
+    private var appPath: String {
+        Bundle.main.bundlePath
+    }
+
+    private var isProductionRelease: Bool {
+        #if DEBUG
+        return false
+        #else
+        return true
+        #endif
+    }
+
+    private var isInstalledLocation: Bool {
+        appPath.hasPrefix("/Applications")
+    }
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "info.circle",
+                title: "ABOUT",
+                subtitle: "Version information and system diagnostics."
+            )
+        } content: {
+            // App Info
+            SettingsCard(title: "APPLICATION") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    AboutInfoRow(label: "Talkie Live", value: "v\(appVersion) (\(buildNumber))")
+                    AboutInfoRow(label: "Bundle ID", value: bundleID)
+                    AboutInfoRow(label: "Build Type", value: isProductionRelease ? "Release" : "Debug", valueColor: isProductionRelease ? .green : .orange)
+                }
+            }
+
+            // Installation
+            SettingsCard(title: "INSTALLATION") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    AboutInfoRow(
+                        label: "Install Location",
+                        value: isInstalledLocation ? "System Applications" : "Development",
+                        valueColor: isInstalledLocation ? .green : .yellow
+                    )
+                    AboutInfoRow(label: "Path", value: appPath, isMonospaced: true, canCopy: true)
+                }
+            }
+
+            // Engine Status
+            SettingsCard(title: "TALKIE ENGINE") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack {
+                        Text("Status")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(engineClient.isConnected ? Color.green : Color.red)
+                                .frame(width: 8, height: 8)
+                            Text(engineClient.isConnected ? "Connected" : "Not Running")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(engineClient.isConnected ? .green : .red)
+                        }
+                    }
+
+                    if engineClient.isConnected, let status = engineClient.status {
+                        AboutInfoRow(label: "Process ID", value: String(status.pid))
+                        AboutInfoRow(label: "Engine Bundle", value: status.bundleId, isMonospaced: true)
+                        if let modelId = status.loadedModelId {
+                            AboutInfoRow(label: "Loaded Model", value: modelId)
+                        }
+                    }
+                }
+            }
+
+            // System Info
+            SettingsCard(title: "SYSTEM") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    AboutInfoRow(label: "macOS", value: ProcessInfo.processInfo.operatingSystemVersionString)
+                    AboutInfoRow(label: "Process ID", value: String(ProcessInfo.processInfo.processIdentifier))
+                }
+            }
+
+            // Support
+            SettingsCard(title: "SUPPORT") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack {
+                        Text("If you need help or want to report an issue, please include the information above.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.5))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                    }
+
+                    Button(action: copyDiagnostics) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.on.clipboard")
+                                .font(.system(size: 10))
+                            Text("Copy Diagnostics")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(.accentColor)
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.vertical, Spacing.sm)
+                        .background(Color.accentColor.opacity(0.15))
+                        .cornerRadius(CornerRadius.xs)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func copyDiagnostics() {
+        var diagnostics = """
+        Talkie Live Diagnostics
+        =======================
+        Version: \(appVersion) (\(buildNumber))
+        Bundle ID: \(bundleID)
+        Build Type: \(isProductionRelease ? "Release" : "Debug")
+        Install Location: \(appPath)
+        macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
+        Process ID: \(ProcessInfo.processInfo.processIdentifier)
+
+        TalkieEngine:
+        """
+
+        if engineClient.isConnected, let status = engineClient.status {
+            diagnostics += """
+
+            Status: Connected
+            Engine PID: \(status.pid)
+            Engine Bundle: \(status.bundleId)
+            Loaded Model: \(status.loadedModelId ?? "None")
+            """
+        } else {
+            diagnostics += "\nStatus: Not Connected"
+            if let error = engineClient.lastError {
+                diagnostics += "\nLast Error: \(error)"
+            }
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(diagnostics, forType: .string)
+    }
+}
+
+struct AboutInfoRow: View {
+    let label: String
+    let value: String
+    var valueColor: Color = .white
+    var isMonospaced: Bool = false
+    var canCopy: Bool = false
+
+    @State private var showCopied = false
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.6))
+            Spacer()
+            HStack(spacing: 4) {
+                Text(value)
+                    .font(.system(size: 11, weight: .medium, design: isMonospaced ? .monospaced : .default))
+                    .foregroundColor(valueColor.opacity(0.9))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                if canCopy {
+                    Button(action: {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(value, forType: .string)
+                        showCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            showCopied = false
+                        }
+                    }) {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 9))
+                            .foregroundColor(showCopied ? .green : .white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }
 

@@ -99,18 +99,18 @@ enum PillPosition: String, CaseIterable, Codable {
 // Legacy compatibility alias
 typealias OverlayPosition = IndicatorPosition
 
-enum AppTheme: String, CaseIterable, Codable {
+// MARK: - Appearance Mode (Light/Dark/System)
+
+enum AppearanceMode: String, CaseIterable, Codable {
     case system = "system"
     case light = "light"
     case dark = "dark"
-    case midnight = "midnight"
 
     var displayName: String {
         switch self {
         case .system: return "System"
         case .light: return "Light"
         case .dark: return "Dark"
-        case .midnight: return "Midnight"
         }
     }
 
@@ -119,10 +119,89 @@ enum AppTheme: String, CaseIterable, Codable {
         case .system: return "Follow system appearance"
         case .light: return "Always light mode"
         case .dark: return "Always dark mode"
-        case .midnight: return "Deep black tactical theme"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
         }
     }
 }
+
+// MARK: - Visual Theme (Color Schemes)
+
+enum VisualTheme: String, CaseIterable, Codable {
+    case live = "live"
+    case midnight = "midnight"
+    case terminal = "terminal"
+    case warm = "warm"
+    case minimal = "minimal"
+
+    var displayName: String {
+        switch self {
+        case .live: return "Live"
+        case .midnight: return "Midnight"
+        case .terminal: return "Terminal"
+        case .warm: return "Warm"
+        case .minimal: return "Minimal"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .live: return "Default blue accent"
+        case .midnight: return "Deep black, high contrast"
+        case .terminal: return "Green on black"
+        case .warm: return "Cozy orange tones"
+        case .minimal: return "Clean and subtle"
+        }
+    }
+
+    /// Default accent color for this theme
+    var accentColor: AccentColorOption {
+        switch self {
+        case .live: return .blue
+        case .midnight: return .blue
+        case .terminal: return .green
+        case .warm: return .orange
+        case .minimal: return .gray
+        }
+    }
+
+    /// Suggested appearance mode for this theme (user can override)
+    var suggestedAppearance: AppearanceMode {
+        switch self {
+        case .live: return .dark
+        case .midnight: return .dark
+        case .terminal: return .dark
+        case .warm: return .dark
+        case .minimal: return .system
+        }
+    }
+
+    /// Preview colors for theme selector
+    var previewColors: (bg: Color, fg: Color, accent: Color) {
+        switch self {
+        case .live:
+            return (Color(white: 0.1), Color.white.opacity(0.9), Color.blue)
+        case .midnight:
+            return (Color.black, Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
+        case .terminal:
+            return (Color.black, Color.green.opacity(0.9), Color.green)
+        case .warm:
+            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color.white.opacity(0.9), Color.orange)
+        case .minimal:
+            return (Color(white: 0.95), Color.black.opacity(0.8), Color.gray)
+        }
+    }
+}
+
+// Legacy compatibility - maps to new system
+@available(*, deprecated, message: "Use AppearanceMode and VisualTheme instead")
+typealias AppTheme = AppearanceMode
 
 enum FontSize: String, CaseIterable, Codable {
     case small = "small"
@@ -186,69 +265,28 @@ enum AccentColorOption: String, CaseIterable, Codable {
     }
 }
 
-// MARK: - Theme Presets
+// Legacy compatibility for ThemePreset
+@available(*, deprecated, message: "Use VisualTheme instead")
+typealias ThemePreset = VisualTheme
 
-enum ThemePreset: String, CaseIterable {
-    case liveDefault = "liveDefault"
-    case terminal = "terminal"
-    case minimal = "minimal"
-    case warm = "warm"
+// MARK: - Context Preference
+
+/// Which app context is considered "primary" for utterances
+enum PrimaryContextSource: String, CaseIterable, Codable {
+    case startApp = "startApp"
+    case endApp = "endApp"
 
     var displayName: String {
         switch self {
-        case .liveDefault: return "Live"
-        case .terminal: return "Terminal"
-        case .minimal: return "Minimal"
-        case .warm: return "Warm"
+        case .startApp: return "Where I Started"
+        case .endApp: return "Where I Finished"
         }
     }
 
     var description: String {
         switch self {
-        case .liveDefault: return "Sharp, high contrast"
-        case .terminal: return "Green accents"
-        case .minimal: return "Clean, adaptive"
-        case .warm: return "Cozy orange tones"
-        }
-    }
-
-    var previewColors: (bg: Color, fg: Color, accent: Color) {
-        switch self {
-        case .liveDefault:
-            return (Color(white: 0.08), Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
-        case .terminal:
-            return (Color.black, Color.green.opacity(0.9), Color.green)
-        case .minimal:
-            return (Color(white: 0.96), Color.black.opacity(0.8), Color.gray)
-        case .warm:
-            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color.white.opacity(0.9), Color.orange)
-        }
-    }
-
-    var theme: AppTheme {
-        switch self {
-        case .liveDefault: return .midnight
-        case .terminal: return .dark
-        case .minimal: return .system
-        case .warm: return .dark
-        }
-    }
-
-    var accentColor: AccentColorOption {
-        switch self {
-        case .liveDefault: return .blue
-        case .terminal: return .green
-        case .minimal: return .gray
-        case .warm: return .orange
-        }
-    }
-
-    var fontSize: FontSize {
-        switch self {
-        case .liveDefault: return .medium
-        case .terminal: return .small
-        case .minimal: return .medium
-        case .warm: return .large
+        case .startApp: return "App where you pressed the hotkey"
+        case .endApp: return "App where you were when recording stopped"
         }
     }
 }
@@ -307,9 +345,14 @@ final class LiveSettings: ObservableObject {
     private let startSoundKey = "startSound"
     private let finishSoundKey = "finishSound"
     private let pastedSoundKey = "pastedSound"
-    private let themeKey = "theme"
+    private let appearanceModeKey = "appearanceMode"
+    private let visualThemeKey = "visualTheme"
     private let fontSizeKey = "fontSize"
     private let accentColorKey = "accentColor"
+    private let primaryContextSourceKey = "primaryContextSource"
+    private let returnToOriginAfterPasteKey = "returnToOriginAfterPaste"
+    // Legacy key for migration
+    private let legacyThemeKey = "theme"
 
     // MARK: - Published Settings
 
@@ -365,10 +408,20 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
-    @Published var theme: AppTheme {
+    @Published var appearanceMode: AppearanceMode {
         didSet {
             save()
-            applyTheme()
+            applyAppearance()
+        }
+    }
+
+    @Published var visualTheme: VisualTheme {
+        didSet {
+            save()
+            // Optionally update accent color to match theme default
+            if accentColor == .system {
+                // Trigger UI update without changing setting
+            }
         }
     }
 
@@ -378,6 +431,23 @@ final class LiveSettings: ObservableObject {
 
     @Published var accentColor: AccentColorOption {
         didSet { save() }
+    }
+
+    /// Which context (start or end app) is primary for utterances
+    @Published var primaryContextSource: PrimaryContextSource {
+        didSet { save() }
+    }
+
+    /// Whether to activate the start app after pasting
+    @Published var returnToOriginAfterPaste: Bool {
+        didSet { save() }
+    }
+
+    // Legacy compatibility - returns appearance mode
+    @available(*, deprecated, message: "Use appearanceMode instead")
+    var theme: AppearanceMode {
+        get { appearanceMode }
+        set { appearanceMode = newValue }
     }
 
     // MARK: - Init
@@ -457,12 +527,31 @@ final class LiveSettings: ObservableObject {
             self.pastedSound = .tink
         }
 
-        // Load theme
-        if let rawValue = UserDefaults.standard.string(forKey: themeKey),
-           let loadedTheme = AppTheme(rawValue: rawValue) {
-            self.theme = loadedTheme
+        // Load appearance mode (with migration from legacy theme key)
+        if let rawValue = UserDefaults.standard.string(forKey: appearanceModeKey),
+           let mode = AppearanceMode(rawValue: rawValue) {
+            self.appearanceMode = mode
+        } else if let legacyTheme = UserDefaults.standard.string(forKey: legacyThemeKey) {
+            // Migrate from legacy theme setting
+            switch legacyTheme {
+            case "system": self.appearanceMode = .system
+            case "light": self.appearanceMode = .light
+            case "dark", "midnight": self.appearanceMode = .dark
+            default: self.appearanceMode = .system
+            }
         } else {
-            self.theme = .system
+            self.appearanceMode = .system
+        }
+
+        // Load visual theme
+        if let rawValue = UserDefaults.standard.string(forKey: visualThemeKey),
+           let theme = VisualTheme(rawValue: rawValue) {
+            self.visualTheme = theme
+        } else if let legacyTheme = UserDefaults.standard.string(forKey: legacyThemeKey) {
+            // Migrate: midnight -> midnight theme, others -> live
+            self.visualTheme = legacyTheme == "midnight" ? .midnight : .live
+        } else {
+            self.visualTheme = .live
         }
 
         // Load font size
@@ -480,6 +569,17 @@ final class LiveSettings: ObservableObject {
         } else {
             self.accentColor = .system
         }
+
+        // Load primary context source (default: start app)
+        if let rawValue = UserDefaults.standard.string(forKey: primaryContextSourceKey),
+           let source = PrimaryContextSource(rawValue: rawValue) {
+            self.primaryContextSource = source
+        } else {
+            self.primaryContextSource = .startApp
+        }
+
+        // Load return to origin setting (default: false)
+        self.returnToOriginAfterPaste = UserDefaults.standard.bool(forKey: returnToOriginAfterPasteKey)
 
         // Apply TTL to store
         UtteranceStore.shared.ttlSeconds = TimeInterval(utteranceTTLHours * 3600)
@@ -502,36 +602,40 @@ final class LiveSettings: ObservableObject {
         UserDefaults.standard.set(startSound.rawValue, forKey: startSoundKey)
         UserDefaults.standard.set(finishSound.rawValue, forKey: finishSoundKey)
         UserDefaults.standard.set(pastedSound.rawValue, forKey: pastedSoundKey)
-        UserDefaults.standard.set(theme.rawValue, forKey: themeKey)
+        UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceModeKey)
+        UserDefaults.standard.set(visualTheme.rawValue, forKey: visualThemeKey)
         UserDefaults.standard.set(fontSize.rawValue, forKey: fontSizeKey)
         UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
+        UserDefaults.standard.set(primaryContextSource.rawValue, forKey: primaryContextSourceKey)
+        UserDefaults.standard.set(returnToOriginAfterPaste, forKey: returnToOriginAfterPasteKey)
     }
 
-    // MARK: - Theme Application
+    // MARK: - Appearance Application
 
-    func applyTheme() {
-        switch theme {
+    func applyAppearance() {
+        switch appearanceMode {
         case .system:
             NSApp.appearance = nil
         case .light:
             NSApp.appearance = NSAppearance(named: .aqua)
         case .dark:
             NSApp.appearance = NSAppearance(named: .darkAqua)
-        case .midnight:
-            // Midnight uses dark as base with custom colors
-            NSApp.appearance = NSAppearance(named: .darkAqua)
         }
     }
 
-    func applyPreset(_ preset: ThemePreset) {
-        theme = preset.theme
-        accentColor = preset.accentColor
-        fontSize = preset.fontSize
+    /// Apply a visual theme preset (updates theme + accent color)
+    func applyVisualTheme(_ theme: VisualTheme) {
+        self.visualTheme = theme
+        self.accentColor = theme.accentColor
+        // Optionally also set appearance to suggested mode
+        // self.appearanceMode = theme.suggestedAppearance
     }
 
-    var currentPreset: ThemePreset? {
-        ThemePreset.allCases.first {
-            $0.theme == theme && $0.accentColor == accentColor && $0.fontSize == fontSize
+    /// Effective accent color considering theme defaults
+    var effectiveAccentColor: Color {
+        if accentColor == .system {
+            return visualTheme.accentColor.color
         }
+        return accentColor.color
     }
 }

@@ -90,7 +90,7 @@ struct LiveNavigationView: View {
         }
         .frame(minWidth: 700, minHeight: 500)
         .onAppear {
-            LiveSettings.shared.applyTheme()
+            LiveSettings.shared.applyAppearance()
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToConsole)) { _ in
             selectedSection = .console
@@ -2238,32 +2238,75 @@ struct HotkeyRecorderRow: View {
 struct HotkeyRecorderButton: View {
     @Binding var hotkey: HotkeyConfig
     @Binding var isRecording: Bool
+    var showReset: Bool = true
+
+    @State private var isHovered = false
+    @State private var isCancelHovered = false
+    @State private var isResetHovered = false
 
     var body: some View {
-        Button(action: {
-            isRecording.toggle()
-        }) {
-            HStack(spacing: 4) {
-                if isRecording {
-                    Text("Press keys...")
+        HStack(spacing: 8) {
+            // Main button
+            Button(action: {
+                isRecording.toggle()
+            }) {
+                HStack(spacing: 6) {
+                    Text(isRecording ? "Press keys..." : hotkey.displayString)
                         .foregroundColor(.accentColor)
-                } else {
-                    Text(hotkey.displayString)
+
+                    // Cancel X button when recording
+                    if isRecording {
+                        Button(action: {
+                            isRecording = false
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(isCancelHovered ? .white : .accentColor.opacity(0.6))
+                                .frame(width: 16, height: 16)
+                                .background(
+                                    Circle()
+                                        .fill(isCancelHovered ? Color.accentColor : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { isCancelHovered = $0 }
+                    }
                 }
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.accentColor.opacity(isRecording ? 0.2 : (isHovered ? 0.18 : 0.12)))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(isRecording ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                )
             }
-            .font(.system(.body, design: .monospaced))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isRecording ? Color.accentColor.opacity(0.15) : Design.backgroundTertiary)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(isRecording ? Color.accentColor : Color.clear, lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+
+            // Reset button (only when not recording and not default)
+            if showReset && !isRecording && hotkey != .default {
+                Button(action: {
+                    hotkey = .default
+                    NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
+                }) {
+                    Text("Reset")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(isResetHovered ? .white : .white.opacity(0.5))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(isResetHovered ? Color.white.opacity(0.15) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { isResetHovered = $0 }
+            }
         }
-        .buttonStyle(.plain)
         .background(
             HotkeyRecorderNSView(isRecording: $isRecording, hotkey: $hotkey)
                 .frame(width: 0, height: 0)
@@ -2287,6 +2330,11 @@ struct HotkeyRecorderNSView: NSViewRepresentable {
                 NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
             }
         }
+        view.onCancel = {
+            DispatchQueue.main.async {
+                isRecording = false
+            }
+        }
         return view
     }
 
@@ -2301,6 +2349,7 @@ struct HotkeyRecorderNSView: NSViewRepresentable {
 class KeyCaptureView: NSView {
     var isCapturing = false
     var onKeyCapture: ((UInt32, UInt32) -> Void)?
+    var onCancel: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { isCapturing }
 
@@ -2310,8 +2359,15 @@ class KeyCaptureView: NSView {
             return
         }
 
-        // Ignore modifier-only keys
         let keyCode = UInt32(event.keyCode)
+
+        // Escape key (53) cancels recording
+        if keyCode == 53 {
+            onCancel?()
+            return
+        }
+
+        // Ignore modifier-only keys
         if keyCode == 55 || keyCode == 56 || keyCode == 58 || keyCode == 59 ||
            keyCode == 54 || keyCode == 57 || keyCode == 60 || keyCode == 61 ||
            keyCode == 62 || keyCode == 63 {
@@ -2489,8 +2545,8 @@ struct AppearanceSettingsContent: View {
 
             // Theme buttons
             HStack(spacing: 6) {
-                ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
-                    themeButton(preset)
+                ForEach(VisualTheme.allCases, id: \.rawValue) { theme in
+                    themeButton(theme)
                 }
             }
         }
@@ -2577,19 +2633,19 @@ struct AppearanceSettingsContent: View {
         )
     }
 
-    private func themeButton(_ preset: ThemePreset) -> some View {
-        let isActive = settings.currentPreset == preset
+    private func themeButton(_ theme: VisualTheme) -> some View {
+        let isActive = settings.visualTheme == theme
 
-        return Button(action: { settings.applyPreset(preset) }) {
+        return Button(action: { settings.applyVisualTheme(theme) }) {
             HStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(preset.previewColors.bg)
+                    .fill(theme.previewColors.bg)
                     .frame(width: 14, height: 14)
                     .overlay(
                         RoundedRectangle(cornerRadius: 3)
-                            .stroke(preset.previewColors.accent, lineWidth: 1)
+                            .stroke(theme.previewColors.accent, lineWidth: 1)
                     )
-                Text(preset.displayName)
+                Text(theme.displayName)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(isActive ? .primary : .secondary)
             }
@@ -2615,7 +2671,7 @@ struct AppearanceSettingsContent: View {
                 .foregroundColor(.secondary)
 
             HStack(spacing: 10) {
-                ForEach([AppTheme.system, .light, .dark, .midnight], id: \.rawValue) { mode in
+                ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                     appearanceModeButton(mode)
                 }
             }
@@ -2625,12 +2681,12 @@ struct AppearanceSettingsContent: View {
         .cornerRadius(8)
     }
 
-    private func appearanceModeButton(_ mode: AppTheme) -> some View {
-        let isSelected = settings.theme == mode
+    private func appearanceModeButton(_ mode: AppearanceMode) -> some View {
+        let isSelected = settings.appearanceMode == mode
 
-        return Button(action: { settings.theme = mode }) {
+        return Button(action: { settings.appearanceMode = mode }) {
             VStack(spacing: 6) {
-                Image(systemName: modeIcon(mode))
+                Image(systemName: mode.icon)
                     .font(.system(size: 16))
                     .foregroundColor(isSelected ? settings.accentColor.color : .secondary)
                     .frame(width: 40, height: 40)
@@ -2643,15 +2699,6 @@ struct AppearanceSettingsContent: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private func modeIcon(_ mode: AppTheme) -> String {
-        switch mode {
-        case .system: return "circle.lefthalf.filled"
-        case .light: return "sun.max"
-        case .dark: return "moon"
-        case .midnight: return "moon.stars"
-        }
     }
 
     // MARK: - Accent Color

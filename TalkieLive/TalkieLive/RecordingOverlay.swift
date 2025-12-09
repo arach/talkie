@@ -62,27 +62,31 @@ final class RecordingOverlayController: ObservableObject {
             let panelHeight = hostingView.frame.height
             let margin: CGFloat = 4  // Minimal gap from menu bar
 
-            let origin: NSPoint
+            // Calculate final position
+            let finalX: CGFloat
             switch LiveSettings.shared.overlayPosition {
             case .topCenter:
-                origin = NSPoint(
-                    x: screenFrame.midX - panelWidth / 2,
-                    y: screenFrame.maxY - panelHeight - margin
-                )
+                finalX = screenFrame.midX - panelWidth / 2
             case .topLeft:
-                origin = NSPoint(
-                    x: screenFrame.minX + margin,
-                    y: screenFrame.maxY - panelHeight - margin
-                )
+                finalX = screenFrame.minX + margin
             case .topRight:
-                origin = NSPoint(
-                    x: screenFrame.maxX - panelWidth - margin,
-                    y: screenFrame.maxY - panelHeight - margin
-                )
+                finalX = screenFrame.maxX - panelWidth - margin
             }
+            let finalY = screenFrame.maxY - panelHeight - margin
 
-            panel.setFrameOrigin(origin)
+            // Start position: above the screen (hidden behind menu bar)
+            let startY = screenFrame.maxY + 10  // Above visible area
+            panel.setFrameOrigin(NSPoint(x: finalX, y: startY))
+            panel.alphaValue = 0
             panel.orderFront(nil)
+
+            // Animate sliding down from top
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().setFrameOrigin(NSPoint(x: finalX, y: finalY))
+                panel.animator().alphaValue = 1
+            }
         }
 
         self.window = panel
@@ -104,8 +108,26 @@ final class RecordingOverlayController: ObservableObject {
         elapsedTime = 0
         transcript = ""
 
-        window?.orderOut(nil)
-        window = nil
+        guard let panel = window, let screen = NSScreen.main else {
+            window?.orderOut(nil)
+            window = nil
+            return
+        }
+
+        let screenFrame = screen.visibleFrame
+        let currentFrame = panel.frame
+
+        // Animate sliding up into the menu bar and fading out
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            // Slide up above the screen
+            panel.animator().setFrameOrigin(NSPoint(x: currentFrame.origin.x, y: screenFrame.maxY + 10))
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            self?.window?.orderOut(nil)
+            self?.window = nil
+        })
     }
 
     func updateState(_ state: LiveState) {
@@ -114,13 +136,57 @@ final class RecordingOverlayController: ObservableObject {
         if state == .listening {
             show()
         } else if state == .idle {
-            // Delay hide slightly to show final state
+            // Delay hide to show success checkmark clearly
             Task {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: .milliseconds(900))  // Longer to show checkmark
                 if self.state == .idle {
                     hide()
                 }
             }
+        }
+
+        // Re-center the window when state changes (different sizes for each state)
+        updateWindowPosition(for: state)
+    }
+
+    /// Update window position and size based on current state
+    private func updateWindowPosition(for state: LiveState) {
+        guard let panel = window, let screen = NSScreen.main else { return }
+
+        let tuning = OverlayTuning.shared
+        let screenFrame = screen.visibleFrame
+        let margin: CGFloat = 4
+
+        // Calculate size based on state (matches processingWidth/processingHeight in view)
+        let width: CGFloat
+        let height: CGFloat
+        switch state {
+        case .listening, .idle:
+            width = CGFloat(tuning.overlayWidth)
+            height = CGFloat(tuning.overlayHeight)
+        case .transcribing, .routing:
+            // Same size - dots collapse but window stays put
+            width = 56
+            height = 24
+        }
+
+        // Calculate new position (always center horizontally)
+        let y = screenFrame.maxY - height - margin
+        let x: CGFloat
+        switch LiveSettings.shared.overlayPosition {
+        case .topCenter:
+            x = screenFrame.midX - width / 2
+        case .topLeft:
+            x = screenFrame.minX + margin
+        case .topRight:
+            x = screenFrame.maxX - width - margin
+        }
+
+        // Animate the window size and position change
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.25
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
         }
     }
 
@@ -161,18 +227,21 @@ struct RecordingOverlayView: View {
         ZStack {
             // Recording state - visualization based on style
             if controller.state == .listening {
-                switch settings.overlayStyle {
-                case .particles:
-                    WavyParticlesView(calm: false)
-                case .particlesCalm:
-                    WavyParticlesView(calm: true)
-                case .waveform:
-                    WaveformBarsView(sensitive: false)
-                case .waveformSensitive:
-                    WaveformBarsView(sensitive: true)
-                case .pillOnly:
-                    EmptyView()  // No top overlay content for pill-only mode
+                Group {
+                    switch settings.overlayStyle {
+                    case .particles:
+                        WavyParticlesView(calm: false)
+                    case .particlesCalm:
+                        WavyParticlesView(calm: true)
+                    case .waveform:
+                        WaveformBarsView(sensitive: false)
+                    case .waveformSensitive:
+                        WaveformBarsView(sensitive: true)
+                    case .pillOnly:
+                        EmptyView()  // No top overlay content for pill-only mode
+                    }
                 }
+                .transition(.opacity)  // Fade only, no horizontal slide
 
                 // Controls - only visible on hover
                 if isOverlayHovered {
@@ -213,11 +282,15 @@ struct RecordingOverlayView: View {
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)  // Center in container
+                .transition(.opacity)  // Fade only, no horizontal slide
             }
 
-            // Success state - checkmark that fades
+            // Success state - single dot (collapsed from three dots)
             if controller.state == .routing || showCheckmark {
-                SuccessCheckmarkView(tint: successGreen)
+                CompletionDotView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)  // Fade only, no horizontal slide
             }
         }
         .frame(width: processingWidth, height: processingHeight)
@@ -245,10 +318,10 @@ struct RecordingOverlayView: View {
                     showCheckmark = true
                 }
             } else if newState == .idle {
-                // Hide checkmark after a delay with smooth fade
+                // Keep checkmark visible longer so user can see it, then fade smoothly
                 Task {
-                    try? await Task.sleep(for: .milliseconds(400))
-                    withAnimation(.easeOut(duration: 0.35)) {
+                    try? await Task.sleep(for: .milliseconds(700))  // Longer visibility
+                    withAnimation(.easeOut(duration: 0.4)) {
                         showCheckmark = false
                     }
                 }
@@ -286,7 +359,7 @@ struct RecordingOverlayView: View {
         case .transcribing:
             // Wider if showing warmup message
             return whisperService.isWarmingUp ? 160 : 56
-        case .routing: return 40  // Smaller for checkmark
+        case .routing: return 56  // Same as transcribing - dots collapse, no size change
         case .idle: return baseWidth
         }
     }
@@ -322,8 +395,8 @@ struct RecordingOverlayView: View {
             }
             return processingOrange.opacity(0.08)
         case .routing:
-            // Very subtle green tint
-            return successGreen.opacity(0.1)
+            // Same as transcribing - neutral exit, no color change
+            return processingOrange.opacity(0.08)
         case .idle:
             return Color.clear
         }
@@ -336,7 +409,8 @@ struct RecordingOverlayView: View {
         case .transcribing:
             return processingOrange.opacity(0.25)
         case .routing:
-            return successGreen.opacity(0.3)
+            // Same as transcribing - neutral exit
+            return processingOrange.opacity(0.25)
         case .idle:
             return Color.clear
         }
@@ -376,25 +450,16 @@ struct ProcessingDotsView: View {
     }
 }
 
-// MARK: - Success Checkmark (minimal completion indicator)
+// MARK: - Completion Dot (collapsed from three processing dots)
 
-struct SuccessCheckmarkView: View {
-    let tint: Color
-    @State private var scale: CGFloat = 0.6
-    @State private var opacity: Double = 0
+struct CompletionDotView: View {
+    private let processingOrange = Color(red: 1.0, green: 0.6, blue: 0.2)
 
     var body: some View {
-        Image(systemName: "checkmark")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundColor(tint)
-            .scaleEffect(scale)
-            .opacity(opacity)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    scale = 1.0
-                    opacity = 1.0
-                }
-            }
+        // Single dot - the three processing dots collapse into one
+        Circle()
+            .fill(processingOrange.opacity(0.9))
+            .frame(width: 4, height: 4)
     }
 }
 
@@ -609,10 +674,11 @@ struct WavyParticlesView: View {
                     let laneOffset = (Double(i % 10) / 10.0 - 0.5) * 0.3
                     let y = centerY + CGFloat((primaryWave + secondaryWave + laneOffset) * Double(centerY) * 0.7)
 
-                    // Size from tuning
+                    // Size from tuning - particles grow with audio level
                     let baseSize = CGFloat(tuning.baseSize)
-                    let levelBonus = level * 2.0
-                    let particleSize = baseSize + levelBonus * CGFloat(0.6 + sin(seed * 5) * 0.4)
+                    let levelBonus = level * 4.0  // Stronger size response to audio
+                    let sizeVariation = CGFloat(0.5 + sin(seed * 5) * 0.5)  // 0.0-1.0 range
+                    let particleSize = baseSize + levelBonus * sizeVariation
 
                     // Opacity from tuning
                     let opacity = tuning.baseOpacity + Double(level) * 0.35 * (0.6 + sin(seed * 3) * 0.4)

@@ -23,6 +23,14 @@ packages:
     version: 7.8.0
   TalkieServices:
     path: ../TalkieServices
+  WFKit:
+    path: ../../WFKit
+  mlx-swift:
+    url: https://github.com/ml-explore/mlx-swift.git
+    version: 0.29.1
+  mlx-swift-lm:
+    url: https://github.com/ml-explore/mlx-swift-lm.git
+    version: 2.29.2
 
 targets:
   Talkie:
@@ -37,9 +45,16 @@ targets:
       - package: FluidAudio
       - package: GRDB
       - package: TalkieServices
+      - package: WFKit
+      - package: mlx-swift
+        product: MLX
+      - package: mlx-swift-lm
+        product: MLXLLM
+      - package: mlx-swift-lm
+        product: MLXLMCommon
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie-os-mac
+        PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.core
         MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "Talkie"

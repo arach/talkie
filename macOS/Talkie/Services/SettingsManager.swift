@@ -1023,19 +1023,13 @@ class SettingsManager: ObservableObject {
                 let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
 
                 // Update @Published properties on main thread
-                // Use sync if already on main, async otherwise
-                let updateBlock = {
+                // Always use async to avoid "publishing changes during view updates" warning
+                DispatchQueue.main.async {
                     self._geminiApiKey = gemini
                     self._openaiApiKey = openai
                     self._anthropicApiKey = anthropic
                     self._groqApiKey = groq
                     self._selectedModel = model
-                }
-
-                if Thread.isMainThread {
-                    updateBlock()
-                } else {
-                    DispatchQueue.main.sync { updateBlock() }
                 }
 
                 // Settings loaded silently - API key status visible in Models UI
@@ -1090,8 +1084,11 @@ class SettingsManager: ObservableObject {
 
         do {
             try context.save()
-            self._geminiApiKey = ""
-            self._selectedModel = defaultModel
+            // Use async to avoid "publishing changes during view updates" warning
+            DispatchQueue.main.async {
+                self._geminiApiKey = ""
+                self._selectedModel = defaultModel
+            }
             print("✅ Created default settings")
         } catch {
             print("❌ Failed to create default settings: \(error)")

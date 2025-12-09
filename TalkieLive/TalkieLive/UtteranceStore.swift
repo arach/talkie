@@ -14,10 +14,15 @@ private let logger = Logger(subsystem: "jdi.talkie.live", category: "UtteranceSt
 // MARK: - Utterance Metadata
 
 struct UtteranceMetadata: Codable, Hashable {
-    // Context: where was the user when they recorded?
+    // Start context: where was the user when recording STARTED?
     var activeAppBundleID: String?
     var activeAppName: String?
     var activeWindowTitle: String?
+
+    // End context: where was the user when recording STOPPED?
+    var endAppBundleID: String?
+    var endAppName: String?
+    var endWindowTitle: String?
 
     // Routing: what happened after transcription?
     var routingMode: String?  // "paste", "clipboardOnly"
@@ -50,6 +55,30 @@ struct UtteranceMetadata: Codable, Hashable {
     var hasAudio: Bool {
         guard let url = audioURL else { return false }
         return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// Whether start and end contexts are different apps
+    var contextChanged: Bool {
+        guard let startApp = activeAppBundleID, let endApp = endAppBundleID else {
+            return false
+        }
+        return startApp != endApp
+    }
+
+    /// Primary app name based on settings (defaults to start app)
+    func primaryAppName(preferEnd: Bool = false) -> String? {
+        if preferEnd {
+            return endAppName ?? activeAppName
+        }
+        return activeAppName ?? endAppName
+    }
+
+    /// Primary bundle ID based on settings (defaults to start app)
+    func primaryBundleID(preferEnd: Bool = false) -> String? {
+        if preferEnd {
+            return endAppBundleID ?? activeAppBundleID
+        }
+        return activeAppBundleID ?? endAppBundleID
     }
 }
 
@@ -101,6 +130,7 @@ struct ContextCapture {
         return frontApp.bundleIdentifier == talkieLiveBundleID
     }
 
+    /// Capture start context (frontmost app when recording begins)
     static func captureCurrentContext() -> UtteranceMetadata {
         var metadata = UtteranceMetadata()
 
@@ -117,6 +147,38 @@ struct ContextCapture {
         }
 
         return metadata
+    }
+
+    /// Fill in end context on existing metadata (when recording stops)
+    static func fillEndContext(in metadata: inout UtteranceMetadata) {
+        // Get frontmost app info
+        if let frontApp = NSWorkspace.shared.frontmostApplication {
+            metadata.endAppBundleID = frontApp.bundleIdentifier
+            metadata.endAppName = frontApp.localizedName
+        }
+
+        // Try to get active window title
+        if let windowTitle = getActiveWindowTitle() {
+            metadata.endWindowTitle = windowTitle
+        }
+    }
+
+    /// Get the current frontmost app for later activation
+    static func getFrontmostApp() -> NSRunningApplication? {
+        return NSWorkspace.shared.frontmostApplication
+    }
+
+    /// Activate an app by bringing it to front
+    static func activateApp(_ app: NSRunningApplication) {
+        app.activate()
+    }
+
+    /// Activate an app by bundle ID
+    static func activateApp(bundleID: String) {
+        guard let app = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleID }) else {
+            return
+        }
+        app.activate()
     }
 
     private static func getActiveWindowTitle() -> String? {

@@ -15,6 +15,7 @@
         <attribute name="engine" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="sourceType" optional="YES" attributeType="String"/>
+        <attribute name="transcriptionDurationMs" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="version" attributeType="Integer 32" defaultValueString="1" usesScalarValueType="YES"/>
         <relationship name="memo" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="VoiceMemo" inverseName="transcriptVersions" inverseEntity="VoiceMemo"/>
     </entity>

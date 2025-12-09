@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import os.log
 import TalkieCore
 import TalkieServices
@@ -28,6 +29,7 @@ final class LiveController: ObservableObject {
     private var recordingStartTime: Date?
     private var capturedContext: UtteranceMetadata?
     private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
+    private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
 
     init(
         audio: LiveAudioCapture,
@@ -58,14 +60,23 @@ final class LiveController: ObservableObject {
         audio.stopCapture()
         recordingStartTime = nil
         capturedContext = nil
+        startApp = nil
         state = .idle
         logger.info("Recording cancelled")
+    }
+
+    /// Get the start app for return-to-origin feature
+    func getStartApp() -> NSRunningApplication? {
+        return startApp
     }
 
     private func start() async {
         // Check if Talkie Live is frontmost BEFORE capturing context
         // This determines if the Live goes into the implicit queue
         createdInTalkieView = ContextCapture.isTalkieLiveFrontmost()
+
+        // Store the start app for potential return-to-origin after paste
+        startApp = ContextCapture.getFrontmostApp()
 
         // Capture context BEFORE recording starts (user is in their target app)
         capturedContext = ContextCapture.captureCurrentContext()
@@ -99,6 +110,20 @@ final class LiveController: ObservableObject {
 
     private func process(buffer: Data) async {
         let settings = LiveSettings.shared
+
+        // Capture end context IMMEDIATELY when recording stops
+        // This captures where the user is NOW (may be different from start)
+        if var context = capturedContext {
+            ContextCapture.fillEndContext(in: &context)
+            capturedContext = context
+
+            // Log if context changed
+            if context.contextChanged {
+                let startApp = context.activeAppName ?? "?"
+                let endApp = context.endAppName ?? "?"
+                SystemEventManager.shared.log(.system, "Context changed", detail: "\(startApp) → \(endApp)")
+            }
+        }
 
         // Calculate recording duration
         let durationSeconds: Double?
@@ -213,6 +238,16 @@ final class LiveController: ObservableObject {
                 // Play pasted sound
                 SoundManager.shared.playPasted()
                 SystemEventManager.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...")
+
+                // Return to origin app if enabled and context changed
+                if settings.returnToOriginAfterPaste,
+                   let originApp = startApp,
+                   metadata.contextChanged {
+                    // Small delay to let paste complete
+                    try? await Task.sleep(for: .milliseconds(100))
+                    ContextCapture.activateApp(originApp)
+                    SystemEventManager.shared.log(.system, "Returned to origin", detail: originApp.localizedName ?? "Unknown")
+                }
 
                 // Store in GRDB with pasteTimestamp = now (already pasted)
                 let utterance = LiveUtterance(

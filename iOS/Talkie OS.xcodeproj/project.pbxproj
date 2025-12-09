@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		536BA68A2EE6903C00C0132C /* File.txt in Resources */ = {isa = PBXBuildFile; fileRef = 536BA6892EE6903C00C0132C /* File.txt */; };
 		53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
 		53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
 		53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -52,7 +51,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		536BA6892EE6903C00C0132C /* File.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = File.txt; sourceTree = "<group>"; };
 		539C69312ED39ADE00BC034F /* Talkie OS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie OS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -146,7 +144,6 @@
 		539C69282ED39ADE00BC034F = {
 			isa = PBXGroup;
 			children = (
-				536BA6892EE6903C00C0132C /* File.txt */,
 				539FB6402EE679B6004EEAF4 /* Talkie.xcodeproj */,
 				53B43EDF2EDB541600C09544 /* TalkieWidgetExtension.entitlements */,
 				539C69332ED39ADE00BC034F /* Talkie iOS */,
@@ -339,7 +336,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				536BA68A2EE6903C00C0132C /* File.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

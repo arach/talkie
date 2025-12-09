@@ -299,13 +299,13 @@ final class ParticleTuning: ObservableObject {
     }
 
     // Wave controls
-    @Published var waveSpeed: Double = 2.0 {
+    @Published var waveSpeed: Double = 2.5 {
         didSet { saveCurrentSettings(); log("waveSpeed", waveSpeed) }
     }
-    @Published var baseAmplitude: Double = 0.4 {
+    @Published var baseAmplitude: Double = 0.35 {
         didSet { saveCurrentSettings(); log("baseAmplitude", baseAmplitude) }
     }
-    @Published var audioAmplitude: Double = 0.35 {
+    @Published var audioAmplitude: Double = 0.55 {
         didSet { saveCurrentSettings(); log("audioAmplitude", audioAmplitude) }
     }
 
@@ -320,13 +320,13 @@ final class ParticleTuning: ObservableObject {
         didSet { saveCurrentSettings(); log("baseOpacity", baseOpacity) }
     }
 
-    // Smoothing
-    @Published var smoothingFactor: Double = 0.18 {
+    // Smoothing (higher = faster response)
+    @Published var smoothingFactor: Double = 0.35 {
         didSet { saveCurrentSettings(); log("smoothingFactor", smoothingFactor) }
     }
 
     // Input sensitivity (how much audio level affects the animation)
-    @Published var inputSensitivity: Double = 1.0 {
+    @Published var inputSensitivity: Double = 2.0 {
         didSet { saveCurrentSettings(); log("inputSensitivity", inputSensitivity) }
     }
 
@@ -777,17 +777,21 @@ struct StatusBar: View {
                 // Status indicator (left) - simpler now
                 statusIndicator
 
-                // Hotkey hint (only when idle and not showing success)
+                // Hotkey hints (only when idle and not showing success)
                 if controller.state == .idle && !showSuccess {
-                    Text(LiveSettings.shared.hotkey.displayString)
-                        .font(.monoXSmall)
-                        .foregroundColor(Design.foregroundMuted)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Design.backgroundTertiary)
+                    HStack(spacing: Spacing.sm) {
+                        // Record shortcut
+                        ShortcutHint(
+                            label: "Record",
+                            shortcut: LiveSettings.shared.hotkey.displayString
                         )
+
+                        // Queue paste shortcut
+                        ShortcutHint(
+                            label: "Paste Queue",
+                            shortcut: "⌥⌘V"
+                        )
+                    }
                 }
 
                 Spacer()
@@ -1077,6 +1081,38 @@ struct StatusBar: View {
         } else {
             return String(format: "%d.%ds", seconds, tenths)
         }
+    }
+}
+
+// MARK: - Shortcut Hint (label + keyboard shortcut)
+
+struct ShortcutHint: View {
+    let label: String
+    let shortcut: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(Design.foregroundMuted.opacity(0.7))
+
+            Text(shortcut)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1.5)  // Subtle letter spacing
+                .foregroundColor(Design.foregroundMuted)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .offset(y: -1)  // Move up 1 pixel
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Design.backgroundTertiary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                )
+                .offset(y: -1)  // Background moves with content
+        )
     }
 }
 
@@ -1893,7 +1929,7 @@ struct DebugToolbarOverlay<Content: View>: View {
             Color.clear // Expand to full size
 
             VStack(alignment: .trailing, spacing: 8) {
-                // Tuning panels (slides in from right)
+                // Tuning panels (slides in from right) - capped height with scroll
                 if showParticleTuning {
                     ParticleTuningPanel(isShowing: $showParticleTuning)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -1919,6 +1955,8 @@ struct DebugToolbarOverlay<Content: View>: View {
                 toggleButton
             }
             .padding(16)
+            .frame(maxHeight: 600, alignment: .bottom)  // Cap height to prevent window resize
+            .clipped()
         }
     }
 
