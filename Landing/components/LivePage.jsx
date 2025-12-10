@@ -126,7 +126,7 @@ export default function LivePage() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-8">
               <Sparkles className="w-3 h-3 text-emerald-500" />
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Free • No Account Required</span>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Free • No Account Required • 100% Local</span>
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase mb-6 leading-[0.85]">
@@ -143,7 +143,7 @@ export default function LivePage() {
             <div className="flex flex-col sm:flex-row items-start gap-4">
               <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-14 px-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-3 shadow-xl shadow-emerald-500/25">
                 <Download className="w-5 h-5" />
-                <span>Download Free</span>
+                <span>Download for Mac</span>
               </a>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase">
@@ -350,7 +350,7 @@ export default function LivePage() {
               <FlowStep
                 number="3"
                 title="Release to Transcribe"
-                description="Let go of the key. Whisper transcribes your speech on-device in about a second. Nothing leaves your Mac."
+                description="Let go of the key. On-device AI transcribes your speech in about a second. Nothing leaves your Mac."
               />
               <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-700 ml-4"></div>
               <FlowStep
@@ -405,7 +405,7 @@ export default function LivePage() {
               Ideas → Action
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
-              Every moment of friction between thought and capture is an opportunity for an idea to fade. Here's how people use Talkie Live.
+              Every bit of friction between thought and capture is a chance for an idea to vanish. Here are a few ways Talkie Live gets used in real work.
             </p>
           </div>
 
@@ -415,11 +415,14 @@ export default function LivePage() {
                 <Code2 className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
               </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">While Coding</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500 italic leading-relaxed mb-2">
+                "Alright, thinking out loud: first fix the auth flow, then clean up these tests, then rename this module…"
+              </p>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                "Explain this function to myself... wait, I should refactor the auth module first... also need to update the tests..."
+                Keep a running stream of code notes without leaving your editor.
               </p>
               <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into TODO comment</span>
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into TODO comment or issue</span>
               </div>
             </div>
 
@@ -428,24 +431,14 @@ export default function LivePage() {
                 <Mail className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
               </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Email Drafts</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500 italic leading-relaxed mb-2">
+                "Hey Sarah, quick update on the launch. We're on track for Friday, but we need a final sign-off on pricing…"
+              </p>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Speak your reply naturally, then edit for tone. 4x faster than typing, especially on mobile keyboards.
+                Dictate the rough draft, then tweak tone instead of typing from scratch.
               </p>
               <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into email field</span>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
-                <PenLine className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
-              </div>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Draft a Blog Post</h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Speak your rough draft out loud. Get the ideas flowing without staring at a blank page. Edit later.
-              </p>
-              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into your editor</span>
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into your email field</span>
               </div>
             </div>
 
@@ -454,24 +447,14 @@ export default function LivePage() {
                 <FileText className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
               </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Meeting Notes</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500 italic leading-relaxed mb-2">
+                "Key decisions: ship v1 as-is, move analytics to next sprint. Action items: John owns rollout, I own bug triage…"
+              </p>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Quick verbal summary after a call: "Key decisions: X, Y, Z. Action items: ..." Right into your notes app.
+                Capture the debrief right after the call while it's still fresh.
               </p>
               <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into Notion/Obsidian</span>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
-                <Palette className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
-              </div>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Creative Briefs</h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                When inspiration hits, verbal description captures nuance that gets lost in quick typed notes.
-              </p>
-              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into design doc</span>
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into Notion, Obsidian, or your notes app</span>
               </div>
             </div>
 
@@ -480,11 +463,46 @@ export default function LivePage() {
                 <RefreshCw className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
               </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Context Switching</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500 italic leading-relaxed mb-2">
+                "Where I left off: debugging the memory leak in the worker pool, next step is to isolate the new job type…"
+              </p>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Before switching tasks: "Where I left off: investigating the memory leak in the worker pool..."
+                Leave yourself a breadcrumb so you can drop back into deep work fast.
               </p>
               <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into task tracker</span>
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into your task tracker</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <PenLine className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Draft a Blog Post</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500 italic leading-relaxed mb-2">
+                "Title idea: Why I stopped writing specs by hand. Intro: I used to… now I just…"
+              </p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Talk through the messy first draft instead of staring at a blank page.
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into your editor</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <Palette className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Creative Briefs</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500 italic leading-relaxed mb-2">
+                "Visual direction: dark background, single accent color, feels like a focused tool not a dashboard. References: Linear, Raycast…"
+              </p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Capture nuance and small details before they slip away.
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into your design doc</span>
               </div>
             </div>
           </div>
@@ -550,7 +568,7 @@ export default function LivePage() {
                 <span className="text-zinc-500">on your Mac.</span>
               </h2>
               <p className="text-zinc-400 leading-relaxed mb-8">
-                Talkie Live uses on-device Whisper models for transcription. No audio leaves your computer. No cloud processing. No API keys needed. No account required.
+                Talkie Live uses on-device transcription with Whisper and Parakeet models. No audio leaves your computer. No cloud processing. No API keys needed. No account required.
               </p>
               <ul className="space-y-4 text-sm text-zinc-300">
                 <li className="flex items-center gap-3">
@@ -575,12 +593,15 @@ export default function LivePage() {
             <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-8">
               <div className="flex items-center gap-3 mb-6">
                 <Cpu className="w-5 h-5 text-emerald-500" />
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-400">Whisper Engine</span>
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-400">Transcription Engines</span>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-center py-3 border-b border-zinc-800">
-                  <span className="text-sm text-zinc-400">Model</span>
-                  <span className="text-sm text-white font-mono">whisper-large-v3-turbo</span>
+                  <span className="text-sm text-zinc-400">Models</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-sm text-white font-mono">whisper-large-v3-turbo</span>
+                    <span className="text-sm text-emerald-400 font-mono">parakeet-v3</span>
+                  </div>
                 </div>
                 <div className="flex justify-between items-center py-3 border-b border-zinc-800">
                   <span className="text-sm text-zinc-400">Runtime</span>
@@ -592,7 +613,7 @@ export default function LivePage() {
                 </div>
                 <div className="flex justify-between items-center py-3">
                   <span className="text-sm text-zinc-400">Languages</span>
-                  <span className="text-sm text-white font-mono">99+</span>
+                  <span className="text-sm text-white font-mono">99+ (Whisper) • English (Parakeet)</span>
                 </div>
               </div>
             </div>
