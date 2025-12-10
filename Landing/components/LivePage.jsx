@@ -104,7 +104,7 @@ export default function LivePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-start gap-4">
-              <a href="https://github.com/arach/talkie/releases/latest/download/TalkieLive-Installer.pkg" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl">
+              <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl">
                 <Download className="w-4 h-4" />
                 <span>Download for Mac</span>
               </a>
@@ -388,7 +388,7 @@ export default function LivePage() {
           <p className="text-zinc-600 dark:text-zinc-400 mb-8 max-w-md mx-auto">
             Download Talkie Live for free. No account needed, no credit card, no catch.
           </p>
-          <a href="https://github.com/arach/talkie/releases/latest/download/TalkieLive-Installer.pkg" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl mx-auto">
+          <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl mx-auto">
             <Download className="w-4 h-4" />
             <span>Download for Mac</span>
           </a>

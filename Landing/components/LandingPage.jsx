@@ -174,7 +174,7 @@ export default function LandingPage() {
               <Smartphone className="w-4 h-4" />
               <span>Download for iOS</span>
             </button>
-            <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-for-Mac.pkg" className="h-12 px-8 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all flex items-center gap-2 min-w-[200px] justify-center">
+            <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-for-Mac.zip" className="h-12 px-8 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all flex items-center gap-2 min-w-[200px] justify-center">
               <Laptop className="w-4 h-4" />
               <span>Download for Mac</span>
             </a>
