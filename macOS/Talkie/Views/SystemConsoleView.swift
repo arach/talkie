@@ -10,7 +10,7 @@ import SwiftUI
 import Combine
 import os
 
-private let fileLogger = Logger(subsystem: "live.talkie.core", category: "LogFile")
+private let fileLogger = Logger(subsystem: "jdi.talkie.core", category: "LogFile")
 
 // MARK: - System Event Model
 
@@ -98,7 +98,9 @@ class LogFileManager {
     private let queue = DispatchQueue(label: "jdi.talkie.logfile", qos: .utility)
 
     private var logsDirectory: URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Talkie/logs", isDirectory: true)
+        }
         return appSupport.appendingPathComponent("Talkie/logs", isDirectory: true)
     }
 

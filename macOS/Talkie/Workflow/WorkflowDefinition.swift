@@ -6,8 +6,10 @@
 //
 
 import Foundation
+import os
 import SwiftUI
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Workflow")
 // MARK: - Workflow Definition
 
 struct WorkflowDefinition: Identifiable, Codable, Hashable {
@@ -834,7 +836,7 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
     }
 
     var defaultModel: WorkflowModelOption {
-        models.first!
+        models.first ?? WorkflowModelOption(id: "unknown", name: "Unknown", contextWindow: 4096, costTier: .budget)
     }
 
     /// Get the recommended model for a given cost tier
@@ -1198,7 +1200,6 @@ struct ShellStepConfig: Codable {
 
         // Remove null bytes (can break C-based tools)
         result = result.replacingOccurrences(of: "\0", with: "")
-
         // Limit length to prevent DoS via massive inputs
         let maxLength = 500_000 // 500KB reasonable for transcript + LLM output
         if result.count > maxLength {
@@ -1535,7 +1536,9 @@ struct SaveFileStepConfig: Codable {
                 return saved
             }
             // Default to ~/Documents/Talkie
-            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                return NSTemporaryDirectory() + "Talkie"
+            }
             return documents.appendingPathComponent("Talkie").path
         }
         set {
@@ -2115,7 +2118,7 @@ class WorkflowManager: ObservableObject {
         }
 
         if added > 0 {
-            print("[WorkflowManager] Added \(added) starter workflows from TWF")
+            logger.debug("[WorkflowManager] Added \(added) starter workflows from TWF")
             saveWorkflows()
         }
     }
@@ -2148,7 +2151,7 @@ class WorkflowManager: ObservableObject {
             }
         }
 
-        print("[WorkflowManager] Reloaded \(starterWorkflows.count) starter workflows from TWF")
+        logger.debug("[WorkflowManager] Reloaded \(starterWorkflows.count) starter workflows from TWF")
         saveWorkflows()
     }
 }

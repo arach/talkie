@@ -11,8 +11,7 @@ import AppKit
 import UserNotifications
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "WorkflowExecutor")
-
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "WorkflowExecutor")
 // MARK: - Workflow Execution Context
 
 struct WorkflowContext {
@@ -154,8 +153,7 @@ class WorkflowExecutor: ObservableObject {
             setProcessingState(for: action, memo: memo, isProcessing: false)
             try? context.save()
 
-            print("✅ \(action.rawValue) completed successfully")
-
+            logger.debug("✅ \(action.rawValue) completed successfully")
         } catch {
             // Clear processing state on error
             setProcessingState(for: action, memo: memo, isProcessing: false)
@@ -207,7 +205,6 @@ class WorkflowExecutor: ObservableObject {
 
         // Log workflow start to console
         await SystemEventManager.shared.log(.workflow, "Starting: \(workflow.name)", detail: "Memo: \(memo.title ?? "Untitled")")
-
         // Register with pending actions manager
         let pendingActionId = PendingActionsManager.shared.startAction(
             workflowId: workflow.id,
@@ -219,10 +216,8 @@ class WorkflowExecutor: ObservableObject {
         )
 
         logger.info("🔄 Starting workflow loop with \(workflow.steps.count) steps")
-
         for (index, step) in workflow.steps.enumerated() {
             logger.info("🔄 Processing step \(index + 1)/\(workflow.steps.count): \(step.type.rawValue)")
-
             guard step.isEnabled else {
                 await SystemEventManager.shared.log(.workflow, "Skipping step \(index + 1) (disabled)", detail: workflow.name)
                 logger.info("⏭️ Step \(index + 1) is disabled, skipping")
@@ -293,7 +288,6 @@ class WorkflowExecutor: ObservableObject {
             }
             workflowContext.outputs[step.outputKey] = output
             logger.info("💾 Saved output to key '\(step.outputKey)'")
-
             // Record step execution
             stepExecutions.append(StepExecution(
                 stepNumber: index + 1,
@@ -309,12 +303,10 @@ class WorkflowExecutor: ObservableObject {
         }
 
         logger.info("🏁 Workflow loop finished, executed \(stepExecutions.count) steps")
-
         // Mark pending action as completed
         PendingActionsManager.shared.completeAction(id: pendingActionId)
 
         await SystemEventManager.shared.log(.workflow, "Completed: \(workflow.name)", detail: "\(workflow.steps.count) steps")
-
         // Save workflow run to Core Data
         let finalOutput = workflowContext.outputs.values.joined(separator: "\n\n---\n\n")
         saveWorkflowRun(
@@ -372,9 +364,9 @@ class WorkflowExecutor: ObservableObject {
 
             do {
                 try context.save()
-                print("💾 Saved workflow run: \(workflow.name)")
+                logger.debug("💾 Saved workflow run: \(workflow.name)")
             } catch {
-                print("❌ Failed to save workflow run: \(error)")
+                logger.debug("❌ Failed to save workflow run: \(error)")
             }
         }
     }
@@ -463,7 +455,6 @@ class WorkflowExecutor: ObservableObject {
 
         logger.info("🤖 LLM Step: Using \(resolved.provider.displayName) / \(resolved.modelId) (tier: \(config.costTier?.rawValue ?? self.settings.llmCostTier.rawValue))")
         await SystemEventManager.shared.log(.workflow, "LLM generating", detail: "\(resolved.provider.displayName) / \(resolved.modelId)")
-
         let resolvedPrompt = context.resolve(config.prompt)
         let systemPrompt = config.systemPrompt.map { context.resolve($0) }
 
@@ -482,7 +473,6 @@ class WorkflowExecutor: ObservableObject {
         }
 
         logger.info("🤖 LLM: Starting generation (prompt: \(fullPrompt.prefix(100))...)")
-
         do {
             let result = try await provider.generate(
                 prompt: fullPrompt,
@@ -523,7 +513,7 @@ class WorkflowExecutor: ObservableObject {
         let validation = config.validate()
         if !validation.valid {
             let errorMessage = validation.errors.joined(separator: "; ")
-            print("🚫 Shell step blocked: \(errorMessage)")
+            logger.debug("🚫 Shell step blocked: \(errorMessage)")
             throw WorkflowError.executionFailed("Security validation failed: \(errorMessage)")
         }
 
@@ -532,8 +522,7 @@ class WorkflowExecutor: ObservableObject {
             throw WorkflowError.executionFailed("Executable not found: \(config.executable)")
         }
 
-        print("🖥️ Executing shell command: \(config.executable)")
-
+        logger.debug("🖥️ Executing shell command: \(config.executable)")
         // Resolve template variables and sanitize dynamic content
         var resolvedArgs = config.arguments.map { arg in
             let resolved = context.resolve(arg)
@@ -542,7 +531,7 @@ class WorkflowExecutor: ObservableObject {
             // Check for injection attempts (log but don't block)
             let warnings = ShellStepConfig.detectInjectionAttempts(sanitized)
             for warning in warnings {
-                print("⚠️ Injection warning in argument: \(warning)")
+                logger.debug("⚠️ Injection warning in argument: \(warning)")
             }
 
             return sanitized
@@ -556,13 +545,13 @@ class WorkflowExecutor: ObservableObject {
             // Check for injection attempts
             let warnings = ShellStepConfig.detectInjectionAttempts(sanitizedPrompt)
             for warning in warnings {
-                print("⚠️ Injection warning in prompt template: \(warning)")
+                logger.debug("⚠️ Injection warning in prompt template: \(warning)")
             }
 
             // Add -p flag and the prompt as arguments
             resolvedArgs.append("-p")
             resolvedArgs.append(sanitizedPrompt)
-            print("   Prompt template resolved (\(sanitizedPrompt.count) chars)")
+            logger.debug("Prompt template resolved (\(sanitizedPrompt.count) chars)")
         }
 
         // Resolve stdin if provided
@@ -573,7 +562,7 @@ class WorkflowExecutor: ObservableObject {
             // Check for injection attempts
             let warnings = ShellStepConfig.detectInjectionAttempts(sanitized)
             for warning in warnings {
-                print("⚠️ Injection warning in stdin: \(warning)")
+                logger.debug("⚠️ Injection warning in stdin: \(warning)")
             }
 
             return sanitized
@@ -586,10 +575,9 @@ class WorkflowExecutor: ObservableObject {
                 arg.contains(" ") ? "\"\(arg)\"" : arg
             }
             .joined(separator: " ")
-
-        print("   Command: \(commandDisplay)")
+        logger.debug("Command: \(commandDisplay)")
         if let stdin = resolvedStdin {
-            print("   Stdin length: \(stdin.count) chars")
+            logger.debug("Stdin length: \(stdin.count) chars")
         }
 
         // Create process
@@ -669,9 +657,9 @@ class WorkflowExecutor: ObservableObject {
 
                     // Check exit status
                     if process.terminationStatus != 0 {
-                        print("⚠️ Command exited with status: \(process.terminationStatus)")
+                        logger.debug("⚠️ Command exited with status: \(process.terminationStatus)")
                         if !stderr.isEmpty {
-                            print("   Stderr: \(stderr.prefix(500))")
+                            logger.debug("Stderr: \(stderr.prefix(500))")
                         }
                         // Still return output but note the error
                         if config.captureStderr && !stderr.isEmpty {
@@ -716,7 +704,6 @@ class WorkflowExecutor: ObservableObject {
             request.setValue(value, forHTTPHeaderField: key)
         }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
         // Build body
         var body: [String: Any] = [:]
 
@@ -827,12 +814,11 @@ class WorkflowExecutor: ObservableObject {
             resolvedBody = resolvedBody.replacingOccurrences(of: "{{WORKFLOW_NAME}}", with: workflowName)
         }
 
-        print("📱 [iOS Push] Creating push notification record...")
-        print("📱 [iOS Push]   Title: \(resolvedTitle)")
-        print("📱 [iOS Push]   Body: \(resolvedBody)")
-        print("📱 [iOS Push]   Memo: \(memo.title ?? "Untitled") (ID: \(memo.id?.uuidString.prefix(8) ?? "nil")...)")
-        print("📱 [iOS Push]   Sound: \(config.sound ? "enabled" : "disabled")")
-
+        logger.debug("📱 [iOS Push] Creating push notification record...")
+        logger.debug("📱 [iOS Push]   Title: \(resolvedTitle)")
+        logger.debug("📱 [iOS Push]   Body: \(resolvedBody)")
+        logger.debug("📱 [iOS Push]   Memo: \(memo.title ?? "Untitled") (ID: \(memo.id?.uuidString.prefix(8) ?? "nil")...)")
+        logger.debug("📱 [iOS Push]   Sound: \(config.sound ? "enabled" : "disabled")")
         // Create PushNotification record in Core Data
         // This will sync to CloudKit and trigger the iOS CKQuerySubscription
         return try await coreDataContext.perform {
@@ -853,9 +839,8 @@ class WorkflowExecutor: ObservableObject {
             }
 
             try coreDataContext.save()
-            print("📱 [iOS Push] ✅ Record saved to Core Data (ID: \(notificationId.uuidString.prefix(8))...)")
-            print("📱 [iOS Push]   → Will sync to CloudKit → APNs → iOS device")
-
+            logger.debug("📱 [iOS Push] ✅ Record saved to Core Data (ID: \(notificationId.uuidString.prefix(8))...)")
+            logger.debug("📱 [iOS Push]   → Will sync to CloudKit → APNs → iOS device")
             return "Push notification queued for iOS"
         }
     }
@@ -869,25 +854,26 @@ class WorkflowExecutor: ObservableObject {
             body += "\n\n---\n\nTranscript:\n\(context.transcript)"
         }
 
-        print("📝 Creating Apple Note:")
-        print("   Title: \(title)")
-        print("   Body length: \(body.count) chars")
-        print("   Body preview: \(String(body.prefix(100)))...")
-
+        logger.debug("📝 Creating Apple Note:")
+        logger.debug("Title: \(title)")
+        logger.debug("Body length: \(body.count) chars")
+        logger.debug("Body preview: \(String(body.prefix(100)))...")
         // Convert body to HTML for better formatting in Notes
         let htmlBody = body
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\n", with: "<br>")
-
         // Build the AppleScript with proper escaping
-        let escapedTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
+        let escapedTitle = title
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
         let escapedHtmlBody = htmlBody.replacingOccurrences(of: "\"", with: "&quot;")
-
         let script: String
         if let folder = config.folderName {
-            let escapedFolder = folder.replacingOccurrences(of: "\"", with: "\\\"")
+            let escapedFolder = folder
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
             script = """
             tell application "Notes"
                 activate
@@ -908,17 +894,15 @@ class WorkflowExecutor: ObservableObject {
             """
         }
 
-        print("📝 AppleScript:\n\(script)")
-
+        logger.debug("📝 AppleScript:\n\(script)")
         var error: NSDictionary?
         if let appleScript = NSAppleScript(source: script) {
             let result = appleScript.executeAndReturnError(&error)
             if let error = error {
                 let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
                 let errorNumber = error[NSAppleScript.errorNumber] as? Int ?? 0
-                print("❌ AppleScript error (\(errorNumber)): \(errorMessage)")
-                print("❌ Full error: \(error)")
-
+                logger.debug("❌ AppleScript error (\(errorNumber)): \(errorMessage)")
+                logger.debug("❌ Full error: \(error)")
                 if errorNumber == -1743 {
                     throw WorkflowError.executionFailed("Permission denied. Go to System Settings > Privacy & Security > Automation and enable Notes for Talkie")
                 }
@@ -927,10 +911,10 @@ class WorkflowExecutor: ObservableObject {
                 }
                 throw WorkflowError.executionFailed("Apple Notes error: \(errorMessage)")
             }
-            print("✅ AppleScript result: \(result.stringValue ?? "nil")")
-            print("✅ Note should be created in Notes app")
+            logger.debug("✅ AppleScript result: \(result.stringValue ?? "nil")")
+            logger.debug("✅ Note should be created in Notes app")
         } else {
-            print("❌ Failed to compile AppleScript")
+            logger.debug("❌ Failed to compile AppleScript")
             throw WorkflowError.executionFailed("Failed to create AppleScript")
         }
 
@@ -942,14 +926,21 @@ class WorkflowExecutor: ObservableObject {
         let title = context.resolve(config.title)
         let notes = config.notes.map { context.resolve($0) }
 
-        // Build AppleScript
-        var properties = ["name:\"\(title)\""]
-
-        if let notes = notes {
-            properties.append("body:\"\(notes.replacingOccurrences(of: "\"", with: "\\\""))\"")
+        // Helper for AppleScript escaping
+        func escapeForAppleScript(_ text: String) -> String {
+            text.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
         }
 
-        let listClause = config.listName.map { "of list \"\($0)\"" } ?? ""
+        // Build AppleScript
+        let escapedTitle = escapeForAppleScript(title)
+        var properties = ["name:\"\(escapedTitle)\""]
+
+        if let notes = notes {
+            properties.append("body:\"\(escapeForAppleScript(notes))\"")
+        }
+
+        let listClause = config.listName.map { "of list \"\(escapeForAppleScript($0))\"" } ?? ""
 
         let script = """
         tell application "Reminders"
@@ -1033,43 +1024,40 @@ class WorkflowExecutor: ObservableObject {
         var resolvedFilename = context.resolve(config.filename)
         let content = context.resolve(config.content)
 
-        print("📁 Save File Step:")
-        print("   Config directory: \(config.directory ?? "nil")")
-        print("   Config filename: \(config.filename)")
-        print("   Resolved filename: \(resolvedFilename)")
-
+        logger.debug("📁 Save File Step:")
+        logger.debug("Config directory: \(config.directory ?? "nil")")
+        logger.debug("Config filename: \(config.filename)")
+        logger.debug("Resolved filename: \(resolvedFilename)")
         var directory: URL
 
         // Check if filename contains an @alias (e.g., "@Obsidian/notes.md")
         if resolvedFilename.hasPrefix("@") {
             // Extract alias and path components
             let aliasResolved = SaveFileStepConfig.resolvePathAlias(resolvedFilename)
-            print("   Filename contains @alias, resolved to: \(aliasResolved)")
-
+            logger.debug("Filename contains @alias, resolved to: \(aliasResolved)")
             // Split into directory and filename
             let url = URL(fileURLWithPath: aliasResolved)
             directory = url.deletingLastPathComponent()
             resolvedFilename = url.lastPathComponent
-            print("   Split into dir: \(directory.path), file: \(resolvedFilename)")
+            logger.debug("Split into dir: \(directory.path), file: \(resolvedFilename)")
         } else if let customDir = config.directory, !customDir.isEmpty {
             // Resolve template variables first, then resolve @aliases
             let resolvedDir = context.resolve(customDir)
             let aliasResolved = SaveFileStepConfig.resolvePathAlias(resolvedDir)
-            print("   Resolved dir: \(resolvedDir)")
-            print("   After alias resolution: \(aliasResolved)")
+            logger.debug("Resolved dir: \(resolvedDir)")
+            logger.debug("After alias resolution: \(aliasResolved)")
             directory = URL(fileURLWithPath: aliasResolved)
         } else {
             // Use the default output directory from settings
-            print("   Using default directory: \(SaveFileStepConfig.defaultOutputDirectory)")
+            logger.debug("Using default directory: \(SaveFileStepConfig.defaultOutputDirectory)")
             directory = URL(fileURLWithPath: SaveFileStepConfig.defaultOutputDirectory)
         }
 
-        print("   Known aliases: \(SaveFileStepConfig.pathAliases)")
-
+        logger.debug("Known aliases: \(SaveFileStepConfig.pathAliases)")
         // Ensure directory exists
         if !FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            print("   Created directory: \(directory.path)")
+            logger.debug("Created directory: \(directory.path)")
         }
 
         let fileURL = directory.appendingPathComponent(resolvedFilename)
@@ -1077,10 +1065,10 @@ class WorkflowExecutor: ObservableObject {
         if config.appendIfExists && FileManager.default.fileExists(atPath: fileURL.path) {
             let existingContent = try String(contentsOf: fileURL, encoding: .utf8)
             try (existingContent + "\n" + content).write(to: fileURL, atomically: true, encoding: .utf8)
-            print("📁 Appended to file: \(fileURL.path)")
+            logger.debug("📁 Appended to file: \(fileURL.path)")
         } else {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("📁 Saved file: \(fileURL.path)")
+            logger.debug("📁 Saved file: \(fileURL.path)")
         }
 
         return "Saved to: \(fileURL.path)"
@@ -1111,7 +1099,6 @@ class WorkflowExecutor: ObservableObject {
                 .map { $0.trimmingCharacters(in: CharacterSet.whitespaces) }
                 .filter { !$0.isEmpty }
             return lines.map { "• \($0)" }.joined(separator: "\n")
-
         case .formatMarkdown:
             // Basic markdown formatting (already in markdown usually)
             return input
@@ -1146,7 +1133,6 @@ class WorkflowExecutor: ObservableObject {
     // MARK: - Transcribe Step Execution
     private func executeTranscribeStep(_ config: TranscribeStepConfig, memo: VoiceMemo, context: WorkflowContext) async throws -> String {
         logger.info("Executing transcribe step with model: \(config.model)")
-
         // Check if memo already has a transcript and we're not overwriting
         if let existingTranscript = memo.currentTranscript, !existingTranscript.isEmpty, !config.overwriteExisting {
             logger.info("Memo already has transcript, skipping transcription (overwriteExisting=false)")
@@ -1159,7 +1145,6 @@ class WorkflowExecutor: ObservableObject {
         }
 
         logger.info("Transcribing audio (\(audioData.count) bytes)")
-
         // Use Apple Speech for "apple_speech" model, Whisper for others
         if config.model == "apple_speech" {
             return try await transcribeWithAppleSpeech(audioData: audioData, memo: memo, config: config)
@@ -1171,7 +1156,6 @@ class WorkflowExecutor: ObservableObject {
     /// Transcribe using Apple Speech (no download required)
     private func transcribeWithAppleSpeech(audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
         await SystemEventManager.shared.log(.workflow, "Transcribing with Apple Speech", detail: "On-device, no download")
-
         do {
             let transcript = try await AppleSpeechService.shared.transcribe(audioData: audioData)
 
@@ -1190,7 +1174,6 @@ class WorkflowExecutor: ObservableObject {
 
             logger.info("Apple Speech transcription complete: \(transcript.prefix(100))...")
             await SystemEventManager.shared.log(.workflow, "Transcription complete", detail: "\(transcript.count) characters")
-
             return transcript
         } catch {
             logger.error("Apple Speech transcription failed: \(error.localizedDescription)")
@@ -1201,7 +1184,6 @@ class WorkflowExecutor: ObservableObject {
     /// Transcribe using Whisper (requires model download)
     private func transcribeWithWhisper(audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
         await SystemEventManager.shared.log(.workflow, "Transcribing with Whisper", detail: "Model: \(config.model)")
-
         // Convert model string to WhisperModel enum
         let whisperModel: WhisperModel
         switch config.model {
@@ -1235,7 +1217,6 @@ class WorkflowExecutor: ObservableObject {
 
             logger.info("Whisper transcription complete: \(transcript.prefix(100))...")
             await SystemEventManager.shared.log(.workflow, "Transcription complete", detail: "\(transcript.count) characters")
-
             return transcript
         } catch {
             logger.error("Whisper transcription failed: \(error.localizedDescription)")
@@ -1247,7 +1228,6 @@ class WorkflowExecutor: ObservableObject {
 
     private func executeSpeakStep(_ config: SpeakStepConfig, memo: VoiceMemo, context: WorkflowContext) async throws -> String {
         logger.info("Executing speak step (Walkie-Talkie mode) with provider: \(config.provider.rawValue)")
-
         // Resolve text with variables
         let textToSpeak = context.resolve(config.text)
 
@@ -1257,10 +1237,11 @@ class WorkflowExecutor: ObservableObject {
         }
 
         await SystemEventManager.shared.log(.workflow, "Speaking response", detail: "\(textToSpeak.prefix(50))...")
-
         // Generate audio file path
         let fileManager = FileManager.default
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            throw WorkflowError.executionFailed("Cannot access documents directory")
+        }
         let audioDir = documentsURL.appendingPathComponent("TalkieAudio")
         try? fileManager.createDirectory(at: audioDir, withIntermediateDirectories: true)
 
@@ -1321,7 +1302,6 @@ class WorkflowExecutor: ObservableObject {
         if config.uploadToWalkie, let fileURL = audioFileURL {
             let memoId = memo.id?.uuidString ?? UUID().uuidString
             logger.info("📤 Uploading Walkie for memo: \(memoId)")
-
             do {
                 let walkieId = try await WalkieService.shared.uploadWalkie(
                     audioURL: fileURL,
@@ -1338,7 +1318,6 @@ class WorkflowExecutor: ObservableObject {
 
         logger.info("🔊 Speak step complete")
         await SystemEventManager.shared.log(.workflow, "Speak complete", detail: "Walkie-Talkie reply delivered")
-
         return textToSpeak
     }
 
@@ -1371,7 +1350,6 @@ class WorkflowExecutor: ObservableObject {
         outputURL: URL
     ) async throws -> URL? {
         logger.info("🗣️ Generating audio with SpeakEasy (provider: \(provider.rawValue))")
-
         // Build SpeakEasy command
         var args: [String] = []
 
@@ -1410,7 +1388,6 @@ class WorkflowExecutor: ObservableObject {
         // Silent mode - don't play audio, just generate the file
         // We'll handle playback ourselves for better UI control
         args.append("--silent")
-
         // Caching
         if useCache {
             args.append("--cache")
@@ -1427,7 +1404,6 @@ class WorkflowExecutor: ObservableObject {
         logger.info("🗣️ Node path: \(nodePath)")
         logger.info("🗣️ SpeakEasy script: \(speakeasyScript)")
         logger.info("🗣️ Output URL: \(outputURL.path)")
-
         // Verify files exist
         guard FileManager.default.fileExists(atPath: nodePath) else {
             logger.error("🗣️ Node not found at: \(nodePath)")
@@ -1456,7 +1432,6 @@ class WorkflowExecutor: ObservableObject {
 
         let commandPreview = "node speakeasy-cli.js " + args.map { $0.contains(" ") ? "\"\($0.prefix(50))...\"" : $0 }.joined(separator: " ")
         logger.info("🗣️ Running: \(commandPreview)")
-
         do {
             try process.run()
             process.waitUntilExit()  // Fast with --silent (no playback)
@@ -1753,7 +1728,6 @@ class WorkflowExecutor: ObservableObject {
         let provider = resolved.provider
         let modelId = resolved.modelId
         logger.info("Intent extraction using \(provider.name) with model \(modelId)")
-
         do {
             let response = try await provider.generate(
                 prompt: prompt,
@@ -1778,7 +1752,6 @@ class WorkflowExecutor: ObservableObject {
             guard trimmed.lowercased().hasPrefix("action:") else { continue }
 
             let parts = trimmed.components(separatedBy: "|")
-
             if let actionPart = parts.first {
                 let action = actionPart
                     .replacingOccurrences(of: "ACTION:", with: "", options: .caseInsensitive)
@@ -1834,11 +1807,9 @@ class WorkflowExecutor: ObservableObject {
         coreDataContext: NSManagedObjectContext
     ) async throws -> String {
         logger.info("📋 executeWorkflowsStep started")
-
         // Get intents from previous step
         let intentsJson = context.resolve(config.intentsKey)
         logger.info("📋 Resolved intents JSON length: \(intentsJson.count) chars")
-
         guard let data = intentsJson.data(using: .utf8),
               let intents = try? JSONDecoder().decode([ExtractedIntent].self, from: data) else {
             logger.warning("📋 Failed to decode intents JSON: \(intentsJson.prefix(200))")
@@ -1846,13 +1817,11 @@ class WorkflowExecutor: ObservableObject {
         }
 
         logger.info("📋 Decoded \(intents.count) intents")
-
         var results: [String] = []
         var errors: [String] = []
 
         for intent in intents {
             logger.info("📋 Processing intent: \(intent.action)")
-
             // Check if this intent is configured for "detect only" (no execution)
             if intent.workflowId == IntentDefinition.doNothingId {
                 logger.info("📋 Intent '\(intent.action)' detected (detect only mode)")
@@ -1966,11 +1935,11 @@ class WorkflowExecutor: ObservableObject {
             if let data = result.output.data(using: .utf8),
                let tasks = try? JSONDecoder().decode([TaskItem].self, from: data) {
                 memo.tasks = result.output // Store raw JSON
-                print("📋 Extracted \(tasks.count) tasks")
+                logger.debug("📋 Extracted \(tasks.count) tasks")
             } else {
                 // Fallback: store as plain text if JSON parsing fails
                 memo.tasks = result.output
-                print("⚠️ Could not parse tasks as JSON, storing as text")
+                logger.debug("⚠️ Could not parse tasks as JSON, storing as text")
             }
 
         case .reminders:
@@ -1978,11 +1947,11 @@ class WorkflowExecutor: ObservableObject {
             if let data = result.output.data(using: .utf8),
                let reminders = try? JSONDecoder().decode([ReminderItem].self, from: data) {
                 memo.reminders = result.output // Store raw JSON
-                print("🔔 Extracted \(reminders.count) reminders")
+                logger.debug("🔔 Extracted \(reminders.count) reminders")
             } else {
                 // Fallback: store as plain text if JSON parsing fails
                 memo.reminders = result.output
-                print("⚠️ Could not parse reminders as JSON, storing as text")
+                logger.debug("⚠️ Could not parse reminders as JSON, storing as text")
             }
 
         case .keyInsights:
@@ -1990,7 +1959,7 @@ class WorkflowExecutor: ObservableObject {
             if let data = result.output.data(using: .utf8),
                let insights = try? JSONDecoder().decode([String].self, from: data) {
                 memo.summary = insights.joined(separator: "\n\n") // Store in summary field
-                print("💡 Extracted \(insights.count) insights")
+                logger.debug("💡 Extracted \(insights.count) insights")
             } else {
                 memo.summary = result.output
             }

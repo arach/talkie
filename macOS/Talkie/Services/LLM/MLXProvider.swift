@@ -9,7 +9,9 @@ import Foundation
 import MLXLMCommon
 import MLX
 import MLXLLM
+import os
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLM")
 #if arch(arm64)
 
 class MLXProvider: LLMProvider {
@@ -124,7 +126,7 @@ class MLXModelManager: ObservableObject {
     /// Refresh the cached installed models state
     func refreshInstalledModels() {
         installedModelIds = Set(catalogModelIds.filter { checkModelExists(id: $0) })
-        print("[MLX] Refreshed installed models: \(installedModelIds)")
+        logger.debug("[MLX] Refreshed installed models: \(self.installedModelIds)")
     }
 
     private func createModelsDirectoryIfNeeded() {
@@ -190,13 +192,13 @@ class MLXModelManager: ObservableObject {
 
         // Unload previous model to free memory
         if loadedContainer != nil {
-            print("🔄 Unloading previous model...")
+            logger.debug("🔄 Unloading previous model...")
             loadedContainer = nil
             loadedModelId = nil
             MLX.GPU.clearCache()
         }
 
-        print("⏳ Loading model: \(id)...")
+        logger.debug("⏳ Loading model: \(id)...")
         let startTime = Date()
 
         isLoading = true
@@ -212,8 +214,7 @@ class MLXModelManager: ObservableObject {
             }
 
             let elapsed = Date().timeIntervalSince(startTime)
-            print("✅ Model loaded in \(String(format: "%.1f", elapsed))s")
-
+            logger.debug("✅ Model loaded in \(String(format: "%.1f", elapsed))s")
             loadedContainer = container
             loadedModelId = id
             isLoading = false
@@ -222,14 +223,13 @@ class MLXModelManager: ObservableObject {
             return container
         } catch {
             isLoading = false
-            print("❌ Failed to load model: \(error)")
+            logger.debug("❌ Failed to load model: \(error)")
             throw LLMError.modelNotFound("Failed to load model \(id): \(error.localizedDescription)")
         }
     }
 
     func downloadModel(id: String, progress: @escaping (Double) -> Void) async throws {
-        print("📥 Starting download for model: \(id)")
-
+        logger.debug("📥 Starting download for model: \(id)")
         // Use MLXLLM's built-in download via loadModelContainer
         // This will download from HuggingFace Hub
         do {
@@ -239,9 +239,9 @@ class MLXModelManager: ObservableObject {
 
             progress(1.0)
             installedModelIds.insert(id) // Update cached state
-            print("✅ Successfully downloaded model: \(id)")
+            logger.debug("✅ Successfully downloaded model: \(id)")
         } catch {
-            print("❌ Failed to download model: \(error)")
+            logger.debug("❌ Failed to download model: \(error)")
             throw error
         }
     }
@@ -277,7 +277,7 @@ class MLXModelManager: ObservableObject {
             MLX.GPU.clearCache()
         }
 
-        print("🗑️ Deleted model: \(id)")
+        logger.debug("🗑️ Deleted model: \(id)")
     }
 
     private func modelPath(for id: String) -> URL {

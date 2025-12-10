@@ -12,7 +12,7 @@ import Foundation
 import CoreData
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "AutoRunProcessor")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "AutoRunProcessor")
 
 // MARK: - Auto-Run Processor
 

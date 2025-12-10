@@ -15,7 +15,7 @@ import Foundation
 import CloudKit
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "Walkie")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Walkie")
 
 // MARK: - Walkie Model
 
@@ -261,8 +261,10 @@ class WalkieService: ObservableObject {
         }
 
         // Copy to cache directory
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("Walkies", isDirectory: true)
+        guard let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            throw WalkieError.noAudioData
+        }
+        let cacheDir = cachesURL.appendingPathComponent("Walkies", isDirectory: true)
         try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
 
         let localURL = cacheDir.appendingPathComponent("\(walkie.id).caf")
@@ -317,8 +319,11 @@ class WalkieService: ObservableObject {
 
     /// Clean local cache (called on app termination or memory pressure)
     func cleanLocalCache() {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("Walkies", isDirectory: true)
+        guard let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            walkieCache.removeAll()
+            return
+        }
+        let cacheDir = cachesURL.appendingPathComponent("Walkies", isDirectory: true)
 
         try? FileManager.default.removeItem(at: cacheDir)
         walkieCache.removeAll()

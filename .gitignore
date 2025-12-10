@@ -68,3 +68,6 @@ logs/
 Installer/staging/
 Installer/packages/
 Installer/*.pkg
+
+# Archived code
+_archive/

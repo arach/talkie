@@ -6,7 +6,9 @@
 //
 
 import Foundation
+import os
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLM")
 // LLMProvider protocol and types imported from iOS/talkie/Services/LLMProvider.swift
 // (automatically included via file system synchronized groups)
 
@@ -90,7 +92,6 @@ class GeminiProvider: LLMProvider {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
         let requestBody: [String: Any] = [
             "contents": [
                 [
@@ -117,7 +118,7 @@ class GeminiProvider: LLMProvider {
 
         guard (200...299).contains(httpResponse.statusCode) else {
             if let errorBody = String(data: data, encoding: .utf8) {
-                print("❌ Gemini API error: \(errorBody)")
+                logger.debug("❌ Gemini API error: \(errorBody)")
             }
             throw LLMError.generationFailed("API error: \(httpResponse.statusCode)")
         }

@@ -6,7 +6,9 @@
 //
 
 import SwiftUI
+import os
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Notifications
 
 extension NSNotification.Name {
@@ -544,15 +546,14 @@ struct ModelsContentView: View {
     // MARK: - Whisper Actions
 
     private func downloadWhisperModel(_ model: WhisperModel) {
-        print("[Whisper] Download button clicked for: \(model.displayName)")
-
+        logger.debug("[Whisper] Download button clicked for: \(model.displayName)")
         #if arch(arm64)
         guard !whisperService.isModelDownloaded(model) else {
-            print("[Whisper] Model already downloaded: \(model.displayName)")
+            logger.debug("[Whisper] Model already downloaded: \(model.displayName)")
             return
         }
 
-        print("[Whisper] Starting download for: \(model.rawValue)")
+        logger.debug("[Whisper] Starting download for: \(model.rawValue)")
         downloadingWhisperModel = model
 
         whisperDownloadTask = Task {
@@ -562,23 +563,23 @@ struct ModelsContentView: View {
                     downloadingWhisperModel = nil
                     whisperDownloadTask = nil
                 }
-                print("[Whisper] Downloaded: \(model.displayName)")
+                logger.debug("[Whisper] Downloaded: \(model.displayName)")
             } catch is CancellationError {
                 await MainActor.run {
                     downloadingWhisperModel = nil
                     whisperDownloadTask = nil
                 }
-                print("[Whisper] Download cancelled")
+                logger.debug("[Whisper] Download cancelled")
             } catch {
                 await MainActor.run {
                     downloadingWhisperModel = nil
                     whisperDownloadTask = nil
                 }
-                print("[Whisper] Download failed: \(error)")
+                logger.debug("[Whisper] Download failed: \(error)")
             }
         }
         #else
-        print("[Whisper] Download requires Apple Silicon (arm64)")
+        logger.debug("[Whisper] Download requires Apple Silicon (arm64)")
         #endif
     }
 
@@ -592,9 +593,9 @@ struct ModelsContentView: View {
         #if arch(arm64)
         do {
             try whisperService.deleteModel(model)
-            print("[Whisper] Deleted: \(model.displayName)")
+            logger.debug("[Whisper] Deleted: \(model.displayName)")
         } catch {
-            print("[Whisper] Delete failed: \(error)")
+            logger.debug("[Whisper] Delete failed: \(error)")
         }
         #endif
     }
@@ -602,15 +603,14 @@ struct ModelsContentView: View {
     // MARK: - Parakeet Actions
 
     private func downloadParakeetModel(_ model: ParakeetModel) {
-        print("[Parakeet] Download button clicked for: \(model.displayName)")
-
+        logger.debug("[Parakeet] Download button clicked for: \(model.displayName)")
         #if arch(arm64)
         guard !parakeetService.isModelDownloaded(model) else {
-            print("[Parakeet] Model already downloaded: \(model.displayName)")
+            logger.debug("[Parakeet] Model already downloaded: \(model.displayName)")
             return
         }
 
-        print("[Parakeet] Starting download for: \(model.rawValue)")
+        logger.debug("[Parakeet] Starting download for: \(model.rawValue)")
         downloadingParakeetModel = model
 
         parakeetDownloadTask = Task {
@@ -620,23 +620,23 @@ struct ModelsContentView: View {
                     downloadingParakeetModel = nil
                     parakeetDownloadTask = nil
                 }
-                print("[Parakeet] Downloaded: \(model.displayName)")
+                logger.debug("[Parakeet] Downloaded: \(model.displayName)")
             } catch is CancellationError {
                 await MainActor.run {
                     downloadingParakeetModel = nil
                     parakeetDownloadTask = nil
                 }
-                print("[Parakeet] Download cancelled")
+                logger.debug("[Parakeet] Download cancelled")
             } catch {
                 await MainActor.run {
                     downloadingParakeetModel = nil
                     parakeetDownloadTask = nil
                 }
-                print("[Parakeet] Download failed: \(error)")
+                logger.debug("[Parakeet] Download failed: \(error)")
             }
         }
         #else
-        print("[Parakeet] Download requires Apple Silicon (arm64)")
+        logger.debug("[Parakeet] Download requires Apple Silicon (arm64)")
         #endif
     }
 
@@ -650,9 +650,9 @@ struct ModelsContentView: View {
         #if arch(arm64)
         do {
             try parakeetService.deleteModel(model)
-            print("[Parakeet] Deleted: \(model.displayName)")
+            logger.debug("[Parakeet] Deleted: \(model.displayName)")
         } catch {
-            print("[Parakeet] Delete failed: \(error)")
+            logger.debug("[Parakeet] Delete failed: \(error)")
         }
         #endif
     }
@@ -678,15 +678,15 @@ struct ModelsContentView: View {
                 await registry.refreshModels()
                 downloadingModelId = nil
                 downloadTask = nil
-                print("[MLX] Downloaded: \(model.displayName)")
+                logger.debug("[MLX] Downloaded: \(model.displayName)")
             } catch is CancellationError {
                 downloadingModelId = nil
                 downloadTask = nil
-                print("[MLX] Download cancelled")
+                logger.debug("[MLX] Download cancelled")
             } catch {
                 downloadingModelId = nil
                 downloadTask = nil
-                print("[MLX] Download failed: \(error)")
+                logger.debug("[MLX] Download failed: \(error)")
             }
         }
         #endif
@@ -708,9 +708,9 @@ struct ModelsContentView: View {
                 let manager = MLXModelManager.shared
                 try manager.deleteModel(id: model.id)
                 await registry.refreshModels()
-                print("[MLX] Deleted: \(model.displayName)")
+                logger.debug("[MLX] Deleted: \(model.displayName)")
             } catch {
-                print("[MLX] Delete failed: \(error)")
+                logger.debug("[MLX] Delete failed: \(error)")
             }
         }
         #endif
@@ -1684,7 +1684,6 @@ struct WhisperModelCard: View {
             // Specs grid with visual separators
             HStack(spacing: 0) {
                 specCell(label: "SIZE", value: modelSize, unit: "MB")
-
                 Spacer()
 
                 Rectangle()
@@ -1694,7 +1693,6 @@ struct WhisperModelCard: View {
                 Spacer()
 
                 specCell(label: "RTF", value: rtfRatio, unit: "x")
-
                 Spacer()
 
                 Rectangle()
@@ -2007,7 +2005,6 @@ struct ParakeetModelCard: View {
             // Specs grid with visual separators
             HStack(spacing: 0) {
                 specCell(label: "SIZE", value: modelSize, unit: "MB")
-
                 Spacer()
 
                 Rectangle()
@@ -2017,7 +2014,6 @@ struct ParakeetModelCard: View {
                 Spacer()
 
                 specCell(label: "RTF", value: rtfRatio, unit: "x")
-
                 Spacer()
 
                 Rectangle()

@@ -3,12 +3,16 @@
 //  Talkie macOS
 //
 //  Manages app settings stored in Core Data
+//  API keys are stored securely in macOS Keychain
 //
 
 import Foundation
 import CoreData
 import SwiftUI
 import AppKit
+import os
+
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Settings")
 
 // MARK: - Appearance Mode
 enum AppearanceMode: String, CaseIterable {
@@ -778,13 +782,17 @@ class SettingsManager: ObservableObject {
 
     /// Default transcripts folder: ~/Documents/Talkie/Transcripts
     static var defaultTranscriptsFolderPath: String {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return NSTemporaryDirectory() + "Talkie/Transcripts"
+        }
         return documentsPath.appendingPathComponent("Talkie/Transcripts").path
     }
 
     /// Default audio folder: ~/Documents/Talkie/Audio
     static var defaultAudioFolderPath: String {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return NSTemporaryDirectory() + "Talkie/Audio"
+        }
         return documentsPath.appendingPathComponent("Talkie/Audio").path
     }
 
@@ -866,32 +874,58 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    // Internal storage
+    // Internal storage - API keys now use Keychain (secure)
     @Published private var _geminiApiKey: String = ""
     @Published private var _openaiApiKey: String?
     @Published private var _anthropicApiKey: String?
     @Published private var _groqApiKey: String?
     @Published private var _selectedModel: String = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
 
+    private let keychain = KeychainManager.shared
+
     // Public accessors that ensure initialization
     var geminiApiKey: String {
         get { ensureInitialized(); return _geminiApiKey }
-        set { _geminiApiKey = newValue }
+        set {
+            _geminiApiKey = newValue
+            keychain.save(newValue, for: KeychainManager.Key.geminiApiKey)
+        }
     }
 
     var openaiApiKey: String? {
         get { ensureInitialized(); return _openaiApiKey }
-        set { _openaiApiKey = newValue }
+        set {
+            _openaiApiKey = newValue
+            if let value = newValue {
+                keychain.save(value, for: KeychainManager.Key.openaiApiKey)
+            } else {
+                keychain.delete(KeychainManager.Key.openaiApiKey)
+            }
+        }
     }
 
     var anthropicApiKey: String? {
         get { ensureInitialized(); return _anthropicApiKey }
-        set { _anthropicApiKey = newValue }
+        set {
+            _anthropicApiKey = newValue
+            if let value = newValue {
+                keychain.save(value, for: KeychainManager.Key.anthropicApiKey)
+            } else {
+                keychain.delete(KeychainManager.Key.anthropicApiKey)
+            }
+        }
     }
 
     var groqApiKey: String? {
         get { ensureInitialized(); return _groqApiKey }
-        set { _groqApiKey = newValue }
+        set {
+            _groqApiKey = newValue
+            if let value = newValue {
+                keychain.save(value, for: KeychainManager.Key.groqApiKey)
+            } else {
+                keychain.delete(KeychainManager.Key.groqApiKey)
+            }
+        }
     }
 
     var selectedModel: String {
@@ -1010,41 +1044,112 @@ class SettingsManager: ObservableObject {
     }
 
     private func performLoadSettings() {
+        // Load API keys from Keychain (secure storage)
+        let geminiFromKeychain = keychain.retrieve(for: KeychainManager.Key.geminiApiKey) ?? ""
+        let openaiFromKeychain = keychain.retrieve(for: KeychainManager.Key.openaiApiKey)
+        let anthropicFromKeychain = keychain.retrieve(for: KeychainManager.Key.anthropicApiKey)
+        let groqFromKeychain = keychain.retrieve(for: KeychainManager.Key.groqApiKey)
+
+        // Load non-sensitive settings from Core Data
         let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
 
         do {
             let results = try context.fetch(fetchRequest)
             if let settings = results.first {
-                // Store values locally first
-                let gemini = settings.geminiApiKey ?? ""
-                let openai = settings.openaiApiKey
-                let anthropic = settings.anthropicApiKey
-                let groq = settings.groqApiKey
                 let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
 
-                // Update @Published properties on main thread
-                // Always use async to avoid "publishing changes during view updates" warning
-                DispatchQueue.main.async {
-                    self._geminiApiKey = gemini
-                    self._openaiApiKey = openai
-                    self._anthropicApiKey = anthropic
-                    self._groqApiKey = groq
-                    self._selectedModel = model
-                }
+                // Check if we need to migrate API keys from Core Data to Keychain
+                let hasCoreDataKeys = (settings.geminiApiKey != nil && !settings.geminiApiKey!.isEmpty) ||
+                                      (settings.openaiApiKey != nil && !settings.openaiApiKey!.isEmpty) ||
+                                      (settings.anthropicApiKey != nil && !settings.anthropicApiKey!.isEmpty) ||
+                                      (settings.groqApiKey != nil && !settings.groqApiKey!.isEmpty)
 
-                // Settings loaded silently - API key status visible in Models UI
+                if hasCoreDataKeys {
+                    // Migrate from Core Data to Keychain
+                    keychain.migrateFromCoreData(
+                        geminiKey: settings.geminiApiKey,
+                        openaiKey: settings.openaiApiKey,
+                        anthropicKey: settings.anthropicApiKey,
+                        groqKey: settings.groqApiKey
+                    ) { [weak self] in
+                        // Clear API keys from Core Data after migration
+                        self?.clearApiKeysFromCoreData()
+                    }
+
+                    // Use migrated values
+                    let gemini = keychain.retrieve(for: KeychainManager.Key.geminiApiKey) ?? ""
+                    let openai = keychain.retrieve(for: KeychainManager.Key.openaiApiKey)
+                    let anthropic = keychain.retrieve(for: KeychainManager.Key.anthropicApiKey)
+                    let groq = keychain.retrieve(for: KeychainManager.Key.groqApiKey)
+
+                    DispatchQueue.main.async {
+                        self._geminiApiKey = gemini
+                        self._openaiApiKey = openai
+                        self._anthropicApiKey = anthropic
+                        self._groqApiKey = groq
+                        self._selectedModel = model
+                    }
+                } else {
+                    // Use Keychain values directly
+                    DispatchQueue.main.async {
+                        self._geminiApiKey = geminiFromKeychain
+                        self._openaiApiKey = openaiFromKeychain
+                        self._anthropicApiKey = anthropicFromKeychain
+                        self._groqApiKey = groqFromKeychain
+                        self._selectedModel = model
+                    }
+                }
             } else {
-                print("⚠️ No settings found in Core Data, creating defaults...")
+                logger.info("No settings found in Core Data, creating defaults")
                 createDefaultSettings()
+
+                // Still load from Keychain if available
+                DispatchQueue.main.async {
+                    self._geminiApiKey = geminiFromKeychain
+                    self._openaiApiKey = openaiFromKeychain
+                    self._anthropicApiKey = anthropicFromKeychain
+                    self._groqApiKey = groqFromKeychain
+                }
             }
         } catch {
-            print("❌ Failed to load settings: \(error)")
+            logger.error("Failed to load settings: \(error.localizedDescription)")
+
+            // Fall back to Keychain values on error
+            DispatchQueue.main.async {
+                self._geminiApiKey = geminiFromKeychain
+                self._openaiApiKey = openaiFromKeychain
+                self._anthropicApiKey = anthropicFromKeychain
+                self._groqApiKey = groqFromKeychain
+            }
+        }
+    }
+
+    /// Clear API keys from Core Data after migration to Keychain
+    private func clearApiKeysFromCoreData() {
+        let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
+
+        do {
+            let results = try context.fetch(fetchRequest)
+            if let settings = results.first {
+                settings.geminiApiKey = nil
+                settings.openaiApiKey = nil
+                settings.anthropicApiKey = nil
+                settings.groqApiKey = nil
+                settings.lastModified = Date()
+                try context.save()
+                logger.info("Cleared API keys from Core Data (migrated to Keychain)")
+            }
+        } catch {
+            logger.error("Failed to clear API keys from Core Data: \(error.localizedDescription)")
         }
     }
 
     // MARK: - Save Settings
     func saveSettings() {
         ensureInitialized()
+
+        // API keys are automatically saved to Keychain via property setters
+        // Only save non-sensitive settings to Core Data
         let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
 
         do {
@@ -1058,17 +1163,15 @@ class SettingsManager: ObservableObject {
                 settings.id = UUID()
             }
 
-            settings.geminiApiKey = geminiApiKey
-            settings.openaiApiKey = openaiApiKey
-            settings.anthropicApiKey = anthropicApiKey
-            settings.groqApiKey = groqApiKey
+            // Only save non-sensitive data to Core Data
+            // API keys are stored securely in Keychain
             settings.selectedModel = selectedModel
             settings.lastModified = Date()
 
             try context.save()
-            print("✅ Settings saved successfully")
+            logger.debug("Settings saved successfully")
         } catch {
-            print("❌ Failed to save settings: \(error)")
+            logger.error("Failed to save settings: \(error.localizedDescription)")
         }
     }
 
@@ -1078,7 +1181,7 @@ class SettingsManager: ObservableObject {
 
         let settings = AppSettings(context: context)
         settings.id = UUID()
-        settings.geminiApiKey = ""
+        // API keys are stored in Keychain, not Core Data
         settings.selectedModel = defaultModel
         settings.lastModified = Date()
 
@@ -1086,12 +1189,11 @@ class SettingsManager: ObservableObject {
             try context.save()
             // Use async to avoid "publishing changes during view updates" warning
             DispatchQueue.main.async {
-                self._geminiApiKey = ""
                 self._selectedModel = defaultModel
             }
-            print("✅ Created default settings")
+            logger.debug("Created default settings")
         } catch {
-            print("❌ Failed to create default settings: \(error)")
+            logger.error("Failed to create default settings: \(error.localizedDescription)")
         }
     }
 

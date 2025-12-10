@@ -12,7 +12,7 @@ import CoreData
 import AppKit
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "LocalFiles")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "LocalFiles")
 
 class TranscriptFileManager {
     static let shared = TranscriptFileManager()
@@ -27,7 +27,9 @@ class TranscriptFileManager {
     }
 
     private let hashCacheURL: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("transcript_hashes.json")
+        }
         let appDir = appSupport.appendingPathComponent("Talkie", isDirectory: true)
         try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
         return appDir.appendingPathComponent("transcript_hashes.json")

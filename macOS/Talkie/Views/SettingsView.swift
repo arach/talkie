@@ -1945,7 +1945,10 @@ struct OutputSettingsView: View {
     }
 
     private func resetToDefault() {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            statusMessage = "Error: Cannot access documents directory"
+            return
+        }
         let defaultPath = documents.appendingPathComponent("Talkie").path
         outputDirectory = defaultPath
         SaveFileStepConfig.defaultOutputDirectory = defaultPath

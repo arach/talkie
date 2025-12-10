@@ -8,7 +8,9 @@
 
 import Foundation
 import CryptoKit
+import os
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Workflow")
 // MARK: - TWF Format Structures
 
 /// Root structure of a .twf.json file
@@ -210,7 +212,7 @@ struct TWFLoader {
     /// Load all TWF files from the StarterWorkflows bundle directory
     static func loadStarterWorkflows() -> [WorkflowDefinition] {
         guard let resourcePath = Bundle.main.resourcePath else {
-            print("[TWFLoader] No resource path found")
+            logger.debug("[TWFLoader] No resource path found")
             return []
         }
 
@@ -232,13 +234,13 @@ struct TWFLoader {
                 do {
                     let workflow = try loadWorkflow(from: filePath)
                     workflows.append(workflow)
-                    print("[TWFLoader] Loaded: \(workflow.name) (\(workflow.steps.count) steps)")
+                    logger.debug("[TWFLoader] Loaded: \(workflow.name) (\(workflow.steps.count) steps)")
                 } catch {
-                    print("[TWFLoader] Failed to load \(filename): \(error)")
+                    logger.debug("[TWFLoader] Failed to load \(filename): \(error)")
                 }
             }
         } catch {
-            print("[TWFLoader] Failed to read directory \(directoryPath): \(error)")
+            logger.debug("[TWFLoader] Failed to read directory \(directoryPath): \(error)")
         }
 
         return workflows

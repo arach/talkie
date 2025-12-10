@@ -8,7 +8,9 @@
 
 import SwiftUI
 import AVFoundation
+import os
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 struct WalkieConversationView: View {
     let memoId: String
 
@@ -108,7 +110,7 @@ struct WalkieConversationView: View {
         do {
             walkies = try await WalkieService.shared.fetchConversation(for: memoId)
         } catch {
-            print("Failed to load walkies: \(error)")
+            logger.debug("Failed to load walkies: \(error)")
         }
     }
 
@@ -144,11 +146,11 @@ struct WalkieConversationView: View {
                             }
                         }
                     } catch {
-                        print("Playback error: \(error)")
+                        logger.debug("Playback error: \(error)")
                     }
                 }
             } catch {
-                print("Download error: \(error)")
+                logger.debug("Download error: \(error)")
             }
         }
     }

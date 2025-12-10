@@ -11,7 +11,7 @@ import Foundation
 import Speech
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "AppleSpeechService")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppleSpeechService")
 
 // MARK: - Apple Speech Service
 

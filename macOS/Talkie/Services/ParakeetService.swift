@@ -10,7 +10,7 @@ import FluidAudio
 import AVFoundation
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "ParakeetService")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "ParakeetService")
 
 // MARK: - Parakeet Model Options
 
@@ -90,7 +90,9 @@ class ParakeetService: ObservableObject {
 
     /// Get Parakeet model storage path
     private func getParakeetModelPath(for model: ParakeetModel) -> String {
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return ""
+        }
         return supportDir
             .appendingPathComponent("Talkie/ParakeetModels")
             .appendingPathComponent(model.rawValue)
@@ -99,7 +101,9 @@ class ParakeetService: ObservableObject {
 
     /// Get URL for model storage base
     private func getModelsBaseURL() -> URL {
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return URL(fileURLWithPath: NSTemporaryDirectory())
+        }
         let modelsDir = supportDir.appendingPathComponent("Talkie/ParakeetModels")
         try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
         return modelsDir

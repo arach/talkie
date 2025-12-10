@@ -9,7 +9,7 @@
 import AVFoundation
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "SpeechSynthesis")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "SpeechSynthesis")
 
 // MARK: - Speech Synthesis Service
 

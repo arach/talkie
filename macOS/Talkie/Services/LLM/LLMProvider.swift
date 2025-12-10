@@ -6,7 +6,9 @@
 //
 
 import Foundation
+import os
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLM")
 // MARK: - LLM Configuration (loaded from LLMConfig.json)
 
 struct LLMConfig: Codable {
@@ -31,7 +33,7 @@ struct LLMConfig: Codable {
         guard let url = Bundle.main.url(forResource: "LLMConfig", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let config = try? JSONDecoder().decode(LLMConfig.self, from: data) else {
-            print("⚠️ Failed to load LLMConfig.json, using empty config")
+            logger.debug("⚠️ Failed to load LLMConfig.json, using empty config")
             return LLMConfig(providers: [:], preferredProviderOrder: [])
         }
         return config
@@ -179,7 +181,7 @@ class LLMProviderRegistry: ObservableObject {
                 let providerModels = try await provider.models
                 models.append(contentsOf: providerModels)
             } catch {
-                print("⚠️ Failed to get models from \(provider.name): \(error)")
+                logger.debug("⚠️ Failed to get models from \(provider.name): \(error)")
             }
         }
 

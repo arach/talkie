@@ -8,7 +8,9 @@
 import SwiftUI
 import AVFoundation
 import AppKit
+import os
 
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 struct MemoDetailView: View {
     @ObservedObject var memo: VoiceMemo
     @ObservedObject private var settings = SettingsManager.shared
@@ -577,7 +579,7 @@ struct MemoDetailView: View {
         } else {
             // Initialize player with synced audio data
             guard let audioData = memo.audioData else {
-                print("⚠️ No audio data available (not yet synced from iOS)")
+                logger.debug("⚠️ No audio data available (not yet synced from iOS)")
                 return
             }
 
@@ -588,9 +590,9 @@ struct MemoDetailView: View {
                 audioPlayer?.play()
                 startPlaybackTimer()
                 isPlaying = true
-                print("✅ Playing synced audio: \(audioData.count) bytes, duration: \(duration)s")
+                logger.debug("✅ Playing synced audio: \(audioData.count) bytes, duration: \(duration)s")
             } catch {
-                print("❌ Failed to play audio: \(error)")
+                logger.debug("❌ Failed to play audio: \(error)")
             }
         }
     }
@@ -664,7 +666,7 @@ struct MemoDetailView: View {
         Task {
             do {
                 guard let audioData = memo.audioData else {
-                    print("[Transcribe] No audio data available")
+                    logger.debug("[Transcribe] No audio data available")
                     return
                 }
 
@@ -736,20 +738,19 @@ struct MemoDetailView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(transcript, forType: .string)
-        print("📋 Transcript copied to clipboard")
+        logger.debug("📋 Transcript copied to clipboard")
     }
 
     private func addToAppleNotes() {
         guard let transcript = memo.currentTranscript else {
-            print("⚠️ No transcript to add to Notes")
+            logger.debug("⚠️ No transcript to add to Notes")
             return
         }
 
         let title = memo.title ?? "Voice Memo"
         let dateStr = formatDate(memoCreatedAt)
 
-        print("📝 Adding to Apple Notes: \(title)")
-
+        logger.debug("📝 Adding to Apple Notes: \(title)")
         // Format content
         let content = "\(title)\n\(dateStr)\n\n---\n\n\(transcript)"
 
@@ -774,9 +775,9 @@ struct MemoDetailView: View {
             appleScript.executeAndReturnError(&error)
             if let error = error {
                 let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-                print("❌ AppleScript error: \(errorMessage)")
+                logger.debug("❌ AppleScript error: \(errorMessage)")
             } else {
-                print("✅ Note created successfully!")
+                logger.debug("✅ Note created successfully!")
             }
         }
     }
@@ -907,9 +908,9 @@ struct MemoDetailView: View {
                     modelId: modelId,
                     context: viewContext
                 )
-                print("✅ \(actionType.rawValue) completed with \(providerName)/\(modelId)")
+                logger.debug("✅ \(actionType.rawValue) completed with \(providerName)/\(modelId)")
             } catch {
-                print("❌ Action error: \(error.localizedDescription)")
+                logger.debug("❌ Action error: \(error.localizedDescription)")
             }
         }
     }
@@ -1080,7 +1081,7 @@ struct MemoDetailView: View {
     private func navigateToWorkflow(_ workflowId: UUID?) {
         // TODO: Implement navigation to workflow definition
         // This would require a callback or notification to switch to the Workflows view
-        print("Navigate to workflow: \(workflowId?.uuidString ?? "unknown")")
+        logger.debug("Navigate to workflow: \(workflowId?.uuidString ?? "unknown")")
     }
 
     private var sortedWorkflowRuns: [WorkflowRun] {

@@ -11,7 +11,7 @@ import AppKit
 import os
 import Combine
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "Persistence")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Persistence")
 
 // MARK: - WAL Management
 
@@ -214,7 +214,8 @@ struct PersistenceController {
             try viewContext.save()
         } catch {
             let nsError = error as NSError
-            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+            logger.error("Failed to save preview context: \(nsError.localizedDescription)")
+            // Continue with empty preview data rather than crashing
         }
         return result
     }()
@@ -227,7 +228,7 @@ struct PersistenceController {
         logger.info("Initializing PersistenceController (token-based sync)...")
 
         if inMemory {
-            container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
+            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
             logger.info("Using in-memory store")
         } else {
             // Configure CloudKit sync - MUST enable history tracking for proper sync!

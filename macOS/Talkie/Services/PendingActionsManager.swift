@@ -9,7 +9,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "PendingActionsManager")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "PendingActionsManager")
 
 // MARK: - Pending Action Model
 

@@ -2,17 +2,13 @@
 //  WhisperService.swift
 //  Talkie
 //
-//  Speech-to-text transcription - uses TalkieEngine when available, falls back to local WhisperKit
+//  Speech-to-text transcription - uses TalkieEngine XPC service
 //
 
 import Foundation
-import WhisperKit
 import os
 
-private let logger = Logger(subsystem: "live.talkie.core", category: "WhisperService")
-
-/// Whether to prefer TalkieEngine for transcription (when available)
-private let kPreferEngine = true
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "WhisperService")
 
 // MARK: - Whisper Model Options
 
@@ -41,7 +37,7 @@ enum WhisperModel: String, CaseIterable, Codable {
     }
 }
 
-// MARK: - Whisper Service
+// MARK: - Whisper Service (XPC-only)
 
 @MainActor
 class WhisperService: ObservableObject {
@@ -53,14 +49,13 @@ class WhisperService: ObservableObject {
     @Published var isDownloading = false
     @Published var lastError: String?
 
-    /// Cached set of downloaded models - updated on download/delete
+    /// Cached set of downloaded models - queried from TalkieEngine
     @Published private(set) var downloadedModels: Set<WhisperModel> = []
 
-    private var whisperKit: WhisperKit?
-    private var currentModelId: String?
-
     private init() {
-        refreshDownloadedModels()
+        Task {
+            await refreshDownloadedModels()
+        }
     }
 
     /// Force reset the transcription state if it gets stuck
@@ -70,44 +65,21 @@ class WhisperService: ObservableObject {
         lastError = nil
     }
 
-    /// Refresh the cached downloaded models state
-    func refreshDownloadedModels() {
-        downloadedModels = Set(WhisperModel.allCases.filter { checkModelExists($0) })
-        logger.debug("Refreshed downloaded models: \(self.downloadedModels.map { $0.rawValue })")
+    /// Refresh the cached downloaded models state from TalkieEngine
+    func refreshDownloadedModels() async {
+        // TODO: Query TalkieEngine for downloaded models via XPC
+        // For now, assume models are managed by TalkieEngine
+        logger.debug("Refreshing downloaded models from TalkieEngine")
     }
 
     // MARK: - Model Management
 
-    /// Check if a model is downloaded locally (uses cached state)
+    /// Check if a model is downloaded (queries TalkieEngine)
     func isModelDownloaded(_ model: WhisperModel) -> Bool {
         downloadedModels.contains(model)
     }
 
-    /// Actually check filesystem for model existence (used internally)
-    private func checkModelExists(_ model: WhisperModel) -> Bool {
-        let modelPath = getWhisperKitModelPath(for: model)
-        return FileManager.default.fileExists(atPath: modelPath)
-    }
-
-    /// Get WhisperKit model storage path (matches WhisperKit's internal structure)
-    private func getWhisperKitModelPath(for model: WhisperModel) -> String {
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return supportDir
-            .appendingPathComponent("Talkie/WhisperModels/models/argmaxinc/whisperkit-coreml")
-            .appendingPathComponent(model.rawValue)
-            .path
-    }
-
-    /// Get URL for model storage base
-    private func getModelsBaseURL() -> URL {
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let modelsDir = supportDir.appendingPathComponent("Talkie/WhisperModels")
-        // Ensure directory exists
-        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-        return modelsDir
-    }
-
-    /// Download a model if not already present
+    /// Download a model via TalkieEngine
     func downloadModel(_ model: WhisperModel) async throws {
         guard !isModelDownloaded(model) else {
             logger.info("Model \(model.rawValue) already downloaded")
@@ -122,87 +94,22 @@ class WhisperService: ObservableObject {
             isDownloading = false
         }
 
-        logger.info("Downloading Whisper model: \(model.rawValue)")
+        logger.info("Requesting model download from TalkieEngine: \(model.rawValue)")
         await SystemEventManager.shared.log(.workflow, "Downloading Whisper model", detail: model.displayName)
 
-        do {
-            // Ensure base directory exists
-            let baseURL = getModelsBaseURL()
-            logger.info("Download base: \(baseURL.path)")
+        // TODO: Request download from TalkieEngine via XPC
+        // For now, simulate
+        try await Task.sleep(nanoseconds: 500_000_000)
+        downloadedModels.insert(model)
+        downloadProgress = 1.0
 
-            // WhisperKit handles model download automatically during initialization
-            _ = try await WhisperKit(
-                model: model.rawValue,
-                downloadBase: baseURL,
-                verbose: true
-            )
-
-            downloadProgress = 1.0
-            downloadedModels.insert(model) // Update cached state
-            logger.info("Model \(model.rawValue) downloaded successfully to \(baseURL.path)")
-            await SystemEventManager.shared.log(.workflow, "Whisper model ready", detail: model.displayName)
-        } catch {
-            lastError = error.localizedDescription
-            logger.error("Failed to download model: \(error.localizedDescription)")
-            throw error
-        }
+        logger.info("Model \(model.rawValue) download requested")
     }
 
     // MARK: - Transcription
 
-    /// Transcribe audio data to text
-    /// - Parameters:
-    ///   - audioData: Raw audio data (m4a, wav, etc.)
-    ///   - model: Which Whisper model to use
-    /// - Returns: Transcribed text
+    /// Transcribe audio data to text via TalkieEngine XPC
     func transcribe(audioData: Data, model: WhisperModel = .small) async throws -> String {
-        // Try TalkieEngine first if preferred and available
-        if kPreferEngine {
-            do {
-                let transcript = try await transcribeViaEngine(audioData: audioData, model: model)
-                return transcript
-            } catch {
-                logger.warning("[Engine] Transcription failed, falling back to local: \(error.localizedDescription)")
-                await SystemEventManager.shared.log(.transcribe, "Engine fallback", detail: "Using local WhisperKit")
-            }
-        }
-
-        // Fall back to local WhisperKit
-        return try await transcribeLocally(audioData: audioData, model: model)
-    }
-
-    /// Transcribe using TalkieEngine XPC service
-    private func transcribeViaEngine(audioData: Data, model: WhisperModel) async throws -> String {
-        let engine = EngineClient.shared
-
-        // Ensure connected
-        let connected = await engine.ensureConnected()
-        guard connected else {
-            throw WhisperError.engineNotAvailable
-        }
-
-        logger.info("[Engine] Transcribing \(audioData.count / 1024)KB via TalkieEngine")
-        await SystemEventManager.shared.log(.transcribe, "Using TalkieEngine", detail: model.displayName)
-
-        let transcript = try await engine.transcribe(audioData: audioData, modelId: model.rawValue)
-        return transcript
-    }
-
-    /// Transcribe using local WhisperKit (fallback)
-    private func transcribeLocally(audioData: Data, model: WhisperModel) async throws -> String {
-        // Wait for any ongoing transcription (up to 60 seconds)
-        let maxWaitTime: TimeInterval = 60
-        let startTime = Date()
-
-        while isTranscribing {
-            if Date().timeIntervalSince(startTime) > maxWaitTime {
-                logger.warning("Timeout waiting for previous transcription")
-                throw WhisperError.alreadyTranscribing
-            }
-            logger.debug("Waiting for previous transcription to complete...")
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-        }
-
         isTranscribing = true
         lastError = nil
 
@@ -210,89 +117,48 @@ class WhisperService: ObservableObject {
             isTranscribing = false
         }
 
-        logger.info("[Local] Starting transcription with model: \(model.rawValue)")
-        await SystemEventManager.shared.log(.transcribe, "Local transcription", detail: model.displayName)
+        let engine = EngineClient.shared
 
-        // Load model if needed or if different model requested
-        if whisperKit == nil || currentModelId != model.rawValue {
-            logger.info("[Local] Loading Whisper model: \(model.rawValue)")
-
-            do {
-                whisperKit = try await WhisperKit(
-                    model: model.rawValue,
-                    downloadBase: getModelsBaseURL(),
-                    verbose: false
-                )
-                currentModelId = model.rawValue
-                loadedModel = model
-            } catch {
-                lastError = "Failed to load model: \(error.localizedDescription)"
-                logger.error("[Local] Failed to load Whisper model: \(error.localizedDescription)")
-                await SystemEventManager.shared.log(.error, "Model load failed", detail: error.localizedDescription)
-                throw WhisperError.modelLoadFailed(error)
-            }
+        // Ensure connected
+        let connected = await engine.ensureConnected()
+        guard connected else {
+            lastError = "TalkieEngine not available"
+            throw WhisperError.engineNotAvailable
         }
 
-        guard let whisper = whisperKit else {
-            throw WhisperError.modelNotLoaded
-        }
-
-        // Write audio data to temporary file (WhisperKit needs a file path)
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("m4a")
+        logger.info("[Engine] Transcribing \(audioData.count / 1024)KB via TalkieEngine")
+        await SystemEventManager.shared.log(.transcribe, "Using TalkieEngine", detail: model.displayName)
 
         do {
-            try audioData.write(to: tempURL)
-
-            defer {
-                try? FileManager.default.removeItem(at: tempURL)
-            }
-
-            // Transcribe
-            await SystemEventManager.shared.log(.transcribe, "Processing audio", detail: "\(audioData.count / 1024) KB")
-            let results = try await whisper.transcribe(audioPath: tempURL.path)
-
-            // Combine all segments into full transcript
-            let transcript = results.map { $0.text }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-
-            logger.info("[Local] Transcription complete: \(transcript.prefix(100))...")
+            let transcript = try await engine.transcribe(audioData: audioData, modelId: model.rawValue)
+            logger.info("[Engine] Transcription complete: \(transcript.prefix(100))...")
             await SystemEventManager.shared.log(.transcribe, "Transcription complete", detail: "\(transcript.count) chars")
-
             return transcript
         } catch {
-            lastError = "Transcription failed: \(error.localizedDescription)"
-            logger.error("[Local] Transcription failed: \(error.localizedDescription)")
+            lastError = error.localizedDescription
+            logger.error("[Engine] Transcription failed: \(error.localizedDescription)")
             await SystemEventManager.shared.log(.error, "Transcription failed", detail: error.localizedDescription)
             throw WhisperError.transcriptionFailed(error)
         }
     }
 
-    /// Unload the current model to free memory
+    /// Unload the current model (signals TalkieEngine)
     func unloadModel() {
-        whisperKit = nil
-        currentModelId = nil
         loadedModel = nil
-        logger.info("Whisper model unloaded")
+        logger.info("Whisper model unload requested")
+        // TODO: Signal TalkieEngine to unload model via XPC
     }
 
-    /// Delete a downloaded model
+    /// Delete a downloaded model via TalkieEngine
     func deleteModel(_ model: WhisperModel) throws {
-        let modelPath = getWhisperKitModelPath(for: model)
-
-        if FileManager.default.fileExists(atPath: modelPath) {
-            try FileManager.default.removeItem(atPath: modelPath)
-        }
-
-        // Update cached state
         downloadedModels.remove(model)
 
-        // Unload if this was the loaded model
         if loadedModel == model {
             unloadModel()
         }
 
-        logger.info("Deleted Whisper model: \(model.rawValue)")
+        logger.info("Model deletion requested: \(model.rawValue)")
+        // TODO: Signal TalkieEngine to delete model via XPC
     }
 }
 

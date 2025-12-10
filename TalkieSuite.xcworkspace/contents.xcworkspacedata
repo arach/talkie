@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Workspace
    version = "1.0">
-   <FileRef
-      location = "group:TalkieCore">
-   </FileRef>
-   <FileRef
-      location = "group:TalkieServices">
-   </FileRef>
-   <FileRef
-      location = "container:macOS/Talkie.xcodeproj">
-   </FileRef>
-   <FileRef
-      location = "group:TalkieLive/TalkieLive.xcodeproj">
-   </FileRef>
-   <FileRef
-      location = "group:iOS/Talkie OS.xcodeproj">
-   </FileRef>
+   <Group
+      location = "group:macOS"
+      name = "macOS">
+      <FileRef
+         location = "group:Talkie/Talkie.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:TalkieLive/TalkieLive.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:TalkieEngine/TalkieEngine.xcodeproj">
+      </FileRef>
+   </Group>
+   <Group
+      location = "group:iOS"
+      name = "iOS">
+      <FileRef
+         location = "group:Talkie OS.xcodeproj">
+      </FileRef>
+   </Group>
 </Workspace>

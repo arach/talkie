@@ -1600,7 +1600,8 @@ struct WorkflowEditorSheet: View {
 
     private func binding(for step: WorkflowStep) -> Binding<WorkflowStep> {
         guard let index = editedWorkflow.steps.firstIndex(where: { $0.id == step.id }) else {
-            fatalError("Step not found")
+            // Return a dummy binding if step not found - should never happen in practice
+            return .constant(step)
         }
         return $editedWorkflow.steps[index]
     }
