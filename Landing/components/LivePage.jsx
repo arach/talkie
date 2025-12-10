@@ -21,6 +21,12 @@ import {
   Target,
   Rocket,
   CheckCircle2,
+  Code2,
+  Mail,
+  PenLine,
+  FileText,
+  Palette,
+  RefreshCw,
 } from 'lucide-react'
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
@@ -124,9 +130,9 @@ export default function LivePage() {
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase mb-6 leading-[0.85]">
-              Capture ideas<br/>
-              <span className="text-emerald-500">before they</span><br/>
-              <span className="text-zinc-400 dark:text-zinc-600">disappear.</span>
+              Fastest way to<br/>
+              <span className="text-emerald-500">convert thoughts</span><br/>
+              <span className="text-zinc-400 dark:text-zinc-600">to action.</span>
             </h1>
 
             <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
@@ -405,7 +411,9 @@ export default function LivePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="text-2xl mb-4">💻</div>
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <Code2 className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">While Coding</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                 "Explain this function to myself... wait, I should refactor the auth module first... also need to update the tests..."
@@ -416,7 +424,9 @@ export default function LivePage() {
             </div>
 
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="text-2xl mb-4">📧</div>
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <Mail className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Email Drafts</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                 Speak your reply naturally, then edit for tone. 4x faster than typing, especially on mobile keyboards.
@@ -427,7 +437,9 @@ export default function LivePage() {
             </div>
 
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="text-2xl mb-4">✍️</div>
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <PenLine className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Draft a Blog Post</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                 Speak your rough draft out loud. Get the ideas flowing without staring at a blank page. Edit later.
@@ -438,7 +450,9 @@ export default function LivePage() {
             </div>
 
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="text-2xl mb-4">📝</div>
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <FileText className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Meeting Notes</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                 Quick verbal summary after a call: "Key decisions: X, Y, Z. Action items: ..." Right into your notes app.
@@ -449,7 +463,9 @@ export default function LivePage() {
             </div>
 
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="text-2xl mb-4">🎨</div>
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <Palette className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Creative Briefs</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                 When inspiration hits, verbal description captures nuance that gets lost in quick typed notes.
@@ -460,7 +476,9 @@ export default function LivePage() {
             </div>
 
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="text-2xl mb-4">🔄</div>
+              <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center mb-4">
+                <RefreshCw className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+              </div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Context Switching</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                 Before switching tasks: "Where I left off: investigating the memory leak in the worker pool..."
