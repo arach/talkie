@@ -136,7 +136,7 @@ export default function LivePage() {
             </h1>
 
             <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
-              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text in seconds so you can capture ideas at the speed you think.
+              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly, so you can capture ideas at the speed you think them.
             </p>
 
             <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -172,7 +172,7 @@ export default function LivePage() {
               <span className="text-emerald-500">Type less.</span>
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly—so you can capture ideas at the speed you think them.
+              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly, so you can capture ideas at the speed you think them.
             </p>
           </div>
 
@@ -342,13 +342,13 @@ export default function LivePage() {
               <FlowStep
                 number="1"
                 title="Hold the Hotkey"
-                description="Press and hold your configured key (default: Right Option). Recording starts instantly—no click, no menu."
+                description="Press and hold your configured key (default: Right Option). Recording starts instantly. No click, no menu."
               />
               <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-700 ml-4"></div>
               <FlowStep
                 number="2"
                 title="Speak Your Mind"
-                description="Talk naturally. A subtle HUD appears. Your original app stays in focus—you never leave what you were doing."
+                description="Talk naturally. A subtle HUD appears. Your original app stays in focus. You never leave what you were doing."
               />
               <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-700 ml-4"></div>
               <FlowStep
@@ -589,7 +589,7 @@ export default function LivePage() {
                 </li>
                 <li className="flex items-center gap-3">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  Works offline—no internet connection needed
+                  Works offline. No internet connection needed
                 </li>
               </ul>
             </div>
