@@ -1299,7 +1299,7 @@ class WorkflowExecutor: ObservableObject {
             }
         } else if config.provider == .system && config.playImmediately {
             // System TTS fallback (blocking for now, but system TTS is rarely used)
-            let speechService = await SpeechSynthesisService.shared
+            let speechService = SpeechSynthesisService.shared
             if let voiceId = config.voice {
                 await MainActor.run { speechService.selectedVoiceIdentifier = voiceId }
             }
@@ -1344,7 +1344,7 @@ class WorkflowExecutor: ObservableObject {
 
     /// Generate audio using built-in macOS TTS
     private func generateWithSystemTTS(text: String, config: SpeakStepConfig, outputURL: URL) async throws -> URL? {
-        let speechService = await SpeechSynthesisService.shared
+        let speechService = SpeechSynthesisService.shared
 
         if let voiceId = config.voice {
             await MainActor.run { speechService.selectedVoiceIdentifier = voiceId }

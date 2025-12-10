@@ -120,7 +120,7 @@ class ParakeetService: ObservableObject {
 
         do {
             // FluidAudio handles model download automatically
-            let models = try await AsrModels.downloadAndLoad(version: model.asrVersion)
+            _ = try await AsrModels.downloadAndLoad(version: model.asrVersion)
 
             // Mark download location
             let markerPath = getModelsBaseURL().appendingPathComponent(model.rawValue)
