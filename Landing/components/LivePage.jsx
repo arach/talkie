@@ -17,15 +17,10 @@ import {
   Cpu,
   HardDrive,
   Sparkles,
-  Brain,
   Lightbulb,
   Target,
   Rocket,
-  MessageSquare,
-  PenTool,
   CheckCircle2,
-  XCircle,
-  ArrowDown,
 } from 'lucide-react'
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
@@ -54,26 +49,18 @@ const FlowStep = ({ number, title, description }) => (
   </div>
 )
 
-const IdeaKillerCard = ({ icon: Icon, title, description, solution }) => (
-  <div className="relative">
-    <div className="border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-6 rounded-lg">
-      <div className="flex items-start gap-3 mb-3">
-        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded">
-          <Icon className="w-4 h-4 text-red-500" />
-        </div>
-        <div>
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide">{title}</h3>
-          <p className="text-xs text-red-600 dark:text-red-400 mt-1">{description}</p>
-        </div>
+const BenefitCard = ({ icon: Icon, title, description, highlight }) => (
+  <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-6 rounded-xl hover:border-emerald-500/50 transition-colors">
+    <div className="flex items-start gap-4">
+      <div className="p-3 bg-emerald-500/10 rounded-xl flex-shrink-0">
+        <Icon className="w-5 h-5 text-emerald-500" />
       </div>
-    </div>
-    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2">
-      <ArrowDown className="w-4 h-4 text-emerald-500" />
-    </div>
-    <div className="mt-6 border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-lg">
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-        <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">{solution}</p>
+      <div>
+        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">{title}</h3>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{description}</p>
+        {highlight && (
+          <p className="text-xs font-mono text-emerald-600 dark:text-emerald-400 mt-3 uppercase tracking-wide">{highlight}</p>
+        )}
       </div>
     </div>
   </div>
@@ -167,49 +154,49 @@ export default function LivePage() {
         </Container>
       </section>
 
-      {/* The Problem - Ideas Die */}
+      {/* Why Voice - Benefits */}
       <section className="py-20 md:py-28 bg-white dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800">
         <Container>
           <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-6">
-              <Brain className="w-3 h-3 text-zinc-500" />
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">The Science of Ideas</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-6">
+              <Zap className="w-3 h-3 text-emerald-500" />
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Why Voice?</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-6">
-              Most ideas die in<br/>
-              <span className="text-red-500">18 seconds.</span>
+              Think faster.<br/>
+              <span className="text-emerald-500">Type less.</span>
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Cognitive research shows that fleeting thoughts—those sudden insights and creative sparks—have an average lifespan of just 18 seconds before they're overwritten by new information. The gap between having an idea and acting on it is where innovation goes to die.
+              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly—so you can capture ideas at the speed you think them.
             </p>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mb-20">
-            <StatCard value="18s" label="Idea Lifespan" />
-            <StatCard value="72%" label="Ideas Lost Daily" />
-            <StatCard value="<1s" label="Talkie Capture" />
+          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mb-16">
+            <StatCard value="4x" label="Faster than typing" />
+            <StatCard value="~2s" label="Idea to text" />
+            <StatCard value="0" label="Apps to open" />
           </div>
 
-          {/* Idea Killers */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <IdeaKillerCard
-              icon={Clock}
-              title="Context Switch Tax"
-              description="Opening an app, finding a note, typing it out—by then, the idea has evolved into something less clear."
-              solution="Hold one key. Speak. Done."
+          {/* Benefits */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <BenefitCard
+              icon={Zap}
+              title="Speed"
+              description="We speak at 150 words per minute but type at 40. Voice capture lets you get thoughts out before they evolve or fade."
+              highlight="4x faster capture"
             />
-            <IdeaKillerCard
-              icon={PenTool}
-              title="Typing Is Slow"
-              description="We think at 400 words per minute but type at 40. That 10x gap causes information loss."
-              solution="Speaking is 4x faster than typing."
+            <BenefitCard
+              icon={Eye}
+              title="Rest Your Eyes"
+              description="Look away from the screen while you speak. Mid-length thoughts flow better when you're not staring at a cursor waiting for words."
+              highlight="Natural expression"
             />
-            <IdeaKillerCard
-              icon={MessageSquare}
-              title="Ideas Interrupt"
-              description="Great ideas don't wait for a convenient moment. They arrive when you're already doing something else."
-              solution="Capture without leaving your flow."
+            <BenefitCard
+              icon={Rocket}
+              title="Ecosystem"
+              description="Start with a quick capture in Talkie Live. Continue with AI workflows in Talkie for Mac. Your ideas grow with the same tools."
+              highlight="Memo → Workflow → Action"
             />
           </div>
         </Container>
@@ -675,7 +662,7 @@ export default function LivePage() {
             <Zap className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
-            Stop losing ideas.
+            Accelerate thoughts<br/>to action.
           </h2>
           <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-10 max-w-lg mx-auto">
             Download Talkie Live for free. No account needed, no credit card, no catch. Just faster thinking.
