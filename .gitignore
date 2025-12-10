@@ -71,3 +71,6 @@ Installer/*.pkg
 
 # Archived code
 _archive/
+
+# Releases (built artifacts)
+releases/
