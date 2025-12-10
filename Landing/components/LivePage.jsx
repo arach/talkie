@@ -408,13 +408,13 @@ export default function LivePage() {
             </div>
 
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
-              <div className="text-2xl mb-4">💬</div>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Slack Messages</h3>
+              <div className="text-2xl mb-4">✍️</div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Draft a Blog Post</h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Compose longer replies without typing. Speak your response naturally, review, and send. Faster than thumb-typing.
+                Speak your rough draft out loud. Get the ideas flowing without staring at a blank page. Edit later.
               </p>
               <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into message field</span>
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into your editor</span>
               </div>
             </div>
 
