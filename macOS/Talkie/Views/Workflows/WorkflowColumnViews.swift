@@ -26,7 +26,6 @@ struct WorkflowListColumn: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("WORKFLOWS")
                         .font(SettingsManager.shared.fontSMBold)
-                        .tracking(1.5)
                     Text("\(workflowManager.workflows.count) total")
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
@@ -131,7 +130,6 @@ struct WorkflowDetailColumn: View {
 
                     Text("SELECT OR CREATE")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Button(action: createNewWorkflow) {
@@ -140,7 +138,6 @@ struct WorkflowDetailColumn: View {
                                 .font(SettingsManager.shared.fontXS)
                             Text("NEW WORKFLOW")
                                 .font(SettingsManager.shared.fontXSBold)
-                                .tracking(0.5)
                         }
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)

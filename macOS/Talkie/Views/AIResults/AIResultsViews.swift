@@ -46,7 +46,6 @@ struct AIResultsContentView: View {
                             .font(SettingsManager.shared.fontTitle)
                         Text("ACTIVITY LOG")
                             .font(SettingsManager.shared.fontBodyBold)
-                            .tracking(2)
                     }
                     .foregroundColor(.primary)
 
@@ -69,7 +68,6 @@ struct AIResultsContentView: View {
 
                         Text("NO RESULTS YET")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Run workflows on your memos")
@@ -115,7 +113,6 @@ struct AIResultsContentView: View {
                         .foregroundColor(.secondary.opacity(0.3))
                     Text("SELECT A RUN")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
                     Text("Choose a workflow run to view details")
                         .font(SettingsManager.shared.fontXS)
@@ -332,7 +329,6 @@ struct AIRunDetailView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("OUTPUT")
                                     .font(SettingsManager.shared.fontXSBold)
-                                    .tracking(1)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
@@ -404,7 +400,6 @@ struct AIStepCard: View {
 
                 Text(step.stepType.uppercased())
                     .font(SettingsManager.shared.fontXSBold)
-                    .tracking(0.5)
                     .foregroundColor(.primary)
 
                 Spacer()
@@ -412,7 +407,6 @@ struct AIStepCard: View {
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
                         .font(SettingsManager.shared.fontXSMedium)
-                        .tracking(0.3)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -426,7 +420,6 @@ struct AIStepCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("INPUT")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(0.5)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
@@ -445,7 +438,6 @@ struct AIStepCard: View {
                 HStack {
                     Text("OUTPUT")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(0.5)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text("→ {{\(step.outputKey)}}")
@@ -491,7 +483,6 @@ struct ActivityLogContentView: View {
                             .font(SettingsManager.shared.fontHeadline)
                         Text("ACTIVITY LOG")
                             .font(SettingsManager.shared.fontTitleBold)
-                            .tracking(2)
                     }
                     .foregroundColor(.primary)
 

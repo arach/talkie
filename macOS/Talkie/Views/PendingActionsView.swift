@@ -22,7 +22,6 @@ struct PendingActionsView: View {
 
                 Text("PENDING ACTIONS")
                     .font(.techLabel)
-                    .tracking(Tracking.wide)
                     .foregroundColor(.secondary)
 
                 Spacer()

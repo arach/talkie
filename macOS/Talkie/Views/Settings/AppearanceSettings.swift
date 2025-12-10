@@ -31,7 +31,6 @@ struct AppearanceSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK THEMES")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     Text("Apply a curated theme preset with one click.")
@@ -44,7 +43,6 @@ struct AppearanceSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("TALKIE")
                                 .font(SettingsManager.shared.fontXSBold)
-                                .tracking(1)
                                 .foregroundColor(SettingsManager.shared.tacticalForeground)
                                 .padding(.bottom, 4)
 
@@ -170,7 +168,6 @@ struct AppearanceSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("APPEARANCE")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 12) {
@@ -191,7 +188,6 @@ struct AppearanceSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ACCENT COLOR")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     Text("Used for buttons, selections, and highlights.")
@@ -216,7 +212,6 @@ struct AppearanceSettingsView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("TYPOGRAPHY")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     // UI Chrome: Font + Size together
@@ -579,7 +574,6 @@ struct ThemePresetCard: View {
                         if isActive {
                             Text("ACTIVE")
                                 .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)

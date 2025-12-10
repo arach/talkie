@@ -35,7 +35,6 @@ struct OutputSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("DEFAULT OUTPUT FOLDER")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 8) {
@@ -87,7 +86,6 @@ struct OutputSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK ACTIONS")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 12) {
@@ -128,7 +126,6 @@ struct OutputSettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("PATH ALIASES")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Define shortcuts like @Obsidian, @Notes to use in file paths")
@@ -185,7 +182,6 @@ struct OutputSettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("ADD NEW ALIAS")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 8) {

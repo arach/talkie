@@ -33,7 +33,6 @@ struct WalkieConversationView: View {
 
                     Text("CONVERSATION")
                         .font(.techLabel)
-                        .tracking(Tracking.wide)
                         .foregroundColor(.secondary)
 
                     if !walkies.isEmpty {

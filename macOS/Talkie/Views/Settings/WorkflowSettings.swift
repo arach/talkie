@@ -22,7 +22,6 @@ struct WorkflowsView: View {
                             .font(SettingsManager.shared.fontTitle)
                         Text("WORKFLOWS")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
                     }
                     .foregroundColor(.primary)
 
@@ -58,7 +57,6 @@ struct ActivityLogView: View {
                             .font(SettingsManager.shared.fontTitle)
                         Text("ACTIVITY LOG")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
                     }
                     .foregroundColor(.primary)
 
@@ -100,7 +98,6 @@ struct AllowedCommandsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ADD COMMAND")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 8) {
@@ -114,7 +111,6 @@ struct AllowedCommandsView: View {
                         Button(action: findCommand) {
                             Text("WHICH")
                                 .font(SettingsManager.shared.fontXSBold)
-                                .tracking(1)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
@@ -127,7 +123,6 @@ struct AllowedCommandsView: View {
                         Button(action: addCommand) {
                             Text("ADD")
                                 .font(SettingsManager.shared.fontXSBold)
-                                .tracking(1)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 10)
@@ -160,7 +155,6 @@ struct AllowedCommandsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("YOUR CUSTOM COMMANDS")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     if customCommands.isEmpty {
@@ -201,7 +195,6 @@ struct AllowedCommandsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("BUILT-IN COMMANDS (\(ShellStepConfig.defaultAllowedExecutables.count))")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     DisclosureGroup {

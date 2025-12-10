@@ -15,6 +15,10 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppDelegate
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Configure window appearance to match theme before SwiftUI renders
+        // This prevents the "flicker" of default colors before theme loads
+        configureWindowAppearance()
+
         // Set notification delegate to show notifications while app is in foreground
         UNUserNotificationCenter.current().delegate = self
 
@@ -26,6 +30,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // Set up CloudKit subscription for instant sync
         setupCloudKitSubscription()
+    }
+
+    private func configureWindowAppearance() {
+        // Apply appearance mode from saved preferences
+        let settings = SettingsManager.shared
+
+        // Set the application-wide appearance to match user preference
+        switch settings.appearanceMode {
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .system:
+            NSApp.appearance = nil  // Follow system
+        }
+
+        // Configure window style for any existing windows
+        for window in NSApp.windows {
+            window.backgroundColor = NSColor.windowBackgroundColor
+            window.isOpaque = true
+        }
     }
 
     private func requestNotificationPermissions() {

@@ -61,7 +61,6 @@ struct AutoRunSettingsView: View {
                         HStack {
                             Text("AUTO-RUN WORKFLOWS")
                                 .font(SettingsManager.shared.fontXSBold)
-                                .tracking(1)
                                 .foregroundColor(.secondary)
 
                             Spacer()
@@ -138,7 +137,6 @@ struct AutoRunSettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("HOW IT WORKS")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         VStack(alignment: .leading, spacing: 8) {

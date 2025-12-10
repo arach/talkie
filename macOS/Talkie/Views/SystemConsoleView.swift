@@ -384,7 +384,6 @@ struct SystemConsoleView: View {
 
             Text("SYSTEM CONSOLE")
                 .font(SettingsManager.shared.fontXSBold)
-                .tracking(1.5)
                 .foregroundColor(.white.opacity(0.9))
 
             Text("v1.0")

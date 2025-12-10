@@ -833,11 +833,13 @@ struct StatusBar: View {
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.xs)
-            .frame(height: isActive ? 28 : 24)
-            .animation(.easeInOut(duration: 0.2), value: isActive)
         }
+        // Fixed height - never changes, prevents layout propagation
+        .frame(height: 28)
         .background(isActive ? statusColor.opacity(0.08) : Design.backgroundSecondary)
+        // Isolate all animations within this view - don't let them leak to parent
         .animation(.easeInOut(duration: 0.2), value: isActive)
+        .drawingGroup()  // Composites to single layer, isolates animations
         .onChange(of: controller.state) { oldState, newState in
             handleStateChange(from: oldState, to: newState)
         }
@@ -917,12 +919,11 @@ struct StatusBar: View {
                 .frame(width: 6, height: 6)
                 .scaleEffect(controller.state == .listening ? (0.95 + (pulseScale - 1.0) * 0.1) : 1.0)
         }
-        .onAppear {
-            startPulseAnimation()
-        }
         .onChange(of: controller.state) { _, newState in
             if newState == .listening || newState == .transcribing {
                 startPulseAnimation()
+            } else {
+                stopPulseAnimation()
             }
         }
     }
@@ -931,6 +932,12 @@ struct StatusBar: View {
         pulseScale = 1.0
         withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
             pulseScale = 1.3
+        }
+    }
+
+    private func stopPulseAnimation() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            pulseScale = 1.0
         }
     }
 

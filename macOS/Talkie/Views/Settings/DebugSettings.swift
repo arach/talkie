@@ -70,7 +70,6 @@ struct DebugInfoView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("SYNC STATUS")
                     .font(SettingsManager.shared.fontXSBold)
-                    .tracking(1)
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 8) {

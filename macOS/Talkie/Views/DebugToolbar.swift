@@ -47,7 +47,6 @@ struct DebugToolbarOverlay<Content: View>: View {
                     HStack {
                         Text("DEV")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .tracking(2)
                             .foregroundColor(.primary)
 
                         Spacer()
@@ -238,7 +237,6 @@ struct DebugSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(1)
                 .foregroundColor(.secondary)
 
             content()
@@ -621,7 +619,6 @@ struct ManagedObjectInspector: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(1)
                 .foregroundColor(.secondary)
 
             VStack(spacing: 0) {

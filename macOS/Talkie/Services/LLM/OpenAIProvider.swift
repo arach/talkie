@@ -81,11 +81,16 @@ class OpenAIProvider: LLMProvider {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        // Build messages array with optional system prompt
+        var messages: [[String: String]] = []
+        if let systemPrompt = options.systemPrompt {
+            messages.append(["role": "system", "content": systemPrompt])
+        }
+        messages.append(["role": "user", "content": prompt])
+
         let body: [String: Any] = [
             "model": model,
-            "messages": [
-                ["role": "user", "content": prompt]
-            ],
+            "messages": messages,
             "temperature": options.temperature,
             "max_tokens": options.maxTokens,
             "top_p": options.topP
@@ -130,9 +135,16 @@ class OpenAIProvider: LLMProvider {
                     request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     
+                    // Build messages array with optional system prompt
+                    var messages: [[String: String]] = []
+                    if let systemPrompt = options.systemPrompt {
+                        messages.append(["role": "system", "content": systemPrompt])
+                    }
+                    messages.append(["role": "user", "content": prompt])
+
                     let body: [String: Any] = [
                         "model": model,
-                        "messages": [["role": "user", "content": prompt]],
+                        "messages": messages,
                         "temperature": options.temperature,
                         "max_tokens": options.maxTokens,
                         "stream": true

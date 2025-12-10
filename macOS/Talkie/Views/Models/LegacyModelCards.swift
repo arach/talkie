@@ -95,7 +95,6 @@ struct FamilyModelCard: View {
             HStack(alignment: .center) {
                 Text(familyName.uppercased())
                     .font(.system(size: 14, weight: .semibold, design: .default))
-                    .tracking(0.5)
                     .foregroundColor(settings.specValueColor)
 
                 Spacer()
@@ -415,7 +414,6 @@ struct WhisperFamilyCard: View {
             HStack(alignment: .center) {
                 Text("WHISPER")
                     .font(.system(size: 14, weight: .semibold, design: .default))
-                    .tracking(0.5)
                     .foregroundColor(settings.specValueColor)
 
                 Spacer()
@@ -682,7 +680,6 @@ struct ParakeetFamilyCard: View {
             HStack(alignment: .center) {
                 Text("PARAKEET")
                     .font(.system(size: 14, weight: .semibold, design: .default))
-                    .tracking(0.5)
                     .foregroundColor(settings.specValueColor)
 
                 Spacer()

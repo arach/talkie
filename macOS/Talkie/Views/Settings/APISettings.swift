@@ -276,7 +276,6 @@ struct APIKeyRow: View {
 
                 Text(provider.uppercased())
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .tracking(1)
 
                 Spacer()
 
@@ -287,7 +286,6 @@ struct APIKeyRow: View {
                         .frame(width: 6, height: 6)
                     Text(isConfigured ? "CONFIGURED" : "NOT SET")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(isConfigured ? .green : .orange)
                 }
             }

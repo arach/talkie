@@ -24,7 +24,8 @@ enum MemoSortField: String, CaseIterable {
 
 struct MemoTableFullView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject private var settings = SettingsManager.shared
+    // Use direct access to avoid view rebuilds on any SettingsManager change
+    private let settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -56,10 +57,26 @@ struct MemoTableFullView: View {
     // Inspector panel width (resizable)
     @State private var inspectorWidth: CGFloat = 420
 
-    // Sorted memos based on current sort state
-    private var sortedMemos: [VoiceMemo] {
+    // Cached sorted memos - only recompute when data or sort changes
+    @State private var cachedSortedMemos: [VoiceMemo] = []
+
+    // Paginated view of cached sorted memos
+    private var visibleMemos: [VoiceMemo] {
+        Array(cachedSortedMemos.prefix(displayedCount))
+    }
+
+    private var hasMoreMemos: Bool {
+        displayedCount < cachedSortedMemos.count
+    }
+
+    private var remainingCount: Int {
+        max(0, cachedSortedMemos.count - displayedCount)
+    }
+
+    /// Recompute sorted memos - call only when fetch results or sort changes
+    private func updateSortedMemos() {
         let memos = Array(allMemos)
-        return memos.sorted { a, b in
+        cachedSortedMemos = memos.sorted { a, b in
             let result: Bool
             switch sortField {
             case .timestamp:
@@ -73,19 +90,6 @@ struct MemoTableFullView: View {
             }
             return sortAscending ? !result : result
         }
-    }
-
-    // Paginated view of sorted memos
-    private var visibleMemos: [VoiceMemo] {
-        Array(sortedMemos.prefix(displayedCount))
-    }
-
-    private var hasMoreMemos: Bool {
-        displayedCount < sortedMemos.count
-    }
-
-    private var remainingCount: Int {
-        max(0, sortedMemos.count - displayedCount)
     }
 
     var body: some View {
@@ -138,7 +142,6 @@ struct MemoTableFullView: View {
 
                         Text("NO MEMOS YET")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Record your first voice memo on iOS")
@@ -183,53 +186,67 @@ struct MemoTableFullView: View {
                                     .fill(SettingsManager.shared.tacticalDivider.opacity(0.25))
                                     .frame(height: 1)
                             }
-
-                            // "Load More" button (Gmail-style pagination)
-                            if hasMoreMemos {
-                                Button(action: loadMore) {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "arrow.down.circle")
-                                            .font(SettingsManager.shared.fontSM)
-                                        Text("LOAD MORE")
-                                            .font(SettingsManager.shared.fontXSBold)
-                                            .tracking(1)
-                                        Text("(\(remainingCount) remaining)")
-                                            .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .foregroundColor(.accentColor)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                }
-                                .buttonStyle(.plain)
-                                .background(SettingsManager.shared.tacticalBackgroundSecondary.opacity(0.5))
-                            }
                         }
                     }
                     .background(SettingsManager.shared.tacticalBackground)
+
+                    // Full-bleed "Load More" footer with subtle highlight
+                    if hasMoreMemos {
+                        Button(action: loadMore) {
+                            HStack(spacing: 4) {
+                                Text("Load \(min(pageSize, remainingCount)) more")
+                                    .font(SettingsManager.shared.fontXS)
+                                Text("·")
+                                Text("\(remainingCount) remaining")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary)
+                            }
+                            .foregroundColor(.accentColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.accentColor.opacity(0.05))
+                            .overlay(
+                                Rectangle()
+                                    .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(SettingsManager.shared.tacticalBackground)
 
             // Inspector Panel (overlays from right, anchored to right edge)
-            if showInspector, let memo = selectedMemo {
+            if showInspector {
                 HStack(spacing: 0) {
                     // Resizable divider (on left side of inspector)
                     InspectorResizeHandle(width: $inspectorWidth)
 
-                    MemoInspectorPanel(
-                        memo: memo,
-                        onClose: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showInspector = false
+                    if let memo = selectedMemo {
+                        MemoInspectorPanel(
+                            memo: memo,
+                            onClose: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showInspector = false
+                                }
                             }
-                        }
-                    )
-                    .frame(width: inspectorWidth)
+                        )
+                        .frame(width: inspectorWidth)
+                    } else {
+                        // Empty state when no memo selected
+                        MemoInspectorEmptyState(
+                            onClose: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showInspector = false
+                                }
+                            }
+                        )
+                        .frame(width: inspectorWidth)
+                    }
                 }
                 .shadow(color: Color.black.opacity(0.08), radius: 3, x: -1, y: 0)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(.move(edge: .trailing))
             }
         }
         .onKeyPress(.escape) {
@@ -241,13 +258,26 @@ struct MemoTableFullView: View {
             }
             return .ignored
         }
+        .onAppear {
+            updateSortedMemos()
+        }
+        .onChange(of: Array(allMemos)) { _, _ in
+            // Invalidate when any memo changes (add, delete, or property update)
+            updateSortedMemos()
+        }
+        .onChange(of: sortField) { _, _ in
+            updateSortedMemos()
+        }
+        .onChange(of: sortAscending) { _, _ in
+            updateSortedMemos()
+        }
     }
 
     // MARK: - Pagination
 
     private func loadMore() {
         withAnimation(.easeInOut(duration: 0.2)) {
-            displayedCount = min(displayedCount + pageSize, sortedMemos.count)
+            displayedCount = min(displayedCount + pageSize, cachedSortedMemos.count)
         }
     }
 }
@@ -271,16 +301,32 @@ struct MemoTableHeader: View {
                 ascending: $sortAscending,
                 width: timestampWidth
             )
-            ColumnResizer(width: $timestampWidth, minWidth: 100, maxWidth: 200)
 
-            MemoSortableColumnHeader(
-                title: "TITLE",
-                field: .title,
-                currentSort: $sortField,
-                ascending: $sortAscending,
-                width: titleWidth
-            )
-            ColumnResizer(width: $titleWidth, minWidth: 120, maxWidth: 400)
+            // Title header (flexible)
+            Button(action: {
+                if sortField == .title {
+                    sortAscending.toggle()
+                } else {
+                    sortField = .title
+                    sortAscending = false
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Text("TITLE")
+                        .font(SettingsManager.shared.fontSMMedium)
+                        .foregroundColor(sortField == .title ? .primary : .secondary)
+                    if sortField == .title {
+                        Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                            .font(SettingsManager.shared.fontXSBold)
+                            .foregroundColor(.blue)
+                    }
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 12)
 
             MemoSortableColumnHeader(
                 title: "DURATION",
@@ -290,7 +336,6 @@ struct MemoTableHeader: View {
                 width: durationWidth,
                 alignment: .trailing
             )
-            ColumnResizer(width: $durationWidth, minWidth: 60, maxWidth: 120)
 
             MemoSortableColumnHeader(
                 title: "WORKFLOWS",
@@ -300,8 +345,6 @@ struct MemoTableHeader: View {
                 width: workflowsWidth,
                 alignment: .trailing
             )
-
-            Spacer()
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
@@ -386,20 +429,22 @@ struct MemoTableRow: View {
                     .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
                     .frame(width: timestampWidth, alignment: .leading)
 
-                // Title
+                // Title (flexible, fills available space)
                 Text(memo.title ?? "Untitled")
                     .font(SettingsManager.shared.fontSM)
                     .foregroundColor(SettingsManager.shared.tacticalForeground)
                     .lineLimit(1)
-                    .frame(width: titleWidth, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Duration
+                Spacer(minLength: 12)
+
+                // Duration (right-aligned)
                 Text(formatDuration(memo.duration))
                     .font(SettingsManager.shared.fontSM)
                     .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
                     .frame(width: durationWidth, alignment: .trailing)
 
-                // Workflow count
+                // Workflow count (right-aligned)
                 HStack(spacing: 3) {
                     if workflowCount > 0 {
                         Image(systemName: "wand.and.stars")
@@ -415,8 +460,6 @@ struct MemoTableRow: View {
                     }
                 }
                 .frame(width: workflowsWidth, alignment: .trailing)
-
-                Spacer()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
@@ -455,7 +498,6 @@ struct MemoInspectorPanel: View {
             HStack {
                 Text("DETAILS")
                     .font(SettingsManager.shared.fontXSBold)
-                    .tracking(1)
                     .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
 
                 Spacer()
@@ -474,6 +516,58 @@ struct MemoInspectorPanel: View {
             // Embed MemoDetailView without redundant header
             MemoDetailView(memo: memo, showHeader: false)
                 .id(memo.id)  // Stable identity for SwiftUI diffing
+        }
+        .background(SettingsManager.shared.tacticalBackground)
+    }
+}
+
+// MARK: - Memo Inspector Empty State
+
+struct MemoInspectorEmptyState: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header (matches MemoInspectorPanel)
+            HStack {
+                Text("DETAILS")
+                    .font(SettingsManager.shared.fontXSBold)
+                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+
+                Spacer()
+
+                CloseButton(action: onClose)
+                    .help("Close inspector (Esc)")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(SettingsManager.shared.tacticalBackgroundSecondary)
+
+            Rectangle()
+                .fill(SettingsManager.shared.tacticalDivider)
+                .frame(height: 0.5)
+
+            // Empty state content
+            VStack(spacing: 16) {
+                Spacer()
+
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 40))
+                    .foregroundColor(.secondary.opacity(0.3))
+
+                VStack(spacing: 6) {
+                    Text("No Memo Selected")
+                        .font(SettingsManager.shared.fontSMBold)
+                        .foregroundColor(.secondary)
+
+                    Text("Click on a memo to view details")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(SettingsManager.shared.tacticalBackground)
     }

@@ -40,7 +40,6 @@ struct ProviderCard<Content: View>: View {
 
                         Text(status.uppercased())
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(0.5)
                             .foregroundColor(isConfigured ? .green : .orange)
                     }
                 }
@@ -105,7 +104,6 @@ struct ModelRow: View {
                                 .font(SettingsManager.shared.fontXS)
                             Text("INSTALLED")
                                 .font(SettingsManager.shared.fontXSBold)
-                                .tracking(0.5)
                         }
                         .foregroundColor(.green)
                     }
@@ -127,7 +125,6 @@ struct ModelRow: View {
                 Button(action: onDelete) {
                     Text("DELETE")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(0.5)
                         .foregroundColor(.red)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -142,7 +139,6 @@ struct ModelRow: View {
                             .font(SettingsManager.shared.fontXS)
                         Text("DOWNLOAD")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(0.5)
                     }
                     .foregroundColor(.blue)
                     .padding(.horizontal, 12)
@@ -165,7 +161,6 @@ struct ActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(SettingsManager.shared.fontXSBold)
-            .tracking(1)
             .foregroundColor(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -250,7 +245,6 @@ struct CompactModelCard: View {
             HStack {
                 Text(modelCode)
                     .font(settings.monoXS)
-                    .tracking(settings.trackingNormal)
                     .foregroundColor(settings.specLabelColor)
 
                 Spacer()
@@ -262,7 +256,6 @@ struct CompactModelCard: View {
                             .frame(width: 6, height: 6)
                         Text("READY")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                             .foregroundColor(settings.statusActive)
                     }
                 } else {
@@ -271,7 +264,6 @@ struct CompactModelCard: View {
                             .font(.system(size: 8))
                         Text("AVAILABLE")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                     }
                     .foregroundColor(.secondary.opacity(0.8))
                 }
@@ -282,7 +274,6 @@ struct CompactModelCard: View {
             // Model name
             Text(model.displayName.uppercased())
                 .font(.system(size: 11, weight: .semibold))
-                .tracking(settings.trackingTight)
                 .foregroundColor(settings.specValueColor)
                 .lineLimit(2)
                 .padding(.bottom, 6)
@@ -368,13 +359,11 @@ struct CompactModelCard: View {
                     HStack {
                         Text("DOWNLOADING \(Int(downloadProgress * 100))%")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                             .foregroundColor(.blue.opacity(0.8))
                         Spacer()
                         Button(action: onCancel) {
                             Text("CANCEL")
                                 .font(settings.monoXS)
-                                .tracking(settings.trackingNormal)
                                 .foregroundColor(settings.statusError)
                         }
                         .buttonStyle(.plain)
@@ -387,7 +376,6 @@ struct CompactModelCard: View {
                             .font(.system(size: 9))
                         Text("REMOVE")
                             .font(settings.monoSM)
-                            .tracking(settings.trackingWide)
                     }
                     .foregroundColor(.secondary.opacity(0.7))
                     .frame(maxWidth: .infinity)
@@ -403,7 +391,6 @@ struct CompactModelCard: View {
                             .font(.system(size: 10))
                         Text("DOWNLOAD")
                             .font(settings.monoSM)
-                            .tracking(settings.trackingWide)
                     }
                     .foregroundColor(isHovered ? .accentColor : settings.specValueColor)
                     .frame(maxWidth: .infinity)
@@ -461,7 +448,6 @@ struct CompactModelCard: View {
         VStack(alignment: .center, spacing: 2) {
             Text(label)
                 .font(settings.monoXS)
-                .tracking(settings.trackingWide)
                 .foregroundColor(settings.specLabelColor)
             Text(value)
                 .font(settings.monoBody)
@@ -572,7 +558,6 @@ struct CompactProviderCard: View {
                 HStack {
                     Text("CONFIGURE")
                         .font(settings.monoSM)
-                        .tracking(settings.trackingWide)
                         .foregroundColor(.secondary)
                     Spacer()
                     Button(action: onCancel) {
@@ -595,7 +580,6 @@ struct CompactProviderCard: View {
                 Button(action: onSave) {
                     Text("SAVE")
                         .font(settings.monoSM)
-                        .tracking(settings.trackingWide)
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -623,7 +607,6 @@ struct CompactProviderCard: View {
                 HStack(spacing: 0) {
                     Text(providerCode)
                         .font(settings.monoXS)
-                        .tracking(settings.trackingNormal)
                         .foregroundColor(settings.specLabelColor)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
@@ -640,13 +623,11 @@ struct CompactProviderCard: View {
                                 .shadow(color: settings.statusActive.opacity(0.5), radius: 3)
                             Text("ACTIVE")
                                 .font(settings.monoXS)
-                                .tracking(settings.trackingNormal)
                                 .foregroundColor(settings.statusActive)
                         }
                     } else {
                         Text("SETUP")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                             .foregroundColor(settings.statusWarning)
                     }
                 }
@@ -665,7 +646,6 @@ struct CompactProviderCard: View {
 
                     Text(name.uppercased())
                         .font(.system(size: 12, weight: .semibold))
-                        .tracking(settings.trackingNormal)
                         .foregroundColor(settings.specValueColor)
                 }
                 .padding(.bottom, 4)
@@ -734,7 +714,6 @@ struct CompactProviderCard: View {
                             .font(.system(size: 9))
                         Text(isConfigured ? "CONFIGURED" : "CONFIGURE")
                             .font(settings.monoSM)
-                            .tracking(settings.trackingWide)
                     }
                     .foregroundColor(isConfigured ? settings.statusActive.opacity(0.7) : settings.specValueColor)
                     .frame(maxWidth: .infinity)
@@ -789,7 +768,6 @@ struct CompactProviderCard: View {
         VStack(alignment: .center, spacing: 2) {
             Text(label)
                 .font(settings.monoXS)
-                .tracking(settings.trackingWide)
                 .foregroundColor(settings.specLabelColor)
             Text(value)
                 .font(settings.monoBody)

@@ -13,7 +13,9 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 struct MemoDetailView: View {
     @ObservedObject var memo: VoiceMemo
-    @ObservedObject private var settings = SettingsManager.shared
+    // Use direct access to SettingsManager.shared instead of @ObservedObject
+    // to avoid unnecessary view rebuilds on any published property change
+    private let settings = SettingsManager.shared
     var showHeader: Bool = true  // Set to false when embedded in inspector
 
     @State private var isPlaying = false
@@ -120,7 +122,7 @@ struct MemoDetailView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Spacing.md, pinnedViews: []) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 // Header with title and edit toggle (optional)
                 if showHeader {
                     HStack(alignment: .top) {
@@ -139,7 +141,6 @@ struct MemoDetailView: View {
                             HStack(spacing: Spacing.xs) {
                                 Text(formatDate(memoCreatedAt).uppercased())
                                     .font(.techLabelSmall)
-                                    .tracking(Tracking.normal)
 
                                 Text("·")
                                     .font(.techLabelSmall)
@@ -210,7 +211,6 @@ struct MemoDetailView: View {
                         HStack(spacing: Spacing.xs) {
                             Text(formatDate(memoCreatedAt).uppercased())
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.normal)
                             Text("·")
                                 .font(.techLabelSmall)
                             Text(formatDuration(memo.duration))
@@ -220,96 +220,34 @@ struct MemoDetailView: View {
                     }
                 }
 
-                // Playback controls with waveform
-                VStack(spacing: Spacing.xs) {
-                    // Waveform visualization (full width, with background)
-                    WaveformView(
-                        progress: memo.duration > 0 ? currentTime / memo.duration : 0,
-                        isPlaying: isPlaying
-                    )
-                    .frame(height: 40)
-                    .drawingGroup()  // Metal-accelerated rendering for smoother scrolling
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, Spacing.xs)
-                    .background(settings.surfaceAlternate)
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(settings.borderDefault, lineWidth: 0.5)
-                    )
-
-                    // Controls: start time, play button, end time - aligned with waveform edges
-                    HStack(alignment: .center, spacing: 0) {
-                        Text(formatDuration(currentTime))
-                            .font(.monoXSmall)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Button(action: togglePlayback) {
-                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                .font(settings.fontTitle)
-                                .foregroundColor(.primary)
-                                .offset(x: isPlaying ? 0 : 1) // Optical centering for play triangle
-                                .frame(width: 32, height: 32)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-                        .buttonStyle(.plain)
-
-                        Text(formatDuration(memo.duration))
-                            .font(.monoXSmall)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                }
-
-                // Transcript Section
+                // 1. TRANSCRIPT (primary content)
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("TRANSCRIPT")
                         .font(.techLabel)
-                        .tracking(Tracking.wide)
                         .foregroundColor(.secondary)
 
                     transcriptView
                 }
 
-                // AI Results Section (only show if there are results)
-                if !cachedWorkflowRuns.isEmpty || memo.summary != nil || memo.tasks != nil {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("AI RESULTS")
-                            .font(.techLabel)
-                            .tracking(Tracking.wide)
-                            .foregroundColor(.secondary)
-
-                        aiResultsView
-                    }
-                }
-
                 // Transcribe Action (only if no transcript yet)
                 #if arch(arm64)
                 if (memo.currentTranscript == nil || memo.currentTranscript?.isEmpty == true) && memo.audioData != nil {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("ACTIONS")
-                            .font(.techLabel)
-                            .tracking(Tracking.wide)
-                            .foregroundColor(.secondary)
-
-                        ActionButtonMac(
-                            icon: "waveform.and.mic",
-                            title: "TRANSCRIBE",
-                            isProcessing: memo.isTranscribing,
-                            isCompleted: memo.currentTranscript != nil,
-                            runCount: 0,
-                            action: { executeTranscribeAction() }
-                        )
-                    }
+                    ActionButtonMac(
+                        icon: "waveform.and.mic",
+                        title: "TRANSCRIBE",
+                        isProcessing: memo.isTranscribing,
+                        isCompleted: memo.currentTranscript != nil,
+                        runCount: 0,
+                        action: { executeTranscribeAction() }
+                    )
                 }
                 #endif
 
-                // Quick Actions (3x2 grid)
+                // 2. QUICK ACTIONS (if transcript exists)
                 if memo.currentTranscript != nil && !memo.isTranscribing {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("QUICK ACTIONS")
                             .font(.techLabel)
-                            .tracking(Tracking.wide)
                             .foregroundColor(.secondary)
 
                         LazyVGrid(columns: [
@@ -317,54 +255,20 @@ struct MemoDetailView: View {
                             GridItem(.flexible(), spacing: 8),
                             GridItem(.flexible(), spacing: 8)
                         ], spacing: 8) {
-                            // Dynamic quick action items (pinned + defaults)
                             ForEach(cachedQuickActionItems) { item in
                                 quickActionButton(for: item)
                             }
-
-                            // 6th slot is always "MORE"
                             BrowseWorkflowsButton(action: { browseWorkflows() })
                         }
                     }
                 }
 
-                // Notes Section (moved below quick actions)
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    HStack {
-                        Text("NOTES")
-                            .font(.techLabel)
-                            .tracking(Tracking.wide)
-                            .foregroundColor(.secondary)
-
-                        Spacer()
-
-                        if showNotesSaved {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(settings.fontXS)
-                                .foregroundColor(.secondary.opacity(0.5))
-                                .transition(.opacity)
-                        }
-                    }
-
-                    TextEditor(text: $editedNotes)
-                        .font(settings.contentFontBody)
-                        .foregroundColor(.primary)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 80)
-                        .padding(12)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                        .onChange(of: editedNotes) { _, _ in
-                            debouncedSaveNotes()
-                        }
-                }
-
-                // Recent Workflow Runs
+                // 3. RECENT RUNS (with AI results inline)
                 if !cachedWorkflowRuns.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("RECENT RUNS")
                                 .font(.techLabel)
-                                .tracking(Tracking.wide)
                                 .foregroundColor(.secondary)
 
                             Spacer()
@@ -422,11 +326,65 @@ struct MemoDetailView: View {
                                     }
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
-                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+                                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
+                    }
+                }
+
+                // 4. NOTES
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack {
+                        Text("NOTES")
+                            .font(.techLabel)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        if showNotesSaved {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(settings.fontXS)
+                                .foregroundColor(.secondary.opacity(0.5))
+                        }
+                    }
+
+                    TextEditor(text: $editedNotes)
+                        .font(settings.contentFontBody)
+                        .foregroundColor(.primary)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 80)
+                        .padding(12)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                        .onChange(of: editedNotes) { _, _ in
+                            debouncedSaveNotes()
+                        }
+                }
+
+                // 5. PLAYBACK (compact, deferred rendering)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("PLAYBACK")
+                        .font(.techLabel)
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 12) {
+                        // Play/Pause button
+                        Button(action: togglePlayback) {
+                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                                .font(settings.fontBody)
+                                .foregroundColor(.primary)
+                                .frame(width: 36, height: 36)
+                                .background(Color(nsColor: .controlBackgroundColor), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+
+                        // Current time / duration
+                        Text("\(formatDuration(currentTime)) / \(formatDuration(memo.duration))")
+                            .font(.monoSmall)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
                     }
                 }
 
@@ -452,7 +410,7 @@ struct MemoDetailView: View {
                         .foregroundColor(.red.opacity(0.8))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
                 }
@@ -950,7 +908,6 @@ struct MemoDetailView: View {
                     .scaleEffect(0.7)
                 Text("PROCESSING...")
                     .font(settings.fontXSBold)
-                    .tracking(1)
                     .foregroundColor(.secondary)
             }
             .padding(12)
@@ -972,33 +929,40 @@ struct MemoDetailView: View {
                         .scrollContentBackground(.hidden)
                         .padding(12)
                         .frame(minHeight: 150)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
                                 .strokeBorder(Color.accentColor.opacity(0.4), lineWidth: 1)
                         )
                 } else {
-                    // Read mode
-                    Text(transcript)
-                        .font(settings.contentFontBody)
-                        .foregroundColor(.primary)
-                        .textSelection(.enabled)
-                        .lineSpacing(4)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        .contextMenu {
-                            Button("Copy") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(transcript, forType: .string)
-                            }
-                            if memo.sortedTranscriptVersions.count > 1 {
-                                Divider()
-                                Button("Version History (\(memo.sortedTranscriptVersions.count))") {
-                                    // TODO: Show version history sheet
+                    // Read mode with quick actions toolbar
+                    ZStack(alignment: .topTrailing) {
+                        Text(transcript)
+                            .font(settings.contentFontBody)
+                            .foregroundColor(.primary)
+                            .textSelection(.enabled)
+                            .lineSpacing(4)
+                            .padding(14)
+                            .padding(.top, 32) // Make room for toolbar
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+                            .contextMenu {
+                                Button("Copy") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(transcript, forType: .string)
+                                }
+                                if memo.sortedTranscriptVersions.count > 1 {
+                                    Divider()
+                                    Button("Version History (\(memo.sortedTranscriptVersions.count))") {
+                                        // TODO: Show version history sheet
+                                    }
                                 }
                             }
-                        }
+
+                        // Quick actions toolbar
+                        TranscriptQuickActions(transcript: transcript)
+                            .padding(8)
+                    }
                 }
             }
         } else {
@@ -1008,7 +972,6 @@ struct MemoDetailView: View {
                     .foregroundColor(.secondary.opacity(0.5))
                 Text("NO TRANSCRIPT AVAILABLE")
                     .font(settings.fontSMBold)
-                    .tracking(1)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
@@ -1091,7 +1054,6 @@ struct MemoDetailView: View {
                     .foregroundColor(.secondary.opacity(0.3))
                 Text("NO RESULTS")
                     .font(settings.fontSMBold)
-                    .tracking(1)
                     .foregroundColor(.secondary)
                 Text("Run workflows to generate AI results")
                     .font(settings.fontSM)
@@ -1139,7 +1101,6 @@ struct AIResultSection<Content: View>: View {
                     .font(.techLabel)
                 Text(title.uppercased())
                     .font(.techLabel)
-                    .tracking(Tracking.wide)
             }
             .foregroundColor(.secondary)
 
@@ -1195,7 +1156,7 @@ struct ActionButtonMac: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {
@@ -1391,7 +1352,6 @@ struct WorkflowRunDetailView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("OUTPUT")
                                     .font(SettingsManager.shared.fontSMBold)
-                                    .tracking(1)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
@@ -1465,7 +1425,6 @@ struct StepExecutionCard: View {
 
                 Text(step.stepType.uppercased())
                     .font(SettingsManager.shared.fontSMBold)
-                    .tracking(0.5)
                     .foregroundColor(.primary)
 
                 Spacer()
@@ -1473,7 +1432,6 @@ struct StepExecutionCard: View {
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
                         .font(SettingsManager.shared.fontXSMedium)
-                        .tracking(0.3)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -1488,7 +1446,6 @@ struct StepExecutionCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("INPUT")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(0.5)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
@@ -1620,7 +1577,6 @@ struct OutputCard: View {
                     if let label = label {
                         Text(label.uppercased())
                             .font(.techLabelSmall)
-                            .tracking(Tracking.normal)
                             .foregroundColor(.secondary.opacity(0.6))
                     }
 
@@ -1634,7 +1590,6 @@ struct OutputCard: View {
                             if copied {
                                 Text("COPIED")
                                     .font(.techLabelSmall)
-                                    .tracking(Tracking.tight)
                             }
                         }
                         .foregroundColor(copied ? .green : .secondary.opacity(0.5))
@@ -1661,7 +1616,6 @@ struct OutputCard: View {
                     HStack(spacing: 4) {
                         Text(isExpanded ? "SHOW LESS" : "SHOW MORE")
                             .font(.techLabelSmall)
-                            .tracking(Tracking.normal)
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(SettingsManager.shared.fontXSBold)
                     }
@@ -1691,6 +1645,258 @@ struct OutputCard: View {
             withAnimation(.easeOut(duration: 0.2)) {
                 copied = false
             }
+        }
+    }
+}
+
+// MARK: - Transcript Quick Actions Toolbar
+
+/// App definitions for quick actions
+struct QuickActionApp: Identifiable {
+    let id: String  // Unique identifier for state tracking
+    let bundleIdentifier: String?  // nil for path-based apps
+    let appPath: String?  // for apps without bundle ID registration
+    let displayName: String
+    let helpText: String
+    let urlScheme: String?  // URL scheme if supported
+
+    // Well-known apps
+    static let claude = QuickActionApp(
+        id: "claude",
+        bundleIdentifier: "com.anthropic.claudefordesktop",
+        appPath: "/Applications/Claude.app",
+        displayName: "Claude",
+        helpText: "Copy transcript and open Claude desktop app",
+        urlScheme: "claude://"
+    )
+
+    static let chatGPT = QuickActionApp(
+        id: "chatgpt",
+        bundleIdentifier: "com.openai.chat",
+        appPath: "/Applications/ChatGPT.app",
+        displayName: "ChatGPT",
+        helpText: "Copy transcript and open ChatGPT desktop app",
+        urlScheme: "chatgpt://"
+    )
+
+    static let obsidian = QuickActionApp(
+        id: "obsidian",
+        bundleIdentifier: "md.obsidian",
+        appPath: "/Applications/Obsidian.app",
+        displayName: "Obsidian",
+        helpText: "Create new Obsidian note with transcript",
+        urlScheme: nil  // Uses special URL scheme with content
+    )
+
+    static let macVim = QuickActionApp(
+        id: "macvim",
+        bundleIdentifier: "org.vim.MacVim",
+        appPath: "/Applications/MacVim.app",
+        displayName: "MacVim",
+        helpText: "Open transcript in MacVim text editor",
+        urlScheme: nil
+    )
+
+    static let allApps: [QuickActionApp] = [.claude, .chatGPT, .obsidian, .macVim]
+
+    /// Check if app is installed - call once and cache, not during render
+    func checkIsInstalled() -> Bool {
+        if let bundleID = bundleIdentifier {
+            return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+        }
+        if let path = appPath {
+            return FileManager.default.fileExists(atPath: path)
+        }
+        return false
+    }
+
+    /// Cached list of installed apps - computed once at app launch
+    static let installedApps: [QuickActionApp] = {
+        allApps.filter { $0.checkIsInstalled() }
+    }()
+}
+
+struct TranscriptQuickActions: View {
+    let transcript: String
+
+    @State private var copiedState: String? = nil  // Track which action just completed
+    @State private var feedbackMessage: String? = nil  // Feedback text to show
+
+    private let logger = Logger(subsystem: "jdi.talkie.core", category: "QuickActions")
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // Copy button (always shown)
+            copyButton
+
+            // Divider between copy and apps
+            if !QuickActionApp.installedApps.isEmpty {
+                Divider()
+                    .frame(height: 16)
+            }
+
+            // App-specific buttons (only for installed apps)
+            ForEach(QuickActionApp.installedApps) { app in
+                appButton(for: app)
+            }
+
+            // Feedback message inline (no layout shift)
+            if let message = feedbackMessage {
+                Text(message)
+                    .font(.caption2)
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.85), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    // MARK: - Button Views
+
+    private var copyButton: some View {
+        Button {
+            copyToClipboard()
+            showFeedback("Copied to clipboard")
+            flashState("copy")
+        } label: {
+            Image(systemName: copiedState == "copy" ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(copiedState == "copy" ? .green : .secondary)
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .help("Copy transcript to clipboard")
+    }
+
+    @ViewBuilder
+    private func appButton(for app: QuickActionApp) -> some View {
+        Button {
+            executeAction(for: app)
+            showFeedback("Copied — paste in \(app.displayName)")
+            flashState(app.id)
+        } label: {
+            Group {
+                if copiedState == app.id {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.green)
+                        .frame(width: 20, height: 20)
+                } else if let bundleID = app.bundleIdentifier {
+                    AppIconView(bundleIdentifier: bundleID, size: 20)
+                } else {
+                    Image(systemName: "app")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20, height: 20)
+                }
+            }
+            .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .help(app.helpText)
+    }
+
+    // MARK: - State Management
+
+    private func flashState(_ state: String) {
+        copiedState = state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if copiedState == state {
+                copiedState = nil
+            }
+        }
+    }
+
+    private func showFeedback(_ message: String) {
+        feedbackMessage = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            feedbackMessage = nil
+        }
+    }
+
+    // MARK: - Actions
+
+    private func copyToClipboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(transcript, forType: .string)
+        logger.debug("Copied transcript to clipboard")
+    }
+
+    private func executeAction(for app: QuickActionApp) {
+        switch app.id {
+        case "claude":
+            openInClaude()
+        case "chatgpt":
+            openInChatGPT()
+        case "obsidian":
+            openInObsidian()
+        case "macvim":
+            openInMacVim()
+        default:
+            copyToClipboard()
+        }
+    }
+
+    private func openInClaude() {
+        copyToClipboard()
+        if let url = URL(string: "claude://") {
+            NSWorkspace.shared.open(url)
+            logger.debug("Opening Claude with transcript")
+        }
+    }
+
+    private func openInChatGPT() {
+        copyToClipboard()
+        if let url = URL(string: "chatgpt://") {
+            NSWorkspace.shared.open(url)
+            logger.debug("Opening ChatGPT with transcript")
+        }
+    }
+
+    private func openInObsidian() {
+        // Obsidian supports creating new notes via URL scheme
+        let encodedContent = transcript.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HHmmss"
+        let fileName = "Talkie \(dateFormatter.string(from: Date()))"
+        let encodedName = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Talkie Note"
+
+        if let url = URL(string: "obsidian://new?name=\(encodedName)&content=\(encodedContent)") {
+            NSWorkspace.shared.open(url)
+            logger.debug("Opening Obsidian with transcript")
+        }
+    }
+
+    private func openInMacVim() {
+        // Write to temp file and open with MacVim
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "talkie-transcript-\(UUID().uuidString.prefix(8)).txt"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+
+        do {
+            try transcript.write(to: fileURL, atomically: true, encoding: .utf8)
+
+            // Try mvim command first, fall back to MacVim.app
+            let mvimURL = URL(fileURLWithPath: "/usr/local/bin/mvim")
+            let macVimAppURL = URL(fileURLWithPath: "/Applications/MacVim.app")
+
+            if FileManager.default.fileExists(atPath: mvimURL.path) {
+                let process = Process()
+                process.executableURL = mvimURL
+                process.arguments = [fileURL.path]
+                try process.run()
+            } else if FileManager.default.fileExists(atPath: macVimAppURL.path) {
+                NSWorkspace.shared.open([fileURL], withApplicationAt: macVimAppURL, configuration: NSWorkspace.OpenConfiguration())
+            } else {
+                // Fallback: open with default text editor
+                NSWorkspace.shared.open(fileURL)
+            }
+            logger.debug("Opening MacVim with transcript")
+        } catch {
+            logger.error("Failed to open in MacVim: \(error.localizedDescription)")
+            // Fallback to clipboard
+            copyToClipboard()
         }
     }
 }

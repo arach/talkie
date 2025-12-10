@@ -72,7 +72,8 @@ class AnthropicProvider: LLMProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         
-        let body: [String: Any] = [
+        // Anthropic uses "system" as top-level field, not in messages array
+        var body: [String: Any] = [
             "model": model,
             "messages": [
                 ["role": "user", "content": prompt]
@@ -81,6 +82,9 @@ class AnthropicProvider: LLMProvider {
             "max_tokens": options.maxTokens,
             "top_p": options.topP
         ]
+        if let systemPrompt = options.systemPrompt {
+            body["system"] = systemPrompt
+        }
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
@@ -121,13 +125,17 @@ class AnthropicProvider: LLMProvider {
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
                     
-                    let body: [String: Any] = [
+                    // Anthropic uses "system" as top-level field
+                    var body: [String: Any] = [
                         "model": model,
                         "messages": [["role": "user", "content": prompt]],
                         "temperature": options.temperature,
                         "max_tokens": options.maxTokens,
                         "stream": true
                     ]
+                    if let systemPrompt = options.systemPrompt {
+                        body["system"] = systemPrompt
+                    }
                     
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
                     

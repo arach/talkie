@@ -29,7 +29,6 @@ struct QuickActionsSettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("PINNED WORKFLOWS")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(MidnightSurface.Text.secondary)
 
                 if pinnedWorkflows.isEmpty {
@@ -60,7 +59,6 @@ struct QuickActionsSettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("AVAILABLE WORKFLOWS")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(MidnightSurface.Text.secondary)
 
                 if unpinnedWorkflows.isEmpty {

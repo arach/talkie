@@ -39,7 +39,6 @@ struct SettingsView: View {
                 // Settings Header - with breathing room at top
                 Text("SETTINGS")
                     .font(.system(size: 10, weight: .bold, design: .default))
-                    .tracking(Tracking.wide)
                     .foregroundColor(.white.opacity(0.9))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
@@ -198,7 +197,6 @@ struct SettingsSidebarSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(size: 9, weight: .semibold))
-                .tracking(Tracking.normal)
                 .foregroundColor(isActive ? .white.opacity(0.7) : .white.opacity(0.4))
                 .padding(.leading, 6)
                 .padding(.bottom, 2)
@@ -252,7 +250,6 @@ struct SettingsDoneButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 11, weight: .semibold))
-            .tracking(Tracking.normal)
             .foregroundColor(.white)
             .padding(.horizontal, 20)
             .padding(.vertical, 8)

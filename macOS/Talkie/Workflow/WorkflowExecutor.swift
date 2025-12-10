@@ -458,24 +458,18 @@ class WorkflowExecutor: ObservableObject {
         let resolvedPrompt = context.resolve(config.prompt)
         let systemPrompt = config.systemPrompt.map { context.resolve($0) }
 
+        // Pass system prompt properly via GenerationOptions (providers handle API-specific formatting)
         let options = GenerationOptions(
             temperature: config.temperature,
             topP: config.topP,
-            maxTokens: config.maxTokens
+            maxTokens: config.maxTokens,
+            systemPrompt: systemPrompt
         )
 
-        // If system prompt exists, prepend it
-        let fullPrompt: String
-        if let system = systemPrompt {
-            fullPrompt = "System: \(system)\n\nUser: \(resolvedPrompt)"
-        } else {
-            fullPrompt = resolvedPrompt
-        }
-
-        logger.info("🤖 LLM: Starting generation (prompt: \(fullPrompt.prefix(100))...)")
+        logger.info("🤖 LLM: Starting generation (prompt: \(resolvedPrompt.prefix(100))..., hasSystemPrompt: \(systemPrompt != nil))")
         do {
             let result = try await provider.generate(
-                prompt: fullPrompt,
+                prompt: resolvedPrompt,
                 model: resolved.modelId,
                 options: options
             )

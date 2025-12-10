@@ -29,7 +29,6 @@ struct ModelLibraryView: View {
                             .font(SettingsManager.shared.fontTitle)
                         Text("MODEL LIBRARY")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(2)
                     }
                     .foregroundColor(.primary)
 
@@ -78,7 +77,6 @@ struct ModelCard: View {
                         .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     Text(model.badge)
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(1)
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -105,14 +103,12 @@ struct ModelCard: View {
                         .foregroundColor(.green)
                     Text("INSTALLED")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.green)
                 }
             } else {
                 Button(action: {}) {
                     Text("DOWNLOAD")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)

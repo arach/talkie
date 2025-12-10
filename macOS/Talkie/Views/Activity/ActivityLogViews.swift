@@ -119,7 +119,6 @@ struct ActivityLogFullView: View {
 
                         Text("NO ACTIVITY YET")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Run workflows on your memos")
@@ -202,7 +201,6 @@ struct ActivityLogFullView: View {
 
                         Text("SELECT AN ACTION")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         Text("Click a row to see details")
@@ -346,7 +344,6 @@ struct ActivityInspectorPanel: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("OUTPUT")
                                     .font(SettingsManager.shared.fontXSBold)
-                                    .tracking(1)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
@@ -426,7 +423,6 @@ struct InspectorStepCard: View {
 
                 Text(step.stepType.uppercased())
                     .font(SettingsManager.shared.fontXSBold)
-                    .tracking(0.5)
                     .foregroundColor(.primary)
 
                 Spacer()

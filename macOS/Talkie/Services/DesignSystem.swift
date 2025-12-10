@@ -81,10 +81,10 @@ extension Font {
 
     // MARK: Tech Labels (Section headers, status indicators)
     /// 10pt bold mono - Section headers (TRANSCRIPT, QUICK ACTIONS)
-    /// Use with .tracking(2) for proper spacing
+    /// Note: Avoid .tracking() on small text - causes subpixel blur
     static let techLabel = Font.system(size: 10, weight: .bold, design: .monospaced)
     /// 9pt bold mono - Metadata labels (dates, status)
-    /// Use with .tracking(1) for proper spacing
+    /// Note: Avoid .tracking() on small text - causes subpixel blur
     static let techLabelSmall = Font.system(size: 9, weight: .bold, design: .monospaced)
 
     // MARK: Mono (Technical data, durations, counts)

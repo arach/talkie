@@ -100,7 +100,6 @@ struct WhisperModelCard: View {
                 // Tier badge
                 Text("TIER \(tierLevel)")
                     .font(settings.monoXS)
-                    .tracking(settings.trackingNormal)
                     .foregroundColor(settings.specLabelColor)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
@@ -118,7 +117,6 @@ struct WhisperModelCard: View {
                             .shadow(color: settings.statusActive.opacity(0.5), radius: 3)
                         Text("ACTIVE")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                             .foregroundColor(settings.statusActive)
                     }
                 } else if isDownloaded {
@@ -128,7 +126,6 @@ struct WhisperModelCard: View {
                             .frame(width: 6, height: 6)
                         Text("READY")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                             .foregroundColor(settings.statusActive)
                     }
                 } else {
@@ -137,7 +134,6 @@ struct WhisperModelCard: View {
                             .font(.system(size: 8))
                         Text("AVAILABLE")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                     }
                     .foregroundColor(.secondary.opacity(0.8))
                 }
@@ -148,7 +144,6 @@ struct WhisperModelCard: View {
             // Model name
             Text(modelName)
                 .font(.system(size: 12, weight: .semibold))
-                .tracking(settings.trackingNormal)
                 .foregroundColor(settings.specValueColor)
                 .padding(.bottom, 6)
 
@@ -236,13 +231,11 @@ struct WhisperModelCard: View {
                     HStack {
                         Text("DOWNLOADING \(Int(downloadProgress * 100))%")
                             .font(settings.monoXS)
-                            .tracking(settings.trackingNormal)
                             .foregroundColor(.blue.opacity(0.8))
                         Spacer()
                         Button(action: onCancel) {
                             Text("CANCEL")
                                 .font(settings.monoXS)
-                                .tracking(settings.trackingNormal)
                                 .foregroundColor(settings.statusError)
                         }
                         .buttonStyle(.plain)
@@ -255,7 +248,6 @@ struct WhisperModelCard: View {
                             .font(.system(size: 9))
                         Text("REMOVE")
                             .font(settings.monoSM)
-                            .tracking(settings.trackingWide)
                     }
                     .foregroundColor(.secondary.opacity(0.7))
                     .frame(maxWidth: .infinity)
@@ -271,7 +263,6 @@ struct WhisperModelCard: View {
                             .font(.system(size: 10))
                         Text("DOWNLOAD")
                             .font(settings.monoSM)
-                            .tracking(settings.trackingWide)
                     }
                     .foregroundColor(isHovered ? .accentColor : settings.specValueColor)
                     .frame(maxWidth: .infinity)
@@ -333,7 +324,6 @@ struct WhisperModelCard: View {
         VStack(alignment: .center, spacing: 3) {
             Text(label)
                 .font(settings.monoXS)
-                .tracking(settings.trackingWide)
                 .foregroundColor(settings.specLabelColor)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(value)

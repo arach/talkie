@@ -38,13 +38,11 @@ struct ModelsContentView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("TOOLS / MODELS")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .tracking(1)
                         .foregroundColor(settingsManager.midnightTextTertiary)
 
                     HStack(spacing: 8) {
                         Text("MODELS & INTELLIGENCE")
                             .font(.system(size: 18, weight: .bold))
-                            .tracking(1)
                             .foregroundColor(settingsManager.midnightTextPrimary)
                         Text("✦")
                             .font(.system(size: 14))
@@ -72,7 +70,6 @@ struct ModelsContentView: View {
 
                             Text("LOCAL MODELS")
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .tracking(1.5)
                                 .foregroundColor(settingsManager.midnightTextSecondary)
                             Spacer()
                             Text("PRIVATE ON-DEVICE")
@@ -95,7 +92,6 @@ struct ModelsContentView: View {
 
                             Text("SPEECH-TO-TEXT")
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .tracking(1.5)
                                 .foregroundColor(settingsManager.midnightTextSecondary)
                             Spacer()
                             Text("HIGH FIDELITY AUDIO")
@@ -123,7 +119,6 @@ struct ModelsContentView: View {
 
                         Text("CLOUD PROVIDERS")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .tracking(1.5)
                             .foregroundColor(settingsManager.midnightTextSecondary)
                         Spacer()
                         Text("API CONFIGURATION")

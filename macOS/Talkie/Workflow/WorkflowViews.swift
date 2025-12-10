@@ -133,7 +133,6 @@ struct WorkflowToggle: View {
 
                 Text(label)
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(isOn ? activeColor : .secondary.opacity(0.6))
             }
             .padding(.horizontal, 10)
@@ -209,7 +208,6 @@ struct WorkflowDetailView: View {
                             if isSystem {
                                 Text("SYSTEM")
                                     .font(.system(size: 7, weight: .bold, design: .monospaced))
-                                    .tracking(0.5)
                                     .foregroundColor(.secondary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -219,7 +217,6 @@ struct WorkflowDetailView: View {
 
                             Text(workflow.isEnabled ? "ACTIVE" : "DISABLED")
                                 .font(.system(size: 7, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
                                 .foregroundColor(workflow.isEnabled ? .green : .secondary)
                         }
                     }
@@ -233,7 +230,6 @@ struct WorkflowDetailView: View {
                                     .font(.system(size: 9))
                                 Text("RUN")
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .tracking(0.5)
                             }
                             .foregroundColor(.primary)
                             .padding(.horizontal, 12)
@@ -249,7 +245,6 @@ struct WorkflowDetailView: View {
                                     .font(.system(size: 9))
                                 Text("VIEW")
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .tracking(0.5)
                             }
                             .foregroundColor(.blue)
                             .padding(.horizontal, 12)
@@ -266,7 +261,6 @@ struct WorkflowDetailView: View {
                                     .font(.system(size: 9))
                                 Text("EDIT")
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .tracking(0.5)
                             }
                             .foregroundColor(isSystem ? .secondary.opacity(0.4) : .secondary)
                             .padding(.horizontal, 12)
@@ -284,7 +278,6 @@ struct WorkflowDetailView: View {
                                         .font(.system(size: 9))
                                     Text("DELETE")
                                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                        .tracking(0.5)
                                 }
                                 .foregroundColor(.secondary)
                                 .padding(.horizontal, 12)
@@ -304,7 +297,6 @@ struct WorkflowDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("STEPS")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(1.5)
                         .foregroundColor(.secondary)
 
                     if workflow.steps.isEmpty {
@@ -446,7 +438,6 @@ struct WorkflowStepCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(step.type.rawValue.uppercased())
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
 
                     Text(step.type.description)
                         .font(.system(size: 8, design: .monospaced))
@@ -458,7 +449,6 @@ struct WorkflowStepCard: View {
                 // Category badge
                 Text(step.type.category.rawValue.uppercased())
                     .font(.system(size: 7, weight: .medium, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary.opacity(0.7))
             }
 
@@ -533,7 +523,6 @@ struct LLMStepDetails: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("PROMPT")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(1)
                         .foregroundColor(.secondary)
 
                     Text(config.prompt)
@@ -566,7 +555,6 @@ struct ShellStepDetails: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("COMMAND")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(1)
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 4) {
@@ -975,7 +963,6 @@ struct DetailBadge: View {
     var body: some View {
         Text(label)
             .font(.system(size: 7, weight: .medium, design: .monospaced))
-            .tracking(0.3)
             .foregroundColor(.secondary)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
@@ -1045,7 +1032,6 @@ struct WorkflowInlineEditor: View {
                     Button(action: { isEditing = false }) {
                         Text("CANCEL")
                             .font(.techLabelSmall)
-                            .tracking(Tracking.tight)
                             .foregroundColor(.secondary)
                             .padding(.horizontal, Spacing.xs)
                             .padding(.vertical, 5)
@@ -1064,7 +1050,6 @@ struct WorkflowInlineEditor: View {
                                 .font(.techLabelSmall)
                             Text("SAVE")
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, Spacing.sm)
@@ -1081,7 +1066,6 @@ struct WorkflowInlineEditor: View {
                                 .font(.techLabelSmall)
                             Text("EDIT")
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.secondary)
                         .padding(.horizontal, Spacing.xs)
@@ -1098,7 +1082,6 @@ struct WorkflowInlineEditor: View {
                                 .font(.techLabelSmall)
                             Text("DUPLICATE")
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.secondary)
                         .padding(.horizontal, Spacing.xs)
@@ -1115,7 +1098,6 @@ struct WorkflowInlineEditor: View {
                                 .font(.techLabelSmall)
                             Text("VIEW")
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.blue)
                         .padding(.horizontal, Spacing.xs)
@@ -1133,7 +1115,6 @@ struct WorkflowInlineEditor: View {
                                 .font(.techLabelSmall)
                             Text("RUN")
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.tight)
                         }
                         .foregroundColor(.primary)
                         .padding(.horizontal, Spacing.sm)
@@ -1165,7 +1146,6 @@ struct WorkflowInlineEditor: View {
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("DESCRIPTION")
                             .font(.techLabelSmall)
-                            .tracking(Tracking.normal)
                             .foregroundColor(.secondary.opacity(0.6))
 
                         if isEditing {
@@ -1189,7 +1169,6 @@ struct WorkflowInlineEditor: View {
                             VStack(alignment: .leading, spacing: Spacing.xs) {
                                 Text("ICON")
                                     .font(.techLabelSmall)
-                                    .tracking(Tracking.normal)
                                     .foregroundColor(.secondary.opacity(0.6))
 
                                 HStack(spacing: Spacing.xs) {
@@ -1214,7 +1193,6 @@ struct WorkflowInlineEditor: View {
                             VStack(alignment: .leading, spacing: Spacing.xs) {
                                 Text("COLOR")
                                     .font(.techLabelSmall)
-                                    .tracking(Tracking.normal)
                                     .foregroundColor(.secondary.opacity(0.6))
 
                                 Picker("", selection: editedWorkflow.color) {
@@ -1242,7 +1220,6 @@ struct WorkflowInlineEditor: View {
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text("OPTIONS")
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.normal)
                                 .foregroundColor(.secondary.opacity(0.6))
 
                             HStack(spacing: 20) {
@@ -1283,7 +1260,6 @@ struct WorkflowInlineEditor: View {
                         HStack {
                             Text("STEPS")
                                 .font(.techLabelSmall)
-                                .tracking(Tracking.normal)
                                 .foregroundColor(.secondary.opacity(0.6))
 
                             Spacer()
@@ -1295,7 +1271,6 @@ struct WorkflowInlineEditor: View {
                                             .font(.techLabelSmall)
                                         Text("ADD STEP")
                                             .font(.techLabelSmall)
-                                            .tracking(Tracking.tight)
                                     }
                                     .foregroundColor(.primary)
                                     .padding(.horizontal, Spacing.xs)
@@ -1317,7 +1292,6 @@ struct WorkflowInlineEditor: View {
 
                                 Text("NO STEPS")
                                     .font(.techLabelSmall)
-                                    .tracking(Tracking.normal)
                                     .foregroundColor(.secondary.opacity(Opacity.half))
 
                                 Text(isEditing ? "Add steps to define workflow actions" : "This workflow has no steps yet")
@@ -1331,7 +1305,6 @@ struct WorkflowInlineEditor: View {
                                                 .font(.techLabelSmall)
                                             Text("ADD FIRST STEP")
                                                 .font(.techLabelSmall)
-                                                .tracking(Tracking.tight)
                                         }
                                         .foregroundColor(.primary)
                                         .padding(.horizontal, Spacing.sm)
@@ -1478,7 +1451,6 @@ struct WorkflowEditorSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("BASIC INFORMATION")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -1546,7 +1518,6 @@ struct WorkflowEditorSheet: View {
                         HStack {
                             Text("WORKFLOW STEPS")
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .tracking(1)
                                 .foregroundColor(.secondary)
 
                             Spacer()
@@ -1696,7 +1667,6 @@ struct StepTypePicker: View {
                                     .font(.system(size: 10))
                                 Text(category.rawValue.uppercased())
                                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .tracking(1)
                             }
                             .foregroundColor(.secondary)
 
@@ -1977,7 +1947,6 @@ struct WorkflowStepEditor: View {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("OUTPUT KEY")
                     .font(.techLabelSmall)
-                    .tracking(Tracking.tight)
                     .foregroundColor(.secondary)
 
                 TextField("Key name for storing output", text: $step.outputKey)
@@ -2132,7 +2101,6 @@ struct LLMStepReadView: View {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("PROMPT")
                     .font(.techLabelSmall)
-                    .tracking(Tracking.tight)
                     .foregroundColor(.secondary.opacity(0.6))
 
                 Text(config.prompt)
@@ -2231,7 +2199,6 @@ struct ShellStepReadView: View {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("STDIN")
                         .font(.techLabelSmall)
-                        .tracking(Tracking.tight)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(stdin)
@@ -2250,7 +2217,6 @@ struct ShellStepReadView: View {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("PROMPT TEMPLATE")
                         .font(.techLabelSmall)
-                        .tracking(Tracking.tight)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(template)
@@ -2333,7 +2299,6 @@ struct WebhookStepReadView: View {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("BODY TEMPLATE")
                         .font(.techLabelSmall)
-                        .tracking(Tracking.tight)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(body)
@@ -2511,7 +2476,6 @@ struct IntentExtractStepReadView: View {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("INTENTS")
                         .font(.techLabelSmall)
-                        .tracking(Tracking.tight)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     // Intent cards
@@ -2969,7 +2933,6 @@ struct SaveFileStepReadView: View {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("CONTENT")
                         .font(.techLabelSmall)
-                        .tracking(Tracking.tight)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(config.content)
@@ -3354,7 +3317,6 @@ struct LLMStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("PROVIDER")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     Picker("", selection: Binding(
@@ -3415,7 +3377,6 @@ struct LLMStepConfigEditor: View {
                     HStack(spacing: 4) {
                         Text("MODEL")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
                             .foregroundColor(.secondary)
 
                         // Badge showing LOCAL or EXTERNAL
@@ -3485,7 +3446,6 @@ struct LLMStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("TEMPERATURE")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     HStack {
@@ -3506,7 +3466,6 @@ struct LLMStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("MAX TOKENS")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     TextField("1024", value: Binding(
@@ -3526,7 +3485,6 @@ struct LLMStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("PROMPT")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 TextEditor(text: Binding(
@@ -3568,7 +3526,6 @@ struct ShellStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("PRESET")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 6) {
@@ -3596,7 +3553,6 @@ struct ShellStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("EXECUTABLE PATH")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 HStack {
@@ -3630,7 +3586,6 @@ struct ShellStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("ARGUMENTS")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 TextField("arg1 arg2 {{TRANSCRIPT}}", text: $argumentsText)
@@ -3665,7 +3620,6 @@ struct ShellStepConfigEditor: View {
                     HStack(spacing: 4) {
                         Text("PROMPT TEMPLATE")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
                             .foregroundColor(.secondary)
                         Text("(for claude -p)")
                             .font(.system(size: 8, design: .monospaced))
@@ -3712,7 +3666,6 @@ struct ShellStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("STDIN INPUT (OPTIONAL)")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 TextField("{{TRANSCRIPT}} or {{OUTPUT}}", text: Binding(
@@ -3736,7 +3689,6 @@ struct ShellStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("TIMEOUT (SECONDS)")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     TextField("30", value: Binding(
@@ -3755,7 +3707,6 @@ struct ShellStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("OPTIONS")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     Toggle("Capture stderr", isOn: Binding(
@@ -3839,7 +3790,6 @@ struct WebhookStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("METHOD")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     Picker("", selection: Binding(
@@ -3861,7 +3811,6 @@ struct WebhookStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("URL")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     TextField("https://...", text: Binding(
@@ -4630,7 +4579,6 @@ struct TranscribeStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("WHISPER MODEL")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 Picker("", selection: Binding(
@@ -4662,7 +4610,6 @@ struct TranscribeStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("OPTIONS")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 Toggle(isOn: Binding(
@@ -4733,7 +4680,6 @@ struct SpeakStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("TEXT TO SPEAK")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 TextEditor(text: Binding(
@@ -4762,7 +4708,6 @@ struct SpeakStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("SPEECH RATE")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 HStack {
@@ -4859,7 +4804,6 @@ struct TriggerStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("TRIGGER PHRASES")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 ForEach(config.phrases, id: \.self) { phrase in
@@ -4909,7 +4853,6 @@ struct TriggerStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("SEARCH LOCATION")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 Picker("", selection: Binding(
@@ -4939,7 +4882,6 @@ struct TriggerStepConfigEditor: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("CONTEXT WINDOW")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     HStack {
@@ -4972,7 +4914,6 @@ struct TriggerStepConfigEditor: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("STOP IF NO MATCH")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
                             .foregroundColor(.secondary)
                         Text("Gates workflow execution")
                             .font(.system(size: 8, design: .monospaced))
@@ -5024,7 +4965,6 @@ struct IntentExtractStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("EXTRACTION METHOD")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 Picker("", selection: Binding(
@@ -5053,7 +4993,6 @@ struct IntentExtractStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("INPUT KEY")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 TextField("", text: Binding(
@@ -5080,7 +5019,6 @@ struct IntentExtractStepConfigEditor: View {
                     HStack {
                         Text("LLM SETTINGS")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
                             .foregroundColor(.secondary)
 
                         Spacer()
@@ -5195,7 +5133,6 @@ struct IntentExtractStepConfigEditor: View {
                 HStack {
                     Text("RECOGNIZED INTENTS")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
                         .foregroundColor(.secondary)
 
                     Spacer()
@@ -5532,7 +5469,6 @@ struct ExecuteWorkflowsStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("INTENTS INPUT KEY")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 TextField("", text: Binding(
@@ -5557,7 +5493,6 @@ struct ExecuteWorkflowsStepConfigEditor: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("EXECUTION OPTIONS")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 24) {

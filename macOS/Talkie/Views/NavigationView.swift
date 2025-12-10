@@ -42,6 +42,11 @@ struct TalkieNavigationView: View {
     @StateObject private var eventManager = SystemEventManager.shared
     @StateObject private var pendingActionsManager = PendingActionsManager.shared
 
+    // Collapsible sidebar state (matches TalkieLive)
+    @State private var isSidebarCollapsed: Bool = false
+    @State private var isChevronHovered: Bool = false
+    @State private var isChevronPressed: Bool = false
+
     var body: some View {
         VStack(spacing: 0) {
             // Main content area
@@ -51,6 +56,11 @@ struct TalkieNavigationView: View {
                         // 2-column layout for Models, etc.
                         NavigationSplitView(columnVisibility: $columnVisibility) {
                             sidebarView
+                                .navigationSplitViewColumnWidth(
+                                    min: isSidebarCollapsed ? 56 : 180,
+                                    ideal: isSidebarCollapsed ? 56 : 180,
+                                    max: isSidebarCollapsed ? 56 : 180
+                                )
                         } detail: {
                             twoColumnDetailView
                         }
@@ -58,9 +68,14 @@ struct TalkieNavigationView: View {
                         // 3-column layout for Memos, Workflows, AI Results
                         NavigationSplitView(columnVisibility: $columnVisibility) {
                             sidebarView
+                                .navigationSplitViewColumnWidth(
+                                    min: isSidebarCollapsed ? 56 : 180,
+                                    ideal: isSidebarCollapsed ? 56 : 180,
+                                    max: isSidebarCollapsed ? 56 : 180
+                                )
                         } content: {
                             contentColumnView
-                                .frame(minWidth: 280, idealWidth: 320)
+                                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
                         } detail: {
                             detailColumnView
                         }
@@ -218,7 +233,6 @@ struct TalkieNavigationView: View {
             #if DEBUG
             Text("DEV")
                 .font(SettingsManager.shared.fontXSBold)
-                .tracking(1)
                 .foregroundColor(.orange.opacity(0.7))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -229,12 +243,6 @@ struct TalkieNavigationView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .background(SettingsManager.shared.tacticalBackgroundSecondary)
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(SettingsManager.shared.tacticalDivider),
-            alignment: .top
-        )
     }
 
     @ViewBuilder
@@ -281,200 +289,188 @@ struct TalkieNavigationView: View {
         }
     }
 
-    // MARK: - Sidebar View
+    // MARK: - Sidebar View (matches TalkieLive structure)
 
     @State private var showingSettings = false
 
     private var sidebarView: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("TALKIE")
-                    .font(SettingsManager.shared.fontSMBold)
-                    .tracking(2)
-                    .foregroundColor(SettingsManager.shared.tacticalForeground)
+            // Header with collapse toggle (matches TalkieLive)
+            sidebarHeader
 
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-
-            Rectangle()
-                .fill(SettingsManager.shared.tacticalDivider)
-                .frame(height: 0.5)
-
-            // Search
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
-
-                TextField("Search memos...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(SettingsManager.shared.tacticalForeground)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(SettingsManager.shared.tacticalBackgroundTertiary)
-            .cornerRadius(4)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-
-            // Navigation sections
+            // Navigation list
             List(selection: $selectedSection) {
-                Section(header: Text("Memos")
-                    .font(SettingsManager.shared.fontXSMedium)
-                    .textCase(SettingsManager.shared.uiTextCase)
-                    .foregroundColor(.secondary.opacity(0.6))
-                ) {
-                    NavigationLink(value: NavigationSection.allMemos) {
-                        Label {
-                            HStack {
-                                Text("All Memos")
-                                    .font(SettingsManager.shared.fontSM)
-                                    .textCase(SettingsManager.shared.uiTextCase)
-                                Spacer()
-                                Text("\(allMemos.count)")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "square.stack")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
+                // Memos section
+                Section(isSidebarCollapsed ? "" : "Memos") {
+                    sidebarItem(
+                        section: .allMemos,
+                        icon: "square.stack",
+                        title: "All Memos",
+                        badge: allMemos.count > 0 ? "\(allMemos.count)" : nil,
+                        badgeColor: .secondary
+                    )
                 }
-                .collapsible(false)
 
-                // Activity section - Actions + Pending Actions
-                Section(header: Text("Activity")
-                    .font(SettingsManager.shared.fontXSMedium)
-                    .textCase(SettingsManager.shared.uiTextCase)
-                    .foregroundColor(.secondary.opacity(0.6))
-                ) {
-                    NavigationLink(value: NavigationSection.aiResults) {
-                        Label {
-                            Text("Actions")
-                                .font(SettingsManager.shared.fontSM)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
+                // Activity section
+                Section(isSidebarCollapsed ? "" : "Activity") {
+                    sidebarItem(
+                        section: .aiResults,
+                        icon: "chart.line.uptrend.xyaxis",
+                        title: "Actions"
+                    )
 
-                    NavigationLink(value: NavigationSection.pendingActions) {
-                        Label {
-                            HStack {
-                                Text("Pending Actions")
-                                    .font(SettingsManager.shared.fontSM)
-                                    .textCase(SettingsManager.shared.uiTextCase)
-                                Spacer()
-                                // Show count badge if there are active actions
-                                if pendingActionsManager.hasActiveActions {
-                                    HStack(spacing: 3) {
-                                        ProgressView()
-                                            .scaleEffect(0.4)
-                                            .frame(width: 10, height: 10)
-                                        Text("\(pendingActionsManager.activeCount)")
-                                            .font(SettingsManager.shared.fontXS)
-                                    }
-                                    .foregroundColor(.accentColor)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.accentColor.opacity(0.15))
-                                    .cornerRadius(8)
-                                }
-                            }
-                        } icon: {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
+                    sidebarItem(
+                        section: .pendingActions,
+                        icon: "clock.arrow.circlepath",
+                        title: "Pending",
+                        badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil,
+                        badgeColor: .accentColor,
+                        showSpinner: pendingActionsManager.hasActiveActions
+                    )
                 }
-                .collapsible(false)
 
-                // Tools section - Workflows, Models, Console
-                Section(header: Text("Tools")
-                    .font(SettingsManager.shared.fontXSMedium)
-                    .textCase(SettingsManager.shared.uiTextCase)
-                    .foregroundColor(.secondary.opacity(0.6))
-                ) {
-                    NavigationLink(value: NavigationSection.workflows) {
-                        Label {
-                            Text("Workflows")
-                                .font(SettingsManager.shared.fontSM)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "wand.and.stars")
-                                .font(SettingsManager.shared.fontXS)
+                // Tools section
+                Section(isSidebarCollapsed ? "" : "Tools") {
+                    sidebarItem(
+                        section: .workflows,
+                        icon: "wand.and.stars",
+                        title: "Workflows"
+                    )
+
+                    sidebarItem(
+                        section: .models,
+                        icon: "brain",
+                        title: "Models"
+                    )
+
+                    sidebarItem(
+                        section: .systemConsole,
+                        icon: "terminal",
+                        title: "Console",
+                        badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil,
+                        badgeColor: .orange
+                    )
+
+                    // Settings button (opens sheet, not navigation)
+                    Button(action: { showingSettings = true }) {
+                        if isSidebarCollapsed {
+                            Image(systemName: "gear")
+                                .frame(maxWidth: .infinity)
+                                .help("Settings")
+                        } else {
+                            Label("Settings", systemImage: "gear")
                         }
                     }
-
-                    NavigationLink(value: NavigationSection.models) {
-                        Label {
-                            Text("Models")
-                                .font(SettingsManager.shared.fontSM)
-                                .textCase(SettingsManager.shared.uiTextCase)
-                        } icon: {
-                            Image(systemName: "brain")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
-
-                    NavigationLink(value: NavigationSection.systemConsole) {
-                        Label {
-                            HStack {
-                                Text("Console")
-                                    .font(SettingsManager.shared.fontSM)
-                                    .textCase(SettingsManager.shared.uiTextCase)
-                                Spacer()
-                                // Show indicator if there are recent errors
-                                if consoleErrorCount > 0 {
-                                    Text("\(consoleErrorCount)")
-                                        .font(SettingsManager.shared.fontXS)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 1)
-                                        .background(Color.orange)
-                                        .cornerRadius(8)
-                                }
-                            }
-                        } icon: {
-                            Image(systemName: "terminal")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                    }
+                    .buttonStyle(.plain)
                 }
-                .collapsible(false)
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-
-            // Footer - Settings button at bottom of sidebar
-            Divider()
-
-            Button(action: { showingSettings = true }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "gear")
-                        .font(SettingsManager.shared.fontXS)
-                    Text("Settings")
-                        .font(SettingsManager.shared.fontSM)
-                        .textCase(SettingsManager.shared.uiTextCase)
-                    Spacer()
-                }
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
         }
-        .frame(minWidth: 180, idealWidth: 200)
-        .background(SettingsManager.shared.tacticalBackground)
+        .background(SettingsManager.shared.tacticalBackgroundSecondary)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .frame(width: 900, height: 750, alignment: .topLeading)
+        }
+    }
+
+    /// Sidebar header with app branding and collapse toggle (matches TalkieLive)
+    private var sidebarHeader: some View {
+        HStack {
+            if isSidebarCollapsed {
+                // Collapsed: show expand chevron centered
+                chevronButton(icon: "chevron.right", help: "Expand Sidebar")
+            } else {
+                // Expanded: show app name and collapse button
+                Text("TALKIE")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(3)
+                    .foregroundColor(Color(white: 0.45))
+
+                Spacer()
+
+                chevronButton(icon: "chevron.left", help: "Collapse Sidebar")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
+        .padding(.horizontal, isSidebarCollapsed ? 0 : 12)
+        .padding(.top, 8) // Clear traffic light buttons
+    }
+
+    /// Interactive chevron button with hover and press feedback (matches TalkieLive)
+    private func chevronButton(icon: String, help: String) -> some View {
+        Button(action: {
+            withAnimation(.easeOut(duration: 0.1)) {
+                isChevronPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isChevronPressed = false
+                toggleSidebarCollapse()
+            }
+        }) {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(isChevronHovered ? Color(white: 0.9) : Color(white: 0.5))
+                .frame(width: 20, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isChevronHovered ? Color(white: 0.2) : Color.clear)
+                )
+                .scaleEffect(isChevronPressed ? 0.85 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isChevronHovered = hovering
+            }
+        }
+        .help(help)
+    }
+
+    private func toggleSidebarCollapse() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSidebarCollapsed.toggle()
+        }
+    }
+
+    /// Adaptive sidebar item - shows icon only when collapsed, full label when expanded (matches TalkieLive)
+    @ViewBuilder
+    private func sidebarItem(
+        section: NavigationSection,
+        icon: String,
+        title: String,
+        badge: String? = nil,
+        badgeColor: Color = .secondary,
+        showSpinner: Bool = false
+    ) -> some View {
+        if isSidebarCollapsed {
+            // Icon-only mode
+            Image(systemName: icon)
+                .frame(maxWidth: .infinity)
+                .tag(section)
+                .help(title)
+        } else {
+            // Full label mode
+            Label {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    if showSpinner {
+                        ProgressView()
+                            .scaleEffect(0.4)
+                            .frame(width: 10, height: 10)
+                    }
+                    if let badge = badge {
+                        Text(badge)
+                            .font(.caption)
+                            .foregroundColor(badgeColor)
+                    }
+                }
+            } icon: {
+                Image(systemName: icon)
+            }
+            .tag(section)
         }
     }
 
@@ -568,7 +564,6 @@ struct TalkieNavigationView: View {
 
                     Text("SELECT A MEMO")
                         .font(SettingsManager.shared.fontBodyBold)
-                        .tracking(2)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -659,25 +654,23 @@ struct TalkieNavigationView: View {
     @ViewBuilder
     private var memoListView: some View {
         VStack(spacing: 0) {
-            // Section header
+            // Search field (moved from sidebar to content column)
             HStack(spacing: 6) {
-                Text(sectionTitle)
-                    .font(SettingsManager.shared.fontSMMedium)
-                    .foregroundColor(SettingsManager.shared.tacticalForeground)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
 
-                if let subtitle = sectionSubtitle {
-                    Text(subtitle)
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
-                }
-
-                Spacer()
+                TextField("Search memos...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            .cornerRadius(6)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(SettingsManager.shared.tacticalBackgroundSecondary)
-
-            Divider()
 
             // Memo list
             if filteredMemos.isEmpty {
@@ -689,7 +682,6 @@ struct TalkieNavigationView: View {
 
                     Text("NO MEMOS")
                         .font(.techLabel)
-                        .tracking(Tracking.wide)
                         .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
 
                     Text("Record on iPhone to sync")

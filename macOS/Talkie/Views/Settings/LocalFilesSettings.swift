@@ -35,7 +35,6 @@ struct LocalFilesSettingsView: View {
                             .foregroundColor(.green)
                         Text("YOUR DATA, YOUR FILES")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.green)
                     }
 
@@ -86,7 +85,6 @@ struct LocalFilesSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("TRANSCRIPTS FOLDER")
                                 .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 8) {
@@ -145,7 +143,6 @@ struct LocalFilesSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("AUDIO FOLDER")
                                 .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 8) {
@@ -195,7 +192,6 @@ struct LocalFilesSettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("FILE STATISTICS")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 24) {
@@ -236,7 +232,6 @@ struct LocalFilesSettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("QUICK ACTIONS")
                             .font(SettingsManager.shared.fontXSBold)
-                            .tracking(1)
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 12) {

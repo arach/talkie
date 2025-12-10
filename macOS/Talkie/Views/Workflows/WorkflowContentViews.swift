@@ -45,7 +45,6 @@ struct WorkflowsContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("WORKFLOWS")
                             .font(SettingsManager.shared.fontSMBold)
-                            .tracking(1.5)
                         Text("\(workflowManager.workflows.count) total")
                             .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
@@ -107,7 +106,6 @@ struct WorkflowsContentView: View {
 
                     Text("SELECT OR CREATE")
                         .font(SettingsManager.shared.fontXSBold)
-                        .tracking(1)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Button(action: createNewWorkflow) {
@@ -116,7 +114,6 @@ struct WorkflowsContentView: View {
                                 .font(SettingsManager.shared.fontXS)
                             Text("NEW WORKFLOW")
                                 .font(SettingsManager.shared.fontXSBold)
-                                .tracking(0.5)
                         }
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)
@@ -401,7 +398,6 @@ struct WorkflowCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title.uppercased())
                         .font(SettingsManager.shared.fontSMBold)
-                        .tracking(0.5)
 
                     Text(description)
                         .font(SettingsManager.shared.fontXS)
@@ -413,7 +409,6 @@ struct WorkflowCard: View {
                                 .scaleEffect(0.5)
                             Text("RUNNING...")
                                 .font(SettingsManager.shared.fontXSMedium)
-                                .tracking(0.5)
                                 .foregroundColor(.secondary)
                         }
                     }
