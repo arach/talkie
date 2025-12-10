@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settings = LiveSettings.shared
+
+        // Apply saved appearance mode on launch
+        settings.applyAppearance()
+
         let audio = MicrophoneCapture()
 
         // Use EngineTranscriptionService - requires TalkieEngine to be running (no fallback)

@@ -95,11 +95,8 @@ struct WalkieConversationView: View {
                 }
             }
         }
-        .task {
+        .task(id: memoId) {
             await loadWalkies()
-        }
-        .onChange(of: memoId) { _, _ in
-            Task { await loadWalkies() }
         }
     }
 

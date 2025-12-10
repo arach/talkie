@@ -1,5 +1,16 @@
 # Talkie Installer Build System
 
+<p align="center">
+  <img src="install-for-mac.png" alt="Talkie Installer" width="600">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-macOS%2014%2B-blue?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Signed-Developer%20ID-green?logo=apple" alt="Developer ID Signed">
+  <img src="https://img.shields.io/badge/Notarized-Apple-brightgreen?logo=apple" alt="Apple Notarized">
+  <img src="https://img.shields.io/badge/Gatekeeper-Verified-success?logo=apple" alt="Gatekeeper Verified">
+</p>
+
 Build, sign, and notarize macOS installer packages for Talkie.
 
 ## Prerequisites

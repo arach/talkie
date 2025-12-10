@@ -43,6 +43,10 @@ struct MemoTableFullView: View {
     @State private var sortField: MemoSortField = .timestamp
     @State private var sortAscending: Bool = false
 
+    // Pagination - Gmail-style "Load More"
+    private let pageSize: Int = 50
+    @State private var displayedCount: Int = 50
+
     // Column widths (resizable)
     @State private var timestampWidth: CGFloat = 150
     @State private var titleWidth: CGFloat = 280
@@ -71,6 +75,19 @@ struct MemoTableFullView: View {
         }
     }
 
+    // Paginated view of sorted memos
+    private var visibleMemos: [VoiceMemo] {
+        Array(sortedMemos.prefix(displayedCount))
+    }
+
+    private var hasMoreMemos: Bool {
+        displayedCount < sortedMemos.count
+    }
+
+    private var remainingCount: Int {
+        max(0, sortedMemos.count - displayedCount)
+    }
+
     var body: some View {
         ZStack(alignment: .trailing) {
             // Main table content (full width, always visible)
@@ -82,9 +99,16 @@ struct MemoTableFullView: View {
                         .foregroundColor(SettingsManager.shared.tacticalForeground)
                         .textCase(SettingsManager.shared.uiTextCase)
 
-                    Text("\(allMemos.count)")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                    // Show "X of Y" when paginated, just "Y" when showing all
+                    if hasMoreMemos {
+                        Text("\(visibleMemos.count) of \(allMemos.count)")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                    } else {
+                        Text("\(allMemos.count)")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                    }
 
                     Spacer()
 
@@ -139,7 +163,7 @@ struct MemoTableFullView: View {
                     // Table rows
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(sortedMemos, id: \.id) { memo in
+                            ForEach(visibleMemos, id: \.id) { memo in
                                 MemoTableRow(
                                     memo: memo,
                                     isSelected: selectedMemo?.id == memo.id,
@@ -158,6 +182,27 @@ struct MemoTableFullView: View {
                                 Rectangle()
                                     .fill(SettingsManager.shared.tacticalDivider.opacity(0.25))
                                     .frame(height: 1)
+                            }
+
+                            // "Load More" button (Gmail-style pagination)
+                            if hasMoreMemos {
+                                Button(action: loadMore) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "arrow.down.circle")
+                                            .font(SettingsManager.shared.fontSM)
+                                        Text("LOAD MORE")
+                                            .font(SettingsManager.shared.fontXSBold)
+                                            .tracking(1)
+                                        Text("(\(remainingCount) remaining)")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .foregroundColor(.accentColor)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(.plain)
+                                .background(SettingsManager.shared.tacticalBackgroundSecondary.opacity(0.5))
                             }
                         }
                     }
@@ -195,6 +240,14 @@ struct MemoTableFullView: View {
                 return .handled
             }
             return .ignored
+        }
+    }
+
+    // MARK: - Pagination
+
+    private func loadMore() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            displayedCount = min(displayedCount + pageSize, sortedMemos.count)
         }
     }
 }
@@ -420,6 +473,7 @@ struct MemoInspectorPanel: View {
 
             // Embed MemoDetailView without redundant header
             MemoDetailView(memo: memo, showHeader: false)
+                .id(memo.id)  // Stable identity for SwiftUI diffing
         }
         .background(SettingsManager.shared.tacticalBackground)
     }

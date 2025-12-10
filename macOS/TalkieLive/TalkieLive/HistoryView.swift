@@ -88,6 +88,7 @@ struct LiveNavigationView: View {
             StatusBar()
         }
         .frame(minWidth: 700, minHeight: 500)
+        .observeTheme()
         .onAppear {
             LiveSettings.shared.applyAppearance()
         }

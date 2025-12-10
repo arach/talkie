@@ -35,6 +35,8 @@ struct MemoDetailView: View {
     @StateObject private var workflowManager = WorkflowManager.shared
     @State private var processingWorkflowIDs: Set<UUID> = []
     @State private var showingWorkflowPicker = false
+    @State private var cachedQuickActionItems: [QuickActionItem] = []
+    @State private var cachedWorkflowRuns: [WorkflowRun] = []
 
     // MARK: - Quick Actions Logic
 
@@ -76,7 +78,7 @@ struct MemoDetailView: View {
     }
 
     /// Build the quick actions list: pinned workflows first, then defaults, max 5 items
-    private var quickActionItems: [QuickActionItem] {
+    private func computeQuickActionItems() -> [QuickActionItem] {
         var items: [QuickActionItem] = []
 
         // Add pinned workflows first (up to 5)
@@ -96,6 +98,18 @@ struct MemoDetailView: View {
         return items
     }
 
+    /// Compute sorted workflow runs from memo
+    private func computeSortedWorkflowRuns() -> [WorkflowRun] {
+        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return [] }
+        return runs.sorted { ($0.runDate ?? Date.distantPast) > ($1.runDate ?? Date.distantPast) }
+    }
+
+    /// Refresh cached data (called on appear and memo change)
+    private func refreshCachedData() {
+        cachedQuickActionItems = computeQuickActionItems()
+        cachedWorkflowRuns = computeSortedWorkflowRuns()
+    }
+
     private var memoTitle: String {
         memo.title ?? "Recording"
     }
@@ -106,7 +120,7 @@ struct MemoDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.md) {
+            LazyVStack(alignment: .leading, spacing: Spacing.md, pinnedViews: []) {
                 // Header with title and edit toggle (optional)
                 if showHeader {
                     HStack(alignment: .top) {
@@ -214,6 +228,7 @@ struct MemoDetailView: View {
                         isPlaying: isPlaying
                     )
                     .frame(height: 40)
+                    .drawingGroup()  // Metal-accelerated rendering for smoother scrolling
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
                     .background(settings.surfaceAlternate)
@@ -257,7 +272,7 @@ struct MemoDetailView: View {
                 }
 
                 // AI Results Section (only show if there are results)
-                if !sortedWorkflowRuns.isEmpty || memo.summary != nil || memo.tasks != nil {
+                if !cachedWorkflowRuns.isEmpty || memo.summary != nil || memo.tasks != nil {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("AI RESULTS")
                             .font(.techLabel)
@@ -303,7 +318,7 @@ struct MemoDetailView: View {
                             GridItem(.flexible(), spacing: 8)
                         ], spacing: 8) {
                             // Dynamic quick action items (pinned + defaults)
-                            ForEach(quickActionItems) { item in
+                            ForEach(cachedQuickActionItems) { item in
                                 quickActionButton(for: item)
                             }
 
@@ -344,7 +359,7 @@ struct MemoDetailView: View {
                 }
 
                 // Recent Workflow Runs
-                if !sortedWorkflowRuns.isEmpty {
+                if !cachedWorkflowRuns.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("RECENT RUNS")
@@ -354,15 +369,15 @@ struct MemoDetailView: View {
 
                             Spacer()
 
-                            if sortedWorkflowRuns.count > 3 {
-                                Text("\(sortedWorkflowRuns.count) runs")
+                            if cachedWorkflowRuns.count > 3 {
+                                Text("\(cachedWorkflowRuns.count) runs")
                                     .font(.techLabelSmall)
                                     .foregroundColor(.secondary)
                             }
                         }
 
                         VStack(spacing: 6) {
-                            ForEach(Array(sortedWorkflowRuns.prefix(3)), id: \.id) { run in
+                            ForEach(Array(cachedWorkflowRuns.prefix(3)), id: \.id) { run in
                                 Button(action: {
                                     selectedWorkflowRun = run
                                 }) {
@@ -451,6 +466,7 @@ struct MemoDetailView: View {
         .onAppear {
             editedTitle = memoTitle
             editedNotes = memo.notes ?? ""
+            refreshCachedData()
             // Delay to avoid triggering save on initial load
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 notesInitialized = true
@@ -467,10 +483,19 @@ struct MemoDetailView: View {
             audioPlayer?.stop()
             audioPlayer = nil
             currentTime = 0
+            refreshCachedData()
             // Re-enable after memo change settles
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 notesInitialized = true
             }
+        }
+        .onChange(of: memo.workflowRuns?.count) { _, _ in
+            // Refresh workflow runs when they change
+            cachedWorkflowRuns = computeSortedWorkflowRuns()
+        }
+        .onChange(of: workflowManager.workflows) { _, _ in
+            // Refresh quick actions when workflows change
+            cachedQuickActionItems = computeQuickActionItems()
         }
         .onExitCommand {
             // Escape cancels edit mode
@@ -993,7 +1018,7 @@ struct MemoDetailView: View {
 
     @ViewBuilder
     private var aiResultsView: some View {
-        let workflowRuns = sortedWorkflowRuns
+        let workflowRuns = cachedWorkflowRuns
         let hasLegacyResults = memo.summary != nil || memo.tasks != nil || memo.reminders != nil
 
         if !workflowRuns.isEmpty || hasLegacyResults {
@@ -1084,10 +1109,6 @@ struct MemoDetailView: View {
         logger.debug("Navigate to workflow: \(workflowId?.uuidString ?? "unknown")")
     }
 
-    private var sortedWorkflowRuns: [WorkflowRun] {
-        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return [] }
-        return runs.sorted { ($0.runDate ?? Date.distantPast) > ($1.runDate ?? Date.distantPast) }
-    }
 
     private func deleteWorkflowRun(_ run: WorkflowRun) {
         guard let context = memo.managedObjectContext else { return }

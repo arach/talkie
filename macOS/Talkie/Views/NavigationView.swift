@@ -559,6 +559,7 @@ struct TalkieNavigationView: View {
         default:
             if let memo = selectedMemo {
                 MemoDetailView(memo: memo)
+                    .id(memo.id)  // Stable identity for SwiftUI diffing
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "text.below.photo")

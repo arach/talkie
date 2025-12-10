@@ -103,53 +103,287 @@ enum SemanticColor {
     static let processing: Color = .purple
 }
 
-// MARK: - Adaptive Theme Colors (Light/Dark)
+// MARK: - Theme Color Palette
 
+/// Complete color palette for a visual theme
+struct ThemeColorPalette {
+    // Surfaces
+    let surface: Color
+    let surfaceElevated: Color
+    let surfaceCard: Color
+
+    // Text
+    let textPrimary: Color
+    let textSecondary: Color
+    let textTertiary: Color
+    let textMuted: Color
+
+    // Borders
+    let border: Color
+    let divider: Color
+
+    // Interactive
+    let hover: Color
+    let accent: Color
+
+    // MARK: - Theme Definitions
+
+    static func palette(for theme: VisualTheme, isDark: Bool) -> ThemeColorPalette {
+        switch theme {
+        case .live:
+            return liveTheme(isDark: isDark)
+        case .midnight:
+            return midnightTheme
+        case .terminal:
+            return terminalTheme
+        case .warm:
+            return warmTheme(isDark: isDark)
+        case .minimal:
+            return minimalTheme(isDark: isDark)
+        }
+    }
+
+    // MARK: - Live Theme (Default)
+    private static func liveTheme(isDark: Bool) -> ThemeColorPalette {
+        if isDark {
+            return ThemeColorPalette(
+                surface: Color(white: 0.06),
+                surfaceElevated: Color(white: 0.10),
+                surfaceCard: Color(white: 0.12),
+                textPrimary: .white,
+                textSecondary: Color(white: 0.7),
+                textTertiary: Color(white: 0.5),
+                textMuted: Color(white: 0.35),
+                border: Color(white: 0.15),
+                divider: Color(white: 0.1),
+                hover: Color(white: 0.12),
+                accent: .blue
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color(white: 0.98),
+                surfaceElevated: Color(white: 0.95),
+                surfaceCard: .white,
+                textPrimary: Color(white: 0.1),
+                textSecondary: Color(white: 0.4),
+                textTertiary: Color(white: 0.55),
+                textMuted: Color(white: 0.7),
+                border: Color(white: 0.88),
+                divider: Color(white: 0.92),
+                hover: Color(white: 0.94),
+                accent: .blue
+            )
+        }
+    }
+
+    // MARK: - Midnight Theme (Deep black, high contrast)
+    private static var midnightTheme: ThemeColorPalette {
+        ThemeColorPalette(
+            surface: Color(red: 0.02, green: 0.02, blue: 0.03),
+            surfaceElevated: Color(red: 0.06, green: 0.06, blue: 0.07),
+            surfaceCard: Color(red: 0.08, green: 0.08, blue: 0.09),
+            textPrimary: .white,
+            textSecondary: Color(white: 0.75),
+            textTertiary: Color(white: 0.55),
+            textMuted: Color(white: 0.35),
+            border: Color(white: 0.12),
+            divider: Color(white: 0.08),
+            hover: Color(white: 0.10),
+            accent: Color(red: 0.4, green: 0.7, blue: 1.0)
+        )
+    }
+
+    // MARK: - Terminal Theme (Green on black)
+    private static var terminalTheme: ThemeColorPalette {
+        let terminalGreen = Color(red: 0.2, green: 0.9, blue: 0.4)
+        let dimGreen = Color(red: 0.15, green: 0.6, blue: 0.3)
+        return ThemeColorPalette(
+            surface: Color(red: 0.02, green: 0.03, blue: 0.02),
+            surfaceElevated: Color(red: 0.04, green: 0.06, blue: 0.04),
+            surfaceCard: Color(red: 0.06, green: 0.08, blue: 0.06),
+            textPrimary: terminalGreen,
+            textSecondary: dimGreen,
+            textTertiary: dimGreen.opacity(0.7),
+            textMuted: dimGreen.opacity(0.5),
+            border: terminalGreen.opacity(0.2),
+            divider: terminalGreen.opacity(0.1),
+            hover: terminalGreen.opacity(0.08),
+            accent: terminalGreen
+        )
+    }
+
+    // MARK: - Warm Theme (Cozy orange tones)
+    private static func warmTheme(isDark: Bool) -> ThemeColorPalette {
+        let warmAccent = Color(red: 1.0, green: 0.6, blue: 0.2)
+        if isDark {
+            return ThemeColorPalette(
+                surface: Color(red: 0.08, green: 0.06, blue: 0.04),
+                surfaceElevated: Color(red: 0.12, green: 0.09, blue: 0.06),
+                surfaceCard: Color(red: 0.14, green: 0.11, blue: 0.08),
+                textPrimary: Color(red: 1.0, green: 0.95, blue: 0.9),
+                textSecondary: Color(red: 0.85, green: 0.75, blue: 0.65),
+                textTertiary: Color(red: 0.7, green: 0.6, blue: 0.5),
+                textMuted: Color(red: 0.5, green: 0.4, blue: 0.35),
+                border: Color(red: 0.25, green: 0.2, blue: 0.15),
+                divider: Color(red: 0.18, green: 0.14, blue: 0.1),
+                hover: Color(red: 0.16, green: 0.12, blue: 0.08),
+                accent: warmAccent
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color(red: 0.98, green: 0.96, blue: 0.94),
+                surfaceElevated: Color(red: 0.96, green: 0.93, blue: 0.90),
+                surfaceCard: Color(red: 1.0, green: 0.98, blue: 0.96),
+                textPrimary: Color(red: 0.2, green: 0.15, blue: 0.1),
+                textSecondary: Color(red: 0.4, green: 0.35, blue: 0.3),
+                textTertiary: Color(red: 0.55, green: 0.5, blue: 0.45),
+                textMuted: Color(red: 0.7, green: 0.65, blue: 0.6),
+                border: Color(red: 0.85, green: 0.8, blue: 0.75),
+                divider: Color(red: 0.9, green: 0.87, blue: 0.84),
+                hover: Color(red: 0.94, green: 0.91, blue: 0.88),
+                accent: warmAccent
+            )
+        }
+    }
+
+    // MARK: - Minimal Theme (Clean and subtle)
+    private static func minimalTheme(isDark: Bool) -> ThemeColorPalette {
+        if isDark {
+            return ThemeColorPalette(
+                surface: Color(white: 0.08),
+                surfaceElevated: Color(white: 0.11),
+                surfaceCard: Color(white: 0.13),
+                textPrimary: Color(white: 0.9),
+                textSecondary: Color(white: 0.6),
+                textTertiary: Color(white: 0.45),
+                textMuted: Color(white: 0.3),
+                border: Color(white: 0.18),
+                divider: Color(white: 0.12),
+                hover: Color(white: 0.14),
+                accent: Color(white: 0.6)
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color(white: 0.97),
+                surfaceElevated: Color(white: 0.94),
+                surfaceCard: .white,
+                textPrimary: Color(white: 0.15),
+                textSecondary: Color(white: 0.45),
+                textTertiary: Color(white: 0.6),
+                textMuted: Color(white: 0.75),
+                border: Color(white: 0.85),
+                divider: Color(white: 0.9),
+                hover: Color(white: 0.92),
+                accent: Color(white: 0.5)
+            )
+        }
+    }
+}
+
+// MARK: - TalkieTheme (Dynamic Theme Provider)
+
+/// Provides theme colors based on the current VisualTheme setting.
+/// Colors are resolved dynamically based on current theme and appearance.
+@MainActor
 enum TalkieTheme {
-    // Backgrounds - adapt to system appearance
+    // System backgrounds (always follow system)
     static let background = Color(NSColor.windowBackgroundColor)
     static let secondaryBackground = Color(NSColor.controlBackgroundColor)
     static let tertiaryBackground = Color(NSColor.underPageBackgroundColor)
 
-    // Adaptive surface colors
-    static var surface: Color {
-        Color(light: Color(white: 0.98), dark: Color(white: 0.06))
-    }
-    static var surfaceElevated: Color {
-        Color(light: Color(white: 0.95), dark: Color(white: 0.10))
-    }
-    static var surfaceCard: Color {
-        Color(light: Color.white, dark: Color(white: 0.12))
-    }
-
-    // Text colors
-    static var textPrimary: Color {
-        Color(light: Color(white: 0.1), dark: Color.white)
-    }
-    static var textSecondary: Color {
-        Color(light: Color(white: 0.4), dark: Color(white: 0.7))
-    }
-    static var textTertiary: Color {
-        Color(light: Color(white: 0.55), dark: Color(white: 0.5))
-    }
-    static var textMuted: Color {
-        Color(light: Color(white: 0.7), dark: Color(white: 0.35))
+    /// Get the current palette based on theme and appearance
+    private static func currentPalette() -> ThemeColorPalette {
+        let theme = LiveSettings.shared.visualTheme
+        let isDark: Bool
+        switch LiveSettings.shared.appearanceMode {
+        case .dark:
+            isDark = true
+        case .light:
+            isDark = false
+        case .system:
+            isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        }
+        return ThemeColorPalette.palette(for: theme, isDark: isDark)
     }
 
-    // Borders and dividers
-    static var border: Color {
-        Color(light: Color(white: 0.88), dark: Color(white: 0.15))
-    }
-    static var divider: Color {
-        Color(light: Color(white: 0.92), dark: Color(white: 0.1))
-    }
+    static var surface: Color { currentPalette().surface }
+    static var surfaceElevated: Color { currentPalette().surfaceElevated }
+    static var surfaceCard: Color { currentPalette().surfaceCard }
+    static var textPrimary: Color { currentPalette().textPrimary }
+    static var textSecondary: Color { currentPalette().textSecondary }
+    static var textTertiary: Color { currentPalette().textTertiary }
+    static var textMuted: Color { currentPalette().textMuted }
+    static var border: Color { currentPalette().border }
+    static var divider: Color { currentPalette().divider }
+    static var hover: Color { currentPalette().hover }
+    static var accent: Color { currentPalette().accent }
 
-    // Interactive states
-    static var hover: Color {
-        Color(light: Color(white: 0.94), dark: Color(white: 0.12))
-    }
     static var selected: Color {
-        Color(light: Color.accentColor.opacity(0.12), dark: Color.accentColor.opacity(0.2))
+        let palette = currentPalette()
+        let isDark: Bool
+        switch LiveSettings.shared.appearanceMode {
+        case .dark: isDark = true
+        case .light: isDark = false
+        case .system: isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        }
+        return palette.accent.opacity(isDark ? 0.2 : 0.12)
+    }
+}
+
+// MARK: - Theme Environment Key
+
+/// Environment key for passing theme through SwiftUI view hierarchy
+private struct ThemeEnvironmentKey: EnvironmentKey {
+    static let defaultValue: VisualTheme = .live
+}
+
+extension EnvironmentValues {
+    var visualTheme: VisualTheme {
+        get { self[ThemeEnvironmentKey.self] }
+        set { self[ThemeEnvironmentKey.self] = newValue }
+    }
+}
+
+// MARK: - Theme-Aware View Modifier
+
+/// View modifier that provides theme colors as a binding for reactive updates
+struct ThemeColors {
+    let theme: VisualTheme
+    let isDark: Bool
+
+    var palette: ThemeColorPalette {
+        ThemeColorPalette.palette(for: theme, isDark: isDark)
+    }
+
+    var surface: Color { palette.surface }
+    var surfaceElevated: Color { palette.surfaceElevated }
+    var surfaceCard: Color { palette.surfaceCard }
+    var textPrimary: Color { palette.textPrimary }
+    var textSecondary: Color { palette.textSecondary }
+    var textTertiary: Color { palette.textTertiary }
+    var textMuted: Color { palette.textMuted }
+    var border: Color { palette.border }
+    var divider: Color { palette.divider }
+    var hover: Color { palette.hover }
+    var accent: Color { palette.accent }
+    var selected: Color { palette.accent.opacity(isDark ? 0.2 : 0.12) }
+}
+
+/// View modifier that observes theme changes and triggers re-renders
+struct ThemeObserver: ViewModifier {
+    @ObservedObject private var settings = LiveSettings.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .id("theme-\(settings.visualTheme.rawValue)-\(settings.appearanceMode.rawValue)-\(colorScheme)")
+    }
+}
+
+extension View {
+    /// Apply this modifier to views that need to react to theme changes
+    func observeTheme() -> some View {
+        modifier(ThemeObserver())
     }
 }
 
