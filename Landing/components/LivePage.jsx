@@ -214,14 +214,19 @@ export default function LivePage() {
                 <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">+ AI</span>
               </div>
               <h3 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
-                A new kind of data.
+                Your workflow, in high resolution.
               </h3>
-              <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed mb-6">
-                Your dictations capture the moment intent becomes action—before it scatters into emails, Slack, docs. This unified substrate stays with you, creating opportunities for AI to help you connect, recall, and build on what matters.
-              </p>
-              <p className="text-sm text-zinc-500 dark:text-zinc-500 italic">
-                More to come.
-              </p>
+              <div className="space-y-4 text-zinc-600 dark:text-zinc-400 leading-relaxed text-left max-w-2xl mx-auto">
+                <p>
+                  Your dictations are a live stream of your workflow. They capture how you break big goals into steps, make decisions, and move work forward, moment by moment.
+                </p>
+                <p>
+                  Today that kind of data mostly feeds other platforms: chat, CRMs, ticketing systems, code hosts, AI coding tools. They improve. Your bill goes up.
+                </p>
+                <p>
+                  With Talkie, that stream stays in one place. A high resolution record of how you work, ready for your own models, scripts, and tools to learn from, replay, and reuse.
+                </p>
+              </div>
             </div>
           </div>
         </Container>
