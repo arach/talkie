@@ -136,8 +136,7 @@ export default function LivePage() {
             </h1>
 
             <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
-              Your best ideas don't arrive when you're ready. They come in the shower, on a walk, mid-conversation.
-              <span className="text-zinc-900 dark:text-white font-medium"> Talkie Live captures them in one second flat.</span>
+              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text in seconds so you can capture ideas at the speed you think.
             </p>
 
             <div className="flex flex-col sm:flex-row items-start gap-4">
