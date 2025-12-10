@@ -3,6 +3,16 @@ set -e
 
 # Talkie for Mac - Installer Build Script
 # Builds all components with proper signing and notarization
+#
+# Usage:
+#   ./build.sh              # Build full installer (all 3 apps)
+#   ./build.sh core         # Build Talkie-Core installer (Engine + Core)
+#   ./build.sh live         # Build Talkie-Live installer (Engine + Live)
+#   ./build.sh all          # Build all 3 installers
+#
+# Environment variables:
+#   VERSION=1.3.0           # Set version (default: 1.3.0)
+#   SKIP_NOTARIZE=1         # Skip notarization (for testing)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -12,7 +22,10 @@ PACKAGES_DIR="$SCRIPT_DIR/packages"
 RESOURCES_DIR="$SCRIPT_DIR/resources"
 
 # Version
-VERSION="${VERSION:-1.2.0}"
+VERSION="${VERSION:-1.3.0}"
+
+# Target: full (default), core, live, or all
+TARGET="${1:-full}"
 
 # Signing identities
 DEVELOPER_ID_APP="Developer ID Application: Arach Tchoupani (2U83JFPW66)"
@@ -24,9 +37,16 @@ NOTARY_PROFILE="notarytool"
 # Skip notarization if set (for testing)
 SKIP_NOTARIZE="${SKIP_NOTARIZE:-0}"
 
+# Validate target
+if [[ ! "$TARGET" =~ ^(full|core|live|all)$ ]]; then
+    echo "❌ Invalid target: $TARGET"
+    echo "   Valid targets: full, core, live, all"
+    exit 1
+fi
+
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║        Talkie for Mac - Installer Builder            ║"
-echo "║                  Version: $VERSION                      ║"
+echo "║           Version: $VERSION  Target: $TARGET             ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
@@ -286,63 +306,78 @@ pkgbuild --root "$STAGING_DIR/core" \
 echo "  ✅ TalkieCore.pkg"
 
 # ═══════════════════════════════════════════════════════════
-# CREATE DISTRIBUTION PACKAGE
+# FUNCTION: Build, sign, notarize a distribution package
 # ═══════════════════════════════════════════════════════════
-echo ""
-echo "📦 Creating distribution package..."
+build_distribution() {
+    local DIST_XML="$1"
+    local PKG_NAME="$2"
+    local OUTPUT_PKG="$SCRIPT_DIR/$PKG_NAME.pkg"
 
-# Create unsigned distribution package first
-productbuild --distribution "$SCRIPT_DIR/distribution.xml" \
-    --resources "$RESOURCES_DIR" \
-    --package-path "$PACKAGES_DIR" \
-    "$SCRIPT_DIR/Talkie-for-Mac-unsigned.pkg"
-
-# Sign the distribution package
-echo ""
-echo "🔏 Signing distribution package..."
-productsign --sign "$DEVELOPER_ID_INSTALLER" \
-    "$SCRIPT_DIR/Talkie-for-Mac-unsigned.pkg" \
-    "$SCRIPT_DIR/Talkie-for-Mac.pkg"
-
-rm "$SCRIPT_DIR/Talkie-for-Mac-unsigned.pkg"
-echo "✅ Distribution package signed"
-
-# Verify package signature
-echo ""
-echo "🔍 Verifying package signature..."
-pkgutil --check-signature "$SCRIPT_DIR/Talkie-for-Mac.pkg"
-
-# ═══════════════════════════════════════════════════════════
-# NOTARIZATION
-# ═══════════════════════════════════════════════════════════
-if [ "$SKIP_NOTARIZE" = "1" ]; then
     echo ""
-    echo "⏭️  Skipping notarization (SKIP_NOTARIZE=1)"
-else
-    echo ""
-    echo "📤 Submitting for notarization..."
-    echo "   This may take several minutes..."
+    echo "📦 Creating $PKG_NAME distribution package..."
 
-    # Submit for notarization and wait
-    xcrun notarytool submit "$SCRIPT_DIR/Talkie-for-Mac.pkg" \
-        --keychain-profile "$NOTARY_PROFILE" \
-        --wait
+    # Create unsigned distribution package
+    productbuild --distribution "$SCRIPT_DIR/$DIST_XML" \
+        --resources "$RESOURCES_DIR" \
+        --package-path "$PACKAGES_DIR" \
+        "$SCRIPT_DIR/${PKG_NAME}-unsigned.pkg"
 
-    NOTARY_STATUS=$?
+    # Sign the distribution package
+    echo "🔏 Signing $PKG_NAME..."
+    productsign --sign "$DEVELOPER_ID_INSTALLER" \
+        "$SCRIPT_DIR/${PKG_NAME}-unsigned.pkg" \
+        "$OUTPUT_PKG"
 
-    if [ $NOTARY_STATUS -eq 0 ]; then
-        echo "✅ Notarization successful"
+    rm -f "$SCRIPT_DIR/${PKG_NAME}-unsigned.pkg"
+    echo "✅ $PKG_NAME signed"
 
-        # Staple the notarization ticket
-        echo ""
-        echo "📎 Stapling notarization ticket..."
-        xcrun stapler staple "$SCRIPT_DIR/Talkie-for-Mac.pkg"
-        echo "✅ Notarization ticket stapled"
+    # Verify package signature
+    echo "🔍 Verifying signature..."
+    pkgutil --check-signature "$OUTPUT_PKG"
+
+    # Notarization
+    if [ "$SKIP_NOTARIZE" = "1" ]; then
+        echo "⏭️  Skipping notarization (SKIP_NOTARIZE=1)"
     else
-        echo "❌ Notarization failed"
-        echo "   Check the log with: xcrun notarytool log <submission-id> --keychain-profile $NOTARY_PROFILE"
-        exit 1
+        echo "📤 Submitting $PKG_NAME for notarization..."
+
+        xcrun notarytool submit "$OUTPUT_PKG" \
+            --keychain-profile "$NOTARY_PROFILE" \
+            --wait
+
+        if [ $? -eq 0 ]; then
+            echo "✅ Notarization successful"
+            echo "📎 Stapling notarization ticket..."
+            xcrun stapler staple "$OUTPUT_PKG"
+            echo "✅ Ticket stapled"
+        else
+            echo "❌ Notarization failed for $PKG_NAME"
+            echo "   Check: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE"
+            return 1
+        fi
     fi
+
+    echo "✅ $PKG_NAME complete: $OUTPUT_PKG"
+}
+
+# ═══════════════════════════════════════════════════════════
+# CREATE DISTRIBUTION PACKAGES BASED ON TARGET
+# ═══════════════════════════════════════════════════════════
+BUILT_PACKAGES=()
+
+if [ "$TARGET" = "full" ] || [ "$TARGET" = "all" ]; then
+    build_distribution "distribution.xml" "Talkie-for-Mac"
+    BUILT_PACKAGES+=("Talkie-for-Mac.pkg")
+fi
+
+if [ "$TARGET" = "core" ] || [ "$TARGET" = "all" ]; then
+    build_distribution "distribution-core.xml" "Talkie-Core"
+    BUILT_PACKAGES+=("Talkie-Core.pkg")
+fi
+
+if [ "$TARGET" = "live" ] || [ "$TARGET" = "all" ]; then
+    build_distribution "distribution-live.xml" "Talkie-Live"
+    BUILT_PACKAGES+=("Talkie-Live.pkg")
 fi
 
 # ═══════════════════════════════════════════════════════════
@@ -353,22 +388,29 @@ echo "╔═══════════════════════�
 echo "║                    BUILD COMPLETE                     ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "📁 Output: $SCRIPT_DIR/Talkie-for-Mac.pkg"
+
+# Show built packages
+echo "📁 Built packages:"
+for pkg in "${BUILT_PACKAGES[@]}"; do
+    ls -lh "$SCRIPT_DIR/$pkg" | awk '{print "  " $9 ": " $5}'
+done
 echo ""
 
-# Show package sizes
-echo "Package sizes:"
-ls -lh "$PACKAGES_DIR"/*.pkg | awk '{print "  " $9 ": " $5}'
-echo ""
-ls -lh "$SCRIPT_DIR/Talkie-for-Mac.pkg" | awk '{print "Distribution: " $9 ": " $5}'
+# Show component packages
+echo "Component packages:"
+ls -lh "$PACKAGES_DIR"/*.pkg 2>/dev/null | awk '{print "  " $9 ": " $5}' || true
 echo ""
 
-# Verify final package
-echo "Final verification:"
-spctl --assess --type install "$SCRIPT_DIR/Talkie-for-Mac.pkg" 2>&1 && echo "✅ Package passes Gatekeeper" || echo "⚠️  Gatekeeper check (may need notarization)"
+# Verify final packages
+echo "Gatekeeper verification:"
+for pkg in "${BUILT_PACKAGES[@]}"; do
+    spctl --assess --type install "$SCRIPT_DIR/$pkg" 2>&1 && echo "  ✅ $pkg passes Gatekeeper" || echo "  ⚠️  $pkg (may need notarization)"
+done
 
 echo ""
-echo "🎉 Done! Package is ready for distribution."
+echo "🎉 Done! Packages are ready for distribution."
 echo ""
 echo "To test installation:"
-echo "  sudo installer -pkg '$SCRIPT_DIR/Talkie-for-Mac.pkg' -target /"
+for pkg in "${BUILT_PACKAGES[@]}"; do
+    echo "  sudo installer -pkg '$SCRIPT_DIR/$pkg' -target /"
+done
