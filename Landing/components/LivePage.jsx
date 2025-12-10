@@ -199,6 +199,25 @@ export default function LivePage() {
               highlight="Memo → Workflow → Action"
             />
           </div>
+
+          {/* + AI Teaser */}
+          <div className="mt-16 pt-16 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="max-w-3xl mx-auto text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-6">
+                <Sparkles className="w-3 h-3 text-emerald-500" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">+ AI</span>
+              </div>
+              <h3 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
+                A new kind of data.
+              </h3>
+              <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed mb-6">
+                Your dictations capture the moment intent becomes action—before it scatters into emails, Slack, docs. This unified substrate stays with you, creating opportunities for AI to help you connect, recall, and build on what matters.
+              </p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500 italic">
+                More to come.
+              </p>
+            </div>
+          </div>
         </Container>
       </section>
 
