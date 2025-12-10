@@ -12,7 +12,6 @@ import {
   Lock,
   Quote,
   HardDrive,
-  Ban,
   Menu,
   X,
   Layers,
@@ -263,8 +262,8 @@ export default function LandingPage() {
                 <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">Data Sovereignty</span>
               </div>
               <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight leading-tight">
-                We can&apos;t see your data.<br/>
-                <span className="text-zinc-500">By design.</span>
+                Our servers don&apos;t listen.<br/>
+                <span className="text-zinc-500">Your voice stays yours.</span>
               </h2>
             </div>
             <Link
@@ -315,16 +314,16 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Vendor Isolation One-liner */}
+          {/* Privacy Highlights */}
           <div className="mt-6 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-[10px] font-mono uppercase">
             <div className="flex items-center gap-2">
-              <Ban className="w-3 h-3 text-red-500" />
-              <span className="text-red-400">Talkie: No data access</span>
+              <Mic className="w-3 h-3 text-emerald-500" />
+              <span className="text-emerald-400">Voice transcribed on-device</span>
             </div>
             <div className="hidden md:block w-px h-4 bg-zinc-700"></div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-3 h-3 text-emerald-500" />
-              <span className="text-emerald-400">You: Full ownership</span>
+              <span className="text-emerald-400">Memos stay on your Mac</span>
             </div>
           </div>
 
