@@ -39,7 +39,7 @@ struct ProviderCard<Content: View>: View {
                             .frame(width: 6, height: 6)
 
                         Text(status.uppercased())
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(isConfigured ? .green : .orange)
                     }
                 }
@@ -66,7 +66,7 @@ struct ProviderCard<Content: View>: View {
             content()
         }
         .padding(16)
-        .background(SettingsManager.shared.surface1)
+        .background(Theme.current.surface1)
         .cornerRadius(8)
     }
 }
@@ -103,7 +103,7 @@ struct ModelRow: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(SettingsManager.shared.fontXS)
                             Text("INSTALLED")
-                                .font(SettingsManager.shared.fontXSBold)
+                                .font(Theme.current.fontXSBold)
                         }
                         .foregroundColor(.green)
                     }
@@ -124,7 +124,7 @@ struct ModelRow: View {
             } else if model.isInstalled {
                 Button(action: onDelete) {
                     Text("DELETE")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.red)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -138,7 +138,7 @@ struct ModelRow: View {
                         Image(systemName: "arrow.down.circle.fill")
                             .font(SettingsManager.shared.fontXS)
                         Text("DOWNLOAD")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                     }
                     .foregroundColor(.blue)
                     .padding(.horizontal, 12)
@@ -160,7 +160,7 @@ struct ModelRow: View {
 struct ActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(SettingsManager.shared.fontXSBold)
+            .font(Theme.current.fontXSBold)
             .foregroundColor(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -185,7 +185,7 @@ struct CompactModelCard: View {
     let onDelete: () -> Void
     let onCancel: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     private var modelCode: String {
@@ -430,12 +430,12 @@ struct CompactModelCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(
-                    isHovered ? Color.white.opacity(0.2) :
+                    isHovered ? Theme.current.foreground.opacity(0.2) :
                     model.isInstalled ? settings.cardBorderActive : settings.cardBorderDefault,
                     lineWidth: isHovered ? 1.5 : 1
                 )
         )
-        .shadow(color: Color.white.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
+        .shadow(color: Theme.current.foreground.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
         .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 8 : 6, y: 2)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -471,7 +471,7 @@ struct CompactProviderCard: View {
     let onCancel: () -> Void
     let onSave: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     private var providerCode: String {
@@ -745,12 +745,12 @@ struct CompactProviderCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(
-                        isHovered ? Color.white.opacity(0.2) :
+                        isHovered ? Theme.current.foreground.opacity(0.2) :
                         isConfigured ? settings.cardBorderActive : settings.cardBorderDefault,
                         lineWidth: isHovered ? 1.5 : 1
                     )
             )
-            .shadow(color: Color.white.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
+            .shadow(color: Theme.current.foreground.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
             .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 8 : 6, y: 2)
             .opacity(isConfiguring ? 0 : 1)
             .rotation3DEffect(.degrees(isConfiguring ? 180 : 0), axis: (x: 0, y: 1, z: 0))

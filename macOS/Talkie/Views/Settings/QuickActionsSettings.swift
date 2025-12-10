@@ -29,19 +29,19 @@ struct QuickActionsSettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("PINNED WORKFLOWS")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(MidnightSurface.Text.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 if pinnedWorkflows.isEmpty {
                     HStack(spacing: 8) {
                         Image(systemName: "pin.slash")
-                            .foregroundColor(MidnightSurface.Text.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                         Text("No workflows pinned")
-                            .foregroundColor(MidnightSurface.Text.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .font(.system(size: 11, design: .monospaced))
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(MidnightSurface.card)
+                    .background(Theme.current.surface1)
                     .cornerRadius(8)
                 } else {
                     VStack(spacing: 4) {
@@ -53,25 +53,25 @@ struct QuickActionsSettingsView: View {
             }
 
             Divider()
-                .background(MidnightSurface.divider)
+                .background(Theme.current.divider)
 
             // Available workflows
             VStack(alignment: .leading, spacing: 12) {
                 Text("AVAILABLE WORKFLOWS")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(MidnightSurface.Text.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 if unpinnedWorkflows.isEmpty {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle")
                             .foregroundColor(.green)
                         Text("All workflows are pinned")
-                            .foregroundColor(MidnightSurface.Text.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .font(.system(size: 11, design: .monospaced))
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(MidnightSurface.card)
+                    .background(Theme.current.surface1)
                     .cornerRadius(8)
                 } else {
                     VStack(spacing: 4) {
@@ -150,7 +150,7 @@ struct QuickActionsSettingsView: View {
             .help(workflow.isPinned ? "Unpin from quick actions" : "Pin to quick actions")
         }
         .padding(10)
-        .background(SettingsManager.shared.surface1)
+        .background(Theme.current.surface1)
         .cornerRadius(8)
     }
 

@@ -17,7 +17,7 @@ struct WorkflowListColumn: View {
     @Binding var selectedWorkflowID: UUID?
     @Binding var editingWorkflow: WorkflowDefinition?
     @StateObject private var workflowManager = WorkflowManager.shared
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +25,7 @@ struct WorkflowListColumn: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("WORKFLOWS")
-                        .font(SettingsManager.shared.fontSMBold)
+                        .font(Theme.current.fontSMBold)
                     Text("\(workflowManager.workflows.count) total")
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
@@ -42,7 +42,7 @@ struct WorkflowListColumn: View {
                 .buttonStyle(.plain)
             }
             .padding(12)
-            .background(settings.surface1)
+            .background(Theme.current.surface1)
 
             Divider()
 
@@ -88,7 +88,7 @@ struct WorkflowDetailColumn: View {
     @Binding var editingWorkflow: WorkflowDefinition?
     @Binding var selectedWorkflowID: UUID?
     @ObservedObject private var workflowManager = WorkflowManager.shared
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var showingMemoSelector = false
 
     @FetchRequest(
@@ -129,7 +129,7 @@ struct WorkflowDetailColumn: View {
                         .foregroundColor(.secondary.opacity(0.2))
 
                     Text("SELECT OR CREATE")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Button(action: createNewWorkflow) {
@@ -137,7 +137,7 @@ struct WorkflowDetailColumn: View {
                             Image(systemName: "plus")
                                 .font(SettingsManager.shared.fontXS)
                             Text("NEW WORKFLOW")
-                                .font(SettingsManager.shared.fontXSBold)
+                                .font(Theme.current.fontXSBold)
                         }
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)

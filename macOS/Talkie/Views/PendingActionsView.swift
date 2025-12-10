@@ -10,7 +10,7 @@ import SwiftUI
 
 struct PendingActionsView: View {
     @StateObject private var pendingManager = PendingActionsManager.shared
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -38,7 +38,7 @@ struct PendingActionsView: View {
             }
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
-            .background(settings.surface1)
+            .background(Theme.current.surface1)
 
             Divider()
                 .opacity(0.5)
@@ -88,7 +88,7 @@ struct PendingActionsView: View {
 struct PendingActionRow: View {
     let action: PendingAction
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var elapsed: TimeInterval = 0
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -118,7 +118,7 @@ struct PendingActionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 // Workflow name
                 Text(action.workflowName)
-                    .font(settings.fontBodyMedium)
+                    .font(Theme.current.fontBodyMedium)
                     .foregroundColor(.primary)
                     .lineLimit(1)
 

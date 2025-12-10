@@ -34,7 +34,7 @@ struct LocalFilesSettingsView: View {
                             .font(SettingsManager.shared.fontSM)
                             .foregroundColor(.green)
                         Text("YOUR DATA, YOUR FILES")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.green)
                     }
 
@@ -111,7 +111,7 @@ struct LocalFilesSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(SettingsManager.shared.surface2)
+                .background(Theme.current.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Audio Section
@@ -181,7 +181,7 @@ struct LocalFilesSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(SettingsManager.shared.surface2)
+                .background(Theme.current.surface2)
                 .cornerRadius(8)
 
                 // Stats and actions (only show if any local files enabled)
@@ -191,7 +191,7 @@ struct LocalFilesSettingsView: View {
                     // Stats
                     VStack(alignment: .leading, spacing: 12) {
                         Text("FILE STATISTICS")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 24) {
@@ -224,14 +224,14 @@ struct LocalFilesSettingsView: View {
                         }
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(SettingsManager.shared.surface2)
+                        .background(Theme.current.surface2)
                         .cornerRadius(8)
                     }
 
                     // Quick actions
                     VStack(alignment: .leading, spacing: 12) {
                         Text("QUICK ACTIONS")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 12) {

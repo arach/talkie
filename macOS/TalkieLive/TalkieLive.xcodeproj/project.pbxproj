@@ -39,16 +39,6 @@
 			path = TalkieLive;
 			sourceTree = "<group>";
 		};
-		539FB5CF2EE6785D004EEAF4 /* TalkieLiveTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = TalkieLiveTests;
-			sourceTree = "<group>";
-		};
-		539FB5D92EE6785D004EEAF4 /* TalkieLiveUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = TalkieLiveUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,8 +71,6 @@
 			isa = PBXGroup;
 			children = (
 				539FB5BB2EE6785C004EEAF4 /* TalkieLive */,
-				539FB5CF2EE6785D004EEAF4 /* TalkieLiveTests */,
-				539FB5D92EE6785D004EEAF4 /* TalkieLiveUITests */,
 				539FB5BA2EE6785C004EEAF4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -135,9 +123,6 @@
 			dependencies = (
 				539FB5CE2EE6785D004EEAF4 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				539FB5CF2EE6785D004EEAF4 /* TalkieLiveTests */,
-			);
 			name = TalkieLiveTests;
 			packageProductDependencies = (
 			);
@@ -157,9 +142,6 @@
 			);
 			dependencies = (
 				539FB5D82EE6785D004EEAF4 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				539FB5D92EE6785D004EEAF4 /* TalkieLiveUITests */,
 			);
 			name = TalkieLiveUITests;
 			packageProductDependencies = (
@@ -563,7 +545,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 
 /* Begin XCRemoteSwiftPackageReference section */
 		53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {

@@ -22,7 +22,7 @@ struct WhisperModelCard: View {
     let onDelete: () -> Void
     let onCancel: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     private var modelCode: String {
@@ -304,14 +304,14 @@ struct WhisperModelCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(
-                    isHovered ? Color.white.opacity(0.2) :
+                    isHovered ? Theme.current.foreground.opacity(0.2) :
                     isLoaded ? settings.cardBorderActive :
                     isDownloaded ? settings.cardBorderReady :
                     settings.cardBorderDefault,
                     lineWidth: isHovered ? 1.5 : 1
                 )
         )
-        .shadow(color: Color.white.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
+        .shadow(color: Theme.current.foreground.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
         .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 8 : 6, y: 2)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {

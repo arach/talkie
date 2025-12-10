@@ -38,7 +38,7 @@ struct MemoTableFullView: View {
 
     // Selection & Inspector state
     @State private var selectedMemo: VoiceMemo?
-    @State private var showInspector: Bool = false
+    @State private var showInspector: Bool = true  // Show zero state by default for visual balance
 
     // Sorting state
     @State private var sortField: MemoSortField = .timestamp
@@ -55,7 +55,10 @@ struct MemoTableFullView: View {
     @State private var workflowsWidth: CGFloat = 100
 
     // Inspector panel width (resizable)
-    @State private var inspectorWidth: CGFloat = 420
+    @State private var inspectorWidth: CGFloat = 380
+
+    // Zero state width - narrower to not obstruct table columns
+    private let zeroStateWidth: CGFloat = 220
 
     // Cached sorted memos - only recompute when data or sort changes
     @State private var cachedSortedMemos: [VoiceMemo] = []
@@ -93,35 +96,35 @@ struct MemoTableFullView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            // Main table content (full width, always visible)
+        HStack(spacing: 0) {
+            // Main table content (flexible width)
             VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 4) {
                     Text("All Memos")
                         .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(SettingsManager.shared.tacticalForeground)
+                        .foregroundColor(Theme.current.foreground)
                         .textCase(SettingsManager.shared.uiTextCase)
 
                     // Show "X of Y" when paginated, just "Y" when showing all
                     if hasMoreMemos {
                         Text("\(visibleMemos.count) of \(allMemos.count)")
                             .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     } else {
                         Text("\(allMemos.count)")
                             .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
                     Spacer()
 
-                    // Inspector toggle button
-                    if selectedMemo != nil {
+                    // Inspector toggle button - always visible when inspector shown or memo selected
+                    if selectedMemo != nil || showInspector {
                         Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
-                            Image(systemName: showInspector ? "sidebar.right" : "sidebar.right")
+                            Image(systemName: "sidebar.right")
                                 .font(SettingsManager.shared.fontXS)
-                                .foregroundColor(showInspector ? .blue : SettingsManager.shared.tacticalForegroundSecondary)
+                                .foregroundColor(showInspector ? .blue : Theme.current.foregroundSecondary)
                         }
                         .buttonStyle(.plain)
                         .help(showInspector ? "Hide Details" : "Show Details")
@@ -129,7 +132,7 @@ struct MemoTableFullView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(SettingsManager.shared.tacticalBackgroundSecondary)
+                .background(Theme.current.backgroundSecondary)
 
                 Divider()
 
@@ -141,7 +144,7 @@ struct MemoTableFullView: View {
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO MEMOS YET")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         Text("Record your first voice memo on iOS")
@@ -183,12 +186,12 @@ struct MemoTableFullView: View {
                                 )
 
                                 Rectangle()
-                                    .fill(SettingsManager.shared.tacticalDivider.opacity(0.25))
+                                    .fill(Theme.current.divider.opacity(0.25))
                                     .frame(height: 1)
                             }
                         }
                     }
-                    .background(SettingsManager.shared.tacticalBackground)
+                    .background(Theme.current.background)
 
                     // Full-bleed "Load More" footer with subtle highlight
                     if hasMoreMemos {
@@ -215,38 +218,35 @@ struct MemoTableFullView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(SettingsManager.shared.tacticalBackground)
+            .background(Theme.current.background)
 
-            // Inspector Panel (overlays from right, anchored to right edge)
-            if showInspector {
-                HStack(spacing: 0) {
-                    // Resizable divider (on left side of inspector)
-                    InspectorResizeHandle(width: $inspectorWidth)
+            // Inspector Panel - inline, not overlaid
+            // Shows either: memo details (when selected) or empty state (for balance)
+            if showInspector || selectedMemo != nil {
+                // Divider between table and inspector
+                Rectangle()
+                    .fill(Theme.current.divider)
+                    .frame(width: 1)
 
-                    if let memo = selectedMemo {
+                if let memo = selectedMemo {
+                    // Full inspector with memo details
+                    HStack(spacing: 0) {
+                        InspectorResizeHandle(width: $inspectorWidth)
                         MemoInspectorPanel(
                             memo: memo,
                             onClose: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
-                                    showInspector = false
-                                }
-                            }
-                        )
-                        .frame(width: inspectorWidth)
-                    } else {
-                        // Empty state when no memo selected
-                        MemoInspectorEmptyState(
-                            onClose: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showInspector = false
+                                    selectedMemo = nil
                                 }
                             }
                         )
                         .frame(width: inspectorWidth)
                     }
+                } else {
+                    // Zero state - narrower, provides visual balance
+                    MemoInspectorEmptyState(onClose: nil)
+                        .frame(width: zeroStateWidth)
                 }
-                .shadow(color: Color.black.opacity(0.08), radius: 3, x: -1, y: 0)
-                .transition(.move(edge: .trailing))
             }
         }
         .onKeyPress(.escape) {
@@ -313,11 +313,11 @@ struct MemoTableHeader: View {
             }) {
                 HStack(spacing: 4) {
                     Text("TITLE")
-                        .font(SettingsManager.shared.fontSMMedium)
+                        .font(Theme.current.fontSMMedium)
                         .foregroundColor(sortField == .title ? .primary : .secondary)
                     if sortField == .title {
                         Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.blue)
                     }
                     Spacer()
@@ -349,7 +349,7 @@ struct MemoTableHeader: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .frame(height: 26)
-        .background(SettingsManager.shared.tacticalBackgroundSecondary)
+        .background(Theme.current.backgroundSecondary)
     }
 }
 
@@ -363,10 +363,10 @@ struct MemoSortableColumnHeader: View {
     let width: CGFloat
     var alignment: Alignment = .leading
 
-    @ObservedObject private var settings = SettingsManager.shared
     @State private var isHovering = false
 
     private var isSorted: Bool { currentSort == field }
+    private var theme: Theme { Theme.current }
 
     var body: some View {
         Button(action: {
@@ -381,12 +381,12 @@ struct MemoSortableColumnHeader: View {
                 if alignment == .trailing { Spacer() }
 
                 Text(title)
-                    .font(SettingsManager.shared.fontSMMedium)
+                    .font(theme.fontSMMedium)
                     .foregroundColor(isSorted ? .primary : .secondary)
 
                 if isSorted {
                     Image(systemName: ascending ? "chevron.up" : "chevron.down")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(theme.fontXSBold)
                         .foregroundColor(.blue)
                 }
 
@@ -394,7 +394,7 @@ struct MemoSortableColumnHeader: View {
             }
             .frame(width: width, alignment: alignment)
             .padding(.vertical, 2)
-            .background(isHovering ? settings.surfaceHover : Color.clear)
+            .background(isHovering ? theme.backgroundTertiary : Color.clear)
             .cornerRadius(3)
         }
         .buttonStyle(.plain)
@@ -406,7 +406,7 @@ struct MemoSortableColumnHeader: View {
 
 struct MemoTableRow: View {
     @ObservedObject var memo: VoiceMemo
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     let isSelected: Bool
     let onSelect: () -> Void
     let timestampWidth: CGFloat
@@ -420,19 +420,24 @@ struct MemoTableRow: View {
         memo.workflowRuns?.count ?? 0
     }
 
+    // Cache theme/font values to avoid recalculation on hover
+    private var theme: Theme { Theme.current }
+    private var fontSM: Font { settings.fontSM }
+    private var fontXS: Font { settings.fontXS }
+
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 0) {
                 // Timestamp
                 Text(formatTimestamp(memo.createdAt ?? Date()))
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                    .font(fontSM)
+                    .foregroundColor(theme.foregroundMuted)
                     .frame(width: timestampWidth, alignment: .leading)
 
                 // Title (flexible, fills available space)
                 Text(memo.title ?? "Untitled")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(SettingsManager.shared.tacticalForeground)
+                    .font(fontSM)
+                    .foregroundColor(theme.foreground)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -440,36 +445,43 @@ struct MemoTableRow: View {
 
                 // Duration (right-aligned)
                 Text(formatDuration(memo.duration))
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                    .font(fontSM)
+                    .foregroundColor(theme.foregroundMuted)
                     .frame(width: durationWidth, alignment: .trailing)
 
                 // Workflow count (right-aligned)
                 HStack(spacing: 3) {
                     if workflowCount > 0 {
                         Image(systemName: "wand.and.stars")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(fontXS)
                             .foregroundColor(.blue.opacity(0.8))
                         Text("\(workflowCount)")
-                            .font(SettingsManager.shared.fontSM)
+                            .font(fontSM)
                             .foregroundColor(.blue)
                     } else {
                         Text("—")
-                            .font(SettingsManager.shared.fontSM)
-                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted.opacity(0.5))
+                            .font(fontSM)
+                            .foregroundColor(theme.foregroundMuted.opacity(0.5))
                     }
                 }
                 .frame(width: workflowsWidth, alignment: .trailing)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(
-                isSelected ? Color.blue.opacity(0.15) :
-                    (isHovering ? SettingsManager.shared.tacticalBackgroundTertiary : Color.clear)
-            )
+            .background(rowBackground)
         }
         .buttonStyle(.plain)
         .onHover { hovering in isHovering = hovering }
+    }
+
+    // Separate computed property for background to minimize body recalculation
+    private var rowBackground: Color {
+        if isSelected {
+            return Color.blue.opacity(0.15)
+        } else if isHovering {
+            return theme.backgroundTertiary
+        }
+        return Color.clear
     }
 
     private func formatTimestamp(_ date: Date) -> String {
@@ -489,7 +501,7 @@ struct MemoTableRow: View {
 
 struct MemoInspectorPanel: View {
     @ObservedObject var memo: VoiceMemo
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     let onClose: () -> Void
 
     var body: some View {
@@ -497,8 +509,8 @@ struct MemoInspectorPanel: View {
             // Minimal inspector toolbar
             HStack {
                 Text("DETAILS")
-                    .font(SettingsManager.shared.fontXSBold)
-                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
@@ -507,44 +519,46 @@ struct MemoInspectorPanel: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(SettingsManager.shared.tacticalBackgroundSecondary)
+            .background(Theme.current.backgroundSecondary)
 
             Rectangle()
-                .fill(SettingsManager.shared.tacticalDivider)
+                .fill(Theme.current.divider)
                 .frame(height: 0.5)
 
             // Embed MemoDetailView without redundant header
             MemoDetailView(memo: memo, showHeader: false)
                 .id(memo.id)  // Stable identity for SwiftUI diffing
         }
-        .background(SettingsManager.shared.tacticalBackground)
+        .background(Theme.current.background)
     }
 }
 
 // MARK: - Memo Inspector Empty State
 
 struct MemoInspectorEmptyState: View {
-    let onClose: () -> Void
+    let onClose: (() -> Void)?  // Optional - nil when showing as permanent zero state
 
     var body: some View {
         VStack(spacing: 0) {
             // Header (matches MemoInspectorPanel)
             HStack {
                 Text("DETAILS")
-                    .font(SettingsManager.shared.fontXSBold)
-                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
-                CloseButton(action: onClose)
-                    .help("Close inspector (Esc)")
+                if let onClose = onClose {
+                    CloseButton(action: onClose)
+                        .help("Close inspector (Esc)")
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(SettingsManager.shared.tacticalBackgroundSecondary)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
 
             Rectangle()
-                .fill(SettingsManager.shared.tacticalDivider)
+                .fill(Color(nsColor: .separatorColor))
                 .frame(height: 0.5)
 
             // Empty state content
@@ -557,11 +571,11 @@ struct MemoInspectorEmptyState: View {
 
                 VStack(spacing: 6) {
                     Text("No Memo Selected")
-                        .font(SettingsManager.shared.fontSMBold)
+                        .font(Theme.current.fontSMBold)
                         .foregroundColor(.secondary)
 
                     Text("Click on a memo to view details")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.6))
                 }
 
@@ -569,7 +583,7 @@ struct MemoInspectorEmptyState: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(SettingsManager.shared.tacticalBackground)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
@@ -591,13 +605,13 @@ struct CloseButton: View {
                 Image(systemName: "xmark")
                     .font(SettingsManager.shared.fontSM)
                     .foregroundColor(isHovering
-                        ? SettingsManager.shared.tacticalForeground
-                        : SettingsManager.shared.tacticalForegroundSecondary)
+                        ? Theme.current.foreground
+                        : Theme.current.foregroundSecondary)
                     .frame(width: 22, height: 22)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
                             .fill(isHovering
-                                ? SettingsManager.shared.tacticalForegroundMuted.opacity(0.15)
+                                ? Theme.current.foregroundMuted.opacity(0.15)
                                 : Color.clear)
                     )
             }
@@ -605,10 +619,6 @@ struct CloseButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isHovering = hovering
-            }
-        }
+        .onHover { hovering in isHovering = hovering }
     }
 }

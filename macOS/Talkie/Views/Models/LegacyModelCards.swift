@@ -21,7 +21,7 @@ struct FamilyModelCard: View {
     let onDelete: (LLMModel) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var selectedModelIndex: Int = 0
     @State private var hoveredModelIndex: Int? = nil
     @State private var isHovered = false
@@ -269,12 +269,12 @@ struct FamilyModelCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(
-                    isHovered ? Color.white.opacity(0.2) :
+                    isHovered ? Theme.current.foreground.opacity(0.2) :
                     hasInstalledModel ? settings.cardBorderActive : settings.cardBorderDefault,
                     lineWidth: isHovered ? 1.5 : 1
                 )
         )
-        .shadow(color: Color.white.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
+        .shadow(color: Theme.current.foreground.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
         .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 8 : 6, y: 2)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -310,7 +310,7 @@ struct ModelTab: View {
     let onTap: () -> Void
     let onHover: (Bool) -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     private var isActive: Bool { isSelected || isHovered }
 
@@ -359,7 +359,7 @@ struct WhisperFamilyCard: View {
     let onDelete: (WhisperModel) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var selectedModelIndex: Int = 0
     @State private var hoveredModelIndex: Int? = nil
     @State private var isHovered = false
@@ -580,12 +580,12 @@ struct WhisperFamilyCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(
-                    isHovered ? Color.white.opacity(0.2) :
+                    isHovered ? Theme.current.foreground.opacity(0.2) :
                     hasInstalledModel ? settings.cardBorderActive : settings.cardBorderDefault,
                     lineWidth: isHovered ? 1.5 : 1
                 )
         )
-        .shadow(color: Color.white.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
+        .shadow(color: Theme.current.foreground.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
         .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 8 : 6, y: 2)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -621,7 +621,7 @@ struct ParakeetFamilyCard: View {
     let onDelete: (ParakeetModel) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var selectedModelIndex: Int = 0
     @State private var hoveredModelIndex: Int? = nil
     @State private var isHovered = false
@@ -846,12 +846,12 @@ struct ParakeetFamilyCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(
-                    isHovered ? Color.white.opacity(0.2) :
+                    isHovered ? Theme.current.foreground.opacity(0.2) :
                     hasInstalledModel ? settings.cardBorderActive : settings.cardBorderDefault,
                     lineWidth: isHovered ? 1.5 : 1
                 )
         )
-        .shadow(color: Color.white.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
+        .shadow(color: Theme.current.foreground.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
         .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 8 : 6, y: 2)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -889,7 +889,7 @@ struct STTModelTab: View {
     let onTap: () -> Void
     let onHover: (Bool) -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     private var isActiveState: Bool { isSelected || isHovered }
 

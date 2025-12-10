@@ -25,6 +25,23 @@ extension FocusedValues {
     }
 }
 
+// MARK: - Settings Navigation Action
+
+struct SettingsNavigationAction {
+    let showSettings: () -> Void
+}
+
+struct SettingsNavigationKey: FocusedValueKey {
+    typealias Value = SettingsNavigationAction
+}
+
+extension FocusedValues {
+    var settingsNavigation: SettingsNavigationAction? {
+        get { self[SettingsNavigationKey.self] }
+        set { self[SettingsNavigationKey.self] = newValue }
+    }
+}
+
 @main
 struct TalkieApp: App {
     // Wire up AppDelegate for push notification handling
@@ -33,6 +50,7 @@ struct TalkieApp: App {
     let persistenceController = PersistenceController.shared
     @ObservedObject private var settingsManager = SettingsManager.shared
     @FocusedValue(\.sidebarToggle) var sidebarToggle
+    @FocusedValue(\.settingsNavigation) var settingsNavigation
 
     var body: some Scene {
         WindowGroup {
@@ -53,12 +71,14 @@ struct TalkieApp: App {
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
             }
-        }
 
-        Settings {
-            SettingsView()
-                .frame(width: 900, height: 750)
-                .tint(settingsManager.accentColor.color)
+            // Replace default Settings menu item with inline navigation
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    settingsNavigation?.showSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }

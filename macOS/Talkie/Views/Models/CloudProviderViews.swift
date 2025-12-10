@@ -21,7 +21,7 @@ struct ExpandableCloudProviderCard: View {
     let onToggle: () -> Void
     let onConfigure: () -> Void  // Deep link to Settings
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     /// Models from centralized LLMConfig.json
@@ -210,7 +210,7 @@ struct CloudModelRow: View {
     let isConfigured: Bool
     let providerColor: Color
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     var body: some View {
@@ -269,7 +269,7 @@ struct CompactCloudProviderRow: View {
     let onToggle: () -> Void
     let onSave: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     var body: some View {
         EmptyView()  // Deprecated - use ExpandableCloudProviderCard instead

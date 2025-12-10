@@ -488,11 +488,11 @@ struct SettingsPageHeader: View {
                     .font(.system(size: 13, weight: .bold, design: .monospaced))
                     .tracking(Tracking.wide)
             }
-            .foregroundColor(MidnightSurface.Text.primary)
+            .foregroundColor(Theme.current.foreground)
 
             Text(subtitle)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(MidnightSurface.Text.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 }
@@ -515,7 +515,7 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
                 .padding(.top, Spacing.lg)
                 .padding(.bottom, Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(MidnightSurface.content)
+                .background(Theme.current.background)
 
             Divider()
                 .opacity(0.3)
@@ -530,7 +530,7 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
             }
         }
         .frame(minHeight: 500, maxHeight: .infinity)
-        .background(MidnightSurface.content)
+        .background(Theme.current.background)
     }
 }
 
@@ -539,5 +539,118 @@ extension SettingsPageContainer where Header == EmptyView {
     init(@ViewBuilder content: () -> Content) {
         self.header = EmptyView()
         self.content = content()
+    }
+}
+
+// MARK: - Cached Theme
+
+/// Pre-computed theme values for performance.
+/// Instead of computing fonts/colors on every view access, we compute once and cache.
+/// Access via `Theme.current` which is updated when settings change.
+struct Theme: Equatable {
+    // MARK: - UI Fonts (for chrome: labels, headers, buttons, navigation)
+    let fontXS: Font
+    let fontXSMedium: Font
+    let fontXSBold: Font
+    let fontSM: Font
+    let fontSMMedium: Font
+    let fontSMBold: Font
+    let fontBody: Font
+    let fontBodyMedium: Font
+    let fontBodyBold: Font
+    let fontTitle: Font
+    let fontTitleMedium: Font
+    let fontTitleBold: Font
+    let fontHeadline: Font
+    let fontHeadlineMedium: Font
+    let fontHeadlineBold: Font
+    let fontDisplay: Font
+    let fontDisplayMedium: Font
+
+    // MARK: - Content Fonts (for user content: transcripts, notes)
+    let contentFontSM: Font
+    let contentFontSMMedium: Font
+    let contentFontBody: Font
+    let contentFontBodyMedium: Font
+    let contentFontBodyBold: Font
+    let contentFontLarge: Font
+    let contentFontLargeMedium: Font
+    let contentFontLargeBold: Font
+
+    // MARK: - Colors
+    let background: Color
+    let backgroundSecondary: Color
+    let backgroundTertiary: Color
+    let foreground: Color
+    let foregroundSecondary: Color
+    let foregroundMuted: Color
+    let divider: Color
+
+    // MARK: - Surface System
+    let surfaceBase: Color
+    let surface1: Color
+    let surface2: Color
+    let surface3: Color
+
+    // MARK: - Current Theme (singleton access)
+
+    /// The current cached theme. Updated automatically when settings change.
+    /// Use this instead of SettingsManager.shared.fontXS etc.
+    static var current: Theme = Theme.compute()
+
+    /// Recompute the theme from current settings. Called when theme-affecting settings change.
+    static func invalidate() {
+        current = compute()
+    }
+
+    /// Compute theme from current SettingsManager values
+    private static func compute() -> Theme {
+        let settings = SettingsManager.shared
+
+        return Theme(
+            // UI Fonts
+            fontXS: settings.themedFont(baseSize: 10, weight: settings.useLightFonts ? .regular : .regular),
+            fontXSMedium: settings.themedFont(baseSize: 10, weight: settings.useLightFonts ? .medium : .medium),
+            fontXSBold: settings.themedFont(baseSize: 10, weight: settings.useLightFonts ? .semibold : .semibold),
+            fontSM: settings.themedFont(baseSize: 11, weight: settings.useLightFonts ? .regular : .regular),
+            fontSMMedium: settings.themedFont(baseSize: 11, weight: settings.useLightFonts ? .medium : .medium),
+            fontSMBold: settings.themedFont(baseSize: 11, weight: settings.useLightFonts ? .semibold : .semibold),
+            fontBody: settings.themedFont(baseSize: 13, weight: settings.useLightFonts ? .regular : .regular),
+            fontBodyMedium: settings.themedFont(baseSize: 13, weight: settings.useLightFonts ? .medium : .medium),
+            fontBodyBold: settings.themedFont(baseSize: 13, weight: settings.useLightFonts ? .semibold : .semibold),
+            fontTitle: settings.themedFont(baseSize: 15, weight: settings.useLightFonts ? .regular : .regular),
+            fontTitleMedium: settings.themedFont(baseSize: 15, weight: settings.useLightFonts ? .medium : .medium),
+            fontTitleBold: settings.themedFont(baseSize: 15, weight: settings.useLightFonts ? .semibold : .bold),
+            fontHeadline: settings.themedFont(baseSize: 18, weight: settings.useLightFonts ? .regular : .regular),
+            fontHeadlineMedium: settings.themedFont(baseSize: 18, weight: settings.useLightFonts ? .medium : .medium),
+            fontHeadlineBold: settings.themedFont(baseSize: 18, weight: settings.useLightFonts ? .semibold : .bold),
+            fontDisplay: settings.themedFont(baseSize: 32, weight: .light),
+            fontDisplayMedium: settings.themedFont(baseSize: 32, weight: settings.useLightFonts ? .regular : .regular),
+
+            // Content Fonts
+            contentFontSM: settings.contentFont(baseSize: 10, weight: .regular),
+            contentFontSMMedium: settings.contentFont(baseSize: 10, weight: .medium),
+            contentFontBody: settings.contentFont(baseSize: 13, weight: .regular),
+            contentFontBodyMedium: settings.contentFont(baseSize: 13, weight: .medium),
+            contentFontBodyBold: settings.contentFont(baseSize: 13, weight: .bold),
+            contentFontLarge: settings.contentFont(baseSize: 15, weight: .regular),
+            contentFontLargeMedium: settings.contentFont(baseSize: 15, weight: .medium),
+            contentFontLargeBold: settings.contentFont(baseSize: 15, weight: .bold),
+
+            // Colors
+            background: settings.tacticalBackground,
+            backgroundSecondary: settings.tacticalBackgroundSecondary,
+            backgroundTertiary: settings.tacticalBackgroundTertiary,
+            foreground: settings.tacticalForeground,
+            foregroundSecondary: settings.tacticalForegroundSecondary,
+            foregroundMuted: settings.tacticalForegroundMuted,
+            divider: settings.tacticalDivider,
+
+            // Surfaces
+            surfaceBase: settings.surfaceBase,
+            surface1: settings.surface1,
+            surface2: settings.surface2,
+            surface3: settings.surface3
+        )
     }
 }

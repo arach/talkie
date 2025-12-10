@@ -49,7 +49,7 @@ struct ActivityRunRow: Identifiable {
 
 struct ActivityLogFullView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
@@ -95,7 +95,7 @@ struct ActivityLogFullView: View {
                         .foregroundColor(.primary)
 
                     Text("Actions")
-                        .font(SettingsManager.shared.fontTitleMedium)
+                        .font(Theme.current.fontTitleMedium)
                         .foregroundColor(.primary)
 
                     Text("\(allRuns.count) events")
@@ -106,7 +106,7 @@ struct ActivityLogFullView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(settings.surface1)
+                .background(Theme.current.surface1)
 
                 Divider()
 
@@ -118,7 +118,7 @@ struct ActivityLogFullView: View {
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO ACTIVITY YET")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         Text("Run workflows on your memos")
@@ -139,7 +139,7 @@ struct ActivityLogFullView: View {
 
                         TableColumn("Workflow", value: \.workflowName) { row in
                             Text(row.workflowName)
-                                .font(SettingsManager.shared.fontBodyBold)
+                                .font(Theme.current.fontBodyBold)
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
                         }
@@ -200,7 +200,7 @@ struct ActivityLogFullView: View {
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("SELECT AN ACTION")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         Text("Click a row to see details")
@@ -210,7 +210,7 @@ struct ActivityLogFullView: View {
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(settings.surface1)
+                    .background(Theme.current.surface1)
                 }
             }
             .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
@@ -253,7 +253,7 @@ struct ActivityInspectorPanel: View {
     let run: WorkflowRun
     let onClose: () -> Void
     let onDelete: () -> Void
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     private var workflowName: String { run.workflowName ?? "Workflow" }
     private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
@@ -282,7 +282,7 @@ struct ActivityInspectorPanel: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(workflowName)
-                        .font(SettingsManager.shared.fontBodyMedium)
+                        .font(Theme.current.fontBodyMedium)
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
@@ -304,7 +304,7 @@ struct ActivityInspectorPanel: View {
                     .help("Close inspector")
             }
             .padding(12)
-            .background(settings.surface1)
+            .background(Theme.current.surface1)
 
             Divider()
 
@@ -331,7 +331,7 @@ struct ActivityInspectorPanel: View {
             .foregroundColor(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(settings.surface2)
+            .background(Theme.current.surface2)
 
             Divider()
 
@@ -343,7 +343,7 @@ struct ActivityInspectorPanel: View {
                         if let output = run.output, !output.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("OUTPUT")
-                                    .font(SettingsManager.shared.fontXSBold)
+                                    .font(Theme.current.fontXSBold)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
@@ -353,7 +353,7 @@ struct ActivityInspectorPanel: View {
                                     .lineSpacing(2)
                                     .padding(10)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(settings.surface1)
+                                    .background(Theme.current.surface1)
                                     .cornerRadius(6)
                             }
                         }
@@ -376,7 +376,7 @@ struct ActivityInspectorPanel: View {
                         Image(systemName: "trash")
                             .font(SettingsManager.shared.fontXS)
                         Text("Delete Run")
-                            .font(SettingsManager.shared.fontXSMedium)
+                            .font(Theme.current.fontXSMedium)
                     }
                     .foregroundColor(.red.opacity(0.7))
                 }
@@ -385,7 +385,7 @@ struct ActivityInspectorPanel: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(settings.surface2)
+            .background(Theme.current.surface2)
         }
         .background(settings.surfaceInput)
     }
@@ -403,7 +403,7 @@ struct ActivityInspectorPanel: View {
 struct InspectorStepCard: View {
     let step: WorkflowExecutor.StepExecution
     let isLast: Bool
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     @State private var showInput = false
 
@@ -411,7 +411,7 @@ struct InspectorStepCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Text("\(step.stepNumber)")
-                    .font(SettingsManager.shared.fontXSBold)
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(.white)
                     .frame(width: 16, height: 16)
                     .background(Color.blue)
@@ -422,14 +422,14 @@ struct InspectorStepCard: View {
                     .foregroundColor(.secondary)
 
                 Text(step.stepType.uppercased())
-                    .font(SettingsManager.shared.fontXSBold)
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(.primary)
 
                 Spacer()
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Image(systemName: showInput ? "chevron.up" : "chevron.down")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -438,7 +438,7 @@ struct InspectorStepCard: View {
             if showInput {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("INPUT")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
@@ -456,7 +456,7 @@ struct InspectorStepCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text("OUTPUT")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text("→ {{\(step.outputKey)}}")
@@ -471,7 +471,7 @@ struct InspectorStepCard: View {
                     .lineSpacing(2)
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(settings.surface1)
+                    .background(Theme.current.surface1)
                     .cornerRadius(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
@@ -480,7 +480,7 @@ struct InspectorStepCard: View {
             }
         }
         .padding(10)
-        .background(settings.surface2)
+        .background(Theme.current.surface2)
         .cornerRadius(6)
     }
 }
@@ -489,7 +489,7 @@ struct InspectorStepCard: View {
 
 struct InspectorResizeHandle: View {
     @Binding var width: CGFloat
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     @State private var isHovering = false
     @State private var isDragging = false

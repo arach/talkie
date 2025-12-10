@@ -67,7 +67,7 @@ struct ModelCard: View {
                 .font(SettingsManager.shared.fontHeadline)
                 .foregroundColor(installed ? .blue : .secondary)
                 .frame(width: 32, height: 32)
-                .background(SettingsManager.shared.surface1)
+                .background(Theme.current.surface1)
                 .cornerRadius(8)
 
             // Info
@@ -102,13 +102,13 @@ struct ModelCard: View {
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.green)
                     Text("INSTALLED")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.green)
                 }
             } else {
                 Button(action: {}) {
                     Text("DOWNLOAD")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -119,7 +119,7 @@ struct ModelCard: View {
             }
         }
         .padding(16)
-        .background(SettingsManager.shared.surface1)
+        .background(Theme.current.surface1)
         .cornerRadius(8)
     }
 }

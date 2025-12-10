@@ -41,7 +41,7 @@ struct AutoRunSettingsView: View {
                     Toggle(isOn: $settingsManager.autoRunWorkflowsEnabled) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Enable Auto-Run Workflows")
-                                .font(SettingsManager.shared.fontSMBold)
+                                .font(Theme.current.fontSMBold)
                             Text("When enabled, workflows marked as auto-run will execute automatically when new memos sync from your iPhone.")
                                 .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.secondary)
@@ -50,7 +50,7 @@ struct AutoRunSettingsView: View {
                     .toggleStyle(.switch)
                 }
                 .padding(16)
-                .background(SettingsManager.shared.surface1)
+                .background(Theme.current.surface1)
                 .cornerRadius(8)
 
                 if settingsManager.autoRunWorkflowsEnabled {
@@ -60,7 +60,7 @@ struct AutoRunSettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text("AUTO-RUN WORKFLOWS")
-                                .font(SettingsManager.shared.fontXSBold)
+                                .font(Theme.current.fontXSBold)
                                 .foregroundColor(.secondary)
 
                             Spacer()
@@ -77,7 +77,7 @@ struct AutoRunSettingsView: View {
                                         Image(systemName: "plus")
                                         Text("Add")
                                     }
-                                    .font(SettingsManager.shared.fontXSMedium)
+                                    .font(Theme.current.fontXSMedium)
                                 }
                             }
                         }
@@ -95,7 +95,7 @@ struct AutoRunSettingsView: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Hey Talkie (Default)")
-                                            .font(SettingsManager.shared.fontSMBold)
+                                            .font(Theme.current.fontSMBold)
                                         Text("Detects \"Hey Talkie\" voice commands and routes to workflows")
                                             .font(SettingsManager.shared.fontXS)
                                             .foregroundColor(.secondary)
@@ -112,7 +112,7 @@ struct AutoRunSettingsView: View {
                                         .cornerRadius(4)
                                 }
                                 .padding(12)
-                                .background(SettingsManager.shared.surface1)
+                                .background(Theme.current.surface1)
                                 .cornerRadius(8)
 
                                 Text("The default Hey Talkie workflow runs automatically. Add your own workflows to customize.")
@@ -136,7 +136,7 @@ struct AutoRunSettingsView: View {
                     // How it works
                     VStack(alignment: .leading, spacing: 12) {
                         Text("HOW IT WORKS")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         VStack(alignment: .leading, spacing: 8) {
@@ -147,7 +147,7 @@ struct AutoRunSettingsView: View {
                             howItWorksRow(number: "5", text: "Universal workflows (like indexers) run on all memos")
                         }
                         .padding(12)
-                        .background(SettingsManager.shared.surface1)
+                        .background(Theme.current.surface1)
                         .cornerRadius(8)
                     }
             }
@@ -252,7 +252,7 @@ struct AutoRunWorkflowRow: View {
             // Workflow info
             VStack(alignment: .leading, spacing: 2) {
                 Text(workflow.name)
-                    .font(SettingsManager.shared.fontSMBold)
+                    .font(Theme.current.fontSMBold)
                 Text(workflow.description.isEmpty ? "\(workflow.steps.count) step(s)" : workflow.description)
                     .font(SettingsManager.shared.fontXS)
                     .foregroundColor(.secondary)
@@ -290,7 +290,7 @@ struct AutoRunWorkflowRow: View {
             .help("Remove from auto-run")
         }
         .padding(12)
-        .background(SettingsManager.shared.surface1)
+        .background(Theme.current.surface1)
         .cornerRadius(8)
     }
 }

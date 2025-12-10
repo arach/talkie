@@ -15,7 +15,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 struct AIResultsContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
@@ -45,7 +45,7 @@ struct AIResultsContentView: View {
                         Image(systemName: "sparkles")
                             .font(SettingsManager.shared.fontTitle)
                         Text("ACTIVITY LOG")
-                            .font(SettingsManager.shared.fontBodyBold)
+                            .font(Theme.current.fontBodyBold)
                     }
                     .foregroundColor(.primary)
 
@@ -55,7 +55,7 @@ struct AIResultsContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
-                .background(settings.surface1)
+                .background(Theme.current.surface1)
 
                 Divider()
 
@@ -67,7 +67,7 @@ struct AIResultsContentView: View {
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO RESULTS YET")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         Text("Run workflows on your memos")
@@ -112,7 +112,7 @@ struct AIResultsContentView: View {
                         .font(SettingsManager.shared.fontDisplay)
                         .foregroundColor(.secondary.opacity(0.3))
                     Text("SELECT A RUN")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
                     Text("Choose a workflow run to view details")
                         .font(SettingsManager.shared.fontXS)
@@ -137,7 +137,7 @@ struct AIResultsContentView: View {
 struct AIMemoHeaderView: View {
     let memo: VoiceMemo
     let runCount: Int
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     var body: some View {
         HStack(spacing: 10) {
@@ -146,14 +146,14 @@ struct AIMemoHeaderView: View {
                 .foregroundColor(.secondary)
 
             Text(memo.title ?? "Untitled")
-                .font(SettingsManager.shared.fontSMBold)
+                .font(Theme.current.fontSMBold)
                 .foregroundColor(.primary)
                 .lineLimit(1)
 
             Spacer()
 
             Text("\(runCount)")
-                .font(SettingsManager.shared.fontXSBold)
+                .font(Theme.current.fontXSBold)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -162,7 +162,7 @@ struct AIMemoHeaderView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(settings.surface2)
+        .background(Theme.current.surface2)
     }
 }
 
@@ -171,7 +171,7 @@ struct AIRunRowView: View {
     let run: WorkflowRun
     let isSelected: Bool
     let onSelect: () -> Void
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     @State private var isHovering = false
 
@@ -193,7 +193,7 @@ struct AIRunRowView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(workflowName)
-                        .font(SettingsManager.shared.fontSMMedium)
+                        .font(Theme.current.fontSMMedium)
                         .foregroundColor(isSelected ? .white : .primary)
                         .lineLimit(1)
 
@@ -239,7 +239,7 @@ struct AIRunRowView: View {
 struct AIRunDetailView: View {
     let run: WorkflowRun
     let onDelete: () -> Void
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     private var workflowName: String { run.workflowName ?? "Workflow" }
     private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
@@ -271,7 +271,7 @@ struct AIRunDetailView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workflowName)
-                            .font(SettingsManager.shared.fontTitleMedium)
+                            .font(Theme.current.fontTitleMedium)
 
                         HStack(spacing: 8) {
                             if let model = modelId {
@@ -316,7 +316,7 @@ struct AIRunDetailView: View {
                 .foregroundColor(.secondary.opacity(0.7))
             }
             .padding(16)
-            .background(settings.surface1)
+            .background(Theme.current.surface1)
 
             Divider()
 
@@ -328,7 +328,7 @@ struct AIRunDetailView: View {
                         if let output = run.output, !output.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("OUTPUT")
-                                    .font(SettingsManager.shared.fontXSBold)
+                                    .font(Theme.current.fontXSBold)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
@@ -338,7 +338,7 @@ struct AIRunDetailView: View {
                                     .lineSpacing(3)
                                     .padding(12)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(settings.surface1)
+                                    .background(Theme.current.surface1)
                                     .cornerRadius(6)
                             }
                         }
@@ -380,7 +380,7 @@ struct AIRunDetailView: View {
 struct AIStepCard: View {
     let step: WorkflowExecutor.StepExecution
     let isLast: Bool
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     @State private var showInput = false
 
@@ -388,7 +388,7 @@ struct AIStepCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("\(step.stepNumber)")
-                    .font(SettingsManager.shared.fontXSBold)
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
                     .background(Color.blue)
@@ -399,14 +399,14 @@ struct AIStepCard: View {
                     .foregroundColor(.secondary)
 
                 Text(step.stepType.uppercased())
-                    .font(SettingsManager.shared.fontXSBold)
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(.primary)
 
                 Spacer()
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
-                        .font(SettingsManager.shared.fontXSMedium)
+                        .font(Theme.current.fontXSMedium)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -419,7 +419,7 @@ struct AIStepCard: View {
             if showInput {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("INPUT")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
@@ -437,7 +437,7 @@ struct AIStepCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("OUTPUT")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text("→ {{\(step.outputKey)}}")
@@ -452,7 +452,7 @@ struct AIStepCard: View {
                     .lineSpacing(3)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(settings.surface1)
+                    .background(Theme.current.surface1)
                     .cornerRadius(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
@@ -461,7 +461,7 @@ struct AIStepCard: View {
             }
         }
         .padding(12)
-        .background(settings.surface2)
+        .background(Theme.current.surface2)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -471,7 +471,7 @@ struct AIStepCard: View {
 }
 
 struct ActivityLogContentView: View {
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     var body: some View {
         ScrollView {
@@ -482,7 +482,7 @@ struct ActivityLogContentView: View {
                         Image(systemName: "list.bullet.clipboard")
                             .font(SettingsManager.shared.fontHeadline)
                         Text("ACTIVITY LOG")
-                            .font(SettingsManager.shared.fontTitleBold)
+                            .font(Theme.current.fontTitleBold)
                     }
                     .foregroundColor(.primary)
 

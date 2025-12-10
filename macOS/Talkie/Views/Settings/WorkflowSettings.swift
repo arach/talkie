@@ -97,7 +97,7 @@ struct AllowedCommandsView: View {
             // Add new command
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ADD COMMAND")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 8) {
@@ -105,12 +105,12 @@ struct AllowedCommandsView: View {
                             .font(.system(size: 11, design: .monospaced))
                             .textFieldStyle(.plain)
                             .padding(10)
-                            .background(SettingsManager.shared.surface1)
+                            .background(Theme.current.surface1)
                             .cornerRadius(6)
 
                         Button(action: findCommand) {
                             Text("WHICH")
-                                .font(SettingsManager.shared.fontXSBold)
+                                .font(Theme.current.fontXSBold)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
@@ -122,7 +122,7 @@ struct AllowedCommandsView: View {
 
                         Button(action: addCommand) {
                             Text("ADD")
-                                .font(SettingsManager.shared.fontXSBold)
+                                .font(Theme.current.fontXSBold)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 10)
@@ -154,7 +154,7 @@ struct AllowedCommandsView: View {
                 // Custom commands
                 VStack(alignment: .leading, spacing: 12) {
                     Text("YOUR CUSTOM COMMANDS")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     if customCommands.isEmpty {
@@ -183,7 +183,7 @@ struct AllowedCommandsView: View {
                                 .buttonStyle(.plain)
                             }
                             .padding(10)
-                            .background(SettingsManager.shared.surface1)
+                            .background(Theme.current.surface1)
                             .cornerRadius(6)
                         }
                     }
@@ -194,7 +194,7 @@ struct AllowedCommandsView: View {
                 // Default commands (collapsed)
                 VStack(alignment: .leading, spacing: 12) {
                     Text("BUILT-IN COMMANDS (\(ShellStepConfig.defaultAllowedExecutables.count))")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     DisclosureGroup {

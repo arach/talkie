@@ -34,7 +34,7 @@ struct MemoDetailView: View {
     @FocusState private var titleFieldFocused: Bool
 
     @Environment(\.managedObjectContext) private var viewContext
-    @StateObject private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
     @State private var processingWorkflowIDs: Set<UUID> = []
     @State private var showingWorkflowPicker = false
     @State private var cachedQuickActionItems: [QuickActionItem] = []
@@ -129,12 +129,12 @@ struct MemoDetailView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             if isEditing {
                                 TextField("Recording title", text: $editedTitle)
-                                    .font(settings.fontTitleMedium)
+                                    .font(Theme.current.fontTitleMedium)
                                     .textFieldStyle(.plain)
                                     .focused($titleFieldFocused)
                             } else {
                                 Text(memoTitle)
-                                    .font(settings.fontTitleMedium)
+                                    .font(Theme.current.fontTitleMedium)
                                     .foregroundColor(.primary)
                             }
 
@@ -176,12 +176,12 @@ struct MemoDetailView: View {
                         HStack {
                             if isEditing {
                                 TextField("Recording title", text: $editedTitle)
-                                    .font(settings.fontTitleMedium)
+                                    .font(Theme.current.fontTitleMedium)
                                     .textFieldStyle(.plain)
                                     .focused($titleFieldFocused)
                             } else {
                                 Text(memoTitle)
-                                    .font(settings.fontTitleMedium)
+                                    .font(Theme.current.fontTitleMedium)
                                     .foregroundColor(.primary)
                                     .lineLimit(1)
                             }
@@ -199,7 +199,7 @@ struct MemoDetailView: View {
                             } else {
                                 Button(action: toggleEditMode) {
                                     Text("Edit")
-                                        .font(settings.fontSMMedium)
+                                        .font(Theme.current.fontSMMedium)
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
@@ -294,7 +294,7 @@ struct MemoDetailView: View {
 
                                         // Workflow name
                                         Text(run.workflowName ?? "Workflow")
-                                            .font(settings.fontBodyMedium)
+                                            .font(Theme.current.fontBodyMedium)
                                             .foregroundColor(.primary)
                                             .lineLimit(1)
 
@@ -311,8 +311,7 @@ struct MemoDetailView: View {
                                                 .foregroundColor(.red)
                                         } else {
                                             ProgressView()
-                                                .scaleEffect(0.5)
-                                                .frame(width: 12, height: 12)
+                                                .controlSize(.mini)
                                         }
 
                                         // Time ago
@@ -405,7 +404,7 @@ struct MemoDetailView: View {
                             Image(systemName: "trash")
                                 .font(settings.fontSM)
                             Text("DELETE MEMO")
-                                .font(settings.fontSMMedium)
+                                .font(Theme.current.fontSMMedium)
                         }
                         .foregroundColor(.red.opacity(0.8))
                         .padding(.horizontal, 10)
@@ -420,7 +419,7 @@ struct MemoDetailView: View {
             .padding(Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SettingsManager.shared.tacticalBackground)
+        .background(Theme.current.background)
         .onAppear {
             editedTitle = memoTitle
             editedNotes = memo.notes ?? ""
@@ -905,9 +904,9 @@ struct MemoDetailView: View {
         if memo.isTranscribing {
             HStack(spacing: 8) {
                 ProgressView()
-                    .scaleEffect(0.7)
+                    .controlSize(.small)
                 Text("PROCESSING...")
-                    .font(settings.fontXSBold)
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(.secondary)
             }
             .padding(12)
@@ -971,7 +970,7 @@ struct MemoDetailView: View {
                     .font(settings.fontDisplay)
                     .foregroundColor(.secondary.opacity(0.5))
                 Text("NO TRANSCRIPT AVAILABLE")
-                    .font(settings.fontSMBold)
+                    .font(Theme.current.fontSMBold)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
@@ -1026,7 +1025,7 @@ struct MemoDetailView: View {
                                     ForEach(tasks) { task in
                                         HStack(spacing: 8) {
                                             Text(taskPriorityIndicator(task.priority))
-                                                .font(settings.fontXSBold)
+                                                .font(Theme.current.fontXSBold)
                                                 .foregroundColor(.secondary)
                                             Text(task.title)
                                                 .font(settings.contentFontBody)
@@ -1053,7 +1052,7 @@ struct MemoDetailView: View {
                     .font(settings.fontHeadline)
                     .foregroundColor(.secondary.opacity(0.3))
                 Text("NO RESULTS")
-                    .font(settings.fontSMBold)
+                    .font(Theme.current.fontSMBold)
                     .foregroundColor(.secondary)
                 Text("Run workflows to generate AI results")
                     .font(settings.fontSM)
@@ -1107,7 +1106,7 @@ struct AIResultSection<Content: View>: View {
             content()
                 .padding(Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(SettingsManager.shared.surface1)
+                .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.xs)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
@@ -1151,7 +1150,7 @@ struct ActionButtonMac: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: triggered)
 
                 Text(title)
-                    .font(SettingsManager.shared.fontXSMedium)
+                    .font(Theme.current.fontXSMedium)
                     .foregroundColor(triggered ? .accentColor : .secondary)
             }
             .frame(maxWidth: .infinity)
@@ -1219,7 +1218,7 @@ struct WorkflowRunListItem: View {
                 // Workflow name (clickable to navigate)
                 Button(action: onNavigateToWorkflow) {
                     Text(workflowName)
-                        .font(SettingsManager.shared.fontBodyMedium)
+                        .font(Theme.current.fontBodyMedium)
                         .foregroundColor(.primary)
                         .underline(isHovering)
                 }
@@ -1250,7 +1249,7 @@ struct WorkflowRunListItem: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(isHovering ? SettingsManager.shared.surfaceHover : SettingsManager.shared.surface1)
+            .background(isHovering ? SettingsManager.shared.surfaceHover : Theme.current.surface1)
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
@@ -1308,7 +1307,7 @@ struct WorkflowRunDetailView: View {
 
                 Button(action: onNavigateToWorkflow) {
                     Text(workflowName)
-                        .font(SettingsManager.shared.fontBodyMedium)
+                        .font(Theme.current.fontBodyMedium)
                         .foregroundColor(.primary)
                 }
                 .buttonStyle(.plain)
@@ -1338,7 +1337,7 @@ struct WorkflowRunDetailView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(SettingsManager.shared.surface1)
+            .background(Theme.current.surface1)
 
             Divider()
                 .opacity(0.5)
@@ -1351,7 +1350,7 @@ struct WorkflowRunDetailView: View {
                         if let output = run.output, !output.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("OUTPUT")
-                                    .font(SettingsManager.shared.fontSMBold)
+                                    .font(Theme.current.fontSMBold)
                                     .foregroundColor(.secondary)
 
                                 Text(output)
@@ -1361,7 +1360,7 @@ struct WorkflowRunDetailView: View {
                                     .lineSpacing(3)
                                     .padding(12)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(SettingsManager.shared.surface1)
+                                    .background(Theme.current.surface1)
                                     .cornerRadius(6)
                             }
                         }
@@ -1413,7 +1412,7 @@ struct StepExecutionCard: View {
             // Step header
             HStack(spacing: 8) {
                 Text("\(step.stepNumber)")
-                    .font(SettingsManager.shared.fontSMBold)
+                    .font(Theme.current.fontSMBold)
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
                     .background(Color.blue)
@@ -1424,14 +1423,14 @@ struct StepExecutionCard: View {
                     .foregroundColor(.secondary)
 
                 Text(step.stepType.uppercased())
-                    .font(SettingsManager.shared.fontSMBold)
+                    .font(Theme.current.fontSMBold)
                     .foregroundColor(.primary)
 
                 Spacer()
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
-                        .font(SettingsManager.shared.fontXSMedium)
+                        .font(Theme.current.fontXSMedium)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -1445,7 +1444,7 @@ struct StepExecutionCard: View {
             if showInput {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("INPUT")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
@@ -1464,7 +1463,7 @@ struct StepExecutionCard: View {
             OutputCard(step.output, label: "output → {{\(step.outputKey)}}", isHighlighted: isLast)
         }
         .padding(12)
-        .background(SettingsManager.shared.surface2)
+        .background(Theme.current.surface2)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -1486,7 +1485,7 @@ struct BrowseWorkflowsButton: View {
                     .foregroundColor(.accentColor)
 
                 Text("MORE")
-                    .font(SettingsManager.shared.fontXSMedium)
+                    .font(Theme.current.fontXSMedium)
                     .foregroundColor(.accentColor)
             }
             .frame(maxWidth: .infinity)
@@ -1585,7 +1584,7 @@ struct OutputCard: View {
                     Button(action: copyToClipboard) {
                         HStack(spacing: 4) {
                             Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(SettingsManager.shared.fontXSMedium)
+                                .font(Theme.current.fontXSMedium)
                                 .foregroundColor(copied ? .green : .secondary.opacity(0.5))
                             if copied {
                                 Text("COPIED")
@@ -1617,7 +1616,7 @@ struct OutputCard: View {
                         Text(isExpanded ? "SHOW LESS" : "SHOW MORE")
                             .font(.techLabelSmall)
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                     }
                     .foregroundColor(.accentColor)
                 }
@@ -1625,7 +1624,7 @@ struct OutputCard: View {
             }
         }
         .padding(Spacing.md)
-        .background(SettingsManager.shared.surface1)
+        .background(Theme.current.surface1)
         .cornerRadius(CornerRadius.sm)
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.sm)
@@ -1749,7 +1748,7 @@ struct TranscriptQuickActions: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.85), in: RoundedRectangle(cornerRadius: 8))
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.95), in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: - Button Views
@@ -1913,7 +1912,7 @@ struct WorkflowPickerSheet: View {
     let onSelect: (WorkflowDefinition) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
     @State private var selectedWorkflow: WorkflowDefinition?
     @State private var searchText = ""
 
@@ -1942,7 +1941,7 @@ struct WorkflowPickerSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Run Workflow")
-                        .font(SettingsManager.shared.fontTitleBold)
+                        .font(Theme.current.fontTitleBold)
                     Text(memo.title ?? "Untitled Memo")
                         .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.secondary)
@@ -1978,7 +1977,7 @@ struct WorkflowPickerSheet: View {
                 }
             }
             .padding(10)
-            .background(SettingsManager.shared.surface1)
+            .background(Theme.current.surface1)
             .cornerRadius(8)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
@@ -1992,7 +1991,7 @@ struct WorkflowPickerSheet: View {
                         .foregroundColor(.secondary.opacity(0.4))
 
                     Text("No Workflows")
-                        .font(SettingsManager.shared.fontBodyMedium)
+                        .font(Theme.current.fontBodyMedium)
                         .foregroundColor(.secondary)
 
                     Text("Create a workflow in Settings → Workflows")
@@ -2074,7 +2073,7 @@ struct WorkflowPickerRow: View {
             // Info
             VStack(alignment: .leading, spacing: 2) {
                 Text(workflow.name)
-                    .font(SettingsManager.shared.fontBodyMedium)
+                    .font(Theme.current.fontBodyMedium)
                     .foregroundColor(.primary)
 
                 if !workflow.description.isEmpty {

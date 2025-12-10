@@ -51,7 +51,7 @@ struct OutputSettingsView: View {
 
                         Button(action: saveDirectory) {
                             Text("Save")
-                                .font(SettingsManager.shared.fontXSMedium)
+                                .font(Theme.current.fontXSMedium)
                         }
                         .buttonStyle(.borderedProminent)
                     }
@@ -125,7 +125,7 @@ struct OutputSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("PATH ALIASES")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         Text("Define shortcuts like @Obsidian, @Notes to use in file paths")
@@ -172,7 +172,7 @@ struct OutputSettingsView: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(SettingsManager.shared.surface1)
+                                .background(Theme.current.surface1)
                                 .cornerRadius(6)
                             }
                         }
@@ -207,7 +207,7 @@ struct OutputSettingsView: View {
 
                             Button(action: addAlias) {
                                 Text("Add")
-                                    .font(SettingsManager.shared.fontXSMedium)
+                                    .font(Theme.current.fontXSMedium)
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(newAliasName.isEmpty || newAliasPath.isEmpty)

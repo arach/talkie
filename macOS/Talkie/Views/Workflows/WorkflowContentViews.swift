@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 struct WorkflowsContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var workflowManager = WorkflowManager.shared
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?
     @State private var showingMemoSelector = false
@@ -44,7 +44,7 @@ struct WorkflowsContentView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("WORKFLOWS")
-                            .font(SettingsManager.shared.fontSMBold)
+                            .font(Theme.current.fontSMBold)
                         Text("\(workflowManager.workflows.count) total")
                             .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
@@ -82,7 +82,7 @@ struct WorkflowsContentView: View {
                 }
             }
             .frame(minWidth: 240, idealWidth: 280, maxWidth: 320)
-            .background(settings.surface1)
+            .background(Theme.current.surface1)
 
             Divider()
                 .opacity(0.5)
@@ -105,7 +105,7 @@ struct WorkflowsContentView: View {
                         .foregroundColor(.secondary.opacity(0.2))
 
                     Text("SELECT OR CREATE")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Button(action: createNewWorkflow) {
@@ -113,7 +113,7 @@ struct WorkflowsContentView: View {
                             Image(systemName: "plus")
                                 .font(SettingsManager.shared.fontXS)
                             Text("NEW WORKFLOW")
-                                .font(SettingsManager.shared.fontXSBold)
+                                .font(Theme.current.fontXSBold)
                         }
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)
@@ -213,7 +213,7 @@ struct WorkflowMemoSelectorSheet: View {
     let memos: [VoiceMemo]
     let onSelect: (VoiceMemo) -> Void
     let onCancel: () -> Void
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
@@ -235,7 +235,7 @@ struct WorkflowMemoSelectorSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Run Workflow")
-                        .font(SettingsManager.shared.fontTitleBold)
+                        .font(Theme.current.fontTitleBold)
                     HStack(spacing: 6) {
                         Image(systemName: workflow.icon)
                             .foregroundColor(workflow.color.color)
@@ -274,7 +274,7 @@ struct WorkflowMemoSelectorSheet: View {
                 }
             }
             .padding(10)
-            .background(settings.surface1)
+            .background(Theme.current.surface1)
             .cornerRadius(8)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
@@ -288,7 +288,7 @@ struct WorkflowMemoSelectorSheet: View {
                         .foregroundColor(.secondary.opacity(0.4))
 
                     Text("No Transcribed Memos")
-                        .font(SettingsManager.shared.fontBodyMedium)
+                        .font(Theme.current.fontBodyMedium)
                         .foregroundColor(.secondary)
 
                     Text("Record and transcribe a voice memo first")
@@ -357,7 +357,7 @@ struct WorkflowMemoSelectorSheet: View {
 
 struct WorkflowCard: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     let icon: String
     let title: String
     let description: String
@@ -397,7 +397,7 @@ struct WorkflowCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title.uppercased())
-                        .font(SettingsManager.shared.fontSMBold)
+                        .font(Theme.current.fontSMBold)
 
                     Text(description)
                         .font(SettingsManager.shared.fontXS)
@@ -408,7 +408,7 @@ struct WorkflowCard: View {
                             ProgressView()
                                 .scaleEffect(0.5)
                             Text("RUNNING...")
-                                .font(SettingsManager.shared.fontXSMedium)
+                                .font(Theme.current.fontXSMedium)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -421,7 +421,7 @@ struct WorkflowCard: View {
                     .foregroundColor(.secondary.opacity(0.3))
             }
             .padding(12)
-            .background(settings.surface1)
+            .background(Theme.current.surface1)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -476,7 +476,7 @@ struct WorkflowCard: View {
 
 struct MemoSelectorSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     let memos: [VoiceMemo]
     let actionType: WorkflowActionType
     let provider: String
@@ -488,7 +488,7 @@ struct MemoSelectorSheet: View {
             // Header
             HStack {
                 Text("Select Memo")
-                    .font(SettingsManager.shared.fontTitleBold)
+                    .font(Theme.current.fontTitleBold)
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
@@ -517,7 +517,7 @@ struct MemoSelectorSheet: View {
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(memo.title ?? "Untitled")
-                                        .font(SettingsManager.shared.fontBodyMedium)
+                                        .font(Theme.current.fontBodyMedium)
                                         .lineLimit(1)
 
                                     if let date = memo.createdAt {
@@ -534,7 +534,7 @@ struct MemoSelectorSheet: View {
                                     .foregroundColor(.secondary)
                             }
                             .padding(12)
-                            .background(settings.surface1)
+                            .background(Theme.current.surface1)
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)

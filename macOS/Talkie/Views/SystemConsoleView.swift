@@ -328,8 +328,8 @@ struct SystemConsoleView: View {
     /// Optional callback to close/navigate away from the console
     var onClose: (() -> Void)? = nil
 
-    private let bgColor = Color(red: 0.06, green: 0.06, blue: 0.08)
-    private let borderColor = Color(red: 0.15, green: 0.15, blue: 0.18)
+    private var bgColor: Color { Theme.current.background }
+    private var borderColor: Color { Theme.current.divider }
     private let subtleGreen = Color(red: 0.4, green: 0.8, blue: 0.4)
 
     var filteredEvents: [SystemEvent] {
@@ -383,12 +383,12 @@ struct SystemConsoleView: View {
                 .foregroundColor(subtleGreen.opacity(0.7))
 
             Text("SYSTEM CONSOLE")
-                .font(SettingsManager.shared.fontXSBold)
-                .foregroundColor(.white.opacity(0.9))
+                .font(Theme.current.fontXSBold)
+                .foregroundColor(Theme.current.foreground)
 
             Text("v1.0")
                 .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(Theme.current.foregroundMuted)
 
             Spacer()
 
@@ -400,7 +400,7 @@ struct SystemConsoleView: View {
                     .shadow(color: subtleGreen.opacity(0.5), radius: 3)
 
                 Text("LIVE")
-                    .font(SettingsManager.shared.fontXSBold)
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(subtleGreen.opacity(0.8))
             }
 
@@ -408,10 +408,10 @@ struct SystemConsoleView: View {
             Button(action: { eventManager.clear() }) {
                 Text("CLEAR")
                     .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(Theme.current.foregroundMuted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.05))
+                    .background(Theme.current.surface1)
                     .cornerRadius(2)
             }
             .buttonStyle(.plain)
@@ -421,10 +421,10 @@ struct SystemConsoleView: View {
                 Button(action: onPopOut) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(Theme.current.foregroundMuted)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.white.opacity(0.05))
+                        .background(Theme.current.surface1)
                         .cornerRadius(2)
                 }
                 .buttonStyle(.plain)
@@ -436,10 +436,10 @@ struct SystemConsoleView: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(Theme.current.foregroundMuted)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.white.opacity(0.05))
+                        .background(Theme.current.surface1)
                         .cornerRadius(2)
                 }
                 .buttonStyle(.plain)
@@ -448,7 +448,7 @@ struct SystemConsoleView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(red: 0.08, green: 0.08, blue: 0.1))
+        .background(Theme.current.backgroundSecondary)
     }
 
     // MARK: - Filter Bar
@@ -469,31 +469,31 @@ struct SystemConsoleView: View {
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(Theme.current.foregroundMuted)
 
                 TextField("Search...", text: $searchQuery)
                     .textFieldStyle(.plain)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(Theme.current.foreground)
                     .frame(width: 120)
 
                 if !searchQuery.isEmpty {
                     Button(action: { searchQuery = "" }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(Theme.current.foregroundMuted)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.white.opacity(0.05))
+            .background(Theme.current.surface1)
             .cornerRadius(4)
 
             Text("\(filteredEvents.count)")
                 .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(Theme.current.foregroundMuted)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -506,7 +506,7 @@ struct SystemConsoleView: View {
 
         return Button(action: { filterType = type }) {
             Text(label)
-                .font(SettingsManager.shared.fontXSBold)
+                .font(Theme.current.fontXSBold)
                 .foregroundColor(isSelected ? bgColor : chipColor.opacity(0.6))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
@@ -560,7 +560,7 @@ struct SystemConsoleView: View {
                     Text("Open Logs")
                         .font(SettingsManager.shared.fontXS)
                 }
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(Theme.current.foregroundMuted)
             }
             .buttonStyle(.plain)
 
@@ -574,13 +574,13 @@ struct SystemConsoleView: View {
                     Text("AUTO")
                         .font(SettingsManager.shared.fontXS)
                 }
-                .foregroundColor(autoScroll ? subtleGreen : .white.opacity(0.3))
+                .foregroundColor(autoScroll ? subtleGreen : Theme.current.foregroundMuted)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color(red: 0.08, green: 0.08, blue: 0.1))
+        .background(Theme.current.backgroundSecondary)
         .overlay(
             Rectangle()
                 .frame(height: 1)
@@ -604,14 +604,14 @@ struct ConsoleEventRow: View {
 
     @State private var isHovering = false
 
-    private let bgColor = Color(red: 0.06, green: 0.06, blue: 0.08)
+    private var bgColor: Color { Theme.current.background }
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             // Timestamp (compact)
             Text(formatTime(event.timestamp))
                 .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .foregroundColor(.white.opacity(0.25))
+                .foregroundColor(Theme.current.foregroundMuted)
                 .frame(width: 52, alignment: .leading)
 
             // Type badge (compact)
@@ -624,13 +624,13 @@ struct ConsoleEventRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.message)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(Theme.current.foreground)
                     .lineLimit(2)
 
                 if let detail = event.detail {
                     Text(detail)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(Theme.current.foregroundMuted)
                         .lineLimit(1)
                 }
             }
@@ -639,7 +639,7 @@ struct ConsoleEventRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
-        .background(isHovering ? Color.white.opacity(0.02) : Color.clear)
+        .background(isHovering ? Theme.current.backgroundSecondary : Color.clear)
         .onHover { hovering in isHovering = hovering }
     }
 

@@ -69,7 +69,7 @@ struct DebugInfoView: View {
             // Sync status section
             VStack(alignment: .leading, spacing: 12) {
                 Text("SYNC STATUS")
-                    .font(SettingsManager.shared.fontXSBold)
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 8) {
@@ -82,7 +82,7 @@ struct DebugInfoView: View {
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(SettingsManager.shared.surface1)
+                .background(Theme.current.surface1)
                 .cornerRadius(8)
             }
         }
@@ -107,7 +107,7 @@ struct DebugInfoView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(SettingsManager.shared.surface2)
+        .background(Theme.current.surface2)
         .cornerRadius(6)
     }
 

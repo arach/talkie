@@ -23,7 +23,7 @@ struct ExpandableModelFamilyCard: View {
     let onDelete: (LLMModel) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     private var hasInstalledModel: Bool {
@@ -198,7 +198,7 @@ struct ModelVariantRow: View {
     let onDownload: () -> Void
     let onDelete: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     private var catalogDef: MLXModelDefinition? {
@@ -330,7 +330,7 @@ struct ExpandableSTTCard<Content: View>: View {
     let onToggle: () -> Void
     @ViewBuilder let content: () -> Content
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     private func specValues() -> (size: String, rtf: String) {
@@ -536,7 +536,7 @@ struct STTVariantRow: View {
     let onDownload: () -> Void
     let onDelete: () -> Void
 
-    @StateObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
     @State private var isHovered = false
 
     var body: some View {

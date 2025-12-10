@@ -30,7 +30,7 @@ struct AppearanceSettingsView: View {
             // MARK: - Theme Presets
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK THEMES")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     Text("Apply a curated theme preset with one click.")
@@ -42,7 +42,7 @@ struct AppearanceSettingsView: View {
                         // Mini sidebar
                         VStack(alignment: .leading, spacing: 2) {
                             Text("TALKIE")
-                                .font(SettingsManager.shared.fontXSBold)
+                                .font(Theme.current.fontXSBold)
                                 .foregroundColor(SettingsManager.shared.tacticalForeground)
                                 .padding(.bottom, 4)
 
@@ -50,15 +50,15 @@ struct AppearanceSettingsView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: item == "All Memos" ? "square.stack" : (item == "Recent" ? "clock" : "checkmark.circle"))
                                         .font(SettingsManager.shared.fontXS)
-                                        .foregroundColor(item == "All Memos" ? .accentColor : SettingsManager.shared.tacticalForegroundMuted)
+                                        .foregroundColor(item == "All Memos" ? .accentColor : Theme.current.foregroundMuted)
                                     Text(item)
                                         .font(SettingsManager.shared.fontSM)
-                                        .foregroundColor(item == "All Memos" ? SettingsManager.shared.tacticalForeground : SettingsManager.shared.tacticalForegroundSecondary)
+                                        .foregroundColor(item == "All Memos" ? SettingsManager.shared.tacticalForeground : Theme.current.foregroundSecondary)
                                     Spacer()
                                     if item == "All Memos" {
                                         Text("103")
                                             .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                                            .foregroundColor(Theme.current.foregroundMuted)
                                     }
                                 }
                                 .padding(.horizontal, 6)
@@ -72,7 +72,7 @@ struct AppearanceSettingsView: View {
                         .background(SettingsManager.shared.tacticalBackground)
 
                         Rectangle()
-                            .fill(SettingsManager.shared.tacticalDivider)
+                            .fill(Theme.current.divider)
                             .frame(width: 0.5)
 
                         // Table
@@ -80,32 +80,32 @@ struct AppearanceSettingsView: View {
                             // Header row
                             HStack(spacing: 0) {
                                 Text("TIMESTAMP")
-                                    .font(SettingsManager.shared.fontXSBold)
-                                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                                     .frame(width: 90, alignment: .leading)
                                 Text("TITLE")
-                                    .font(SettingsManager.shared.fontXSBold)
-                                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 Text("DUR")
-                                    .font(SettingsManager.shared.fontXSBold)
-                                    .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                                     .frame(width: 40, alignment: .trailing)
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(SettingsManager.shared.tacticalBackgroundSecondary)
+                            .background(Theme.current.backgroundSecondary)
 
                             // Sample rows
                             ForEach(0..<5) { i in
                                 VStack(spacing: 0) {
                                     Rectangle()
-                                        .fill(SettingsManager.shared.tacticalDivider.opacity(0.3))
+                                        .fill(Theme.current.divider.opacity(0.3))
                                         .frame(height: 0.5)
                                     HStack(spacing: 0) {
                                         Text(["Nov 30, 11:22", "Nov 29, 15:42", "Nov 29, 12:51", "Nov 28, 21:49", "Nov 28, 19:33"][i])
                                             .font(SettingsManager.shared.fontSM)
-                                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                                            .foregroundColor(Theme.current.foregroundMuted)
                                             .frame(width: 90, alignment: .leading)
                                         Text(["Recording 2025-11-30", "Quick memo 11/29", "Recording 11/29", "Quick memo 11/28", "Meeting notes"][i])
                                             .font(SettingsManager.shared.fontSM)
@@ -114,7 +114,7 @@ struct AppearanceSettingsView: View {
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(["0:09", "0:34", "0:08", "0:31", "1:04"][i])
                                             .font(SettingsManager.shared.fontSM)
-                                            .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                                            .foregroundColor(Theme.current.foregroundMuted)
                                             .frame(width: 40, alignment: .trailing)
                                     }
                                     .padding(.horizontal, 8)
@@ -128,7 +128,7 @@ struct AppearanceSettingsView: View {
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(SettingsManager.shared.tacticalDivider, lineWidth: 0.5)
+                            .stroke(Theme.current.divider, lineWidth: 0.5)
                     )
 
                     // Theme selection (bottom)
@@ -149,7 +149,7 @@ struct AppearanceSettingsView: View {
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
-                                .background(isThemeActive(preset) ? Color.accentColor.opacity(0.15) : SettingsManager.shared.tacticalBackgroundTertiary)
+                                .background(isThemeActive(preset) ? Color.accentColor.opacity(0.15) : Theme.current.backgroundTertiary)
                                 .cornerRadius(4)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 4)
@@ -161,13 +161,13 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(SettingsManager.shared.surface2)
+                .background(Theme.current.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Theme Mode
                 VStack(alignment: .leading, spacing: 12) {
                     Text("APPEARANCE")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 12) {
@@ -181,13 +181,13 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(SettingsManager.shared.surface2)
+                .background(Theme.current.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Accent Color
                 VStack(alignment: .leading, spacing: 12) {
                     Text("ACCENT COLOR")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     Text("Used for buttons, selections, and highlights.")
@@ -205,19 +205,19 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(SettingsManager.shared.surface2)
+                .background(Theme.current.surface2)
                 .cornerRadius(8)
 
                 // MARK: - Typography
                 VStack(alignment: .leading, spacing: 10) {
                     Text("TYPOGRAPHY")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     // UI Chrome: Font + Size together
                     VStack(alignment: .leading, spacing: 8) {
                         Text("UI Chrome")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .textCase(SettingsManager.shared.uiTextCase)
                             .foregroundColor(.secondary.opacity(0.6))
 
@@ -273,13 +273,13 @@ struct AppearanceSettingsView: View {
                         .controlSize(.mini)
                     }
                     .padding(10)
-                    .background(SettingsManager.shared.surface1)
+                    .background(Theme.current.surface1)
                     .cornerRadius(6)
 
                     // Content: Font + Size together
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Content")
-                            .font(SettingsManager.shared.fontXSBold)
+                            .font(Theme.current.fontXSBold)
                             .textCase(SettingsManager.shared.uiTextCase)
                             .foregroundColor(.secondary.opacity(0.6))
 
@@ -320,7 +320,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     .padding(10)
-                    .background(SettingsManager.shared.surface1)
+                    .background(Theme.current.surface1)
                     .cornerRadius(6)
 
                     // Preview
@@ -333,7 +333,7 @@ struct AppearanceSettingsView: View {
                             // UI Font Preview
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("UI Chrome")
-                                    .font(SettingsManager.shared.fontXSBold)
+                                    .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
                                     .foregroundColor(.secondary.opacity(0.6))
                                 Text(settingsManager.uiAllCaps ? "MEMOS · ACTIONS · 12:34 PM" : "Memos · Actions · 12:34 PM")
@@ -346,7 +346,7 @@ struct AppearanceSettingsView: View {
                             // Content Font Preview
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Content")
-                                    .font(SettingsManager.shared.fontXSBold)
+                                    .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
                                     .foregroundColor(.secondary.opacity(0.6))
                                 Text("The quick brown fox jumps over the lazy dog. This is how your transcripts and notes will appear.")
@@ -365,7 +365,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(16)
-                .background(SettingsManager.shared.surface2)
+                .background(Theme.current.surface2)
                 .cornerRadius(8)
 
                 // Note about accent color
@@ -397,7 +397,7 @@ struct AppearanceModeButton: View {
                     .font(SettingsManager.shared.fontHeadline)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 48, height: 48)
-                    .background(isSelected ? Color.accentColor.opacity(0.15) : SettingsManager.shared.surface1)
+                    .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
                     .cornerRadius(10)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
@@ -451,13 +451,13 @@ struct AccentColorButton: View {
 
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(SettingsManager.shared.fontXSBold)
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.accentColor)
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.accentColor.opacity(0.1) : SettingsManager.shared.surface1)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Theme.current.surface1)
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
@@ -481,7 +481,7 @@ struct FontStyleButton: View {
                     .font(SettingsManager.shared.fontSM)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 28, height: 28)
-                    .background(isSelected ? Color.accentColor.opacity(0.15) : SettingsManager.shared.surface1)
+                    .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
@@ -517,7 +517,7 @@ struct FontSizeButton: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : SettingsManager.shared.surface1)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -590,7 +590,7 @@ struct ThemePresetCard: View {
                 }
             }
             .padding(10)
-            .background(isActive ? Color.accentColor.opacity(0.1) : SettingsManager.shared.surface1)
+            .background(isActive ? Color.accentColor.opacity(0.1) : Theme.current.surface1)
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)

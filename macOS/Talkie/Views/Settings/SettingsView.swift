@@ -20,17 +20,14 @@ enum SettingsSection: String, Hashable {
 }
 
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject var settingsManager = SettingsManager.shared
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
     @State private var selectedSection: SettingsSection = .apiKeys  // Default to API Keys
 
-    // Use DesignSystem colors for Midnight theme consistency
-    // Sidebar is slightly elevated, content is true black, cards pop out slightly
-    private let sidebarBackground = MidnightSurface.elevated
-    private let contentBackground = MidnightSurface.content
-    private let bottomBarBackground = MidnightSurface.sidebar
+    // Theme-aware colors for light/dark mode
+    private var sidebarBackground: Color { Theme.current.backgroundSecondary }
+    private var contentBackground: Color { Theme.current.background }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -39,7 +36,7 @@ struct SettingsView: View {
                 // Settings Header - with breathing room at top
                 Text("SETTINGS")
                     .font(.system(size: 10, weight: .bold, design: .default))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(Theme.current.foreground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.top, 20)
@@ -137,7 +134,7 @@ struct SettingsView: View {
 
             // Divider
             Rectangle()
-                .fill(MidnightSurface.divider)
+                .fill(Theme.current.divider)
                 .frame(width: 1)
 
             // MARK: - Content Area
@@ -164,20 +161,6 @@ struct SettingsView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                // Bottom bar with Done button
-                HStack {
-                    Spacer()
-                    Button("DONE") {
-                        dismiss()
-                    }
-                    .buttonStyle(SettingsDoneButtonStyle())
-                    .keyboardShortcut(.return, modifiers: .command)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
-                .background(bottomBarBackground)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(contentBackground)
@@ -197,7 +180,7 @@ struct SettingsSidebarSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(isActive ? .white.opacity(0.7) : .white.opacity(0.4))
+                .foregroundColor(isActive ? Theme.current.foregroundSecondary : Theme.current.foregroundMuted)
                 .padding(.leading, 6)
                 .padding(.bottom, 2)
 
@@ -220,12 +203,12 @@ struct SettingsSidebarItem: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 9))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.5))
+                .foregroundColor(isSelected ? (SettingsManager.shared.appearanceMode == .dark ? .white : .white) : Theme.current.foregroundMuted)
                 .frame(width: 14)
 
             Text(title)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.7))
+                .foregroundColor(isSelected ? (SettingsManager.shared.appearanceMode == .dark ? .white : .white) : Theme.current.foregroundSecondary)
 
             Spacer(minLength: 0)
         }
@@ -234,7 +217,7 @@ struct SettingsSidebarItem: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+                .fill(isSelected ? Color.accentColor : (isHovered ? Theme.current.backgroundTertiary : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -243,20 +226,6 @@ struct SettingsSidebarItem: View {
         .onHover { hovering in
             isHovered = hovering
         }
-    }
-}
-
-struct SettingsDoneButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-            .background(Color.accentColor)
-            .cornerRadius(CornerRadius.xs)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(TalkieAnimation.fast, value: configuration.isPressed)
     }
 }
 

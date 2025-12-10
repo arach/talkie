@@ -20,7 +20,7 @@ struct WalkieConversationView: View {
     @State private var playingWalkieId: String?
     @State private var audioPlayer: AVAudioPlayer?
 
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -159,7 +159,7 @@ struct WalkieBubble: View {
     let isPlaying: Bool
     let onPlay: () -> Void
 
-    @ObservedObject private var settings = SettingsManager.shared
+    private let settings = SettingsManager.shared
 
     private var isFromUser: Bool { walkie.sender == .user }
 

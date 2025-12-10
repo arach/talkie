@@ -184,15 +184,20 @@ enum ThemePreset: String, CaseIterable {
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
         case .talkiePro:
-            return (Color(white: 0.08), Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
+            // fg: white*0.85 = 0.85
+            return (Color(white: 0.08), Color(white: 0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
         case .terminal:
-            return (Color.black, Color.green.opacity(0.9), Color.green)
+            // fg: green*0.9 ≈ (0, 0.9*0.85, 0) = (0, 0.765, 0)
+            return (Color.black, Color(red: 0, green: 0.765, blue: 0), Color.green)
         case .minimal:
-            return (Color(white: 0.96), Color.black.opacity(0.8), Color.gray)
+            // fg: black*0.8 = 0.2
+            return (Color(white: 0.96), Color(white: 0.2), Color.gray)
         case .classic:
-            return (Color(white: 0.15), Color.white.opacity(0.9), Color.blue)
+            // fg: white*0.9 = 0.9
+            return (Color(white: 0.15), Color(white: 0.9), Color.blue)
         case .warm:
-            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color.white.opacity(0.9), Color.orange)
+            // fg: white*0.9 = 0.9
+            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
         }
     }
 
@@ -275,6 +280,7 @@ class SettingsManager: ObservableObject {
                 } else {
                     UserDefaults.standard.removeObject(forKey: self.currentThemeKey)
                 }
+                Theme.invalidate()
             }
         }
     }
@@ -304,6 +310,7 @@ class SettingsManager: ObservableObject {
             let mode = appearanceMode
             DispatchQueue.main.async {
                 UserDefaults.standard.set(mode.rawValue, forKey: self.appearanceModeKey)
+                Theme.invalidate()
             }
             applyAppearanceMode()
         }
@@ -329,6 +336,7 @@ class SettingsManager: ObservableObject {
             let style = uiFontStyle
             DispatchQueue.main.async {
                 UserDefaults.standard.set(style.rawValue, forKey: self.uiFontStyleKey)
+                Theme.invalidate()
             }
         }
     }
@@ -339,6 +347,7 @@ class SettingsManager: ObservableObject {
             let style = contentFontStyle
             DispatchQueue.main.async {
                 UserDefaults.standard.set(style.rawValue, forKey: self.contentFontStyleKey)
+                Theme.invalidate()
             }
         }
     }
@@ -355,6 +364,7 @@ class SettingsManager: ObservableObject {
             let size = uiFontSize
             DispatchQueue.main.async {
                 UserDefaults.standard.set(size.rawValue, forKey: self.uiFontSizeKey)
+                Theme.invalidate()
             }
         }
     }
@@ -365,6 +375,7 @@ class SettingsManager: ObservableObject {
             let size = contentFontSize
             DispatchQueue.main.async {
                 UserDefaults.standard.set(size.rawValue, forKey: self.contentFontSizeKey)
+                Theme.invalidate()
             }
         }
     }
@@ -468,7 +479,8 @@ class SettingsManager: ObservableObject {
         if isMinimalTheme {
             return isSystemDarkMode ? Color(white: 0.18) : Color(white: 0.91)
         }
-        return Color(NSColor.controlBackgroundColor).opacity(0.5)
+        // Fallback: solid color approximating controlBackgroundColor*0.5
+        return isSystemDarkMode ? Color(white: 0.13) : Color(white: 0.94)
     }
 
     /// Primary text
@@ -501,7 +513,8 @@ class SettingsManager: ObservableObject {
         if isMinimalTheme {
             return isSystemDarkMode ? Color(white: 0.48) : Color(white: 0.50)
         }
-        return Color.secondary.opacity(0.7)
+        // Fallback: secondary*0.7 ≈ dark: 0.42, light: 0.58
+        return isSystemDarkMode ? Color(white: 0.42) : Color(white: 0.58)
     }
 
     /// Divider/border color
@@ -533,65 +546,66 @@ class SettingsManager: ObservableObject {
     var contentFontLargeMedium: Font { contentFont(baseSize: 15, weight: .medium) }
     var contentFontLargeBold: Font { contentFont(baseSize: 15, weight: .bold) }
 
-    // MARK: - Surface System (Talkie Pro)
+    // MARK: - Surface System (Appearance-Aware)
     // Layered background surfaces from deepest to topmost
-    // Using Midnight theme colors for consistent dark aesthetic
+    // Adapts to light/dark appearance mode
 
-    /// Surface Level 0: Window/App background (deepest layer - true black)
+    /// Surface Level 0: Window/App background (deepest layer)
     var surfaceBase: Color {
-        MidnightSurface.content
+        appearanceMode == .dark ? Color(white: 0.05) : Color(white: 0.98)
     }
 
     /// Surface Level 1: Primary content areas (slightly elevated)
     var surface1: Color {
-        MidnightSurface.sidebar
+        appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.95)
     }
 
     /// Surface Level 2: Cards, panels, modals (more elevated)
     var surface2: Color {
-        MidnightSurface.elevated
+        appearanceMode == .dark ? Color(white: 0.12) : Color(white: 0.92)
     }
 
     /// Surface Level 3: Elevated elements (popovers, tooltips, menus)
     var surface3: Color {
-        MidnightSurface.card
+        appearanceMode == .dark ? Color(white: 0.16) : Color(white: 0.88)
     }
 
-    /// Surface Overlay: Dark tint for premium depth effect
+    /// Surface Overlay: Tint for depth effect
     var surfaceOverlay: Color {
-        Color.black.opacity(0.12)
+        appearanceMode == .dark ? Color.black.opacity(0.12) : Color.black.opacity(0.04)
     }
 
     /// Surface Gradient: Subtle top highlight
     var surfaceGradientTop: Color {
-        Color.white.opacity(0.02)
+        appearanceMode == .dark ? Color.white.opacity(0.02) : Color.white.opacity(0.5)
     }
 
     /// Text/Input background (slightly elevated from base)
     var surfaceInput: Color {
-        MidnightSurface.sidebar
+        appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.95)
     }
 
-    // MARK: - Interactive Surface States
+    // MARK: - Interactive Surface States (Appearance-Aware Solid Colors)
+    // These are used as overlays on known backgrounds, so we pre-compute the blend result
 
-    /// Hover state overlay
+    /// Hover state overlay - dark: 0.05+0.05=0.10, light: 0.95-0.05=0.90
     var surfaceHover: Color {
-        Color.primary.opacity(0.05)
+        appearanceMode == .dark ? Color(white: 0.10) : Color(white: 0.90)
     }
 
-    /// Active/pressed state overlay
+    /// Active/pressed state overlay - dark: 0.05+0.08=0.13, light: 0.95-0.08=0.87
     var surfaceActive: Color {
-        Color.primary.opacity(0.08)
+        appearanceMode == .dark ? Color(white: 0.13) : Color(white: 0.87)
     }
 
-    /// Selected state overlay
+    /// Selected state overlay - dark: 0.05+0.1=0.15, light: 0.95-0.1=0.85
     var surfaceSelected: Color {
-        Color.primary.opacity(0.1)
+        appearanceMode == .dark ? Color(white: 0.15) : Color(white: 0.85)
     }
 
-    /// Alternating row background (for lists)
+    /// Alternating row background (for lists) - dark: 0.05+0.02=0.07, light: 0.95-0.02=0.93
     var surfaceAlternate: Color {
-        Color.primary.opacity(0.02)
+        appearanceMode == .dark ? Color(white: 0.07) : Color(white: 0.93)
     }
 
     // MARK: - Semantic Surface Colors
@@ -616,21 +630,21 @@ class SettingsManager: ObservableObject {
         Color.blue.opacity(0.1)
     }
 
-    // MARK: - Border & Divider Colors
+    // MARK: - Border & Divider Colors (Appearance-Aware Solid Colors)
 
-    /// Default border (subtle)
+    /// Default border (subtle) - dark: ~0.13 (8% of white on 0.05), light: ~0.87 (8% of black on 0.95)
     var borderDefault: Color {
-        Color.primary.opacity(0.08)
+        appearanceMode == .dark ? Color(white: 0.13) : Color(white: 0.87)
     }
 
-    /// Strong border (more visible)
+    /// Strong border (more visible) - dark: ~0.20 (15% of white on 0.05), light: ~0.80
     var borderStrong: Color {
-        Color.primary.opacity(0.15)
+        appearanceMode == .dark ? Color(white: 0.20) : Color(white: 0.80)
     }
 
-    /// Divider for separating content
+    /// Divider for separating content - dark: ~0.11 (6% of white on 0.05), light: ~0.89
     var divider: Color {
-        Color.primary.opacity(0.06)
+        appearanceMode == .dark ? Color(white: 0.11) : Color(white: 0.89)
     }
 
     /// Success border
@@ -643,19 +657,26 @@ class SettingsManager: ObservableObject {
         Color.blue.opacity(0.3)
     }
 
-    // MARK: - Status Colors
+    // MARK: - Status Colors (Solid Pre-computed)
 
     var statusActive: Color { Color.green }
-    var statusReady: Color { Color.blue.opacity(0.7) }
-    var statusOffline: Color { Color.secondary.opacity(0.4) }
+    // blue*0.7 ≈ (0, 0, 0.7)
+    var statusReady: Color { Color(red: 0, green: 0.35, blue: 0.7) }
+    // secondary*0.4 ≈ dark: 0.24, light: 0.60
+    var statusOffline: Color {
+        appearanceMode == .dark ? Color(white: 0.24) : Color(white: 0.60)
+    }
     var statusWarning: Color { Color.orange }
-    var statusError: Color { Color.red.opacity(0.7) }
+    // red*0.7 ≈ (0.7, 0, 0)
+    var statusError: Color { Color(red: 0.7, green: 0, blue: 0) }
 
-    // MARK: - Shadow Intensities
+    // MARK: - Shadow Intensities (Solid Pre-computed)
+    // These are semi-transparent by nature (shadows need to blend), but we can optimize
+    // by using appearance-aware solid colors when the background is known
 
-    var shadowLight: Color { Color.black.opacity(0.04) }
-    var shadowMedium: Color { Color.black.opacity(0.08) }
-    var shadowStrong: Color { Color.black.opacity(0.15) }
+    var shadowLight: Color { Color(white: 0, opacity: 0.04) }
+    var shadowMedium: Color { Color(white: 0, opacity: 0.08) }
+    var shadowStrong: Color { Color(white: 0, opacity: 0.15) }
 
     // MARK: - Typography Tokens
 
@@ -671,42 +692,69 @@ class SettingsManager: ObservableObject {
     var trackingWide: CGFloat { 0.8 }
     var trackingExtraWide: CGFloat { 1.5 }
 
-    // MARK: - Spec/Label Colors (for data displays)
+    // MARK: - Spec/Label Colors (Appearance-Aware Solid Colors for data displays)
 
-    var specLabelColor: Color { Color.secondary.opacity(0.5) }
-    var specValueColor: Color { Color.primary.opacity(0.85) }
-    var specUnitColor: Color { Color.secondary.opacity(0.6) }
+    // secondary*0.5 ≈ dark: 0.30, light: 0.70
+    var specLabelColor: Color {
+        appearanceMode == .dark ? Color(white: 0.30) : Color(white: 0.70)
+    }
+    // primary*0.85 ≈ dark: 0.85, light: 0.15
+    var specValueColor: Color {
+        appearanceMode == .dark ? Color(white: 0.85) : Color(white: 0.15)
+    }
+    // secondary*0.6 ≈ dark: 0.36, light: 0.64
+    var specUnitColor: Color {
+        appearanceMode == .dark ? Color(white: 0.36) : Color(white: 0.64)
+    }
 
-    // MARK: - Midnight Theme Colors (Website Aesthetic)
-    // True black backgrounds with high contrast white text
+    // MARK: - Midnight Theme Colors (Appearance-Aware, Solid Colors)
+    // Uses pre-computed solid colors instead of opacity blending for performance
     // Used for Models page and premium UI sections
 
-    /// Midnight base: True black background
-    var midnightBase: Color { Color(white: 0.04) }
+    /// Midnight base: Background
+    var midnightBase: Color {
+        appearanceMode == .dark ? Color(white: 0.04) : Color(white: 0.98)
+    }
 
-    /// Midnight surface: Slightly elevated cards (very transparent)
-    var midnightSurface: Color { Color.white.opacity(0.02) }
+    /// Midnight surface: Slightly elevated cards (dark: 0.04+0.02=0.06, light: 0.98-0.02=0.96)
+    var midnightSurface: Color {
+        appearanceMode == .dark ? Color(white: 0.06) : Color(white: 0.96)
+    }
 
     /// Midnight surface hover: Mouse hover state
-    var midnightSurfaceHover: Color { Color.white.opacity(0.05) }
+    var midnightSurfaceHover: Color {
+        appearanceMode == .dark ? Color(white: 0.09) : Color(white: 0.93)
+    }
 
     /// Midnight surface elevated: Expanded states
-    var midnightSurfaceElevated: Color { Color.white.opacity(0.04) }
+    var midnightSurfaceElevated: Color {
+        appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.94)
+    }
 
     /// Midnight border: Subtle card outlines
-    var midnightBorder: Color { Color.white.opacity(0.06) }
+    var midnightBorder: Color {
+        appearanceMode == .dark ? Color(white: 0.10) : Color(white: 0.90)
+    }
 
     /// Midnight border active: Expanded/focused states
-    var midnightBorderActive: Color { Color.white.opacity(0.12) }
+    var midnightBorderActive: Color {
+        appearanceMode == .dark ? Color(white: 0.16) : Color(white: 0.82)
+    }
 
-    /// Midnight text primary: High contrast white
-    var midnightTextPrimary: Color { Color.white.opacity(0.92) }
+    /// Midnight text primary: High contrast
+    var midnightTextPrimary: Color {
+        appearanceMode == .dark ? Color(white: 0.92) : Color(white: 0.12)
+    }
 
     /// Midnight text secondary: Muted labels
-    var midnightTextSecondary: Color { Color.white.opacity(0.5) }
+    var midnightTextSecondary: Color {
+        appearanceMode == .dark ? Color(white: 0.50) : Color(white: 0.45)
+    }
 
     /// Midnight text tertiary: Very subtle hints
-    var midnightTextTertiary: Color { Color.white.opacity(0.3) }
+    var midnightTextTertiary: Color {
+        appearanceMode == .dark ? Color(white: 0.30) : Color(white: 0.65)
+    }
 
     /// Midnight accent bar: Section header vertical accent (default)
     var midnightAccentBar: Color { Color(red: 1.0, green: 0.6, blue: 0.2) }  // Orange/amber
@@ -720,10 +768,17 @@ class SettingsManager: ObservableObject {
     /// Section accent: Cloud Providers - Blue
     var midnightAccentCloud: Color { Color(red: 0.4, green: 0.6, blue: 1.0) }  // Blue
 
-    /// Midnight recommended badge (transparent yellow with border)
-    var midnightBadgeRecommended: Color { Color(red: 1.0, green: 0.85, blue: 0.2).opacity(0.15) }  // Transparent gold
-    var midnightBadgeRecommendedBorder: Color { Color(red: 1.0, green: 0.85, blue: 0.2).opacity(0.5) }  // Gold border
-    var midnightBadgeRecommendedText: Color { Color(red: 1.0, green: 0.85, blue: 0.2) }  // Gold text
+    /// Midnight recommended badge background
+    var midnightBadgeRecommended: Color {
+        appearanceMode == .dark ? Color(red: 0.15, green: 0.13, blue: 0.03) : Color(red: 1.0, green: 0.97, blue: 0.88)
+    }
+    /// Midnight recommended badge border
+    var midnightBadgeRecommendedBorder: Color {
+        appearanceMode == .dark ? Color(red: 0.5, green: 0.43, blue: 0.1) : Color(red: 0.8, green: 0.68, blue: 0.16)
+    }
+    var midnightBadgeRecommendedText: Color {
+        appearanceMode == .dark ? Color(red: 1.0, green: 0.85, blue: 0.2) : Color(red: 0.7, green: 0.5, blue: 0.0)
+    }
 
     /// Midnight active status
     var midnightStatusActive: Color { Color(red: 0.3, green: 0.85, blue: 0.4) }  // Bright green
@@ -732,10 +787,14 @@ class SettingsManager: ObservableObject {
     var midnightStatusReady: Color { Color(red: 0.3, green: 0.7, blue: 0.35) }  // Muted green
 
     /// Midnight download button
-    var midnightButtonPrimary: Color { Color.white.opacity(0.12) }
+    var midnightButtonPrimary: Color {
+        appearanceMode == .dark ? Color(white: 0.16) : Color(white: 0.90)
+    }
 
     /// Midnight download button hover
-    var midnightButtonHover: Color { Color.white.opacity(0.18) }
+    var midnightButtonHover: Color {
+        appearanceMode == .dark ? Color(white: 0.22) : Color(white: 0.85)
+    }
 
     // MARK: - Legacy Aliases (for backwards compatibility)
     // TODO: Migrate views to use new surface tokens, then remove these

@@ -17,12 +17,14 @@ enum NavigationSection: Hashable {
     case pendingActions
     case models
     case allowedCommands
+    case settings
     case smartFolder(String)
 }
 
 struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject private var settings = SettingsManager.shared
+    // Use let for singletons - @ObservedObject causes full rerender on every settings change
+    private let settings = SettingsManager.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -38,73 +40,62 @@ struct TalkieNavigationView: View {
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
     @State private var showConsolePopover = false
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @StateObject private var eventManager = SystemEventManager.shared
-    @StateObject private var pendingActionsManager = PendingActionsManager.shared
+    // Use let for singletons to avoid unnecessary view updates
+    private let eventManager = SystemEventManager.shared
+    private let pendingActionsManager = PendingActionsManager.shared
 
     // Collapsible sidebar state (matches TalkieLive)
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
-    @State private var isChevronPressed: Bool = false
+
+    // Sidebar width constants - use fixed values to avoid NavigationSplitView recalculations
+    private let sidebarExpandedWidth: CGFloat = 180
+    private let sidebarCollapsedWidth: CGFloat = 56
+
+    private var currentSidebarWidth: CGFloat {
+        isSidebarCollapsed ? sidebarCollapsedWidth : sidebarExpandedWidth
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Main content area
-            ZStack(alignment: .topLeading) {
-                Group {
-                    if isTwoColumnSection {
-                        // 2-column layout for Models, etc.
-                        NavigationSplitView(columnVisibility: $columnVisibility) {
-                            sidebarView
-                                .navigationSplitViewColumnWidth(
-                                    min: isSidebarCollapsed ? 56 : 180,
-                                    ideal: isSidebarCollapsed ? 56 : 180,
-                                    max: isSidebarCollapsed ? 56 : 180
-                                )
-                        } detail: {
-                            twoColumnDetailView
-                        }
-                    } else {
-                        // 3-column layout for Memos, Workflows, AI Results
-                        NavigationSplitView(columnVisibility: $columnVisibility) {
-                            sidebarView
-                                .navigationSplitViewColumnWidth(
-                                    min: isSidebarCollapsed ? 56 : 180,
-                                    ideal: isSidebarCollapsed ? 56 : 180,
-                                    max: isSidebarCollapsed ? 56 : 180
-                                )
-                        } content: {
-                            contentColumnView
-                                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
-                        } detail: {
-                            detailColumnView
-                        }
-                        .navigationSplitViewStyle(.prominentDetail)
-                    }
-                }
+            // Main content area - HStack for manual sidebar control (avoids NavigationSplitView layout issues)
+            HStack(spacing: 0) {
+                // Sidebar with animated width
+                sidebarView
+                    .frame(width: currentSidebarWidth)
+                    .clipped()
 
-                // Floating sidebar toggle button (shows when sidebar is collapsed)
-                if columnVisibility == .detailOnly {
-                    Button(action: { toggleSidebar() }) {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .frame(width: 28, height: 28)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+                // Divider between sidebar and content
+                Rectangle()
+                    .fill(Theme.current.divider)
+                    .frame(width: 1)
+
+                // Main content area
+                if isTwoColumnSection {
+                    twoColumnDetailView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // 3-column: content list + detail
+                    HStack(spacing: 0) {
+                        contentColumnView
+                            .frame(width: 300)
+
+                        Rectangle()
+                            .fill(Theme.current.divider)
+                            .frame(width: 1)
+
+                        detailColumnView
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .buttonStyle(.plain)
-                    .help("Show Sidebar")
-                    .padding(.top, 8)
-                    .padding(.leading, 12)
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
 
             // Full-width status bar (like VS Code/Cursor)
             statusBarView
         }
-        .animation(.easeInOut(duration: 0.2), value: columnVisibility)
+        .animation(.snappy(duration: 0.2), value: isSidebarCollapsed)
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
+        .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
         .onChange(of: allMemos.count) { _, _ in
             // Mark any new memos as received when they appear in the list
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
@@ -130,7 +121,7 @@ struct TalkieNavigationView: View {
 
     // MARK: - Status Bar View
 
-    @StateObject private var syncManager = SyncStatusManager.shared
+    private let syncManager = SyncStatusManager.shared
 
     // Console event counts (for status bar indicators)
     private var consoleErrorCount: Int {
@@ -216,7 +207,7 @@ struct TalkieNavigationView: View {
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.white.opacity(0.05))
+                .background(Theme.current.backgroundTertiary.opacity(0.5))
                 .cornerRadius(3)
             }
             .buttonStyle(.plain)
@@ -232,7 +223,7 @@ struct TalkieNavigationView: View {
             // Right side - DEV indicator (only in debug builds)
             #if DEBUG
             Text("DEV")
-                .font(SettingsManager.shared.fontXSBold)
+                .font(Theme.current.fontXSBold)
                 .foregroundColor(.orange.opacity(0.7))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -242,7 +233,7 @@ struct TalkieNavigationView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .background(SettingsManager.shared.tacticalBackgroundSecondary)
+        .background(Theme.current.backgroundSecondary)
     }
 
     @ViewBuilder
@@ -291,35 +282,34 @@ struct TalkieNavigationView: View {
 
     // MARK: - Sidebar View (matches TalkieLive structure)
 
-    @State private var showingSettings = false
 
     private var sidebarView: some View {
         VStack(spacing: 0) {
             // Header with collapse toggle (matches TalkieLive)
             sidebarHeader
 
-            // Navigation list
-            List(selection: $selectedSection) {
-                // Memos section
-                Section(isSidebarCollapsed ? "" : "Memos") {
-                    sidebarItem(
+            // Custom navigation using ScrollView + VStack (avoids List selection flickering)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // Memos section
+                    sidebarSectionHeader("Memos")
+                    sidebarButton(
                         section: .allMemos,
                         icon: "square.stack",
                         title: "All Memos",
                         badge: allMemos.count > 0 ? "\(allMemos.count)" : nil,
                         badgeColor: .secondary
                     )
-                }
 
-                // Activity section
-                Section(isSidebarCollapsed ? "" : "Activity") {
-                    sidebarItem(
+                    // Activity section
+                    sidebarSectionHeader("Activity")
+                        .padding(.top, isSidebarCollapsed ? 0 : 12)
+                    sidebarButton(
                         section: .aiResults,
                         icon: "chart.line.uptrend.xyaxis",
                         title: "Actions"
                     )
-
-                    sidebarItem(
+                    sidebarButton(
                         section: .pendingActions,
                         icon: "clock.arrow.circlepath",
                         title: "Pending",
@@ -327,51 +317,112 @@ struct TalkieNavigationView: View {
                         badgeColor: .accentColor,
                         showSpinner: pendingActionsManager.hasActiveActions
                     )
-                }
 
-                // Tools section
-                Section(isSidebarCollapsed ? "" : "Tools") {
-                    sidebarItem(
+                    // Tools section
+                    sidebarSectionHeader("Tools")
+                        .padding(.top, isSidebarCollapsed ? 0 : 12)
+                    sidebarButton(
                         section: .workflows,
                         icon: "wand.and.stars",
                         title: "Workflows"
                     )
-
-                    sidebarItem(
+                    sidebarButton(
                         section: .models,
                         icon: "brain",
                         title: "Models"
                     )
-
-                    sidebarItem(
+                    sidebarButton(
                         section: .systemConsole,
                         icon: "terminal",
                         title: "Console",
                         badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil,
                         badgeColor: .orange
                     )
-
-                    // Settings button (opens sheet, not navigation)
-                    Button(action: { showingSettings = true }) {
-                        if isSidebarCollapsed {
-                            Image(systemName: "gear")
-                                .frame(maxWidth: .infinity)
-                                .help("Settings")
-                        } else {
-                            Label("Settings", systemImage: "gear")
-                        }
-                    }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+
+            Spacer()
+
+            // Settings pinned to bottom
+            VStack(spacing: 0) {
+                Divider()
+                    .opacity(isSidebarCollapsed ? 0 : 0.5)
+                sidebarButton(
+                    section: .settings,
+                    icon: "gear",
+                    title: "Settings"
+                )
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+            }
         }
-        .background(SettingsManager.shared.tacticalBackgroundSecondary)
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-                .frame(width: 900, height: 750, alignment: .topLeading)
+        .background(Theme.current.backgroundSecondary)
+    }
+
+    /// Section header for custom sidebar
+    @ViewBuilder
+    private func sidebarSectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(Theme.current.foregroundMuted)
+            .opacity(isSidebarCollapsed ? 0 : 1)
+            .frame(height: isSidebarCollapsed ? 0 : 16)  // Collapse to 0 height when sidebar collapsed
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 4)
+    }
+
+    /// Custom sidebar button with controlled selection styling
+    @ViewBuilder
+    private func sidebarButton(
+        section: NavigationSection,
+        icon: String,
+        title: String,
+        badge: String? = nil,
+        badgeColor: Color = .secondary,
+        showSpinner: Bool = false
+    ) -> some View {
+        let isSelected = selectedSection == section
+
+        Button(action: { selectedSection = section }) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(isSelected ? .white : Theme.current.foreground)
+                    .frame(width: 16)
+
+                // Text and badge - always present, opacity animated
+                HStack {
+                    Text(title)
+                        .font(.system(size: 12))
+                        .foregroundColor(isSelected ? .white : Theme.current.foreground)
+                    Spacer()
+                    if showSpinner {
+                        ProgressView()
+                            .scaleEffect(0.4)
+                            .frame(width: 10, height: 10)
+                    }
+                    if let badge = badge {
+                        Text(badge)
+                            .font(.system(size: 10))
+                            .foregroundColor(isSelected ? .white.opacity(0.8) : badgeColor)
+                    }
+                }
+                .opacity(isSidebarCollapsed ? 0 : 1)
+                .frame(width: isSidebarCollapsed ? 0 : nil)
+                .clipped()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, isSidebarCollapsed ? 4 : 8)
+            .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
         }
+        .buttonStyle(.plain)
+        .help(isSidebarCollapsed ? title : "")
     }
 
     /// Sidebar header with app branding and collapse toggle (matches TalkieLive)
@@ -385,7 +436,7 @@ struct TalkieNavigationView: View {
                 Text("TALKIE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(3)
-                    .foregroundColor(Color(white: 0.45))
+                    .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
 
@@ -401,77 +452,28 @@ struct TalkieNavigationView: View {
     /// Interactive chevron button with hover and press feedback (matches TalkieLive)
     private func chevronButton(icon: String, help: String) -> some View {
         Button(action: {
-            withAnimation(.easeOut(duration: 0.1)) {
-                isChevronPressed = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isChevronPressed = false
-                toggleSidebarCollapse()
-            }
+            // Immediate toggle - no delay, let parent animation handle it
+            toggleSidebarCollapse()
         }) {
             Image(systemName: icon)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(isChevronHovered ? Color(white: 0.9) : Color(white: 0.5))
+                .foregroundColor(isChevronHovered ? Theme.current.foreground : Theme.current.foregroundMuted)
                 .frame(width: 20, height: 20)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(isChevronHovered ? Color(white: 0.2) : Color.clear)
+                        .fill(isChevronHovered ? Theme.current.backgroundTertiary : Color.clear)
                 )
-                .scaleEffect(isChevronPressed ? 0.85 : 1.0)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.12)) {
-                isChevronHovered = hovering
-            }
+            isChevronHovered = hovering
         }
         .help(help)
     }
 
     private func toggleSidebarCollapse() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            isSidebarCollapsed.toggle()
-        }
-    }
-
-    /// Adaptive sidebar item - shows icon only when collapsed, full label when expanded (matches TalkieLive)
-    @ViewBuilder
-    private func sidebarItem(
-        section: NavigationSection,
-        icon: String,
-        title: String,
-        badge: String? = nil,
-        badgeColor: Color = .secondary,
-        showSpinner: Bool = false
-    ) -> some View {
-        if isSidebarCollapsed {
-            // Icon-only mode
-            Image(systemName: icon)
-                .frame(maxWidth: .infinity)
-                .tag(section)
-                .help(title)
-        } else {
-            // Full label mode
-            Label {
-                HStack {
-                    Text(title)
-                    Spacer()
-                    if showSpinner {
-                        ProgressView()
-                            .scaleEffect(0.4)
-                            .frame(width: 10, height: 10)
-                    }
-                    if let badge = badge {
-                        Text(badge)
-                            .font(.caption)
-                            .foregroundColor(badgeColor)
-                    }
-                }
-            } icon: {
-                Image(systemName: icon)
-            }
-            .tag(section)
-        }
+        // No withAnimation here - parent .animation(.snappy) handles it
+        isSidebarCollapsed.toggle()
     }
 
     // MARK: - 2-Column Detail View
@@ -494,6 +496,8 @@ struct TalkieNavigationView: View {
             })
         case .pendingActions:
             PendingActionsView()
+        case .settings:
+            SettingsView()
         default:
             EmptyView()
         }
@@ -501,25 +505,16 @@ struct TalkieNavigationView: View {
 
     // MARK: - Column Views
 
-    /// Toggle sidebar visibility
+    /// Toggle sidebar visibility (now just toggles collapse state)
     private func toggleSidebar() {
-        withAnimation {
-            switch columnVisibility {
-            case .all:
-                columnVisibility = .detailOnly
-            case .detailOnly:
-                columnVisibility = .all
-            default:
-                columnVisibility = .all
-            }
-        }
+        toggleSidebarCollapse()
     }
 
     /// Whether the current section uses a 2-column layout (sidebar + full content)
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole, .pendingActions:
+        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole, .pendingActions, .settings:
             return true
         default:
             return false
@@ -563,11 +558,11 @@ struct TalkieNavigationView: View {
                         .foregroundColor(.secondary.opacity(0.5))
 
                     Text("SELECT A MEMO")
-                        .font(SettingsManager.shared.fontBodyBold)
+                        .font(Theme.current.fontBodyBold)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(settings.surfaceInput)
+                .background(Theme.current.surface1)
             }
         }
     }
@@ -587,6 +582,7 @@ struct TalkieNavigationView: View {
         case .pendingActions: return "PENDING ACTIONS"
         case .models: return "MODELS"
         case .allowedCommands: return "ALLOWED COMMANDS"
+        case .settings: return "SETTINGS"
         case .smartFolder(let name): return name.uppercased()
         case .none: return "MEMOS"
         }
@@ -670,7 +666,7 @@ struct TalkieNavigationView: View {
             .cornerRadius(6)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(SettingsManager.shared.tacticalBackgroundSecondary)
+            .background(Theme.current.backgroundSecondary)
 
             // Memo list
             if filteredMemos.isEmpty {
@@ -678,15 +674,15 @@ struct TalkieNavigationView: View {
                     Spacer()
                     Image(systemName: "waveform")
                         .font(SettingsManager.shared.fontDisplay)
-                        .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                        .foregroundColor(Theme.current.foregroundMuted)
 
                     Text("NO MEMOS")
                         .font(.techLabel)
-                        .foregroundColor(SettingsManager.shared.tacticalForegroundSecondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Record on iPhone to sync")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(SettingsManager.shared.tacticalForegroundMuted)
+                        .foregroundColor(Theme.current.foregroundMuted)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

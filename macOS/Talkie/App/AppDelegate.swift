@@ -50,6 +50,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         for window in NSApp.windows {
             window.backgroundColor = NSColor.windowBackgroundColor
             window.isOpaque = true
+            // Prevent blur effect when window is inactive by disabling layer caching
+            window.contentView?.wantsLayer = true
+            window.contentView?.layerContentsRedrawPolicy = .onSetNeedsDisplay
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Force redraw when app becomes active to ensure crisp rendering
+        for window in NSApp.windows {
+            window.contentView?.needsDisplay = true
         }
     }
 

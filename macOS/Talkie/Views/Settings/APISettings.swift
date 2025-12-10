@@ -177,7 +177,7 @@ struct APISettingsView: View {
                 }
 
             Divider()
-                .background(MidnightSurface.divider)
+                .background(Theme.current.divider)
                 .padding(.vertical, 8)
 
             // LLM Cost Tier Section
@@ -297,7 +297,7 @@ struct APIKeyRow: View {
                         .font(.system(size: 11, design: .monospaced))
                         .textFieldStyle(.plain)
                         .padding(10)
-                        .background(SettingsManager.shared.surface1)
+                        .background(Theme.current.surface1)
                         .cornerRadius(6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
@@ -306,13 +306,13 @@ struct APIKeyRow: View {
 
                     Button(action: onCancel) {
                         Text("Cancel")
-                            .font(SettingsManager.shared.fontXSMedium)
+                            .font(Theme.current.fontXSMedium)
                     }
                     .buttonStyle(.bordered)
 
                     Button(action: onSave) {
                         Text("Save")
-                            .font(SettingsManager.shared.fontXSMedium)
+                            .font(Theme.current.fontXSMedium)
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -323,7 +323,7 @@ struct APIKeyRow: View {
                     HStack(spacing: 8) {
                         Text(isRevealed ? (currentKey ?? "") : maskedKey)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(Theme.current.foregroundMuted)
                             .lineLimit(1)
                             .truncationMode(.middle)
 
@@ -333,23 +333,23 @@ struct APIKeyRow: View {
                         Button(action: onReveal) {
                             Image(systemName: isRevealed ? "eye.slash" : "eye")
                                 .font(SettingsManager.shared.fontXS)
-                                .foregroundColor(.white.opacity(0.4))
+                                .foregroundColor(Theme.current.foregroundMuted)
                         }
                         .buttonStyle(.plain)
                         .help(isRevealed ? "Hide API key" : "Reveal API key")
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(Color.black.opacity(0.3))
+                    .background(Theme.current.surface1)
                     .cornerRadius(CornerRadius.xs)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.xs)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            .stroke(Theme.current.divider, lineWidth: 1)
                     )
 
                     Button(action: onEdit) {
                         Text("Edit")
-                            .font(SettingsManager.shared.fontXSMedium)
+                            .font(Theme.current.fontXSMedium)
                     }
                     .buttonStyle(.bordered)
 
@@ -368,7 +368,7 @@ struct APIKeyRow: View {
                             Image(systemName: "plus.circle.fill")
                                 .font(SettingsManager.shared.fontXS)
                             Text("Add API Key")
-                                .font(SettingsManager.shared.fontXSMedium)
+                                .font(Theme.current.fontXSMedium)
                         }
                     }
                     .buttonStyle(.bordered)
@@ -388,7 +388,7 @@ struct APIKeyRow: View {
             }
         }
         .padding(16)
-        .background(SettingsManager.shared.surface2)
+        .background(Theme.current.surface2)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
