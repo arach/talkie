@@ -12,12 +12,20 @@ import {
   Zap,
   Timer,
   Eye,
-  EyeOff,
   Laptop,
   Download,
   Cpu,
   HardDrive,
   Sparkles,
+  Brain,
+  Lightbulb,
+  Target,
+  Rocket,
+  MessageSquare,
+  PenTool,
+  CheckCircle2,
+  XCircle,
+  ArrowDown,
 } from 'lucide-react'
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
@@ -43,6 +51,38 @@ const FlowStep = ({ number, title, description }) => (
       <h4 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-1">{title}</h4>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">{description}</p>
     </div>
+  </div>
+)
+
+const IdeaKillerCard = ({ icon: Icon, title, description, solution }) => (
+  <div className="relative">
+    <div className="border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-6 rounded-lg">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded">
+          <Icon className="w-4 h-4 text-red-500" />
+        </div>
+        <div>
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide">{title}</h3>
+          <p className="text-xs text-red-600 dark:text-red-400 mt-1">{description}</p>
+        </div>
+      </div>
+    </div>
+    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2">
+      <ArrowDown className="w-4 h-4 text-emerald-500" />
+    </div>
+    <div className="mt-6 border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-lg">
+      <div className="flex items-center gap-2">
+        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">{solution}</p>
+      </div>
+    </div>
+  </div>
+)
+
+const StatCard = ({ value, label }) => (
+  <div className="text-center">
+    <div className="text-3xl md:text-4xl font-bold text-emerald-500 mb-1">{value}</div>
+    <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{label}</div>
   </div>
 )
 
@@ -81,36 +121,189 @@ export default function LivePage() {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+      {/* Hero Section - More Dramatic */}
+      <section className="relative pt-28 pb-20 md:pt-40 md:pb-32 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
         <div className="absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] opacity-60 pointer-events-none" />
+
+        {/* Gradient accent */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <Container className="relative z-10">
           <div className="max-w-3xl">
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-8">
               <Sparkles className="w-3 h-3 text-emerald-500" />
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Free Menu Bar App</span>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Free • No Account Required</span>
             </div>
 
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase mb-6 leading-[0.9]">
-              Instant<br/>
-              <span className="text-emerald-500">voice-to-text</span><br/>
-              for Mac.
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase mb-6 leading-[0.85]">
+              Capture ideas<br/>
+              <span className="text-emerald-500">before they</span><br/>
+              <span className="text-zinc-400 dark:text-zinc-600">disappear.</span>
             </h1>
 
-            <p className="text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
-              Hold a hotkey, speak, release. Your words appear wherever you were typing. No context switching. No cloud upload. Just fast, local dictation.
+            <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
+              Your best ideas don't arrive when you're ready. They come in the shower, on a walk, mid-conversation.
+              <span className="text-zinc-900 dark:text-white font-medium"> Talkie Live captures them in one second flat.</span>
             </p>
 
             <div className="flex flex-col sm:flex-row items-start gap-4">
-              <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl">
-                <Download className="w-4 h-4" />
-                <span>Download for Mac</span>
+              <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-14 px-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-3 shadow-xl shadow-emerald-500/25">
+                <Download className="w-5 h-5" />
+                <span>Download Free</span>
               </a>
-              <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
-                <Laptop className="w-3 h-3" />
-                macOS 13+ required
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase">
+                  <Laptop className="w-3 h-3" />
+                  macOS 13+ • Apple Silicon
+                </div>
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  Signed & Notarized by Apple
+                </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* The Problem - Ideas Die */}
+      <section className="py-20 md:py-28 bg-white dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800">
+        <Container>
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-6">
+              <Brain className="w-3 h-3 text-zinc-500" />
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">The Science of Ideas</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-6">
+              Most ideas die in<br/>
+              <span className="text-red-500">18 seconds.</span>
+            </h2>
+            <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+              Cognitive research shows that fleeting thoughts—those sudden insights and creative sparks—have an average lifespan of just 18 seconds before they're overwritten by new information. The gap between having an idea and acting on it is where innovation goes to die.
+            </p>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mb-20">
+            <StatCard value="18s" label="Idea Lifespan" />
+            <StatCard value="72%" label="Ideas Lost Daily" />
+            <StatCard value="<1s" label="Talkie Capture" />
+          </div>
+
+          {/* Idea Killers */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <IdeaKillerCard
+              icon={Clock}
+              title="Context Switch Tax"
+              description="Opening an app, finding a note, typing it out—by then, the idea has evolved into something less clear."
+              solution="Hold one key. Speak. Done."
+            />
+            <IdeaKillerCard
+              icon={PenTool}
+              title="Typing Is Slow"
+              description="We think at 400 words per minute but type at 40. That 10x gap causes information loss."
+              solution="Speaking is 4x faster than typing."
+            />
+            <IdeaKillerCard
+              icon={MessageSquare}
+              title="Ideas Interrupt"
+              description="Great ideas don't wait for a convenient moment. They arrive when you're already doing something else."
+              solution="Capture without leaving your flow."
+            />
+          </div>
+        </Container>
+      </section>
+
+      {/* The Philosophy */}
+      <section className="py-20 md:py-28 bg-zinc-950 text-white">
+        <Container>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div>
+              <div className="flex items-center gap-2 mb-6">
+                <Lightbulb className="w-5 h-5 text-emerald-400" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">Philosophy</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight mb-6 leading-tight">
+                Ideas deserve a<br/>
+                <span className="text-emerald-400">zero-friction</span> path<br/>
+                to action.
+              </h2>
+              <div className="space-y-6 text-zinc-400 leading-relaxed">
+                <p>
+                  Every creative breakthrough, business insight, and personal epiphany started as a fleeting thought. The difference between people who execute and people who don't is often just their capture system.
+                </p>
+                <p>
+                  <span className="text-white font-medium">Talkie Live exists for one purpose:</span> to make the gap between "I just thought of something" and "It's recorded" as close to zero as physically possible.
+                </p>
+                <p>
+                  No app to open. No window to find. No typing required. Just hold a key, speak your thought, and return to whatever you were doing. The entire interaction takes less than a second to initiate.
+                </p>
+              </div>
+            </div>
+
+            {/* Visual: Idea → Action Flow */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-emerald-500/5 rounded-2xl blur-xl"></div>
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
+                <div className="space-y-6">
+                  {/* Step 1 */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Lightbulb className="w-6 h-6 text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-mono uppercase text-zinc-500 mb-1">Moment 0</div>
+                      <div className="text-white font-bold">Idea arrives</div>
+                    </div>
+                  </div>
+
+                  <div className="w-px h-4 bg-zinc-800 ml-6"></div>
+
+                  {/* Step 2 */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Mic className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-mono uppercase text-zinc-500 mb-1">+0.3 seconds</div>
+                      <div className="text-white font-bold">Hold key, speak</div>
+                    </div>
+                  </div>
+
+                  <div className="w-px h-4 bg-zinc-800 ml-6"></div>
+
+                  {/* Step 3 */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Cpu className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-mono uppercase text-zinc-500 mb-1">+1.2 seconds</div>
+                      <div className="text-white font-bold">Transcribed locally</div>
+                    </div>
+                  </div>
+
+                  <div className="w-px h-4 bg-zinc-800 ml-6"></div>
+
+                  {/* Step 4 */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Target className="w-6 h-6 text-purple-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-mono uppercase text-zinc-500 mb-1">+1.5 seconds</div>
+                      <div className="text-white font-bold">Text appears exactly where you need it</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-zinc-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono uppercase text-zinc-500">Total time</span>
+                    <span className="text-2xl font-bold text-emerald-400">~2 seconds</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -118,7 +311,7 @@ export default function LivePage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-16 md:py-24 bg-white dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800">
+      <section className="py-20 md:py-28 bg-white dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800">
         <Container>
           <div className="flex items-center gap-3 mb-12">
             <Zap className="w-4 h-4 text-emerald-500" />
@@ -133,45 +326,54 @@ export default function LivePage() {
               <FlowStep
                 number="1"
                 title="Hold the Hotkey"
-                description="Press and hold your configured key (default: Right Option). Recording starts instantly."
+                description="Press and hold your configured key (default: Right Option). Recording starts instantly—no click, no menu."
               />
               <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-700 ml-4"></div>
               <FlowStep
                 number="2"
-                title="Speak"
-                description="Talk naturally. A subtle HUD shows you're recording. Your original app stays in focus."
+                title="Speak Your Mind"
+                description="Talk naturally. A subtle HUD appears. Your original app stays in focus—you never leave what you were doing."
               />
               <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-700 ml-4"></div>
               <FlowStep
                 number="3"
-                title="Release"
-                description="Let go. Transcription happens on-device via Whisper. Takes about a second."
+                title="Release to Transcribe"
+                description="Let go of the key. Whisper transcribes your speech on-device in about a second. Nothing leaves your Mac."
               />
               <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-700 ml-4"></div>
               <FlowStep
                 number="4"
                 title="Text Appears"
-                description="Your transcription is pasted directly where you were typing, or copied to clipboard."
+                description="Your transcription is pasted directly where your cursor was, or copied to clipboard. You're already back to work."
               />
             </div>
 
-            {/* Visual Demo Placeholder */}
-            <div className="bg-zinc-100 dark:bg-zinc-950 rounded-lg border border-zinc-200 dark:border-zinc-800 p-8 flex items-center justify-center min-h-[400px]">
+            {/* Visual Demo */}
+            <div className="bg-zinc-100 dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-8 flex items-center justify-center min-h-[450px]">
               <div className="text-center">
                 {/* Simulated HUD */}
-                <div className="inline-flex flex-col items-center gap-4">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-black/80 backdrop-blur rounded-lg">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-white text-sm font-mono">0:03.2</span>
+                <div className="inline-flex flex-col items-center gap-6">
+                  <div className="flex items-center gap-3 px-6 py-3 bg-black/90 backdrop-blur-lg rounded-2xl shadow-2xl">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-lg shadow-red-500/50"></div>
+                    <span className="text-white text-lg font-mono font-medium">0:03.2</span>
                   </div>
-                  <div className="flex gap-1">
-                    <div className="w-1 h-4 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <div className="w-1 h-6 bg-emerald-500 rounded-full animate-pulse delay-75"></div>
-                    <div className="w-1 h-3 bg-emerald-500 rounded-full animate-pulse delay-150"></div>
-                    <div className="w-1 h-5 bg-emerald-500 rounded-full animate-pulse delay-100"></div>
-                    <div className="w-1 h-4 bg-emerald-500 rounded-full animate-pulse delay-200"></div>
+                  <div className="flex gap-1.5">
+                    {[4, 7, 3, 6, 4, 8, 5, 3, 6, 4].map((h, i) => (
+                      <div
+                        key={i}
+                        className="w-1.5 bg-emerald-500 rounded-full animate-pulse shadow-sm shadow-emerald-500/50"
+                        style={{
+                          height: `${h * 4}px`,
+                          animationDelay: `${i * 50}ms`
+                        }}
+                      ></div>
+                    ))}
                   </div>
-                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mt-4">Recording in progress...</p>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg">
+                    <Command className="w-3 h-3 text-zinc-500" />
+                    <span className="text-xs font-mono text-zinc-500">Right Option</span>
+                  </div>
+                  <p className="text-xs font-mono text-zinc-400 uppercase tracking-wider mt-2">Release to transcribe</p>
                 </div>
               </div>
             </div>
@@ -179,8 +381,94 @@ export default function LivePage() {
         </Container>
       </section>
 
+      {/* Use Cases */}
+      <section className="py-20 md:py-28 bg-zinc-50 dark:bg-zinc-950">
+        <Container>
+          <div className="text-center mb-16">
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <Rocket className="w-4 h-4 text-emerald-500" />
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Real World Uses</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
+              Ideas → Action
+            </h2>
+            <p className="text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
+              Every moment of friction between thought and capture is an opportunity for an idea to fade. Here's how people use Talkie Live.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="text-2xl mb-4">💻</div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">While Coding</h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                "Explain this function to myself... wait, I should refactor the auth module first... also need to update the tests..."
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into TODO comment</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="text-2xl mb-4">📧</div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Email Drafts</h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Speak your reply naturally, then edit for tone. 4x faster than typing, especially on mobile keyboards.
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into email field</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="text-2xl mb-4">🚿</div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Shower Thoughts</h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Step out, grab your Mac, hold the key, dump the idea. Back to your routine before the thought escapes.
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Copy to clipboard</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="text-2xl mb-4">📝</div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Meeting Notes</h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Quick verbal summary after a call: "Key decisions: X, Y, Z. Action items: ..." Right into your notes app.
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into Notion/Obsidian</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="text-2xl mb-4">🎨</div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Creative Briefs</h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                When inspiration hits, verbal description captures nuance that gets lost in quick typed notes.
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into design doc</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-xl">
+              <div className="text-2xl mb-4">🔄</div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Context Switching</h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Before switching tasks: "Where I left off: investigating the memory leak in the worker pool..."
+              </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <span className="text-[10px] font-mono text-emerald-500 uppercase">→ Paste into task tracker</span>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
       {/* Features Grid */}
-      <section className="py-16 md:py-24 bg-zinc-50 dark:bg-zinc-950">
+      <section className="py-20 md:py-28 bg-white dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800">
         <Container>
           <div className="flex items-center gap-3 mb-12">
             <Command className="w-4 h-4 text-emerald-500" />
@@ -193,70 +481,74 @@ export default function LivePage() {
             <FeatureCard
               icon={Mic}
               title="Hold-to-Talk"
-              description="No buttons to click. Hold a hotkey to record, release to transcribe. Muscle memory in minutes."
+              description="No buttons to click. Hold a hotkey to record, release to transcribe. Builds muscle memory in minutes."
             />
             <FeatureCard
               icon={MousePointer2}
               title="Return to Origin"
-              description="Talkie Live remembers which app you were in. Text gets pasted right back where you were."
+              description="Talkie Live remembers which app and text field you were in. Text gets pasted right back where you were working."
             />
             <FeatureCard
               icon={Timer}
-              title="Ephemeral Echoes"
-              description="Your transcriptions are stored locally for 48 hours. Quick history, no permanent clutter."
+              title="48-Hour Echoes"
+              description="Your transcriptions are stored locally for 48 hours. Quick access to recent captures, no permanent clutter."
             />
             <FeatureCard
               icon={Eye}
               title="Minimal HUD"
-              description="A subtle floating pill shows recording state. Expands on hover, disappears when not needed."
+              description="A subtle floating pill shows recording state. Expands on hover for details, disappears when not needed."
             />
             <FeatureCard
               icon={Clipboard}
               title="Smart Routing"
-              description="Auto-paste into text fields, or copy to clipboard for non-editable contexts. You choose."
+              description="Auto-paste into text fields, or copy to clipboard for non-editable contexts. Intelligently adapts."
             />
             <FeatureCard
               icon={Clock}
-              title="Instant Start"
-              description="Lives in your menu bar. Always ready. No app to launch, no window to find."
+              title="Always Ready"
+              description="Lives silently in your menu bar. No app to launch, no window to find. Ready the instant you need it."
             />
           </div>
         </Container>
       </section>
 
       {/* Privacy Section */}
-      <section className="py-16 md:py-24 bg-zinc-900 border-t border-b border-zinc-800">
+      <section className="py-20 md:py-28 bg-zinc-900">
         <Container>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <HardDrive className="w-4 h-4 text-emerald-500" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">100% Local</span>
+              <div className="flex items-center gap-2 mb-6">
+                <HardDrive className="w-5 h-5 text-emerald-500" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">100% Local Processing</span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight leading-tight mb-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-white uppercase tracking-tight leading-tight mb-6">
                 Your voice stays<br/>
                 <span className="text-zinc-500">on your Mac.</span>
               </h2>
               <p className="text-zinc-400 leading-relaxed mb-8">
-                Talkie Live uses on-device Whisper models for transcription. No audio leaves your computer. No cloud processing. No API keys needed.
+                Talkie Live uses on-device Whisper models for transcription. No audio leaves your computer. No cloud processing. No API keys needed. No account required.
               </p>
-              <ul className="space-y-3 text-sm text-zinc-300">
+              <ul className="space-y-4 text-sm text-zinc-300">
                 <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                   Transcription runs on Apple Silicon Neural Engine
                 </li>
                 <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                   Audio files stored locally, auto-deleted after 48h
                 </li>
                 <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                  No account required, no telemetry
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  No account required, no telemetry, no analytics
+                </li>
+                <li className="flex items-center gap-3">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  Works offline—no internet connection needed
                 </li>
               </ul>
             </div>
 
-            <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-8">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-8">
               <div className="flex items-center gap-3 mb-6">
                 <Cpu className="w-5 h-5 text-emerald-500" />
                 <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-400">Whisper Engine</span>
@@ -285,7 +577,7 @@ export default function LivePage() {
       </section>
 
       {/* Talkie Live vs Talkie */}
-      <section className="py-16 md:py-24 bg-white dark:bg-zinc-900">
+      <section className="py-20 md:py-28 bg-white dark:bg-zinc-900">
         <Container>
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
@@ -298,76 +590,76 @@ export default function LivePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Live */}
-            <div className="border-2 border-emerald-500 rounded-lg p-8 bg-emerald-500/5">
+            <div className="border-2 border-emerald-500 rounded-xl p-8 bg-emerald-500/5">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-white" />
+                <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center">
+                  <Zap className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-zinc-900 dark:text-white uppercase">Talkie Live</h3>
-                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 uppercase">Free</span>
+                  <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 uppercase">Free Forever</span>
                 </div>
               </div>
               <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   Menu bar presence
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   Global hotkey recording
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   On-device transcription
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   48h echo history
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   Paste-to-origin
                 </li>
               </ul>
             </div>
 
             {/* Full */}
-            <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg p-8">
+            <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl p-8">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-lg flex items-center justify-center">
-                  <Mic className="w-5 h-5 text-white dark:text-black" />
+                <div className="w-12 h-12 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center">
+                  <Mic className="w-6 h-6 text-white dark:text-black" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-zinc-900 dark:text-white uppercase">Talkie</h3>
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase">Full App</span>
+                  <span className="text-xs font-mono text-zinc-500 uppercase">Full App</span>
                 </div>
               </div>
               <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-zinc-400 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
                   Everything in Live, plus...
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-zinc-400 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
                   Permanent memo library
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-zinc-400 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
                   iCloud sync (iPhone + Mac)
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-zinc-400 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
                   AI workflows & automation
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1 h-1 bg-zinc-400 rounded-full"></span>
+                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
                   Multi-provider LLM support
                 </li>
               </ul>
               <Link
                 href="/features"
-                className="inline-flex items-center gap-2 mt-6 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                className="inline-flex items-center gap-2 mt-6 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
                 See all features <ArrowRight className="w-3 h-3" />
               </Link>
@@ -377,22 +669,22 @@ export default function LivePage() {
       </section>
 
       {/* CTA */}
-      <section className="py-24 bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-black border-t border-zinc-200 dark:border-zinc-800">
+      <section className="py-28 bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-black border-t border-zinc-200 dark:border-zinc-800">
         <Container className="text-center">
-          <div className="w-12 h-12 mx-auto mb-6 bg-emerald-500 rounded-xl flex items-center justify-center">
-            <Zap className="w-6 h-6 text-white" />
+          <div className="w-16 h-16 mx-auto mb-8 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-xl shadow-emerald-500/25">
+            <Zap className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
-            Ready to type<br/>with your voice?
+          <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
+            Stop losing ideas.
           </h2>
-          <p className="text-zinc-600 dark:text-zinc-400 mb-8 max-w-md mx-auto">
-            Download Talkie Live for free. No account needed, no credit card, no catch.
+          <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-10 max-w-lg mx-auto">
+            Download Talkie Live for free. No account needed, no credit card, no catch. Just faster thinking.
           </p>
-          <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl mx-auto">
-            <Download className="w-4 h-4" />
+          <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="inline-flex h-14 px-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all items-center gap-3 shadow-xl shadow-emerald-500/25">
+            <Download className="w-5 h-5" />
             <span>Download for Mac</span>
           </a>
-          <p className="mt-6 text-[10px] font-mono uppercase text-zinc-400">macOS 13+ • Apple Silicon optimized</p>
+          <p className="mt-8 text-xs font-mono uppercase text-zinc-400">macOS 13+ • Apple Silicon optimized • Signed & Notarized</p>
         </Container>
       </section>
 
