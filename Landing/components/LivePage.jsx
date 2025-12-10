@@ -237,19 +237,19 @@ export default function LivePage() {
                 <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">Philosophy</span>
               </div>
               <h2 className="text-3xl md:text-4xl font-bold uppercase tracking-tight mb-6 leading-tight">
-                Ideas deserve a<br/>
-                <span className="text-emerald-400">zero-friction</span> path<br/>
-                to action.
+                Work is changing fast,<br/>
+                <span className="text-emerald-400">and we're leaning</span><br/>
+                into it.
               </h2>
               <div className="space-y-6 text-zinc-400 leading-relaxed">
                 <p>
-                  Every creative breakthrough, business insight, and personal epiphany started as a fleeting thought. The difference between people who execute and people who don't is often just their capture system.
+                  For the first time in our careers, we can turn ideas into action at the speed of the tools around us.
                 </p>
                 <p>
-                  <span className="text-white font-medium">Talkie Live exists for one purpose:</span> to make the gap between "I just thought of something" and "It's recorded" as close to zero as physically possible.
+                  <span className="text-white font-medium">It's the age of AI.</span> Typing every idea by hand is no longer required.
                 </p>
                 <p>
-                  No app to open. No window to find. No typing required. Just hold a key, speak your thought, and return to whatever you were doing. The entire interaction takes less than a second to initiate.
+                  You get to talk, move faster, and actually enjoy the upgrade.
                 </p>
               </div>
             </div>
