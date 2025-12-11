@@ -23,7 +23,7 @@ Talkie transforms voice memos into actionable outputs through customizable workf
 - **On-Device Transcription**: WhisperKit, Parakeet, and other open-source models
 - **On-Device LLMs**: MLX support with Llama 3, Gemma, Mistral, Phi, and more
 - **Workflow Automation**: Chain together LLM processing, shell commands, and integrations
-- **CLI Integration**: Run tools like `claude`, `gh`, `jq` with full access to your configured environment
+- **iCloud Sync**: CloudKit-based sync across devices
 
 ## Development
 
