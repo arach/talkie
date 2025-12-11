@@ -50,6 +50,40 @@
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
+      <PostActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Launch TalkieLive"
+               scriptText = "open &quot;${BUILT_PRODUCTS_DIR}/TalkieLive.app&quot;&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "539FB5B82EE6785C004EEAF4"
+                     BuildableName = "TalkieLive.app"
+                     BlueprintName = "TalkieLive"
+                     ReferencedContainer = "container:macOS/TalkieLive/TalkieLive.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Launch Talkie"
+               scriptText = "open &quot;${BUILT_PRODUCTS_DIR}/Talkie.app&quot;&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "1EB6D14809D2E04C6D77B8BC"
+                     BuildableName = "Talkie.app"
+                     BlueprintName = "Talkie"
+                     ReferencedContainer = "container:macOS/Talkie/Talkie.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
    </BuildAction>
    <TestAction
       buildConfiguration = "Debug"
@@ -72,10 +106,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1EB6D14809D2E04C6D77B8BC"
-            BuildableName = "Talkie.app"
-            BlueprintName = "Talkie"
-            ReferencedContainer = "container:macOS/Talkie/Talkie.xcodeproj">
+            BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
+            BuildableName = "TalkieEngine.app"
+            BlueprintName = "TalkieEngine"
+            ReferencedContainer = "container:macOS/TalkieEngine/TalkieEngine.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -89,10 +123,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1EB6D14809D2E04C6D77B8BC"
-            BuildableName = "Talkie.app"
-            BlueprintName = "Talkie"
-            ReferencedContainer = "container:macOS/Talkie/Talkie.xcodeproj">
+            BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
+            BuildableName = "TalkieEngine.app"
+            BlueprintName = "TalkieEngine"
+            ReferencedContainer = "container:macOS/TalkieEngine/TalkieEngine.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
