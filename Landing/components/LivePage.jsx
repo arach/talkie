@@ -131,13 +131,13 @@ export default function LivePage() {
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase leading-none whitespace-nowrap">
                   <span>Thoughts</span> <span className="text-zinc-400 dark:text-zinc-500">→</span> <span className="transition-colors duration-300 group-hover/headline:text-emerald-500">Action</span>
                 </h1>
-                {/* App Icon - inline with headline */}
-                <div className="hidden lg:flex items-center justify-center relative group/icon flex-shrink-0 w-28 h-28">
-                  <div className="absolute inset-0 m-auto w-36 h-36 bg-emerald-500/5 rounded-full blur-2xl transition-all duration-500 group-hover/icon:bg-emerald-500/20 group-hover/icon:scale-125 group-hover/headline:bg-emerald-500/15 pointer-events-none" />
+                {/* Logo - inline with headline */}
+                <div className="hidden lg:flex items-center justify-center relative group/icon flex-shrink-0 w-40 h-28">
+                  <div className="absolute inset-0 m-auto w-48 h-36 bg-emerald-500/5 rounded-full blur-2xl transition-all duration-500 group-hover/icon:bg-emerald-500/20 group-hover/icon:scale-125 group-hover/headline:bg-emerald-500/15 pointer-events-none" />
                   <img
-                    src="/talkie-live-icon.png"
+                    src="/talkie-live-logo.png"
                     alt="Talkie Live"
-                    className="w-24 h-24 md:w-28 md:h-28 relative z-10 opacity-80 grayscale-[20%] transition-all duration-300 group-hover/icon:opacity-100 group-hover/icon:grayscale-0 group-hover/icon:scale-105 group-hover/icon:rotate-1 group-hover/headline:opacity-100 group-hover/headline:grayscale-0 group-hover/headline:rotate-1"
+                    className="w-36 md:w-40 relative z-10 opacity-90 transition-all duration-300 group-hover/icon:opacity-100 group-hover/icon:scale-105 group-hover/icon:rotate-1 group-hover/headline:opacity-100 group-hover/headline:rotate-1"
                   />
                 </div>
               </div>
