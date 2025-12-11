@@ -38,7 +38,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.title = "🎙"
+            if let image = NSImage(named: "MenuBarIcon") {
+                image.isTemplate = true
+                button.image = image
+            } else {
+                button.title = "🎙"  // Fallback
+            }
             updateStatusBarTooltip()
         }
 
@@ -205,15 +210,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateIcon(for state: LiveState) {
         guard let button = statusItem.button else { return }
+
+        // Set base image
+        if let image = NSImage(named: "MenuBarIcon") {
+            image.isTemplate = true
+            button.image = image
+        }
+
+        // Add state indicator as title suffix
         switch state {
         case .idle:
-            button.title = "🎙"
+            button.title = ""
         case .listening:
-            button.title = "🎙◉"
+            button.title = " ◉"
         case .transcribing:
-            button.title = "🎙⟳"
+            button.title = " ⟳"
         case .routing:
-            button.title = "🎙→"
+            button.title = " →"
         }
     }
 
