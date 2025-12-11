@@ -664,87 +664,106 @@ private struct EngineSetupStepView: View {
 
 // MARK: - Model Download Step
 
+private enum ModelChoice: String, CaseIterable {
+    case parakeet
+    case whisper
+}
+
 private struct ModelDownloadStepView: View {
     let colors: OnboardingColors
     let onNext: () -> Void
     @ObservedObject private var manager = OnboardingManager.shared
     @State private var isDownloading = false
+    @State private var selectedModel: ModelChoice = .parakeet
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 48))
-                .foregroundColor(.cyan)
-
-            VStack(spacing: Spacing.sm) {
-                Text("SPEECH MODEL")
-                    .font(.system(size: 24, weight: .black))
+        VStack(spacing: Spacing.md) {
+            VStack(spacing: Spacing.xs) {
+                Text("CHOOSE YOUR MODEL")
+                    .font(.system(size: 22, weight: .black))
                     .tracking(1)
                     .foregroundColor(colors.textPrimary)
 
-                Text("Fast, accurate, runs entirely on your Mac")
-                    .font(.system(size: 13, design: .monospaced))
+                Text("Runs entirely on your Mac")
+                    .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(colors.textSecondary)
-                    .multilineTextAlignment(.center)
+
+                Text("You can always change this later in Settings")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+                    .padding(.top, 2)
             }
 
-            // Download panel
-            VStack(spacing: Spacing.sm) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text("PARAKEET V3")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .tracking(1)
-                                .foregroundColor(colors.textPrimary)
-
-                            if manager.isModelDownloaded {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(colors.accent)
-                                    .font(.system(size: 12))
-                            }
-                        }
-                        Text("~200 MB download")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(colors.textTertiary)
-                    }
-
-                    Spacer()
+            // Model cards
+            HStack(alignment: .top, spacing: Spacing.md) {
+                // Parakeet card
+                ModelCard(
+                    colors: colors,
+                    isSelected: selectedModel == .parakeet,
+                    logoName: "nvidia",
+                    modelName: "Parakeet",
+                    version: "v3",
+                    size: "~200 MB",
+                    specs: [
+                        ("Speed", "Ultra-fast"),
+                        ("Quality", "Excellent"),
+                        ("Languages", "English")
+                    ],
+                    badge: "RECOMMENDED",
+                    badgeColor: colors.accent,
+                    isDownloaded: manager.isModelDownloaded && selectedModel == .parakeet,
+                    learnMoreURL: "https://huggingface.co/nvidia/parakeet-tdt-1.1b"
+                ) {
+                    selectedModel = .parakeet
                 }
 
-                if isDownloading || manager.downloadProgress > 0 {
-                    VStack(spacing: 6) {
-                        ProgressView(value: manager.downloadProgress)
-                            .tint(.cyan)
-
-                        Text(manager.downloadStatus.uppercased())
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .tracking(0.5)
-                            .foregroundColor(colors.textTertiary)
-                    }
-                }
-
-                if let error = manager.errorMessage {
-                    Text(error)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.red)
+                // Whisper card
+                ModelCard(
+                    colors: colors,
+                    isSelected: selectedModel == .whisper,
+                    logoName: "openai",
+                    modelName: "Whisper",
+                    version: "large-v3",
+                    size: "~1.5 GB",
+                    specs: [
+                        ("Speed", "Fast"),
+                        ("Quality", "Excellent"),
+                        ("Languages", "99+")
+                    ],
+                    badge: "MULTILINGUAL",
+                    badgeColor: .cyan,
+                    isDownloaded: false,
+                    learnMoreURL: "https://openai.com/research/whisper"
+                ) {
+                    selectedModel = .whisper
                 }
             }
-            .padding(Spacing.md)
-            .frame(maxWidth: 300)
-            .background(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(colors.surfaceCard)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(colors.border, lineWidth: 1)
-                    )
-            )
 
+            // Download progress
+            if isDownloading || manager.downloadProgress > 0 {
+                VStack(spacing: 6) {
+                    ProgressView(value: manager.downloadProgress)
+                        .tint(selectedModel == .parakeet ? colors.accent : .cyan)
+                        .frame(maxWidth: 300)
+
+                    Text(manager.downloadStatus.uppercased())
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundColor(colors.textTertiary)
+                }
+            }
+
+            if let error = manager.errorMessage {
+                Text(error)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.red)
+            }
+
+            // Action button
             if !manager.isModelDownloaded {
                 Button(action: startDownload) {
                     HStack(spacing: 6) {
-                        Text(isDownloading ? "DOWNLOADING..." : "DOWNLOAD")
+                        Text(isDownloading ? "DOWNLOADING..." : "DOWNLOAD \(selectedModel == .parakeet ? "PARAKEET" : "WHISPER")")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .tracking(1)
                         if !isDownloading {
@@ -753,7 +772,7 @@ private struct ModelDownloadStepView: View {
                         }
                     }
                     .foregroundColor(isDownloading ? colors.textTertiary : colors.background)
-                    .frame(width: 180, height: 40)
+                    .frame(width: 220, height: 40)
                     .background(isDownloading ? colors.surfaceCard : colors.accent)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
@@ -780,7 +799,7 @@ private struct ModelDownloadStepView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(Spacing.xl)
+        .padding(Spacing.lg)
     }
 
     private func startDownload() {
@@ -788,6 +807,166 @@ private struct ModelDownloadStepView: View {
         Task {
             await manager.downloadDefaultModel()
             isDownloading = false
+        }
+    }
+}
+
+// MARK: - Model Card
+
+private struct ModelCard: View {
+    let colors: OnboardingColors
+    let isSelected: Bool
+    let logoName: String
+    let modelName: String
+    let version: String
+    let size: String
+    let specs: [(String, String)]
+    let badge: String
+    let badgeColor: Color
+    let isDownloaded: Bool
+    let learnMoreURL: String
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    // Header with logo
+                    HStack {
+                        // Logo placeholder (NVIDIA or OpenAI style)
+                        if logoName == "nvidia" {
+                            NvidiaLogo()
+                                .frame(width: 20, height: 20)
+                        } else {
+                            OpenAILogo()
+                                .frame(width: 18, height: 18)
+                        }
+
+                        Spacer()
+
+                        // Badge
+                        Text(badge)
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(badgeColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(badgeColor.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+
+                    // Model name
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(modelName)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(colors.textPrimary)
+
+                        Text(version)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(colors.textTertiary)
+
+                        if isDownloaded {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.accent)
+                        }
+                    }
+
+                    // Size
+                    Text(size)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(colors.textTertiary)
+
+                    Divider()
+                        .background(colors.border)
+
+                    // Specs
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(specs, id: \.0) { spec in
+                            HStack {
+                                Text(spec.0)
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(colors.textTertiary)
+                                Spacer()
+                                Text(spec.1)
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .foregroundColor(colors.textSecondary)
+                            }
+                        }
+                    }
+                }
+                .padding(Spacing.md)
+                .frame(width: 160)
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(colors.surfaceCard)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                .strokeBorder(isSelected ? colors.accent : colors.border, lineWidth: isSelected ? 2 : 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+
+            // Learn more link
+            Button(action: {
+                if let url = URL(string: learnMoreURL) {
+                    NSWorkspace.shared.open(url)
+                }
+            }) {
+                HStack(spacing: 3) {
+                    Text("Learn more")
+                        .font(.system(size: 9, design: .monospaced))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 8, weight: .medium))
+                }
+                .foregroundColor(colors.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Logo Views
+
+private struct NvidiaLogo: View {
+    var body: some View {
+        // Simplified NVIDIA eye logo
+        ZStack {
+            // Green background
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(hex: "76B900"))
+
+            // Eye shape
+            Path { path in
+                path.move(to: CGPoint(x: 4, y: 10))
+                path.addQuadCurve(to: CGPoint(x: 16, y: 10), control: CGPoint(x: 10, y: 4))
+                path.addQuadCurve(to: CGPoint(x: 4, y: 10), control: CGPoint(x: 10, y: 16))
+            }
+            .fill(Color.white)
+            .scaleEffect(0.8)
+        }
+    }
+}
+
+private struct OpenAILogo: View {
+    var body: some View {
+        // Simplified OpenAI logo (hexagonal flower)
+        ZStack {
+            Circle()
+                .fill(Color.white)
+
+            // Simple representation
+            Image(systemName: "hexagon")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.black)
         }
     }
 }
