@@ -273,7 +273,7 @@ struct OnboardingView: View {
                 .padding(.bottom, Spacing.xl)
             }
         }
-        .frame(width: 600, height: 520)
+        .frame(width: 680, height: 580)
     }
 }
 
@@ -284,7 +284,7 @@ private struct GridPatternView: View {
 
     var body: some View {
         Canvas { context, size in
-            let gridSize: CGFloat = 40
+            let gridSize: CGFloat = 60
 
             // Vertical lines
             for x in stride(from: 0, to: size.width, by: gridSize) {
@@ -412,71 +412,67 @@ private struct WelcomeStepView: View {
     let onNext: () -> Void
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
-            // Talkie logo
-            TalkieLogo(colors: colors)
-                .padding(.bottom, Spacing.md)
-
-            // App icon
-            Image("OnboardingIcon")
+        VStack(spacing: Spacing.xl) {
+            // App icon - using actual high-res icon
+            Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 100, height: 100)
+                .frame(width: 128, height: 128)
 
             // Main headline
-            VStack(spacing: 0) {
+            VStack(spacing: Spacing.xs) {
                 Text("TALKIE LIVE")
-                    .font(.system(size: 32, weight: .black))
+                    .font(.system(size: 36, weight: .black))
                     .tracking(-1)
                     .foregroundColor(colors.textPrimary)
 
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Text("VOICE")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(colors.textSecondary)
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(colors.textTertiary)
 
-                    Text("TO")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(colors.textTertiary.opacity(0.5))
-
                     Text("TEXT")
-                        .font(.system(size: 20, weight: .black))
+                        .font(.system(size: 18, weight: .black))
                         .foregroundColor(colors.accent)
                 }
             }
 
             // Tagline
             Text("Instantly anywhere on your Mac")
-                .font(.system(size: 13, design: .monospaced))
+                .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(colors.textSecondary)
 
             // Features
-            VStack(alignment: .leading, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 FeatureRow(colors: colors, icon: "mic.fill", title: "Record anywhere", description: "Press hotkey in any app")
                 FeatureRow(colors: colors, icon: "text.cursor", title: "Auto-paste", description: "Transcription appears instantly")
                 FeatureRow(colors: colors, icon: "cpu", title: "100% on-device", description: "Private, fast, no internet needed")
             }
-            .padding(.top, Spacing.md)
+            .padding(.top, Spacing.sm)
 
             // Get Started button
             Button(action: onNext) {
                 HStack(spacing: Spacing.sm) {
                     Text("GET STARTED")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
                         .tracking(2)
 
                     Image(systemName: "arrow.right")
                         .font(.system(size: 12, weight: .bold))
                 }
                 .foregroundColor(colors.background)
-                .frame(width: 200, height: 44)
+                .frame(width: 220, height: 48)
                 .background(colors.accent)
                 .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
-            .padding(.top, Spacing.lg)
+            .padding(.top, Spacing.md)
         }
-        .padding(Spacing.xl)
+        .padding(Spacing.xxl)
     }
 }
 

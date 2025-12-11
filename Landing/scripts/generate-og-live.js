@@ -1,5 +1,11 @@
 const puppeteer = require('puppeteer');
 const path = require('path');
+const fs = require('fs');
+
+// Read the logo as base64 for embedding
+const logoPath = path.join(__dirname, '..', 'public', 'talkie-live-logo.png');
+const logoBase64 = fs.readFileSync(logoPath).toString('base64');
+const logoDataUrl = `data:image/png;base64,${logoBase64}`;
 
 const html = `
 <!DOCTYPE html>
@@ -22,19 +28,9 @@ const html = `
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background-color: #09090b;
+      background: linear-gradient(180deg, #0a0a0c 0%, #0d0d10 100%);
       position: relative;
       overflow: hidden;
-    }
-    .gradient {
-      position: absolute;
-      top: -200px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 800px;
-      height: 800px;
-      background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
-      pointer-events: none;
     }
     .grid {
       position: absolute;
@@ -43,13 +39,13 @@ const html = `
         linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
       background-size: 40px 40px;
-      opacity: 0.8;
+      opacity: 0.6;
     }
     .corner { position: absolute; width: 20px; height: 20px; }
-    .corner-tl { top: 32px; left: 32px; border-top: 2px solid #10b981; border-left: 2px solid #10b981; }
-    .corner-tr { top: 32px; right: 32px; border-top: 2px solid #10b981; border-right: 2px solid #10b981; }
-    .corner-bl { bottom: 32px; left: 32px; border-bottom: 2px solid #10b981; border-left: 2px solid #10b981; }
-    .corner-br { bottom: 32px; right: 32px; border-bottom: 2px solid #10b981; border-right: 2px solid #10b981; }
+    .corner-tl { top: 32px; left: 32px; border-top: 2px solid #3f3f46; border-left: 2px solid #3f3f46; }
+    .corner-tr { top: 32px; right: 32px; border-top: 2px solid #3f3f46; border-right: 2px solid #3f3f46; }
+    .corner-bl { bottom: 32px; left: 32px; border-bottom: 2px solid #3f3f46; border-left: 2px solid #3f3f46; }
+    .corner-br { bottom: 32px; right: 32px; border-bottom: 2px solid #3f3f46; border-right: 2px solid #3f3f46; }
     .content {
       display: flex;
       flex-direction: column;
@@ -58,53 +54,60 @@ const html = `
       z-index: 1;
       padding: 0 60px;
     }
+    .logo-badge {
+      position: absolute;
+      top: 40px;
+      right: 50px;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+    }
+    .logo-badge img {
+      width: 100px;
+      height: auto;
+    }
     .hero-badge {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      border-radius: 100px;
-      padding: 10px 20px;
-      margin-bottom: 40px;
+      background: rgba(24, 24, 27, 0.9);
+      border: 1px solid rgba(63, 63, 70, 0.7);
+      border-radius: 10px;
+      padding: 8px 16px;
+      margin-bottom: 32px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
     }
     .hero-badge-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background-color: #10b981;
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.8);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
     }
     .hero-badge-text {
-      font-size: 11px;
+      font-size: 10px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
-      letter-spacing: 0.2em;
-      color: #10b981;
+      letter-spacing: 0.22em;
+      color: #d4d4d8;
       text-transform: uppercase;
     }
     h1 {
-      font-size: 88px;
+      font-size: 82px;
       font-weight: 900;
       color: #fafafa;
       letter-spacing: -0.04em;
       text-transform: uppercase;
-      line-height: 0.85;
-      margin-bottom: 16px;
+      line-height: 0.95;
     }
-    h1 .emerald {
+    h1 .highlight {
       color: #10b981;
     }
-    h1 .muted {
-      color: #52525b;
-    }
     .tagline {
-      font-size: 20px;
+      font-size: 18px;
       color: #a1a1aa;
       margin-top: 32px;
       font-weight: 500;
       max-width: 700px;
-      line-height: 1.5;
+      line-height: 1.6;
     }
     .tagline strong {
       color: #fafafa;
@@ -112,95 +115,64 @@ const html = `
     .features {
       display: flex;
       align-items: center;
-      gap: 32px;
-      margin-top: 40px;
+      gap: 24px;
+      margin-top: 28px;
     }
     .feature {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 13px;
+      gap: 6px;
+      font-size: 11px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 500;
       color: #71717a;
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
-    .feature .check {
-      width: 16px;
-      height: 16px;
+    .feature-check {
       color: #10b981;
-    }
-    .badge {
-      position: absolute;
-      top: 50px;
-      right: 70px;
-      background: #10b981;
-      padding: 10px 20px;
-      border-radius: 8px;
-      transform: rotate(3deg);
-      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
-    }
-    .badge span {
       font-size: 14px;
-      font-weight: 800;
-      font-family: 'JetBrains Mono', monospace;
-      color: #000;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
     }
     .bottom {
       position: absolute;
       bottom: 36px;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
     }
     .bottom span {
       font-size: 13px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 500;
       color: #52525b;
-      letter-spacing: 0.05em;
     }
-    .bottom .sep { color: #3f3f46; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="gradient"></div>
     <div class="grid"></div>
     <div class="corner corner-tl"></div>
     <div class="corner corner-tr"></div>
     <div class="corner corner-bl"></div>
     <div class="corner corner-br"></div>
-    <div class="badge"><span>Free</span></div>
+    <div class="logo-badge">
+      <img src="${logoDataUrl}" alt="Talkie Live" />
+    </div>
     <div class="content">
       <div class="hero-badge">
         <div class="hero-badge-dot"></div>
         <span class="hero-badge-text">Talkie Live</span>
       </div>
-      <h1>CAPTURE IDEAS<br/><span class="emerald">BEFORE THEY</span><br/><span class="muted">DISAPPEAR.</span></h1>
-      <p class="tagline">Hold a hotkey, speak, release. <strong>Your words appear instantly.</strong></p>
+      <h1>THOUGHTS <span class="highlight">→</span> ACTION<br/><span class="highlight">INSTANTLY.</span></h1>
+      <p class="tagline">Hold a hotkey, speak, release. <strong>Your words appear wherever you're typing.</strong></p>
       <div class="features">
-        <div class="feature">
-          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-          <span>100% Local</span>
-        </div>
-        <div class="feature">
-          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-          <span>No Account</span>
-        </div>
-        <div class="feature">
-          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-          <span>macOS Menu Bar</span>
-        </div>
+        <div class="feature"><span class="feature-check">✓</span> 100% Local</div>
+        <div class="feature"><span class="feature-check">✓</span> No Account</div>
+        <div class="feature"><span class="feature-check">✓</span> macOS Menu Bar</div>
       </div>
     </div>
     <div class="bottom">
-      <span>Voice-to-Text in ~2 seconds</span>
-      <span class="sep">|</span>
-      <span>talkie.live</span>
+      <span>usetalkie.com/live</span>
     </div>
   </div>
 </body>
