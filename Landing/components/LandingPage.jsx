@@ -192,12 +192,12 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform flex items-center gap-2 shadow-xl min-w-[200px] justify-center">
-              <Smartphone className="w-4 h-4" />
-              <span>Download for iOS</span>
-            </button>
-            <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-for-Mac.zip" className="h-12 px-8 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all flex items-center gap-2 min-w-[200px] justify-center">
-              <Laptop className="w-4 h-4" />
+            <a href="#pricing" className="group/ios h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-2 shadow-xl hover:shadow-2xl min-w-[200px] justify-center">
+              <Smartphone className="w-4 h-4 transition-transform group-hover/ios:-rotate-6" />
+              <span>Get iOS Early Access</span>
+            </a>
+            <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-for-Mac.zip" className="group/mac h-12 px-8 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all flex items-center gap-2 min-w-[200px] justify-center">
+              <Laptop className="w-4 h-4 transition-transform group-hover/mac:scale-110" />
               <span>Download for Mac</span>
             </a>
           </div>
@@ -222,12 +222,12 @@ export default function LandingPage() {
           <div className="max-w-4xl mx-auto space-y-6">
 
             {/* Header/Intro */}
-            <div className="space-y-4">
+            <div className="space-y-4 group/manifesto-header">
               <div className="flex items-center gap-3">
-                <Quote className="w-3 h-3 text-zinc-400" />
-                <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">The Manifesto</h3>
+                <Quote className="w-3 h-3 text-zinc-400 transition-colors group-hover/manifesto-header:text-emerald-500" />
+                <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500 transition-colors group-hover/manifesto-header:text-emerald-500">The Manifesto</h3>
               </div>
-              <h2 className="text-lg md:text-xl font-bold tracking-tight text-zinc-900 dark:text-white leading-[1.2] uppercase">
+              <h2 className="text-lg md:text-xl font-bold tracking-tight text-zinc-900 dark:text-white leading-[1.2] uppercase transition-transform origin-left group-hover/manifesto-header:scale-[1.02]">
                 Your best ideas don&apos;t wait for you to sit down.
               </h2>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-2xl">
@@ -242,16 +242,16 @@ export default function LandingPage() {
 
             {/* Two Column Block */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-400 block mb-2">001 / DEVICES</span>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-white mb-2 uppercase tracking-tight">iPhone + Mac = The Perfect Pair</h3>
+              <div className="group/devices p-4 -m-4 rounded-lg transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-400 block mb-2 transition-colors group-hover/devices:text-emerald-500">001 / DEVICES</span>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white mb-2 uppercase tracking-tight transition-colors group-hover/devices:text-emerald-600 dark:group-hover/devices:text-emerald-400">iPhone + Mac = The Perfect Pair</h3>
                 <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed text-xs">
                   Your iPhone is the perfect capture device — always on you, always ready. Your Mac is where raw ideas become real output.
                 </p>
               </div>
-              <div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-400 block mb-2">002 / APPS</span>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-white mb-2 uppercase tracking-tight">Apps, clouds and AI disconnect.</h3>
+              <div className="group/apps p-4 -m-4 rounded-lg transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-400 block mb-2 transition-colors group-hover/apps:text-emerald-500">002 / APPS</span>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white mb-2 uppercase tracking-tight transition-colors group-hover/apps:text-emerald-600 dark:group-hover/apps:text-emerald-400">Apps, clouds and AI disconnect.</h3>
                 <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed text-xs">
                   Voice Memos and Notes keep ideas trapped. AI tools pull your ideas into their clouds. Your thoughts get scattered or absorbed into someone else&apos;s system.
                 </p>
@@ -260,9 +260,9 @@ export default function LandingPage() {
 
             {/* Outro */}
             <div className="text-center pt-4 space-y-4">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-black/50">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                <p className="text-zinc-900 dark:text-white font-bold text-[10px] uppercase tracking-wide">
+              <div className="group/believe inline-flex items-center gap-2 px-4 py-2 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-black/50 transition-all hover:border-emerald-500/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-default">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse group-hover/believe:scale-125 transition-transform"></div>
+                <p className="text-zinc-900 dark:text-white font-bold text-[10px] uppercase tracking-wide transition-colors group-hover/believe:text-emerald-600 dark:group-hover/believe:text-emerald-400">
                   We believe something essential is missing.
                 </p>
               </div>
@@ -302,10 +302,10 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-800">
 
               {/* Local Storage */}
-              <div className="p-6">
+              <div className="p-6 group/local transition-colors hover:bg-zinc-900/50">
                 <div className="flex items-center gap-3 mb-3">
-                  <HardDrive className="w-4 h-4 text-emerald-500" />
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Local-First</span>
+                  <HardDrive className="w-4 h-4 text-emerald-500 transition-transform group-hover/local:scale-110" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-colors group-hover/local:text-emerald-500">Local-First</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
                   Data lives on your device. Delete the app, delete the data. No cloud database we control.
@@ -313,10 +313,10 @@ export default function LandingPage() {
               </div>
 
               {/* iCloud */}
-              <div className="p-6">
+              <div className="p-6 group/icloud transition-colors hover:bg-zinc-900/50">
                 <div className="flex items-center gap-3 mb-3">
-                  <Cloud className="w-4 h-4 text-emerald-500" />
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Your iCloud</span>
+                  <Cloud className="w-4 h-4 text-emerald-500 transition-transform group-hover/icloud:scale-110" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-colors group-hover/icloud:text-emerald-500">Your iCloud</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
                   Sync uses Apple&apos;s Private CloudKit. Keys stay with your Apple ID. We never see them.
@@ -324,10 +324,10 @@ export default function LandingPage() {
               </div>
 
               {/* On-Device AI */}
-              <div className="p-6">
+              <div className="p-6 group/ai transition-colors hover:bg-zinc-900/50">
                 <div className="flex items-center gap-3 mb-3">
-                  <Cpu className="w-4 h-4 text-emerald-500" />
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">On-Device AI</span>
+                  <Cpu className="w-4 h-4 text-emerald-500 transition-transform group-hover/ai:scale-110" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 transition-colors group-hover/ai:text-emerald-500">On-Device AI</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
                   Transcription runs locally on Neural Engine. Use local LLMs for full offline workflows.
@@ -339,14 +339,14 @@ export default function LandingPage() {
 
           {/* Privacy Highlights */}
           <div className="mt-6 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-[10px] font-mono uppercase">
-            <div className="flex items-center gap-2">
-              <Mic className="w-3 h-3 text-emerald-500" />
-              <span className="text-emerald-400">Voice transcribed on-device</span>
+            <div className="group/highlight1 flex items-center gap-2 cursor-default">
+              <Mic className="w-3 h-3 text-emerald-500 transition-transform group-hover/highlight1:scale-125" />
+              <span className="text-emerald-400 transition-colors group-hover/highlight1:text-emerald-300">Voice transcribed on-device</span>
             </div>
             <div className="hidden md:block w-px h-4 bg-zinc-700"></div>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-3 h-3 text-emerald-500" />
-              <span className="text-emerald-400">Memos stay on your Mac</span>
+            <div className="group/highlight2 flex items-center gap-2 cursor-default">
+              <ShieldCheck className="w-3 h-3 text-emerald-500 transition-transform group-hover/highlight2:scale-125" />
+              <span className="text-emerald-400 transition-colors group-hover/highlight2:text-emerald-300">Memos stay on your Mac</span>
             </div>
           </div>
 
@@ -356,28 +356,28 @@ export default function LandingPage() {
       <PricingSection />
 
       {/* Condensed CTA */}
-      <section id="get" className="relative py-24 bg-gradient-to-b from-white to-zinc-50 dark:from-zinc-950 dark:to-black border-t border-zinc-200 dark:border-zinc-800">
+      <section id="get" className="relative py-24 bg-gradient-to-b from-white to-zinc-50 dark:from-zinc-950 dark:to-black border-t border-zinc-200 dark:border-zinc-800 group/cta">
         <div className="absolute inset-0 pointer-events-none bg-noise" />
         <div className="relative mx-auto max-w-4xl px-6 text-center">
-          <Cpu className="w-8 h-8 mx-auto text-zinc-400 mb-6" strokeWidth={1} />
-          <h2 className="text-xl md:text-3xl font-bold text-zinc-900 dark:text-white mb-8 tracking-tight uppercase leading-tight">
+          <Cpu className="w-8 h-8 mx-auto text-zinc-400 mb-6 transition-all duration-500 group-hover/cta:text-emerald-500 group-hover/cta:rotate-180" strokeWidth={1} />
+          <h2 className="text-xl md:text-3xl font-bold text-zinc-900 dark:text-white mb-8 tracking-tight uppercase leading-tight transition-transform duration-300 group-hover/cta:scale-[1.01]">
             Stop uploading your thoughts <br className="hidden md:block" /> to someone else's cloud.
           </h2>
           <div className="flex justify-center">
-            <a href="mailto:hello@example.com?subject=Talkie%20Waitlist" className="group relative inline-flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider overflow-hidden rounded">
-              <span className="relative z-10">Join the waitlist</span>
-              <ArrowRight className="w-4 h-4 relative z-10 group-hover:translate-x-1 transition-transform" />
+            <a href="#pricing" className="group/btn relative inline-flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider overflow-hidden rounded hover:shadow-lg transition-shadow">
+              <span className="relative z-10">Get Early Access</span>
+              <ArrowRight className="w-4 h-4 relative z-10 group-hover/btn:translate-x-1 transition-transform" />
             </a>
           </div>
-          <p className="mt-6 text-[10px] font-mono uppercase text-zinc-400">One‑time license • No subscriptions</p>
+          <p className="mt-6 text-[10px] font-mono uppercase text-zinc-400">Your data stays yours • Always</p>
         </div>
       </section>
 
       <footer className="py-12 bg-zinc-100 dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800">
         <Container className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-zinc-900 dark:bg-white rounded-sm"></div>
-            <span className="text-sm font-bold uppercase tracking-widest text-zinc-900 dark:text-white">Talkie_OS</span>
+          <div className="group/footer-logo flex items-center gap-2 cursor-default">
+            <div className="w-3 h-3 bg-zinc-900 dark:bg-white rounded-sm transition-all group-hover/footer-logo:rotate-45 group-hover/footer-logo:bg-emerald-500 dark:group-hover/footer-logo:bg-emerald-400"></div>
+            <span className="text-sm font-bold uppercase tracking-widest text-zinc-900 dark:text-white transition-colors group-hover/footer-logo:text-emerald-600 dark:group-hover/footer-logo:text-emerald-400">Talkie_OS</span>
           </div>
           <div className="flex gap-8 text-[10px] font-mono uppercase text-zinc-500">
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition-colors">Twitter</a>
