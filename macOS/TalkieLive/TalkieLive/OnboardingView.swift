@@ -11,17 +11,22 @@ import SwiftUI
 // MARK: - Notifications
 
 extension Notification.Name {
-    /// Posted when a transcription completes successfully (for onboarding celebration)
+    /// Posted when recording starts (for onboarding celebration - immediate feedback)
+    static let recordingDidStart = Notification.Name("recordingDidStart")
+    /// Posted when transcription completes (for dismissing onboarding after first use)
     static let transcriptionDidComplete = Notification.Name("transcriptionDidComplete")
+    /// Posted to switch to Recent view (after first transcription)
+    static let switchToRecent = Notification.Name("switchToRecent")
 }
 
 // MARK: - Onboarding State
 
 enum OnboardingStep: Int, CaseIterable {
     case welcome = 0
-    case engineSetup = 1
-    case modelDownload = 2
-    case ready = 3
+    case engineSetup = 1      // Introduce Talkie Live as menu bar app
+    case modelDownload = 2    // Choose model (Parakeet vs Whisper)
+    case engineWarmup = 3     // Engine connection + model warmup
+    case ready = 4            // Try your hotkey
 }
 
 // MARK: - Onboarding Manager
@@ -229,15 +234,26 @@ struct OnboardingView: View {
                 Group {
                     switch manager.currentStep {
                     case .welcome:
-                        WelcomeStepView(colors: colors, onNext: { manager.currentStep = .engineSetup })
+                        WelcomeStepView(
+                            colors: colors,
+                            onNext: { manager.currentStep = .engineSetup },
+                            onSkip: {
+                                manager.completeOnboarding()
+                                dismiss()
+                            }
+                        )
                     case .engineSetup:
                         EngineSetupStepView(colors: colors, onNext: { manager.currentStep = .modelDownload })
                     case .modelDownload:
-                        ModelDownloadStepView(colors: colors, onNext: { manager.currentStep = .ready })
+                        ModelDownloadStepView(colors: colors, onNext: { manager.currentStep = .engineWarmup })
+                    case .engineWarmup:
+                        EngineWarmupStepView(colors: colors, onNext: { manager.currentStep = .ready })
                     case .ready:
                         ReadyStepView(colors: colors, onComplete: {
                             manager.completeOnboarding()
                             dismiss()
+                            // Navigate to Recent view after first transcription
+                            NotificationCenter.default.post(name: .switchToRecent, object: nil)
                         })
                     }
                 }
@@ -363,6 +379,7 @@ private struct TalkieLogo: View {
 private struct WelcomeStepView: View {
     let colors: OnboardingColors
     let onNext: () -> Void
+    let onSkip: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.xl) {
@@ -424,6 +441,17 @@ private struct WelcomeStepView: View {
                 .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
+            .focusable(false)
+
+            // Skip below Get Started (welcome screen only)
+            Button(action: onSkip) {
+                Text("Skip")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+            }
+            .buttonStyle(.borderless)
+            .focusable(false)
+            .padding(.top, Spacing.xs)
 
             Spacer()
         }
@@ -799,13 +827,12 @@ private struct ModelCard: View {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     // Header with logo
                     HStack {
-                        // Logo placeholder (NVIDIA or OpenAI style)
                         if logoName == "nvidia" {
                             NvidiaLogo()
-                                .frame(width: 20, height: 20)
+                                .frame(width: 28, height: 20)
                         } else {
                             OpenAILogo()
-                                .frame(width: 18, height: 18)
+                                .frame(width: 24, height: 24)
                         }
 
                         Spacer()
@@ -822,20 +849,27 @@ private struct ModelCard: View {
                     }
 
                     // Model name
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(modelName)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(colors.textPrimary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(modelName)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(colors.textPrimary)
 
-                        Text(version)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(colors.textTertiary)
+                            Text(version)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
 
-                        if isDownloaded {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(colors.accent)
+                            if isDownloaded {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(colors.accent)
+                            }
                         }
+
+                        // "by Company" attribution
+                        Text("by \(logoName == "nvidia" ? "NVIDIA" : "OpenAI")")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(colors.textTertiary)
                     }
 
                     // Size
@@ -900,40 +934,194 @@ private struct ModelCard: View {
     }
 }
 
+// MARK: - Engine Warmup Step
+
+private struct EngineWarmupStepView: View {
+    let colors: OnboardingColors
+    let onNext: () -> Void
+    @ObservedObject private var manager = OnboardingManager.shared
+    @State private var isCheckingEngine = true
+    @State private var isWarmingUp = false
+    @State private var warmupProgress: Double = 0
+    @State private var statusMessage = "Connecting to TalkieEngine..."
+    @State private var isReady = false
+
+    var body: some View {
+        VStack(spacing: Spacing.lg) {
+            // Visual: Engine icon with status indicator
+            ZStack {
+                Circle()
+                    .fill(colors.surfaceCard)
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "engine.combustion")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(isReady ? colors.accent : colors.textSecondary)
+
+                // Progress ring
+                if !isReady {
+                    Circle()
+                        .trim(from: 0, to: warmupProgress)
+                        .stroke(colors.accent, lineWidth: 3)
+                        .frame(width: 90, height: 90)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.3), value: warmupProgress)
+                }
+
+                // Checkmark overlay when ready
+                if isReady {
+                    Circle()
+                        .fill(colors.accent)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                        )
+                        .offset(x: 30, y: 30)
+                }
+            }
+
+            // Title
+            VStack(spacing: Spacing.sm) {
+                Text(isReady ? "READY TO GO" : "WARMING UP")
+                    .font(.system(size: 24, weight: .black))
+                    .tracking(1)
+                    .foregroundColor(colors.textPrimary)
+
+                Text(statusMessage)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            // Details: Status checklist
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                WarmupCheckRow(
+                    colors: colors,
+                    label: "TalkieEngine connected",
+                    isChecked: manager.isEngineConnected,
+                    isLoading: isCheckingEngine
+                )
+                WarmupCheckRow(
+                    colors: colors,
+                    label: "Model loaded",
+                    isChecked: isReady,
+                    isLoading: isWarmingUp
+                )
+            }
+            .padding(Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(colors.surfaceCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(colors.border, lineWidth: 1)
+                    )
+            )
+
+            // CTA
+            Button(action: onNext) {
+                HStack(spacing: 6) {
+                    Text("CONTINUE")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundColor(isReady ? colors.background : colors.textTertiary)
+                .frame(width: 160, height: 40)
+                .background(isReady ? colors.accent : colors.surfaceCard)
+                .cornerRadius(CornerRadius.sm)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .strokeBorder(isReady ? Color.clear : colors.border, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!isReady)
+            .focusable(false)
+        }
+        .padding(Spacing.xl)
+        .onAppear {
+            startWarmup()
+        }
+    }
+
+    private func startWarmup() {
+        // Step 1: Check engine connection
+        isCheckingEngine = true
+        Task {
+            await manager.checkEngineConnection()
+            isCheckingEngine = false
+
+            if manager.isEngineConnected {
+                // Step 2: Warm up the model
+                statusMessage = "Loading transcription model..."
+                isWarmingUp = true
+
+                // Simulate warmup progress (actual warmup happens via EngineClient)
+                for i in 1...10 {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    warmupProgress = Double(i) / 10.0
+                }
+
+                isWarmingUp = false
+                isReady = true
+                statusMessage = "Your model is ready for transcription"
+            } else {
+                statusMessage = "TalkieEngine not found. Please ensure it's running."
+            }
+        }
+    }
+}
+
+// MARK: - Warmup Check Row
+
+private struct WarmupCheckRow: View {
+    let colors: OnboardingColors
+    let label: String
+    let isChecked: Bool
+    let isLoading: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            if isLoading {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 16, height: 16)
+            } else if isChecked {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(colors.accent)
+            } else {
+                Circle()
+                    .strokeBorder(colors.textTertiary, lineWidth: 1)
+                    .frame(width: 14, height: 14)
+            }
+
+            Text(label)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(isChecked ? colors.textPrimary : colors.textTertiary)
+        }
+    }
+}
+
 // MARK: - Logo Views
 
 private struct NvidiaLogo: View {
     var body: some View {
-        // Simplified NVIDIA eye logo
-        ZStack {
-            // Green background
-            RoundedRectangle(cornerRadius: 3)
-                .fill(Color(hex: "76B900"))
-
-            // Eye shape
-            Path { path in
-                path.move(to: CGPoint(x: 4, y: 10))
-                path.addQuadCurve(to: CGPoint(x: 16, y: 10), control: CGPoint(x: 10, y: 4))
-                path.addQuadCurve(to: CGPoint(x: 4, y: 10), control: CGPoint(x: 10, y: 16))
-            }
-            .fill(Color.white)
-            .scaleEffect(0.8)
-        }
+        Image("NvidiaLogo")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
     }
 }
 
 private struct OpenAILogo: View {
     var body: some View {
-        // Simplified OpenAI logo (hexagonal flower)
-        ZStack {
-            Circle()
-                .fill(Color.white)
-
-            // Simple representation
-            Image(systemName: "hexagon")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.black)
-        }
+        Image("OpenAILogo")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
     }
 }
 
@@ -960,12 +1148,12 @@ private struct ReadyStepView: View {
     let onComplete: () -> Void
     @ObservedObject private var settings = LiveSettings.shared
     @State private var showCelebration = false
-    @State private var autoDismissCountdown = 3
+    @State private var celebrationMessage = "Recording..."
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
             if showCelebration {
-                // Celebration state - first transcription success!
+                // Celebration state - shows during recording, then after transcription
                 celebrationView
             } else {
                 // Ready state - waiting for user to try hotkey
@@ -973,12 +1161,20 @@ private struct ReadyStepView: View {
             }
         }
         .padding(Spacing.xl)
-        .onReceive(NotificationCenter.default.publisher(for: .transcriptionDidComplete)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .recordingDidStart)) { _ in
+            // Show celebration immediately when hotkey is pressed
             withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                 showCelebration = true
+                celebrationMessage = "Recording..."
             }
-            // Auto-dismiss after countdown
-            startAutoDismiss()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .transcriptionDidComplete)) { _ in
+            // Update message and auto-dismiss after transcription
+            celebrationMessage = "You just transcribed your first recording!"
+            // Short delay then dismiss
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                onComplete()
+            }
         }
     }
 
@@ -1051,50 +1247,11 @@ private struct ReadyStepView: View {
                     .tracking(2)
                     .foregroundColor(colors.textPrimary)
 
-                Text("You just transcribed your first recording")
+                Text(celebrationMessage)
                     .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
-            }
-
-            VStack(spacing: Spacing.xs) {
-                Text("You're all set to go")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(colors.textTertiary)
-
-                Text("Closing in \(autoDismissCountdown)...")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(colors.textTertiary.opacity(0.7))
-            }
-            .padding(.top, Spacing.md)
-
-            Button(action: onComplete) {
-                HStack(spacing: Spacing.sm) {
-                    Text("LET'S GO")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .tracking(1)
-
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 12, weight: .bold))
-                }
-                .foregroundColor(colors.background)
-                .frame(width: 180, height: 44)
-                .background(colors.accent)
-                .cornerRadius(CornerRadius.sm)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, Spacing.sm)
-        }
-    }
-
-    private func startAutoDismiss() {
-        autoDismissCountdown = 3
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            if autoDismissCountdown > 1 {
-                autoDismissCountdown -= 1
-            } else {
-                timer.invalidate()
-                onComplete()
+                    .animation(.easeInOut, value: celebrationMessage)
             }
         }
     }

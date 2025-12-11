@@ -72,7 +72,7 @@ struct LiveNavigationView: View {
                         .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
                 } else {
                     historyListView
-                        .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
+                        .navigationSplitViewColumnWidth(min: 280, ideal: 400, max: .infinity)
                 }
             } detail: {
                 // Detail column - shows utterance detail or full-width content
@@ -94,6 +94,9 @@ struct LiveNavigationView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToConsole)) { _ in
             selectedSection = .console
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToRecent)) { _ in
+            selectedSection = .history
         }
     }
 
@@ -117,8 +120,8 @@ struct LiveNavigationView: View {
                 Section(isSidebarCollapsed ? "" : "Library") {
                     sidebarItem(
                         section: .history,
-                        icon: "sparkles",
-                        title: "Echoes",
+                        icon: "waveform",
+                        title: "Recent",
                         badge: store.utterances.count > 0 ? "\(store.utterances.count)" : nil,
                         badgeColor: .secondary
                     )
@@ -389,7 +392,7 @@ struct LiveNavigationView: View {
                 .frame(height: 0.5)
 
             HStack {
-                Text("\(store.utterances.count) \(store.utterances.count == 1 ? "echo" : "echoes")")
+                Text("\(store.utterances.count) \(store.utterances.count == 1 ? "recording" : "recordings")")
                     .font(Design.fontXS)
                     .foregroundColor(Design.foregroundMuted)
 
@@ -423,10 +426,10 @@ struct LiveNavigationView: View {
     private var emptyHistoryState: some View {
         VStack(spacing: 12) {
             Spacer()
-            Image(systemName: "sparkles")
+            Image(systemName: "waveform")
                 .font(.system(size: 36))
                 .foregroundColor(Design.foregroundMuted.opacity(0.5))
-            Text("No Echoes Yet")
+            Text("No Recordings Yet")
                 .font(Design.fontBodyMedium)
                 .foregroundColor(Design.foregroundSecondary)
             Text("Press \(LiveSettings.shared.hotkey.displayString) to start recording")
@@ -1101,8 +1104,14 @@ private struct MinimalAudioCard: View {
 
                 // Waveform + timeline (fills available space)
                 VStack(spacing: 6) {
-                    MinimalWaveformBars(progress: displayProgress, isPlaying: isThisPlaying)
-                        .frame(height: 32)
+                    // Waveform with click-to-seek
+                    SeekableWaveform(
+                        progress: displayProgress,
+                        isPlaying: isThisPlaying,
+                        hasAudio: hasAudio,
+                        onSeek: seekToPosition
+                    )
+                    .frame(height: 32)
 
                     // Time row - aligned with waveform edges
                     HStack {
@@ -1192,6 +1201,25 @@ private struct MinimalAudioCard: View {
         playback.togglePlayPause(url: url, id: utterance.id.uuidString)
     }
 
+    /// Seek to a position - loads audio first if not already loaded
+    private func seekToPosition(_ progress: Double) {
+        guard let url = utterance.metadata.audioURL else {
+            print("⚠️ seekToPosition: No audio URL")
+            return
+        }
+
+        print("🎯 seekToPosition: \(Int(progress * 100))% - isLoaded: \(isThisLoaded)")
+
+        // If audio isn't loaded yet, load it first then seek
+        if !isThisLoaded {
+            print("📂 Loading audio first...")
+            playback.play(url: url, id: utterance.id.uuidString)
+            playback.pause()  // Load but don't auto-play
+        }
+        playback.seek(to: progress)
+        print("✅ Seeked to \(Int(progress * 100))%")
+    }
+
     private func revealInFinder() {
         guard let url = utterance.metadata.audioURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -1201,6 +1229,64 @@ private struct MinimalAudioCard: View {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
+    }
+}
+
+// MARK: - Seekable Waveform (wraps MinimalWaveformBars with click-to-seek)
+
+private struct SeekableWaveform: View {
+    let progress: Double
+    let isPlaying: Bool
+    let hasAudio: Bool
+    let onSeek: (Double) -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // The actual waveform visualization
+                MinimalWaveformBars(progress: progress, isPlaying: isPlaying)
+                    .allowsHitTesting(false)
+
+                // Full-width click target overlay
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onEnded { value in
+                                guard hasAudio else { return }
+                                let clickX = value.location.x
+                                let width = geometry.size.width
+                                let seekProgress = max(0, min(1, clickX / width))
+                                print("👆 Waveform clicked at \(Int(seekProgress * 100))% (x: \(Int(clickX)), width: \(Int(width)))")
+                                onSeek(seekProgress)
+                            }
+                    )
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active:
+                            isHovered = true
+                        case .ended:
+                            isHovered = false
+                        }
+                    }
+            }
+            .cursor(hasAudio ? .pointingHand : .arrow)
+        }
+    }
+}
+
+// Cursor modifier for waveform
+extension View {
+    func cursor(_ cursor: NSCursor) -> some View {
+        self.onHover { hovering in
+            if hovering {
+                cursor.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 
@@ -1239,32 +1325,36 @@ private struct WaveformBarsContent: View {
     let isPlaying: Bool
     let time: TimeInterval
 
-    private static let barHeights: [Double] = {
-        var heights: [Double] = []
-        for i in 0..<40 {
-            let seed = Double(i) * 1.618
-            let h = 0.3 + sin(seed * 2.5) * 0.25 + cos(seed * 1.3) * 0.2
-            heights.append(max(0.15, min(1.0, h)))
-        }
-        return heights
-    }()
+    // Fixed bar dimensions
+    private static let barWidth: CGFloat = 2
+    private static let barSpacing: CGFloat = 2
+
+    /// Generate deterministic height for a bar index using golden ratio seeding
+    private static func barHeight(for index: Int) -> Double {
+        let seed = Double(index) * 1.618
+        let h = 0.3 + sin(seed * 2.5) * 0.25 + cos(seed * 1.3) * 0.2
+        return max(0.15, min(1.0, h))
+    }
 
     var body: some View {
         GeometryReader { geo in
-            HStack(spacing: 2) {
-                ForEach(0..<Self.barHeights.count, id: \.self) { i in
+            let barCount = max(1, Int(geo.size.width / (Self.barWidth + Self.barSpacing)))
+
+            HStack(spacing: Self.barSpacing) {
+                ForEach(0..<barCount, id: \.self) { i in
                     WaveformBar(
                         index: i,
-                        totalBars: Self.barHeights.count,
-                        baseHeight: Self.barHeights[i],
+                        totalBars: barCount,
+                        baseHeight: Self.barHeight(for: i),
                         progress: progress,
                         isPlaying: isPlaying,
                         time: time,
-                        containerHeight: geo.size.height
+                        containerHeight: geo.size.height,
+                        barWidth: Self.barWidth
                     )
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 }
@@ -1277,6 +1367,7 @@ private struct WaveformBar: View {
     let isPlaying: Bool
     let time: TimeInterval
     let containerHeight: CGFloat
+    let barWidth: CGFloat
 
     private var barProgress: Double {
         Double(index) / Double(totalBars)
@@ -1310,7 +1401,7 @@ private struct WaveformBar: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 1)
             .fill(barColor)
-            .frame(width: 3, height: containerHeight * max(0.15, animatedHeight))
+            .frame(width: barWidth, height: containerHeight * max(0.15, animatedHeight))
     }
 }
 
@@ -1677,9 +1768,15 @@ private struct WaveformCard: View {
                 }
             }
 
-            // Waveform visualization
-            WaveformVisualization(progress: displayProgress, isPlaying: isThisPlaying)
-                .frame(height: 48)
+            // Waveform visualization (click/drag to seek)
+            WaveformVisualization(
+                progress: displayProgress,
+                isPlaying: isThisPlaying,
+                onSeek: hasAudio ? { progress in
+                    seekToPosition(progress)
+                } : nil
+            )
+            .frame(height: 48)
 
             // Playback controls
             HStack(spacing: Spacing.md) {
@@ -1712,9 +1809,9 @@ private struct WaveformCard: View {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
-                                if hasAudio && isThisLoaded {
+                                if hasAudio {
                                     let newProgress = max(0, min(1, value.location.x / geo.size.width))
-                                    playback.seek(to: newProgress)
+                                    seekToPosition(newProgress)
                                 }
                             }
                     )
@@ -1767,6 +1864,25 @@ private struct WaveformCard: View {
         playback.togglePlayPause(url: url, id: utterance.id.uuidString)
     }
 
+    /// Seek to a position - loads audio first if not already loaded
+    private func seekToPosition(_ progress: Double) {
+        guard let url = utterance.metadata.audioURL else {
+            print("⚠️ seekToPosition: No audio URL")
+            return
+        }
+
+        print("🎯 seekToPosition: \(Int(progress * 100))% - isLoaded: \(isThisLoaded)")
+
+        // If audio isn't loaded yet, load it first then seek
+        if !isThisLoaded {
+            print("📂 Loading audio first...")
+            playback.play(url: url, id: utterance.id.uuidString)
+            playback.pause()  // Load but don't auto-play
+        }
+        playback.seek(to: progress)
+        print("✅ Seeked to \(Int(progress * 100))%")
+    }
+
     private func revealInFinder(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
@@ -1784,45 +1900,63 @@ private struct WaveformCard: View {
 private struct WaveformVisualization: View {
     let progress: Double
     var isPlaying: Bool = false
+    var onSeek: ((Double) -> Void)? = nil
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.05, paused: !isPlaying)) { timeline in
-            Canvas { context, size in
-                let barCount = 60
-                let barWidth: CGFloat = 2
-                let gap: CGFloat = 2
-                let totalWidth = CGFloat(barCount) * (barWidth + gap)
-                let startX = (size.width - totalWidth) / 2
-
-                for i in 0..<barCount {
-                    let seed = Double(i) * 1.618
-                    let time = timeline.date.timeIntervalSinceReferenceDate
-
-                    // Generate pseudo-random but consistent heights
-                    let baseHeight = 0.3 + sin(seed * 2.5) * 0.2 + cos(seed * 1.3) * 0.15
-
-                    // Animate only when playing
-                    let animatedHeight: Double
-                    if isPlaying {
-                        animatedHeight = baseHeight + sin(time * 3 + seed) * 0.15
-                    } else {
-                        animatedHeight = baseHeight
+        GeometryReader { geo in
+            ZStack {
+                // Clickable background
+                Rectangle()
+                    .fill(Color.white.opacity(0.001))  // Nearly invisible but clickable
+                    .onTapGesture { location in
+                        if let onSeek = onSeek {
+                            let newProgress = max(0, min(1, location.x / geo.size.width))
+                            print("👆 Waveform tapped at \(Int(newProgress * 100))%")
+                            onSeek(newProgress)
+                        }
                     }
 
-                    let barHeight = max(4, CGFloat(animatedHeight) * size.height * 0.8)
-                    let x = startX + CGFloat(i) * (barWidth + gap)
-                    let y = (size.height - barHeight) / 2
+                // Waveform canvas (non-interactive)
+                TimelineView(.animation(minimumInterval: 0.05, paused: !isPlaying)) { timeline in
+                    Canvas { context, size in
+                        let barCount = 60
+                        let barWidth: CGFloat = 2
+                        let gap: CGFloat = 2
+                        let totalWidth = CGFloat(barCount) * (barWidth + gap)
+                        let startX = (size.width - totalWidth) / 2
 
-                    let barRect = CGRect(x: x, y: y, width: barWidth, height: barHeight)
+                        for i in 0..<barCount {
+                            let seed = Double(i) * 1.618
+                            let time = timeline.date.timeIntervalSinceReferenceDate
 
-                    let progressPoint = CGFloat(i) / CGFloat(barCount)
-                    let opacity = progressPoint < progress ? 0.8 : 0.25
+                            // Generate pseudo-random but consistent heights
+                            let baseHeight = 0.3 + sin(seed * 2.5) * 0.2 + cos(seed * 1.3) * 0.15
 
-                    context.fill(
-                        RoundedRectangle(cornerRadius: 1).path(in: barRect),
-                        with: .color(.accentColor.opacity(opacity))
-                    )
+                            // Animate only when playing
+                            let animatedHeight: Double
+                            if isPlaying {
+                                animatedHeight = baseHeight + sin(time * 3 + seed) * 0.15
+                            } else {
+                                animatedHeight = baseHeight
+                            }
+
+                            let barHeight = max(4, CGFloat(animatedHeight) * size.height * 0.8)
+                            let x = startX + CGFloat(i) * (barWidth + gap)
+                            let y = (size.height - barHeight) / 2
+
+                            let barRect = CGRect(x: x, y: y, width: barWidth, height: barHeight)
+
+                            let progressPoint = CGFloat(i) / CGFloat(barCount)
+                            let opacity = progressPoint < progress ? 0.8 : 0.25
+
+                            context.fill(
+                                RoundedRectangle(cornerRadius: 1).path(in: barRect),
+                                with: .color(.accentColor.opacity(opacity))
+                            )
+                        }
+                    }
                 }
+                .allowsHitTesting(false)
             }
         }
     }
