@@ -3,6 +3,7 @@
 //  TalkieLive
 //
 //  First-run onboarding flow: Engine setup + Model download
+//  Design aligned with iOS onboarding (tactical dark theme with light/dark awareness)
 //
 
 import SwiftUI
@@ -108,125 +109,401 @@ final class OnboardingManager: ObservableObject {
     }
 }
 
+// MARK: - Onboarding Colors (Light/Dark Aware)
+
+private struct OnboardingColors {
+    let background: Color
+    let surfaceCard: Color
+    let textPrimary: Color
+    let textSecondary: Color
+    let textTertiary: Color
+    let accent: Color
+    let border: Color
+    let gridLine: Color
+    let bracketColor: Color
+
+    static func forScheme(_ colorScheme: ColorScheme) -> OnboardingColors {
+        if colorScheme == .dark {
+            return OnboardingColors(
+                background: Color(hex: "0A0A0A"),
+                surfaceCard: Color(hex: "151515"),
+                textPrimary: .white,
+                textSecondary: Color(hex: "9A9A9A"),
+                textTertiary: Color(hex: "6A6A6A"),
+                accent: Color(hex: "22C55E"),
+                border: Color(hex: "2A2A2A"),
+                gridLine: Color(hex: "1A1A1A"),
+                bracketColor: Color(hex: "3A3A3A")
+            )
+        } else {
+            return OnboardingColors(
+                background: Color(hex: "FAFAFA"),
+                surfaceCard: .white,
+                textPrimary: Color(hex: "0A0A0A"),
+                textSecondary: Color(hex: "6A6A6A"),
+                textTertiary: Color(hex: "9A9A9A"),
+                accent: Color(hex: "22C55E"),
+                border: Color(hex: "E5E5E5"),
+                gridLine: Color(hex: "F0F0F0"),
+                bracketColor: Color(hex: "CACACA")
+            )
+        }
+    }
+}
+
+// MARK: - Color Hex Initializer (for onboarding)
+
+private extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r, g, b: UInt64
+        switch hex.count {
+        case 6:
+            (r, g, b) = (int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (r, g, b) = (0, 0, 0)
+        }
+        self.init(
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255
+        )
+    }
+}
+
 // MARK: - Main Onboarding View
 
 struct OnboardingView: View {
     @ObservedObject private var manager = OnboardingManager.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var colors: OnboardingColors {
+        OnboardingColors.forScheme(colorScheme)
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Progress indicator
-            HStack(spacing: 8) {
-                ForEach(OnboardingStep.allCases, id: \.rawValue) { step in
-                    Circle()
-                        .fill(step.rawValue <= manager.currentStep.rawValue ? Color.accentColor : Color.gray.opacity(0.3))
-                        .frame(width: 8, height: 8)
-                }
-            }
-            .padding(.top, 24)
+        ZStack {
+            // Background
+            colors.background
+                .ignoresSafeArea()
 
-            Spacer()
+            // Grid pattern
+            GridPatternView(lineColor: colors.gridLine)
+                .opacity(0.5)
 
-            // Step content
-            Group {
-                switch manager.currentStep {
-                case .welcome:
-                    WelcomeStepView(onNext: { manager.currentStep = .engineSetup })
-                case .engineSetup:
-                    EngineSetupStepView(onNext: { manager.currentStep = .modelDownload })
-                case .modelDownload:
-                    ModelDownloadStepView(onNext: { manager.currentStep = .ready })
-                case .ready:
-                    ReadyStepView(onComplete: {
+            // Corner brackets
+            CornerBrackets(color: colors.bracketColor)
+
+            VStack(spacing: 0) {
+                // Skip button
+                HStack {
+                    Spacer()
+                    Button(action: {
                         manager.completeOnboarding()
                         dismiss()
-                    })
+                    }) {
+                        Text("SKIP")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(colors.textTertiary)
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.xs)
+                    }
+                    .buttonStyle(.plain)
                 }
-            }
-            .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-            .animation(.easeInOut(duration: 0.3), value: manager.currentStep)
+                .padding(.horizontal, Spacing.md)
+                .padding(.top, Spacing.md)
 
-            Spacer()
+                Spacer()
+
+                // Step content
+                Group {
+                    switch manager.currentStep {
+                    case .welcome:
+                        WelcomeStepView(colors: colors, onNext: { manager.currentStep = .engineSetup })
+                    case .engineSetup:
+                        EngineSetupStepView(colors: colors, onNext: { manager.currentStep = .modelDownload })
+                    case .modelDownload:
+                        ModelDownloadStepView(colors: colors, onNext: { manager.currentStep = .ready })
+                    case .ready:
+                        ReadyStepView(colors: colors, onComplete: {
+                            manager.completeOnboarding()
+                            dismiss()
+                        })
+                    }
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+                .animation(.easeInOut(duration: 0.3), value: manager.currentStep)
+
+                Spacer()
+
+                // Navigation
+                HStack(spacing: Spacing.lg) {
+                    // Back button
+                    Button(action: { manager.currentStep = OnboardingStep(rawValue: manager.currentStep.rawValue - 1) ?? .welcome }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(colors.textTertiary)
+                            .frame(width: 40, height: 40)
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(manager.currentStep.rawValue > 0 ? 1 : 0)
+                    .disabled(manager.currentStep == .welcome)
+
+                    Spacer()
+
+                    // Page dots
+                    HStack(spacing: Spacing.xs) {
+                        ForEach(OnboardingStep.allCases, id: \.rawValue) { step in
+                            Circle()
+                                .fill(step.rawValue <= manager.currentStep.rawValue ? colors.accent : colors.border)
+                                .frame(width: step == manager.currentStep ? 8 : 6, height: step == manager.currentStep ? 8 : 6)
+                                .animation(.spring(response: 0.3), value: manager.currentStep)
+                        }
+                    }
+
+                    Spacer()
+
+                    // Forward button (visual placeholder for alignment)
+                    Color.clear
+                        .frame(width: 40, height: 40)
+                }
+                .padding(.horizontal, Spacing.xl)
+                .padding(.bottom, Spacing.xl)
+            }
         }
-        .frame(width: 500, height: 400)
-        .background(TalkieTheme.surface)
+        .frame(width: 600, height: 520)
+    }
+}
+
+// MARK: - Grid Pattern
+
+private struct GridPatternView: View {
+    let lineColor: Color
+
+    var body: some View {
+        Canvas { context, size in
+            let gridSize: CGFloat = 40
+
+            // Vertical lines
+            for x in stride(from: 0, to: size.width, by: gridSize) {
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+            }
+
+            // Horizontal lines
+            for y in stride(from: 0, to: size.height, by: gridSize) {
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+            }
+        }
+    }
+}
+
+// MARK: - Corner Brackets
+
+private struct CornerBrackets: View {
+    let color: Color
+    private let bracketSize: CGFloat = 40
+    private let strokeWidth: CGFloat = 2
+
+    var body: some View {
+        GeometryReader { geo in
+            // Top-left
+            BracketShape(corner: .topLeft)
+                .stroke(color, lineWidth: strokeWidth)
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: bracketSize / 2 + 24, y: bracketSize / 2 + 60)
+
+            // Top-right
+            BracketShape(corner: .topRight)
+                .stroke(color, lineWidth: strokeWidth)
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: geo.size.width - bracketSize / 2 - 24, y: bracketSize / 2 + 60)
+
+            // Bottom-left
+            BracketShape(corner: .bottomLeft)
+                .stroke(color, lineWidth: strokeWidth)
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: bracketSize / 2 + 24, y: geo.size.height - bracketSize / 2 - 80)
+
+            // Bottom-right
+            BracketShape(corner: .bottomRight)
+                .stroke(color, lineWidth: strokeWidth)
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: geo.size.width - bracketSize / 2 - 24, y: geo.size.height - bracketSize / 2 - 80)
+        }
+    }
+}
+
+private enum BracketCorner {
+    case topLeft, topRight, bottomLeft, bottomRight
+}
+
+private struct BracketShape: Shape {
+    let corner: BracketCorner
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let length = min(rect.width, rect.height)
+
+        switch corner {
+        case .topLeft:
+            path.move(to: CGPoint(x: 0, y: length))
+            path.addLine(to: CGPoint(x: 0, y: 0))
+            path.addLine(to: CGPoint(x: length, y: 0))
+        case .topRight:
+            path.move(to: CGPoint(x: rect.width - length, y: 0))
+            path.addLine(to: CGPoint(x: rect.width, y: 0))
+            path.addLine(to: CGPoint(x: rect.width, y: length))
+        case .bottomLeft:
+            path.move(to: CGPoint(x: 0, y: rect.height - length))
+            path.addLine(to: CGPoint(x: 0, y: rect.height))
+            path.addLine(to: CGPoint(x: length, y: rect.height))
+        case .bottomRight:
+            path.move(to: CGPoint(x: rect.width, y: rect.height - length))
+            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+            path.addLine(to: CGPoint(x: rect.width - length, y: rect.height))
+        }
+
+        return path
+    }
+}
+
+// MARK: - Talkie Logo
+
+private struct TalkieLogo: View {
+    let colors: OnboardingColors
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(";)")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(colors.accent)
+
+            Text("Talkie")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(colors.textPrimary)
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .strokeBorder(colors.accent, lineWidth: 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(colors.background)
+                )
+        )
+        .rotationEffect(.degrees(-3))
     }
 }
 
 // MARK: - Welcome Step
 
-struct WelcomeStepView: View {
+private struct WelcomeStepView: View {
+    let colors: OnboardingColors
     let onNext: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: Spacing.lg) {
+            // Talkie logo
+            TalkieLogo(colors: colors)
+                .padding(.bottom, Spacing.md)
+
             // App icon
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.cyan, .blue],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            Image("OnboardingIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 100, height: 100)
 
-            VStack(spacing: 8) {
-                Text("Welcome to Talkie Live")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+            // Main headline
+            VStack(spacing: 0) {
+                Text("TALKIE LIVE")
+                    .font(.system(size: 32, weight: .black))
+                    .tracking(-1)
+                    .foregroundColor(colors.textPrimary)
 
-                Text("Voice-to-text, instantly anywhere on your Mac")
-                    .font(.system(size: 14))
-                    .foregroundColor(TalkieTheme.textSecondary)
-                    .multilineTextAlignment(.center)
+                HStack(spacing: 8) {
+                    Text("VOICE")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(colors.textTertiary)
+
+                    Text("TO")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(colors.textTertiary.opacity(0.5))
+
+                    Text("TEXT")
+                        .font(.system(size: 20, weight: .black))
+                        .foregroundColor(colors.accent)
+                }
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                FeatureRow(icon: "mic.fill", title: "Record anywhere", description: "Press hotkey in any app")
-                FeatureRow(icon: "text.cursor", title: "Auto-paste", description: "Transcription appears instantly")
-                FeatureRow(icon: "cpu", title: "100% on-device", description: "Private, fast, no internet needed")
-            }
-            .padding(.top, 8)
+            // Tagline
+            Text("Instantly anywhere on your Mac")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(colors.textSecondary)
 
+            // Features
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                FeatureRow(colors: colors, icon: "mic.fill", title: "Record anywhere", description: "Press hotkey in any app")
+                FeatureRow(colors: colors, icon: "text.cursor", title: "Auto-paste", description: "Transcription appears instantly")
+                FeatureRow(colors: colors, icon: "cpu", title: "100% on-device", description: "Private, fast, no internet needed")
+            }
+            .padding(.top, Spacing.md)
+
+            // Get Started button
             Button(action: onNext) {
-                Text("Get Started")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 200, height: 40)
-                    .background(Color.accentColor)
-                    .cornerRadius(8)
+                HStack(spacing: Spacing.sm) {
+                    Text("GET STARTED")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .tracking(2)
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(colors.background)
+                .frame(width: 200, height: 44)
+                .background(colors.accent)
+                .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
-            .padding(.top, 16)
+            .padding(.top, Spacing.lg)
         }
-        .padding(32)
+        .padding(Spacing.xl)
     }
 }
 
-struct FeatureRow: View {
+private struct FeatureRow: View {
+    let colors: OnboardingColors
     let icon: String
     let title: String
     let description: String
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(.accentColor)
+                .font(.system(size: 14))
+                .foregroundColor(colors.accent)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(colors.textPrimary)
                 Text(description)
-                    .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(colors.textSecondary)
             }
         }
     }
@@ -234,82 +511,101 @@ struct FeatureRow: View {
 
 // MARK: - Engine Setup Step
 
-struct EngineSetupStepView: View {
+private struct EngineSetupStepView: View {
+    let colors: OnboardingColors
     let onNext: () -> Void
     @ObservedObject private var manager = OnboardingManager.shared
     @State private var isChecking = false
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: Spacing.lg) {
             Image(systemName: "gearshape.2.fill")
                 .font(.system(size: 48))
                 .foregroundColor(.orange)
 
-            VStack(spacing: 8) {
-                Text("TalkieEngine Setup")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+            VStack(spacing: Spacing.sm) {
+                Text("TALKIE ENGINE")
+                    .font(.system(size: 24, weight: .black))
+                    .tracking(1)
+                    .foregroundColor(colors.textPrimary)
 
-                Text("Talkie Live uses TalkieEngine for fast on-device transcription")
-                    .font(.system(size: 13))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                Text("Powers on-device transcription")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
-            // Status
-            VStack(spacing: 12) {
-                HStack(spacing: 8) {
+            // Status panel
+            VStack(spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     if isChecking {
                         ProgressView()
-                            .scaleEffect(0.8)
+                            .scaleEffect(0.7)
                     } else {
                         Circle()
-                            .fill(manager.isEngineConnected ? Color.green : Color.red)
-                            .frame(width: 10, height: 10)
+                            .fill(manager.isEngineConnected ? colors.accent : Color.red)
+                            .frame(width: 8, height: 8)
                     }
 
-                    Text(isChecking ? "Checking connection..." : (manager.isEngineConnected ? "Engine connected" : "Engine not running"))
-                        .font(.system(size: 13))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                    Text(isChecking ? "CHECKING..." : (manager.isEngineConnected ? "CONNECTED" : "OFFLINE"))
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(isChecking ? colors.textTertiary : (manager.isEngineConnected ? colors.accent : .red))
                 }
 
                 if !manager.isEngineConnected && !isChecking {
-                    Text("Please ensure TalkieEngine is installed and running")
-                        .font(.system(size: 11))
+                    Text("Ensure TalkieEngine is installed and running")
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.orange)
                 }
             }
-            .padding(.vertical, 16)
-            .padding(.horizontal, 24)
-            .background(TalkieTheme.secondaryBackground)
-            .cornerRadius(8)
+            .padding(Spacing.md)
+            .frame(maxWidth: 300)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(colors.surfaceCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(colors.border, lineWidth: 1)
+                    )
+            )
 
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.sm) {
                 Button(action: checkConnection) {
-                    Text(isChecking ? "Checking..." : "Check Connection")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(TalkieTheme.textPrimary)
-                        .frame(width: 140, height: 36)
-                        .background(TalkieTheme.secondaryBackground)
-                        .cornerRadius(6)
+                    Text(isChecking ? "CHECKING..." : "CHECK")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(colors.textPrimary)
+                        .frame(width: 120, height: 36)
+                        .background(colors.surfaceCard)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                .strokeBorder(colors.border, lineWidth: 1)
+                        )
+                        .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
                 .disabled(isChecking)
 
                 if manager.isEngineConnected {
                     Button(action: onNext) {
-                        Text("Continue")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 140, height: 36)
-                            .background(Color.accentColor)
-                            .cornerRadius(6)
+                        HStack(spacing: 6) {
+                            Text("CONTINUE")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .tracking(1)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundColor(colors.background)
+                        .frame(width: 140, height: 36)
+                        .background(colors.accent)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-        .padding(32)
+        .padding(Spacing.xl)
         .onAppear {
             checkConnection()
         }
@@ -326,46 +622,52 @@ struct EngineSetupStepView: View {
 
 // MARK: - Model Download Step
 
-struct ModelDownloadStepView: View {
+private struct ModelDownloadStepView: View {
+    let colors: OnboardingColors
     let onNext: () -> Void
     @ObservedObject private var manager = OnboardingManager.shared
     @State private var isDownloading = false
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: Spacing.lg) {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: 48))
                 .foregroundColor(.cyan)
 
-            VStack(spacing: 8) {
-                Text("Download Speech Model")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+            VStack(spacing: Spacing.sm) {
+                Text("SPEECH MODEL")
+                    .font(.system(size: 24, weight: .black))
+                    .tracking(1)
+                    .foregroundColor(colors.textPrimary)
 
-                Text("Parakeet is a fast, accurate speech recognition model that runs entirely on your Mac")
-                    .font(.system(size: 13))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                Text("Fast, accurate, runs entirely on your Mac")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
-            // Download progress
-            VStack(spacing: 12) {
+            // Download panel
+            VStack(spacing: Spacing.sm) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Parakeet v3")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                        HStack(spacing: 6) {
+                            Text("PARAKEET V3")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .tracking(1)
+                                .foregroundColor(colors.textPrimary)
+
+                            if manager.isModelDownloaded {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(colors.accent)
+                                    .font(.system(size: 12))
+                            }
+                        }
                         Text("~200 MB download")
-                            .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(colors.textTertiary)
                     }
 
                     Spacer()
-
-                    if manager.isModelDownloaded {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                    }
                 }
 
                 if isDownloading || manager.downloadProgress > 0 {
@@ -373,54 +675,70 @@ struct ModelDownloadStepView: View {
                         ProgressView(value: manager.downloadProgress)
                             .tint(.cyan)
 
-                        Text(manager.downloadStatus)
-                            .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                        Text(manager.downloadStatus.uppercased())
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(colors.textTertiary)
                     }
                 }
 
                 if let error = manager.errorMessage {
                     Text(error)
-                        .font(.system(size: 11))
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.red)
                 }
             }
-            .padding(16)
-            .background(TalkieTheme.secondaryBackground)
-            .cornerRadius(8)
+            .padding(Spacing.md)
+            .frame(maxWidth: 300)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(colors.surfaceCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(colors.border, lineWidth: 1)
+                    )
+            )
 
-            HStack(spacing: 12) {
-                if !manager.isModelDownloaded {
-                    Button(action: startDownload) {
-                        Text(isDownloading ? "Downloading..." : "Download Model")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 160, height: 36)
-                            .background(isDownloading ? Color.gray : Color.accentColor)
-                            .cornerRadius(6)
+            if !manager.isModelDownloaded {
+                Button(action: startDownload) {
+                    HStack(spacing: 6) {
+                        Text(isDownloading ? "DOWNLOADING..." : "DOWNLOAD")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                        if !isDownloading {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 10, weight: .bold))
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isDownloading)
-                } else {
-                    Button(action: onNext) {
-                        Text("Continue")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 160, height: 36)
-                            .background(Color.accentColor)
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
+                    .foregroundColor(isDownloading ? colors.textTertiary : colors.background)
+                    .frame(width: 180, height: 40)
+                    .background(isDownloading ? colors.surfaceCard : colors.accent)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(isDownloading ? colors.border : Color.clear, lineWidth: 1)
+                    )
+                    .cornerRadius(CornerRadius.sm)
                 }
+                .buttonStyle(.plain)
+                .disabled(isDownloading)
+            } else {
+                Button(action: onNext) {
+                    HStack(spacing: 6) {
+                        Text("CONTINUE")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(colors.background)
+                    .frame(width: 180, height: 40)
+                    .background(colors.accent)
+                    .cornerRadius(CornerRadius.sm)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(32)
-        .onAppear {
-            // Auto-check if model is already downloaded
-            if manager.isModelDownloaded {
-                // Already done
-            }
-        }
+        .padding(Spacing.xl)
     }
 
     private func startDownload() {
@@ -434,62 +752,84 @@ struct ModelDownloadStepView: View {
 
 // MARK: - Ready Step
 
-struct ReadyStepView: View {
+private struct ReadyStepView: View {
+    let colors: OnboardingColors
     let onComplete: () -> Void
     @ObservedObject private var settings = LiveSettings.shared
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: Spacing.lg) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 64))
-                .foregroundColor(.green)
+                .font(.system(size: 56))
+                .foregroundColor(colors.accent)
 
-            VStack(spacing: 8) {
-                Text("You're All Set!")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+            VStack(spacing: Spacing.sm) {
+                Text("ALL SET")
+                    .font(.system(size: 28, weight: .black))
+                    .tracking(2)
+                    .foregroundColor(colors.textPrimary)
 
                 Text("Talkie Live is ready to use")
-                    .font(.system(size: 14))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(colors.textSecondary)
             }
 
-            // Hotkey reminder
-            VStack(spacing: 8) {
-                Text("Your recording hotkey:")
-                    .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+            // Hotkey display
+            VStack(spacing: Spacing.sm) {
+                Text("YOUR HOTKEY")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundColor(colors.textTertiary)
 
                 Text(settings.hotkey.displayString)
-                    .font(.system(size: 24, weight: .bold, design: .monospaced))
-                    .foregroundColor(.accentColor)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(TalkieTheme.secondaryBackground)
-                    .cornerRadius(8)
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundColor(colors.accent)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(colors.surfaceCard)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                    .strokeBorder(colors.accent.opacity(0.3), lineWidth: 1)
+                            )
+                    )
 
                 Text("Press once to start, again to stop")
-                    .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textTertiary)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, Spacing.md)
 
             Button(action: onComplete) {
-                Text("Start Using Talkie Live")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 220, height: 40)
-                    .background(Color.accentColor)
-                    .cornerRadius(8)
+                HStack(spacing: Spacing.sm) {
+                    Text("START USING TALKIE LIVE")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .tracking(1)
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(colors.background)
+                .frame(width: 280, height: 44)
+                .background(colors.accent)
+                .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
+            .padding(.top, Spacing.md)
         }
-        .padding(32)
+        .padding(Spacing.xl)
     }
 }
 
 // MARK: - Preview
 
-#Preview {
+#Preview("Light") {
     OnboardingView()
+        .preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    OnboardingView()
+        .preferredColorScheme(.dark)
 }
