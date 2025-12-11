@@ -3,7 +3,7 @@
 ![macOS](https://img.shields.io/badge/macOS-13%2B-blue?logo=apple)
 ![iOS](https://img.shields.io/badge/iOS-17%2B-blue?logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange?logo=swift)
-![License](https://img.shields.io/badge/License-MIT-green)
+![License](https://img.shields.io/badge/License-EULA-lightgrey)
 
 A multi-platform voice memo application with intelligent workflow automation.
 
@@ -106,4 +106,4 @@ When making changes:
 
 ## License
 
-[Add your license here]
+See [LICENSE](LICENSE) for details.
