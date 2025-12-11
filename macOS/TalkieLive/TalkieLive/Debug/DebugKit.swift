@@ -2367,6 +2367,14 @@ struct DebugToolbarOverlay<Content: View>: View {
                             OnboardingManager.shared.resetOnboarding()
                             SystemEventManager.shared.log(.system, "Onboarding reset", detail: "Will show on next app launch")
                         }
+
+                        DebugActionButton(icon: "arrow.down.circle", label: "Simulate No Model") {
+                            OnboardingManager.shared.isModelDownloaded = false
+                            OnboardingManager.shared.downloadProgress = 0
+                            OnboardingManager.shared.downloadStatus = ""
+                            OnboardingManager.shared.currentStep = .modelDownload
+                            SystemEventManager.shared.log(.system, "Model state reset", detail: "Simulating no model installed")
+                        }
                     }
                 }
             }
