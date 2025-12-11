@@ -24,7 +24,6 @@ Talkie transforms voice memos into actionable outputs through customizable workf
 - **On-Device LLMs**: MLX support with Llama 3, Gemma, Mistral, Phi, and more
 - **Workflow Automation**: Chain together LLM processing, shell commands, and integrations
 - **CLI Integration**: Run tools like `claude`, `gh`, `jq` with full access to your configured environment
-- **Apple Ecosystem**: Native integration with Notes, Reminders, Calendar
 
 ## Development
 
