@@ -2362,6 +2362,11 @@ struct DebugToolbarOverlay<Content: View>: View {
                         DebugActionButton(icon: "text.bubble", label: "Test Log") {
                             SystemEventManager.shared.log(.system, "Test event", detail: "This is a test log entry")
                         }
+
+                        DebugActionButton(icon: "arrow.counterclockwise", label: "Reset Onboarding") {
+                            OnboardingManager.shared.resetOnboarding()
+                            SystemEventManager.shared.log(.system, "Onboarding reset", detail: "Will show on next app launch")
+                        }
                     }
                 }
             }
