@@ -19,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Apply saved appearance mode on launch
         settings.applyAppearance()
 
+        // Initialize retry manager (watches for engine reconnection)
+        _ = TranscriptionRetryManager.shared
+
         let audio = MicrophoneCapture()
 
         // Use EngineTranscriptionService - requires TalkieEngine to be running (no fallback)

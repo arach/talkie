@@ -8,6 +8,31 @@
 import Foundation
 import GRDB
 
+// MARK: - Transcription Status
+
+/// Tracks the transcription state of a Live
+enum TranscriptionStatus: String, Codable, CaseIterable {
+    case pending    // Audio saved, transcription not yet attempted
+    case failed     // Transcription failed, can retry
+    case success    // Transcription completed successfully
+
+    var displayName: String {
+        switch self {
+        case .pending: return "Pending"
+        case .failed: return "Failed"
+        case .success: return "Complete"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pending: return "clock"
+        case .failed: return "exclamationmark.triangle"
+        case .success: return "checkmark.circle"
+        }
+    }
+}
+
 // MARK: - Promotion Status
 
 /// Tracks what happened to a Live after capture
@@ -124,6 +149,10 @@ struct LiveUtterance: Identifiable, Hashable {
     var metadata: [String: String]?
     var audioFilename: String?
 
+    // Transcription tracking
+    var transcriptionStatus: TranscriptionStatus
+    var transcriptionError: String?  // Error message if failed
+
     // Promotion tracking
     var promotionStatus: PromotionStatus
     var talkieMemoID: String?   // ID of the memo if promoted to memo
@@ -139,6 +168,7 @@ struct LiveUtterance: Identifiable, Hashable {
         case id, createdAt, text, mode, appBundleID, appName, windowTitle
         case durationSeconds, wordCount, whisperModel, transcriptionMs
         case sessionID, metadata, audioFilename
+        case transcriptionStatus, transcriptionError
         case promotionStatus, talkieMemoID, commandID
         case createdInTalkieView, pasteTimestamp
     }
@@ -170,6 +200,11 @@ struct LiveUtterance: Identifiable, Hashable {
         createdInTalkieView && pasteTimestamp == nil && promotionStatus == .none
     }
 
+    /// Whether this Live can be retried (failed transcription with audio available)
+    var canRetryTranscription: Bool {
+        (transcriptionStatus == .failed || transcriptionStatus == .pending) && hasAudio
+    }
+
     init(
         id: Int64? = nil,
         createdAt: Date = Date(),
@@ -185,6 +220,8 @@ struct LiveUtterance: Identifiable, Hashable {
         sessionID: String? = nil,
         metadata: [String: String]? = nil,
         audioFilename: String? = nil,
+        transcriptionStatus: TranscriptionStatus = .success,
+        transcriptionError: String? = nil,
         promotionStatus: PromotionStatus = .none,
         talkieMemoID: String? = nil,
         commandID: String? = nil,
@@ -205,6 +242,8 @@ struct LiveUtterance: Identifiable, Hashable {
         self.sessionID = sessionID
         self.metadata = metadata
         self.audioFilename = audioFilename
+        self.transcriptionStatus = transcriptionStatus
+        self.transcriptionError = transcriptionError
         self.promotionStatus = promotionStatus
         self.talkieMemoID = talkieMemoID
         self.commandID = commandID
@@ -231,6 +270,15 @@ extension LiveUtterance: FetchableRecord {
         transcriptionMs = row[Columns.transcriptionMs]
         sessionID = row[Columns.sessionID]
         audioFilename = row[Columns.audioFilename]
+
+        // Transcription status fields
+        if let statusString: String = row[Columns.transcriptionStatus],
+           let status = TranscriptionStatus(rawValue: statusString) {
+            transcriptionStatus = status
+        } else {
+            transcriptionStatus = .success  // Default for existing records
+        }
+        transcriptionError = row[Columns.transcriptionError]
 
         // Promotion fields
         if let statusString: String = row[Columns.promotionStatus],
@@ -276,6 +324,10 @@ extension LiveUtterance: PersistableRecord {
         container[Columns.transcriptionMs] = transcriptionMs
         container[Columns.sessionID] = sessionID
         container[Columns.audioFilename] = audioFilename
+
+        // Transcription status fields
+        container[Columns.transcriptionStatus] = transcriptionStatus.rawValue
+        container[Columns.transcriptionError] = transcriptionError
 
         // Promotion fields
         container[Columns.promotionStatus] = promotionStatus.rawValue

@@ -307,9 +307,28 @@ final class LiveController: ObservableObject {
             logger.error("Transcription error: \(error.localizedDescription)")
             SystemEventManager.shared.log(.error, "Transcription failed", detail: error.localizedDescription)
 
-            // Even on failure, we saved the audio - log this for user awareness
+            // Even on failure, we saved the audio - store a record for retry
             if let filename = audioFilename {
-                SystemEventManager.shared.log(.file, "Audio preserved", detail: "\(filename) - retry transcription available")
+                SystemEventManager.shared.log(.file, "Audio preserved", detail: "\(filename) - queued for retry")
+
+                // Store a record with failed status so we can retry later
+                let utterance = LiveUtterance(
+                    text: "[Transcription failed - retry pending]",
+                    mode: "failed",
+                    appBundleID: capturedContext?.activeAppBundleID,
+                    appName: capturedContext?.activeAppName,
+                    windowTitle: capturedContext?.activeWindowTitle,
+                    durationSeconds: durationSeconds,
+                    whisperModel: settings.selectedModelId,
+                    audioFilename: filename,
+                    transcriptionStatus: .failed,
+                    transcriptionError: error.localizedDescription,
+                    createdInTalkieView: createdInTalkieView,
+                    pasteTimestamp: nil
+                )
+                PastLivesDatabase.store(utterance)
+
+                SystemEventManager.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
             }
         }
 

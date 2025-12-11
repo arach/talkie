@@ -69,6 +69,14 @@ enum PastLivesDatabase {
                 }
             }
 
+            // Migration 5: Add transcription status columns for retry support
+            migrator.registerMigration("addTranscriptionStatus") { db in
+                try db.alter(table: "live_utterance") { t in
+                    t.add(column: "transcriptionStatus", .text).defaults(to: "success")
+                    t.add(column: "transcriptionError", .text)
+                }
+            }
+
             try migrator.migrate(dbQueue)
             return dbQueue
         } catch {
@@ -313,6 +321,73 @@ extension PastLivesDatabase {
     static func fetch(id: Int64) -> LiveUtterance? {
         try? shared.read { db in
             try LiveUtterance.fetchOne(db, id: id)
+        }
+    }
+
+    // MARK: - Transcription Retry Methods
+
+    /// Fetch Lives that need transcription retry (failed or pending with audio)
+    static func fetchNeedsRetry() -> [LiveUtterance] {
+        (try? shared.read { db in
+            try LiveUtterance
+                .filter(
+                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.failed.rawValue ||
+                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.pending.rawValue
+                )
+                .filter(LiveUtterance.Columns.audioFilename != nil)
+                .order(LiveUtterance.Columns.createdAt.desc)
+                .fetchAll(db)
+        }) ?? []
+    }
+
+    /// Count Lives that need transcription retry
+    static func countNeedsRetry() -> Int {
+        (try? shared.read { db in
+            try LiveUtterance
+                .filter(
+                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.failed.rawValue ||
+                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.pending.rawValue
+                )
+                .filter(LiveUtterance.Columns.audioFilename != nil)
+                .fetchCount(db)
+        }) ?? 0
+    }
+
+    /// Update transcription result (success)
+    static func markTranscriptionSuccess(id: Int64?, text: String, transcriptionMs: Int?, model: String?) {
+        guard let id else { return }
+        try? shared.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE live_utterance
+                    SET transcriptionStatus = ?, transcriptionError = NULL,
+                        text = ?, wordCount = ?, transcriptionMs = ?, whisperModel = ?
+                    WHERE id = ?
+                    """,
+                arguments: [
+                    TranscriptionStatus.success.rawValue,
+                    text,
+                    text.split(separator: " ").count,
+                    transcriptionMs,
+                    model,
+                    id
+                ]
+            )
+        }
+    }
+
+    /// Update transcription result (failed)
+    static func markTranscriptionFailed(id: Int64?, error: String) {
+        guard let id else { return }
+        try? shared.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE live_utterance
+                    SET transcriptionStatus = ?, transcriptionError = ?
+                    WHERE id = ?
+                    """,
+                arguments: [TranscriptionStatus.failed.rawValue, error, id]
+            )
         }
     }
 }
