@@ -9,6 +9,7 @@ import Foundation
 import WhisperKit
 import FluidAudio
 import AVFoundation
+import Cocoa
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.engine", category: "EngineService")
@@ -28,6 +29,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     // MARK: - Shared State
     private var isTranscribing = false
     private var isWarmingUp = false
+    private var isShuttingDown = false
     private var downloadedWhisperModels: Set<String> = []
     private var downloadedParakeetModels: Set<String> = []
 
@@ -47,6 +49,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         super.init()
         refreshDownloadedModels()
         logger.info("EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
+        EngineStatusManager.shared.log(.info, "Engine", "EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
     }
 
     // MARK: - Model Directories
@@ -131,17 +134,31 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         modelId: String,
         reply: @escaping (String?, String?) -> Void
     ) async {
+        guard !isShuttingDown else {
+            EngineStatusManager.shared.log(.warning, "Transcribe", "Rejected - engine is shutting down")
+            reply(nil, "Engine is shutting down, please retry")
+            return
+        }
+
         guard !isTranscribing else {
+            EngineStatusManager.shared.log(.warning, "Transcribe", "Rejected - already transcribing")
             reply(nil, "Already transcribing")
             return
         }
 
         isTranscribing = true
-        defer { isTranscribing = false }
+        EngineStatusManager.shared.isTranscribing = true
+        defer {
+            isTranscribing = false
+            EngineStatusManager.shared.isTranscribing = false
+        }
 
         let (family, actualModelId) = parseModelId(modelId)
         let audioSizeKB = audioData.count / 1024
         logger.info("Transcribing \(audioSizeKB) KB with \(family):\(actualModelId)")
+        EngineStatusManager.shared.log(.info, "Transcribe", "Starting \(audioSizeKB) KB with \(family):\(actualModelId)")
+
+        let startTime = Date()
 
         do {
             let transcript: String
@@ -152,11 +169,17 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             }
 
             totalTranscriptions += 1
+            let elapsed = Date().timeIntervalSince(startTime)
+            let wordCount = transcript.split(separator: " ").count
             logger.info("Transcribed #\(self.totalTranscriptions): \(transcript.prefix(50))...")
+            EngineStatusManager.shared.log(.info, "Transcribe", "✓ Completed #\(totalTranscriptions) in \(String(format: "%.1f", elapsed))s (\(wordCount) words)")
+            EngineStatusManager.shared.totalTranscriptions = totalTranscriptions
             reply(transcript, nil)
 
         } catch {
+            let elapsed = Date().timeIntervalSince(startTime)
             logger.error("Transcription failed: \(error.localizedDescription)")
+            EngineStatusManager.shared.log(.error, "Transcribe", "✗ Failed after \(String(format: "%.1f", elapsed))s: \(error.localizedDescription)")
             reply(nil, error.localizedDescription)
         }
     }
@@ -167,15 +190,18 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Load model if needed
         if whisperKit == nil || currentWhisperModelId != modelId {
             logger.info("Loading Whisper model: \(modelId)")
+            EngineStatusManager.shared.log(.info, "Whisper", "Loading model: \(modelId)")
 
             let localPath = whisperModelPath(for: modelId)
             if FileManager.default.fileExists(atPath: localPath) {
                 // Model already downloaded - load from local folder
                 logger.info("Loading from local folder: \(localPath)")
+                EngineStatusManager.shared.log(.debug, "Whisper", "Loading from local cache...")
                 whisperKit = try await WhisperKit(modelFolder: localPath, verbose: false)
             } else {
                 // Model not downloaded - download it
                 logger.info("Model not found locally, downloading...")
+                EngineStatusManager.shared.log(.info, "Whisper", "Downloading model (not cached)...")
                 whisperKit = try await WhisperKit(
                     model: modelId,
                     downloadBase: whisperModelsBaseURL,
@@ -184,6 +210,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             }
             currentWhisperModelId = modelId
             downloadedWhisperModels.insert(modelId)
+            EngineStatusManager.shared.currentModel = "whisper:\(modelId)"
+            EngineStatusManager.shared.log(.info, "Whisper", "Model \(modelId) loaded")
         }
 
         guard let whisper = whisperKit else {
@@ -219,8 +247,10 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Load model if needed
         if asrManager == nil || currentParakeetModelId != modelId {
             logger.info("Loading Parakeet model: \(modelId)")
+            EngineStatusManager.shared.log(.info, "Parakeet", "Loading model: \(modelId)")
 
             let models = try await AsrModels.downloadAndLoad(version: asrVersion)
+            EngineStatusManager.shared.log(.debug, "Parakeet", "Models downloaded, initializing ASR manager...")
             asrManager = AsrManager(config: .default)
             try await asrManager?.initialize(models: models)
             currentParakeetModelId = modelId
@@ -231,6 +261,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             try? FileManager.default.createDirectory(at: markerPath, withIntermediateDirectories: true)
             try? "downloaded".write(to: markerPath.appendingPathComponent(".marker"), atomically: true, encoding: .utf8)
             downloadedParakeetModels.insert(modelId)
+            EngineStatusManager.shared.currentModel = "parakeet:\(modelId)"
+            EngineStatusManager.shared.log(.info, "Parakeet", "Model \(modelId) loaded and ready")
         }
 
         guard let manager = asrManager else {
@@ -248,6 +280,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Convert to audio samples
         let startTime = Date()
         let samples = try await loadAudioSamples(from: tempURL)
+        EngineStatusManager.shared.log(.debug, "Parakeet", "Audio converted to \(samples.count) samples")
         let result = try await manager.transcribe(samples)
         let elapsed = Date().timeIntervalSince(startTime)
 
@@ -305,6 +338,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     private func doPreloadModel(_ modelId: String, reply: @escaping (String?) -> Void) async {
         guard !isWarmingUp else {
+            EngineStatusManager.shared.log(.warning, "Preload", "Rejected - already warming up")
             reply("Already warming up")
             return
         }
@@ -314,11 +348,16 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         let (family, actualModelId) = parseModelId(modelId)
         logger.info("Preloading \(family) model: \(actualModelId)")
+        EngineStatusManager.shared.log(.info, "Preload", "Preloading \(family):\(actualModelId)...")
+
+        let startTime = Date()
 
         do {
             if family == "parakeet" {
                 let asrVersion: AsrModelVersion = actualModelId == "v2" ? .v2 : .v3
+                EngineStatusManager.shared.log(.debug, "Preload", "Downloading Parakeet models...")
                 let models = try await AsrModels.downloadAndLoad(version: asrVersion)
+                EngineStatusManager.shared.log(.debug, "Preload", "Initializing Parakeet ASR manager...")
                 asrManager = AsrManager(config: .default)
                 try await asrManager?.initialize(models: models)
                 currentParakeetModelId = actualModelId
@@ -329,17 +368,22 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 try? FileManager.default.createDirectory(at: markerPath, withIntermediateDirectories: true)
                 try? "downloaded".write(to: markerPath.appendingPathComponent(".marker"), atomically: true, encoding: .utf8)
 
+                EngineStatusManager.shared.currentModel = "parakeet:\(actualModelId)"
+                let elapsed = Date().timeIntervalSince(startTime)
                 logger.info("Parakeet model \(actualModelId) preloaded")
+                EngineStatusManager.shared.log(.info, "Preload", "✓ Parakeet \(actualModelId) ready in \(String(format: "%.1f", elapsed))s")
             } else {
                 // Check if model is already downloaded locally
                 let localPath = whisperModelPath(for: actualModelId)
                 if FileManager.default.fileExists(atPath: localPath) {
                     // Model already downloaded - load from local folder
                     logger.info("Loading Whisper from local folder: \(localPath)")
+                    EngineStatusManager.shared.log(.debug, "Preload", "Loading Whisper from cache...")
                     whisperKit = try await WhisperKit(modelFolder: localPath, verbose: false)
                 } else {
                     // Model not downloaded - download it
                     logger.info("Whisper model not found locally, downloading...")
+                    EngineStatusManager.shared.log(.info, "Preload", "Downloading Whisper model (not cached)...")
                     whisperKit = try await WhisperKit(
                         model: actualModelId,
                         downloadBase: whisperModelsBaseURL,
@@ -351,16 +395,22 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
                 // Warmup with silent audio
                 logger.info("Running Whisper warmup inference...")
+                EngineStatusManager.shared.log(.debug, "Preload", "Running warmup inference...")
                 let silentAudio = [Float](repeating: 0.0, count: 16000)
                 _ = try? await whisperKit?.transcribe(audioArray: silentAudio)
 
+                EngineStatusManager.shared.currentModel = "whisper:\(actualModelId)"
+                let elapsed = Date().timeIntervalSince(startTime)
                 logger.info("Whisper model \(actualModelId) preloaded and warmed up")
+                EngineStatusManager.shared.log(.info, "Preload", "✓ Whisper \(actualModelId) ready in \(String(format: "%.1f", elapsed))s")
             }
 
             reply(nil)
 
         } catch {
+            let elapsed = Date().timeIntervalSince(startTime)
             logger.error("Failed to preload model: \(error.localizedDescription)")
+            EngineStatusManager.shared.log(.error, "Preload", "✗ Failed after \(String(format: "%.1f", elapsed))s: \(error.localizedDescription)")
             reply(error.localizedDescription)
         }
     }
@@ -371,7 +421,9 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             self.currentWhisperModelId = nil
             self.asrManager = nil
             self.currentParakeetModelId = nil
+            EngineStatusManager.shared.currentModel = nil
             logger.info("All models unloaded")
+            EngineStatusManager.shared.log(.info, "Engine", "All models unloaded")
             reply()
         }
     }
@@ -429,6 +481,43 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         reply(true)
     }
 
+    // MARK: - Graceful Shutdown
+
+    nonisolated func requestShutdown(waitForCompletion: Bool, reply: @escaping (Bool) -> Void) {
+        logger.info("[XPC] Shutdown requested (waitForCompletion: \(waitForCompletion))")
+
+        Task { @MainActor in
+            // Stop accepting new work immediately
+            self.isShuttingDown = true
+            EngineStatusManager.shared.log(.warning, "Engine", "Shutdown requested - no longer accepting new work")
+
+            if waitForCompletion && self.isTranscribing {
+                EngineStatusManager.shared.log(.info, "Engine", "Waiting for current transcription to complete...")
+
+                // Wait for transcription to finish (up to 2 minutes grace period)
+                let deadline = Date().addingTimeInterval(120)
+                while self.isTranscribing && Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                }
+
+                if self.isTranscribing {
+                    EngineStatusManager.shared.log(.warning, "Engine", "Timeout waiting, shutting down anyway")
+                } else {
+                    EngineStatusManager.shared.log(.info, "Engine", "Transcription complete, shutting down")
+                }
+            }
+
+            reply(true)
+
+            // Give the reply a moment to send, then exit
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                logger.info("TalkieEngine exiting gracefully")
+                EngineStatusManager.shared.log(.info, "Engine", "Goodbye!")
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
     // MARK: - Model Download Management
 
     /// Known models with metadata
@@ -452,6 +541,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     private func doDownloadModel(_ modelId: String, reply: @escaping (String?) -> Void) async {
         guard !isDownloading else {
+            EngineStatusManager.shared.log(.warning, "Download", "Rejected - already downloading")
             reply("Already downloading a model")
             return
         }
@@ -461,10 +551,12 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Check if already downloaded
         if family == "parakeet" && downloadedParakeetModels.contains(actualModelId) {
             logger.info("Parakeet model \(actualModelId) already downloaded")
+            EngineStatusManager.shared.log(.debug, "Download", "Parakeet \(actualModelId) already cached")
             reply(nil)
             return
         } else if family == "whisper" && downloadedWhisperModels.contains(actualModelId) {
             logger.info("Whisper model \(actualModelId) already downloaded")
+            EngineStatusManager.shared.log(.debug, "Download", "Whisper \(actualModelId) already cached")
             reply(nil)
             return
         }
@@ -476,6 +568,9 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         totalDownloadBytes = nil
 
         logger.info("Starting download for \(family) model: \(actualModelId)")
+        EngineStatusManager.shared.log(.info, "Download", "Starting download: \(family):\(actualModelId)")
+
+        let startTime = Date()
 
         downloadTask = Task {
             do {
@@ -494,7 +589,9 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                         self.isDownloading = false
                         self.currentDownloadModelId = nil
                         self.downloadProgress = 1.0
+                        let elapsed = Date().timeIntervalSince(startTime)
                         logger.info("Parakeet model \(actualModelId) downloaded successfully")
+                        EngineStatusManager.shared.log(.info, "Download", "✓ Parakeet \(actualModelId) downloaded in \(String(format: "%.1f", elapsed))s")
                     }
                 } else {
                     // Download Whisper model using model name and downloadBase
@@ -510,7 +607,9 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                         self.isDownloading = false
                         self.currentDownloadModelId = nil
                         self.downloadProgress = 1.0
+                        let elapsed = Date().timeIntervalSince(startTime)
                         logger.info("Whisper model \(actualModelId) downloaded successfully to \(self.whisperModelPath(for: actualModelId))")
+                        EngineStatusManager.shared.log(.info, "Download", "✓ Whisper \(actualModelId) downloaded in \(String(format: "%.1f", elapsed))s")
                     }
                 }
                 reply(nil)
@@ -519,7 +618,9 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 await MainActor.run {
                     self.isDownloading = false
                     self.currentDownloadModelId = nil
+                    let elapsed = Date().timeIntervalSince(startTime)
                     logger.error("Failed to download model \(actualModelId): \(error.localizedDescription)")
+                    EngineStatusManager.shared.log(.error, "Download", "✗ Failed after \(String(format: "%.1f", elapsed))s: \(error.localizedDescription)")
                 }
                 reply(error.localizedDescription)
             }
@@ -547,6 +648,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     nonisolated func cancelDownload(reply: @escaping () -> Void) {
         Task { @MainActor in
+            let modelId = self.currentDownloadModelId ?? "unknown"
             if let task = self.downloadTask {
                 task.cancel()
                 self.downloadTask = nil
@@ -555,6 +657,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             self.currentDownloadModelId = nil
             self.downloadProgress = 0
             logger.info("Download cancelled")
+            EngineStatusManager.shared.log(.warning, "Download", "Cancelled download: \(modelId)")
             reply()
         }
     }

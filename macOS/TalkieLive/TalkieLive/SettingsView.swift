@@ -1907,82 +1907,6 @@ struct EngineSettingsSection: View {
                 }
             }
 
-            // Loaded Model Status
-            SettingsCard(title: "ACTIVE MODEL") {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let status = engineClient.status, let modelId = status.loadedModelId {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 6, height: 6)
-                                Text(modelId.replacingOccurrences(of: "openai_whisper-", with: "Whisper ").capitalized)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-                            Text(status.isTranscribing ? "Currently transcribing..." : "Ready for transcription")
-                                .font(.system(size: 10))
-                                .foregroundColor(status.isTranscribing ? .orange : .white.opacity(0.5))
-                        } else if let status = engineClient.status, status.isWarmingUp {
-                            HStack(spacing: 6) {
-                                ProgressView()
-                                    .scaleEffect(0.5)
-                                Text("Loading model...")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.orange)
-                            }
-                        } else {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(Color.orange)
-                                    .frame(width: 6, height: 6)
-                                Text("No model loaded")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                            Text("Model will load on first transcription")
-                                .font(.system(size: 10))
-                                .foregroundColor(.white.opacity(0.5))
-                        }
-                    }
-
-                    Spacer()
-
-                    // Preload/Unload buttons
-                    if engineClient.isConnected {
-                        if engineClient.status?.loadedModelId != nil {
-                            Button(action: {
-                                Task { await engineClient.unloadModel() }
-                            }) {
-                                Text("Unload")
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(.orange)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.orange.opacity(0.15))
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Button(action: {
-                                Task {
-                                    try? await engineClient.preloadModel(settings.selectedModelId)
-                                }
-                            }) {
-                                Text("Preload")
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(.green)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.green.opacity(0.15))
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-
             // Speech Recognition Models - Dynamic from Engine
             ForEach(ModelFamily.allCases, id: \.rawValue) { family in
                 if let models = modelsByFamily[family.rawValue], !models.isEmpty {
@@ -2810,9 +2734,6 @@ struct AboutSettingsSection: View {
                     if engineClient.isConnected, let status = engineClient.status {
                         AboutInfoRow(label: "Process ID", value: String(status.pid))
                         AboutInfoRow(label: "Engine Bundle", value: status.bundleId, isMonospaced: true)
-                        if let modelId = status.loadedModelId {
-                            AboutInfoRow(label: "Loaded Model", value: modelId)
-                        }
                     }
                 }
             }
@@ -2875,7 +2796,6 @@ struct AboutSettingsSection: View {
             Status: Connected
             Engine PID: \(status.pid)
             Engine Bundle: \(status.bundleId)
-            Loaded Model: \(status.loadedModelId ?? "None")
             """
         } else {
             diagnostics += "\nStatus: Not Connected"

@@ -19,6 +19,7 @@
 	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
 	<array>
 		<string>jdi.talkie.engine.xpc</string>
+		<string>jdi.talkie.engine.xpc.debug</string>
 	</array>
 </dict>
 </plist>

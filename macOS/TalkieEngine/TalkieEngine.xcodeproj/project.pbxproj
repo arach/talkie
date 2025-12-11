@@ -15,6 +15,7 @@
 		B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309C8ED6550F5436C180F21E /* main.swift */; };
 		D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3345200BF5B8343E77A15413 /* EngineService.swift */; };
 		D92C5024D36DB3573FEDADC7 /* EngineProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */; };
+		E1A2B3C4D5E6F7A8B9C0D1E2 /* EngineStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E3 /* EngineStatusView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 		A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPCServiceWrapper.swift; sourceTree = "<group>"; };
 		BB26F22F9D507243DB479766 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D04B99055A71871474300365 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1E3 /* EngineStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineStatusView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,6 +63,7 @@
 		D9C01A083B04BE1B82451546 /* TalkieEngine */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* Views */,
 				BB26F22F9D507243DB479766 /* AppDelegate.swift */,
 				8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */,
 				4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */,
@@ -71,6 +74,14 @@
 				A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */,
 			);
 			path = TalkieEngine;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F1A2B3C4D5E6F7A8B9C0D1E3 /* EngineStatusView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -144,6 +155,7 @@
 				D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */,
 				2EE2C5A649FB1DE1A536887B /* XPCServiceWrapper.swift in Sources */,
 				B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */,
+				E1A2B3C4D5E6F7A8B9C0D1E2 /* EngineStatusView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

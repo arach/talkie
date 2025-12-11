@@ -68,4 +68,11 @@ final class XPCServiceWrapper: NSObject, TalkieEngineProtocol {
         logger.info("XPC: getAvailableModels called")
         engine.getAvailableModels(reply: reply)
     }
+
+    // MARK: - Graceful Shutdown
+
+    func requestShutdown(waitForCompletion: Bool, reply: @escaping (Bool) -> Void) {
+        logger.info("XPC: requestShutdown called (waitForCompletion: \(waitForCompletion))")
+        engine.requestShutdown(waitForCompletion: waitForCompletion, reply: reply)
+    }
 }

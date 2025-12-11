@@ -11,7 +11,11 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Engine")
 
 /// Mach service name for XPC connection (must match TalkieEngine)
+#if DEBUG
+private let kTalkieEngineServiceName = "jdi.talkie.engine.xpc.debug"
+#else
 private let kTalkieEngineServiceName = "jdi.talkie.engine.xpc"
+#endif
 
 /// XPC protocol for TalkieEngine (must match TalkieEngine's protocol)
 @objc protocol TalkieEngineProtocol {

@@ -8,7 +8,11 @@
 import Foundation
 
 /// Mach service name for XPC connection
+#if DEBUG
+public let kTalkieEngineServiceName = "jdi.talkie.engine.xpc.debug"
+#else
 public let kTalkieEngineServiceName = "jdi.talkie.engine.xpc"
+#endif
 
 /// Model family identifiers
 public enum ModelFamily: String, Codable, Sendable, CaseIterable {
@@ -63,6 +67,12 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
 
     /// Check if engine is alive (for connection testing)
     func ping(reply: @escaping (_ pong: Bool) -> Void)
+
+    /// Request graceful shutdown (honor system - finish current work, then exit)
+    /// - Parameters:
+    ///   - waitForCompletion: If true, wait for current transcription to finish before exiting
+    ///   - reply: Callback confirming shutdown was accepted
+    func requestShutdown(waitForCompletion: Bool, reply: @escaping (_ accepted: Bool) -> Void)
 
     // MARK: - Model Download Management
 
