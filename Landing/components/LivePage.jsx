@@ -186,9 +186,9 @@ export default function LivePage() {
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mb-16">
-            <StatCard value="4x" label="Faster than typing" />
-            <StatCard value="~2s" label="Idea to text" />
-            <StatCard value="0" label="Apps to open" />
+            <StatCard value="~40" label="Keyboard WPM" />
+            <StatCard value="200+" label="Talkie Live WPM" />
+            <StatCard value="5x" label="Faster" />
           </div>
 
           {/* Benefits */}
@@ -225,13 +225,13 @@ export default function LivePage() {
               </h3>
               <div className="space-y-4 text-zinc-600 dark:text-zinc-400 leading-relaxed text-left max-w-2xl mx-auto">
                 <p>
-                  Your dictations are a live stream of your workflow. They capture how you break big goals into steps, make decisions, and move work forward, moment by moment.
+                  Every dictation is a live log of how you work: how you break down goals, sequence steps, and make decisions.
                 </p>
                 <p>
-                  Today that kind of data mostly feeds other platforms: chat, CRMs, ticketing systems, code hosts, AI coding tools. They improve. Your bill goes up.
+                  Today that stream feeds other platforms: chat, CRMs, ticketing systems, code hosts, AI coding tools. They learn. They improve. You pay.
                 </p>
                 <p>
-                  With Talkie, that stream stays in one place. A high resolution record of how you work, ready for your own models, scripts, and tools to learn from, replay, and reuse.
+                  Talkie keeps that stream in one place, under your control, as training data for your own models and scripts.
                 </p>
               </div>
             </div>
