@@ -373,29 +373,20 @@ struct MemoDetailView: View {
                         }
                 }
 
-                // 5. PLAYBACK (compact, deferred rendering)
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("PLAYBACK")
-                        .font(.techLabel)
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 12) {
-                        // Play/Pause button
-                        Button(action: togglePlayback) {
-                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                .font(settings.fontBody)
-                                .foregroundColor(.primary)
-                                .frame(width: 36, height: 36)
-                                .background(Color(nsColor: .controlBackgroundColor), in: Circle())
-                        }
-                        .buttonStyle(.plain)
-
-                        // Current time / duration
-                        Text("\(formatDuration(currentTime)) / \(formatDuration(memo.duration))")
-                            .font(.monoSmall)
+                // 5. PLAYBACK (with progress bar)
+                if memo.audioData != nil {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("PLAYBACK")
+                            .font(.techLabel)
                             .foregroundColor(.secondary)
 
-                        Spacer()
+                        AudioPlayerCard(
+                            isPlaying: isPlaying,
+                            currentTime: currentTime,
+                            duration: duration > 0 ? duration : memo.duration,
+                            onTogglePlayback: togglePlayback,
+                            onSeek: seekTo
+                        )
                     }
                 }
 
@@ -609,6 +600,13 @@ struct MemoDetailView: View {
     private func stopPlaybackTimer() {
         playbackTimer?.invalidate()
         playbackTimer = nil
+    }
+
+    private func seekTo(_ progress: Double) {
+        guard let player = audioPlayer else { return }
+        let time = progress * player.duration
+        player.currentTime = time
+        currentTime = time
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -2104,5 +2102,107 @@ struct WorkflowPickerRow: View {
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Audio Player Card
+
+struct AudioPlayerCard: View {
+    let isPlaying: Bool
+    let currentTime: TimeInterval
+    let duration: TimeInterval
+    let onTogglePlayback: () -> Void
+    let onSeek: (Double) -> Void
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+    @State private var dragProgress: Double = 0
+
+    private var progress: Double {
+        guard duration > 0 else { return 0 }
+        return isDragging ? dragProgress : (currentTime / duration)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Play/Pause button
+            Button(action: onTogglePlayback) {
+                ZStack {
+                    Circle()
+                        .fill(isPlaying ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                        .frame(width: 40, height: 40)
+
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(isPlaying ? .white : .primary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Progress bar and time
+            VStack(alignment: .leading, spacing: 6) {
+                // Progress bar
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        // Background track
+                        Capsule()
+                            .fill(Color(nsColor: .separatorColor))
+                            .frame(height: 4)
+
+                        // Progress fill
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .frame(width: max(0, geometry.size.width * progress), height: 4)
+
+                        // Scrubber handle (visible on hover/drag)
+                        if isHovering || isDragging {
+                            Circle()
+                                .fill(Color.accentColor)
+                                .frame(width: 12, height: 12)
+                                .offset(x: max(0, min(geometry.size.width - 12, geometry.size.width * progress - 6)))
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                isDragging = true
+                                let newProgress = max(0, min(1, value.location.x / geometry.size.width))
+                                dragProgress = newProgress
+                            }
+                            .onEnded { value in
+                                let finalProgress = max(0, min(1, value.location.x / geometry.size.width))
+                                onSeek(finalProgress)
+                                isDragging = false
+                            }
+                    )
+                }
+                .frame(height: 12)
+                .onHover { hovering in
+                    isHovering = hovering
+                }
+
+                // Time labels
+                HStack {
+                    Text(formatTime(isDragging ? dragProgress * duration : currentTime))
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text(formatTime(duration))
+                        .font(.monoXSmall)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
