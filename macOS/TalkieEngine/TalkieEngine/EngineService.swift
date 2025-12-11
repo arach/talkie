@@ -368,9 +368,15 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 try? FileManager.default.createDirectory(at: markerPath, withIntermediateDirectories: true)
                 try? "downloaded".write(to: markerPath.appendingPathComponent(".marker"), atomically: true, encoding: .utf8)
 
+                // Warmup with silent audio (1 second at 16kHz)
+                logger.info("Running Parakeet warmup inference...")
+                EngineStatusManager.shared.log(.debug, "Preload", "Running warmup inference...")
+                let silentSamples = [Float](repeating: 0.0, count: 16000)
+                _ = try? await asrManager?.transcribe(silentSamples)
+
                 EngineStatusManager.shared.currentModel = "parakeet:\(actualModelId)"
                 let elapsed = Date().timeIntervalSince(startTime)
-                logger.info("Parakeet model \(actualModelId) preloaded")
+                logger.info("Parakeet model \(actualModelId) preloaded and warmed up")
                 EngineStatusManager.shared.log(.info, "Preload", "✓ Parakeet \(actualModelId) ready in \(String(format: "%.1f", elapsed))s")
             } else {
                 // Check if model is already downloaded locally
