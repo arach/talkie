@@ -53,14 +53,24 @@ final class LiveController: ObservableObject {
     }
 
     /// Cancel without processing (user pressed X)
+    /// Works in any active state - sets cancelled flag to prevent paste
+    @Published private(set) var isCancelled = false
+
     func cancelListening() {
-        guard state == .listening else { return }
+        guard state != .idle else { return }
+        let previousState = state
+        isCancelled = true
         audio.stopCapture()
         recordingStartTime = nil
         capturedContext = nil
         startApp = nil
         state = .idle
-        logger.info("Recording cancelled")
+        logger.info("Recording cancelled (was \(String(describing: previousState)))")
+    }
+
+    /// Reset cancelled flag when starting a new recording
+    private func resetCancelled() {
+        isCancelled = false
     }
 
     /// Get the start app for return-to-origin feature
@@ -69,6 +79,9 @@ final class LiveController: ObservableObject {
     }
 
     private func start() async {
+        // Reset cancelled flag for new recording
+        resetCancelled()
+
         // Check if Talkie Live is frontmost BEFORE capturing context
         // This determines if the Live goes into the implicit queue
         createdInTalkieView = ContextCapture.isTalkieLiveFrontmost()
@@ -194,6 +207,13 @@ final class LiveController: ObservableObject {
             metadata.transcriptionDurationMs = transcriptionMs
             metadata.routingMode = settings.routingMode.rawValue
             metadata.audioFilename = audioFilename
+
+            // Check if user cancelled during transcription
+            if isCancelled {
+                logger.info("Recording was cancelled - skipping paste")
+                state = .idle
+                return
+            }
 
             state = .routing
 

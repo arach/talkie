@@ -2130,14 +2130,11 @@ struct TranscriptVersionRow: View {
     }
 }
 
-// MARK: - Workflow Run Row
+// MARK: - Workflow Run Row (Compact)
 struct WorkflowRunRow: View {
     let run: WorkflowRun
     @State private var showCopied = false
-    @State private var showDetails = false
     @State private var isExpanded = false
-
-    private let collapsedLineLimit = 4
 
     private var statusColor: Color {
         switch run.status {
@@ -2149,104 +2146,106 @@ struct WorkflowRunRow: View {
     }
 
     private var formattedDate: String {
-        guard let date = run.runDate else { return "Unknown" }
+        guard let date = run.runDate else { return "" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private var outputIsLong: Bool {
-        guard let output = run.output else { return false }
-        // Rough estimate: more than 4 lines worth of text
-        return output.count > 200 || output.components(separatedBy: .newlines).count > collapsedLineLimit
+    /// First line or truncated preview of output
+    private var outputPreview: String? {
+        guard let output = run.output, !output.isEmpty else { return nil }
+        let firstLine = output.components(separatedBy: .newlines).first ?? output
+        let trimmed = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > 60 {
+            return String(trimmed.prefix(60)) + "..."
+        }
+        return trimmed
+    }
+
+    private var hasOutput: Bool {
+        run.output?.isEmpty == false
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Header: Workflow name + timestamp - tap to expand/collapse
+        VStack(alignment: .leading, spacing: 0) {
+            // Compact header row - always visible
             Button(action: {
+                guard hasOutput else { return }
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isExpanded.toggle()
                 }
             }) {
-                HStack {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: run.workflowIcon ?? "wand.and.stars")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(statusColor)
+                HStack(spacing: Spacing.sm) {
+                    // Status indicator dot
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
 
-                        Text(run.workflowName ?? "Workflow")
-                            .font(.techLabel)
-                            .tracking(1)
-                            .foregroundColor(.textSecondary)
-                    }
+                    // Workflow icon + name
+                    Image(systemName: run.workflowIcon ?? "wand.and.stars")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.textSecondary)
+
+                    Text(run.workflowName ?? "Workflow")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.textPrimary)
+                        .lineLimit(1)
 
                     Spacer()
 
-                    HStack(spacing: Spacing.xs) {
+                    // Time + expand indicator
+                    HStack(spacing: 4) {
                         Text(formattedDate)
-                            .font(.techLabelSmall)
+                            .font(.system(size: 11))
                             .foregroundColor(.textTertiary)
 
-                        if outputIsLong {
+                        if hasOutput {
                             Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundColor(.textTertiary)
                         }
                     }
                 }
+                .padding(.vertical, Spacing.xs)
             }
             .buttonStyle(PlainButtonStyle())
 
-            // Output - primary content
-            if let output = run.output, !output.isEmpty {
+            // Preview line when collapsed (if has output)
+            if !isExpanded, let preview = outputPreview {
+                Text(preview)
+                    .font(.system(size: 12))
+                    .foregroundColor(.textTertiary)
+                    .lineLimit(1)
+                    .padding(.leading, 6 + Spacing.sm) // Align with text after dot
+                    .padding(.bottom, Spacing.xs)
+            }
+
+            // Expanded output
+            if isExpanded, let output = run.output, !output.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(output)
-                        .font(.bodySmall)
+                        .font(.system(size: 13))
                         .foregroundColor(.textPrimary)
-                        .lineSpacing(4)
-                        .lineLimit(isExpanded ? nil : collapsedLineLimit)
+                        .lineSpacing(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .multilineTextAlignment(.leading)
+                        .padding(.leading, 6 + Spacing.sm) // Align with text after dot
 
-                    // Footer: expand hint or copy button
+                    // Copy button
                     HStack {
-                        if outputIsLong && !isExpanded {
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    isExpanded = true
-                                }
-                            }) {
-                                HStack(spacing: 4) {
-                                    Text("SHOW MORE")
-                                        .font(.techLabelSmall)
-                                        .tracking(0.5)
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 8, weight: .semibold))
-                                }
-                                .foregroundColor(.active)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-
                         Spacer()
-
                         Button(action: {
                             UIPasteboard.general.string = output
-                            withAnimation {
-                                showCopied = true
-                            }
+                            withAnimation { showCopied = true }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                withAnimation {
-                                    showCopied = false
-                                }
+                                withAnimation { showCopied = false }
                             }
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
                                     .font(.system(size: 9, weight: .medium))
                                 Text(showCopied ? "COPIED" : "COPY")
-                                    .font(.techLabelSmall)
+                                    .font(.system(size: 10, weight: .medium))
                                     .tracking(0.5)
                             }
                             .foregroundColor(showCopied ? .success : .textTertiary)
@@ -2255,49 +2254,11 @@ struct WorkflowRunRow: View {
                     }
                 }
                 .padding(Spacing.sm)
-                .background(Color.surfacePrimary)
+                .background(Color.surfacePrimary.opacity(0.5))
                 .cornerRadius(CornerRadius.sm)
             }
-
-            // Details toggle - provider/model info
-            if let provider = run.providerName, let model = run.modelId {
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        showDetails.toggle()
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 10))
-                        Text(showDetails ? "HIDE DETAILS" : "DETAILS")
-                            .font(.techLabelSmall)
-                            .tracking(0.5)
-                        Image(systemName: showDetails ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                    }
-                    .foregroundColor(.textTertiary)
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                if showDetails {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "cpu")
-                            .font(.system(size: 10))
-                        Text("\(provider) · \(model)")
-                            .font(.techLabelSmall)
-                    }
-                    .foregroundColor(.textTertiary)
-                    .padding(.leading, Spacing.xs)
-                }
-            }
         }
-        .padding(Spacing.md)
-        .background(Color.surfaceSecondary)
-        .cornerRadius(CornerRadius.sm)
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .strokeBorder(statusColor.opacity(0.3), lineWidth: 0.5)
-        )
+        .padding(.vertical, Spacing.xs)
     }
 }
 
