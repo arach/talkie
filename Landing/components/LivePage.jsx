@@ -115,43 +115,51 @@ export default function LivePage() {
       </nav>
 
       {/* Hero Section - More Dramatic */}
-      <section className="relative pt-28 pb-20 md:pt-40 md:pb-32 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+      <section className="relative pt-28 pb-20 md:pt-40 md:pb-32 overflow-hidden bg-zinc-100 dark:bg-zinc-950 group/hero">
         <div className="absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] opacity-60 pointer-events-none" />
 
-        {/* Gradient accent */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
         <Container className="relative z-10">
-          <div className="max-w-3xl">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-8">
-              <Sparkles className="w-3 h-3 text-emerald-500" />
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Free • No Account Required • 100% Local</span>
-            </div>
+          <div>
+            <div className="max-w-4xl">
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-8">
+                <Sparkles className="w-3 h-3 text-emerald-500" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Start Free • No Account Required • 100% Local</span>
+              </div>
 
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase mb-6 leading-[0.85]">
-              Fastest way to<br/>
-              <span className="text-emerald-500">convert thoughts</span><br/>
-              <span className="text-zinc-400 dark:text-zinc-600">to action.</span>
-            </h1>
-
-            <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
-              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly, so you can capture ideas at the speed you think them.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-start gap-4">
-              <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-14 px-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-3 shadow-xl shadow-emerald-500/25">
-                <Download className="w-5 h-5" />
-                <span>Download for Mac</span>
-              </a>
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase">
-                  <Laptop className="w-3 h-3" />
-                  macOS 13+ • Apple Silicon
+              <div className="flex items-center gap-6 md:gap-10 mb-6 group/headline">
+                <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase leading-none whitespace-nowrap">
+                  <span>Thoughts</span> <span className="text-zinc-400 dark:text-zinc-500">→</span> <span className="transition-colors duration-300 group-hover/headline:text-emerald-500">Action</span>
+                </h1>
+                {/* App Icon - inline with headline */}
+                <div className="hidden lg:flex items-center justify-center relative group/icon flex-shrink-0 w-28 h-28">
+                  <div className="absolute inset-0 m-auto w-36 h-36 bg-emerald-500/5 rounded-full blur-2xl transition-all duration-500 group-hover/icon:bg-emerald-500/20 group-hover/icon:scale-125 group-hover/headline:bg-emerald-500/15 pointer-events-none" />
+                  <img
+                    src="/talkie-live-icon.png"
+                    alt="Talkie Live"
+                    className="w-24 h-24 md:w-28 md:h-28 relative z-10 opacity-80 grayscale-[20%] transition-all duration-300 group-hover/icon:opacity-100 group-hover/icon:grayscale-0 group-hover/icon:scale-105 group-hover/icon:rotate-1 group-hover/headline:opacity-100 group-hover/headline:grayscale-0 group-hover/headline:rotate-1"
+                  />
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                  Signed & Notarized by Apple
+              </div>
+
+              <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
+                Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly, so you can capture ideas at the speed you think them.
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-start gap-4">
+                <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-Live.zip" className="h-14 px-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-3 shadow-xl shadow-emerald-500/25">
+                  <Download className="w-5 h-5" />
+                  <span>Download for Mac</span>
+                </a>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase">
+                    <Laptop className="w-3 h-3" />
+                    macOS 13+ • Apple Silicon
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    Signed & Notarized by Apple
+                  </div>
                 </div>
               </div>
             </div>
@@ -168,8 +176,8 @@ export default function LivePage() {
               <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Why Voice?</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-6">
-              Think faster.<br/>
-              <span className="text-emerald-500">Type less.</span>
+              Execute at the<br/>
+              <span className="text-emerald-500">speed of thought.</span>
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
               Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly, so you can capture ideas at the speed you think them.

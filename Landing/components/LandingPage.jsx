@@ -17,6 +17,7 @@ import {
   Layers,
   FileText,
   DollarSign,
+  Zap,
 } from 'lucide-react'
 import PrimitivesSection from './PrimitivesSection'
 import Container from './Container'
@@ -151,8 +152,21 @@ export default function LandingPage() {
         )}
       </nav>
 
+      {/* Announcement Banner - below nav */}
+      <div className="fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30">
+        <Link href="/live" className="block group/banner">
+          <Container className="h-10 flex items-center justify-center gap-3 text-[11px]">
+            <img src="/talkie-live-icon.png" alt="Talkie Live" className="w-8 h-8 rounded-lg shadow-lg transition-transform group-hover/banner:scale-110 group-hover/banner:rotate-2" />
+            <span className="text-white font-bold">Introducing Talkie Live</span>
+            <span className="text-white/40">•</span>
+            <span className="text-white/90">Voice-to-text that works anywhere on your Mac</span>
+            <ArrowRight className="w-3 h-3 text-white ml-1 transition-transform group-hover/banner:translate-x-0.5" />
+          </Container>
+        </Link>
+      </div>
+
       {/* Hero Section - Technical Grid Background */}
-      <section className="relative pt-28 pb-12 md:pt-32 md:pb-16 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+      <section className="relative pt-36 pb-12 md:pt-40 md:pb-16 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
         <div className="absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] opacity-60 pointer-events-none" />
 
         <Container className="relative z-10 text-center">
