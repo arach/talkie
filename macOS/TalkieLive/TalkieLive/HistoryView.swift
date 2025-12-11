@@ -330,6 +330,30 @@ struct LiveNavigationView: View {
 
                             Divider()
 
+                            Button {
+                                // TODO: Promote to Talkie Core memo
+                            } label: {
+                                Label("Promote to Memo", systemImage: "arrow.up.doc")
+                            }
+
+                            Button {
+                                // TODO: Re-transcribe with better model
+                            } label: {
+                                Label("Enhance", systemImage: "waveform.badge.magnifyingglass")
+                            }
+
+                            Button {
+                                let text = utterance.text
+                                let picker = NSSharingServicePicker(items: [text])
+                                if let window = NSApp.keyWindow, let contentView = window.contentView {
+                                    picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+                                }
+                            } label: {
+                                Label("Share...", systemImage: "square.and.arrow.up")
+                            }
+
+                            Divider()
+
                             Button(role: .destructive) {
                                 withAnimation {
                                     if selectedUtterance == utterance {
