@@ -2114,13 +2114,11 @@ struct AudioPlayerCard: View {
     let onTogglePlayback: () -> Void
     let onSeek: (Double) -> Void
 
-    @State private var isHovering = false
-    @State private var isDragging = false
-    @State private var dragProgress: Double = 0
+    @State private var isPlayButtonHovered = false
 
     private var progress: Double {
         guard duration > 0 else { return 0 }
-        return isDragging ? dragProgress : (currentTime / duration)
+        return currentTime / duration
     }
 
     var body: some View {
@@ -2129,80 +2127,154 @@ struct AudioPlayerCard: View {
             Button(action: onTogglePlayback) {
                 ZStack {
                     Circle()
-                        .fill(isPlaying ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                        .frame(width: 40, height: 40)
+                        .fill(playButtonBackground)
+                        .frame(width: 36, height: 36)
 
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(isPlaying ? .white : .primary)
+                        .font(.system(size: 12))
+                        .foregroundColor(playButtonForeground)
                 }
             }
             .buttonStyle(.plain)
+            .onHover { isPlayButtonHovered = $0 }
 
-            // Progress bar and time
-            VStack(alignment: .leading, spacing: 6) {
-                // Progress bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        // Background track
-                        Capsule()
-                            .fill(Color(nsColor: .separatorColor))
-                            .frame(height: 4)
+            // Waveform + timeline
+            VStack(spacing: 6) {
+                AudioWaveformBars(progress: progress, isPlaying: isPlaying)
+                    .frame(height: 32)
 
-                        // Progress fill
-                        Capsule()
-                            .fill(Color.accentColor)
-                            .frame(width: max(0, geometry.size.width * progress), height: 4)
-
-                        // Scrubber handle (visible on hover/drag)
-                        if isHovering || isDragging {
-                            Circle()
-                                .fill(Color.accentColor)
-                                .frame(width: 12, height: 12)
-                                .offset(x: max(0, min(geometry.size.width - 12, geometry.size.width * progress - 6)))
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                isDragging = true
-                                let newProgress = max(0, min(1, value.location.x / geometry.size.width))
-                                dragProgress = newProgress
-                            }
-                            .onEnded { value in
-                                let finalProgress = max(0, min(1, value.location.x / geometry.size.width))
-                                onSeek(finalProgress)
-                                isDragging = false
-                            }
-                    )
-                }
-                .frame(height: 12)
-                .onHover { hovering in
-                    isHovering = hovering
-                }
-
-                // Time labels
+                // Time row
                 HStack {
-                    Text(formatTime(isDragging ? dragProgress * duration : currentTime))
-                        .font(.monoXSmall)
+                    Text(formatTime(currentTime))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(.secondary)
 
                     Spacer()
 
                     Text(formatTime(duration))
-                        .font(.monoXSmall)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.6))
                 }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var playButtonBackground: Color {
+        if isPlaying { return Color.accentColor.opacity(0.25) }
+        if isPlayButtonHovered { return Color(nsColor: .controlBackgroundColor).opacity(0.8) }
+        return Color(nsColor: .separatorColor).opacity(0.3)
+    }
+
+    private var playButtonForeground: Color {
+        if isPlaying { return .primary }
+        if isPlayButtonHovered { return .primary }
+        return .secondary
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
+    }
+}
+
+// MARK: - Audio Waveform Bars
+
+private struct AudioWaveformBars: View {
+    let progress: Double
+    var isPlaying: Bool = false
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.05, paused: !isPlaying)) { timeline in
+            AudioWaveformBarsContent(
+                progress: progress,
+                isPlaying: isPlaying,
+                time: timeline.date.timeIntervalSinceReferenceDate
+            )
+        }
+    }
+}
+
+private struct AudioWaveformBarsContent: View {
+    let progress: Double
+    let isPlaying: Bool
+    let time: TimeInterval
+
+    // Pre-computed bar heights for consistency
+    private static let barHeights: [Double] = {
+        var heights: [Double] = []
+        for i in 0..<40 {
+            let seed = Double(i) * 1.618
+            let h = 0.3 + sin(seed * 2.5) * 0.25 + cos(seed * 1.3) * 0.2
+            heights.append(max(0.15, min(1.0, h)))
+        }
+        return heights
+    }()
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 2) {
+                ForEach(0..<Self.barHeights.count, id: \.self) { i in
+                    AudioWaveformBar(
+                        index: i,
+                        totalBars: Self.barHeights.count,
+                        baseHeight: Self.barHeights[i],
+                        progress: progress,
+                        isPlaying: isPlaying,
+                        time: time,
+                        containerHeight: geo.size.height
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+private struct AudioWaveformBar: View {
+    let index: Int
+    let totalBars: Int
+    let baseHeight: Double
+    let progress: Double
+    let isPlaying: Bool
+    let time: TimeInterval
+    let containerHeight: CGFloat
+
+    private var barProgress: Double {
+        Double(index) / Double(totalBars)
+    }
+
+    private var isPast: Bool {
+        barProgress < progress
+    }
+
+    private var isCurrent: Bool {
+        abs(barProgress - progress) < (1.0 / Double(totalBars))
+    }
+
+    private var animatedHeight: Double {
+        if isPlaying && isPast {
+            return baseHeight + sin(time * 4 + Double(index) * 0.5) * 0.1
+        }
+        return baseHeight
+    }
+
+    private var barColor: Color {
+        if isCurrent {
+            return .primary
+        } else if isPast {
+            return .accentColor
+        } else {
+            return .secondary.opacity(0.3)
+        }
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(barColor)
+            .frame(width: 3, height: containerHeight * max(0.15, animatedHeight))
     }
 }
