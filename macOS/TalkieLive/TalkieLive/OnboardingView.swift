@@ -132,7 +132,7 @@ private struct OnboardingColors {
                 textTertiary: Color(hex: "6A6A6A"),
                 accent: Color(hex: "22C55E"),
                 border: Color(hex: "2A2A2A"),
-                gridLine: Color(hex: "2A2A2A"),
+                gridLine: Color(hex: "333333"),
                 bracketColor: Color(hex: "3A3A3A")
             )
         } else {
@@ -412,48 +412,48 @@ private struct WelcomeStepView: View {
     let onNext: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Spacing.xl) {
+            Spacer()
+
             // App icon - using actual high-res icon
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 128, height: 128)
-                .padding(.bottom, Spacing.xxl)
+                .frame(width: 120, height: 120)
 
             // Title bundle: headline + subtitle + tagline (closer together)
             VStack(spacing: Spacing.xs) {
                 Text("TALKIE LIVE")
-                    .font(.system(size: 36, weight: .black))
+                    .font(.system(size: 34, weight: .black))
                     .tracking(-1)
                     .foregroundColor(colors.textPrimary)
 
                 HStack(spacing: 10) {
                     Text("VOICE")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(colors.textSecondary)
 
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(colors.textTertiary)
 
                     Text("TEXT")
-                        .font(.system(size: 18, weight: .black))
+                        .font(.system(size: 16, weight: .black))
                         .foregroundColor(colors.accent)
                 }
 
                 Text("Instantly anywhere on your Mac")
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(colors.textSecondary)
-                    .padding(.top, Spacing.xxs)
+                    .padding(.top, 2)
             }
 
-            // Features
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                FeatureRow(colors: colors, icon: "mic.fill", title: "Record anywhere", description: "Press hotkey in any app")
-                FeatureRow(colors: colors, icon: "text.cursor", title: "Auto-paste", description: "Transcription appears instantly")
-                FeatureRow(colors: colors, icon: "cpu", title: "100% on-device", description: "Private, fast, no internet needed")
+            // Features - 3 column layout
+            HStack(spacing: Spacing.lg) {
+                FeatureColumn(colors: colors, icon: "mic.fill", title: "Record", description: "Press hotkey\nin any app")
+                FeatureColumn(colors: colors, icon: "text.cursor", title: "Auto-paste", description: "Text appears\ninstantly")
+                FeatureColumn(colors: colors, icon: "cpu", title: "On-device", description: "Private, fast,\nno internet")
             }
-            .padding(.top, Spacing.xl)
 
             // Get Started button
             Button(action: onNext) {
@@ -471,34 +471,41 @@ private struct WelcomeStepView: View {
                 .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
-            .padding(.top, Spacing.xxl)
+
+            Spacer()
         }
-        .padding(Spacing.xxl)
+        .padding(Spacing.xl)
     }
 }
 
-private struct FeatureRow: View {
+// MARK: - Feature Column (3-column layout)
+
+private struct FeatureColumn: View {
     let colors: OnboardingColors
     let icon: String
     let title: String
     let description: String
 
     var body: some View {
-        HStack(spacing: Spacing.sm) {
+        VStack(spacing: Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.system(size: 22))
                 .foregroundColor(colors.accent)
-                .frame(width: 24)
+                .frame(width: 32, height: 32)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundColor(colors.textPrimary)
+
                 Text(description)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(colors.textSecondary)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
             }
         }
+        .frame(width: 100)
     }
 }
 
