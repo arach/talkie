@@ -201,6 +201,9 @@ final class LiveController: ObservableObject {
             // Track milestone
             ProcessingMilestones.shared.markTranscriptionComplete(wordCount: wordCount)
 
+            // Notify for onboarding celebration (if user is on ready step)
+            NotificationCenter.default.post(name: .transcriptionDidComplete, object: nil)
+
             // Build complete metadata
             var metadata = capturedContext ?? UtteranceMetadata()
             metadata.whisperModel = settings.selectedModelId

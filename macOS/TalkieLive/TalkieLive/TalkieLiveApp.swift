@@ -9,10 +9,7 @@ struct TalkieLiveApp: App {
         // Main window - History (hidden title for cleaner look)
         Window("Talkie Live", id: "main") {
             mainContent
-                .sheet(isPresented: .init(
-                    get: { onboarding.shouldShowOnboarding },
-                    set: { if !$0 { onboarding.completeOnboarding() } }
-                )) {
+                .sheet(isPresented: $onboarding.shouldShowOnboarding) {
                     OnboardingView()
                 }
         }

@@ -8,6 +8,13 @@
 
 import SwiftUI
 
+// MARK: - Notifications
+
+extension Notification.Name {
+    /// Posted when a transcription completes successfully (for onboarding celebration)
+    static let transcriptionDidComplete = Notification.Name("transcriptionDidComplete")
+}
+
 // MARK: - Onboarding State
 
 enum OnboardingStep: Int, CaseIterable {
@@ -29,16 +36,20 @@ final class OnboardingManager: ObservableObject {
     @Published var downloadProgress: Double = 0
     @Published var downloadStatus: String = ""
     @Published var errorMessage: String?
+    @Published var shouldShowOnboarding: Bool
 
     private let engineClient = EngineClient.shared
 
-    var hasCompletedOnboarding: Bool {
-        get { UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") }
-        set { UserDefaults.standard.set(newValue, forKey: "hasCompletedOnboarding") }
+    private init() {
+        self.shouldShowOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     }
 
-    var shouldShowOnboarding: Bool {
-        !hasCompletedOnboarding
+    var hasCompletedOnboarding: Bool {
+        get { UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "hasCompletedOnboarding")
+            shouldShowOnboarding = !newValue
+        }
     }
 
     func checkEngineConnection() async {
@@ -120,7 +131,6 @@ private struct OnboardingColors {
     let accent: Color
     let border: Color
     let gridLine: Color
-    let bracketColor: Color
 
     static func forScheme(_ colorScheme: ColorScheme) -> OnboardingColors {
         if colorScheme == .dark {
@@ -131,9 +141,8 @@ private struct OnboardingColors {
                 textSecondary: Color(hex: "9A9A9A"),
                 textTertiary: Color(hex: "6A6A6A"),
                 accent: Color(hex: "22C55E"),
-                border: Color(hex: "2A2A2A"),
-                gridLine: Color(hex: "333333"),
-                bracketColor: Color(hex: "3A3A3A")
+                border: Color(hex: "3A3A3A"),
+                gridLine: Color(hex: "1A1A1A")
             )
         } else {
             return OnboardingColors(
@@ -143,9 +152,8 @@ private struct OnboardingColors {
                 textSecondary: Color(hex: "6A6A6A"),
                 textTertiary: Color(hex: "9A9A9A"),
                 accent: Color(hex: "22C55E"),
-                border: Color(hex: "E5E5E5"),
-                gridLine: Color(hex: "E8E8E8"),
-                bracketColor: Color(hex: "BABABA")
+                border: Color(hex: "D0D0D0"),
+                gridLine: Color(hex: "F0F0F0")
             )
         }
     }
@@ -194,9 +202,6 @@ struct OnboardingView: View {
             GridPatternView(lineColor: colors.gridLine)
                 .opacity(0.5)
 
-            // Corner brackets
-            CornerBrackets(color: colors.bracketColor)
-
             VStack(spacing: 0) {
                 // Skip button
                 HStack {
@@ -212,7 +217,8 @@ struct OnboardingView: View {
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.xs)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
+                    .focusable(false)
                 }
                 .padding(.horizontal, Spacing.md)
                 .padding(.top, Spacing.md)
@@ -238,43 +244,61 @@ struct OnboardingView: View {
 
                 Spacer()
 
-                // Navigation
-                HStack(spacing: Spacing.lg) {
-                    // Back button
-                    Button(action: { manager.currentStep = OnboardingStep(rawValue: manager.currentStep.rawValue - 1) ?? .welcome }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(colors.textTertiary)
+                // Navigation (hidden on welcome screen)
+                if manager.currentStep != .welcome {
+                    HStack(spacing: Spacing.lg) {
+                        // Back button
+                        Button(action: { manager.currentStep = OnboardingStep(rawValue: manager.currentStep.rawValue - 1) ?? .welcome }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(colors.textTertiary)
+                                .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        // Page dots
+                        HStack(spacing: Spacing.xs) {
+                            ForEach(OnboardingStep.allCases, id: \.rawValue) { step in
+                                Circle()
+                                    .fill(step.rawValue <= manager.currentStep.rawValue ? colors.accent : colors.border)
+                                    .frame(width: step == manager.currentStep ? 8 : 6, height: step == manager.currentStep ? 8 : 6)
+                                    .animation(.spring(response: 0.3), value: manager.currentStep)
+                            }
+                        }
+
+                        Spacer()
+
+                        // Forward button (visual placeholder for alignment)
+                        Color.clear
                             .frame(width: 40, height: 40)
                     }
-                    .buttonStyle(.plain)
-                    .opacity(manager.currentStep.rawValue > 0 ? 1 : 0)
-                    .disabled(manager.currentStep == .welcome)
-
-                    Spacer()
-
-                    // Page dots
-                    HStack(spacing: Spacing.xs) {
-                        ForEach(OnboardingStep.allCases, id: \.rawValue) { step in
-                            Circle()
-                                .fill(step.rawValue <= manager.currentStep.rawValue ? colors.accent : colors.border)
-                                .frame(width: step == manager.currentStep ? 8 : 6, height: step == manager.currentStep ? 8 : 6)
-                                .animation(.spring(response: 0.3), value: manager.currentStep)
-                        }
-                    }
-
-                    Spacer()
-
-                    // Forward button (visual placeholder for alignment)
-                    Color.clear
-                        .frame(width: 40, height: 40)
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.bottom, Spacing.xl)
                 }
-                .padding(.horizontal, Spacing.xl)
-                .padding(.bottom, Spacing.xl)
             }
         }
         .frame(width: 680, height: 580)
+        .background(WindowAccessor())
     }
+}
+
+// MARK: - Window Accessor (for Cmd+Q support in sheet)
+
+private struct WindowAccessor: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            // Ensure the app menu remains responsive while sheet is presented
+            if let window = view.window {
+                window.preventsApplicationTerminationWhenModal = false
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 // MARK: - Grid Pattern
@@ -291,7 +315,7 @@ private struct GridPatternView: View {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+                context.stroke(path, with: .color(lineColor), lineWidth: 0.5)
             }
 
             // Horizontal lines
@@ -299,80 +323,9 @@ private struct GridPatternView: View {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+                context.stroke(path, with: .color(lineColor), lineWidth: 0.5)
             }
         }
-    }
-}
-
-// MARK: - Corner Brackets
-
-private struct CornerBrackets: View {
-    let color: Color
-    private let bracketSize: CGFloat = 24
-    private let strokeWidth: CGFloat = 1.5
-    private let inset: CGFloat = 16
-
-    var body: some View {
-        GeometryReader { geo in
-            // Top-left
-            BracketShape(corner: .topLeft)
-                .stroke(color, lineWidth: strokeWidth)
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: bracketSize / 2 + inset, y: bracketSize / 2 + inset)
-
-            // Top-right
-            BracketShape(corner: .topRight)
-                .stroke(color, lineWidth: strokeWidth)
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: geo.size.width - bracketSize / 2 - inset, y: bracketSize / 2 + inset)
-
-            // Bottom-left
-            BracketShape(corner: .bottomLeft)
-                .stroke(color, lineWidth: strokeWidth)
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: bracketSize / 2 + inset, y: geo.size.height - bracketSize / 2 - inset)
-
-            // Bottom-right
-            BracketShape(corner: .bottomRight)
-                .stroke(color, lineWidth: strokeWidth)
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: geo.size.width - bracketSize / 2 - inset, y: geo.size.height - bracketSize / 2 - inset)
-        }
-    }
-}
-
-private enum BracketCorner {
-    case topLeft, topRight, bottomLeft, bottomRight
-}
-
-private struct BracketShape: Shape {
-    let corner: BracketCorner
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let length = min(rect.width, rect.height)
-
-        switch corner {
-        case .topLeft:
-            path.move(to: CGPoint(x: 0, y: length))
-            path.addLine(to: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: length, y: 0))
-        case .topRight:
-            path.move(to: CGPoint(x: rect.width - length, y: 0))
-            path.addLine(to: CGPoint(x: rect.width, y: 0))
-            path.addLine(to: CGPoint(x: rect.width, y: length))
-        case .bottomLeft:
-            path.move(to: CGPoint(x: 0, y: rect.height - length))
-            path.addLine(to: CGPoint(x: 0, y: rect.height))
-            path.addLine(to: CGPoint(x: length, y: rect.height))
-        case .bottomRight:
-            path.move(to: CGPoint(x: rect.width, y: rect.height - length))
-            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
-            path.addLine(to: CGPoint(x: rect.width - length, y: rect.height))
-        }
-
-        return path
     }
 }
 
@@ -503,169 +456,142 @@ private struct FeatureColumn: View {
                     .foregroundColor(colors.textTertiary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(width: 100)
     }
 }
 
-// MARK: - Engine Setup Step
+// MARK: - Talkie Live Intro Step (Menu Bar App)
 
 private struct EngineSetupStepView: View {
     let colors: OnboardingColors
     let onNext: () -> Void
-    @ObservedObject private var manager = OnboardingManager.shared
-    @State private var isChecking = false
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
-            // Menu bar illustration
-            VStack(spacing: Spacing.xs) {
-                // Simulated menu bar
-                HStack(spacing: 8) {
-                    Spacer()
+            // Menu bar illustration - showing TalkieLive's location
+            VStack(spacing: Spacing.sm) {
+                // Simulated full-width menu bar
+                HStack(spacing: 0) {
+                    // Left side: Apple logo + app menu
+                    HStack(spacing: 16) {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(colors.textTertiary.opacity(0.8))
 
-                    // TalkieEngine icon (highlighted)
-                    Image("MenuBarIcon")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                        .padding(5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(colors.accent.opacity(0.2))
-                        )
+                        Text("Cursor")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(colors.textTertiary.opacity(0.8))
 
-                    // ChatGPT-style icon (circle with dot)
-                    ZStack {
-                        Circle()
-                            .strokeBorder(colors.textTertiary.opacity(0.6), lineWidth: 1.5)
-                            .frame(width: 14, height: 14)
-                        Circle()
-                            .fill(colors.textTertiary.opacity(0.6))
-                            .frame(width: 4, height: 4)
+                        HStack(spacing: 14) {
+                            Text("File")
+                            Text("Edit")
+                            Text("View")
+                        }
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textTertiary.opacity(0.6))
                     }
 
-                    // Claude-style icon (sparkle/star)
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(colors.textTertiary.opacity(0.6))
+                    Spacer()
 
-                    // Time display
-                    Text("9:41")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(colors.textTertiary.opacity(0.6))
+                    // Right side: System tray icons
+                    HStack(spacing: 12) {
+                        // Third-party apps
+                        ChatGPTMenuIcon()
+                            .frame(width: 14, height: 14)
+                            .foregroundColor(colors.textTertiary.opacity(0.7))
+
+                        Image("ClaudeMenuIcon")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 14)
+                            .foregroundColor(colors.textTertiary.opacity(0.7))
+
+                        // TalkieLive icon (highlighted)
+                        Image("MenuBarIcon")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 16, height: 16)
+                            .foregroundColor(colors.accent)
+                            .padding(4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(colors.accent.opacity(0.2))
+                            )
+
+                        // System icons
+                        Image(systemName: "wifi")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(colors.textTertiary.opacity(0.7))
+
+                        Image(systemName: "battery.75percent")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(colors.textTertiary.opacity(0.7))
+
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(colors.textTertiary.opacity(0.7))
+
+                        Text("Thu 9:41 AM")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(colors.textTertiary.opacity(0.8))
+                            .padding(.leading, 4)
+                    }
                 }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.xs)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, 5)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(colors.surfaceCard)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(colors.surfaceCard.opacity(0.9))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: 4)
                                 .strokeBorder(colors.border, lineWidth: 1)
                         )
                 )
+                .frame(width: 560)
 
-                Text("Lives in your menu bar")
+                Text("Find it in your menu bar")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(colors.textTertiary)
             }
 
             VStack(spacing: Spacing.sm) {
-                Text("TALKIE ENGINE")
+                Text("TALKIE LIVE")
                     .font(.system(size: 24, weight: .black))
                     .tracking(1)
                     .foregroundColor(colors.textPrimary)
 
-                Text("On-device transcription")
+                Text("Always ready when you need it")
                     .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
-            // Status panel
-            VStack(spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    if isChecking {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    } else {
-                        Circle()
-                            .fill(manager.isEngineConnected ? colors.accent : Color.red)
-                            .frame(width: 8, height: 8)
-                    }
+            // Feature highlights - 3 column layout
+            HStack(spacing: Spacing.xl) {
+                FeatureColumn(colors: colors, icon: "command", title: "Hotkey", description: "Press anywhere\nto start")
+                FeatureColumn(colors: colors, icon: "mic.fill", title: "Speak", description: "Talk naturally\ninto your mic")
+                FeatureColumn(colors: colors, icon: "doc.on.clipboard", title: "Paste", description: "Text appears\ninstantly")
+            }
 
-                    Text(isChecking ? "CHECKING..." : (manager.isEngineConnected ? "CONNECTED" : "OFFLINE"))
+            Button(action: onNext) {
+                HStack(spacing: 6) {
+                    Text("CONTINUE")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .tracking(1)
-                        .foregroundColor(isChecking ? colors.textTertiary : (manager.isEngineConnected ? colors.accent : .red))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 10, weight: .bold))
                 }
-
-                if !manager.isEngineConnected && !isChecking {
-                    Text("Ensure TalkieEngine is installed and running")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.orange)
-                }
+                .foregroundColor(colors.background)
+                .frame(width: 160, height: 40)
+                .background(colors.accent)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .frame(maxWidth: 300)
-            .background(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(colors.surfaceCard)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(colors.border, lineWidth: 1)
-                    )
-            )
-
-            HStack(spacing: Spacing.sm) {
-                Button(action: checkConnection) {
-                    Text(isChecking ? "CHECKING..." : "CHECK")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundColor(colors.textPrimary)
-                        .frame(width: 120, height: 36)
-                        .background(colors.surfaceCard)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                .strokeBorder(colors.border, lineWidth: 1)
-                        )
-                        .cornerRadius(CornerRadius.xs)
-                }
-                .buttonStyle(.plain)
-                .disabled(isChecking)
-
-                if manager.isEngineConnected {
-                    Button(action: onNext) {
-                        HStack(spacing: 6) {
-                            Text("CONTINUE")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .tracking(1)
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundColor(colors.background)
-                        .frame(width: 140, height: 36)
-                        .background(colors.accent)
-                        .cornerRadius(CornerRadius.xs)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            .buttonStyle(.plain)
         }
         .padding(Spacing.xl)
-        .onAppear {
-            checkConnection()
-        }
-    }
-
-    private func checkConnection() {
-        isChecking = true
-        Task {
-            await manager.checkEngineConnection()
-            isChecking = false
-        }
     }
 }
 
@@ -685,6 +611,39 @@ private struct ModelDownloadStepView: View {
 
     var body: some View {
         VStack(spacing: Spacing.md) {
+            // TalkieEngine introduction
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "engine.combustion")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(colors.accent)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(colors.accent.opacity(0.15))
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("POWERED BY TALKIE ENGINE")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundColor(colors.textTertiary)
+
+                    Text("Runs your model locally")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(colors.textSecondary)
+                }
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(colors.surfaceCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(colors.border, lineWidth: 1)
+                    )
+            )
+
             VStack(spacing: Spacing.xs) {
                 Text("CHOOSE YOUR MODEL")
                     .font(.system(size: 22, weight: .black))
@@ -978,14 +937,52 @@ private struct OpenAILogo: View {
     }
 }
 
+// MARK: - ChatGPT Menu Bar Icon
+
+private struct ChatGPTMenuIcon: View {
+    var body: some View {
+        // ChatGPT's menu bar icon: a simple circle with inner design
+        ZStack {
+            Circle()
+                .strokeBorder(lineWidth: 1.5)
+
+            // Inner dot pattern similar to ChatGPT logo
+            Circle()
+                .frame(width: 4, height: 4)
+        }
+    }
+}
+
 // MARK: - Ready Step
 
 private struct ReadyStepView: View {
     let colors: OnboardingColors
     let onComplete: () -> Void
     @ObservedObject private var settings = LiveSettings.shared
+    @State private var showCelebration = false
+    @State private var autoDismissCountdown = 3
 
     var body: some View {
+        VStack(spacing: Spacing.lg) {
+            if showCelebration {
+                // Celebration state - first transcription success!
+                celebrationView
+            } else {
+                // Ready state - waiting for user to try hotkey
+                readyView
+            }
+        }
+        .padding(Spacing.xl)
+        .onReceive(NotificationCenter.default.publisher(for: .transcriptionDidComplete)) { _ in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                showCelebration = true
+            }
+            // Auto-dismiss after countdown
+            startAutoDismiss()
+        }
+    }
+
+    private var readyView: some View {
         VStack(spacing: Spacing.lg) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 56))
@@ -1002,12 +999,12 @@ private struct ReadyStepView: View {
                     .foregroundColor(colors.textSecondary)
             }
 
-            // Hotkey display
+            // Hotkey display with "try it now" encouragement
             VStack(spacing: Spacing.sm) {
-                Text("YOUR HOTKEY")
+                Text("TRY IT NOW")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(2)
-                    .foregroundColor(colors.textTertiary)
+                    .foregroundColor(colors.accent)
 
                 Text(settings.hotkey.displayString)
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
@@ -1030,8 +1027,50 @@ private struct ReadyStepView: View {
             .padding(.vertical, Spacing.md)
 
             Button(action: onComplete) {
+                Text("SKIP")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(colors.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, Spacing.sm)
+        }
+    }
+
+    private var celebrationView: some View {
+        VStack(spacing: Spacing.lg) {
+            // Celebration icon with animation
+            Image(systemName: "party.popper.fill")
+                .font(.system(size: 56))
+                .foregroundColor(colors.accent)
+                .symbolEffect(.bounce, value: showCelebration)
+
+            VStack(spacing: Spacing.sm) {
+                Text("NICE!")
+                    .font(.system(size: 32, weight: .black))
+                    .tracking(2)
+                    .foregroundColor(colors.textPrimary)
+
+                Text("You just transcribed your first recording")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(spacing: Spacing.xs) {
+                Text("You're all set to go")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+
+                Text("Closing in \(autoDismissCountdown)...")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(colors.textTertiary.opacity(0.7))
+            }
+            .padding(.top, Spacing.md)
+
+            Button(action: onComplete) {
                 HStack(spacing: Spacing.sm) {
-                    Text("START USING TALKIE LIVE")
+                    Text("LET'S GO")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .tracking(1)
 
@@ -1039,14 +1078,25 @@ private struct ReadyStepView: View {
                         .font(.system(size: 12, weight: .bold))
                 }
                 .foregroundColor(colors.background)
-                .frame(width: 280, height: 44)
+                .frame(width: 180, height: 44)
                 .background(colors.accent)
                 .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
-            .padding(.top, Spacing.md)
+            .padding(.top, Spacing.sm)
         }
-        .padding(Spacing.xl)
+    }
+
+    private func startAutoDismiss() {
+        autoDismissCountdown = 3
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            if autoDismissCountdown > 1 {
+                autoDismissCountdown -= 1
+            } else {
+                timer.invalidate()
+                onComplete()
+            }
+        }
     }
 }
 
