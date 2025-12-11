@@ -153,15 +153,21 @@ export default function LandingPage() {
       </nav>
 
       {/* Announcement Banner - below nav */}
-      <div className="fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30">
-        <Link href="/live" className="block group/banner">
-          <Container className="h-10 flex items-center justify-center gap-3 text-[11px]">
-            <img src="/talkie-live-icon.png" alt="Talkie Live" className="w-8 h-8 rounded-lg shadow-lg transition-transform group-hover/banner:scale-110 group-hover/banner:rotate-2" />
+      <div className="fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30 group/banner">
+        <Link href="/live" className="block">
+          <div className="h-10 flex items-center justify-center text-[11px] px-4">
             <span className="text-white font-bold">Introducing Talkie Live</span>
-            <span className="text-white/40">•</span>
+            <span className="text-white/40 mx-2">•</span>
             <span className="text-white/90">Voice-to-text that works anywhere on your Mac</span>
-            <ArrowRight className="w-3 h-3 text-white ml-1 transition-transform group-hover/banner:translate-x-0.5" />
-          </Container>
+            <div className="flex items-center gap-1.5 ml-2">
+              <img
+                src="/talkie-live-logo.png"
+                alt=""
+                className="h-4 w-auto transition-all duration-300 ease-out opacity-0 scale-0 group-hover/banner:opacity-100 group-hover/banner:scale-100"
+              />
+              <ArrowRight className="w-3 h-3 text-white transition-all duration-300 ease-out group-hover/banner:translate-x-1" />
+            </div>
+          </div>
         </Link>
       </div>
 

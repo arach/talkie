@@ -54,15 +54,27 @@ const html = `
       z-index: 1;
       padding: 0 60px;
     }
-    .logo-badge {
+    .bottom-section {
       position: absolute;
-      top: 40px;
-      right: 50px;
-      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+      bottom: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
     }
-    .logo-badge img {
-      width: 100px;
+    .bottom-logo {
+      filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4));
+    }
+    .bottom-logo img {
+      width: 90px;
       height: auto;
+    }
+    .bottom-url {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      color: #52525b;
+      letter-spacing: 0.02em;
     }
     .hero-badge {
       display: flex;
@@ -133,19 +145,6 @@ const html = `
       color: #10b981;
       font-size: 14px;
     }
-    .bottom {
-      position: absolute;
-      bottom: 36px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .bottom span {
-      font-size: 13px;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      color: #52525b;
-    }
   </style>
 </head>
 <body>
@@ -155,24 +154,24 @@ const html = `
     <div class="corner corner-tr"></div>
     <div class="corner corner-bl"></div>
     <div class="corner corner-br"></div>
-    <div class="logo-badge">
-      <img src="${logoDataUrl}" alt="Talkie Live" />
-    </div>
     <div class="content">
       <div class="hero-badge">
         <div class="hero-badge-dot"></div>
         <span class="hero-badge-text">Talkie Live</span>
       </div>
-      <h1>THOUGHTS <span class="highlight">→</span> ACTION<br/><span class="highlight">INSTANTLY.</span></h1>
-      <p class="tagline">Hold a hotkey, speak, release. <strong>Your words appear wherever you're typing.</strong></p>
+      <h1>THOUGHTS<span class="highlight">→</span>TEXT.<br/><span class="highlight">INSTANTLY.</span></h1>
+      <p class="tagline">Hold a hotkey, speak, release. <strong>Your words appear at the cursor.</strong></p>
       <div class="features">
         <div class="feature"><span class="feature-check">✓</span> 100% Local</div>
         <div class="feature"><span class="feature-check">✓</span> No Account</div>
         <div class="feature"><span class="feature-check">✓</span> macOS Menu Bar</div>
       </div>
     </div>
-    <div class="bottom">
-      <span>usetalkie.com/live</span>
+    <div class="bottom-section">
+      <span class="bottom-url">usetalkie.com/live</span>
+      <div class="bottom-logo">
+        <img src="${logoDataUrl}" alt="Talkie Live" />
+      </div>
     </div>
   </div>
 </body>

@@ -412,14 +412,15 @@ private struct WelcomeStepView: View {
     let onNext: () -> Void
 
     var body: some View {
-        VStack(spacing: Spacing.xl) {
+        VStack(spacing: 0) {
             // App icon - using actual high-res icon
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 128, height: 128)
+                .padding(.bottom, Spacing.xxl)
 
-            // Main headline
+            // Title bundle: headline + subtitle + tagline (closer together)
             VStack(spacing: Spacing.xs) {
                 Text("TALKIE LIVE")
                     .font(.system(size: 36, weight: .black))
@@ -439,12 +440,12 @@ private struct WelcomeStepView: View {
                         .font(.system(size: 18, weight: .black))
                         .foregroundColor(colors.accent)
                 }
-            }
 
-            // Tagline
-            Text("Instantly anywhere on your Mac")
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(colors.textSecondary)
+                Text("Instantly anywhere on your Mac")
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(colors.textSecondary)
+                    .padding(.top, Spacing.xxs)
+            }
 
             // Features
             VStack(alignment: .leading, spacing: Spacing.md) {
@@ -452,7 +453,7 @@ private struct WelcomeStepView: View {
                 FeatureRow(colors: colors, icon: "text.cursor", title: "Auto-paste", description: "Transcription appears instantly")
                 FeatureRow(colors: colors, icon: "cpu", title: "100% on-device", description: "Private, fast, no internet needed")
             }
-            .padding(.top, Spacing.sm)
+            .padding(.top, Spacing.xl)
 
             // Get Started button
             Button(action: onNext) {
@@ -470,7 +471,7 @@ private struct WelcomeStepView: View {
                 .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
-            .padding(.top, Spacing.md)
+            .padding(.top, Spacing.xxl)
         }
         .padding(Spacing.xxl)
     }
