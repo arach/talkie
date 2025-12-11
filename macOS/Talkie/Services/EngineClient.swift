@@ -39,6 +39,8 @@ private let kTalkieEngineServiceName = "jdi.talkie.engine.xpc"
 
 /// Engine status (matches TalkieEngine's EngineStatus)
 public struct EngineStatus: Codable, Sendable {
+    public let pid: Int32?
+    public let isDebugBuild: Bool?
     public let loadedModelId: String?
     public let isTranscribing: Bool
     public let isWarmingUp: Bool

@@ -1753,15 +1753,17 @@ struct EngineSettingsSection: View {
                                     Text(status.bundleId)
                                         .font(.system(size: 10, design: .monospaced))
                                         .foregroundColor(.white.opacity(0.5))
-                                    #if DEBUG
-                                    Text("DEBUG")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundColor(.orange)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 2)
-                                        .background(Color.orange.opacity(0.2))
-                                        .cornerRadius(3)
-                                    #endif
+
+                                    // Show Engine's debug/prod status
+                                    if let isDebug = status.isDebugBuild {
+                                        Text(isDebug ? "DEBUG" : "PROD")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundColor(isDebug ? .orange : .green)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 2)
+                                            .background(isDebug ? Color.orange.opacity(0.2) : Color.green.opacity(0.2))
+                                            .cornerRadius(3)
+                                    }
                                 }
                             } else if let error = engineClient.lastError {
                                 Text(error)

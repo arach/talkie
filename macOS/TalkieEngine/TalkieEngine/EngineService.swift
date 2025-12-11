@@ -447,11 +447,18 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 loadedId = "parakeet:\(parakeetModel)"
             }
 
+            #if DEBUG
+            let isDebug = true
+            #else
+            let isDebug = false
+            #endif
+
             let status = EngineStatus(
                 pid: ProcessInfo.processInfo.processIdentifier,
                 version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
                 startedAt: self.startedAt,
                 bundleId: Bundle.main.bundleIdentifier ?? "jdi.talkie.engine",
+                isDebugBuild: isDebug,
                 loadedModelId: loadedId,
                 isTranscribing: self.isTranscribing,
                 isWarmingUp: self.isWarmingUp,

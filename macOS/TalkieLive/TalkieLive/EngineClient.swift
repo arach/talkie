@@ -50,6 +50,7 @@ public struct EngineStatus: Codable, Sendable {
     public let version: String
     public let startedAt: Date
     public let bundleId: String
+    public let isDebugBuild: Bool?  // Optional for backwards compat
 
     // Model state
     public let loadedModelId: String?

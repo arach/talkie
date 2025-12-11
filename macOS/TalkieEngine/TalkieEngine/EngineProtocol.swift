@@ -103,6 +103,7 @@ public struct EngineStatus: Codable, Sendable {
     public let version: String
     public let startedAt: Date
     public let bundleId: String
+    public let isDebugBuild: Bool
 
     // Model state
     public let loadedModelId: String?
@@ -119,6 +120,7 @@ public struct EngineStatus: Codable, Sendable {
         version: String,
         startedAt: Date,
         bundleId: String,
+        isDebugBuild: Bool = false,
         loadedModelId: String?,
         isTranscribing: Bool,
         isWarmingUp: Bool,
@@ -130,6 +132,7 @@ public struct EngineStatus: Codable, Sendable {
         self.version = version
         self.startedAt = startedAt
         self.bundleId = bundleId
+        self.isDebugBuild = isDebugBuild
         self.loadedModelId = loadedModelId
         self.isTranscribing = isTranscribing
         self.isWarmingUp = isWarmingUp

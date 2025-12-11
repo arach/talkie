@@ -268,6 +268,14 @@ struct EngineStatusView: View {
 
     // MARK: - Header
 
+    private var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
     private var headerView: some View {
         HStack(spacing: 12) {
             // Engine icon
@@ -276,9 +284,20 @@ struct EngineStatusView: View {
                 .foregroundColor(accentGreen)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("TalkieEngine")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                HStack(spacing: 6) {
+                    Text("TalkieEngine")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+
+                    // Debug/Production badge
+                    Text(isDebugBuild ? "DEBUG" : "PROD")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(isDebugBuild ? .orange : accentGreen)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(isDebugBuild ? Color.orange.opacity(0.2) : accentGreen.opacity(0.2))
+                        .cornerRadius(3)
+                }
 
                 Text("Transcription Service")
                     .font(.system(size: 10))
