@@ -7,7 +7,8 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var liveController: LiveController!
-    private let hotKeyManager = HotKeyManager()
+    private let hotKeyManager = HotKeyManager()  // Toggle mode hotkey
+    private let pttHotKeyManager = HotKeyManager(signature: "TLPT", hotkeyID: 3)  // Push-to-talk hotkey
     private let queuePickerHotKeyManager = HotKeyManager(signature: "TLQP", hotkeyID: 2)
     private let overlayController = RecordingOverlayController.shared
     private let floatingPill = FloatingPillController.shared
@@ -109,8 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Show floating pill on launch
         floatingPill.show()
 
-        // Register hotkey from settings
-        registerHotkey()
+        // Register hotkeys from settings
+        registerHotkeys()
 
         // Register queue picker hotkey: ⌥⌘V (Option + Command + V)
         // keyCode 9 = V key
@@ -130,8 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func registerHotkey() {
+    private func registerHotkeys() {
         let settings = LiveSettings.shared
+
+        // Register toggle hotkey (press to start, press to stop)
         hotKeyManager.registerHotKey(
             modifiers: settings.hotkey.modifiers,
             keyCode: settings.hotkey.keyCode
@@ -139,12 +142,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.toggleListening()
         }
+
+        // Register push-to-talk hotkey if enabled
+        if settings.pttEnabled {
+            pttHotKeyManager.registerHotKey(
+                modifiers: settings.pttHotkey.modifiers,
+                keyCode: settings.pttHotkey.keyCode,
+                onPress: { [weak self] in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        await self.liveController.pttStart()
+                    }
+                },
+                onRelease: { [weak self] in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        self.liveController.pttStop()
+                    }
+                }
+            )
+        }
     }
 
     @objc private func hotkeyDidChange() {
-        // Unregister old hotkey and register new one
+        // Unregister old hotkeys and register new ones
         hotKeyManager.unregisterAll()
-        registerHotkey()
+        pttHotKeyManager.unregisterAll()
+        registerHotkeys()
 
         // Update menu item key equivalent
         updateMenuKeyEquivalent()

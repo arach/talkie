@@ -1163,6 +1163,13 @@ struct OverlayStyleRow: View {
 struct ShortcutsSettingsSection: View {
     @ObservedObject private var settings = LiveSettings.shared
     @State private var isRecordingHotkey = false
+    @State private var isRecordingPTTHotkey = false
+    @State private var isRestoreHovered = false
+
+    /// Check if any shortcuts have been modified from defaults
+    private var hasModifiedShortcuts: Bool {
+        settings.hotkey != .default || settings.pttHotkey != .defaultPTT
+    }
 
     var body: some View {
         SettingsPageContainer {
@@ -1172,15 +1179,15 @@ struct ShortcutsSettingsSection: View {
                 subtitle: "Configure global keyboard shortcuts."
             )
         } content: {
-            // Record shortcut
-            SettingsCard(title: "RECORD") {
+            // Toggle mode shortcut
+            SettingsCard(title: "TOGGLE RECORD") {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Quick Capture")
+                            Text("Toggle Recording")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.white)
-                            Text("Press and hold to record, release to transcribe and paste")
+                            Text("Press to start, press again to stop and transcribe")
                                 .font(.system(size: 9))
                                 .foregroundColor(.white.opacity(0.5))
                         }
@@ -1189,7 +1196,8 @@ struct ShortcutsSettingsSection: View {
 
                         HotkeyRecorderButton(
                             hotkey: $settings.hotkey,
-                            isRecording: $isRecordingHotkey
+                            isRecording: $isRecordingHotkey,
+                            showReset: false
                         )
                     }
 
@@ -1198,6 +1206,59 @@ struct ShortcutsSettingsSection: View {
                             .font(.system(size: 10))
                             .foregroundColor(.accentColor.opacity(0.8))
                     }
+                }
+            }
+
+            // Push-to-talk shortcut
+            SettingsCard(title: "PUSH-TO-TALK") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    // Enable toggle
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Enable Push-to-Talk")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+                            Text("Hold to record, release to stop and transcribe")
+                                .font(.system(size: 9))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: $settings.pttEnabled)
+                            .toggleStyle(.switch)
+                            .tint(.accentColor)
+                            .labelsHidden()
+                    }
+
+                    if settings.pttEnabled {
+                        Divider()
+                            .background(Color.white.opacity(0.1))
+
+                        HStack {
+                            Text("PTT Shortcut")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
+
+                            Spacer()
+
+                            HotkeyRecorderButton(
+                                hotkey: $settings.pttHotkey,
+                                isRecording: $isRecordingPTTHotkey,
+                                showReset: false
+                            )
+                        }
+
+                        if isRecordingPTTHotkey {
+                            Text("Press any key combination with ⌘, ⌥, ⌃, or ⇧")
+                                .font(.system(size: 10))
+                                .foregroundColor(.accentColor.opacity(0.8))
+                        }
+                    }
+                }
+                .onChange(of: settings.pttEnabled) { _, _ in
+                    // Notify to re-register hotkeys
+                    NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
                 }
             }
 
@@ -1218,12 +1279,12 @@ struct ShortcutsSettingsSection: View {
 
                         Text("⌥⌘V")
                             .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.purple)
+                            .foregroundColor(.accentColor)
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.sm)
                             .background(
                                 RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                    .fill(Color.purple.opacity(0.15))
+                                    .fill(Color.accentColor.opacity(0.12))
                             )
                     }
 
@@ -1232,6 +1293,38 @@ struct ShortcutsSettingsSection: View {
                         .foregroundColor(.white.opacity(0.4))
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+
+            // Restore defaults (only show if shortcuts have been modified)
+            if hasModifiedShortcuts {
+                HStack {
+                    Spacer()
+
+                    Button(action: {
+                        settings.hotkey = .default
+                        settings.pttHotkey = .defaultPTT
+                        NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 10))
+                            Text("Restore Default Shortcuts")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(isRestoreHovered ? .white : .white.opacity(0.5))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isRestoreHovered ? Color.white.opacity(0.1) : Color.clear)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isRestoreHovered = $0 }
+
+                    Spacer()
+                }
+                .padding(.top, Spacing.sm)
             }
         }
     }

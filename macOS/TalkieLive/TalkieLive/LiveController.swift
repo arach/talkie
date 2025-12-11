@@ -40,6 +40,7 @@ final class LiveController: ObservableObject {
         logger.info("LiveController initialized")
     }
 
+    /// Toggle mode: press to start, press to stop
     func toggleListening() async {
         switch state {
         case .idle:
@@ -50,6 +51,28 @@ final class LiveController: ObservableObject {
             // Don't interrupt processing
             break
         }
+    }
+
+    // MARK: - Push-to-Talk Mode
+
+    /// PTT start: called when PTT hotkey is pressed down
+    func pttStart() async {
+        guard state == .idle else {
+            logger.info("PTT start ignored - not idle (state=\(self.state.rawValue))")
+            return
+        }
+        logger.info("PTT recording started (key down)")
+        await start()
+    }
+
+    /// PTT stop: called when PTT hotkey is released
+    func pttStop() {
+        guard state == .listening else {
+            logger.info("PTT stop ignored - not listening (state=\(self.state.rawValue))")
+            return
+        }
+        logger.info("PTT recording stopped (key up)")
+        stop()
     }
 
     /// Cancel without processing (user pressed X)
@@ -105,6 +128,9 @@ final class LiveController: ObservableObject {
 
         // Track milestone
         ProcessingMilestones.shared.markRecordingStarted()
+
+        // Notify for onboarding celebration (immediate feedback when user presses hotkey)
+        NotificationCenter.default.post(name: .recordingDidStart, object: nil)
 
         state = .listening
         audio.startCapture { [weak self] buffer in
@@ -201,7 +227,7 @@ final class LiveController: ObservableObject {
             // Track milestone
             ProcessingMilestones.shared.markTranscriptionComplete(wordCount: wordCount)
 
-            // Notify for onboarding celebration (if user is on ready step)
+            // Notify for onboarding (dismiss after first transcription)
             NotificationCenter.default.post(name: .transcriptionDidComplete, object: nil)
 
             // Build complete metadata

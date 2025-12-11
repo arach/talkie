@@ -296,8 +296,15 @@ struct HotkeyConfig: Codable, Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
 
+    /// Toggle hotkey default: ⌥⌘L
     static let `default` = HotkeyConfig(
         keyCode: 37,  // L
+        modifiers: UInt32(cmdKey | optionKey)  // ⌥⌘
+    )
+
+    /// Push-to-talk hotkey default: ⌥⌘; (semicolon, right next to L)
+    static let defaultPTT = HotkeyConfig(
+        keyCode: 41,  // ; (semicolon)
         modifiers: UInt32(cmdKey | optionKey)  // ⌥⌘
     )
 
@@ -316,7 +323,7 @@ struct HotkeyConfig: Codable, Equatable {
             0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X",
             8: "C", 9: "V", 11: "B", 12: "Q", 13: "W", 14: "E", 15: "R",
             16: "Y", 17: "T", 31: "O", 32: "U", 34: "I", 35: "P", 37: "L",
-            38: "J", 40: "K", 45: "N", 46: "M",
+            38: "J", 40: "K", 41: ";", 45: "N", 46: "M",
             18: "1", 19: "2", 20: "3", 21: "4", 23: "5",
             22: "6", 26: "7", 28: "8", 25: "9", 29: "0",
             49: "Space", 36: "Return", 48: "Tab", 51: "Delete", 53: "Esc"
@@ -333,6 +340,8 @@ final class LiveSettings: ObservableObject {
 
     // MARK: - Keys
     private let hotkeyKey = "hotkey"
+    private let pttHotkeyKey = "pttHotkey"
+    private let pttEnabledKey = "pttEnabled"
     private let selectedModelIdKey = "selectedModelId"
     private let whisperModelKey = "whisperModel"  // Legacy, for migration
     private let routingModeKey = "routingMode"
@@ -357,7 +366,18 @@ final class LiveSettings: ObservableObject {
 
     // MARK: - Published Settings
 
+    /// Toggle hotkey (press to start, press to stop)
     @Published var hotkey: HotkeyConfig {
+        didSet { save() }
+    }
+
+    /// Push-to-talk hotkey (hold to record, release to stop)
+    @Published var pttHotkey: HotkeyConfig {
+        didSet { save() }
+    }
+
+    /// Whether push-to-talk hotkey is enabled
+    @Published var pttEnabled: Bool {
         didSet { save() }
     }
 
@@ -473,13 +493,24 @@ final class LiveSettings: ObservableObject {
     // MARK: - Init
 
     private init() {
-        // Load hotkey
+        // Load toggle hotkey
         if let data = UserDefaults.standard.data(forKey: hotkeyKey),
            let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
             self.hotkey = config
         } else {
             self.hotkey = .default
         }
+
+        // Load push-to-talk hotkey
+        if let data = UserDefaults.standard.data(forKey: pttHotkeyKey),
+           let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
+            self.pttHotkey = config
+        } else {
+            self.pttHotkey = .defaultPTT
+        }
+
+        // Load PTT enabled state (default: false)
+        self.pttEnabled = UserDefaults.standard.bool(forKey: pttEnabledKey)
 
         // Load selected model ID (with migration from legacy whisperModel)
         if let modelId = UserDefaults.standard.string(forKey: selectedModelIdKey) {
@@ -617,6 +648,10 @@ final class LiveSettings: ObservableObject {
         if let data = try? JSONEncoder().encode(hotkey) {
             UserDefaults.standard.set(data, forKey: hotkeyKey)
         }
+        if let data = try? JSONEncoder().encode(pttHotkey) {
+            UserDefaults.standard.set(data, forKey: pttHotkeyKey)
+        }
+        UserDefaults.standard.set(pttEnabled, forKey: pttEnabledKey)
         UserDefaults.standard.set(selectedModelId, forKey: selectedModelIdKey)
         UserDefaults.standard.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: routingModeKey)
         UserDefaults.standard.set(Int(selectedMicrophoneID), forKey: selectedMicrophoneIDKey)
