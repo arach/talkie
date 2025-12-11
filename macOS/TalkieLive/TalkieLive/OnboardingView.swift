@@ -133,7 +133,7 @@ private struct OnboardingColors {
                 accent: Color(hex: "22C55E"),
                 border: Color(hex: "2A2A2A"),
                 gridLine: Color(hex: "2A2A2A"),
-                bracketColor: Color(hex: "4A4A4A")
+                bracketColor: Color(hex: "3A3A3A")
             )
         } else {
             return OnboardingColors(
@@ -309,9 +309,9 @@ private struct GridPatternView: View {
 
 private struct CornerBrackets: View {
     let color: Color
-    private let bracketSize: CGFloat = 32
-    private let strokeWidth: CGFloat = 2
-    private let inset: CGFloat = 12
+    private let bracketSize: CGFloat = 24
+    private let strokeWidth: CGFloat = 1.5
+    private let inset: CGFloat = 16
 
     var body: some View {
         GeometryReader { geo in
@@ -515,26 +515,39 @@ private struct EngineSetupStepView: View {
             // Menu bar illustration
             VStack(spacing: Spacing.xs) {
                 // Simulated menu bar
-                HStack(spacing: Spacing.sm) {
+                HStack(spacing: 8) {
                     Spacer()
 
-                    // Menu bar icon representation
+                    // TalkieEngine icon (highlighted)
                     Image("MenuBarIcon")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 18, height: 18)
-                        .padding(6)
+                        .frame(width: 16, height: 16)
+                        .padding(5)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(colors.accent.opacity(0.2))
                         )
 
-                    // Other mock menu bar items
-                    ForEach(0..<3, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(colors.textTertiary.opacity(0.3))
+                    // ChatGPT-style icon (circle with dot)
+                    ZStack {
+                        Circle()
+                            .strokeBorder(colors.textTertiary.opacity(0.6), lineWidth: 1.5)
                             .frame(width: 14, height: 14)
+                        Circle()
+                            .fill(colors.textTertiary.opacity(0.6))
+                            .frame(width: 4, height: 4)
                     }
+
+                    // Claude-style icon (sparkle/star)
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(colors.textTertiary.opacity(0.6))
+
+                    // Time display
+                    Text("9:41")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(colors.textTertiary.opacity(0.6))
                 }
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
@@ -546,7 +559,6 @@ private struct EngineSetupStepView: View {
                                 .strokeBorder(colors.border, lineWidth: 1)
                         )
                 )
-                .frame(width: 180)
 
                 Text("Lives in your menu bar")
                     .font(.system(size: 10, design: .monospaced))
@@ -559,7 +571,7 @@ private struct EngineSetupStepView: View {
                     .tracking(1)
                     .foregroundColor(colors.textPrimary)
 
-                Text("Powers on-device transcription")
+                Text("On-device transcription")
                     .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
