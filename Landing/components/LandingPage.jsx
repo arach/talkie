@@ -156,16 +156,19 @@ export default function LandingPage() {
       <div className="fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30 group/banner">
         <Link href="/live" className="block">
           <div className="h-10 flex items-center justify-center text-[11px] px-4">
+            {/* Left spacer to counterbalance right reserved area */}
+            <div className="w-10" />
             <span className="text-white font-bold">Introducing Talkie Live</span>
             <span className="text-white/40 mx-2">•</span>
             <span className="text-white/90">Voice-to-text that works anywhere on your Mac</span>
-            <div className="flex items-center gap-1.5 ml-2">
+            {/* Reserved area for logo + arrow */}
+            <div className="w-10 flex items-center ml-0.5">
               <img
                 src="/talkie-live-logo.png"
                 alt=""
-                className="h-4 w-auto transition-all duration-300 ease-out opacity-0 scale-0 group-hover/banner:opacity-100 group-hover/banner:scale-100"
+                className="h-5 w-auto transition-all duration-300 ease-out opacity-0 scale-0 group-hover/banner:opacity-100 group-hover/banner:scale-100 -mr-1 -ml-1"
               />
-              <ArrowRight className="w-3 h-3 text-white transition-all duration-300 ease-out group-hover/banner:translate-x-1" />
+              <ArrowRight className="w-3 h-3 text-white flex-shrink-0 transition-all duration-300 ease-out -translate-x-5 group-hover/banner:translate-x-0" />
             </div>
           </div>
         </Link>

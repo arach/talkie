@@ -113,6 +113,10 @@ const html = `
     h1 .highlight {
       color: #10b981;
     }
+    h1 .arrow {
+      color: #10b981;
+      margin: 0 -8px;
+    }
     .tagline {
       font-size: 18px;
       color: #a1a1aa;
@@ -159,7 +163,7 @@ const html = `
         <div class="hero-badge-dot"></div>
         <span class="hero-badge-text">Talkie Live</span>
       </div>
-      <h1>THOUGHTS<span class="highlight">→</span>TEXT.<br/><span class="highlight">INSTANTLY.</span></h1>
+      <h1>THOUGHTS<span class="arrow">→</span>TEXT.<br/><span class="highlight">INSTANTLY.</span></h1>
       <p class="tagline">Hold a hotkey, speak, release. <strong>Your words appear at the cursor.</strong></p>
       <div class="features">
         <div class="feature"><span class="feature-check">✓</span> 100% Local</div>
