@@ -26,12 +26,23 @@ func ensureSingleInstance() {
 
     logger.info("Found \(existingPIDs.count) existing TalkieEngine process(es): \(existingPIDs)")
 
-    // Ask the existing service to shut down gracefully via XPC
-    // This will wait for any in-progress work to complete (up to 2 min)
-    requestGracefulShutdown()
+    // Try to ask the existing service to shut down gracefully via XPC
+    // This only works if both are on the same namespace (both debug or both production)
+    let gracefulShutdownWorked = requestGracefulShutdown()
 
-    // Wait for all existing processes to exit
-    waitForProcessesToExit(pids: existingPIDs, timeout: 130) // 2 min + 10s buffer
+    if gracefulShutdownWorked {
+        // Wait for graceful shutdown (up to 2 min for in-progress work)
+        waitForProcessesToExit(pids: existingPIDs, timeout: 130)
+    } else {
+        // XPC failed - likely different namespace (debug vs prod)
+        // These are separate deployments, don't interfere with each other
+        #if DEBUG
+        logger.info("Existing process is likely production build - debug and production can coexist")
+        #else
+        logger.info("Existing process is likely debug build - debug and production can coexist")
+        #endif
+        // Don't wait or kill - let them coexist on different namespaces
+    }
 }
 
 /// Find all TalkieEngine processes except our own
@@ -70,8 +81,9 @@ func findExistingEngineProcesses(excludingPID myPID: Int32) -> [Int32] {
 
 /// Ask the existing engine to shut down gracefully via XPC
 /// This is the "honor system" - we ask nicely and wait
-func requestGracefulShutdown() {
-    logger.info("Requesting graceful shutdown of existing instance...")
+/// Note: Only works if both instances are on the same namespace (both debug or both production)
+func requestGracefulShutdown() -> Bool {
+    logger.info("Requesting graceful shutdown of existing instance via \(kTalkieEngineServiceName)...")
 
     let connection = NSXPCConnection(machServiceName: kTalkieEngineServiceName, options: [])
     connection.remoteObjectInterface = NSXPCInterface(with: TalkieEngineProtocol.self)
@@ -79,9 +91,12 @@ func requestGracefulShutdown() {
 
     let semaphore = DispatchSemaphore(value: 0)
     var shutdownAccepted = false
+    var xpcFailed = false
 
     let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-        logger.warning("XPC error requesting shutdown: \(error.localizedDescription)")
+        // XPC error means we can't communicate - likely different namespace (debug vs prod)
+        logger.info("XPC connection failed (likely different namespace): \(error.localizedDescription)")
+        xpcFailed = true
         semaphore.signal()
     } as? TalkieEngineProtocol
 
@@ -92,16 +107,16 @@ func requestGracefulShutdown() {
         semaphore.signal()
     }
 
-    // Wait for the shutdown request to complete (2 min grace + buffer)
-    let result = semaphore.wait(timeout: .now() + 130)
-
-    if result == .timedOut {
-        logger.warning("Shutdown request timed out")
-    } else if shutdownAccepted {
-        logger.info("Existing instance accepted shutdown request")
-    }
+    // Wait for the shutdown request (short timeout since XPC errors are fast)
+    let result = semaphore.wait(timeout: .now() + 5)
 
     connection.invalidate()
+
+    if result == .timedOut || xpcFailed {
+        return false // Couldn't communicate via XPC
+    }
+
+    return shutdownAccepted
 }
 
 /// Wait for processes to exit, with timeout
