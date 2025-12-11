@@ -1,5 +1,10 @@
 # Talkie
 
+![macOS](https://img.shields.io/badge/macOS-13%2B-blue?logo=apple)
+![iOS](https://img.shields.io/badge/iOS-17%2B-blue?logo=apple)
+![Swift](https://img.shields.io/badge/Swift-5.9-orange?logo=swift)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 A multi-platform voice memo application with intelligent workflow automation.
 
 **[Security Model](SECURITY.md)** | **[Implementation Notes](IMPLEMENTATION_SUMMARY.md)** | **[Website](https://usetalkie.com)**
