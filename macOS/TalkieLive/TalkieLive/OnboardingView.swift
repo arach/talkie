@@ -132,8 +132,8 @@ private struct OnboardingColors {
                 textTertiary: Color(hex: "6A6A6A"),
                 accent: Color(hex: "22C55E"),
                 border: Color(hex: "2A2A2A"),
-                gridLine: Color(hex: "1A1A1A"),
-                bracketColor: Color(hex: "3A3A3A")
+                gridLine: Color(hex: "2A2A2A"),
+                bracketColor: Color(hex: "4A4A4A")
             )
         } else {
             return OnboardingColors(
@@ -144,8 +144,8 @@ private struct OnboardingColors {
                 textTertiary: Color(hex: "9A9A9A"),
                 accent: Color(hex: "22C55E"),
                 border: Color(hex: "E5E5E5"),
-                gridLine: Color(hex: "F0F0F0"),
-                bracketColor: Color(hex: "CACACA")
+                gridLine: Color(hex: "E8E8E8"),
+                bracketColor: Color(hex: "BABABA")
             )
         }
     }
@@ -235,11 +235,6 @@ struct OnboardingView: View {
                         })
                     }
                 }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
-                .animation(.easeInOut(duration: 0.3), value: manager.currentStep)
 
                 Spacer()
 
@@ -314,8 +309,9 @@ private struct GridPatternView: View {
 
 private struct CornerBrackets: View {
     let color: Color
-    private let bracketSize: CGFloat = 40
+    private let bracketSize: CGFloat = 32
     private let strokeWidth: CGFloat = 2
+    private let inset: CGFloat = 12
 
     var body: some View {
         GeometryReader { geo in
@@ -323,25 +319,25 @@ private struct CornerBrackets: View {
             BracketShape(corner: .topLeft)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
-                .position(x: bracketSize / 2 + 24, y: bracketSize / 2 + 60)
+                .position(x: bracketSize / 2 + inset, y: bracketSize / 2 + inset)
 
             // Top-right
             BracketShape(corner: .topRight)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
-                .position(x: geo.size.width - bracketSize / 2 - 24, y: bracketSize / 2 + 60)
+                .position(x: geo.size.width - bracketSize / 2 - inset, y: bracketSize / 2 + inset)
 
             // Bottom-left
             BracketShape(corner: .bottomLeft)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
-                .position(x: bracketSize / 2 + 24, y: geo.size.height - bracketSize / 2 - 80)
+                .position(x: bracketSize / 2 + inset, y: geo.size.height - bracketSize / 2 - inset)
 
             // Bottom-right
             BracketShape(corner: .bottomRight)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
-                .position(x: geo.size.width - bracketSize / 2 - 24, y: geo.size.height - bracketSize / 2 - 80)
+                .position(x: geo.size.width - bracketSize / 2 - inset, y: geo.size.height - bracketSize / 2 - inset)
         }
     }
 }
@@ -519,9 +515,46 @@ private struct EngineSetupStepView: View {
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
-            Image(systemName: "gearshape.2.fill")
-                .font(.system(size: 48))
-                .foregroundColor(.orange)
+            // Menu bar illustration
+            VStack(spacing: Spacing.xs) {
+                // Simulated menu bar
+                HStack(spacing: Spacing.sm) {
+                    Spacer()
+
+                    // Menu bar icon representation
+                    Image("MenuBarIcon")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 18, height: 18)
+                        .padding(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(colors.accent.opacity(0.2))
+                        )
+
+                    // Other mock menu bar items
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(colors.textTertiary.opacity(0.3))
+                            .frame(width: 14, height: 14)
+                    }
+                }
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(colors.surfaceCard)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(colors.border, lineWidth: 1)
+                        )
+                )
+                .frame(width: 180)
+
+                Text("Lives in your menu bar")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+            }
 
             VStack(spacing: Spacing.sm) {
                 Text("TALKIE ENGINE")
