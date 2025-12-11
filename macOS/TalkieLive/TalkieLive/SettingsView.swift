@@ -1754,9 +1754,9 @@ struct EngineSettingsSection: View {
                                         .font(.system(size: 10, design: .monospaced))
                                         .foregroundColor(.white.opacity(0.5))
 
-                                    // Show Engine's debug/prod status
+                                    // Show Engine's dev/prod status
                                     if let isDebug = status.isDebugBuild {
-                                        Text(isDebug ? "DEBUG" : "PROD")
+                                        Text(isDebug ? "DEV" : "PROD")
                                             .font(.system(size: 8, weight: .bold))
                                             .foregroundColor(isDebug ? .orange : .green)
                                             .padding(.horizontal, 4)

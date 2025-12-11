@@ -707,6 +707,7 @@ struct StatusBar: View {
     @ObservedObject private var controller = RecordingOverlayController.shared
     @ObservedObject private var milestones = ProcessingMilestones.shared
     @ObservedObject private var whisperService = WhisperService.shared
+    @ObservedObject private var engineClient = EngineClient.shared
     @State private var recordingDuration: TimeInterval = 0
     @State private var processingDuration: TimeInterval = 0
     @State private var warmupDuration: TimeInterval = 0
@@ -820,6 +821,9 @@ struct StatusBar: View {
                 }
 
                 Spacer()
+
+                // Engine status indicator (clickable to open TalkieEngine)
+                engineStatusIndicator
 
                 // Right side content - timer during recording, file saved during processing
                 rightSideContent
@@ -1089,6 +1093,121 @@ struct StatusBar: View {
         warmupTimer?.invalidate()
         warmupTimer = nil
         warmupDuration = 0
+    }
+
+    // MARK: - Engine Status Indicator
+
+    @ViewBuilder
+    private var engineStatusIndicator: some View {
+        Button(action: openTalkieEngine) {
+            HStack(spacing: 4) {
+                // Connection status dot
+                Circle()
+                    .fill(engineStatusColor)
+                    .frame(width: 5, height: 5)
+
+                // Engine label with model
+                if let status = engineClient.status {
+                    Text("Engine")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(Design.foregroundMuted.opacity(0.8))
+
+                    if let model = status.loadedModelId {
+                        Text("•")
+                            .font(.system(size: 8))
+                            .foregroundColor(Design.foregroundMuted.opacity(0.3))
+
+                        Text(formatModelName(model))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(Design.foregroundMuted.opacity(0.6))
+                    }
+
+                    // DEV/PROD badge
+                    if let isDebug = status.isDebugBuild {
+                        Text(isDebug ? "DEV" : "")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(isDebug ? 0.2 : 0))
+                            .cornerRadius(2)
+                    }
+                } else {
+                    Text("Engine")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(Design.foregroundMuted.opacity(0.5))
+
+                    Text("offline")
+                        .font(.system(size: 9))
+                        .foregroundColor(.red.opacity(0.6))
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Design.backgroundTertiary.opacity(0.5))
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Click to open TalkieEngine")
+    }
+
+    private var engineStatusColor: Color {
+        switch engineClient.connectionState {
+        case .connected:
+            return .green
+        case .connecting:
+            return .orange
+        case .disconnected, .error:
+            return .red
+        }
+    }
+
+    private func formatModelName(_ modelId: String) -> String {
+        // Extract just the model name without family prefix
+        if modelId.contains(":") {
+            let parts = modelId.split(separator: ":")
+            if parts.count == 2 {
+                let family = String(parts[0])
+                let model = String(parts[1])
+                if family == "parakeet" {
+                    return "Parakeet"
+                }
+                return model.replacingOccurrences(of: "openai_whisper-", with: "")
+                           .replacingOccurrences(of: "distil-whisper_distil-", with: "distil-")
+            }
+        }
+        return modelId
+    }
+
+    private func openTalkieEngine() {
+        // Try to open TalkieEngine app
+        let engineBundleIds = [
+            "jdi.talkie.engine",       // Production
+            "jdi.talkie.engine.debug"  // Debug
+        ]
+
+        for bundleId in engineBundleIds {
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                return
+            }
+        }
+
+        // Fallback: try opening by path
+        let possiblePaths = [
+            "/Applications/TalkieEngine.app",
+            "\(NSHomeDirectory())/Applications/TalkieEngine.app"
+        ]
+
+        for path in possiblePaths {
+            let url = URL(fileURLWithPath: path)
+            if FileManager.default.fileExists(atPath: path) {
+                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+                return
+            }
+        }
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

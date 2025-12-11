@@ -289,8 +289,8 @@ struct EngineStatusView: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
 
-                    // Debug/Production badge
-                    Text(isDebugBuild ? "DEBUG" : "PROD")
+                    // Dev/Production badge
+                    Text(isDebugBuild ? "DEV" : "PROD")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
                         .foregroundColor(isDebugBuild ? .orange : accentGreen)
                         .padding(.horizontal, 5)
