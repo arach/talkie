@@ -320,6 +320,27 @@ struct LiveNavigationView: View {
                 List(filteredUtterances, selection: $selectedUtterance) { utterance in
                     UtteranceRowView(utterance: utterance)
                         .tag(utterance)
+                        .contextMenu {
+                            Button {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(utterance.text, forType: .string)
+                            } label: {
+                                Label("Copy", systemImage: "doc.on.doc")
+                            }
+
+                            Divider()
+
+                            Button(role: .destructive) {
+                                withAnimation {
+                                    if selectedUtterance == utterance {
+                                        selectedUtterance = nil
+                                    }
+                                    store.delete(utterance)
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 withAnimation {
