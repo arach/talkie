@@ -281,7 +281,19 @@ class WorkflowExecutor: ObservableObject {
                 PendingActionsManager.shared.completeAction(id: pendingActionId)
                 break
             } catch {
-                logger.error("❌ Step \(index + 1) failed with error: \(error.localizedDescription)")
+                // Log full error details for debugging
+                logger.error("❌ Step \(index + 1) (\(step.type.rawValue)) failed:")
+                logger.error("   Error type: \(type(of: error))")
+                logger.error("   Description: \(error.localizedDescription)")
+                logger.error("   Full error: \(String(describing: error))")
+
+                // Log to system console with full details
+                await SystemEventManager.shared.log(
+                    .error,
+                    "Step \(index + 1) failed: \(step.type.rawValue)",
+                    detail: "[\(type(of: error))] \(error.localizedDescription)\n\nFull: \(String(describing: error))"
+                )
+
                 // Mark pending action as failed
                 PendingActionsManager.shared.failAction(id: pendingActionId, error: error.localizedDescription)
                 throw error
@@ -479,8 +491,18 @@ class WorkflowExecutor: ObservableObject {
             return result
 
         } catch {
-            logger.error("🤖 LLM: Generation failed - \(error.localizedDescription)")
-            await SystemEventManager.shared.log(.error, "LLM failed", detail: error.localizedDescription)
+            logger.error("🤖 LLM: Generation failed:")
+            logger.error("   Provider: \(resolved.provider.displayName)")
+            logger.error("   Model: \(resolved.modelId)")
+            logger.error("   Error type: \(type(of: error))")
+            logger.error("   Description: \(error.localizedDescription)")
+            logger.error("   Full error: \(String(describing: error))")
+
+            await SystemEventManager.shared.log(
+                .error,
+                "LLM failed: \(resolved.provider.displayName)/\(resolved.modelId)",
+                detail: "[\(type(of: error))] \(error.localizedDescription)\n\nFull: \(String(describing: error))"
+            )
             throw error
         }
     }

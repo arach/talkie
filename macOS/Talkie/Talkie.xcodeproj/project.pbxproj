@@ -8,6 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		00173E73B5BB8FBA6B9C5892 /* TWF_SPEC.md in Resources */ = {isa = PBXBuildFile; fileRef = 12801FF39F6E9D691944A98D /* TWF_SPEC.md */; };
+		TS1M0N1T0R5RC001 /* TalkieServiceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS1M0N1T0RF1L301 /* TalkieServiceMonitor.swift */; };
+		TL1V3M0N1T0R002 /* TalkieLiveMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL1V3M0N1T0RF302 /* TalkieLiveMonitor.swift */; };
+		TS1M0N1T0RV1W003 /* TalkieServiceMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TS1M0N1T0RVF303 /* TalkieServiceMonitorView.swift */; };
+		TL1V3M0N1T0RV004 /* TalkieLiveMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL1V3M0N1T0RVF04 /* TalkieLiveMonitorView.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
 		087D32BC3B7DA607FF40CA82 /* QuickActionsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */; };
 		0A5465C557AF3307FD4069BF /* AppIconProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */; };
@@ -95,6 +99,10 @@
 
 /* Begin PBXFileReference section */
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
+		TS1M0N1T0RF1L301 /* TalkieServiceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieServiceMonitor.swift; sourceTree = "<group>"; };
+		TL1V3M0N1T0RF302 /* TalkieLiveMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieLiveMonitor.swift; sourceTree = "<group>"; };
+		TS1M0N1T0RVF303 /* TalkieServiceMonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieServiceMonitorView.swift; sourceTree = "<group>"; };
+		TL1V3M0N1T0RVF04 /* TalkieLiveMonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieLiveMonitorView.swift; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
 		08F216C6C2F9B2D0EB686BC8 /* AutoRunProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRunProcessor.swift; sourceTree = "<group>"; };
 		0AE0F9BE138BF58E1192F3E9 /* WorkflowSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowSettings.swift; sourceTree = "<group>"; };
@@ -242,6 +250,8 @@
 				3F03AE42A0A83903EC8E3B2D /* NavigationView.swift */,
 				35028147CAD1F8AA00F3561D /* PendingActionsView.swift */,
 				E7CF75F0011D8585DD8DB871 /* SystemConsoleView.swift */,
+				TS1M0N1T0RVF303 /* TalkieServiceMonitorView.swift */,
+				TL1V3M0N1T0RVF04 /* TalkieLiveMonitorView.swift */,
 				7873E71319209F4F26C64705 /* WalkieConversationView.swift */,
 				684E68244668F49BFE901621 /* Activity */,
 				DA139020BF07C1F2E23AAAEE /* AIResults */,
@@ -406,6 +416,8 @@
 				20D24FE1F81720CC4E6F9728 /* PendingActionsManager.swift */,
 				9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */,
 				21E7CFB7BA19EE59D1A229FC /* SpeechSynthesisService.swift */,
+				TS1M0N1T0RF1L301 /* TalkieServiceMonitor.swift */,
+				TL1V3M0N1T0RF302 /* TalkieLiveMonitor.swift */,
 				5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */,
 				4E35708A082682B2EEEEFB9B /* WalkieService.swift */,
 				CB3C446E2274B6FF1A3F7F55 /* WhisperService.swift */,
@@ -561,6 +573,10 @@
 				8063B685266428801B46BC43 /* SystemConsoleView.swift in Sources */,
 				E111B4E4E4F135881F1E138E /* TWFLoader.swift in Sources */,
 				A23C030ECADDC780B883F3E2 /* TalkieApp.swift in Sources */,
+				TS1M0N1T0R5RC001 /* TalkieServiceMonitor.swift in Sources */,
+				TL1V3M0N1T0R002 /* TalkieLiveMonitor.swift in Sources */,
+				TS1M0N1T0RV1W003 /* TalkieServiceMonitorView.swift in Sources */,
+				TL1V3M0N1T0RV004 /* TalkieLiveMonitorView.swift in Sources */,
 				57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */,
 				EFDB9037C949557D2EA24D12 /* TalkieWorkflowSchema.swift in Sources */,
 				673E5DD45505795431156EAB /* TranscriptFileManager.swift in Sources */,

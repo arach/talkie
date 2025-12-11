@@ -100,10 +100,22 @@ struct MemoDetailView: View {
         return items
     }
 
-    /// Compute sorted workflow runs from memo
+    /// Compute sorted workflow runs from memo (deduplicated by ID to handle CloudKit sync duplicates)
     private func computeSortedWorkflowRuns() -> [WorkflowRun] {
         guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return [] }
-        return runs.sorted { ($0.runDate ?? Date.distantPast) > ($1.runDate ?? Date.distantPast) }
+        // Deduplicate by ID, keeping the most recent one
+        var uniqueRuns: [UUID: WorkflowRun] = [:]
+        for run in runs {
+            guard let id = run.id else { continue }
+            if let existing = uniqueRuns[id] {
+                if (run.runDate ?? .distantPast) > (existing.runDate ?? .distantPast) {
+                    uniqueRuns[id] = run
+                }
+            } else {
+                uniqueRuns[id] = run
+            }
+        }
+        return uniqueRuns.values.sorted { ($0.runDate ?? Date.distantPast) > ($1.runDate ?? Date.distantPast) }
     }
 
     /// Refresh cached data (called on appear and memo change)

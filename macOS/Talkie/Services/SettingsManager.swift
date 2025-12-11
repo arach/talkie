@@ -947,7 +947,7 @@ class SettingsManager: ObservableObject {
         get { ensureInitialized(); return _geminiApiKey }
         set {
             _geminiApiKey = newValue
-            keychain.save(newValue, for: KeychainManager.Key.geminiApiKey)
+            _ = keychain.save(newValue, for: KeychainManager.Key.geminiApiKey)
         }
     }
 
@@ -956,7 +956,7 @@ class SettingsManager: ObservableObject {
         set {
             _openaiApiKey = newValue
             if let value = newValue {
-                keychain.save(value, for: KeychainManager.Key.openaiApiKey)
+                _ = keychain.save(value, for: KeychainManager.Key.openaiApiKey)
             } else {
                 keychain.delete(KeychainManager.Key.openaiApiKey)
             }
@@ -968,7 +968,7 @@ class SettingsManager: ObservableObject {
         set {
             _anthropicApiKey = newValue
             if let value = newValue {
-                keychain.save(value, for: KeychainManager.Key.anthropicApiKey)
+                _ = keychain.save(value, for: KeychainManager.Key.anthropicApiKey)
             } else {
                 keychain.delete(KeychainManager.Key.anthropicApiKey)
             }
@@ -980,7 +980,7 @@ class SettingsManager: ObservableObject {
         set {
             _groqApiKey = newValue
             if let value = newValue {
-                keychain.save(value, for: KeychainManager.Key.groqApiKey)
+                _ = keychain.save(value, for: KeychainManager.Key.groqApiKey)
             } else {
                 keychain.delete(KeychainManager.Key.groqApiKey)
             }
@@ -1125,7 +1125,7 @@ class SettingsManager: ObservableObject {
 
                 if hasCoreDataKeys {
                     // Migrate from Core Data to Keychain
-                    keychain.migrateFromCoreData(
+                    _ = keychain.migrateFromCoreData(
                         geminiKey: settings.geminiApiKey,
                         openaiKey: settings.openaiApiKey,
                         anthropicKey: settings.anthropicApiKey,

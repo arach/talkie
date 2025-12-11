@@ -26,9 +26,23 @@ struct AIResultsContentView: View {
     @State private var selectedRun: WorkflowRun?
     @State private var selectedMemoId: NSManagedObjectID?
 
-    // Group runs by memo
+    // Group runs by memo (deduplicated by ID to handle CloudKit sync duplicates)
     private var runsByMemo: [(memo: VoiceMemo, runs: [WorkflowRun])] {
-        let grouped = Dictionary(grouping: allRuns) { $0.memo }
+        // Deduplicate runs by ID, keeping the most recent one
+        var uniqueRuns: [UUID: WorkflowRun] = [:]
+        for run in allRuns {
+            guard let id = run.id else { continue }
+            if let existing = uniqueRuns[id] {
+                // Keep the one with the more recent runDate
+                if (run.runDate ?? .distantPast) > (existing.runDate ?? .distantPast) {
+                    uniqueRuns[id] = run
+                }
+            } else {
+                uniqueRuns[id] = run
+            }
+        }
+
+        let grouped = Dictionary(grouping: uniqueRuns.values) { $0.memo }
         return grouped.compactMap { (memo, runs) -> (VoiceMemo, [WorkflowRun])? in
             guard let memo = memo else { return nil }
             return (memo, runs.sorted { ($0.runDate ?? .distantPast) > ($1.runDate ?? .distantPast) })

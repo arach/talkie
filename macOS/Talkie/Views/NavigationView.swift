@@ -15,6 +15,7 @@ enum NavigationSection: Hashable {
     case activityLog
     case systemConsole
     case pendingActions
+    case talkieService
     case models
     case allowedCommands
     case settings
@@ -43,6 +44,8 @@ struct TalkieNavigationView: View {
     // Use let for singletons to avoid unnecessary view updates
     private let eventManager = SystemEventManager.shared
     private let pendingActionsManager = PendingActionsManager.shared
+    // TalkieServiceMonitor needs ObservedObject to show live status dot updates
+    @ObservedObject private var talkieServiceMonitor = TalkieServiceMonitor.shared
 
     // Collapsible sidebar state (matches TalkieLive)
     @State private var isSidebarCollapsed: Bool = false
@@ -288,62 +291,84 @@ struct TalkieNavigationView: View {
             // Header with collapse toggle (matches TalkieLive)
             sidebarHeader
 
-            // Custom navigation using ScrollView + VStack (avoids List selection flickering)
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 2) {
-                    // Memos section
-                    sidebarSectionHeader("Memos")
-                    sidebarButton(
-                        section: .allMemos,
-                        icon: "square.stack",
-                        title: "All Memos",
-                        badge: allMemos.count > 0 ? "\(allMemos.count)" : nil,
-                        badgeColor: .secondary
-                    )
-
-                    // Activity section
-                    sidebarSectionHeader("Activity")
-                        .padding(.top, isSidebarCollapsed ? 0 : 12)
-                    sidebarButton(
-                        section: .aiResults,
-                        icon: "chart.line.uptrend.xyaxis",
-                        title: "Actions"
-                    )
-                    sidebarButton(
-                        section: .pendingActions,
-                        icon: "clock.arrow.circlepath",
-                        title: "Pending",
-                        badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil,
-                        badgeColor: .accentColor,
-                        showSpinner: pendingActionsManager.hasActiveActions
-                    )
-
-                    // Tools section
-                    sidebarSectionHeader("Tools")
-                        .padding(.top, isSidebarCollapsed ? 0 : 12)
-                    sidebarButton(
-                        section: .workflows,
-                        icon: "wand.and.stars",
-                        title: "Workflows"
-                    )
-                    sidebarButton(
-                        section: .models,
-                        icon: "brain",
-                        title: "Models"
-                    )
-                    sidebarButton(
-                        section: .systemConsole,
-                        icon: "terminal",
-                        title: "Console",
-                        badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil,
-                        badgeColor: .orange
-                    )
+            // Navigation content
+            if isSidebarCollapsed {
+                // Collapsed: simple VStack, no scroll, natural sizing
+                VStack(spacing: 0) {
+                    sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
+                    sidebarButton(section: .aiResults, icon: "chart.line.uptrend.xyaxis", title: "Actions")
+                    sidebarButton(section: .pendingActions, icon: "clock.arrow.circlepath", title: "Pending", badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil, badgeColor: .accentColor, showSpinner: pendingActionsManager.hasActiveActions)
+                    sidebarButton(section: .workflows, icon: "wand.and.stars", title: "Workflows")
+                    sidebarButton(section: .models, icon: "brain", title: "Models")
+                    sidebarButton(section: .talkieService, icon: "gearshape.2", title: "Service", badge: nil, badgeColor: talkieServiceMonitor.state == .running ? .green : .red, showStatusDot: true, statusDotColor: talkieServiceMonitor.state == .running ? .green : .red)
+                    sidebarButton(section: .systemConsole, icon: "terminal", title: "Console", badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil, badgeColor: .orange)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity)
+            } else {
+                // Expanded: ScrollView with sections
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        // Memos section
+                        sidebarSectionHeader("Memos")
+                        sidebarButton(
+                            section: .allMemos,
+                            icon: "square.stack",
+                            title: "All Memos",
+                            badge: allMemos.count > 0 ? "\(allMemos.count)" : nil,
+                            badgeColor: .secondary
+                        )
+
+                        // Activity section
+                        sidebarSectionHeader("Activity")
+                            .padding(.top, 12)
+                        sidebarButton(
+                            section: .aiResults,
+                            icon: "chart.line.uptrend.xyaxis",
+                            title: "Actions"
+                        )
+                        sidebarButton(
+                            section: .pendingActions,
+                            icon: "clock.arrow.circlepath",
+                            title: "Pending",
+                            badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil,
+                            badgeColor: .accentColor,
+                            showSpinner: pendingActionsManager.hasActiveActions
+                        )
+
+                        // Tools section
+                        sidebarSectionHeader("Tools")
+                            .padding(.top, 12)
+                        sidebarButton(
+                            section: .workflows,
+                            icon: "wand.and.stars",
+                            title: "Workflows"
+                        )
+                        sidebarButton(
+                            section: .models,
+                            icon: "brain",
+                            title: "Models"
+                        )
+                        sidebarButton(
+                            section: .talkieService,
+                            icon: "gearshape.2",
+                            title: "Talkie Service",
+                            showStatusDot: true,
+                            statusDotColor: talkieServiceMonitor.state == .running ? .green : .red
+                        )
+                        sidebarButton(
+                            section: .systemConsole,
+                            icon: "terminal",
+                            title: "Console",
+                            badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil,
+                            badgeColor: .orange
+                        )
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             // Settings pinned to bottom
             VStack(spacing: 0) {
@@ -381,16 +406,32 @@ struct TalkieNavigationView: View {
         title: String,
         badge: String? = nil,
         badgeColor: Color = .secondary,
-        showSpinner: Bool = false
+        showSpinner: Bool = false,
+        showStatusDot: Bool = false,
+        statusDotColor: Color = .gray
     ) -> some View {
         let isSelected = selectedSection == section
 
         Button(action: { selectedSection = section }) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundColor(isSelected ? .white : Theme.current.foreground)
-                    .frame(width: 16)
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: icon)
+                        .font(.system(size: isSidebarCollapsed ? 14 : 12))
+                        .foregroundColor(isSelected ? .white : Theme.current.foreground)
+                        .frame(width: isSidebarCollapsed ? 20 : 16)
+
+                    // Status dot indicator
+                    if showStatusDot {
+                        Circle()
+                            .fill(statusDotColor)
+                            .frame(width: 6, height: 6)
+                            .overlay(
+                                Circle()
+                                    .stroke(isSelected ? Color.accentColor : settings.tacticalBackground, lineWidth: 1.5)
+                            )
+                            .offset(x: 2, y: 2)
+                    }
+                }
 
                 // Text and badge - always present, opacity animated
                 HStack {
@@ -413,9 +454,11 @@ struct TalkieNavigationView: View {
                 .frame(width: isSidebarCollapsed ? 0 : nil)
                 .clipped()
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, isSidebarCollapsed ? 0 : 8)
             .padding(.vertical, isSidebarCollapsed ? 4 : 8)
+            .frame(width: isSidebarCollapsed ? 36 : nil, height: isSidebarCollapsed ? 36 : nil)
             .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
+            .offset(x: isSidebarCollapsed ? 3 : 0)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isSelected ? Color.accentColor : Color.clear)
@@ -496,6 +539,8 @@ struct TalkieNavigationView: View {
             })
         case .pendingActions:
             PendingActionsView()
+        case .talkieService:
+            TalkieServiceMonitorView()
         case .settings:
             SettingsView()
         default:
@@ -514,7 +559,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole, .pendingActions, .settings:
+        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole, .pendingActions, .talkieService, .settings:
             return true
         default:
             return false
@@ -580,6 +625,7 @@ struct TalkieNavigationView: View {
         case .activityLog: return "ACTIVITY LOG"
         case .systemConsole: return "CONSOLE"
         case .pendingActions: return "PENDING ACTIONS"
+        case .talkieService: return "TALKIE SERVICE"
         case .models: return "MODELS"
         case .allowedCommands: return "ALLOWED COMMANDS"
         case .settings: return "SETTINGS"
