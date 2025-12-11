@@ -1,12 +1,12 @@
 {
   "images" : [
     {
-      "filename" : "nvidia-eye.png",
+      "filename" : "openai-logo.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "nvidia-eye@2x.png",
+      "filename" : "openai-logo@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
