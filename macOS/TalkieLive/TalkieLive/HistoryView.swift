@@ -147,7 +147,7 @@ struct LiveNavigationView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
         }
-        .background(TalkieTheme.secondaryBackground)
+        .background(TalkieTheme.surfaceElevated)
     }
 
     /// Sidebar header with app branding and collapse toggle

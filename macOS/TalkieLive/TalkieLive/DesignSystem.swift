@@ -133,9 +133,9 @@ struct ThemeColorPalette {
         case .live:
             return liveTheme(isDark: isDark)
         case .midnight:
-            return midnightTheme
+            return midnightTheme(isDark: isDark)
         case .terminal:
-            return terminalTheme
+            return terminalTheme(isDark: isDark)
         case .warm:
             return warmTheme(isDark: isDark)
         case .minimal:
@@ -176,40 +176,77 @@ struct ThemeColorPalette {
         }
     }
 
-    // MARK: - Midnight Theme (Deep black, high contrast)
-    private static var midnightTheme: ThemeColorPalette {
-        ThemeColorPalette(
-            surface: Color(red: 0.02, green: 0.02, blue: 0.03),
-            surfaceElevated: Color(red: 0.06, green: 0.06, blue: 0.07),
-            surfaceCard: Color(red: 0.08, green: 0.08, blue: 0.09),
-            textPrimary: .white,
-            textSecondary: Color(white: 0.75),
-            textTertiary: Color(white: 0.55),
-            textMuted: Color(white: 0.35),
-            border: Color(white: 0.12),
-            divider: Color(white: 0.08),
-            hover: Color(white: 0.10),
-            accent: Color(red: 0.4, green: 0.7, blue: 1.0)
-        )
+    // MARK: - Midnight Theme (Deep black/pure white, high contrast)
+    private static func midnightTheme(isDark: Bool) -> ThemeColorPalette {
+        let midnightAccent = Color(red: 0.4, green: 0.7, blue: 1.0)
+        if isDark {
+            return ThemeColorPalette(
+                surface: Color(red: 0.02, green: 0.02, blue: 0.03),
+                surfaceElevated: Color(red: 0.06, green: 0.06, blue: 0.07),
+                surfaceCard: Color(red: 0.08, green: 0.08, blue: 0.09),
+                textPrimary: .white,
+                textSecondary: Color(white: 0.75),
+                textTertiary: Color(white: 0.55),
+                textMuted: Color(white: 0.35),
+                border: Color(white: 0.12),
+                divider: Color(white: 0.08),
+                hover: Color(white: 0.10),
+                accent: midnightAccent
+            )
+        } else {
+            // Light mode: Pure white, high contrast black text
+            return ThemeColorPalette(
+                surface: .white,
+                surfaceElevated: Color(white: 0.97),
+                surfaceCard: Color(white: 0.99),
+                textPrimary: Color(red: 0.02, green: 0.02, blue: 0.03),
+                textSecondary: Color(white: 0.3),
+                textTertiary: Color(white: 0.45),
+                textMuted: Color(white: 0.6),
+                border: Color(white: 0.85),
+                divider: Color(white: 0.9),
+                hover: Color(white: 0.95),
+                accent: midnightAccent
+            )
+        }
     }
 
-    // MARK: - Terminal Theme (Green on black)
-    private static var terminalTheme: ThemeColorPalette {
-        let terminalGreen = Color(red: 0.2, green: 0.9, blue: 0.4)
-        let dimGreen = Color(red: 0.15, green: 0.6, blue: 0.3)
-        return ThemeColorPalette(
-            surface: Color(red: 0.02, green: 0.03, blue: 0.02),
-            surfaceElevated: Color(red: 0.04, green: 0.06, blue: 0.04),
-            surfaceCard: Color(red: 0.06, green: 0.08, blue: 0.06),
-            textPrimary: terminalGreen,
-            textSecondary: dimGreen,
-            textTertiary: dimGreen.opacity(0.7),
-            textMuted: dimGreen.opacity(0.5),
-            border: terminalGreen.opacity(0.2),
-            divider: terminalGreen.opacity(0.1),
-            hover: terminalGreen.opacity(0.08),
-            accent: terminalGreen
-        )
+    // MARK: - Terminal Theme (Green on black / dark green on paper)
+    private static func terminalTheme(isDark: Bool) -> ThemeColorPalette {
+        if isDark {
+            let terminalGreen = Color(red: 0.2, green: 0.9, blue: 0.4)
+            let dimGreen = Color(red: 0.15, green: 0.6, blue: 0.3)
+            return ThemeColorPalette(
+                surface: Color(red: 0.02, green: 0.03, blue: 0.02),
+                surfaceElevated: Color(red: 0.04, green: 0.06, blue: 0.04),
+                surfaceCard: Color(red: 0.06, green: 0.08, blue: 0.06),
+                textPrimary: terminalGreen,
+                textSecondary: dimGreen,
+                textTertiary: dimGreen.opacity(0.7),
+                textMuted: dimGreen.opacity(0.5),
+                border: terminalGreen.opacity(0.2),
+                divider: terminalGreen.opacity(0.1),
+                hover: terminalGreen.opacity(0.08),
+                accent: terminalGreen
+            )
+        } else {
+            // Light mode: Paper-like background with dark green text (like a printout)
+            let darkGreen = Color(red: 0.05, green: 0.35, blue: 0.15)
+            let mediumGreen = Color(red: 0.1, green: 0.45, blue: 0.2)
+            return ThemeColorPalette(
+                surface: Color(red: 0.97, green: 0.98, blue: 0.96),
+                surfaceElevated: Color(red: 0.94, green: 0.96, blue: 0.93),
+                surfaceCard: Color(red: 0.99, green: 1.0, blue: 0.98),
+                textPrimary: darkGreen,
+                textSecondary: mediumGreen,
+                textTertiary: mediumGreen.opacity(0.7),
+                textMuted: mediumGreen.opacity(0.5),
+                border: darkGreen.opacity(0.15),
+                divider: darkGreen.opacity(0.08),
+                hover: darkGreen.opacity(0.06),
+                accent: darkGreen
+            )
+        }
     }
 
     // MARK: - Warm Theme (Cozy orange tones)
