@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
@@ -318,18 +319,61 @@ public final class EngineClient: ObservableObject {
     }
 
     /// Ensure we're connected, attempting reconnection if needed
+    /// On first launch, the engine may need time to start via launchd
     public func ensureConnected() async -> Bool {
         if isConnected { return true }
 
-        connect()
+        // Try connecting with retries (engine may need to start via launchd)
+        for attempt in 1...3 {
+            if attempt > 1 {
+                logger.info("[Connect] Retry attempt \(attempt)/3...")
+                // Reset connection state for retry
+                handleDisconnection(reason: "Retry attempt \(attempt)")
 
-        // Wait briefly for connection
-        for _ in 0..<10 {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-            if isConnected { return true }
+                // Try to launch TalkieEngine explicitly on retry
+                await launchEngineIfNeeded()
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s for engine to start
+            }
+
+            connect()
+
+            // Wait for connection (up to 2 seconds per attempt)
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                if isConnected { return true }
+            }
         }
 
         return isConnected
+    }
+
+    /// Launch TalkieEngine app if it's not running
+    private func launchEngineIfNeeded() async {
+        // Check if engine is already running
+        let runningApps = NSWorkspace.shared.runningApplications
+        let engineRunning = runningApps.contains { $0.bundleIdentifier == "jdi.talkie.engine" }
+
+        if engineRunning {
+            logger.info("[Connect] TalkieEngine already running")
+            return
+        }
+
+        logger.info("[Connect] Launching TalkieEngine...")
+
+        // Try to launch from /Applications
+        let engineURL = URL(fileURLWithPath: "/Applications/TalkieEngine.app")
+        if FileManager.default.fileExists(atPath: engineURL.path) {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false // Don't bring to front
+            do {
+                try await NSWorkspace.shared.openApplication(at: engineURL, configuration: config)
+                logger.info("[Connect] TalkieEngine launched")
+            } catch {
+                logger.error("[Connect] Failed to launch TalkieEngine: \(error.localizedDescription)")
+            }
+        } else {
+            logger.error("[Connect] TalkieEngine not found at /Applications/TalkieEngine.app")
+        }
     }
 
     private func formatDuration(since date: Date) -> String {
@@ -344,6 +388,7 @@ public final class EngineClient: ObservableObject {
     // MARK: - Transcription
 
     /// Transcribe audio using TalkieEngine
+    /// Automatically waits and retries if engine is busy (loading model or transcribing)
     public func transcribe(audioData: Data, modelId: String = "openai_whisper-small") async throws -> String {
         guard let proxy = engineProxy else {
             // Try to connect first
@@ -351,10 +396,40 @@ public final class EngineClient: ObservableObject {
             guard connected, let proxy = engineProxy else {
                 throw EngineClientError.notConnected
             }
-            return try await doTranscribe(proxy: proxy, audioData: audioData, modelId: modelId)
+            return try await transcribeWithRetry(proxy: proxy, audioData: audioData, modelId: modelId)
         }
 
-        return try await doTranscribe(proxy: proxy, audioData: audioData, modelId: modelId)
+        return try await transcribeWithRetry(proxy: proxy, audioData: audioData, modelId: modelId)
+    }
+
+    /// Transcribe with automatic retry for "Already transcribing" errors
+    /// This handles the case where engine is busy loading a model (can take 60+ seconds)
+    /// or processing another transcription
+    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioData: Data, modelId: String) async throws -> String {
+        let maxAttempts = 30  // 30 attempts × 2s = 60s max wait
+        let retryDelay: UInt64 = 2_000_000_000  // 2 seconds
+
+        var lastError: Error?
+
+        for attempt in 1...maxAttempts {
+            do {
+                return try await doTranscribe(proxy: proxy, audioData: audioData, modelId: modelId)
+            } catch let error as EngineClientError {
+                // Check if it's "Already transcribing" - wait and retry
+                if case .transcriptionFailed(let message) = error, message.contains("Already transcribing") {
+                    logger.info("[Engine] Engine busy (attempt \(attempt)/\(maxAttempts)), waiting 2s...")
+                    lastError = error
+                    try? await Task.sleep(nanoseconds: retryDelay)
+                    continue
+                }
+                // Other errors - don't retry
+                throw error
+            }
+        }
+
+        // Exhausted retries
+        logger.error("[Engine] Engine still busy after \(maxAttempts) attempts (~60s)")
+        throw lastError ?? EngineClientError.transcriptionFailed("Engine busy timeout")
     }
 
     private func doTranscribe(proxy: TalkieEngineProtocol, audioData: Data, modelId: String) async throws -> String {

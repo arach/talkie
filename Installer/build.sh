@@ -11,8 +11,9 @@ set -e
 #   ./build.sh all          # Build all 3 installers
 #
 # Environment variables:
-#   VERSION=1.3.0           # Set version (default: 1.3.0)
+#   VERSION=1.3.0           # Set version (default: 1.5.0)
 #   SKIP_NOTARIZE=1         # Skip notarization (for testing)
+#   SKIP_CLEAN=1            # Skip clean build (incremental, much faster)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -36,6 +37,13 @@ NOTARY_PROFILE="notarytool"
 
 # Skip notarization if set (for testing)
 SKIP_NOTARIZE="${SKIP_NOTARIZE:-0}"
+
+# Skip clean build if set (for faster iteration)
+SKIP_CLEAN="${SKIP_CLEAN:-0}"
+BUILD_ACTION="clean build"
+if [ "$SKIP_CLEAN" = "1" ]; then
+    BUILD_ACTION="build"
+fi
 
 # Validate target
 if [[ ! "$TARGET" =~ ^(full|core|live|all)$ ]]; then
@@ -65,13 +73,25 @@ if ! security find-identity -v | grep -q "$DEVELOPER_ID_INSTALLER"; then
 fi
 echo "✅ Signing identities verified"
 
-# Clean previous builds
+# Clean previous builds (only for target being built)
 echo ""
 echo "🧹 Cleaning previous builds..."
 rm -rf "$STAGING_DIR"/*
 rm -rf "$PACKAGES_DIR"/*.pkg
-rm -f "$SCRIPT_DIR/Talkie-for-Mac.pkg"
-rm -f "$SCRIPT_DIR/Talkie-for-Mac-Signed.pkg"
+
+# Only delete the distribution pkg we're about to build
+if [ "$TARGET" = "full" ] || [ "$TARGET" = "all" ]; then
+    rm -f "$SCRIPT_DIR/Talkie-for-Mac.pkg"
+    rm -f "$SCRIPT_DIR/Talkie-for-Mac-unsigned.pkg"
+fi
+if [ "$TARGET" = "core" ] || [ "$TARGET" = "all" ]; then
+    rm -f "$SCRIPT_DIR/Talkie-Core.pkg"
+    rm -f "$SCRIPT_DIR/Talkie-Core-unsigned.pkg"
+fi
+if [ "$TARGET" = "live" ] || [ "$TARGET" = "all" ]; then
+    rm -f "$SCRIPT_DIR/Talkie-Live.pkg"
+    rm -f "$SCRIPT_DIR/Talkie-Live-unsigned.pkg"
+fi
 
 # Create directories
 mkdir -p "$STAGING_DIR"/{engine,live,core}
@@ -119,7 +139,7 @@ xcodebuild -project TalkieEngine.xcodeproj \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR/TalkieEngine" \
     -arch arm64 \
-    clean build 2>&1 | grep -E "(error:|warning:|BUILD)" || true
+    $BUILD_ACTION 2>&1 | grep -E "(error:|warning:|BUILD)" || true
 
 ENGINE_APP="$BUILD_DIR/TalkieEngine/Build/Products/Release/TalkieEngine.app"
 if [ ! -d "$ENGINE_APP" ]; then
@@ -176,7 +196,7 @@ xcodebuild -project TalkieLive.xcodeproj \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR/TalkieLive" \
     -arch arm64 \
-    clean build 2>&1 | grep -E "(error:|warning:|BUILD)" || true
+    $BUILD_ACTION 2>&1 | grep -E "(error:|warning:|BUILD)" || true
 
 LIVE_APP="$BUILD_DIR/TalkieLive/Build/Products/Release/TalkieLive.app"
 if [ ! -d "$LIVE_APP" ]; then
@@ -209,7 +229,7 @@ xcodebuild -project Talkie.xcodeproj \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR/TalkieCore" \
     -arch arm64 \
-    clean build 2>&1 | grep -E "(error:|warning:|BUILD)" || true
+    $BUILD_ACTION 2>&1 | grep -E "(error:|warning:|BUILD)" || true
 
 CORE_APP="$BUILD_DIR/TalkieCore/Build/Products/Release/Talkie.app"
 if [ ! -d "$CORE_APP" ]; then
@@ -350,6 +370,12 @@ build_distribution() {
             echo "📎 Stapling notarization ticket..."
             xcrun stapler staple "$OUTPUT_PKG"
             echo "✅ Ticket stapled"
+
+            # Archive immediately after successful notarization
+            local ARCHIVE_DIR="$SCRIPT_DIR/releases/$VERSION"
+            mkdir -p "$ARCHIVE_DIR"
+            cp "$OUTPUT_PKG" "$ARCHIVE_DIR/"
+            echo "📂 Archived to releases/$VERSION/$PKG_NAME.pkg"
         else
             echo "❌ Notarization failed for $PKG_NAME"
             echo "   Check: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE"

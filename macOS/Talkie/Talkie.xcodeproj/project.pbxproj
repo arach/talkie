@@ -12,12 +12,13 @@
 		087D32BC3B7DA607FF40CA82 /* QuickActionsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */; };
 		0A5465C557AF3307FD4069BF /* AppIconProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */; };
 		105F1CFFCA8FF0A934729073 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB66A9AB5F11CD75E0C5CD7A /* Assets.xcassets */; };
+		14939466210DE1AC6840F725 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D0D2AC46F2B1EE67539FDB0B /* MLXLMCommon */; };
 		169AB59BC4641ED01BF19EDA /* WorkflowDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6320567449625417C05E9521 /* WorkflowDefinition.swift */; };
 		19ADDD55F0A4518DFAAFC9D7 /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D64DBBEBBB07D9C047A7F626 /* CloudKitSyncManager.swift */; };
 		1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ADA116B700BED47718C7D9E /* ActivityLogViews.swift */; };
 		1EB339080DB651B76F45E652 /* DebugSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C96A04FEABC5B772E63AD67 /* DebugSettings.swift */; };
 		217A8AB59A41C52DFAB13BE4 /* LegacyModelCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00DBA02942A8A7926AC9AC6 /* LegacyModelCards.swift */; };
-		2829621A6E4A01B27CF56E78 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = 888B917F1D14A6981B3952DF /* MLX */; };
+		2829621A6E4A01B27CF56E78 /* WFKit in Frameworks */ = {isa = PBXBuildFile; productRef = F5624562F960D8515AA5C876 /* WFKit */; };
 		2B3EEAEB2371119D2137778B /* hq-transcribe.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 21BD9BDA1979A48C8AD411E9 /* hq-transcribe.twf.json */; };
 		2C894B7C30919117AF8B77C5 /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */; };
 		35BB70F14D43FAE83CE9FA61 /* WorkflowAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = C195E1DC1F0B84087FABAD85 /* WorkflowAction.swift */; };
@@ -37,7 +38,7 @@
 		4F5A6DF3769EF9034B8F2C01 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA115E69E2A9DEA695B5B87 /* KeychainManager.swift */; };
 		57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */; };
 		59F341C52213699C8F4592A0 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741882426A451E5DC9B3BEEA /* GroqProvider.swift */; };
-		5A8FB727E018EBC503E01329 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 9CB6A32843C8E78377EA7EE1 /* GRDB */; };
+		5A8FB727E018EBC503E01329 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = E488AD1F887CCD0880A88457 /* FluidAudio */; };
 		5F69E9294236AA4A916A79B0 /* ParakeetModelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2BC91C2122C795E52E3758 /* ParakeetModelViews.swift */; };
 		5FAF4DE34BAE6EB1664C4F0D /* NavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F03AE42A0A83903EC8E3B2D /* NavigationView.swift */; };
 		606E43ED2836A954C361C3D7 /* AnthropicProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A64BF792ECAB5F2F70A7A085 /* AnthropicProvider.swift */; };
@@ -46,7 +47,7 @@
 		642DEC0586D865075007587F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */; };
 		6562B1C0819BB0A465A98458 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32E922E7292E91230F71AD6 /* SettingsView.swift */; };
 		673E5DD45505795431156EAB /* TranscriptFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */; };
-		67A5249D6D764042BF21594F /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = E488AD1F887CCD0880A88457 /* FluidAudio */; };
+		67A5249D6D764042BF21594F /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6F3171CA8771D255AD77C856 /* DebugKit */; };
 		67CD427670A2C17B12FACBDE /* WhisperModelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF85D803DB667E4820E2185 /* WhisperModelViews.swift */; };
 		6E43A0752EB325768C3E9E5E /* WalkieConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7873E71319209F4F26C64705 /* WalkieConversationView.swift */; };
 		6EA7A6FB3B8E66D64B46A4A9 /* OpenAIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */; };
@@ -71,14 +72,14 @@
 		B33086CC4E3AD8DD1FC5EE13 /* TalkieServiceMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720EC90439850FC3D809A9BC /* TalkieServiceMonitorView.swift */; };
 		B3A26A431CEBB6919CFB877D /* WorkflowSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE0F9BE138BF58E1192F3E9 /* WorkflowSettings.swift */; };
 		B51587461BFB51452F58FC6A /* TWF_GENERATION_PROMPT.md in Resources */ = {isa = PBXBuildFile; fileRef = 394615BAE0B9C87F889FE23A /* TWF_GENERATION_PROMPT.md */; };
-		B93B60C64B35A0BB5C82BB98 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = A513D039239E420AEF986661 /* MLXLLM */; };
+		B93B60C64B35A0BB5C82BB98 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = 888B917F1D14A6981B3952DF /* MLX */; };
 		BB2616B0993300F4C54E9E0B /* talkie.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 4F1A26DD0EB35BB47991023F /* talkie.xcdatamodeld */; };
 		C71513A0A6EF966DD60FF8C7 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C368F29870833A22EA1F5E0 /* DesignSystem.swift */; };
 		C95A1F5BA10EBE178A095D04 /* brain-dump-processor.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 6F3F74262D51A295C8C6E020 /* brain-dump-processor.twf.json */; };
 		CA38C7C6CFE0057E73773A3B /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */; };
 		CB12A13CA5ECEE19E50A05A2 /* MemoTableViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */; };
-		CE3E9EFEDFC1391AF65FAAE6 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D0D2AC46F2B1EE67539FDB0B /* MLXLMCommon */; };
-		D0EC6C1DC965D20E26780A84 /* WFKit in Frameworks */ = {isa = PBXBuildFile; productRef = F5624562F960D8515AA5C876 /* WFKit */; };
+		CE3E9EFEDFC1391AF65FAAE6 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = A513D039239E420AEF986661 /* MLXLLM */; };
+		D0EC6C1DC965D20E26780A84 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 9CB6A32843C8E78377EA7EE1 /* GRDB */; };
 		D2F1E3D8A57F3DFB0F6A91CE /* AutoRunProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F216C6C2F9B2D0EB686BC8 /* AutoRunProcessor.swift */; };
 		D8E2B2EE4DC4D5B9360D39BB /* ModelsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */; };
 		DA7E5F307F15FEA3F6FD6448 /* WalkieService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E35708A082682B2EEEEFB9B /* WalkieService.swift */; };
@@ -123,6 +124,7 @@
 		3C96A04FEABC5B772E63AD67 /* DebugSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugSettings.swift; sourceTree = "<group>"; };
 		3F03AE42A0A83903EC8E3B2D /* NavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationView.swift; sourceTree = "<group>"; };
 		42D075A51DACCCAA5F00B0AC /* WorkflowExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutor.swift; sourceTree = "<group>"; };
+		43687D8D58CDF24241B52B29 /* DebugKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DebugKit; path = ../../../DebugKit; sourceTree = SOURCE_ROOT; };
 		478B8969CCF8329C0038C831 /* LLMModelCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMModelCards.swift; sourceTree = "<group>"; };
 		499C191C937A588B1FC14A1B /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
 		4E35708A082682B2EEEEFB9B /* WalkieService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieService.swift; sourceTree = "<group>"; };
@@ -189,12 +191,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				67A5249D6D764042BF21594F /* FluidAudio in Frameworks */,
-				5A8FB727E018EBC503E01329 /* GRDB in Frameworks */,
-				D0EC6C1DC965D20E26780A84 /* WFKit in Frameworks */,
-				2829621A6E4A01B27CF56E78 /* MLX in Frameworks */,
-				B93B60C64B35A0BB5C82BB98 /* MLXLLM in Frameworks */,
-				CE3E9EFEDFC1391AF65FAAE6 /* MLXLMCommon in Frameworks */,
+				67A5249D6D764042BF21594F /* DebugKit in Frameworks */,
+				5A8FB727E018EBC503E01329 /* FluidAudio in Frameworks */,
+				D0EC6C1DC965D20E26780A84 /* GRDB in Frameworks */,
+				2829621A6E4A01B27CF56E78 /* WFKit in Frameworks */,
+				B93B60C64B35A0BB5C82BB98 /* MLX in Frameworks */,
+				CE3E9EFEDFC1391AF65FAAE6 /* MLXLLM in Frameworks */,
+				14939466210DE1AC6840F725 /* MLXLMCommon in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,6 +221,7 @@
 		13D195D5F236957648E32FD9 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
+				43687D8D58CDF24241B52B29 /* DebugKit */,
 				EDF6CBE76775757D53F5AF8E /* WFKit */,
 			);
 			name = Packages;
@@ -444,6 +448,7 @@
 			);
 			name = Talkie;
 			packageProductDependencies = (
+				6F3171CA8771D255AD77C856 /* DebugKit */,
 				E488AD1F887CCD0880A88457 /* FluidAudio */,
 				9CB6A32843C8E78377EA7EE1 /* GRDB */,
 				F5624562F960D8515AA5C876 /* WFKit */,
@@ -485,6 +490,7 @@
 				8E2FBDF079FA33ECCBBEBD40 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				1A8749A28BBB7162D19B3B41 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				D66F1C7CF2D97B28C1F5CC88 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				42C3CD2203F5E4A8B6CE2FC7 /* XCLocalSwiftPackageReference "../../../DebugKit" */,
 				05193DEAEA1A4AFDF888739F /* XCLocalSwiftPackageReference "../../WFKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -798,6 +804,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../WFKit;
 		};
+		42C3CD2203F5E4A8B6CE2FC7 /* XCLocalSwiftPackageReference "../../../DebugKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../DebugKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -836,6 +846,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		6F3171CA8771D255AD77C856 /* DebugKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DebugKit;
+		};
 		888B917F1D14A6981B3952DF /* MLX */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 1A8749A28BBB7162D19B3B41 /* XCRemoteSwiftPackageReference "mlx-swift" */;

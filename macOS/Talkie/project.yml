@@ -13,6 +13,8 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
 
 packages:
+  DebugKit:
+    path: ../../../DebugKit
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
     version: 0.7.11
@@ -41,6 +43,7 @@ targets:
       - Resources
       - Assets.xcassets
     dependencies:
+      - package: DebugKit
       - package: FluidAudio
       - package: GRDB
       - package: WFKit

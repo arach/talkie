@@ -74,6 +74,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        let onboardingItem = NSMenuItem(title: "Show Onboarding...", action: #selector(showOnboarding), keyEquivalent: "")
+        onboardingItem.target = self
+        menu.addItem(onboardingItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let quitItem = NSMenuItem(title: "Quit Talkie Live", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
 
@@ -233,6 +239,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleFloatingPill(_ sender: NSMenuItem) {
         floatingPill.toggle()
         sender.state = floatingPill.isVisible ? .on : .off
+    }
+
+    @objc private func showOnboarding() {
+        OnboardingManager.shared.resetOnboarding()
+        OnboardingManager.shared.shouldShowOnboarding = true
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func updateIcon(for state: LiveState) {

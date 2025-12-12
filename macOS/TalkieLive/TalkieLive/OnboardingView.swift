@@ -7,6 +7,8 @@
 //
 
 import SwiftUI
+import AVFoundation
+import ApplicationServices
 
 // MARK: - Notifications
 
@@ -23,10 +25,11 @@ extension Notification.Name {
 
 enum OnboardingStep: Int, CaseIterable {
     case welcome = 0
-    case engineSetup = 1      // Introduce Talkie Live as menu bar app
-    case modelDownload = 2    // Choose model (Parakeet vs Whisper)
-    case engineWarmup = 3     // Engine connection + model warmup
-    case ready = 4            // Try your hotkey
+    case permissions = 1      // Request microphone access
+    case engineSetup = 2      // Introduce Talkie Live as menu bar app
+    case modelDownload = 3    // Choose model (Parakeet vs Whisper)
+    case engineWarmup = 4     // Engine connection + model warmup
+    case ready = 5            // Try your hotkey
 }
 
 // MARK: - Onboarding Manager
@@ -47,10 +50,61 @@ final class OnboardingManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var shouldShowOnboarding: Bool
 
+    // Permissions state
+    @Published var hasMicrophonePermission = false
+    @Published var hasAccessibilityPermission = false
+    @Published var isRequestingPermission = false
+
     private let engineClient = EngineClient.shared
+    private var accessibilityCheckTimer: Timer?
 
     private init() {
         self.shouldShowOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        // Check initial permission state
+        checkMicrophonePermission()
+        checkAccessibilityPermission()
+    }
+
+    func checkMicrophonePermission() {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        hasMicrophonePermission = (status == .authorized)
+    }
+
+    func checkAccessibilityPermission() {
+        hasAccessibilityPermission = AXIsProcessTrusted()
+    }
+
+    func requestMicrophonePermission() async {
+        isRequestingPermission = true
+        let granted = await AVCaptureDevice.requestAccess(for: .audio)
+        hasMicrophonePermission = granted
+        isRequestingPermission = false
+    }
+
+    func openAccessibilitySettings() {
+        // Open System Settings to Accessibility > Privacy
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+        // Start polling for permission grant
+        startAccessibilityPolling()
+    }
+
+    func startAccessibilityPolling() {
+        accessibilityCheckTimer?.invalidate()
+        accessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.checkAccessibilityPermission()
+                if self?.hasAccessibilityPermission == true {
+                    self?.stopAccessibilityPolling()
+                }
+            }
+        }
+    }
+
+    func stopAccessibilityPolling() {
+        accessibilityCheckTimer?.invalidate()
+        accessibilityCheckTimer = nil
     }
 
     var hasCompletedOnboarding: Bool {
@@ -282,8 +336,10 @@ struct OnboardingView: View {
                     case .welcome:
                         WelcomeStepView(
                             colors: colors,
-                            onNext: { manager.currentStep = .engineSetup }
+                            onNext: { manager.currentStep = .permissions }
                         )
+                    case .permissions:
+                        PermissionsStepView(colors: colors, onNext: { manager.currentStep = .engineSetup })
                     case .engineSetup:
                         EngineSetupStepView(colors: colors, onNext: { manager.currentStep = .modelDownload })
                     case .modelDownload:
@@ -555,6 +611,7 @@ private struct TalkieLogo: View {
 private struct WelcomeStepView: View {
     let colors: OnboardingColors
     let onNext: () -> Void
+    @State private var animationPhase: Int = 0
 
     var body: some View {
         OnboardingStepLayout(
@@ -562,10 +619,13 @@ private struct WelcomeStepView: View {
             title: "TALKIE LIVE",
             subtitle: "Voice to text anywhere on your Mac",
             illustration: {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 88, height: 88)
+                // Animated pill demo with cursor
+                PillDemoAnimation(colors: colors, phase: $animationPhase)
+                    .frame(width: 120, height: 80)
+                    .onAppear {
+                        // Start animation loop
+                        animatePillDemo()
+                    }
             },
             content: {
                 // Features - 3 column layout
@@ -579,6 +639,289 @@ private struct WelcomeStepView: View {
                 OnboardingCTAButton(colors: colors, title: "GET STARTED", action: onNext)
             }
         )
+    }
+
+    private func animatePillDemo() {
+        // Phase 0: Sliver only (1.5s)
+        // Phase 1: Cursor approaches (0.5s)
+        // Phase 2: Expanded with cursor (1.5s)
+        // Phase 3: Cursor leaves (0.5s)
+        // Loop back to 0
+
+        Task {
+            while true {
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // Show sliver
+                withAnimation(.easeOut(duration: 0.4)) { animationPhase = 1 }
+
+                try? await Task.sleep(nanoseconds: 400_000_000) // Cursor arriving
+                withAnimation(.easeOut(duration: 0.2)) { animationPhase = 2 }
+
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // Show expanded
+                withAnimation(.easeIn(duration: 0.4)) { animationPhase = 3 }
+
+                try? await Task.sleep(nanoseconds: 400_000_000) // Cursor leaving
+                withAnimation(.easeIn(duration: 0.2)) { animationPhase = 0 }
+            }
+        }
+    }
+}
+
+// MARK: - Pill Demo Animation
+
+private struct PillDemoAnimation: View {
+    let colors: OnboardingColors
+    @Binding var phase: Int
+
+    // Phase 0: Sliver only
+    // Phase 1: Cursor approaching, pill starting to expand
+    // Phase 2: Fully expanded with cursor hovering
+    // Phase 3: Cursor leaving, pill collapsing
+
+    private var isExpanded: Bool {
+        phase == 1 || phase == 2
+    }
+
+    private var cursorOffset: CGFloat {
+        switch phase {
+        case 0: return 50    // Far right, off screen
+        case 1: return 15    // Approaching
+        case 2: return 8     // Hovering close
+        case 3: return 30    // Leaving
+        default: return 50
+        }
+    }
+
+    private var cursorOpacity: Double {
+        switch phase {
+        case 0: return 0
+        case 1, 2: return 1
+        case 3: return 0.5
+        default: return 0
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            // Screen mockup background for contrast
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.6), Color.black.opacity(0.8)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+
+            // The pill (bottom center)
+            VStack {
+                Spacer()
+                ZStack {
+                    if isExpanded {
+                        // Expanded pill
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 6, height: 6)
+                            Text("REC")
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(1)
+                                .foregroundColor(Color.white.opacity(0.5))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                                )
+                        )
+                        .transition(.scale.combined(with: .opacity))
+                    } else {
+                        // Collapsed sliver - more visible
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.white.opacity(0.35))
+                            .frame(width: 24, height: 2)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(.bottom, 6)
+            }
+
+            // Cursor
+            Image(systemName: "cursorarrow")
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.5), radius: 1, x: 1, y: 1)
+                .opacity(cursorOpacity)
+                .offset(x: cursorOffset, y: 8)
+        }
+    }
+}
+
+// MARK: - Permissions Step
+
+private struct PermissionsStepView: View {
+    let colors: OnboardingColors
+    let onNext: () -> Void
+    @ObservedObject private var manager = OnboardingManager.shared
+    @State private var isPulsing = false
+
+    private var allPermissionsGranted: Bool {
+        manager.hasMicrophonePermission && manager.hasAccessibilityPermission
+    }
+
+    var body: some View {
+        OnboardingStepLayout(
+            colors: colors,
+            title: "VOICE & ACCESSIBILITY",
+            subtitle: "Only when you ask",
+            illustration: {
+                ZStack {
+                    // Subtle pulse ring
+                    Circle()
+                        .fill(colors.accent.opacity(0.08))
+                        .frame(width: 96, height: 96)
+                        .scaleEffect(isPulsing ? 1.15 : 1.0)
+                        .opacity(isPulsing ? 0.3 : 0.6)
+
+                    // Main circle with light fill
+                    Circle()
+                        .fill(colors.accent.opacity(0.12))
+                        .frame(width: 80, height: 80)
+
+                    // Mic icon
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 32, weight: .medium))
+                        .foregroundColor(colors.accent)
+                }
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                        isPulsing = true
+                    }
+                }
+            },
+            content: {
+                VStack(spacing: Spacing.md) {
+                    // Microphone permission row
+                    PermissionRow(
+                        colors: colors,
+                        icon: "mic.fill",
+                        title: "Microphone",
+                        description: "Turns your voice into text",
+                        isGranted: manager.hasMicrophonePermission,
+                        actionTitle: "Grant",
+                        action: {
+                            Task {
+                                await manager.requestMicrophonePermission()
+                                if !manager.hasMicrophonePermission {
+                                    SystemEventManager.shared.log(.error, "Microphone permission denied", detail: "User denied or dismissed the permission dialog")
+                                }
+                            }
+                        }
+                    )
+
+                    // Accessibility permission row
+                    PermissionRow(
+                        colors: colors,
+                        icon: "hand.raised.fill",
+                        title: "Accessibility",
+                        description: "Global hotkey & auto-paste",
+                        isGranted: manager.hasAccessibilityPermission,
+                        actionTitle: "Open Settings",
+                        action: {
+                            manager.openAccessibilitySettings()
+                        }
+                    )
+
+                    if !manager.hasAccessibilityPermission {
+                        Text("This lets you start recording with a keystroke from any app, and automatically paste your words where you're typing.")
+                            .font(.system(size: 11))
+                            .foregroundColor(colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, Spacing.xs)
+                    }
+                }
+                .frame(width: 320)
+            },
+            cta: {
+                if allPermissionsGranted {
+                    OnboardingCTAButton(colors: colors, title: "CONTINUE", action: onNext)
+                } else {
+                    OnboardingCTAButton(
+                        colors: colors,
+                        title: "GRANT ALL PERMISSIONS",
+                        icon: "",
+                        isEnabled: false,
+                        action: {}
+                    )
+                }
+            }
+        )
+        .onAppear {
+            manager.checkMicrophonePermission()
+            manager.checkAccessibilityPermission()
+        }
+        .onDisappear {
+            manager.stopAccessibilityPolling()
+        }
+    }
+}
+
+// MARK: - Permission Row
+
+private struct PermissionRow: View {
+    let colors: OnboardingColors
+    let icon: String
+    let title: String
+    let description: String
+    let isGranted: Bool
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(isGranted ? .green : colors.textTertiary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(colors.textPrimary)
+                Text(description)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+            }
+
+            Spacer()
+
+            if isGranted {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(.green)
+            } else {
+                Button(action: action) {
+                    Text(actionTitle)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(colors.accent)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(Spacing.sm)
+        .background(colors.surfaceCard)
+        .cornerRadius(8)
     }
 }
 

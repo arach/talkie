@@ -37,6 +37,10 @@ final class FloatingPillController: ObservableObject {
     @Published var elapsedTime: TimeInterval = 0
     @Published var processingTime: TimeInterval = 0
 
+    // Engine & queue status
+    @Published var isEngineConnected: Bool = false
+    @Published var pendingQueueCount: Int = 0
+
     // Track last published proximity to avoid redundant updates
     private var lastPublishedProximity: CGFloat = 0
 
@@ -74,6 +78,22 @@ final class FloatingPillController: ObservableObject {
                         self?.show()  // Recreate to add/remove pills on screens
                     }
                 }
+            }
+            .store(in: &settingsCancellables)
+
+        // Observe engine connection state
+        EngineClient.shared.$connectionState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                self?.isEngineConnected = (state == .connected)
+            }
+            .store(in: &settingsCancellables)
+
+        // Observe pending queue count
+        TranscriptionRetryManager.shared.$pendingCount
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] count in
+                self?.pendingQueueCount = count
             }
             .store(in: &settingsCancellables)
     }
@@ -311,7 +331,16 @@ final class FloatingPillController: ObservableObject {
     var onTap: (() -> Void)?
 
     func handleTap() {
-        onTap?()
+        // If there are queued items and we're idle, show the failed queue picker
+        if pendingQueueCount > 0 && state == .idle {
+            showFailedQueue()
+        } else {
+            onTap?()
+        }
+    }
+
+    func showFailedQueue() {
+        FailedQueueController.shared.show()
     }
 }
 
@@ -369,10 +398,36 @@ struct FloatingPillView: View {
 
     // Minimal sliver when far from cursor
     private var sliverContent: some View {
-        RoundedRectangle(cornerRadius: 1)
-            .fill(indicatorColor.opacity(sliverOpacity))
-            .frame(width: 24, height: 2)
-            .scaleEffect(x: controller.state == .listening ? 1.0 + pulsePhase * 0.3 : 1.0, y: 1.0)
+        HStack(spacing: 4) {
+            // Engine offline indicator (yellow dot)
+            if !controller.isEngineConnected {
+                Circle()
+                    .fill(SemanticColor.warning)
+                    .frame(width: 4, height: 4)
+            }
+
+            RoundedRectangle(cornerRadius: 1)
+                .fill(sliverIndicatorColor.opacity(sliverOpacity))
+                .frame(width: 24, height: 2)
+                .scaleEffect(x: controller.state == .listening ? 1.0 + pulsePhase * 0.3 : 1.0, y: 1.0)
+
+            // Queue count badge
+            if controller.pendingQueueCount > 0 && controller.state == .idle {
+                Text("\(controller.pendingQueueCount)")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(SemanticColor.warning))
+            }
+        }
+    }
+
+    private var sliverIndicatorColor: Color {
+        if !controller.isEngineConnected {
+            return SemanticColor.warning  // Yellow when engine offline
+        }
+        return indicatorColor
     }
 
     // Expanded button with timer when close to cursor
@@ -380,15 +435,31 @@ struct FloatingPillView: View {
         HStack(spacing: 4) {
             // State indicator dot - pulsates when recording
             Circle()
-                .fill(indicatorColor)
+                .fill(expandedIndicatorColor)
                 .frame(width: 6, height: 6)
                 .scaleEffect(controller.state == .listening ? 1.0 + pulsePhase * 0.4 : 1.0)
 
-            // Timer (only when recording/transcribing) - white text, not red
+            // Content varies by state
             if controller.state == .listening || controller.state == .transcribing {
+                // Timer when recording/transcribing
                 Text(timeString)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundColor(TalkieTheme.textSecondary)
+            } else if !controller.isEngineConnected {
+                // Engine offline message
+                Text("OFFLINE")
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(1)
+                    .foregroundColor(SemanticColor.warning)
+            } else if controller.pendingQueueCount > 0 {
+                // Queue count - tap to retry
+                HStack(spacing: 3) {
+                    Text("\(controller.pendingQueueCount)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundColor(SemanticColor.warning)
             } else {
                 Text("REC")
                     .font(.system(size: 9, weight: .semibold))
@@ -402,6 +473,16 @@ struct FloatingPillView: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(.ultraThinMaterial)
         )
+    }
+
+    private var expandedIndicatorColor: Color {
+        if !controller.isEngineConnected && controller.state == .idle {
+            return SemanticColor.warning
+        }
+        if controller.pendingQueueCount > 0 && controller.state == .idle {
+            return SemanticColor.warning
+        }
+        return indicatorColor
     }
 
     private var timeString: String {
