@@ -5,147 +5,64 @@
 //  Debug toolbar overlay - available in DEBUG builds
 //  Provides quick access to dev tools and convenience functions
 //
+//  Uses DebugKit package for the core overlay, with app-specific content below.
+//
 
 import SwiftUI
 import CoreData
 import UserNotifications
+import DebugKit
 
 #if DEBUG
 
-// MARK: - Debug Toolbar Overlay
+// MARK: - Talkie Debug Toolbar Wrapper
 
-/// Floating debug toolbar with expandable panel
-struct DebugToolbarOverlay<Content: View>: View {
-    @State private var showToolbar = false
-    @State private var showingLogs = false
-    @State private var showCopiedFeedback = false
-    private let settings = SettingsManager.shared
-
-    let contextContent: () -> Content
+/// Wrapper around DebugKit's DebugToolbar with Talkie-specific content
+struct TalkieDebugToolbar<CustomContent: View>: View {
     let debugInfo: () -> [String: String]
+    let customContent: CustomContent
 
+    @State private var showingConsole = false
+
+    /// Initialize with custom content and optional debug info (matches original API)
     init(
-        @ViewBuilder content: @escaping () -> Content,
+        @ViewBuilder content: @escaping () -> CustomContent,
         debugInfo: @escaping () -> [String: String] = { [:] }
     ) {
-        self.contextContent = content
+        self.customContent = content()
         self.debugInfo = debugInfo
     }
 
-    /// Convenience init with no context content (system-only)
-    init() where Content == EmptyView {
-        self.contextContent = { EmptyView() }
-        self.debugInfo = { [:] }
-    }
-
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            // Expanded panel
-            if showToolbar {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header
-                    HStack {
-                        Text("DEV")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundColor(.primary)
-
-                        Spacer()
-
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showToolbar = false
-                            }
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Theme.current.surface2)
-
-                    Divider()
-
-                    // Content area
-                    VStack(alignment: .leading, spacing: 10) {
-                        // State info
-                        let info = debugInfo()
-                        if !info.isEmpty {
-                            DebugSection(title: "STATE") {
-                                DebugStateTable(info: info)
-                            }
-                        }
-
-                        // Context-specific content
-                        contextContent()
-
-                        // System-level actions
-                        DebugSection(title: "SYSTEM") {
-                            VStack(spacing: 4) {
-                                DebugActionButton(icon: "doc.text.magnifyingglass", label: "View Console") {
-                                    showingLogs = true
-                                }
-                                DebugActionButton(
-                                    icon: showCopiedFeedback ? "checkmark" : "doc.on.clipboard",
-                                    label: showCopiedFeedback ? "Copied!" : "Copy Debug Info"
-                                ) {
-                                    copyDebugInfo()
-                                }
-                            }
-                        }
-                    }
-                    .padding(10)
-                    .padding(.bottom, 6)
+        DebugToolbar(
+            title: "DEV",
+            icon: "ant.fill",
+            sections: buildSections(),
+            actions: [
+                DebugAction("View Console", icon: "doc.text.magnifyingglass") {
+                    showingConsole = true
                 }
-                .frame(width: 300)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Theme.current.surfaceBase)
-                        .shadow(color: settings.shadowMedium, radius: 12, x: 0, y: 4)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.gray.opacity(0.3), lineWidth: 0.5)
-                )
-                .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
-            }
-
-            // Toggle button (always visible - shared chrome)
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showToolbar.toggle()
-                }
-            }) {
-                Image(systemName: "ant.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(showToolbar ? .orange : .secondary)
-                    .rotationEffect(.degrees(showToolbar ? 180 : 0))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showToolbar)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .fill(Theme.current.surface1)
-                            .shadow(color: settings.shadowLight, radius: 4, x: 0, y: 2)
-                    )
-                    .overlay(
-                        Circle()
-                            .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
+            ],
+            onCopy: { buildCopyText() }
+        ) {
+            customContent
         }
-        .padding(.trailing, 16)
-        .padding(.bottom, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .sheet(isPresented: $showingLogs) {
+        .sheet(isPresented: $showingConsole) {
             DebugConsoleSheet()
         }
     }
 
-    private func copyDebugInfo() {
+    private func buildSections() -> [DebugKit.DebugSection] {
         let info = debugInfo()
+        guard !info.isEmpty else { return [] }
+
+        let rows = info.keys.sorted().map { key in
+            (key, info[key] ?? "-")
+        }
+        return [DebugKit.DebugSection("STATE", rows)]
+    }
+
+    private func buildCopyText() -> String {
         var lines: [String] = []
 
         // App info
@@ -156,6 +73,7 @@ struct DebugToolbarOverlay<Content: View>: View {
         lines.append("")
 
         // Context state
+        let info = debugInfo()
         if !info.isEmpty {
             lines.append("State:")
             for key in info.keys.sorted() {
@@ -176,19 +94,19 @@ struct DebugToolbarOverlay<Content: View>: View {
             }
         }
 
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
-
-        withAnimation {
-            showCopiedFeedback = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation {
-                showCopiedFeedback = false
-            }
-        }
+        return lines.joined(separator: "\n")
     }
 }
+
+extension TalkieDebugToolbar where CustomContent == EmptyView {
+    /// Convenience init with no context content (system-only)
+    init() {
+        self.init(content: { EmptyView() }, debugInfo: { [:] })
+    }
+}
+
+// MARK: - Legacy Alias (for compatibility)
+typealias DebugToolbarOverlay<Content: View> = TalkieDebugToolbar<Content>
 
 // MARK: - Debug Console Sheet
 

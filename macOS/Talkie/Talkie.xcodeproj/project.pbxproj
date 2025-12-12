@@ -81,6 +81,7 @@
 		CB12A13CA5ECEE19E50A05A2 /* MemoTableViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */; };
 		CE3E9EFEDFC1391AF65FAAE6 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D0D2AC46F2B1EE67539FDB0B /* MLXLMCommon */; };
 		D0EC6C1DC965D20E26780A84 /* WFKit in Frameworks */ = {isa = PBXBuildFile; productRef = F5624562F960D8515AA5C876 /* WFKit */; };
+		A7C3F8B2D1E5940F7A6B3C81 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = F9E2A4D6B8C1073E5F9D2A47 /* DebugKit */; };
 		D2F1E3D8A57F3DFB0F6A91CE /* AutoRunProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F216C6C2F9B2D0EB686BC8 /* AutoRunProcessor.swift */; };
 		D8E2B2EE4DC4D5B9360D39BB /* ModelsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */; };
 		DA7E5F307F15FEA3F6FD6448 /* WalkieService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E35708A082682B2EEEEFB9B /* WalkieService.swift */; };
@@ -179,6 +180,7 @@
 		E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsCatalog.swift; sourceTree = "<group>"; };
 		EA0F1D288CD155489B664F4C /* ModelsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsContentView.swift; sourceTree = "<group>"; };
 		EDF6CBE76775757D53F5AF8E /* WFKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WFKit; path = ../../WFKit; sourceTree = SOURCE_ROOT; };
+		B4D7E9A1C6F3280B5E8A1D93 /* DebugKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DebugKit; path = ../../../DebugKit; sourceTree = SOURCE_ROOT; };
 		F10F63F44EE54D3A552CB6A0 /* key-insights.twf.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "key-insights.twf.json"; sourceTree = "<group>"; };
 		F32E922E7292E91230F71AD6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsSettings.swift; sourceTree = "<group>"; };
@@ -189,6 +191,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A7C3F8B2D1E5940F7A6B3C81 /* DebugKit in Frameworks */,
 				67A5249D6D764042BF21594F /* FluidAudio in Frameworks */,
 				5A8FB727E018EBC503E01329 /* GRDB in Frameworks */,
 				D0EC6C1DC965D20E26780A84 /* WFKit in Frameworks */,
@@ -218,6 +221,7 @@
 		13D195D5F236957648E32FD9 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
+				B4D7E9A1C6F3280B5E8A1D93 /* DebugKit */,
 				EDF6CBE76775757D53F5AF8E /* WFKit */,
 			);
 			name = Packages;
@@ -444,6 +448,7 @@
 			);
 			name = Talkie;
 			packageProductDependencies = (
+				F9E2A4D6B8C1073E5F9D2A47 /* DebugKit */,
 				E488AD1F887CCD0880A88457 /* FluidAudio */,
 				9CB6A32843C8E78377EA7EE1 /* GRDB */,
 				F5624562F960D8515AA5C876 /* WFKit */,
@@ -486,6 +491,7 @@
 				1A8749A28BBB7162D19B3B41 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				D66F1C7CF2D97B28C1F5CC88 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				05193DEAEA1A4AFDF888739F /* XCLocalSwiftPackageReference "../../WFKit" */,
+				C5A8E3F7D2B6914A0E7C8F65 /* XCLocalSwiftPackageReference "../../../DebugKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
@@ -798,6 +804,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../WFKit;
 		};
+		C5A8E3F7D2B6914A0E7C8F65 /* XCLocalSwiftPackageReference "../../../DebugKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../DebugKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -864,6 +874,10 @@
 		F5624562F960D8515AA5C876 /* WFKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = WFKit;
+		};
+		F9E2A4D6B8C1073E5F9D2A47 /* DebugKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DebugKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 
