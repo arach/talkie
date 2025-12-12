@@ -18,8 +18,8 @@ import {
   FileText,
   DollarSign,
   Zap,
+  Wand2,
 } from 'lucide-react'
-import PrimitivesSection from './PrimitivesSection'
 import Container from './Container'
 import HeroBadge from './HeroBadge'
 import PricingSection from './PricingSection'
@@ -29,9 +29,16 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [pricingActive, setPricingActive] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [iosHover, setIosHover] = useState(false)
+  const [scrollProgress, setScrollProgress] = useState(0)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8)
+    const onScroll = () => {
+      setScrolled(window.scrollY > 8)
+      // Fade out iPhone over first 200px of scroll
+      const progress = Math.min(window.scrollY / 200, 1)
+      setScrollProgress(progress)
+    }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -69,10 +76,10 @@ export default function LandingPage() {
       }`}>
         <Container className="h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-black dark:bg-white text-white dark:text-black shadow-sm">
-              <Mic className="h-3.5 w-3.5" fill="currentColor" />
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-emerald-500 to-teal-400 text-white shadow-sm">
+              <Mic className="h-3.5 w-3.5" />
             </div>
-            <span className="font-bold text-base tracking-tight font-mono uppercase">Talkie_OS</span>
+            <span className="font-bold text-base tracking-tight font-mono uppercase">Talkie</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">
             <Link
@@ -100,6 +107,14 @@ export default function LandingPage() {
               }`}
             >
               Pricing
+            </a>
+          </div>
+          <div className="hidden md:flex items-center gap-3">
+            <a
+              href="https://github.com/arach/talkie/releases/latest/download/Talkie-for-Mac.zip"
+              className="px-3 py-2 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              Download Mac
             </a>
           </div>
           {/* Mobile menu button */}
@@ -176,7 +191,33 @@ export default function LandingPage() {
 
       {/* Hero Section - Technical Grid Background */}
       <section className="relative pt-36 pb-12 md:pt-40 md:pb-16 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
-        <div className="absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] opacity-60 pointer-events-none" />
+        <div className={`absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] pointer-events-none transition-opacity duration-300 ease-out ${iosHover ? 'opacity-0' : 'opacity-60'}`} />
+
+        {/* Left hover zone for video reveal */}
+        <div
+          className="absolute left-0 top-0 w-1/2 h-full hidden sm:block z-20"
+          onMouseEnter={() => setIosHover(true)}
+          onMouseLeave={() => setIosHover(false)}
+        />
+
+        {/* iPhone video - half resolution source, displayed at 330px (2x for retina) */}
+        <div
+          className={`fixed left-8 md:left-16 top-[52px] w-[330px] pointer-events-none select-none hidden sm:block rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${iosHover ? 'z-50' : 'z-20'} transition-opacity duration-150`}
+          style={{ isolation: 'isolate', opacity: 1 - scrollProgress }}
+        >
+          <div className={`rounded-[2rem] border-[3px] border-zinc-700 overflow-hidden transition-opacity duration-300 ease-out ${iosHover ? 'opacity-100' : 'opacity-30'}`}>
+            <video
+              src="/recording-preview-half.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto block"
+              style={{ marginBottom: '-12px' }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
 
         <Container className="relative z-10 text-center">
           <div className="mb-8 flex justify-center"><HeroBadge /></div>
@@ -192,7 +233,12 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a href="#pricing" className="group/ios h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-2 shadow-xl hover:shadow-2xl min-w-[200px] justify-center">
+            <a
+              href="#pricing"
+              className="group/ios h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-2 shadow-xl hover:shadow-2xl min-w-[200px] justify-center"
+              onMouseEnter={() => setIosHover(true)}
+              onMouseLeave={() => setIosHover(false)}
+            >
               <Smartphone className="w-4 h-4 transition-transform group-hover/ios:-rotate-6" />
               <span>Get iOS Early Access</span>
             </a>
@@ -214,7 +260,134 @@ export default function LandingPage() {
       </section>
 
       {/* Features Grid */}
-      <PrimitivesSection />
+      <section className="relative">
+        {/* Background layer - below phone */}
+        <div className="absolute inset-0 py-8 md:py-16 bg-zinc-100 dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800 overflow-hidden z-10">
+          {/* Subtle Background Glows */}
+          <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-zinc-300/20 dark:bg-zinc-800/20 rounded-full blur-[128px] pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
+          <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-zinc-200/40 dark:bg-zinc-800/10 rounded-full blur-[128px] pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
+        </div>
+
+        {/* Content layer - above phone */}
+        <div className="relative z-30 py-8 md:py-16 mx-auto max-w-6xl px-6">
+
+          <div className="mb-6 md:mb-10 md:flex items-end justify-between group/primitives-header">
+            <div className="max-w-xl">
+              <h2 className="text-3xl font-bold text-zinc-900 dark:text-white mb-4 tracking-tight uppercase transition-colors group-hover/primitives-header:text-emerald-600 dark:group-hover/primitives-header:text-emerald-400">Powerful Primitives.</h2>
+              <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">
+                We&apos;ve rebuilt the recording stack from the ground up. Talkie combines a professional‑grade audio engine with a node‑based automation system.
+              </p>
+            </div>
+            <div className="hidden md:block">
+              <Layers className="w-6 h-6 text-zinc-300 dark:text-zinc-700 transition-all group-hover/primitives-header:text-emerald-500 group-hover/primitives-header:rotate-12" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 md:auto-rows-fr">
+
+            {/* 1. Local AI Workflows (Large) */}
+            <div className="col-span-1 md:col-span-2 md:row-span-2 relative bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-emerald-500/30 p-4 md:p-6 flex flex-col md:justify-between group/workflows overflow-hidden rounded-sm shadow-sm hover:shadow-md transition-all duration-500">
+              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/workflows:opacity-10 transition-opacity transform group-hover/workflows:scale-110 duration-700">
+                <Wand2 className="w-40 h-40" strokeWidth={0.5} />
+              </div>
+
+              <div className="relative z-10">
+                <div className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4 transition-colors group-hover/workflows:bg-emerald-100 dark:group-hover/workflows:bg-emerald-900/30">
+                  <Zap className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/workflows:text-emerald-600 dark:group-hover/workflows:text-emerald-400 group-hover/workflows:scale-110" />
+                </div>
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2 uppercase tracking-wide transition-colors group-hover/workflows:text-emerald-600 dark:group-hover/workflows:text-emerald-400">Local AI Workflows</h3>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-sm">
+                  Don&apos;t just record. Process. Configure pipelines to automatically summarize meetings, extract action items, or reformat ramblings into clear prose.
+                </p>
+              </div>
+
+              <div className="mt-4 md:mt-8 space-y-1.5 md:space-y-2">
+                <div className="flex items-center gap-3 text-xs font-mono text-zinc-500">
+                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full"></div>
+                  <span>Input: Audio Recording (RAW)</span>
+                </div>
+                <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700 ml-[2.5px]"></div>
+                <div className="flex items-center gap-3 text-xs font-mono text-zinc-500">
+                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full"></div>
+                  <span>Process: Whisper (Quantized)</span>
+                </div>
+                <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700 ml-[2.5px]"></div>
+                <div className="flex items-center gap-3 text-xs font-mono text-blue-500">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                  <span>LLM: Summarize &amp; Extract Tasks</span>
+                </div>
+                <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700 ml-[2.5px]"></div>
+                <div className="flex items-center gap-3 text-xs font-mono text-zinc-900 dark:text-white font-bold">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                  <span>Output: Draft Email / Notion Page</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. On-Device Only (Tall) */}
+            <div className="col-span-1 md:col-span-1 md:row-span-2 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-emerald-500/30 p-4 md:p-5 flex flex-col group/device rounded-sm shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="flex items-center gap-2 mb-1.5 md:mb-2">
+                <Lock className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/device:text-emerald-500 group-hover/device:scale-110" />
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide transition-colors group-hover/device:text-emerald-600 dark:group-hover/device:text-emerald-400">On‑Device Only</h3>
+              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-2 md:mb-3">
+                Your voice is your biometric identity. It should never touch a server. The only cloud we use is the one you already trust: iCloud.
+              </p>
+              <div className="mt-auto border-t border-zinc-200 dark:border-zinc-800 pt-2 md:pt-3">
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 mb-1.5 md:mb-2">
+                  <span>Tracker Count</span>
+                  <span className="text-zinc-300 dark:text-zinc-700">0</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 mb-1.5 md:mb-2">
+                  <span>Cloud Processing</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">Permission Based</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 mb-1.5 md:mb-2">
+                  <span>Offline Mode</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">Active</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500">
+                  <span>Storage</span>
+                  <span className="text-blue-500">Apple iCloud</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. iCloud Sync */}
+            <div className="col-span-1 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-blue-500/30 p-4 md:p-5 flex flex-col md:justify-between group/icloud rounded-sm shadow-sm hover:shadow-md transition-all duration-300">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/icloud:text-blue-500 group-hover/icloud:scale-110" />
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide transition-colors group-hover/icloud:text-blue-600 dark:group-hover/icloud:text-blue-400">iCloud Sync</h3>
+                  </div>
+                  <div className="w-2 h-2 rounded-full bg-blue-500 transition-all group-hover/icloud:scale-125 group-hover/icloud:shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  Start recording on iPhone. Tag it. It appears instantly on your Mac for deep work.
+                </p>
+              </div>
+            </div>
+
+            {/* 4. Pro Audio */}
+            <div className="col-span-1 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-emerald-500/30 p-4 md:p-5 flex flex-col md:justify-between group/audio rounded-sm shadow-sm hover:shadow-md transition-all duration-300">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Mic className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/audio:text-emerald-500 group-hover/audio:scale-110" />
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide transition-colors group-hover/audio:text-emerald-600 dark:group-hover/audio:text-emerald-400">Pro Audio</h3>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-400 transition-colors group-hover/audio:text-emerald-500">WHISPER‑V3</span>
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  32‑bit float audio pipeline. Stereo recording. Automatic noise reduction.
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
 
       {/* Manifesto Section (Preview) */}
       <section id="manifesto" className="py-12 md:py-16 bg-white dark:bg-zinc-950 border-t border-b border-zinc-200 dark:border-zinc-800">
@@ -377,7 +550,7 @@ export default function LandingPage() {
         <Container className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="group/footer-logo flex items-center gap-2 cursor-default">
             <div className="w-3 h-3 bg-zinc-900 dark:bg-white rounded-sm transition-all group-hover/footer-logo:rotate-45 group-hover/footer-logo:bg-emerald-500 dark:group-hover/footer-logo:bg-emerald-400"></div>
-            <span className="text-sm font-bold uppercase tracking-widest text-zinc-900 dark:text-white transition-colors group-hover/footer-logo:text-emerald-600 dark:group-hover/footer-logo:text-emerald-400">Talkie_OS</span>
+            <span className="text-sm font-bold uppercase tracking-widest text-zinc-900 dark:text-white transition-colors group-hover/footer-logo:text-emerald-600 dark:group-hover/footer-logo:text-emerald-400">Talkie</span>
           </div>
           <div className="flex gap-8 text-[10px] font-mono uppercase text-zinc-500">
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition-colors">Twitter</a>

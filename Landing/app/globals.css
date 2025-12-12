@@ -35,7 +35,8 @@ html { scroll-behavior: smooth; }
 .bg-hero-gradient { background: radial-gradient(120% 80% at 50% 0%, rgba(0,0,0,.08), transparent 60%); }
 
 /* Subtle focus rings */
-.focus-visible:outline-none:focus-visible {
+:focus-visible {
+  outline: none;
   box-shadow: 0 0 0 2px rgba(250,250,250,0.08);
 }
 
