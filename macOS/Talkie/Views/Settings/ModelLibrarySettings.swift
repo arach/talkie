@@ -59,13 +59,14 @@ struct ModelLibraryView: View {
 struct ModelCard: View {
     let model: AIModel
     let installed: Bool
+    private let settings = SettingsManager.shared
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             // Icon
             Image(systemName: "sparkles")
                 .font(SettingsManager.shared.fontHeadline)
-                .foregroundColor(installed ? .blue : .secondary)
+                .foregroundColor(installed ? settings.resolvedAccentColor : .secondary)
                 .frame(width: 32, height: 32)
                 .background(Theme.current.surface1)
                 .cornerRadius(8)
@@ -80,7 +81,7 @@ struct ModelCard: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(model == .geminiPro ? Color.purple : Color.blue)
+                        .background(model == .geminiPro ? Color.purple : settings.resolvedAccentColor)
                         .cornerRadius(4)
                 }
 
@@ -112,7 +113,7 @@ struct ModelCard: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.blue)
+                        .background(settings.resolvedAccentColor)
                         .cornerRadius(4)
                 }
                 .buttonStyle(.plain)

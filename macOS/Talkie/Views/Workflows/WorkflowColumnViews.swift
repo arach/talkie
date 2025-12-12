@@ -36,7 +36,7 @@ struct WorkflowListColumn: View {
                         .font(SettingsManager.shared.fontBody)
                         .foregroundColor(.primary)
                         .frame(width: 24, height: 24)
-                        .background(settings.surfaceSelected)
+                        .background(Theme.current.surfaceSelected)
                         .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
@@ -92,8 +92,7 @@ struct WorkflowDetailColumn: View {
     @State private var showingMemoSelector = false
 
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
-        animation: .default
+        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
@@ -142,13 +141,13 @@ struct WorkflowDetailColumn: View {
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(settings.surfaceSelected)
+                        .background(Theme.current.surfaceSelected)
                         .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(settings.surfaceInput)
+                .background(Theme.current.surfaceInput)
             }
         }
         .sheet(isPresented: $showingMemoSelector) {
@@ -229,13 +228,14 @@ struct ColumnResizer: View {
     @Binding var width: CGFloat
     let minWidth: CGFloat
     let maxWidth: CGFloat
+    private let settings = SettingsManager.shared
 
     @State private var isHovering = false
     @State private var isDragging = false
 
     var body: some View {
         Rectangle()
-            .fill(isDragging ? Color.blue : (isHovering ? Color.secondary.opacity(0.3) : Color.clear))
+            .fill(isDragging ? settings.resolvedAccentColor : (isHovering ? Color.secondary.opacity(0.3) : Color.clear))
             .frame(width: 4)
             .contentShape(Rectangle().inset(by: -4))
             .onHover { hovering in

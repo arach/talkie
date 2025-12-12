@@ -31,8 +31,7 @@ struct MemoTableFullView: View {
         sortDescriptors: [
             NSSortDescriptor(keyPath: \VoiceMemo.sortOrder, ascending: true),
             NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
-        ],
-        animation: .default
+        ]
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
@@ -477,7 +476,7 @@ struct MemoTableRow: View {
     // Separate computed property for background to minimize body recalculation
     private var rowBackground: Color {
         if isSelected {
-            return Color.blue.opacity(0.15)
+            return settings.resolvedAccentColor.opacity(0.15)
         } else if isHovering {
             return theme.backgroundTertiary
         }

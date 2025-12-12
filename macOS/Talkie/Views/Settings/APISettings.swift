@@ -256,6 +256,7 @@ struct APIKeyRow: View {
     let onCancel: () -> Void
     let onReveal: () -> Void
     let onDelete: () -> Void
+    private let settings = SettingsManager.shared
 
     private var maskedKey: String {
         guard let key = currentKey, !key.isEmpty else { return "Not configured" }
@@ -271,7 +272,7 @@ struct APIKeyRow: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(SettingsManager.shared.fontTitle)
-                    .foregroundColor(isConfigured ? .blue : .secondary)
+                    .foregroundColor(isConfigured ? settings.resolvedAccentColor : .secondary)
                     .frame(width: 20)
 
                 Text(provider.uppercased())
@@ -301,7 +302,7 @@ struct APIKeyRow: View {
                         .cornerRadius(6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.blue.opacity(0.5), lineWidth: 1)
+                                .stroke(settings.resolvedAccentColor.opacity(0.5), lineWidth: 1)
                         )
 
                     Button(action: onCancel) {

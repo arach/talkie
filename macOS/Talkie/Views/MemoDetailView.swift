@@ -584,7 +584,7 @@ struct MemoDetailView: View {
 
     private func startPlaybackTimer() {
         playbackTimer?.invalidate()
-        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             if let player = audioPlayer {
                 currentTime = player.currentTime
                 // Check if playback finished
@@ -921,7 +921,7 @@ struct MemoDetailView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity)
-            .background(settings.surfaceAlternate)
+            .background(Theme.current.surfaceAlternate)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -1272,10 +1272,15 @@ struct WorkflowRunListItem: View {
         }
     }
 
+    // Static cached formatter
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     private func formatRunDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
@@ -1414,6 +1419,7 @@ struct WorkflowRunDetailView: View {
 struct StepExecutionCard: View {
     let step: WorkflowExecutor.StepExecution
     let isLast: Bool
+    private let settings = SettingsManager.shared
 
     @State private var showInput = false
 
@@ -1425,7 +1431,7 @@ struct StepExecutionCard: View {
                     .font(Theme.current.fontSMBold)
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
-                    .background(Color.blue)
+                    .background(settings.resolvedAccentColor)
                     .cornerRadius(4)
 
                 Image(systemName: step.stepIcon)

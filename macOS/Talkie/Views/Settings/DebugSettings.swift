@@ -16,12 +16,14 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 struct DebugInfoView: View {
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
-        animation: .default
+        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
     )
     private var allVoiceMemos: FetchedResults<VoiceMemo>
 
+    @ObservedObject private var settingsManager = SettingsManager.shared
     @State private var iCloudStatus: String = "Checking..."
+
+    private let syncIntervalOptions = [1, 5, 10, 15, 30, 60]
 
     private var environment: String {
         #if DEBUG
@@ -84,6 +86,39 @@ struct DebugInfoView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.current.surface1)
                 .cornerRadius(8)
+            }
+
+            Divider()
+
+            // Sync interval setting
+            VStack(alignment: .leading, spacing: 12) {
+                Text("AUTO-SYNC INTERVAL")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 12) {
+                    Text("Sync every")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    Picker("", selection: $settingsManager.syncIntervalMinutes) {
+                        ForEach(syncIntervalOptions, id: \.self) { minutes in
+                            Text(minutes == 1 ? "1 minute" : "\(minutes) minutes")
+                                .tag(minutes)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+
+                    Spacer()
+                }
+                .padding(12)
+                .background(Theme.current.surface1)
+                .cornerRadius(8)
+
+                Text("Manual sync is always available via the toolbar button. Lower intervals use more battery and network.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
             }
         }
         .onAppear {

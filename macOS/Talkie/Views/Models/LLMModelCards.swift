@@ -79,6 +79,7 @@ struct ModelRow: View {
     let downloadProgress: Double
     let onDownload: () -> Void
     let onDelete: () -> Void
+    private let settings = SettingsManager.shared
 
     var body: some View {
         HStack(spacing: 12) {
@@ -140,10 +141,10 @@ struct ModelRow: View {
                         Text("DOWNLOAD")
                             .font(Theme.current.fontXSBold)
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(settings.resolvedAccentColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.1))
+                    .background(settings.resolvedAccentColor.opacity(0.1))
                     .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
@@ -164,7 +165,7 @@ struct ActionButtonStyle: ButtonStyle {
             .foregroundColor(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.blue)
+            .background(SettingsManager.shared.resolvedAccentColor)
             .cornerRadius(4)
             .opacity(configuration.isPressed ? 0.7 : 1.0)
     }
@@ -595,7 +596,7 @@ struct CompactProviderCard: View {
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.blue.opacity(0.4), lineWidth: 1)
+                    .stroke(settings.resolvedAccentColor.opacity(0.4), lineWidth: 1)
             )
             .opacity(isConfiguring ? 1 : 0)
             .rotation3DEffect(.degrees(isConfiguring ? 0 : -180), axis: (x: 0, y: 1, z: 0))

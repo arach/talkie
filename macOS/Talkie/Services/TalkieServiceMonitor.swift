@@ -79,8 +79,9 @@ public final class TalkieServiceMonitor: ObservableObject {
     private let maxLogEntries = 500
 
     private init() {
-        logger.info("[TalkieService] Monitor initialized")
-        startMonitoring()
+        logger.info("[TalkieService] Monitor initialized (lazy - call startMonitoring() when needed)")
+        // Don't auto-start - let views call startMonitoring() when they appear
+        // This prevents CPU drain when monitoring views aren't visible
     }
 
     deinit {

@@ -52,8 +52,7 @@ struct ActivityLogFullView: View {
     private let settings = SettingsManager.shared
 
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
-        animation: .default
+        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)]
     )
     private var allRuns: FetchedResults<WorkflowRun>
 
@@ -176,7 +175,7 @@ struct ActivityLogFullView: View {
                 }
             }
             .frame(minWidth: 400, idealWidth: 550)
-            .background(settings.surfaceInput)
+            .background(Theme.current.surfaceInput)
 
             // Right side: Inspector (always visible)
             VStack(spacing: 0) {
@@ -277,7 +276,7 @@ struct ActivityInspectorPanel: View {
                     .font(SettingsManager.shared.fontBody)
                     .foregroundColor(.blue)
                     .frame(width: 24, height: 24)
-                    .background(settings.surfaceInfo)
+                    .background(Theme.current.surfaceInfo)
                     .cornerRadius(4)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -324,7 +323,7 @@ struct ActivityInspectorPanel: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(settings.surfaceAlternate)
+                        .background(Theme.current.surfaceAlternate)
                         .cornerRadius(3)
                 }
             }
@@ -387,7 +386,7 @@ struct ActivityInspectorPanel: View {
             .padding(.vertical, 8)
             .background(Theme.current.surface2)
         }
-        .background(settings.surfaceInput)
+        .background(Theme.current.surfaceInput)
     }
 
     private func formatFullDate(_ date: Date) -> String {
@@ -414,7 +413,7 @@ struct InspectorStepCard: View {
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(.white)
                     .frame(width: 16, height: 16)
-                    .background(Color.blue)
+                    .background(settings.resolvedAccentColor)
                     .cornerRadius(3)
 
                 Image(systemName: step.stepIcon)
@@ -448,7 +447,7 @@ struct InspectorStepCard: View {
                         .lineLimit(6)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(settings.surfaceAlternate)
+                        .background(Theme.current.surfaceAlternate)
                         .cornerRadius(4)
                 }
             }
@@ -499,7 +498,7 @@ struct InspectorResizeHandle: View {
 
     var body: some View {
         Rectangle()
-            .fill(isDragging ? settings.surfaceInfo : (isHovering ? settings.surfaceHover : settings.divider))
+            .fill(isDragging ? Theme.current.surfaceInfo : (isHovering ? Theme.current.surfaceHover : Theme.current.divider))
             .frame(width: isDragging ? 3 : 1)
             .contentShape(Rectangle().inset(by: -4))
             .onHover { hovering in

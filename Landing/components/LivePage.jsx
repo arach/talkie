@@ -27,6 +27,8 @@ import {
   FileText,
   Palette,
   RefreshCw,
+  Keyboard,
+  Circle,
 } from 'lucide-react'
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
@@ -167,8 +169,55 @@ export default function LivePage() {
         </Container>
       </section>
 
+      {/* Quick Start - Two Ways to Record */}
+      <section className="py-16 md:py-20 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
+        <Container>
+          <div className="text-center mb-10">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Two Ways to Record</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+            {/* Keyboard Shortcut */}
+            <div className="group border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 rounded-xl hover:border-emerald-500/50 transition-all text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-2xl mb-5 group-hover:bg-emerald-500/10 transition-colors">
+                <Keyboard className="w-7 h-7 text-zinc-600 dark:text-zinc-400 group-hover:text-emerald-500 transition-colors" />
+              </div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Keyboard</h3>
+              <div className="inline-flex items-center gap-1.5 px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg mb-4">
+                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">⌥</span>
+                <span className="text-xs font-mono text-zinc-400">+</span>
+                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">⌘</span>
+                <span className="text-xs font-mono text-zinc-400">+</span>
+                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">L</span>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Press anywhere to record</p>
+            </div>
+
+            {/* Menu Bar Pill */}
+            <div className="group border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 rounded-xl hover:border-emerald-500/50 transition-all text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-2xl mb-5 group-hover:bg-emerald-500/10 transition-colors">
+                <div className="flex items-center gap-1">
+                  <Circle className="w-2.5 h-2.5 text-emerald-500 fill-emerald-500" />
+                  <div className="w-8 h-2.5 bg-zinc-300 dark:bg-zinc-600 rounded-full group-hover:bg-emerald-500/50 transition-colors"></div>
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Menu Bar</h3>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg mb-4">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400">Always-on pill</span>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Click to start talking</p>
+            </div>
+          </div>
+
+          <p className="text-center text-xs text-zinc-400 mt-8 max-w-md mx-auto">
+            Text appears exactly where your cursor was. No copy-paste needed.
+          </p>
+        </Container>
+      </section>
+
       {/* Why Voice - Benefits */}
-      <section className="py-20 md:py-28 bg-white dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800">
+      <section className="py-20 md:py-28 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
         <Container>
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-6">
@@ -566,67 +615,120 @@ export default function LivePage() {
         </Container>
       </section>
 
+      {/* Powerful AI Models - Feature Section */}
+      <section className="py-16 md:py-20 bg-zinc-950 border-t border-b border-zinc-800">
+        <Container>
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-xl mb-4">
+              <Cpu className="w-6 h-6 text-emerald-500" />
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight mb-3">
+              Powerful AI Models
+            </h2>
+            <p className="text-sm text-zinc-400 max-w-md mx-auto">
+              Your voice stays on your Mac. Choose the model that fits your workflow.
+            </p>
+          </div>
+
+          {/* Model Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+            {/* Parakeet Card */}
+            <div className="relative bg-zinc-900 border-2 border-emerald-500 rounded-xl p-5">
+              <div className="absolute -top-2.5 left-4">
+                <span className="px-2 py-0.5 bg-emerald-500 text-[9px] font-mono font-bold uppercase tracking-wider text-white rounded">Recommended</span>
+              </div>
+              <div className="flex items-center gap-2.5 mt-1 mb-4">
+                <div className="w-9 h-9 bg-emerald-500/20 rounded-lg flex items-center justify-center p-1.5">
+                  <img src="/nvidia-logo.png" alt="NVIDIA" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <span className="text-base text-white font-bold">Parakeet</span>
+                  <span className="text-zinc-500 text-sm ml-1">v3</span>
+                </div>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Size</span>
+                  <span className="text-zinc-300 font-mono">~200 MB</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Speed</span>
+                  <span className="text-emerald-400 font-mono">Ultra-fast</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Languages</span>
+                  <span className="text-zinc-300 font-mono">English</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Whisper Card */}
+            <div className="relative bg-zinc-900 border border-zinc-700 rounded-xl p-5 hover:border-zinc-600 transition-colors">
+              <div className="absolute -top-2.5 left-4">
+                <span className="px-2 py-0.5 bg-cyan-600 text-[9px] font-mono font-bold uppercase tracking-wider text-white rounded">Multilingual</span>
+              </div>
+              <div className="flex items-center gap-2.5 mt-1 mb-4">
+                <div className="w-9 h-9 bg-zinc-800 rounded-lg flex items-center justify-center p-1.5">
+                  <img src="/openai-logo.png" alt="OpenAI" className="w-full h-full object-contain opacity-70" />
+                </div>
+                <div>
+                  <span className="text-base text-white font-bold">Whisper</span>
+                  <span className="text-zinc-500 text-sm ml-1">large-v3</span>
+                </div>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Size</span>
+                  <span className="text-zinc-300 font-mono">~1.5 GB</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Speed</span>
+                  <span className="text-zinc-300 font-mono">Fast</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Languages</span>
+                  <span className="text-zinc-300 font-mono">99+</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-center text-[10px] text-zinc-500 mt-6">
+            Both run locally via MLX on Apple Silicon • No internet required • Switch anytime
+          </p>
+        </Container>
+      </section>
+
       {/* Privacy Section */}
       <section className="py-20 md:py-28 bg-zinc-900">
         <Container>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <div className="flex items-center gap-2 mb-6">
-                <HardDrive className="w-5 h-5 text-emerald-500" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">100% Local Processing</span>
-              </div>
-              <h2 className="text-3xl md:text-4xl font-bold text-white uppercase tracking-tight leading-tight mb-6">
-                Your voice stays<br/>
-                <span className="text-zinc-500">on your Mac.</span>
-              </h2>
-              <p className="text-zinc-400 leading-relaxed mb-8">
-                Talkie Live uses on-device transcription with Whisper and Parakeet models. No audio leaves your computer. No cloud processing. No API keys needed. No account required.
-              </p>
-              <ul className="space-y-4 text-sm text-zinc-300">
-                <li className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  Transcription runs on Apple Silicon Neural Engine
-                </li>
-                <li className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  Audio files stored locally, auto-deleted after 48h
-                </li>
-                <li className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  No account required, no telemetry, no analytics
-                </li>
-                <li className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  Works offline. No internet connection needed
-                </li>
-              </ul>
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <HardDrive className="w-5 h-5 text-emerald-500" />
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">100% Local Processing</span>
             </div>
-
-            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-8">
-              <div className="flex items-center gap-3 mb-6">
-                <Cpu className="w-5 h-5 text-emerald-500" />
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-400">Transcription Engines</span>
+            <h2 className="text-3xl md:text-4xl font-bold text-white uppercase tracking-tight leading-tight mb-6">
+              Your voice stays on your Mac.
+            </h2>
+            <p className="text-zinc-400 leading-relaxed mb-10 max-w-xl mx-auto">
+              No audio leaves your computer. No cloud processing. No API keys. No account required.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
+                <p className="text-xs text-zinc-400">Neural Engine<br/>Processing</p>
               </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-3 border-b border-zinc-800">
-                  <span className="text-sm text-zinc-400">Models</span>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-sm text-white font-mono">whisper-large-v3-turbo</span>
-                    <span className="text-sm text-emerald-400 font-mono">parakeet-v3</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-zinc-800">
-                  <span className="text-sm text-zinc-400">Runtime</span>
-                  <span className="text-sm text-white font-mono">MLX (Apple Silicon)</span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-zinc-800">
-                  <span className="text-sm text-zinc-400">Latency</span>
-                  <span className="text-sm text-emerald-400 font-mono">~1s for 10s audio</span>
-                </div>
-                <div className="flex justify-between items-center py-3">
-                  <span className="text-sm text-zinc-400">Languages</span>
-                  <span className="text-sm text-white font-mono">99+ (Whisper) • English (Parakeet)</span>
-                </div>
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
+                <p className="text-xs text-zinc-400">48h Auto<br/>Cleanup</p>
+              </div>
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
+                <p className="text-xs text-zinc-400">Zero<br/>Telemetry</p>
+              </div>
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
+                <p className="text-xs text-zinc-400">Works<br/>Offline</p>
               </div>
             </div>
           </div>
@@ -742,6 +844,32 @@ export default function LivePage() {
             <span>Download for Mac</span>
           </a>
           <p className="mt-8 text-xs font-mono uppercase text-zinc-400">macOS 13+ • Apple Silicon optimized • Signed & Notarized</p>
+        </Container>
+      </section>
+
+      {/* Ecosystem Bar */}
+      <section className="py-8 bg-zinc-100 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
+        <Container>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">Talkie Ecosystem</span>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-purple-500 rounded-sm"></div>
+                <span className="text-[10px] font-mono uppercase text-zinc-500">Engine</span>
+                <span className="text-[10px] text-zinc-400 hidden sm:inline">powers transcription</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                <span className="text-[10px] font-mono uppercase text-emerald-600 dark:text-emerald-400 font-bold">Live</span>
+                <span className="text-[10px] text-zinc-400 hidden sm:inline">you&apos;re here</span>
+              </div>
+              <Link href="/features" className="flex items-center gap-2 group">
+                <div className="w-2 h-2 bg-orange-500 rounded-sm"></div>
+                <span className="text-[10px] font-mono uppercase text-zinc-500 group-hover:text-orange-500 transition-colors">Talkie</span>
+                <span className="text-[10px] text-zinc-400 hidden sm:inline group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">full app →</span>
+              </Link>
+            </div>
+          </div>
         </Container>
       </section>
 

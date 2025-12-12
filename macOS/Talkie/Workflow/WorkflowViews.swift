@@ -163,6 +163,7 @@ struct WorkflowDetailView: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onRun: () -> Void
+    private let settings = SettingsManager.shared
 
     @State private var showingVisualizer = false
 
@@ -246,10 +247,10 @@ struct WorkflowDetailView: View {
                                 Text("VIEW")
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                             }
-                            .foregroundColor(.blue)
+                            .foregroundColor(settings.resolvedAccentColor)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.blue.opacity(0.1))
+                            .background(settings.resolvedAccentColor.opacity(0.1))
                             .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
@@ -981,6 +982,7 @@ struct WorkflowInlineEditor: View {
     let onRun: () -> Void
 
     @ObservedObject private var workflowManager = WorkflowManager.shared
+    private let settings = SettingsManager.shared
     @State private var showingStepTypePicker = false
     @State private var isEditing = false
     @State private var showingVisualizer = false
@@ -1099,10 +1101,10 @@ struct WorkflowInlineEditor: View {
                             Text("VIEW")
                                 .font(.techLabelSmall)
                         }
-                        .foregroundColor(.blue)
+                        .foregroundColor(settings.resolvedAccentColor)
                         .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 5)
-                        .background(Color.blue.opacity(Opacity.light))
+                        .background(settings.resolvedAccentColor.opacity(Opacity.light))
                         .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
@@ -1694,15 +1696,16 @@ struct StepTypePicker: View {
 struct StepTypeCard: View {
     let stepType: WorkflowStep.StepType
     let onSelect: () -> Void
+    private let settings = SettingsManager.shared
 
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
                 Image(systemName: stepType.icon)
                     .font(.system(size: 16))
-                    .foregroundColor(.blue)
+                    .foregroundColor(settings.resolvedAccentColor)
                     .frame(width: 36, height: 36)
-                    .background(Color.blue.opacity(0.1))
+                    .background(settings.resolvedAccentColor.opacity(0.1))
                     .cornerRadius(8)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -3514,6 +3517,7 @@ struct ShellStepConfigEditor: View {
     @State private var argumentsText: String = ""
     @State private var promptTemplate: String = ""
     @State private var usePromptTemplate: Bool = false
+    private let settings = SettingsManager.shared
 
     private var config: ShellStepConfig {
         if case .shell(let c) = step.config { return c }
@@ -3729,14 +3733,14 @@ struct ShellStepConfigEditor: View {
             // Security note
             HStack(spacing: 4) {
                 Image(systemName: "lock.shield")
-                    .foregroundColor(.blue)
+                    .foregroundColor(settings.resolvedAccentColor)
                     .font(.system(size: 10))
                 Text("Only allowlisted executables can run. No shell expansion or command chaining.")
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(.secondary)
             }
             .padding(8)
-            .background(Color.blue.opacity(0.1))
+            .background(settings.resolvedAccentColor.opacity(0.1))
             .cornerRadius(6)
         }
     }
@@ -3986,6 +3990,7 @@ struct NotificationStepConfigEditor: View {
 
 struct iOSPushStepConfigEditor: View {
     @Binding var step: WorkflowStep
+    private let settings = SettingsManager.shared
 
     private var config: iOSPushStepConfig {
         if case .iOSPush(let c) = step.config { return c }
@@ -3997,13 +4002,13 @@ struct iOSPushStepConfigEditor: View {
             // Info banner
             HStack(spacing: 8) {
                 Image(systemName: "iphone.badge.play")
-                    .foregroundColor(.blue)
+                    .foregroundColor(settings.resolvedAccentColor)
                 Text("Sends a push notification to your iPhone via CloudKit")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.secondary)
             }
             .padding(8)
-            .background(Color.blue.opacity(0.1))
+            .background(settings.resolvedAccentColor.opacity(0.1))
             .cornerRadius(6)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -5457,6 +5462,7 @@ struct FlowLayout: Layout {
 
 struct ExecuteWorkflowsStepConfigEditor: View {
     @Binding var step: WorkflowStep
+    private let settings = SettingsManager.shared
 
     private var config: ExecuteWorkflowsStepConfig {
         if case .executeWorkflows(let c) = step.config { return c }
@@ -5538,7 +5544,7 @@ struct ExecuteWorkflowsStepConfigEditor: View {
             HStack(spacing: 8) {
                 Image(systemName: "info.circle")
                     .font(.system(size: 12))
-                    .foregroundColor(.blue)
+                    .foregroundColor(settings.resolvedAccentColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Workflow Routing")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
@@ -5548,7 +5554,7 @@ struct ExecuteWorkflowsStepConfigEditor: View {
                 }
             }
             .padding(10)
-            .background(Color.blue.opacity(0.1))
+            .background(settings.resolvedAccentColor.opacity(0.1))
             .cornerRadius(6)
         }
     }

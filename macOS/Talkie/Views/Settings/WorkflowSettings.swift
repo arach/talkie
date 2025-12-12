@@ -85,6 +85,7 @@ struct AllowedCommandsView: View {
     @State private var newCommandPath: String = ""
     @State private var customCommands: [String] = []
     @State private var showingWhichResult: String?
+    private let settings = SettingsManager.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -126,7 +127,7 @@ struct AllowedCommandsView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 10)
-                                .background(newCommandPath.isEmpty ? Color.gray : Color.blue)
+                                .background(newCommandPath.isEmpty ? Color.gray : settings.resolvedAccentColor)
                                 .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
@@ -137,10 +138,10 @@ struct AllowedCommandsView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "info.circle")
                                 .font(SettingsManager.shared.fontXS)
-                                .foregroundColor(.blue)
+                                .foregroundColor(settings.resolvedAccentColor)
                             Text(result)
                                 .font(SettingsManager.shared.fontXS)
-                                .foregroundColor(.blue)
+                                .foregroundColor(settings.resolvedAccentColor)
                         }
                     }
 

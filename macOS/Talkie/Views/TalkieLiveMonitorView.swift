@@ -34,8 +34,14 @@ struct TalkieLiveMonitorView: View {
                 logsSection
             }
         }
-        .background(settings.tacticalBackground)
+        .background(Theme.current.background)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            monitor.startMonitoring()
+        }
+        .onDisappear {
+            monitor.stopMonitoring()
+        }
     }
 
     // MARK: - Header
@@ -53,7 +59,7 @@ struct TalkieLiveMonitorView: View {
                     .frame(width: 8, height: 8)
                     .overlay(
                         Circle()
-                            .stroke(settings.tacticalBackground, lineWidth: 2)
+                            .stroke(Theme.current.background, lineWidth: 2)
                     )
                     .offset(x: 2, y: 2)
             }
@@ -180,7 +186,7 @@ struct TalkieLiveMonitorView: View {
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.sm)
-        .background(settings.surfaceAlternate.opacity(0.3))
+        .background(Theme.current.surfaceAlternate.opacity(0.3))
     }
 
     private func statItem(label: String, value: String) -> some View {
@@ -221,7 +227,7 @@ struct TalkieLiveMonitorView: View {
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.xs)
-            .background(settings.surfaceAlternate.opacity(0.5))
+            .background(Theme.current.surfaceAlternate.opacity(0.5))
 
             // Log list
             if monitor.logs.isEmpty {
@@ -261,6 +267,13 @@ struct TalkieLiveMonitorView: View {
 struct TalkieLiveLogRow: View {
     let entry: TalkieLiveLogEntry
     private let settings = SettingsManager.shared
+
+    // Static cached formatter - avoid recreating on every render
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
 
     @State private var isExpanded = false
 
@@ -318,9 +331,7 @@ struct TalkieLiveLogRow: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: date)
+        Self.timeFormatter.string(from: date)
     }
 }
 
@@ -344,6 +355,10 @@ struct TalkieLiveStatusBadge: View {
         .padding(.vertical, 3)
         .background(statusColor.opacity(0.1))
         .cornerRadius(4)
+        .onAppear {
+            // One-time check without starting full monitoring
+            monitor.refreshState()
+        }
     }
 
     private var statusColor: Color {

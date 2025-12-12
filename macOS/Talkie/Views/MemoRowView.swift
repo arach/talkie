@@ -11,6 +11,27 @@ struct MemoRowView: View {
     @ObservedObject var memo: VoiceMemo
     private let settings = SettingsManager.shared
 
+    // Static cached formatters - avoid recreating on every render
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        return f
+    }()
+
+    private static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, h:mm a"
+        return f
+    }()
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, h:mm a"
+        return f
+    }()
+
+    private static let calendar = Calendar.current
+
     private var memoTitle: String {
         memo.title ?? "Recording"
     }
@@ -25,7 +46,7 @@ struct MemoRowView: View {
                 // Title
                 Text(memoTitle)
                     .font(Theme.current.fontBodyMedium)
-                    .foregroundColor(settings.tacticalForeground)
+                    .foregroundColor(Theme.current.foreground)
                     .lineLimit(1)
 
                 // Minimal metadata: duration + relative time
@@ -63,21 +84,14 @@ struct MemoRowView: View {
     }
 
     private func formatDateCompact(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        let calendar = Calendar.current
-
-        if calendar.isDateInToday(date) {
-            formatter.timeStyle = .short
-            return "Today, \(formatter.string(from: date))"
-        } else if calendar.isDateInYesterday(date) {
-            formatter.timeStyle = .short
-            return "Yesterday, \(formatter.string(from: date))"
-        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
-            formatter.dateFormat = "EEEE, h:mm a"
-            return formatter.string(from: date)
+        if Self.calendar.isDateInToday(date) {
+            return "Today, \(Self.timeFormatter.string(from: date))"
+        } else if Self.calendar.isDateInYesterday(date) {
+            return "Yesterday, \(Self.timeFormatter.string(from: date))"
+        } else if Self.calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
+            return Self.weekdayFormatter.string(from: date)
         } else {
-            formatter.dateFormat = "MMM d, h:mm a"
-            return formatter.string(from: date)
+            return Self.dateFormatter.string(from: date)
         }
     }
 

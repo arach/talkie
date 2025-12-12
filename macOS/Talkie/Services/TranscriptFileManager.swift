@@ -39,6 +39,12 @@ class TranscriptFileManager {
         loadHashCache()
     }
 
+    deinit {
+        if let observer = remoteChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
     private func loadHashCache() {
         guard let data = try? Data(contentsOf: hashCacheURL),
               let dict = try? JSONDecoder().decode([String: Int].self, from: data) else {
@@ -141,6 +147,27 @@ class TranscriptFileManager {
         context.perform {
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
 
+            // Build predicate to only fetch memos we actually need to process
+            var predicates: [NSPredicate] = []
+            let saveTranscripts = SettingsManager.shared.saveTranscriptsLocally
+            let saveAudio = SettingsManager.shared.saveAudioLocally
+
+            if saveTranscripts && saveAudio {
+                // Need memos with transcript OR audio
+                predicates.append(NSCompoundPredicate(orPredicateWithSubpredicates: [
+                    NSPredicate(format: "transcription != nil AND transcription != ''"),
+                    NSPredicate(format: "audioData != nil")
+                ]))
+            } else if saveTranscripts {
+                predicates.append(NSPredicate(format: "transcription != nil AND transcription != ''"))
+            } else if saveAudio {
+                predicates.append(NSPredicate(format: "audioData != nil"))
+            }
+
+            if !predicates.isEmpty {
+                fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+            }
+
             do {
                 let memos = try context.fetch(fetchRequest)
                 var transcriptsCreated = 0
@@ -149,7 +176,7 @@ class TranscriptFileManager {
 
                 for memo in memos {
                     // Write transcript file (if enabled and memo has transcription)
-                    if SettingsManager.shared.saveTranscriptsLocally,
+                    if saveTranscripts,
                        let transcription = memo.currentTranscript, !transcription.isEmpty {
                         let result = self.writeTranscriptFile(for: memo)
                         switch result {
@@ -160,7 +187,7 @@ class TranscriptFileManager {
                     }
 
                     // Write audio file (if enabled and memo has audio)
-                    if SettingsManager.shared.saveAudioLocally {
+                    if saveAudio {
                         let audioResult = self.writeAudioFile(for: memo)
                         if audioResult == .created {
                             audioCreated += 1

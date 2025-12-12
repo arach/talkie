@@ -591,6 +591,12 @@ struct Theme: Equatable {
     let surface1: Color
     let surface2: Color
     let surface3: Color
+    let surfaceInput: Color
+    let surfaceHover: Color
+    let surfaceSelected: Color
+    let surfaceAlternate: Color
+    let surfaceWarning: Color
+    let surfaceInfo: Color
 
     // MARK: - Current Theme (singleton access)
 
@@ -650,7 +656,13 @@ struct Theme: Equatable {
             surfaceBase: settings.surfaceBase,
             surface1: settings.surface1,
             surface2: settings.surface2,
-            surface3: settings.surface3
+            surface3: settings.surface3,
+            surfaceInput: settings.surfaceInput,
+            surfaceHover: settings.surfaceHover,
+            surfaceSelected: settings.surfaceSelected,
+            surfaceAlternate: settings.surfaceAlternate,
+            surfaceWarning: settings.surfaceWarning,
+            surfaceInfo: settings.surfaceInfo
         )
     }
 }

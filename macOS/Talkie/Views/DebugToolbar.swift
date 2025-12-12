@@ -213,7 +213,7 @@ struct DebugStateTable: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(index % 2 == 0 ? settings.surfaceAlternate : Color.clear)
+                .background(index % 2 == 0 ? Theme.current.surfaceAlternate : Color.clear)
             }
         }
         .background(Theme.current.surface1)

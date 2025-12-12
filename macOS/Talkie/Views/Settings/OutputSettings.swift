@@ -22,6 +22,7 @@ struct OutputSettingsView: View {
     @State private var newAliasName: String = ""
     @State private var newAliasPath: String = ""
     @State private var showingAliasFolderPicker = false
+    private let settings = SettingsManager.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -60,13 +61,13 @@ struct OutputSettingsView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "folder.fill")
                             .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.blue)
+                            .foregroundColor(settings.resolvedAccentColor)
                         Text(SaveFileStepConfig.defaultOutputDirectory)
                             .font(SettingsManager.shared.fontXS)
                             .foregroundColor(.secondary)
                     }
                     .padding(8)
-                    .background(Color.blue.opacity(0.1))
+                    .background(settings.resolvedAccentColor.opacity(0.1))
                     .cornerRadius(6)
                 }
 

@@ -31,8 +31,7 @@ struct TalkieNavigationView: View {
         sortDescriptors: [
             NSSortDescriptor(keyPath: \VoiceMemo.sortOrder, ascending: true),
             NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
-        ],
-        animation: .default
+        ]
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
@@ -44,8 +43,13 @@ struct TalkieNavigationView: View {
     // Use let for singletons to avoid unnecessary view updates
     private let eventManager = SystemEventManager.shared
     private let pendingActionsManager = PendingActionsManager.shared
-    // TalkieServiceMonitor needs ObservedObject to show live status dot updates
-    @ObservedObject private var talkieServiceMonitor = TalkieServiceMonitor.shared
+    // Only track the state we need, not full @ObservedObject (avoids redraws on CPU/memory updates)
+    private let talkieServiceMonitor = TalkieServiceMonitor.shared
+    @State private var serviceIsRunning: Bool = false
+
+    // Cached console event counts (updated via publisher, not computed on every render)
+    @State private var cachedErrorCount: Int = 0
+    @State private var cachedWorkflowCount: Int = 0
 
     // Collapsible sidebar state (matches TalkieLive)
     @State private var isSidebarCollapsed: Bool = false
@@ -107,6 +111,19 @@ struct TalkieNavigationView: View {
             // Navigate to Workflows section when "MORE" button is clicked
             selectedSection = .workflows
         }
+        .onReceive(eventManager.$events) { _ in
+            updateEventCounts()
+        }
+        .onReceive(talkieServiceMonitor.$state) { newState in
+            serviceIsRunning = (newState == .running)
+        }
+        .onAppear {
+            updateEventCounts()
+            // Do a one-time state check without starting full monitoring
+            // (monitoring is now lazy - only starts when monitor view is shown)
+            talkieServiceMonitor.refreshState()
+            serviceIsRunning = (talkieServiceMonitor.state == .running)
+        }
         #if DEBUG
         .overlay(alignment: .bottomTrailing) {
             DebugToolbarOverlay {
@@ -126,13 +143,14 @@ struct TalkieNavigationView: View {
 
     private let syncManager = SyncStatusManager.shared
 
-    // Console event counts (for status bar indicators)
-    private var consoleErrorCount: Int {
-        eventManager.events.prefix(100).filter { $0.type == .error }.count
-    }
+    // Console event counts - use cached values updated via publisher
+    private var consoleErrorCount: Int { cachedErrorCount }
+    private var consoleWorkflowCount: Int { cachedWorkflowCount }
 
-    private var consoleWorkflowCount: Int {
-        eventManager.events.prefix(100).filter { $0.type == .workflow }.count
+    private func updateEventCounts() {
+        let recent = eventManager.events.prefix(100)
+        cachedErrorCount = recent.filter { $0.type == .error }.count
+        cachedWorkflowCount = recent.filter { $0.type == .workflow }.count
     }
 
     private var statusBarView: some View {
@@ -230,7 +248,7 @@ struct TalkieNavigationView: View {
                 .foregroundColor(.orange.opacity(0.7))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(settings.surfaceWarning)
+                .background(Theme.current.surfaceWarning)
                 .cornerRadius(3)
             #endif
         }
@@ -300,7 +318,7 @@ struct TalkieNavigationView: View {
                     sidebarButton(section: .pendingActions, icon: "clock.arrow.circlepath", title: "Pending", badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil, badgeColor: .accentColor, showSpinner: pendingActionsManager.hasActiveActions)
                     sidebarButton(section: .workflows, icon: "wand.and.stars", title: "Workflows")
                     sidebarButton(section: .models, icon: "brain", title: "Models")
-                    sidebarButton(section: .talkieService, icon: "gearshape.2", title: "Service", badge: nil, badgeColor: talkieServiceMonitor.state == .running ? .green : .red, showStatusDot: true, statusDotColor: talkieServiceMonitor.state == .running ? .green : .red)
+                    sidebarButton(section: .talkieService, icon: "gearshape.2", title: "Service", badge: nil, badgeColor: serviceIsRunning ? .green : .red, showStatusDot: true, statusDotColor: serviceIsRunning ? .green : .red)
                     sidebarButton(section: .systemConsole, icon: "terminal", title: "Console", badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil, badgeColor: .orange)
                 }
                 .frame(maxWidth: .infinity)
@@ -353,7 +371,7 @@ struct TalkieNavigationView: View {
                             icon: "gearshape.2",
                             title: "Talkie Service",
                             showStatusDot: true,
-                            statusDotColor: talkieServiceMonitor.state == .running ? .green : .red
+                            statusDotColor: serviceIsRunning ? .green : .red
                         )
                         sidebarButton(
                             section: .systemConsole,
@@ -427,7 +445,7 @@ struct TalkieNavigationView: View {
                             .frame(width: 6, height: 6)
                             .overlay(
                                 Circle()
-                                    .stroke(isSelected ? Color.accentColor : settings.tacticalBackground, lineWidth: 1.5)
+                                    .stroke(isSelected ? Color.accentColor : Theme.current.background, lineWidth: 1.5)
                             )
                             .offset(x: 2, y: 2)
                     }

@@ -22,8 +22,7 @@ struct WorkflowsContentView: View {
     @State private var showingMemoSelector = false
 
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
-        animation: .default
+        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
@@ -55,7 +54,7 @@ struct WorkflowsContentView: View {
                             .font(SettingsManager.shared.fontBody)
                             .foregroundColor(.primary)
                             .frame(width: 24, height: 24)
-                            .background(settings.surfaceSelected)
+                            .background(Theme.current.surfaceSelected)
                             .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
@@ -118,13 +117,13 @@ struct WorkflowsContentView: View {
                         .foregroundColor(.primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(settings.surfaceSelected)
+                        .background(Theme.current.surfaceSelected)
                         .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(settings.surfaceInput)
+                .background(Theme.current.surfaceInput)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -351,7 +350,7 @@ struct WorkflowMemoSelectorSheet: View {
             .padding(16)
         }
         .frame(width: 500, height: 500)
-        .background(settings.surfaceInput)
+        .background(Theme.current.surfaceInput)
     }
 }
 
@@ -370,8 +369,7 @@ struct WorkflowCard: View {
     @State private var errorMessage: String?
 
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
-        animation: .default
+        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
@@ -392,7 +390,7 @@ struct WorkflowCard: View {
                     .font(SettingsManager.shared.fontTitle)
                     .foregroundColor(.primary.opacity(0.7))
                     .frame(width: 32, height: 32)
-                    .background(settings.surfaceHover)
+                    .background(Theme.current.surfaceHover)
                     .cornerRadius(4)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -544,7 +542,7 @@ struct MemoSelectorSheet: View {
             }
         }
         .frame(width: 400, height: 500)
-        .background(settings.surfaceInput)
+        .background(Theme.current.surfaceInput)
     }
 }
 

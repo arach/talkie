@@ -2247,10 +2247,10 @@ struct DebugToolbarOverlay<Content: View>: View {
                     toggleButton
                 }
 
-                // Expanded panel
+                // Expanded panel - use simple opacity to avoid competing with button rotation
                 if showToolbar {
                     debugPanel
-                        .transition(.scale(scale: 0.9, anchor: scaleAnchor).combined(with: .opacity))
+                        .transition(.opacity.animation(.easeOut(duration: 0.15)))
                 }
 
                 // Tuning panels (slides in from edge) - capped height with scroll
@@ -2282,15 +2282,20 @@ struct DebugToolbarOverlay<Content: View>: View {
 
     private var toggleButton: some View {
         Button(action: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            // Use separate transactions: fast for rotation, normal for layout
+            var transaction = Transaction(animation: .spring(response: 0.25, dampingFraction: 0.8))
+            transaction.disablesAnimations = false
+            withTransaction(transaction) {
                 showToolbar.toggle()
             }
         }) {
+            // Isolate the rotating icon into its own composited layer
             Image(systemName: "ant.fill")
                 .font(.system(size: 14))
                 .foregroundColor(showToolbar ? .orange : .secondary)
                 .rotationEffect(.degrees(showToolbar ? 180 : 0))
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showToolbar)
+                .drawingGroup() // Rasterize icon before animating - prevents layout recalc
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: showToolbar)
                 .frame(width: 32, height: 32)
                 .background(
                     Circle()

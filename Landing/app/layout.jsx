@@ -45,6 +45,9 @@ export const metadata = {
       'Record once. Talkie transcribes, summarizes, and turns memos into tasks — synced across iOS and macOS.',
     images: ['/og-image.png'],
   },
+}
+
+export const viewport = {
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },

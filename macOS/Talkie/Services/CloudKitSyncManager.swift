@@ -48,18 +48,52 @@ class CloudKitSyncManager: ObservableObject {
     // MARK: - Timers and Schedulers
     private var syncTimer: Timer?
     private var remoteChangeObserver: NSObjectProtocol?
+    private var syncIntervalObserver: NSObjectProtocol?
     private var debounceTimer: Timer?
-    private let syncInterval: TimeInterval = 60 // 1 minute - simple and predictable
     private let debounceInterval: TimeInterval = 3.0 // Coalesce rapid notifications
+
+    // Sync interval from settings (default 10 minutes)
+    private var syncInterval: TimeInterval {
+        SettingsManager.shared.syncIntervalSeconds
+    }
 
     // Background activity scheduler - wakes app even when terminated
     private var backgroundActivityScheduler: NSBackgroundActivityScheduler?
-    private let backgroundSyncInterval: TimeInterval = 2 * 60 // 2 minutes for background (tighter for testing)
+    // Background sync at 1.5x foreground interval
+    private var backgroundSyncInterval: TimeInterval {
+        syncInterval * 1.5
+    }
 
     // App Nap prevention - keeps sync running when app loses focus
     private var appNapActivity: NSObjectProtocol?
 
+    // Static cached formatter for status display
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     private init() {}
+
+    deinit {
+        // Clean up timers
+        syncTimer?.invalidate()
+        debounceTimer?.invalidate()
+
+        // Clean up observers
+        if let observer = remoteChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = syncIntervalObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        // End App Nap prevention (inline to avoid main actor isolation issue)
+        if let activity = appNapActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
+    }
 
     func configure(with context: NSManagedObjectContext) {
         self.viewContext = context
@@ -110,6 +144,17 @@ class CloudKitSyncManager: ObservableObject {
             }
         }
 
+        // Listen for sync interval setting changes
+        syncIntervalObserver = NotificationCenter.default.addObserver(
+            forName: .syncIntervalDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.restartSyncTimers()
+            }
+        }
+
         logger.info("CloudKitSyncManager configured - foreground: \(Int(self.syncInterval))s, background: \(Int(self.backgroundSyncInterval))s")
 
         if serverChangeToken != nil {
@@ -120,6 +165,27 @@ class CloudKitSyncManager: ObservableObject {
 
         // Run one-time migrations
         MigrationRunner.shared.runPending(context: context)
+    }
+
+    /// Restarts sync timers when the sync interval setting changes
+    private func restartSyncTimers() {
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm:ss"
+        let now = Date()
+
+        // Restart foreground timer
+        syncTimer?.invalidate()
+        syncTimer = Timer.scheduledTimer(withTimeInterval: syncInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.syncNow()
+            }
+        }
+        let nextSync = now.addingTimeInterval(syncInterval)
+        logger.info("Sync timer restarted - next sync at \(timeFormatter.string(from: nextSync)) (every \(Int(self.syncInterval))s / \(Int(self.syncInterval/60))min)")
+
+        // Restart background scheduler
+        backgroundActivityScheduler?.invalidate()
+        setupBackgroundActivityScheduler()
     }
 
     // MARK: - App Nap Prevention
@@ -337,9 +403,8 @@ class CloudKitSyncManager: ObservableObject {
 
     /// Process auto-run workflows for unprocessed memos
     /// Includes memos without transcripts (System Transcribe will handle them)
+    /// Note: Context should already be refreshed by caller - no need to refresh again
     private func processTriggers(context: NSManagedObjectContext) async {
-        context.refreshAllObjects()
-
         // Query: unprocessed memos with audio data
         // Note: We include memos WITHOUT transcripts because System Transcribe (Phase 1) handles those
         let request = VoiceMemo.fetchRequest()
@@ -553,9 +618,7 @@ class CloudKitSyncManager: ObservableObject {
         if isSyncing {
             return "Syncing..."
         } else if let date = lastSyncDate {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .abbreviated
-            return "Synced \(formatter.localizedString(for: date, relativeTo: Date()))"
+            return "Synced \(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))"
         } else {
             return "Not synced"
         }

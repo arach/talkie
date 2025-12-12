@@ -8,11 +8,16 @@
 
 import SwiftUI
 import CoreData
+import Combine
 
 struct PendingActionsView: View {
     @StateObject private var pendingManager = PendingActionsManager.shared
     @Environment(\.managedObjectContext) private var viewContext
     private let settings = SettingsManager.shared
+
+    // Timer only created when needed - NOT autoconnect (that runs forever)
+    @State private var timerTick: UInt = 0
+    @State private var timerCancellable: AnyCancellable?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -63,7 +68,7 @@ struct PendingActionsView: View {
                         SectionHeader(title: "RUNNING", icon: "play.circle.fill", color: .accentColor)
 
                         ForEach(pendingManager.pendingActions) { action in
-                            PendingActionRow(action: action)
+                            PendingActionRow(action: action, tick: timerTick)
                             Divider()
                                 .opacity(0.3)
                                 .padding(.leading, 52)
@@ -71,9 +76,11 @@ struct PendingActionsView: View {
                     }
 
                     // Recent actions (failed first, then completed)
-                    if !pendingManager.recentActions.isEmpty {
+                    // Cache filtered arrays to avoid double-filtering
+                    let recentActions = pendingManager.recentActions
+                    if !recentActions.isEmpty {
                         // Failed actions
-                        let failedActions = pendingManager.failedActions
+                        let failedActions = recentActions.filter { $0.status.isFailed }
                         if !failedActions.isEmpty {
                             SectionHeader(title: "FAILED", icon: "xmark.circle.fill", color: .red)
 
@@ -85,8 +92,8 @@ struct PendingActionsView: View {
                             }
                         }
 
-                        // Completed actions
-                        let completedActions = pendingManager.recentActions.filter { !$0.status.isFailed }
+                        // Completed actions - use same source array, opposite filter
+                        let completedActions = recentActions.filter { !$0.status.isFailed }
                         if !completedActions.isEmpty {
                             SectionHeader(title: "RECENT", icon: "checkmark.circle.fill", color: .green)
 
@@ -143,8 +150,39 @@ struct PendingActionsView: View {
                 .background(Theme.current.surface1)
             }
         }
-        .background(settings.tacticalBackground)
+        .background(Theme.current.background)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: pendingManager.hasActiveActions) { _, hasActive in
+            // Start/stop timer based on whether there are pending actions
+            if hasActive {
+                startTimer()
+            } else {
+                stopTimer()
+            }
+        }
+        .onAppear {
+            // Start timer if already has active actions
+            if pendingManager.hasActiveActions {
+                startTimer()
+            }
+        }
+        .onDisappear {
+            stopTimer()
+        }
+    }
+
+    private func startTimer() {
+        guard timerCancellable == nil else { return }
+        timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { _ in
+                timerTick &+= 1
+            }
+    }
+
+    private func stopTimer() {
+        timerCancellable?.cancel()
+        timerCancellable = nil
     }
 
     private func retryAction(_ action: RecentAction) {
@@ -210,7 +248,7 @@ private struct SectionHeader: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.xs)
-        .background(settings.surfaceAlternate.opacity(0.5))
+        .background(Theme.current.surfaceAlternate.opacity(0.5))
     }
 }
 
@@ -218,31 +256,33 @@ private struct SectionHeader: View {
 
 struct PendingActionRow: View {
     let action: PendingAction
+    let tick: UInt  // Triggers redraw from parent timer
 
     private let settings = SettingsManager.shared
-    @State private var elapsed: TimeInterval = 0
 
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    // Computed from action - updates when tick changes
+    private var elapsed: TimeInterval { action.elapsed }
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
             // Workflow icon with spinner overlay
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(settings.surfaceAlternate)
+                    .fill(Theme.current.surfaceAlternate)
                     .frame(width: 36, height: 36)
 
                 Image(systemName: action.workflowIcon)
                     .font(settings.fontBody)
                     .foregroundColor(.accentColor)
 
-                // Spinner ring around icon
+                // Spinner ring around icon - smooth rotation driven by tick
+                // Use linear animation between tick values, NOT repeatForever (that causes cascading animations)
                 Circle()
                     .trim(from: 0, to: 0.7)
                     .stroke(Color.accentColor.opacity(0.6), lineWidth: 2)
                     .frame(width: 40, height: 40)
-                    .rotationEffect(.degrees(elapsed * 60))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: elapsed)
+                    .rotationEffect(.degrees(Double(tick) * 60))
+                    .animation(.linear(duration: 1), value: tick)
             }
 
             // Info
@@ -289,7 +329,7 @@ struct PendingActionRow: View {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(settings.surfaceAlternate)
+                                .fill(Theme.current.surfaceAlternate)
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(Color.accentColor.opacity(0.7))
                                 .frame(width: geo.size.width * action.progress)
@@ -301,12 +341,6 @@ struct PendingActionRow: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
-        .onReceive(timer) { _ in
-            elapsed = action.elapsed
-        }
-        .onAppear {
-            elapsed = action.elapsed
-        }
     }
 
     private func formatElapsed(_ seconds: TimeInterval) -> String {
@@ -344,7 +378,7 @@ struct RecentActionRow: View {
                 // Workflow icon with status indicator
                 ZStack {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(isFailed ? Color.red.opacity(0.15) : settings.surfaceAlternate)
+                        .fill(isFailed ? Color.red.opacity(0.15) : Theme.current.surfaceAlternate)
                         .frame(width: 36, height: 36)
 
                     Image(systemName: action.workflowIcon)
@@ -427,7 +461,7 @@ struct RecentActionRow: View {
                 }
             }
         }
-        .background(isHovering ? settings.surfaceAlternate.opacity(0.3) : Color.clear)
+        .background(isHovering ? Theme.current.surfaceAlternate.opacity(0.3) : Color.clear)
         .onHover { hovering in
             isHovering = hovering
         }

@@ -18,8 +18,7 @@ struct AIResultsContentView: View {
     private let settings = SettingsManager.shared
 
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)],
-        animation: .default
+        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)]
     )
     private var allRuns: FetchedResults<WorkflowRun>
 
@@ -112,7 +111,7 @@ struct AIResultsContentView: View {
                 }
             }
             .frame(minWidth: 280, maxWidth: 350)
-            .background(settings.surfaceInput)
+            .background(Theme.current.surfaceInput)
 
             // Right: Detail view
             if let run = selectedRun {
@@ -133,7 +132,7 @@ struct AIResultsContentView: View {
                         .foregroundColor(.secondary.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(settings.surfaceInput)
+                .background(Theme.current.surfaceInput)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -171,7 +170,7 @@ struct AIMemoHeaderView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(settings.surfaceAlternate)
+                .background(Theme.current.surfaceAlternate)
                 .cornerRadius(4)
         }
         .padding(.horizontal, 12)
@@ -202,7 +201,7 @@ struct AIRunRowView: View {
                     .font(SettingsManager.shared.fontSM)
                     .foregroundColor(isSelected ? .white : .secondary)
                     .frame(width: 22, height: 22)
-                    .background(isSelected ? Color.blue : Color.primary.opacity(0.05))
+                    .background(isSelected ? settings.resolvedAccentColor : Color.primary.opacity(0.05))
                     .cornerRadius(4)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -233,7 +232,7 @@ struct AIRunRowView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .frame(height: 44)
-            .background(isSelected ? Color.blue : (isHovering ? settings.surfaceHover : Color.clear))
+            .background(isSelected ? settings.resolvedAccentColor : (isHovering ? Theme.current.surfaceHover : Color.clear))
             .cornerRadius(6)
         }
         .buttonStyle(.plain)
@@ -242,10 +241,15 @@ struct AIRunRowView: View {
         .padding(.vertical, 1)
     }
 
+    // Static cached formatter
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     private func formatDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
@@ -280,7 +284,7 @@ struct AIRunDetailView: View {
                         .font(SettingsManager.shared.fontTitle)
                         .foregroundColor(.blue)
                         .frame(width: 32, height: 32)
-                        .background(settings.surfaceInfo)
+                        .background(Theme.current.surfaceInfo)
                         .cornerRadius(6)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -294,7 +298,7 @@ struct AIRunDetailView: View {
                                     .foregroundColor(.secondary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(settings.surfaceAlternate)
+                                    .background(Theme.current.surfaceAlternate)
                                     .cornerRadius(3)
                             }
 
@@ -379,7 +383,7 @@ struct AIRunDetailView: View {
                 .padding(16)
             }
         }
-        .background(settings.surfaceInput)
+        .background(Theme.current.surfaceInput)
     }
 
     private func formatFullDate(_ date: Date) -> String {
@@ -405,7 +409,7 @@ struct AIStepCard: View {
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
-                    .background(Color.blue)
+                    .background(settings.resolvedAccentColor)
                     .cornerRadius(4)
 
                 Image(systemName: step.stepIcon)
@@ -443,7 +447,7 @@ struct AIStepCard: View {
                         .lineLimit(10)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(settings.surfaceAlternate)
+                        .background(Theme.current.surfaceAlternate)
                         .cornerRadius(4)
                 }
             }
@@ -517,7 +521,7 @@ struct ActivityLogContentView: View {
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(settings.surfaceInput)
+        .background(Theme.current.surfaceInput)
     }
 }
 

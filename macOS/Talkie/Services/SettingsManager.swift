@@ -259,6 +259,11 @@ enum ThemePreset: String, CaseIterable {
 class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
+    // MARK: - Batch Update Flag (prevents cascade Theme.invalidate() calls)
+
+    /// When true, skip Theme.invalidate() in property didSets (call once at end of batch)
+    private var isBatchingUpdates = false
+
     // MARK: - Appearance Settings (UserDefaults - device-specific)
 
     private let appearanceModeKey = "appearanceMode"
@@ -274,14 +279,12 @@ class SettingsManager: ObservableObject {
     /// The currently active theme preset
     @Published var currentTheme: ThemePreset? {
         didSet {
-            DispatchQueue.main.async {
-                if let theme = self.currentTheme {
-                    UserDefaults.standard.set(theme.rawValue, forKey: self.currentThemeKey)
-                } else {
-                    UserDefaults.standard.removeObject(forKey: self.currentThemeKey)
-                }
-                Theme.invalidate()
+            if let theme = currentTheme {
+                UserDefaults.standard.set(theme.rawValue, forKey: currentThemeKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: currentThemeKey)
             }
+            if !isBatchingUpdates { Theme.invalidate() }
         }
     }
 
@@ -300,6 +303,30 @@ class SettingsManager: ObservableObject {
         currentTheme == .minimal
     }
 
+    /// Check if terminal theme is active
+    var isTerminalTheme: Bool {
+        currentTheme == .terminal
+    }
+
+    /// Check if warm theme is active
+    var isWarmTheme: Bool {
+        currentTheme == .warm
+    }
+
+    /// Check if classic theme is active
+    var isClassicTheme: Bool {
+        currentTheme == .classic
+    }
+
+    /// Whether currently in dark mode (respects manual override)
+    var isDarkMode: Bool {
+        switch appearanceMode {
+        case .dark: return true
+        case .light: return false
+        case .system: return isSystemDarkMode
+        }
+    }
+
     /// Check if system is in dark mode
     var isSystemDarkMode: Bool {
         NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -307,21 +334,15 @@ class SettingsManager: ObservableObject {
 
     @Published var appearanceMode: AppearanceMode {
         didSet {
-            let mode = appearanceMode
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(mode.rawValue, forKey: self.appearanceModeKey)
-                Theme.invalidate()
-            }
+            UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceModeKey)
+            if !isBatchingUpdates { Theme.invalidate() }
             applyAppearanceMode()
         }
     }
 
     @Published var accentColor: AccentColorOption {
         didSet {
-            let color = accentColor
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(color.rawValue, forKey: self.accentColorKey)
-            }
+            UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
         }
     }
 
@@ -333,22 +354,16 @@ class SettingsManager: ObservableObject {
     /// Font style for UI chrome: labels, headers, buttons, badges, navigation
     @Published var uiFontStyle: FontStyleOption {
         didSet {
-            let style = uiFontStyle
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(style.rawValue, forKey: self.uiFontStyleKey)
-                Theme.invalidate()
-            }
+            UserDefaults.standard.set(uiFontStyle.rawValue, forKey: uiFontStyleKey)
+            if !isBatchingUpdates { Theme.invalidate() }
         }
     }
 
     /// Font style for content: transcripts, notes, markdown, user-generated text
     @Published var contentFontStyle: FontStyleOption {
         didSet {
-            let style = contentFontStyle
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(style.rawValue, forKey: self.contentFontStyleKey)
-                Theme.invalidate()
-            }
+            UserDefaults.standard.set(contentFontStyle.rawValue, forKey: contentFontStyleKey)
+            if !isBatchingUpdates { Theme.invalidate() }
         }
     }
 
@@ -361,32 +376,23 @@ class SettingsManager: ObservableObject {
     /// UI chrome font size (labels, headers, buttons, badges)
     @Published var uiFontSize: FontSizeOption {
         didSet {
-            let size = uiFontSize
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(size.rawValue, forKey: self.uiFontSizeKey)
-                Theme.invalidate()
-            }
+            UserDefaults.standard.set(uiFontSize.rawValue, forKey: uiFontSizeKey)
+            if !isBatchingUpdates { Theme.invalidate() }
         }
     }
 
     /// Content font size (transcripts, notes, markdown)
     @Published var contentFontSize: FontSizeOption {
         didSet {
-            let size = contentFontSize
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(size.rawValue, forKey: self.contentFontSizeKey)
-                Theme.invalidate()
-            }
+            UserDefaults.standard.set(contentFontSize.rawValue, forKey: contentFontSizeKey)
+            if !isBatchingUpdates { Theme.invalidate() }
         }
     }
 
     /// Whether UI chrome labels should be ALL CAPS (tactical style)
     @Published var uiAllCaps: Bool {
         didSet {
-            let value = uiAllCaps
-            DispatchQueue.main.async {
-                UserDefaults.standard.set(value, forKey: self.uiAllCapsKey)
-            }
+            UserDefaults.standard.set(uiAllCaps, forKey: uiAllCapsKey)
         }
     }
 
@@ -452,10 +458,22 @@ class SettingsManager: ObservableObject {
     /// Primary background
     var tacticalBackground: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.05) : Color(white: 0.98)
+            return isDarkMode ? Color(white: 0.05) : Color(white: 0.98)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.11) : Color(white: 0.97)
+            return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
+        }
+        if isTerminalTheme {
+            // Terminal: Black in dark, paper-white in light
+            return isDarkMode ? Color.black : Color(white: 0.97)
+        }
+        if isWarmTheme {
+            // Warm: Rich brown-black in dark, warm cream in light
+            return isDarkMode ? Color(red: 0.08, green: 0.06, blue: 0.04) : Color(red: 0.99, green: 0.97, blue: 0.94)
+        }
+        if isClassicTheme {
+            // Classic: Dark gray in dark, clean white in light
+            return isDarkMode ? Color(white: 0.12) : Color(white: 0.98)
         }
         return Color(NSColor.windowBackgroundColor)
     }
@@ -463,10 +481,19 @@ class SettingsManager: ObservableObject {
     /// Secondary background (slightly lighter/darker)
     var tacticalBackgroundSecondary: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.94)
+            return isDarkMode ? Color(white: 0.08) : Color(white: 0.94)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.14) : Color(white: 0.94)
+            return isDarkMode ? Color(white: 0.14) : Color(white: 0.94)
+        }
+        if isTerminalTheme {
+            return isDarkMode ? Color(white: 0.06) : Color(white: 0.94)
+        }
+        if isWarmTheme {
+            return isDarkMode ? Color(red: 0.12, green: 0.09, blue: 0.06) : Color(red: 0.96, green: 0.94, blue: 0.90)
+        }
+        if isClassicTheme {
+            return isDarkMode ? Color(white: 0.15) : Color(white: 0.95)
         }
         return Color(NSColor.controlBackgroundColor)
     }
@@ -474,22 +501,41 @@ class SettingsManager: ObservableObject {
     /// Tertiary background for cards/panels
     var tacticalBackgroundTertiary: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.12) : Color(white: 0.90)
+            return isDarkMode ? Color(white: 0.12) : Color(white: 0.90)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.18) : Color(white: 0.91)
+            return isDarkMode ? Color(white: 0.18) : Color(white: 0.91)
         }
-        // Fallback: solid color approximating controlBackgroundColor*0.5
-        return isSystemDarkMode ? Color(white: 0.13) : Color(white: 0.94)
+        if isTerminalTheme {
+            return isDarkMode ? Color(white: 0.10) : Color(white: 0.91)
+        }
+        if isWarmTheme {
+            return isDarkMode ? Color(red: 0.16, green: 0.12, blue: 0.08) : Color(red: 0.93, green: 0.90, blue: 0.86)
+        }
+        if isClassicTheme {
+            return isDarkMode ? Color(white: 0.18) : Color(white: 0.92)
+        }
+        return isDarkMode ? Color(white: 0.13) : Color(white: 0.94)
     }
 
     /// Primary text
     var tacticalForeground: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.98) : Color(white: 0.08)
+            return isDarkMode ? Color(white: 0.98) : Color(white: 0.08)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.92) : Color(white: 0.12)
+            return isDarkMode ? Color(white: 0.92) : Color(white: 0.12)
+        }
+        if isTerminalTheme {
+            // Terminal: Green in dark, dark green in light
+            return isDarkMode ? Color(red: 0.0, green: 0.85, blue: 0.0) : Color(red: 0.0, green: 0.35, blue: 0.0)
+        }
+        if isWarmTheme {
+            // Warm: Warm white in dark, rich brown in light
+            return isDarkMode ? Color(red: 1.0, green: 0.95, blue: 0.88) : Color(red: 0.25, green: 0.18, blue: 0.12)
+        }
+        if isClassicTheme {
+            return isDarkMode ? Color(white: 0.95) : Color(white: 0.10)
         }
         return Color.primary
     }
@@ -497,10 +543,19 @@ class SettingsManager: ObservableObject {
     /// Secondary text
     var tacticalForegroundSecondary: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.72) : Color(white: 0.32)
+            return isDarkMode ? Color(white: 0.72) : Color(white: 0.32)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.65) : Color(white: 0.38)
+            return isDarkMode ? Color(white: 0.65) : Color(white: 0.38)
+        }
+        if isTerminalTheme {
+            return isDarkMode ? Color(red: 0.0, green: 0.65, blue: 0.0) : Color(red: 0.0, green: 0.45, blue: 0.0)
+        }
+        if isWarmTheme {
+            return isDarkMode ? Color(red: 0.85, green: 0.78, blue: 0.68) : Color(red: 0.45, green: 0.38, blue: 0.30)
+        }
+        if isClassicTheme {
+            return isDarkMode ? Color(white: 0.70) : Color(white: 0.35)
         }
         return Color.secondary
     }
@@ -508,22 +563,39 @@ class SettingsManager: ObservableObject {
     /// Muted text for timestamps, metadata
     var tacticalForegroundMuted: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.52) : Color(white: 0.48)
+            return isDarkMode ? Color(white: 0.52) : Color(white: 0.48)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.48) : Color(white: 0.50)
+            return isDarkMode ? Color(white: 0.48) : Color(white: 0.50)
         }
-        // Fallback: secondary*0.7 ≈ dark: 0.42, light: 0.58
-        return isSystemDarkMode ? Color(white: 0.42) : Color(white: 0.58)
+        if isTerminalTheme {
+            return isDarkMode ? Color(red: 0.0, green: 0.45, blue: 0.0) : Color(red: 0.0, green: 0.55, blue: 0.0)
+        }
+        if isWarmTheme {
+            return isDarkMode ? Color(red: 0.65, green: 0.58, blue: 0.48) : Color(red: 0.55, green: 0.48, blue: 0.40)
+        }
+        if isClassicTheme {
+            return isDarkMode ? Color(white: 0.50) : Color(white: 0.50)
+        }
+        return isDarkMode ? Color(white: 0.42) : Color(white: 0.58)
     }
 
     /// Divider/border color
     var tacticalDivider: Color {
         if useTacticalColors {
-            return appearanceMode == .dark ? Color(white: 0.2) : Color(white: 0.85)
+            return isDarkMode ? Color(white: 0.2) : Color(white: 0.85)
         }
         if isMinimalTheme {
-            return isSystemDarkMode ? Color(white: 0.22) : Color(white: 0.88)
+            return isDarkMode ? Color(white: 0.22) : Color(white: 0.88)
+        }
+        if isTerminalTheme {
+            return isDarkMode ? Color(red: 0.0, green: 0.3, blue: 0.0) : Color(red: 0.0, green: 0.6, blue: 0.0).opacity(0.3)
+        }
+        if isWarmTheme {
+            return isDarkMode ? Color(red: 0.3, green: 0.22, blue: 0.15) : Color(red: 0.85, green: 0.80, blue: 0.72)
+        }
+        if isClassicTheme {
+            return isDarkMode ? Color(white: 0.25) : Color(white: 0.85)
         }
         return Color(NSColor.separatorColor)
     }
@@ -552,37 +624,37 @@ class SettingsManager: ObservableObject {
 
     /// Surface Level 0: Window/App background (deepest layer)
     var surfaceBase: Color {
-        appearanceMode == .dark ? Color(white: 0.05) : Color(white: 0.98)
+        isDarkMode ? Color(white: 0.05) : Color(white: 0.98)
     }
 
     /// Surface Level 1: Primary content areas (slightly elevated)
     var surface1: Color {
-        appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.95)
+        isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
     }
 
     /// Surface Level 2: Cards, panels, modals (more elevated)
     var surface2: Color {
-        appearanceMode == .dark ? Color(white: 0.12) : Color(white: 0.92)
+        isDarkMode ? Color(white: 0.12) : Color(white: 0.92)
     }
 
     /// Surface Level 3: Elevated elements (popovers, tooltips, menus)
     var surface3: Color {
-        appearanceMode == .dark ? Color(white: 0.16) : Color(white: 0.88)
+        isDarkMode ? Color(white: 0.16) : Color(white: 0.88)
     }
 
     /// Surface Overlay: Tint for depth effect
     var surfaceOverlay: Color {
-        appearanceMode == .dark ? Color.black.opacity(0.12) : Color.black.opacity(0.04)
+        isDarkMode ? Color.black.opacity(0.12) : Color.black.opacity(0.04)
     }
 
     /// Surface Gradient: Subtle top highlight
     var surfaceGradientTop: Color {
-        appearanceMode == .dark ? Color.white.opacity(0.02) : Color.white.opacity(0.5)
+        isDarkMode ? Color.white.opacity(0.02) : Color.white.opacity(0.5)
     }
 
     /// Text/Input background (slightly elevated from base)
     var surfaceInput: Color {
-        appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.95)
+        isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
     }
 
     // MARK: - Interactive Surface States (Appearance-Aware Solid Colors)
@@ -590,22 +662,22 @@ class SettingsManager: ObservableObject {
 
     /// Hover state overlay - dark: 0.05+0.05=0.10, light: 0.95-0.05=0.90
     var surfaceHover: Color {
-        appearanceMode == .dark ? Color(white: 0.10) : Color(white: 0.90)
+        isDarkMode ? Color(white: 0.10) : Color(white: 0.90)
     }
 
     /// Active/pressed state overlay - dark: 0.05+0.08=0.13, light: 0.95-0.08=0.87
     var surfaceActive: Color {
-        appearanceMode == .dark ? Color(white: 0.13) : Color(white: 0.87)
+        isDarkMode ? Color(white: 0.13) : Color(white: 0.87)
     }
 
     /// Selected state overlay - dark: 0.05+0.1=0.15, light: 0.95-0.1=0.85
     var surfaceSelected: Color {
-        appearanceMode == .dark ? Color(white: 0.15) : Color(white: 0.85)
+        isDarkMode ? Color(white: 0.15) : Color(white: 0.85)
     }
 
     /// Alternating row background (for lists) - dark: 0.05+0.02=0.07, light: 0.95-0.02=0.93
     var surfaceAlternate: Color {
-        appearanceMode == .dark ? Color(white: 0.07) : Color(white: 0.93)
+        isDarkMode ? Color(white: 0.07) : Color(white: 0.93)
     }
 
     // MARK: - Semantic Surface Colors
@@ -634,17 +706,17 @@ class SettingsManager: ObservableObject {
 
     /// Default border (subtle) - dark: ~0.13 (8% of white on 0.05), light: ~0.87 (8% of black on 0.95)
     var borderDefault: Color {
-        appearanceMode == .dark ? Color(white: 0.13) : Color(white: 0.87)
+        isDarkMode ? Color(white: 0.13) : Color(white: 0.87)
     }
 
     /// Strong border (more visible) - dark: ~0.20 (15% of white on 0.05), light: ~0.80
     var borderStrong: Color {
-        appearanceMode == .dark ? Color(white: 0.20) : Color(white: 0.80)
+        isDarkMode ? Color(white: 0.20) : Color(white: 0.80)
     }
 
     /// Divider for separating content - dark: ~0.11 (6% of white on 0.05), light: ~0.89
     var divider: Color {
-        appearanceMode == .dark ? Color(white: 0.11) : Color(white: 0.89)
+        isDarkMode ? Color(white: 0.11) : Color(white: 0.89)
     }
 
     /// Success border
@@ -664,7 +736,7 @@ class SettingsManager: ObservableObject {
     var statusReady: Color { Color(red: 0, green: 0.35, blue: 0.7) }
     // secondary*0.4 ≈ dark: 0.24, light: 0.60
     var statusOffline: Color {
-        appearanceMode == .dark ? Color(white: 0.24) : Color(white: 0.60)
+        isDarkMode ? Color(white: 0.24) : Color(white: 0.60)
     }
     var statusWarning: Color { Color.orange }
     // red*0.7 ≈ (0.7, 0, 0)
@@ -696,15 +768,15 @@ class SettingsManager: ObservableObject {
 
     // secondary*0.5 ≈ dark: 0.30, light: 0.70
     var specLabelColor: Color {
-        appearanceMode == .dark ? Color(white: 0.30) : Color(white: 0.70)
+        isDarkMode ? Color(white: 0.30) : Color(white: 0.70)
     }
     // primary*0.85 ≈ dark: 0.85, light: 0.15
     var specValueColor: Color {
-        appearanceMode == .dark ? Color(white: 0.85) : Color(white: 0.15)
+        isDarkMode ? Color(white: 0.85) : Color(white: 0.15)
     }
     // secondary*0.6 ≈ dark: 0.36, light: 0.64
     var specUnitColor: Color {
-        appearanceMode == .dark ? Color(white: 0.36) : Color(white: 0.64)
+        isDarkMode ? Color(white: 0.36) : Color(white: 0.64)
     }
 
     // MARK: - Midnight Theme Colors (Appearance-Aware, Solid Colors)
@@ -713,47 +785,47 @@ class SettingsManager: ObservableObject {
 
     /// Midnight base: Background
     var midnightBase: Color {
-        appearanceMode == .dark ? Color(white: 0.04) : Color(white: 0.98)
+        isDarkMode ? Color(white: 0.04) : Color(white: 0.98)
     }
 
     /// Midnight surface: Slightly elevated cards (dark: 0.04+0.02=0.06, light: 0.98-0.02=0.96)
     var midnightSurface: Color {
-        appearanceMode == .dark ? Color(white: 0.06) : Color(white: 0.96)
+        isDarkMode ? Color(white: 0.06) : Color(white: 0.96)
     }
 
     /// Midnight surface hover: Mouse hover state
     var midnightSurfaceHover: Color {
-        appearanceMode == .dark ? Color(white: 0.09) : Color(white: 0.93)
+        isDarkMode ? Color(white: 0.09) : Color(white: 0.93)
     }
 
     /// Midnight surface elevated: Expanded states
     var midnightSurfaceElevated: Color {
-        appearanceMode == .dark ? Color(white: 0.08) : Color(white: 0.94)
+        isDarkMode ? Color(white: 0.08) : Color(white: 0.94)
     }
 
     /// Midnight border: Subtle card outlines
     var midnightBorder: Color {
-        appearanceMode == .dark ? Color(white: 0.10) : Color(white: 0.90)
+        isDarkMode ? Color(white: 0.10) : Color(white: 0.90)
     }
 
     /// Midnight border active: Expanded/focused states
     var midnightBorderActive: Color {
-        appearanceMode == .dark ? Color(white: 0.16) : Color(white: 0.82)
+        isDarkMode ? Color(white: 0.16) : Color(white: 0.82)
     }
 
     /// Midnight text primary: High contrast
     var midnightTextPrimary: Color {
-        appearanceMode == .dark ? Color(white: 0.92) : Color(white: 0.12)
+        isDarkMode ? Color(white: 0.92) : Color(white: 0.12)
     }
 
     /// Midnight text secondary: Muted labels
     var midnightTextSecondary: Color {
-        appearanceMode == .dark ? Color(white: 0.50) : Color(white: 0.45)
+        isDarkMode ? Color(white: 0.50) : Color(white: 0.45)
     }
 
     /// Midnight text tertiary: Very subtle hints
     var midnightTextTertiary: Color {
-        appearanceMode == .dark ? Color(white: 0.30) : Color(white: 0.65)
+        isDarkMode ? Color(white: 0.30) : Color(white: 0.65)
     }
 
     /// Midnight accent bar: Section header vertical accent (default)
@@ -770,14 +842,14 @@ class SettingsManager: ObservableObject {
 
     /// Midnight recommended badge background
     var midnightBadgeRecommended: Color {
-        appearanceMode == .dark ? Color(red: 0.15, green: 0.13, blue: 0.03) : Color(red: 1.0, green: 0.97, blue: 0.88)
+        isDarkMode ? Color(red: 0.15, green: 0.13, blue: 0.03) : Color(red: 1.0, green: 0.97, blue: 0.88)
     }
     /// Midnight recommended badge border
     var midnightBadgeRecommendedBorder: Color {
-        appearanceMode == .dark ? Color(red: 0.5, green: 0.43, blue: 0.1) : Color(red: 0.8, green: 0.68, blue: 0.16)
+        isDarkMode ? Color(red: 0.5, green: 0.43, blue: 0.1) : Color(red: 0.8, green: 0.68, blue: 0.16)
     }
     var midnightBadgeRecommendedText: Color {
-        appearanceMode == .dark ? Color(red: 1.0, green: 0.85, blue: 0.2) : Color(red: 0.7, green: 0.5, blue: 0.0)
+        isDarkMode ? Color(red: 1.0, green: 0.85, blue: 0.2) : Color(red: 0.7, green: 0.5, blue: 0.0)
     }
 
     /// Midnight active status
@@ -788,12 +860,12 @@ class SettingsManager: ObservableObject {
 
     /// Midnight download button
     var midnightButtonPrimary: Color {
-        appearanceMode == .dark ? Color(white: 0.16) : Color(white: 0.90)
+        isDarkMode ? Color(white: 0.16) : Color(white: 0.90)
     }
 
     /// Midnight download button hover
     var midnightButtonHover: Color {
-        appearanceMode == .dark ? Color(white: 0.22) : Color(white: 0.85)
+        isDarkMode ? Color(white: 0.22) : Color(white: 0.85)
     }
 
     // MARK: - Legacy Aliases (for backwards compatibility)
@@ -807,8 +879,14 @@ class SettingsManager: ObservableObject {
     var cardBorderReady: Color { borderInfo }
     var specDividerOpacity: Double { 0.08 }
 
-    /// Apply a curated theme preset
+    /// Apply a curated theme preset (batches updates to avoid cascade invalidations)
     func applyTheme(_ theme: ThemePreset) {
+        isBatchingUpdates = true
+        defer {
+            isBatchingUpdates = false
+            Theme.invalidate()  // Single invalidation at the end
+        }
+
         currentTheme = theme
         appearanceMode = theme.appearanceMode
         uiFontStyle = theme.uiFontStyle
@@ -931,6 +1009,29 @@ class SettingsManager: ObservableObject {
                 UserDefaults.standard.set(tier.rawValue, forKey: self.llmQualityTierKey)
             }
         }
+    }
+
+    // MARK: - CloudKit Sync Interval Settings (UserDefaults - device-specific)
+    // Controls how often automatic sync occurs (manual sync always available)
+
+    private let syncIntervalMinutesKey = "syncIntervalMinutes"
+
+    /// CloudKit sync interval in minutes (default: 10 minutes)
+    /// Manual sync button is always available regardless of this setting
+    @Published var syncIntervalMinutes: Int {
+        didSet {
+            let minutes = syncIntervalMinutes
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(minutes, forKey: self.syncIntervalMinutesKey)
+            }
+            // Notify CloudKitSyncManager to update its timer
+            NotificationCenter.default.post(name: .syncIntervalDidChange, object: nil)
+        }
+    }
+
+    /// Sync interval converted to seconds for use by CloudKitSyncManager
+    var syncIntervalSeconds: TimeInterval {
+        TimeInterval(syncIntervalMinutes * 60)
     }
 
     // Internal storage - API keys now use Keychain (secure)
@@ -1082,6 +1183,14 @@ class SettingsManager: ObservableObject {
             self.llmCostTier = tier
         } else {
             self.llmCostTier = .budget
+        }
+
+        // Initialize sync interval
+        // Default: 10 minutes - manual sync always available
+        if let savedMinutes = UserDefaults.standard.object(forKey: syncIntervalMinutesKey) as? Int {
+            self.syncIntervalMinutes = savedMinutes
+        } else {
+            self.syncIntervalMinutes = 10
         }
 
         // Apply appearance mode on launch
@@ -1261,4 +1370,9 @@ class SettingsManager: ObservableObject {
         ensureInitialized()
         return !geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+}
+
+// MARK: - Notification Names
+extension Notification.Name {
+    static let syncIntervalDidChange = Notification.Name("syncIntervalDidChange")
 }

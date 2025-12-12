@@ -24,7 +24,19 @@ class WALManager {
 
     private init() {}
 
+    deinit {
+        stopPeriodicMaintenance()
+    }
+
+    func stopPeriodicMaintenance() {
+        purgeTimer?.invalidate()
+        purgeTimer = nil
+    }
+
     func startPeriodicMaintenance(container: NSPersistentContainer) {
+        // Stop any existing timer first
+        stopPeriodicMaintenance()
+
         // Purge old history on startup
         purgeOldHistory(container: container)
 

@@ -372,13 +372,13 @@ struct AppearanceSettingsView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "info.circle")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.blue)
+                        .foregroundColor(settingsManager.resolvedAccentColor)
                     Text("Accent color applies to Talkie only. System accent color is set in System Settings.")
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary)
                 }
                 .padding(8)
-                .background(Color.blue.opacity(0.1))
+                .background(settingsManager.resolvedAccentColor.opacity(0.1))
                 .cornerRadius(6)
         }
     }

@@ -22,7 +22,7 @@ PACKAGES_DIR="$SCRIPT_DIR/packages"
 RESOURCES_DIR="$SCRIPT_DIR/resources"
 
 # Version
-VERSION="${VERSION:-1.3.0}"
+VERSION="${VERSION:-1.5.0}"
 
 # Target: full (default), core, live, or all
 TARGET="${1:-full}"
