@@ -167,7 +167,8 @@ struct HomeView: View {
 
         guard !recentUtterances.isEmpty else {
             return Insight(
-                emoji: "👋",
+                iconName: "hand.wave",
+                iconColor: .green,
                 message: "Welcome back!",
                 detail: "Ready to get things done? Hold your hotkey to start."
             )
@@ -201,7 +202,8 @@ struct HomeView: View {
         // Generate encouraging insight based on dominant activity
         if devCount > 0 && devCount >= totalCategorized / 2 {
             return Insight(
-                emoji: "💻",
+                iconName: "laptopcomputer",
+                iconColor: .purple,
                 message: "In the zone!",
                 detail: "You've been doing great dev work this week. Keep building!"
             )
@@ -209,7 +211,8 @@ struct HomeView: View {
 
         if socialCount > 0 && socialCount >= totalCategorized / 2 {
             return Insight(
-                emoji: "💬",
+                iconName: "bubble.left.and.bubble.right",
+                iconColor: .blue,
                 message: "Staying connected!",
                 detail: "Great week for collaboration and catching up with people."
             )
@@ -217,7 +220,8 @@ struct HomeView: View {
 
         if creativeCount > 0 && creativeCount >= totalCategorized / 2 {
             return Insight(
-                emoji: "🎨",
+                iconName: "paintbrush",
+                iconColor: .pink,
                 message: "Creative flow!",
                 detail: "You've been in creative mode. Love to see it!"
             )
@@ -225,7 +229,8 @@ struct HomeView: View {
 
         if writingCount > 0 && writingCount >= totalCategorized / 2 {
             return Insight(
-                emoji: "✍️",
+                iconName: "pencil.line",
+                iconColor: .indigo,
                 message: "Writing mode!",
                 detail: "You've been getting a lot done in writing apps. Keep it up!"
             )
@@ -233,7 +238,8 @@ struct HomeView: View {
 
         if browserCount > 0 && browserCount >= totalCategorized / 2 {
             return Insight(
-                emoji: "🔍",
+                iconName: "magnifyingglass",
+                iconColor: .teal,
                 message: "Research mode!",
                 detail: "Doing your homework and exploring. Curiosity is a superpower!"
             )
@@ -243,7 +249,8 @@ struct HomeView: View {
         let streak = calculateStreak(utterances)
         if streak >= 7 {
             return Insight(
-                emoji: "🔥",
+                iconName: "flame.fill",
+                iconColor: .orange,
                 message: "\(streak) day streak!",
                 detail: "You're on fire! Using voice to get things done is a superpower."
             )
@@ -251,7 +258,8 @@ struct HomeView: View {
 
         if streak >= 3 {
             return Insight(
-                emoji: "⚡️",
+                iconName: "bolt.fill",
+                iconColor: .yellow,
                 message: "Building momentum!",
                 detail: "\(streak) days in a row. You're making this a habit!"
             )
@@ -264,7 +272,8 @@ struct HomeView: View {
         // "Productive morning" - before noon with good activity
         if hour < 12 && todayCount >= 8 {
             return Insight(
-                emoji: "☀️",
+                iconName: "sun.max.fill",
+                iconColor: .orange,
                 message: "Productive morning!",
                 detail: "\(todayCount) actions already and it's not even noon."
             )
@@ -273,7 +282,8 @@ struct HomeView: View {
         // Volume-based insights (afternoon/evening)
         if todayCount >= 10 {
             return Insight(
-                emoji: "🚀",
+                iconName: "arrow.up.right",
+                iconColor: .green,
                 message: "Productive day!",
                 detail: "You've driven \(todayCount) actions today. Impressive!"
             )
@@ -281,7 +291,8 @@ struct HomeView: View {
 
         // Default encouraging message
         return Insight(
-            emoji: "✨",
+            iconName: "sparkles",
+            iconColor: .cyan,
             message: "Keep going!",
             detail: "\(recentUtterances.count) actions this week. You're getting things done!"
         )
@@ -437,7 +448,8 @@ enum ActivityViewLevel: CaseIterable {
 }
 
 struct Insight {
-    let emoji: String
+    let iconName: String
+    let iconColor: Color
     let message: String
     let detail: String
 }
@@ -479,18 +491,20 @@ enum ActivityLevel: Int {
     }
 }
 
+// MARK: - Standard Card Height
+
+private let statCardHeight: CGFloat = 100
+
 // MARK: - Streak Card
 
 struct StreakCard: View {
     let streak: Int
 
-    private var icon: String {
-        if streak >= 30 { return "🏆" }
-        else if streak >= 14 { return "⚡️" }
-        else if streak >= 7 { return "🔥" }
-        else if streak >= 3 { return "✨" }
-        else if streak >= 1 { return "🌱" }
-        else { return "💤" }
+    private var iconName: String {
+        if streak >= 14 { return "bolt.fill" }
+        else if streak >= 7 { return "flame.fill" }
+        else if streak >= 1 { return "flame" }
+        else { return "flame" }
     }
 
     private var message: String {
@@ -509,21 +523,30 @@ struct StreakCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            Text(icon)
-                .font(.system(size: 20))
+        VStack(spacing: 6) {
+            // Label
+            HStack(spacing: 4) {
+                Image(systemName: iconName)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(accentColor)
+                Text("STREAK")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(TalkieTheme.textTertiary)
+            }
 
+            // Number
             Text("\(streak)")
-                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .font(.system(size: 36, weight: .heavy, design: .monospaced))
                 .foregroundColor(accentColor)
 
+            // Message
             Text(message)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(TalkieTheme.textSecondary)
-                .textCase(.uppercase)
         }
-        .frame(maxWidth: .infinity, minHeight: 80)
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .frame(height: statCardHeight)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(TalkieTheme.surfaceCard)
@@ -540,12 +563,10 @@ struct StreakCard: View {
 struct TodayCard: View {
     let count: Int
 
-    private var icon: String {
-        if count >= 20 { return "🚀" }
-        else if count >= 10 { return "💪" }
-        else if count >= 5 { return "👍" }
-        else if count >= 1 { return "✅" }
-        else { return "🎯" }
+    private var iconName: String {
+        if count >= 10 { return "waveform.path.ecg" }
+        else if count >= 1 { return "waveform" }
+        else { return "waveform" }
     }
 
     private var message: String {
@@ -563,21 +584,30 @@ struct TodayCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            Text(icon)
-                .font(.system(size: 20))
+        VStack(spacing: 6) {
+            // Label
+            HStack(spacing: 4) {
+                Image(systemName: iconName)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(accentColor)
+                Text("TODAY")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(TalkieTheme.textTertiary)
+            }
 
+            // Number
             Text("\(count)")
-                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .font(.system(size: 36, weight: .heavy, design: .monospaced))
                 .foregroundColor(accentColor)
 
+            // Message
             Text(message)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(TalkieTheme.textSecondary)
-                .textCase(.uppercase)
         }
-        .frame(maxWidth: .infinity, minHeight: 80)
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .frame(height: statCardHeight)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(TalkieTheme.surfaceCard)
@@ -597,12 +627,14 @@ struct InsightCard: View {
     var body: some View {
         HStack(spacing: 12) {
             if let insight = insight {
-                Text(insight.emoji)
-                    .font(.system(size: 32))
+                Image(systemName: insight.iconName)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(insight.iconColor)
+                    .frame(width: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(insight.message)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(TalkieTheme.textPrimary)
 
                     Text(insight.detail)
@@ -614,12 +646,14 @@ struct InsightCard: View {
                 Spacer()
             } else {
                 // Empty state
-                Text("👋")
-                    .font(.system(size: 32))
+                Image(systemName: "hand.wave")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.green)
+                    .frame(width: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Ready to go!")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(TalkieTheme.textPrimary)
 
                     Text("Hold your hotkey to start recording.")
@@ -630,8 +664,9 @@ struct InsightCard: View {
                 Spacer()
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 80)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .frame(height: statCardHeight)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(TalkieTheme.surfaceCard)

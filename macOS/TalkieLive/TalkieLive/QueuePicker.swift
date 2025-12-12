@@ -235,14 +235,14 @@ struct QueuePickerView: View {
             HStack {
                 Text("Unpasted Lives")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color(white: 0.9))
+                    .foregroundColor(TalkieTheme.textPrimary)
                 Spacer()
                 Text("\(viewModel.items.count)")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(white: 0.5))
+                    .foregroundColor(TalkieTheme.textTertiary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(Color(white: 0.2))
+                    .background(TalkieTheme.border)
                     .cornerRadius(4)
             }
             .padding(.horizontal, 16)
@@ -251,7 +251,7 @@ struct QueuePickerView: View {
 
             // Divider
             Rectangle()
-                .fill(Color(white: 0.2))
+                .fill(TalkieTheme.border)
                 .frame(height: 1)
 
             // Items list
@@ -282,10 +282,10 @@ struct QueuePickerView: View {
         .frame(width: 420)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(white: 0.1))
+                .fill(TalkieTheme.surfaceElevated)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(white: 0.2), lineWidth: 1)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
                 )
         )
     }
@@ -309,20 +309,20 @@ struct QueueItemRow: View {
                     // Time ago
                     Text(timeAgo(from: item.createdAt))
                         .font(.system(size: 10))
-                        .foregroundColor(Color(white: 0.45))
+                        .foregroundColor(TalkieTheme.textTertiary)
 
                     // Word count
                     if let wordCount = item.wordCount {
                         Text("\(wordCount) words")
                             .font(.system(size: 10))
-                            .foregroundColor(Color(white: 0.45))
+                            .foregroundColor(TalkieTheme.textTertiary)
                     }
 
                     // Source app
                     if let appName = item.appName {
                         Text(appName)
                             .font(.system(size: 10))
-                            .foregroundColor(Color(white: 0.45))
+                            .foregroundColor(TalkieTheme.textTertiary)
                     }
                 }
             }
@@ -333,7 +333,7 @@ struct QueueItemRow: View {
             if isSelected {
                 Text("↵")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(Color(white: 0.5))
+                    .foregroundColor(TalkieTheme.textTertiary)
             }
         }
         .padding(.horizontal, 12)

@@ -802,7 +802,7 @@ private struct ModelDownloadStepView: View {
                                 ("Languages", "99+")
                             ],
                             badge: "MULTILINGUAL",
-                            badgeColor: .cyan,
+                            badgeColor: SemanticColor.info,
                             isDownloaded: false,
                             learnMoreURL: "https://openai.com/research/whisper"
                         ) {
@@ -814,7 +814,7 @@ private struct ModelDownloadStepView: View {
                     if let error = manager.errorMessage {
                         Text(error)
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.red)
+                            .foregroundColor(SemanticColor.error)
                             .frame(height: 20)
                     } else {
                         Spacer().frame(height: 20)
@@ -826,7 +826,7 @@ private struct ModelDownloadStepView: View {
                     colors: colors,
                     isDownloading: isDownloading,
                     progress: manager.downloadProgress,
-                    accentColor: selectedModel == .parakeet ? colors.accent : .cyan,
+                    accentColor: selectedModel == .parakeet ? colors.accent : SemanticColor.info,
                     onDownload: startDownload,
                     onCancel: cancelDownload
                 )
@@ -1057,7 +1057,7 @@ private struct ModelCard: View {
                             Image(systemName: "arrow.up.right")
                                 .font(.system(size: 8, weight: .medium))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
@@ -1523,13 +1523,13 @@ private struct OnboardingPillDemo: View {
                     // Expanded hover state - matches FloatingPillView
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(Color.white)
+                            .fill(colors.textPrimary)
                             .frame(width: 6, height: 6)
 
                         Text("REC")
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(1)
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(colors.textTertiary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -1543,13 +1543,13 @@ private struct OnboardingPillDemo: View {
                     // Recording state with pulsing red dot
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(Color(red: 1.0, green: 0.3, blue: 0.3))
+                            .fill(SemanticColor.error)
                             .frame(width: 6, height: 6)
                             .scaleEffect(1.0 + pulsePhase * 0.4)
 
                         Text(timeString)
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(colors.textSecondary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)

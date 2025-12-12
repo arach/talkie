@@ -364,12 +364,12 @@ struct FloatingPillView: View {
             if controller.state == .listening || controller.state == .transcribing {
                 Text(timeString)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(TalkieTheme.textSecondary)
             } else {
                 Text("REC")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(TalkieTheme.textTertiary)
             }
         }
         .padding(.horizontal, 10)
@@ -399,9 +399,9 @@ struct FloatingPillView: View {
     private var indicatorColor: Color {
         switch controller.state {
         case .idle: return .white
-        case .listening: return Color(red: 1.0, green: 0.3, blue: 0.3)
-        case .transcribing: return Color(red: 1.0, green: 0.7, blue: 0.3)
-        case .routing: return Color(red: 0.4, green: 1.0, blue: 0.5)
+        case .listening: return SemanticColor.error
+        case .transcribing: return SemanticColor.warning
+        case .routing: return SemanticColor.success
         }
     }
 

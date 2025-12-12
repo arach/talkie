@@ -134,7 +134,7 @@ struct LiveNavigationView: View {
                         icon: "terminal",
                         title: "Console",
                         badge: errorCount > 0 ? "\(errorCount)" : nil,
-                        badgeColor: .red
+                        badgeColor: SemanticColor.error
                     )
 
                     sidebarItem(
@@ -161,7 +161,7 @@ struct LiveNavigationView: View {
                 Text("TALKIE LIVE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(3)
-                    .foregroundColor(Color(white: 0.45))
+                    .foregroundColor(TalkieTheme.textTertiary)
 
                 Spacer()
 
@@ -188,11 +188,11 @@ struct LiveNavigationView: View {
         }) {
             Image(systemName: icon)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(isChevronHovered ? Color(white: 0.9) : Color(white: 0.5))
+                .foregroundColor(isChevronHovered ? TalkieTheme.textPrimary : TalkieTheme.textTertiary)
                 .frame(width: 20, height: 20)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(isChevronHovered ? Color(white: 0.2) : Color.clear)
+                        .fill(isChevronHovered ? TalkieTheme.border : Color.clear)
                 )
                 .scaleEffect(isChevronPressed ? 0.85 : 1.0)
         }
@@ -288,11 +288,11 @@ struct LiveNavigationView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
                         .font(.system(size: 10))
-                        .foregroundColor(.cyan)
+                        .foregroundColor(SemanticColor.info)
 
                     Text("App: \(appFilter)")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color(white: 0.8))
+                        .foregroundColor(TalkieTheme.textSecondary)
 
                     Spacer()
 
@@ -303,14 +303,14 @@ struct LiveNavigationView: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.5))
+                            .foregroundColor(TalkieTheme.textTertiary)
                     }
                     .buttonStyle(.plain)
                     .help("Clear filter")
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.cyan.opacity(0.1))
+                .background(SemanticColor.info.opacity(0.1))
             }
 
             Rectangle()
@@ -403,7 +403,7 @@ struct LiveNavigationView: View {
                         store.clear()
                     }
                     .font(Design.fontXS)
-                    .foregroundColor(.red.opacity(0.8))
+                    .foregroundColor(SemanticColor.error.opacity(0.8))
                     .buttonStyle(.plain)
                 }
             }
@@ -601,7 +601,7 @@ struct UtteranceDetailView: View {
                 .padding(24)
             }
         }
-        .background(Color(white: 0.04))  // Near black background
+        .background(TalkieTheme.surface)  // Near black background
     }
 
     private func copyToClipboard() {
@@ -643,19 +643,19 @@ private struct MinimalHeader: View {
 
                     Text(formatTime(utterance.timestamp))
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color(white: 0.55))
+                        .foregroundColor(TalkieTheme.textTertiary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color(white: 0.2), lineWidth: 1)
+                                .stroke(TalkieTheme.border, lineWidth: 1)
                         )
                 }
 
                 Spacer()
 
                 // Export action only (Copy moved to text area)
-                GhostButton(icon: "square.and.arrow.up", label: "Export", isActive: false, accentColor: .cyan) {
+                GhostButton(icon: "square.and.arrow.up", label: "Export", isActive: false, accentColor: SemanticColor.info) {
                     // Export action
                 }
             }
@@ -663,7 +663,7 @@ private struct MinimalHeader: View {
             // ID row
             Text("ID: T-\(utterance.id.uuidString.prefix(5).uppercased())")
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundColor(Color(white: 0.35))
+                .foregroundColor(TalkieTheme.textMuted)
         }
     }
 
@@ -690,19 +690,19 @@ private struct GhostButton: View {
     @State private var isHovered = false
 
     private var textColor: Color {
-        if isActive { return .green }
+        if isActive { return SemanticColor.success }
         if let accent = accentColor {
-            return isHovered ? accent : Color(white: 0.65)
+            return isHovered ? accent : TalkieTheme.textSecondary
         }
-        return isHovered ? Color(white: 0.9) : Color(white: 0.65)
+        return isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary
     }
 
     private var borderColor: Color {
-        if isActive { return Color.green.opacity(0.4) }
+        if isActive { return SemanticColor.success.opacity(0.4) }
         if isHovered {
-            return accentColor?.opacity(0.4) ?? Color(white: 0.35)
+            return accentColor?.opacity(0.4) ?? TalkieTheme.textMuted
         }
-        return Color(white: 0.22)
+        return TalkieTheme.border
     }
 
     var body: some View {
@@ -721,7 +721,7 @@ private struct GhostButton: View {
                     .stroke(borderColor, lineWidth: 1)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(isHovered ? Color(white: 0.12) : Color.clear)
+                            .fill(isHovered ? TalkieTheme.surfaceCard : Color.clear)
                     )
             )
         }
@@ -744,7 +744,7 @@ private struct ContentToggle: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color(white: 0.12))
+                .fill(TalkieTheme.surfaceCard)
         )
     }
 }
@@ -762,12 +762,12 @@ private struct ToggleSegment: View {
                 Text(label)
                     .font(.system(size: 10, weight: .medium))
             }
-            .foregroundColor(isSelected ? .white : Color(white: 0.5))
+            .foregroundColor(isSelected ? .white : TalkieTheme.textTertiary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(isSelected ? Color(white: 0.18) : Color.clear)
+                    .fill(isSelected ? TalkieTheme.border : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -786,9 +786,9 @@ private struct TranscriptContainer: View {
     @State private var isCopyHovered = false
 
     // Crisp text colors - solid grays instead of opacity
-    private static let textPrimary = Color(white: 0.93)
-    private static let textSecondary = Color(white: 0.7)
-    private static let textMuted = Color(white: 0.45)
+    private static let textPrimary = TalkieTheme.textPrimary
+    private static let textSecondary = TalkieTheme.textSecondary
+    private static let textMuted = TalkieTheme.textTertiary
 
     private var tokenEstimate: Int {
         // Rough estimate: ~4 chars per token
@@ -802,7 +802,7 @@ private struct TranscriptContainer: View {
                 HStack(spacing: 0) {
                     // Left accent bar
                     Rectangle()
-                        .fill(showJSON ? Color.cyan.opacity(0.5) : Color(white: 0.3))
+                        .fill(showJSON ? SemanticColor.info.opacity(0.5) : TalkieTheme.textMuted)
                         .frame(width: 3)
 
                     // Text content
@@ -825,13 +825,13 @@ private struct TranscriptContainer: View {
                     Button(action: onCopy) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 11))
-                            .foregroundColor(copied ? .green : (isCopyHovered ? .white : Color(white: 0.5)))
+                            .foregroundColor(copied ? SemanticColor.success : (isCopyHovered ? .white : TalkieTheme.textTertiary))
                     }
                     .buttonStyle(.plain)
                     .padding(8)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(isCopyHovered ? Color(white: 0.15) : Color.clear)
+                            .fill(isCopyHovered ? TalkieTheme.border : Color.clear)
                     )
                     .onHover { isCopyHovered = $0 }
                     .padding(8)
@@ -853,19 +853,19 @@ private struct TranscriptContainer: View {
 
                 Spacer()
 
-                StatPill(label: "TOKENS", value: "~\(tokenEstimate)", color: .cyan)
+                StatPill(label: "TOKENS", value: "~\(tokenEstimate)", color: SemanticColor.info)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Color(white: 0.04))
+            .background(TalkieTheme.surface)
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color(white: 0.06))
+                .fill(TalkieTheme.surface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(white: 0.12), lineWidth: 1)
+                .stroke(TalkieTheme.surfaceCard, lineWidth: 1)
         )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
@@ -881,11 +881,11 @@ private struct StatPill: View {
         HStack(spacing: 6) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(color?.opacity(0.6) ?? Color(white: 0.45))
+                .foregroundColor(color?.opacity(0.6) ?? TalkieTheme.textTertiary)
 
             Text(value)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundColor(color ?? Color(white: 0.93))
+                .foregroundColor(color ?? TalkieTheme.textPrimary)
         }
     }
 }
@@ -907,7 +907,7 @@ private struct JSONContentView: View {
 
         Text(json)
             .font(.system(size: 11, weight: .regular, design: .monospaced))
-            .foregroundColor(Color(white: 0.75))
+            .foregroundColor(TalkieTheme.textSecondary)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
@@ -946,7 +946,7 @@ private struct MinimalInfoCards: View {
                     label: "DURATION",
                     icon: "clock",
                     value: formatDuration(duration),
-                    iconColor: .orange
+                    iconColor: SemanticColor.warning
                 )
             }
 
@@ -956,7 +956,7 @@ private struct MinimalInfoCards: View {
                     label: "TRANSCRIBED",
                     icon: "bolt",
                     value: formatTranscriptionTime(transcriptionMs),
-                    iconColor: .green
+                    iconColor: SemanticColor.success
                 )
             }
         }
@@ -989,7 +989,7 @@ private struct InfoCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(isHovered ? Color(white: 0.6) : Color(white: 0.45))
+                .foregroundColor(isHovered ? TalkieTheme.textTertiary : TalkieTheme.textTertiary)
 
             HStack(spacing: 6) {
                 if let bundleID = appBundleID {
@@ -1003,7 +1003,7 @@ private struct InfoCard: View {
 
                 Text(value)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(isHovered ? Color(white: 0.95) : Color(white: 0.88))
+                    .foregroundColor(isHovered ? TalkieTheme.surface : TalkieTheme.textPrimary)
                     .lineLimit(1)
             }
         }
@@ -1011,11 +1011,11 @@ private struct InfoCard: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color(white: 0.09) : Color(white: 0.06))
+                .fill(isHovered ? TalkieTheme.surfaceElevated : TalkieTheme.surface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isHovered ? iconColor.opacity(0.3) : Color(white: 0.12), lineWidth: 1)
+                .stroke(isHovered ? iconColor.opacity(0.3) : TalkieTheme.surfaceCard, lineWidth: 1)
         )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
@@ -1117,13 +1117,13 @@ private struct MinimalAudioCard: View {
                     HStack {
                         Text(formatTime(displayCurrentTime))
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color(white: 0.5))
+                            .foregroundColor(TalkieTheme.textTertiary)
 
                         Spacer()
 
                         Text(formatTime(totalDuration))
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color(white: 0.35))
+                            .foregroundColor(TalkieTheme.textMuted)
                     }
                 }
             }
@@ -1133,7 +1133,7 @@ private struct MinimalAudioCard: View {
 
             // Divider
             Rectangle()
-                .fill(Color(white: 0.12))
+                .fill(TalkieTheme.surfaceCard)
                 .frame(height: 1)
 
             // File info row - Cmd+click to reveal
@@ -1141,7 +1141,7 @@ private struct MinimalAudioCard: View {
                 // File ID (truncated, full on hover)
                 Text(isHovering ? fullFilename : shortFileId)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(white: isHovering ? 0.7 : 0.4))
+                    .foregroundColor(isHovering ? TalkieTheme.textSecondary : TalkieTheme.textMuted)
                     .lineLimit(1)
                     .animation(.easeOut(duration: 0.15), value: isHovering)
 
@@ -1151,14 +1151,14 @@ private struct MinimalAudioCard: View {
                 if !fileSize.isEmpty {
                     Text(fileSize)
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color(white: 0.35))
+                        .foregroundColor(TalkieTheme.textMuted)
                 }
 
                 // Cmd+click hint on hover
                 if isHovering && hasAudio {
                     Text("⌘ click to reveal")
                         .font(.system(size: 9))
-                        .foregroundColor(Color(white: 0.45))
+                        .foregroundColor(TalkieTheme.textTertiary)
                 }
             }
             .padding(.horizontal, 14)
@@ -1173,27 +1173,27 @@ private struct MinimalAudioCard: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color(white: 0.06))
+                .fill(TalkieTheme.surface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(white: 0.12), lineWidth: 1)
+                .stroke(TalkieTheme.surfaceCard, lineWidth: 1)
         )
         .onHover { isHovering = $0 }
     }
 
     private var playButtonBackground: Color {
-        if !hasAudio { return Color(white: 0.08) }
+        if !hasAudio { return TalkieTheme.hover }
         if isThisPlaying { return Color.accentColor.opacity(0.25) }
-        if isPlayButtonHovered { return Color(white: 0.18) }
-        return Color(white: 0.12)
+        if isPlayButtonHovered { return TalkieTheme.border }
+        return TalkieTheme.surfaceCard
     }
 
     private var playButtonForeground: Color {
-        if !hasAudio { return Color(white: 0.3) }
+        if !hasAudio { return TalkieTheme.textMuted }
         if isThisPlaying { return .white }
         if isPlayButtonHovered { return .white }
-        return Color(white: 0.85)
+        return TalkieTheme.textPrimary
     }
 
     private func togglePlayback() {
@@ -1420,21 +1420,21 @@ private struct ActionsSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("ACTIONS")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(white: 0.45))
+                .foregroundColor(TalkieTheme.textTertiary)
 
             LazyVGrid(columns: columns, spacing: 10) {
                 ActionCard(
                     icon: "waveform.badge.magnifyingglass",
                     title: "Enhance Audio",
                     subtitle: "Pro model",
-                    color: .cyan
+                    color: SemanticColor.info
                 )
 
                 ActionCard(
                     icon: "arrow.up.doc",
                     title: "Promote to Memo",
                     subtitle: "Full features",
-                    color: .green
+                    color: SemanticColor.success
                 )
 
                 ActionCard(
@@ -1468,24 +1468,24 @@ private struct ActionCard: View {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundColor(isHovered ? color : Color(white: 0.55))
+                    .foregroundColor(isHovered ? color : TalkieTheme.textTertiary)
                     .frame(width: 36, height: 36)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(isHovered ? color.opacity(0.12) : Color(white: 0.1))
+                            .fill(isHovered ? color.opacity(0.12) : TalkieTheme.surfaceElevated)
                     )
 
                 VStack(spacing: 2) {
                     Text(title)
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(isHovered ? Color(white: 0.93) : Color(white: 0.6))
+                        .foregroundColor(isHovered ? TalkieTheme.textPrimary : TalkieTheme.textTertiary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
                     if let subtitle = subtitle {
                         Text(subtitle)
                             .font(.system(size: 8))
-                            .foregroundColor(isHovered ? color.opacity(0.7) : Color(white: 0.4))
+                            .foregroundColor(isHovered ? color.opacity(0.7) : TalkieTheme.textMuted)
                     }
                 }
             }
@@ -1493,11 +1493,11 @@ private struct ActionCard: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered ? Color(white: 0.08) : Color(white: 0.06))
+                    .fill(isHovered ? TalkieTheme.hover : TalkieTheme.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isHovered ? color.opacity(0.3) : Color(white: 0.12), lineWidth: 1)
+                    .stroke(isHovered ? color.opacity(0.3) : TalkieTheme.surfaceCard, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -1539,7 +1539,7 @@ private struct TranscriptionInfoCard: View {
 
             // Divider
             Rectangle()
-                .fill(Color.white.opacity(0.06))
+                .fill(TalkieTheme.surface)
                 .frame(height: 1)
 
             // Row 2: Transcription metadata
@@ -1550,7 +1550,7 @@ private struct TranscriptionInfoCard: View {
                         icon: "cpu",
                         label: "Model",
                         value: model.capitalized,
-                        color: .cyan
+                        color: SemanticColor.info
                     )
                 }
 
@@ -1560,7 +1560,7 @@ private struct TranscriptionInfoCard: View {
                         icon: "clock",
                         label: "Duration",
                         value: formatDuration(duration),
-                        color: .orange
+                        color: SemanticColor.warning
                     )
                 }
 
@@ -1570,7 +1570,7 @@ private struct TranscriptionInfoCard: View {
                         icon: "bolt",
                         label: "Processed",
                         value: formatTranscriptionTime(transcriptionMs),
-                        color: .green
+                        color: SemanticColor.success
                     )
                 }
 
@@ -1590,11 +1590,11 @@ private struct TranscriptionInfoCard: View {
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.03))
+                .fill(TalkieTheme.divider)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(TalkieTheme.surface, lineWidth: 1)
         )
     }
 
@@ -1631,12 +1631,12 @@ private struct InfoPill: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(label)
                     .font(.system(size: 7, weight: .medium))
-                    .foregroundColor(.white.opacity(0.35))
+                    .foregroundColor(TalkieTheme.textMuted)
                     .textCase(.uppercase)
 
                 Text(value)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(TalkieTheme.textSecondary)
                     .lineLimit(1)
             }
         }
@@ -1663,7 +1663,7 @@ private struct TranscriptCard: View {
             // Content area - clean, readable
             Text(text)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(.white.opacity(0.95))
+                .foregroundColor(TalkieTheme.textPrimary)
                 .textSelection(.enabled)
                 .lineSpacing(6)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1677,7 +1677,7 @@ private struct TranscriptCard: View {
                     Label("\(text.count) chars", systemImage: "character.cursor.ibeam")
                 }
                 .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.35))
+                .foregroundColor(TalkieTheme.textMuted)
 
                 Spacer()
 
@@ -1689,12 +1689,12 @@ private struct TranscriptCard: View {
                         Text(copied ? "Copied!" : "Copy")
                             .font(.system(size: 9, weight: .medium))
                     }
-                    .foregroundColor(copied ? .green : (isHoveringCopy ? .white : .white.opacity(0.5)))
+                    .foregroundColor(copied ? SemanticColor.success : (isHoveringCopy ? .white : TalkieTheme.textTertiary))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(copied ? Color.green.opacity(0.15) : (isHoveringCopy ? Color.white.opacity(0.1) : Color.clear))
+                            .fill(copied ? SemanticColor.success.opacity(0.15) : (isHoveringCopy ? TalkieTheme.surfaceElevated : Color.clear))
                     )
                 }
                 .buttonStyle(.plain)
@@ -1702,15 +1702,15 @@ private struct TranscriptCard: View {
             }
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.sm)
-            .background(Color.white.opacity(0.02))
+            .background(TalkieTheme.divider)
         }
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(white: 0.06))
+                .fill(TalkieTheme.surface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(TalkieTheme.hover, lineWidth: 1)
         )
     }
 }
@@ -1747,24 +1747,24 @@ private struct WaveformCard: View {
                 Label("AUDIO", systemImage: "waveform")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(0.5)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
 
                 Spacer()
 
                 if hasAudio {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10))
-                        .foregroundColor(.green.opacity(0.6))
+                        .foregroundColor(SemanticColor.success.opacity(0.6))
                 } else {
                     Text("No audio file")
                         .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.3))
+                        .foregroundColor(TalkieTheme.textMuted)
                 }
 
                 if let duration = utterance.durationSeconds {
                     Text(formatDuration(duration))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(TalkieTheme.textTertiary)
                 }
             }
 
@@ -1784,11 +1784,11 @@ private struct WaveformCard: View {
                 Button(action: togglePlayback) {
                     ZStack {
                         Circle()
-                            .fill(hasAudio ? Color.accentColor : Color.white.opacity(0.1))
+                            .fill(hasAudio ? Color.accentColor : TalkieTheme.surfaceElevated)
 
                         Image(systemName: isThisPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 14))
-                            .foregroundColor(hasAudio ? .white : .white.opacity(0.3))
+                            .foregroundColor(hasAudio ? .white : TalkieTheme.textMuted)
                     }
                     .frame(width: 32, height: 32)
                 }
@@ -1799,7 +1799,7 @@ private struct WaveformCard: View {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white.opacity(0.1))
+                            .fill(TalkieTheme.surfaceElevated)
 
                         RoundedRectangle(cornerRadius: 2)
                             .fill(Color.accentColor)
@@ -1821,7 +1821,7 @@ private struct WaveformCard: View {
                 // Time display
                 Text("\(formatDuration(displayCurrentTime)) / \(formatDuration(utterance.durationSeconds ?? 0))")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
             }
 
             // File info row
@@ -1829,11 +1829,11 @@ private struct WaveformCard: View {
                 HStack(spacing: 4) {
                     Image(systemName: "doc.fill")
                         .font(.system(size: 8))
-                        .foregroundColor(.white.opacity(0.3))
+                        .foregroundColor(TalkieTheme.textMuted)
 
                     Text(audioURL.lastPathComponent)
                         .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.3))
+                        .foregroundColor(TalkieTheme.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
 
@@ -1851,11 +1851,11 @@ private struct WaveformCard: View {
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.03))
+                .fill(TalkieTheme.divider)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(TalkieTheme.surface, lineWidth: 1)
         )
     }
 
@@ -1907,7 +1907,7 @@ private struct WaveformVisualization: View {
             ZStack {
                 // Clickable background
                 Rectangle()
-                    .fill(Color.white.opacity(0.001))  // Nearly invisible but clickable
+                    .fill(Color.clear)  // Nearly invisible but clickable
                     .onTapGesture { location in
                         if let onSeek = onSeek {
                             let newProgress = max(0, min(1, location.x / geo.size.width))
@@ -1973,7 +1973,7 @@ private struct StatsCard: View {
                 Label("STATS", systemImage: "chart.bar")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(0.5)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
                 Spacer()
             }
 
@@ -2002,7 +2002,7 @@ private struct StatsCard: View {
                         value: formatDuration(duration),
                         label: "Duration",
                         icon: "clock",
-                        color: .orange
+                        color: SemanticColor.warning
                     )
                 }
 
@@ -2011,27 +2011,27 @@ private struct StatsCard: View {
                         value: formatTranscriptionTime(transcriptionMs),
                         label: "Transcription",
                         icon: "bolt",
-                        color: .green
+                        color: SemanticColor.success
                     )
                 }
             }
 
             // Additional stats row
             if utterance.metadata.whisperModel != nil || utterance.metadata.routingMode != nil {
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(TalkieTheme.surfaceElevated)
 
                 HStack(spacing: Spacing.lg) {
                     if let model = utterance.metadata.whisperModel {
                         HStack(spacing: 4) {
                             Image(systemName: "cpu")
                                 .font(.system(size: 9))
-                                .foregroundColor(.cyan.opacity(0.7))
+                                .foregroundColor(SemanticColor.info.opacity(0.7))
                             Text("Model:")
                                 .font(.system(size: 9))
-                                .foregroundColor(.white.opacity(0.4))
+                                .foregroundColor(TalkieTheme.textMuted)
                             Text(model)
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(TalkieTheme.textSecondary)
                         }
                     }
 
@@ -2042,10 +2042,10 @@ private struct StatsCard: View {
                                 .foregroundColor(.pink.opacity(0.7))
                             Text("Routing:")
                                 .font(.system(size: 9))
-                                .foregroundColor(.white.opacity(0.4))
+                                .foregroundColor(TalkieTheme.textMuted)
                             Text(routingMode == "paste" ? "Paste" : "Clipboard")
                                 .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(TalkieTheme.textSecondary)
                         }
                     }
 
@@ -2056,11 +2056,11 @@ private struct StatsCard: View {
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.03))
+                .fill(TalkieTheme.divider)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(TalkieTheme.surface, lineWidth: 1)
         )
     }
 
@@ -2100,7 +2100,7 @@ private struct StatBox: View {
 
             Text(label)
                 .font(.system(size: 8, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(TalkieTheme.textMuted)
                 .textCase(.uppercase)
         }
         .frame(maxWidth: .infinity)
@@ -2143,7 +2143,7 @@ private struct SmartActionsCard: View {
                 Label("QUICK ACTIONS", systemImage: "bolt.fill")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(0.5)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
 
                 Spacer()
 
@@ -2184,7 +2184,7 @@ private struct SmartActionsCard: View {
 
             // Secondary actions (overflow)
             if canPromote || utterance.metadata.hasAudio {
-                Divider().background(Color.white.opacity(0.06))
+                Divider().background(TalkieTheme.surface)
 
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
@@ -2235,11 +2235,11 @@ private struct SmartActionsCard: View {
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.03))
+                .fill(TalkieTheme.divider)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(TalkieTheme.surface, lineWidth: 1)
         )
     }
 
@@ -2261,7 +2261,7 @@ private struct SmartActionsCard: View {
 
     private var promotionStatusColor: Color {
         switch promotionStatus {
-        case .none: return .white.opacity(0.3)
+        case .none: return TalkieTheme.textMuted
         case .memo: return .blue
         case .command: return .purple
         case .ignored: return .gray
@@ -2311,9 +2311,9 @@ private struct QuickActionButton: View {
     private var actionColor: Color {
         switch action {
         case .copyToClipboard: return .blue
-        case .typeAgain: return .orange
-        case .retryTranscription: return .cyan
-        case .promoteToMemo: return .green
+        case .typeAgain: return SemanticColor.warning
+        case .retryTranscription: return SemanticColor.info
+        case .promoteToMemo: return SemanticColor.success
         case .createResearchMemo: return .teal
         case .sendToClaude: return .purple
         case .runWorkflow: return .pink
@@ -2337,27 +2337,27 @@ private struct QuickActionButton: View {
         HStack(spacing: 10) {
             Image(systemName: showFeedback ? "checkmark" : action.icon)
                 .font(.system(size: 14))
-                .foregroundColor(showFeedback ? .green : actionColor.opacity(0.8))
+                .foregroundColor(showFeedback ? SemanticColor.success : actionColor.opacity(0.8))
                 .frame(width: 32, height: 32)
-                .background(showFeedback ? Color.green.opacity(0.15) : actionColor.opacity(0.1))
+                .background(showFeedback ? SemanticColor.success.opacity(0.15) : actionColor.opacity(0.1))
                 .cornerRadius(6)
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
                     Text(showFeedback ? "Done!" : action.displayName)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(showFeedback ? .green : .white.opacity(0.9))
+                        .foregroundColor(showFeedback ? SemanticColor.success : TalkieTheme.textPrimary)
 
                     if let shortcut = action.shortcut, !showFeedback {
                         Text(shortcut)
                             .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(TalkieTheme.textMuted)
                     }
                 }
 
                 Text(actionDescription)
                     .font(.system(size: 8))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(TalkieTheme.textMuted)
                     .lineLimit(1)
             }
 
@@ -2366,11 +2366,11 @@ private struct QuickActionButton: View {
         .padding(Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(showFeedback ? Color.green.opacity(0.1) : (isHovered ? actionColor.opacity(0.1) : Color.clear))
+                .fill(showFeedback ? SemanticColor.success.opacity(0.1) : (isHovered ? actionColor.opacity(0.1) : Color.clear))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(showFeedback ? Color.green.opacity(0.3) : (isHovered ? actionColor.opacity(0.3) : Color.white.opacity(0.05)), lineWidth: 1)
+                .stroke(showFeedback ? SemanticColor.success.opacity(0.3) : (isHovered ? actionColor.opacity(0.3) : TalkieTheme.divider), lineWidth: 1)
         )
     }
 
@@ -2378,22 +2378,22 @@ private struct QuickActionButton: View {
         HStack(spacing: 6) {
             Image(systemName: showFeedback ? "checkmark" : action.icon)
                 .font(.system(size: 10))
-                .foregroundColor(showFeedback ? .green : actionColor.opacity(0.7))
+                .foregroundColor(showFeedback ? SemanticColor.success : actionColor.opacity(0.7))
 
             Text(showFeedback ? "Done" : action.displayName)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(showFeedback ? .green : .white.opacity(0.7))
+                .foregroundColor(showFeedback ? SemanticColor.success : TalkieTheme.textSecondary)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(showFeedback ? Color.green.opacity(0.1) : (isHovered ? actionColor.opacity(0.08) : Color.white.opacity(0.03)))
+                .fill(showFeedback ? SemanticColor.success.opacity(0.1) : (isHovered ? actionColor.opacity(0.08) : TalkieTheme.divider))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(showFeedback ? Color.green.opacity(0.2) : (isHovered ? actionColor.opacity(0.2) : Color.clear), lineWidth: 1)
+                .stroke(showFeedback ? SemanticColor.success.opacity(0.2) : (isHovered ? actionColor.opacity(0.2) : Color.clear), lineWidth: 1)
         )
     }
 
@@ -2487,12 +2487,12 @@ struct HotkeyRecorderButton: View {
                 }) {
                     Text("Reset")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(isResetHovered ? .white : .white.opacity(0.5))
+                        .foregroundColor(isResetHovered ? .white : TalkieTheme.textTertiary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(isResetHovered ? Color.white.opacity(0.15) : Color.clear)
+                                .fill(isResetHovered ? TalkieTheme.border : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
@@ -2608,11 +2608,11 @@ struct CollapsedNavButton: View {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .white : (isHovered ? Color(white: 0.8) : Color(white: 0.5)))
+                    .foregroundColor(isSelected ? .white : (isHovered ? TalkieTheme.textSecondary : TalkieTheme.textTertiary))
                     .frame(width: 36, height: 32)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? Color(white: 0.15) : Color.clear))
+                            .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? TalkieTheme.border : Color.clear))
                     )
 
                 if let badge = badge, badge > 0 {
@@ -2684,7 +2684,7 @@ struct StorageInfoRow: View {
             }
             .font(Design.fontXS)
             .buttonStyle(.tiny)
-            .foregroundColor(.red.opacity(0.8))
+            .foregroundColor(SemanticColor.error.opacity(0.8))
         }
         .onAppear {
             refreshStats()
@@ -2754,17 +2754,17 @@ struct AppearanceSettingsContent: View {
                 Text("LIVE")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .tracking(1)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(TalkieTheme.textPrimary)
                     .padding(.bottom, 4)
 
                 ForEach(["History", "Console", "Settings"], id: \.self) { item in
                     HStack(spacing: 4) {
                         Image(systemName: item == "History" ? "clock" : (item == "Console" ? "terminal" : "gearshape"))
                             .font(.system(size: 8))
-                            .foregroundColor(item == "History" ? settings.accentColor.color : .white.opacity(0.4))
+                            .foregroundColor(item == "History" ? settings.accentColor.color : TalkieTheme.textMuted)
                         Text(item)
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(item == "History" ? .white.opacity(0.9) : .white.opacity(0.5))
+                            .foregroundColor(item == "History" ? TalkieTheme.textPrimary : TalkieTheme.textTertiary)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -2786,27 +2786,27 @@ struct AppearanceSettingsContent: View {
                 HStack {
                     Text("TIMESTAMP")
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(TalkieTheme.textMuted)
                         .frame(width: 60, alignment: .leading)
                     Text("TEXT")
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(TalkieTheme.textMuted)
                     Spacer()
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(Color.white.opacity(0.03))
+                .background(TalkieTheme.divider)
 
                 // Sample rows
                 ForEach(0..<3, id: \.self) { i in
                     HStack {
                         Text(["12:34", "12:31", "12:28"][i])
                             .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(TalkieTheme.textMuted)
                             .frame(width: 60, alignment: .leading)
                         Text(["Quick memo...", "Meeting notes...", "Recording..."][i])
                             .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(TalkieTheme.textSecondary)
                             .lineLimit(1)
                         Spacer()
                     }
@@ -2843,7 +2843,7 @@ struct AppearanceSettingsContent: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(isActive ? settings.accentColor.color.opacity(0.15) : Color.white.opacity(0.05))
+            .background(isActive ? settings.accentColor.color.opacity(0.15) : TalkieTheme.divider)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -2882,7 +2882,7 @@ struct AppearanceSettingsContent: View {
                     .font(.system(size: 16))
                     .foregroundColor(isSelected ? settings.accentColor.color : .secondary)
                     .frame(width: 40, height: 40)
-                    .background(isSelected ? settings.accentColor.color.opacity(0.15) : Color.white.opacity(0.05))
+                    .background(isSelected ? settings.accentColor.color.opacity(0.15) : TalkieTheme.divider)
                     .cornerRadius(8)
 
                 Text(mode.displayName)
@@ -2923,7 +2923,7 @@ struct AppearanceSettingsContent: View {
                     .frame(width: 12, height: 12)
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            .stroke(TalkieTheme.border, lineWidth: 1)
                     )
 
                 Text(colorOption.displayName)
@@ -2934,7 +2934,7 @@ struct AppearanceSettingsContent: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? colorOption.color.opacity(0.15) : Color.white.opacity(0.03))
+            .background(isSelected ? colorOption.color.opacity(0.15) : TalkieTheme.divider)
             .cornerRadius(4)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
@@ -2979,7 +2979,7 @@ struct AppearanceSettingsContent: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .background(isSelected ? settings.accentColor.color.opacity(0.15) : Color.white.opacity(0.03))
+            .background(isSelected ? settings.accentColor.color.opacity(0.15) : TalkieTheme.divider)
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)

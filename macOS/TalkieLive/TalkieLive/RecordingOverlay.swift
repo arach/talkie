@@ -218,8 +218,8 @@ struct RecordingOverlayView: View {
     @State private var showCheckmark: Bool = false  // For transcribing → success transition
 
     // Colors matching status bar / floating pill
-    private let processingOrange = Color(red: 1.0, green: 0.6, blue: 0.2)
-    private let successGreen = Color(red: 0.3, green: 0.85, blue: 0.4)
+    private let processingOrange = SemanticColor.warning
+    private let successGreen = SemanticColor.success
     private let warmupCyan = Color.cyan
 
     var body: some View {
@@ -404,7 +404,7 @@ struct RecordingOverlayView: View {
     private var borderColor: Color {
         switch controller.state {
         case .listening:
-            return Color.white.opacity(0.1)
+            return TalkieTheme.textSecondary.opacity(0.1)
         case .transcribing:
             return processingOrange.opacity(0.25)
         case .routing:
@@ -452,7 +452,7 @@ struct ProcessingDotsView: View {
 // MARK: - Completion Dot (collapsed from three processing dots)
 
 struct CompletionDotView: View {
-    private let processingOrange = Color(red: 1.0, green: 0.6, blue: 0.2)
+    private let processingOrange = SemanticColor.warning
 
     var body: some View {
         // Single dot - the three processing dots collapse into one
@@ -522,7 +522,7 @@ struct InfinityParticlesView: View {
                             height: particleSize
                         )
                         // Use white to match main particle color
-                        context.fill(Circle().path(in: rect), with: .color(.white.opacity(max(0.25, min(0.75, opacity)))))
+                        context.fill(Circle().path(in: rect), with: .color(TalkieTheme.textSecondary.opacity(max(0.25, min(0.75, opacity)))))
                     }
 
                     // Add a subtle glow trail effect - a few larger, more transparent particles
@@ -544,7 +544,7 @@ struct InfinityParticlesView: View {
                             width: glowSize,
                             height: glowSize
                         )
-                        context.fill(Circle().path(in: rect), with: .color(.white.opacity(glowOpacity)))
+                        context.fill(Circle().path(in: rect), with: .color(TalkieTheme.textSecondary.opacity(glowOpacity)))
                     }
                 }
             }
@@ -607,11 +607,11 @@ struct OverlayButton<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content()
-                .foregroundColor(.white.opacity(isHovered ? 0.9 : 0.4))
+                .foregroundColor(TalkieTheme.textSecondary.opacity(isHovered ? 0.9 : 0.4))
                 .padding(6)
                 .background(
                     Circle()
-                        .fill(Color.white.opacity(isHovered ? 0.15 : 0))
+                        .fill(TalkieTheme.textSecondary.opacity(isHovered ? 0.15 : 0))
                 )
                 .scaleEffect(isHovered ? 1.1 : 1.0)
         }
@@ -688,7 +688,7 @@ struct WavyParticlesView: View {
                         width: particleSize,
                         height: particleSize
                     )
-                    context.fill(Circle().path(in: rect), with: .color(.white.opacity(opacity)))
+                    context.fill(Circle().path(in: rect), with: .color(TalkieTheme.textSecondary.opacity(opacity)))
                 }
 
                 // Smooth level update
@@ -762,7 +762,7 @@ struct WaveformBarsView: View {
                     let opacity = baseOpacity + Double(barLevel) * tuning.levelOpacityBoost
                     context.fill(
                         RoundedRectangle(cornerRadius: CGFloat(tuning.cornerRadius)).path(in: barRect),
-                        with: .color(.white.opacity(opacity))
+                        with: .color(TalkieTheme.textSecondary.opacity(opacity))
                     )
                 }
 
