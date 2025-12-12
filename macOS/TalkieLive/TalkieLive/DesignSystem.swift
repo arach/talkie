@@ -461,7 +461,7 @@ struct SidebarHeader: View {
             Text(title)
                 .font(.techLabel)
                 .tracking(Tracking.wide)
-                .foregroundColor(Design.foreground)
+                .foregroundColor(TalkieTheme.textPrimary)
             Spacer()
         }
         .padding(.horizontal, Spacing.md)
@@ -477,16 +477,16 @@ struct SidebarSearchField: View {
         HStack(spacing: Spacing.xs) {
             Image(systemName: "magnifyingglass")
                 .font(Design.fontXS)
-                .foregroundColor(Design.foregroundMuted)
+                .foregroundColor(TalkieTheme.textMuted)
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(Design.fontXS)
-                .foregroundColor(Design.foreground)
+                .foregroundColor(TalkieTheme.textPrimary)
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, 5)
-        .background(Design.backgroundTertiary)
+        .background(TalkieTheme.surfaceElevated)
         .cornerRadius(CornerRadius.xs)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)

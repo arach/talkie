@@ -24,14 +24,14 @@ struct EmbeddedSettingsView: View {
                     Text("SETTINGS")
                         .font(.techLabel)
                         .tracking(Tracking.wide)
-                        .foregroundColor(Design.foreground)
+                        .foregroundColor(TalkieTheme.textPrimary)
                     Spacer()
                 }
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.sm)
 
                 Rectangle()
-                    .fill(Design.divider)
+                    .fill(TalkieTheme.divider)
                     .frame(height: 0.5)
 
                 // Sections List
@@ -151,7 +151,7 @@ struct EmbeddedSettingsSectionHeader: View {
             Text(title)
                 .font(.techLabelSmall)
                 .tracking(Tracking.normal)
-                .foregroundColor(Design.foregroundMuted)
+                .foregroundColor(TalkieTheme.textMuted)
             Spacer()
         }
         .padding(.top, Spacing.sm)
@@ -173,12 +173,12 @@ struct EmbeddedSettingsRow: View {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: icon)
                     .font(Design.fontXS)
-                    .foregroundColor(isSelected ? Design.accent : Design.foregroundSecondary)
+                    .foregroundColor(isSelected ? TalkieTheme.accent : TalkieTheme.textSecondary)
                     .frame(width: 16)
 
                 Text(title)
                     .font(Design.fontSM)
-                    .foregroundColor(isSelected ? Design.foreground : Design.foregroundSecondary)
+                    .foregroundColor(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
 
                 Spacer()
             }
@@ -186,7 +186,7 @@ struct EmbeddedSettingsRow: View {
             .padding(.vertical, Spacing.xs)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .fill(isSelected ? Design.accent.opacity(0.15) : (isHovered ? Design.foreground.opacity(0.05) : Color.clear))
+                    .fill(isSelected ? TalkieTheme.accent.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
             )
         }
         .buttonStyle(.plain)

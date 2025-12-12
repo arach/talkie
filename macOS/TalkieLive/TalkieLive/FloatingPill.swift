@@ -28,11 +28,17 @@ final class FloatingPillController: ObservableObject {
     private let maxBounce: CGFloat = 3  // Tiny bounce amount (very subtle)
     private let bounceSmoothness: CGFloat = 0.12  // Smooth return
 
+    // Performance: threshold to avoid publishing tiny proximity changes
+    private let proximityPublishThreshold: CGFloat = 0.05
+
     @Published var state: LiveState = .idle
     @Published var isVisible: Bool = true
     @Published var proximity: CGFloat = 0  // 0 = far, 1 = very close (for view to react)
     @Published var elapsedTime: TimeInterval = 0
     @Published var processingTime: TimeInterval = 0
+
+    // Track last published proximity to avoid redundant updates
+    private var lastPublishedProximity: CGFloat = 0
 
     private init() {
         // Listen for screen configuration changes
@@ -172,8 +178,10 @@ final class FloatingPillController: ObservableObject {
     private func startMagneticTracking() {
         stopMagneticTracking()
 
-        // Use a timer to poll mouse position (more reliable than event monitor for global tracking)
-        magneticTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+        // Poll at 15fps for proximity detection - plenty smooth for hover effects
+        // Timer updates at higher rate (30fps) only when actively recording to show elapsed time
+        let frameRate: Double = (state == .listening || state == .transcribing) ? 30.0 : 15.0
+        magneticTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / frameRate, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateMagneticPositions()
                 self?.updateElapsedTime()
@@ -205,6 +213,9 @@ final class FloatingPillController: ObservableObject {
 
         var closestProximity: CGFloat = 0
 
+        // Pre-calculate squared radius to avoid sqrt in hot loop
+        let proximityRadiusSquared = proximityRadius * proximityRadius
+
         for window in windows {
             guard let homePosition = homePositions[window] else { continue }
 
@@ -215,10 +226,12 @@ final class FloatingPillController: ObservableObject {
             )
             let dx = mouseLocation.x - homeCenter.x
             let dy = mouseLocation.y - homeCenter.y
-            let distance = sqrt(dx * dx + dy * dy)
+            let distanceSquared = dx * dx + dy * dy
 
-            // Track proximity for UI expansion (this is the main purpose)
-            if distance < proximityRadius && distance > 0 {
+            // Track proximity for UI expansion (compare squared distances to avoid sqrt)
+            if distanceSquared < proximityRadiusSquared && distanceSquared > 0 {
+                // Only compute sqrt when we're actually in range
+                let distance = sqrt(distanceSquared)
                 let pullStrength = 1.0 - (distance / proximityRadius)
                 closestProximity = max(closestProximity, pullStrength)
             }
@@ -239,8 +252,11 @@ final class FloatingPillController: ObservableObject {
             window.setFrameOrigin(NSPoint(x: homePosition.x, y: newY))
         }
 
-        // Update proximity for view reactivity
-        proximity = closestProximity
+        // Only publish proximity if it changed meaningfully (avoids redundant SwiftUI updates)
+        if abs(closestProximity - lastPublishedProximity) > proximityPublishThreshold {
+            proximity = closestProximity
+            lastPublishedProximity = closestProximity
+        }
     }
 
     func hide() {
@@ -263,6 +279,7 @@ final class FloatingPillController: ObservableObject {
     }
 
     func updateState(_ state: LiveState) {
+        let previousState = self.state
         self.state = state
 
         // Track recording time
@@ -280,6 +297,13 @@ final class FloatingPillController: ObservableObject {
             elapsedTime = 0
             processingStartTime = nil
             processingTime = 0
+        }
+
+        // Restart timer if we transition to/from active recording (changes frame rate)
+        let wasActive = previousState == .listening || previousState == .transcribing
+        let isActive = state == .listening || state == .transcribing
+        if wasActive != isActive && isVisible {
+            startMagneticTracking()  // Restarts with appropriate frame rate
         }
     }
 

@@ -778,13 +778,13 @@ struct StatusBar: View {
     }
 
     private var statusColor: Color {
-        if whisperService.isWarmingUp { return .cyan }
-        if showSuccess { return .green }
+        if whisperService.isWarmingUp { return SemanticColor.info }
+        if showSuccess { return SemanticColor.success }
         switch controller.state {
-        case .idle: return Design.foregroundMuted
-        case .listening: return .red
-        case .transcribing: return .orange
-        case .routing: return .green
+        case .idle: return TalkieTheme.textMuted
+        case .listening: return SemanticColor.error
+        case .transcribing: return SemanticColor.warning
+        case .routing: return SemanticColor.success
         }
     }
 
@@ -796,7 +796,7 @@ struct StatusBar: View {
         VStack(spacing: 0) {
             // Clear top border
             Rectangle()
-                .fill(Design.divider)
+                .fill(TalkieTheme.divider)
                 .frame(height: 1)
 
             HStack(spacing: Spacing.sm) {
@@ -840,7 +840,7 @@ struct StatusBar: View {
         }
         // Fixed height - never changes, prevents layout propagation
         .frame(height: 28)
-        .background(isActive ? statusColor.opacity(0.08) : Design.backgroundSecondary)
+        .background(isActive ? statusColor.opacity(0.08) : TalkieTheme.surfaceElevated)
         // Isolate all animations within this view - don't let them leak to parent
         .animation(.easeInOut(duration: 0.2), value: isActive)
         .drawingGroup()  // Composites to single layer, isolates animations
@@ -899,7 +899,7 @@ struct StatusBar: View {
             Text(statusText)
                 .font(.monoXSmall)
                 .fontWeight(isActive ? .medium : .regular)
-                .foregroundColor(isActive ? statusColor : Design.foregroundMuted)
+                .foregroundColor(isActive ? statusColor : TalkieTheme.textMuted)
 
             // State-specific content
             stateContent
@@ -1110,16 +1110,16 @@ struct StatusBar: View {
                 if let status = engineClient.status {
                     Text("Engine")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(Design.foregroundMuted.opacity(0.8))
+                        .foregroundColor(TalkieTheme.textMuted.opacity(0.8))
 
                     if let model = status.loadedModelId {
                         Text("•")
                             .font(.system(size: 8))
-                            .foregroundColor(Design.foregroundMuted.opacity(0.3))
+                            .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
 
                         Text(formatModelName(model))
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(Design.foregroundMuted.opacity(0.6))
+                            .foregroundColor(TalkieTheme.textMuted.opacity(0.6))
                     }
 
                     // DEV/PROD badge
@@ -1135,7 +1135,7 @@ struct StatusBar: View {
                 } else {
                     Text("Engine")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(Design.foregroundMuted.opacity(0.5))
+                        .foregroundColor(TalkieTheme.textMuted.opacity(0.5))
 
                     Text("offline")
                         .font(.system(size: 9))
@@ -1146,7 +1146,7 @@ struct StatusBar: View {
             .padding(.vertical, 3)
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Design.backgroundTertiary.opacity(0.5))
+                    .fill(TalkieTheme.surfaceCard.opacity(0.5))
             )
         }
         .buttonStyle(.plain)
@@ -1245,19 +1245,19 @@ struct ShortcutHint: View {
         HStack(spacing: 3) {
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(Design.foregroundMuted.opacity(0.7))
+                .foregroundColor(TalkieTheme.textMuted.opacity(0.7))
 
             Text(shortcut)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .tracking(1.5)  // Subtle letter spacing
-                .foregroundColor(Design.foregroundMuted)
+                .foregroundColor(TalkieTheme.textMuted)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .offset(y: -1)  // Move up 1 pixel
         .background(
             RoundedRectangle(cornerRadius: 3)
-                .fill(Design.backgroundTertiary)
+                .fill(TalkieTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
                         .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
@@ -1297,13 +1297,13 @@ struct LogPreview: View {
                 // Small chevron indicator
                 Image(systemName: "chevron.up")
                     .font(.system(size: 7, weight: .semibold))
-                    .foregroundColor(Design.foregroundMuted.opacity(0.6))
+                    .foregroundColor(TalkieTheme.textMuted.opacity(0.6))
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(isHovered ? Design.backgroundTertiary : Color.clear)
+                    .fill(isHovered ? TalkieTheme.surfaceCard : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -1522,7 +1522,7 @@ struct ConsoleView: View {
                 .font(.labelSmall)
             }
             .padding(Spacing.md)
-            .background(Design.backgroundSecondary)
+            .background(TalkieTheme.surfaceElevated)
 
             Divider()
 
@@ -1530,7 +1530,7 @@ struct ConsoleView: View {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "magnifyingglass")
                     .font(.monoXSmall)
-                    .foregroundColor(Design.foregroundMuted)
+                    .foregroundColor(TalkieTheme.textMuted)
 
                 TextField("Search logs...", text: $searchText)
                     .textFieldStyle(.plain)
@@ -1538,7 +1538,7 @@ struct ConsoleView: View {
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.xs)
-            .background(Design.backgroundTertiary)
+            .background(TalkieTheme.surfaceCard)
 
             Divider()
 
@@ -1552,7 +1552,7 @@ struct ConsoleView: View {
             }
         }
         .frame(width: 700, height: 500)
-        .background(Design.background)
+        .background(TalkieTheme.surface)
     }
 
     private func filterPill(_ type: EventType?, _ label: String) -> some View {
@@ -1563,9 +1563,9 @@ struct ConsoleView: View {
                 .padding(.vertical, 2)
                 .background(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .fill(filterType == type ? Design.accent.opacity(0.2) : Color.clear)
+                        .fill(filterType == type ? TalkieTheme.accent.opacity(0.2) : Color.clear)
                 )
-                .foregroundColor(filterType == type ? Design.accent : Design.foregroundSecondary)
+                .foregroundColor(filterType == type ? TalkieTheme.accent : TalkieTheme.textSecondary)
         }
         .buttonStyle(.plain)
     }
@@ -1587,7 +1587,7 @@ struct ConsoleEventRow: View {
                 // Timestamp
                 Text(timeString)
                     .font(.monoXSmall)
-                    .foregroundColor(Design.foregroundMuted)
+                    .foregroundColor(TalkieTheme.textMuted)
                     .frame(width: 80, alignment: .leading)
 
                 // Type badge
@@ -1606,7 +1606,7 @@ struct ConsoleEventRow: View {
                 // Message
                 Text(event.message)
                     .font(.monoSmall)
-                    .foregroundColor(Design.foreground)
+                    .foregroundColor(TalkieTheme.textPrimary)
                     .lineLimit(isExpanded ? nil : 1)
 
                 Spacer()
@@ -1616,7 +1616,7 @@ struct ConsoleEventRow: View {
                     Button(action: { isExpanded.toggle() }) {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 10))
-                            .foregroundColor(Design.foregroundMuted)
+                            .foregroundColor(TalkieTheme.textMuted)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1628,7 +1628,7 @@ struct ConsoleEventRow: View {
             if isExpanded, let detail = event.detail {
                 Text(detail)
                     .font(.monoXSmall)
-                    .foregroundColor(Design.foregroundSecondary)
+                    .foregroundColor(TalkieTheme.textSecondary)
                     .padding(.horizontal, Spacing.md)
                     .padding(.leading, 90) // Align with message
                     .padding(.bottom, Spacing.xs)
@@ -2581,7 +2581,7 @@ struct ParticleTuningPanel: View {
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10))
-                        .foregroundColor(Design.foregroundMuted)
+                        .foregroundColor(TalkieTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }
@@ -2930,7 +2930,7 @@ struct WaveformTuningPanel: View {
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10))
-                        .foregroundColor(Design.foregroundMuted)
+                        .foregroundColor(TalkieTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }
@@ -3062,7 +3062,7 @@ struct OverlayTuningPanel: View {
                 Button(action: { isShowing = false }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10))
-                        .foregroundColor(Design.foregroundMuted)
+                        .foregroundColor(TalkieTheme.textMuted)
                 }
                 .buttonStyle(.plain)
             }

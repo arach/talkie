@@ -215,6 +215,13 @@ AutoRunProcessor
 - **Debug Toolbar**: Toggle features, force sync, clear caches
 - **Logs**: `log show --predicate 'subsystem == "jdi.talkie-os-mac"' --last 5m`
 
+## Design Guidelines
+
+### Icons
+- **Avoid emojis in UI** — Use SF Symbols instead for a consistent, professional look
+- SF Symbols adapt to dark mode, accessibility settings, and system weight
+- Emojis are acceptable in user-generated content (e.g., workflow names) but not in app chrome
+
 ## Notes
 
 - macOS receives memos, iOS creates them

@@ -421,6 +421,7 @@ struct RecordingOverlayView: View {
 struct ProcessingDotsView: View {
     let tint: Color
     @State private var animationPhase: Int = 0
+    @State private var timer: Timer?
 
     var body: some View {
         HStack(spacing: 3) {
@@ -432,11 +433,15 @@ struct ProcessingDotsView: View {
         }
         .onAppear {
             // Cycle through dots with smooth animation
-            Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { _ in
+            timer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { _ in
                 withAnimation(.easeInOut(duration: 0.25)) {
                     animationPhase = (animationPhase + 1) % 4
                 }
             }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 
@@ -691,7 +696,7 @@ struct WavyParticlesView: View {
                     context.fill(Circle().path(in: rect), with: .color(TalkieTheme.textSecondary.opacity(opacity)))
                 }
 
-                // Smooth level update
+                // Smooth level update - needed inside Canvas for 60fps responsiveness
                 DispatchQueue.main.async {
                     smoothedLevel = smoothedLevel * (1.0 - CGFloat(smoothingFactor)) + targetLevel * CGFloat(smoothingFactor)
                 }
@@ -767,6 +772,7 @@ struct WaveformBarsView: View {
                 }
 
                 // Update bar levels with audio - shift left and add new value
+                // Note: DispatchQueue.main.async is needed here for smooth 60fps updates
                 DispatchQueue.main.async {
                     // Resize array if needed
                     var newLevels = currentLevels.count == barCount ? currentLevels : Array(repeating: 0.1, count: barCount)

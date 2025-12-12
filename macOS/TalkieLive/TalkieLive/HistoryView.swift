@@ -314,7 +314,7 @@ struct LiveNavigationView: View {
             }
 
             Rectangle()
-                .fill(Design.divider)
+                .fill(TalkieTheme.divider)
                 .frame(height: 0.5)
 
             if filteredUtterances.isEmpty {
@@ -388,13 +388,13 @@ struct LiveNavigationView: View {
 
             // Footer
             Rectangle()
-                .fill(Design.divider)
+                .fill(TalkieTheme.divider)
                 .frame(height: 0.5)
 
             HStack {
                 Text("\(store.utterances.count) \(store.utterances.count == 1 ? "recording" : "recordings")")
                     .font(Design.fontXS)
-                    .foregroundColor(Design.foregroundMuted)
+                    .foregroundColor(TalkieTheme.textMuted)
 
                 Spacer()
 
@@ -410,7 +410,7 @@ struct LiveNavigationView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
-        .background(Design.background)
+        .background(TalkieTheme.surface)
     }
 
     private var settingsContentView: some View {
@@ -428,13 +428,13 @@ struct LiveNavigationView: View {
             Spacer()
             Image(systemName: "waveform")
                 .font(.system(size: 36))
-                .foregroundColor(Design.foregroundMuted.opacity(0.5))
+                .foregroundColor(TalkieTheme.textMuted.opacity(0.5))
             Text("No Recordings Yet")
                 .font(Design.fontBodyMedium)
-                .foregroundColor(Design.foregroundSecondary)
+                .foregroundColor(TalkieTheme.textSecondary)
             Text("Press \(LiveSettings.shared.hotkey.displayString) to start recording")
                 .font(Design.fontSM)
-                .foregroundColor(Design.foregroundMuted)
+                .foregroundColor(TalkieTheme.textMuted)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -459,10 +459,10 @@ struct LiveNavigationView: View {
         VStack(spacing: 12) {
             Image(systemName: "gearshape")
                 .font(.system(size: 36))
-                .foregroundColor(Design.foregroundMuted.opacity(0.3))
+                .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
             Text("Configure TalkieLive settings")
                 .font(Design.fontSM)
-                .foregroundColor(Design.foregroundMuted)
+                .foregroundColor(TalkieTheme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(TalkieTheme.surface)
@@ -472,10 +472,10 @@ struct LiveNavigationView: View {
         VStack(spacing: 12) {
             Image(systemName: "terminal")
                 .font(.system(size: 36))
-                .foregroundColor(Design.foregroundMuted.opacity(0.3))
+                .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
             Text("System event logs")
                 .font(Design.fontSM)
-                .foregroundColor(Design.foregroundMuted)
+                .foregroundColor(TalkieTheme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(TalkieTheme.surface)
@@ -485,10 +485,10 @@ struct LiveNavigationView: View {
         VStack(spacing: 12) {
             Image(systemName: "sparkle")
                 .font(.system(size: 36))
-                .foregroundColor(Design.foregroundMuted.opacity(0.3))
+                .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
             Text("Select a past life")
                 .font(Design.fontSM)
-                .foregroundColor(Design.foregroundMuted)
+                .foregroundColor(TalkieTheme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(TalkieTheme.surface)
@@ -505,7 +505,7 @@ struct UtteranceRowView: View {
             // Preview text
             Text(utterance.text)
                 .font(Design.fontBody)
-                .foregroundColor(Design.foreground)
+                .foregroundColor(TalkieTheme.textPrimary)
                 .lineLimit(2)
 
             // Metadata
@@ -516,7 +516,7 @@ struct UtteranceRowView: View {
 
                     Text("·")
                         .font(Design.fontXS)
-                        .foregroundColor(Design.foregroundMuted)
+                        .foregroundColor(TalkieTheme.textMuted)
                 }
 
                 Text(formatDate(utterance.timestamp))
@@ -525,7 +525,7 @@ struct UtteranceRowView: View {
                 if let appName = utterance.metadata.activeAppName {
                     Text("·")
                         .font(Design.fontXS)
-                        .foregroundColor(Design.foregroundMuted)
+                        .foregroundColor(TalkieTheme.textMuted)
 
                     HStack(spacing: 4) {
                         if let bundleID = utterance.metadata.activeAppBundleID {
@@ -539,7 +539,7 @@ struct UtteranceRowView: View {
                     }
                 }
             }
-            .foregroundColor(Design.foregroundSecondary)
+            .foregroundColor(TalkieTheme.textSecondary)
         }
         .padding(.vertical, 6)
     }
@@ -2654,7 +2654,7 @@ struct SoundPickerRow: View {
                     .font(Design.fontXS)
             }
             .buttonStyle(.plain)
-            .foregroundColor(Design.foregroundSecondary)
+            .foregroundColor(TalkieTheme.textSecondary)
             .disabled(sound == .none)
         }
     }
@@ -2673,7 +2673,7 @@ struct StorageInfoRow: View {
                     .font(Design.fontSM)
                 Text("\(pastLivesCount) recordings • \(storageSize)")
                     .font(Design.fontXS)
-                    .foregroundColor(Design.foregroundSecondary)
+                    .foregroundColor(TalkieTheme.textSecondary)
             }
 
             Spacer()
