@@ -2171,6 +2171,38 @@ struct TacticalEventRow: View {
 
 #if DEBUG
 
+/// Position options for the debug toolbar
+enum DebugToolbarPosition: String, CaseIterable {
+    case bottomTrailing = "bottomTrailing"
+    case bottomLeading = "bottomLeading"
+    case topTrailing = "topTrailing"
+    case topLeading = "topLeading"
+
+    var alignment: Alignment {
+        switch self {
+        case .bottomTrailing: return .bottomTrailing
+        case .bottomLeading: return .bottomLeading
+        case .topTrailing: return .topTrailing
+        case .topLeading: return .topLeading
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .bottomTrailing: return "arrow.down.right"
+        case .bottomLeading: return "arrow.down.left"
+        case .topTrailing: return "arrow.up.right"
+        case .topLeading: return "arrow.up.left"
+        }
+    }
+
+    var next: DebugToolbarPosition {
+        let all = Self.allCases
+        let idx = all.firstIndex(of: self) ?? 0
+        return all[(idx + 1) % all.count]
+    }
+}
+
 /// Floating debug toolbar with expandable panel - wraps any content
 /// Usage: DebugToolbarOverlay { YourMainContent() }
 struct DebugToolbarOverlay<Content: View>: View {
@@ -2181,6 +2213,15 @@ struct DebugToolbarOverlay<Content: View>: View {
     @State private var showOverlayTuning = false
     @State private var showCopiedFeedback = false
     @ObservedObject private var events = SystemEventManager.shared
+
+    // Persisted settings
+    @AppStorage("debugToolbar.isHidden") private var isHidden = false
+    @AppStorage("debugToolbar.position") private var positionRaw = DebugToolbarPosition.bottomTrailing.rawValue
+
+    private var position: DebugToolbarPosition {
+        get { DebugToolbarPosition(rawValue: positionRaw) ?? .bottomTrailing }
+        nonmutating set { positionRaw = newValue.rawValue }
+    }
 
     let content: () -> Content
 
@@ -2193,46 +2234,75 @@ struct DebugToolbarOverlay<Content: View>: View {
             // Main content
             content()
 
-            // Debug overlay (bottom right)
-            debugOverlay
+            // Debug overlay (position based on setting)
+            if !isHidden {
+                debugOverlay
+            }
         }
         .sheet(isPresented: $showingConsole) {
             DebugConsoleSheet()
         }
+        // ⌘D to toggle debug toolbar visibility
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d" {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isHidden.toggle()
+                    }
+                    return nil // Consume the event
+                }
+                return event
+            }
+        }
     }
 
     private var debugOverlay: some View {
-        ZStack(alignment: .bottomTrailing) {
+        let isTop = position == .topTrailing || position == .topLeading
+        let isLeading = position == .bottomLeading || position == .topLeading
+        let horizontalAlignment: HorizontalAlignment = isLeading ? .leading : .trailing
+        let slideEdge: Edge = isLeading ? .leading : .trailing
+        let scaleAnchor: UnitPoint = isTop
+            ? (isLeading ? .topLeading : .topTrailing)
+            : (isLeading ? .bottomLeading : .bottomTrailing)
+
+        return ZStack(alignment: position.alignment) {
             Color.clear // Expand to full size
 
-            VStack(alignment: .trailing, spacing: 8) {
-                // Tuning panels (slides in from right) - capped height with scroll
-                if showParticleTuning {
-                    ParticleTuningPanel(isShowing: $showParticleTuning)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
-
-                if showWaveformTuning {
-                    WaveformTuningPanel(isShowing: $showWaveformTuning)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
-
-                if showOverlayTuning {
-                    OverlayTuningPanel(isShowing: $showOverlayTuning)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+            VStack(alignment: horizontalAlignment, spacing: 8) {
+                // For top positions, button comes first
+                if isTop {
+                    toggleButton
                 }
 
                 // Expanded panel
                 if showToolbar {
                     debugPanel
-                        .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
+                        .transition(.scale(scale: 0.9, anchor: scaleAnchor).combined(with: .opacity))
                 }
 
-                // Toggle button (always visible)
-                toggleButton
+                // Tuning panels (slides in from edge) - capped height with scroll
+                if showParticleTuning {
+                    ParticleTuningPanel(isShowing: $showParticleTuning)
+                        .transition(.move(edge: slideEdge).combined(with: .opacity))
+                }
+
+                if showWaveformTuning {
+                    WaveformTuningPanel(isShowing: $showWaveformTuning)
+                        .transition(.move(edge: slideEdge).combined(with: .opacity))
+                }
+
+                if showOverlayTuning {
+                    OverlayTuningPanel(isShowing: $showOverlayTuning)
+                        .transition(.move(edge: slideEdge).combined(with: .opacity))
+                }
+
+                // For bottom positions, button comes last
+                if !isTop {
+                    toggleButton
+                }
             }
             .padding(16)
-            .frame(maxHeight: 600, alignment: .bottom)  // Cap height to prevent window resize
+            .frame(maxHeight: 600, alignment: isTop ? .top : .bottom)
             .clipped()
         }
     }
@@ -2272,6 +2342,19 @@ struct DebugToolbarOverlay<Content: View>: View {
                     .foregroundColor(.white.opacity(0.9))
 
                 Spacer()
+
+                // Position toggle button
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        positionRaw = position.next.rawValue
+                    }
+                }) {
+                    Image(systemName: position.icon)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .help("Move toolbar (\(position.next.rawValue))")
 
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
