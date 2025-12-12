@@ -1390,11 +1390,11 @@ private struct WaveformBar: View {
 
     private var barColor: Color {
         if isCurrent {
-            return Color(white: 0.95)
+            return .primary
         } else if isPast {
-            return Color(white: 0.65)
+            return .accentColor
         } else {
-            return Color(white: 0.25)
+            return .secondary.opacity(0.3)
         }
     }
 

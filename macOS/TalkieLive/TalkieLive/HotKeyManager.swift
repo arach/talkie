@@ -27,6 +27,9 @@ private final class HotKeyRegistry {
     private var eventHandlerRef: EventHandlerRef?
     private var isInstalled = false
 
+    /// Track which hotkeys are currently "down" to filter out key repeats
+    private var keysCurrentlyDown: Set<HotKeyIdentifier> = []
+
     private init() {}
 
     struct HotKeyIdentifier: Hashable {
@@ -53,19 +56,27 @@ private final class HotKeyRegistry {
 
     func handleEvent(signature: OSType, id: UInt32, eventType: HotKeyEventType) {
         let identifier = HotKeyIdentifier(signature: signature, id: id)
-        logger.info("Looking up callback for signature=\(signature) id=\(id) type=\(String(describing: eventType))")
 
         switch eventType {
         case .pressed:
+            // Filter out key repeats - only fire on initial press
+            guard !keysCurrentlyDown.contains(identifier) else {
+                logger.debug("Ignoring key repeat for signature=\(signature) id=\(id)")
+                return
+            }
+            keysCurrentlyDown.insert(identifier)
+
             if let callback = pressCallbacks[identifier] {
-                logger.info("Found press callback, firing!")
+                logger.info("Hotkey pressed: signature=\(signature) id=\(id)")
                 callback()
             } else {
                 logger.warning("No press callback registered for this hotkey")
             }
         case .released:
+            keysCurrentlyDown.remove(identifier)
+
             if let callback = releaseCallbacks[identifier] {
-                logger.info("Found release callback, firing!")
+                logger.info("Hotkey released: signature=\(signature) id=\(id)")
                 callback()
             }
             // No warning for missing release - it's optional
@@ -126,7 +137,6 @@ private func globalHotKeyEventHandler(
 
     guard status == noErr else { return status }
 
-    logger.info("Hotkey event: signature=\(hotKeyID.signature) id=\(hotKeyID.id) type=\(String(describing: eventType))")
     HotKeyRegistry.shared.handleEvent(signature: hotKeyID.signature, id: hotKeyID.id, eventType: eventType)
 
     return noErr

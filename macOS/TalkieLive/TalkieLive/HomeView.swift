@@ -13,14 +13,19 @@ struct HomeView: View {
     @ObservedObject private var store = UtteranceStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
+    @State private var previewLevel: ActivityViewLevel? = nil  // Debug: override activity level
 
     // Navigation callbacks
     var onSelectUtterance: ((Utterance) -> Void)?
     var onSelectApp: ((String, String?) -> Void)?  // (appName, bundleID)
 
+    private var activityLevel: ActivityViewLevel {
+        previewLevel ?? ActivityViewLevel.from(daysWithActivity: stats.daysWithActivity)
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 20) {
                 // Header
                 VStack(alignment: .leading, spacing: 4) {
                     Text("TALKIE LIVE")
@@ -28,36 +33,79 @@ struct HomeView: View {
                         .tracking(1.5)
                         .foregroundColor(TalkieTheme.textTertiary)
 
-                    Text("Activity")
+                    Text("Home")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(TalkieTheme.textPrimary)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
 
-                // Insight banner (if available)
-                if let insight = stats.insight {
-                    InsightBanner(insight: insight)
-                        .padding(.horizontal, 24)
+                // Top Row: Insight (2 slots) | Streak | Today
+                HStack(spacing: 12) {
+                    // Insight Card (2 slots worth)
+                    InsightCard(insight: stats.insight)
+                        .frame(maxWidth: .infinity)
+
+                    // Streak Card
+                    StreakCard(streak: stats.streak)
+                        .frame(maxWidth: .infinity)
+
+                    // Today Card
+                    TodayCard(count: stats.todayCount)
+                        .frame(maxWidth: .infinity)
                 }
+                .padding(.horizontal, 24)
 
-                // Activity Graph
-                ActivityGraphCard(data: activityData, stats: stats)
-                    .padding(.horizontal, 24)
-
-                // Quick Stats
-                QuickStatsRow(stats: stats)
-                    .padding(.horizontal, 24)
-
-                // Two column layout for Top Apps and Recent
+                // Two column layout: Recent (left, 2 slots) | Top Apps (right, 2 slots)
                 HStack(alignment: .top, spacing: 16) {
-                    // Top Apps
-                    TopAppsCard(apps: stats.topApps, onSelectApp: onSelectApp)
-
-                    // Recent Activity
+                    // Recent Activity - LEFT (more important)
                     RecentActivityCard(
                         utterances: Array(store.utterances.prefix(5)),
                         onSelectUtterance: onSelectUtterance
+                    )
+
+                    // Top Apps - RIGHT
+                    TopAppsCard(apps: stats.topApps, onSelectApp: onSelectApp)
+                }
+                .padding(.horizontal, 24)
+
+                // Activity Graph - Adaptive sizing based on engagement
+                VStack(alignment: .leading, spacing: 8) {
+                    // Picker to switch between layouts
+                    HStack(spacing: 8) {
+                        Text("ACTIVITY")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(1)
+                            .foregroundColor(TalkieTheme.textTertiary)
+
+                        Spacer()
+
+                        Picker("", selection: Binding(
+                            get: { previewLevel ?? activityLevel },
+                            set: { previewLevel = $0 }
+                        )) {
+                            Text("Month").tag(ActivityViewLevel.monthly)
+                            Text("Quarter").tag(ActivityViewLevel.quarterly)
+                            Text("Year").tag(ActivityViewLevel.yearly)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 200)
+
+                        if previewLevel != nil {
+                            Button(action: { previewLevel = nil }) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(TalkieTheme.textTertiary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Reset to auto")
+                        }
+                    }
+
+                    AdaptiveActivityCard(
+                        data: activityData,
+                        stats: stats,
+                        level: activityLevel
                     )
                 }
                 .padding(.horizontal, 24)
@@ -76,23 +124,37 @@ struct HomeView: View {
 
     private func loadActivityData() {
         let utterances = store.utterances
+        let calendar = Calendar.current
+
+        // Calculate unique days with activity
+        var uniqueDays = Set<Date>()
+        var earliestDate: Date?
+        for u in utterances {
+            let day = calendar.startOfDay(for: u.timestamp)
+            uniqueDays.insert(day)
+            if earliestDate == nil || day < earliestDate! {
+                earliestDate = day
+            }
+        }
 
         // Calculate stats
         stats = HomeStats(
             totalRecordings: utterances.count,
             totalWords: utterances.map { $0.wordCount }.reduce(0, +),
             totalDuration: utterances.compactMap { $0.durationSeconds }.reduce(0, +),
-            todayCount: utterances.filter { Calendar.current.isDateInToday($0.timestamp) }.count,
+            todayCount: utterances.filter { calendar.isDateInToday($0.timestamp) }.count,
             weekCount: utterances.filter {
-                guard let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else { return false }
+                guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) else { return false }
                 return $0.timestamp >= weekAgo
             }.count,
             streak: calculateStreak(utterances),
             topApps: calculateTopApps(utterances),
-            insight: generateInsight(utterances)
+            insight: generateInsight(utterances),
+            daysWithActivity: uniqueDays.count,
+            firstActivityDate: earliestDate
         )
 
-        // Build activity data for last 52 weeks (full year) like GitHub
+        // Build activity data for full year (allows switching between views)
         activityData = buildActivityData(from: utterances, weeks: 52)
     }
 
@@ -325,6 +387,53 @@ struct HomeStats {
     var streak: Int = 0
     var topApps: [(name: String, bundleID: String?, count: Int)] = []
     var insight: Insight?
+    var daysWithActivity: Int = 0  // Total unique days with recordings
+    var firstActivityDate: Date?   // When user started
+
+    /// Estimated time saved vs typing (4x speedup factor)
+    /// Typing: ~40 WPM, Voice: ~160 WPM
+    /// Time saved = (words / 40 WPM) - (words / 160 WPM) = words * 0.01875 minutes
+    var timeSavedSeconds: Double {
+        // Time it would take to type at 40 WPM
+        let typingTimeMinutes = Double(totalWords) / 40.0
+        // Time it took to speak at ~160 WPM (4x faster)
+        let speakingTimeMinutes = Double(totalWords) / 160.0
+        // Time saved in seconds
+        return (typingTimeMinutes - speakingTimeMinutes) * 60.0
+    }
+}
+
+// Activity view sizing based on user engagement
+enum ActivityViewLevel: CaseIterable {
+    case monthly    // < 30 days - 1 slot (~5 weeks)
+    case quarterly  // 30-90 days - 2 slots (~13 weeks)
+    case yearly     // > 90 days - 3 slots (full year)
+
+    static func from(daysWithActivity: Int) -> ActivityViewLevel {
+        if daysWithActivity < 30 {
+            return .monthly
+        } else if daysWithActivity <= 90 {
+            return .quarterly
+        } else {
+            return .yearly
+        }
+    }
+
+    var weeksToShow: Int {
+        switch self {
+        case .monthly: return 5     // ~1 month
+        case .quarterly: return 13  // ~3 months
+        case .yearly: return 52     // Full year
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .monthly: return "Month"
+        case .quarterly: return "Quarter"
+        case .yearly: return "Year"
+        }
+    }
 }
 
 struct Insight {
@@ -370,29 +479,159 @@ enum ActivityLevel: Int {
     }
 }
 
-// MARK: - Insight Banner
+// MARK: - Streak Card
 
-struct InsightBanner: View {
-    let insight: Insight
+struct StreakCard: View {
+    let streak: Int
+
+    private var icon: String {
+        if streak >= 30 { return "🏆" }
+        else if streak >= 14 { return "⚡️" }
+        else if streak >= 7 { return "🔥" }
+        else if streak >= 3 { return "✨" }
+        else if streak >= 1 { return "🌱" }
+        else { return "💤" }
+    }
+
+    private var message: String {
+        if streak >= 30 { return "Legendary!" }
+        else if streak >= 14 { return "On fire!" }
+        else if streak >= 7 { return "Crushing it!" }
+        else if streak >= 3 { return "Building it!" }
+        else if streak >= 1 { return "Started!" }
+        else { return "Start today" }
+    }
+
+    private var accentColor: Color {
+        if streak >= 7 { return .orange }
+        else if streak >= 1 { return .green }
+        else { return TalkieTheme.textMuted }
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(icon)
+                .font(.system(size: 20))
+
+            Text("\(streak)")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(accentColor)
+
+            Text(message)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(TalkieTheme.textSecondary)
+                .textCase(.uppercase)
+        }
+        .frame(maxWidth: .infinity, minHeight: 80)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(TalkieTheme.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(streak >= 7 ? accentColor.opacity(0.3) : TalkieTheme.border, lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - Today Card
+
+struct TodayCard: View {
+    let count: Int
+
+    private var icon: String {
+        if count >= 20 { return "🚀" }
+        else if count >= 10 { return "💪" }
+        else if count >= 5 { return "👍" }
+        else if count >= 1 { return "✅" }
+        else { return "🎯" }
+    }
+
+    private var message: String {
+        if count >= 20 { return "Incredible!" }
+        else if count >= 10 { return "Great day!" }
+        else if count >= 5 { return "Nice work!" }
+        else if count >= 1 { return "Getting started" }
+        else { return "Ready to go" }
+    }
+
+    private var accentColor: Color {
+        if count >= 10 { return .cyan }
+        else if count >= 1 { return .green }
+        else { return TalkieTheme.textMuted }
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(icon)
+                .font(.system(size: 20))
+
+            Text("\(count)")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(accentColor)
+
+            Text(message)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(TalkieTheme.textSecondary)
+                .textCase(.uppercase)
+        }
+        .frame(maxWidth: .infinity, minHeight: 80)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(TalkieTheme.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(count >= 10 ? accentColor.opacity(0.3) : TalkieTheme.border, lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - Insight Card (2-slot width)
+
+struct InsightCard: View {
+    let insight: Insight?
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(insight.emoji)
-                .font(.system(size: 28))
+            if let insight = insight {
+                Text(insight.emoji)
+                    .font(.system(size: 32))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(insight.message)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(TalkieTheme.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(insight.message)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(TalkieTheme.textPrimary)
 
-                Text(insight.detail)
-                    .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    Text(insight.detail)
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+            } else {
+                // Empty state
+                Text("👋")
+                    .font(.system(size: 32))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ready to go!")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(TalkieTheme.textPrimary)
+
+                    Text("Hold your hotkey to start recording.")
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textSecondary)
+                }
+
+                Spacer()
             }
-
-            Spacer()
         }
         .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 80)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(TalkieTheme.surfaceCard)
@@ -404,7 +643,267 @@ struct InsightBanner: View {
     }
 }
 
-// MARK: - Activity Graph Card
+// MARK: - Adaptive Activity Card
+
+struct AdaptiveActivityCard: View {
+    let data: [DayActivity]
+    let stats: HomeStats
+    let level: ActivityViewLevel
+
+    private let cellSize: CGFloat = 12
+    private let cellSpacing: CGFloat = 2
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Text(headerText)
+                    .font(.system(size: 12))
+                    .foregroundColor(TalkieTheme.textSecondary)
+
+                Spacer()
+
+                // Legend
+                HStack(spacing: 4) {
+                    Text("Less")
+                        .font(.system(size: 9))
+                        .foregroundColor(TalkieTheme.textTertiary)
+
+                    ForEach(ActivityLevel.allCases, id: \.rawValue) { activityLevel in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(activityLevel.color)
+                            .frame(width: 10, height: 10)
+                    }
+
+                    Text("More")
+                        .font(.system(size: 9))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+            }
+
+            // Grid - adaptive based on level
+            switch level {
+            case .monthly:
+                MonthlyActivityGrid(data: data, cellSize: cellSize, spacing: cellSpacing)
+            case .quarterly:
+                QuarterlyActivityGrid(data: data, cellSize: cellSize, spacing: cellSpacing)
+            case .yearly:
+                GeometryReader { geo in
+                    ActivityGrid(data: data, cellSize: cellSize, spacing: cellSpacing, containerWidth: geo.size.width)
+                }
+                .frame(height: 7 * cellSize + 6 * cellSpacing)
+            }
+
+            // Month labels for quarterly and yearly
+            if level != .monthly {
+                MonthLabelsAdaptive(level: level, cellSize: cellSize, spacing: cellSpacing)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(TalkieTheme.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
+                )
+        )
+    }
+
+    private var headerText: String {
+        switch level {
+        case .monthly:
+            return "\(stats.weekCount) recordings this month"
+        case .quarterly:
+            return "\(stats.totalRecordings) recordings this quarter"
+        case .yearly:
+            return "\(stats.totalRecordings) total recordings"
+        }
+    }
+}
+
+// Monthly: ~5 weeks grid
+struct MonthlyActivityGrid: View {
+    let data: [DayActivity]
+    let cellSize: CGFloat
+    let spacing: CGFloat
+
+    private let weeksToShow = 5
+
+    var body: some View {
+        let grid = buildGrid()
+
+        HStack(alignment: .top, spacing: spacing) {
+            // Day labels
+            VStack(alignment: .trailing, spacing: spacing) {
+                ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
+                    Text(day)
+                        .font(.system(size: 8))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                        .frame(height: cellSize)
+                }
+            }
+            .frame(width: 12)
+
+            // Grid
+            HStack(alignment: .top, spacing: spacing) {
+                ForEach(0..<weeksToShow, id: \.self) { weekIndex in
+                    if weekIndex < grid.count {
+                        VStack(spacing: spacing) {
+                            ForEach(0..<7, id: \.self) { dayIndex in
+                                if dayIndex < grid[weekIndex].count {
+                                    ActivityCell(day: grid[weekIndex][dayIndex], size: cellSize)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: 7 * cellSize + 6 * spacing)
+    }
+
+    private func buildGrid() -> [[DayActivity]] {
+        buildActivityGrid(from: data, weeks: weeksToShow)
+    }
+}
+
+// Quarterly: ~13 weeks grid
+struct QuarterlyActivityGrid: View {
+    let data: [DayActivity]
+    let cellSize: CGFloat
+    let spacing: CGFloat
+
+    private let weeksToShow = 13
+
+    var body: some View {
+        let grid = buildGrid()
+
+        HStack(alignment: .top, spacing: spacing) {
+            // Day labels
+            VStack(alignment: .trailing, spacing: spacing) {
+                ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
+                    Text(day)
+                        .font(.system(size: 8))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                        .frame(height: cellSize)
+                }
+            }
+            .frame(width: 12)
+
+            // Grid
+            HStack(alignment: .top, spacing: spacing) {
+                ForEach(0..<weeksToShow, id: \.self) { weekIndex in
+                    if weekIndex < grid.count {
+                        VStack(spacing: spacing) {
+                            ForEach(0..<7, id: \.self) { dayIndex in
+                                if dayIndex < grid[weekIndex].count {
+                                    ActivityCell(day: grid[weekIndex][dayIndex], size: cellSize)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: 7 * cellSize + 6 * spacing)
+    }
+
+    private func buildGrid() -> [[DayActivity]] {
+        buildActivityGrid(from: data, weeks: weeksToShow)
+    }
+}
+
+// Shared grid builder
+private func buildActivityGrid(from data: [DayActivity], weeks: Int) -> [[DayActivity]] {
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let todayWeekday = calendar.component(.weekday, from: today)
+
+    var dataByDate: [Date: DayActivity] = [:]
+    for day in data {
+        dataByDate[calendar.startOfDay(for: day.date)] = day
+    }
+
+    let daysBack = (weeks - 1) * 7 + (todayWeekday - 1)
+    guard let startDate = calendar.date(byAdding: .day, value: -daysBack, to: today) else {
+        return []
+    }
+
+    var grid: [[DayActivity]] = []
+    var currentDate = startDate
+
+    for _ in 0..<weeks {
+        var week: [DayActivity] = []
+        for _ in 0..<7 {
+            if currentDate <= today {
+                if let existing = dataByDate[currentDate] {
+                    week.append(existing)
+                } else {
+                    week.append(DayActivity(date: currentDate, count: 0, level: .none))
+                }
+            } else {
+                week.append(DayActivity(date: currentDate, count: -1, level: .none))
+            }
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+        grid.append(week)
+    }
+
+    return grid
+}
+
+// Adaptive month labels
+struct MonthLabelsAdaptive: View {
+    let level: ActivityViewLevel
+    let cellSize: CGFloat
+    let spacing: CGFloat
+
+    private let dayLabelWidth: CGFloat = 12
+
+    var body: some View {
+        let months = getMonths()
+        let weekWidth = cellSize + spacing
+        let weeksPerMonth = CGFloat(level.weeksToShow) / CGFloat(months.count)
+
+        HStack(spacing: 0) {
+            Spacer().frame(width: dayLabelWidth + spacing)
+
+            ForEach(Array(months.enumerated()), id: \.offset) { _, month in
+                Text(month)
+                    .font(.system(size: 9))
+                    .foregroundColor(TalkieTheme.textTertiary)
+                    .frame(width: weeksPerMonth * weekWidth, alignment: .leading)
+            }
+        }
+    }
+
+    private func getMonths() -> [String] {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+
+        var months: [String] = []
+        let today = Date()
+
+        let monthsToShow: Int
+        switch level {
+        case .monthly: monthsToShow = 1
+        case .quarterly: monthsToShow = 3
+        case .yearly: monthsToShow = 12
+        }
+
+        for i in (0..<monthsToShow).reversed() {
+            if let date = calendar.date(byAdding: .month, value: -i, to: today) {
+                months.append(formatter.string(from: date))
+            }
+        }
+
+        return months
+    }
+}
+
+// MARK: - Activity Graph Card (Legacy - Full Year)
 
 struct ActivityGraphCard: View {
     let data: [DayActivity]
@@ -694,9 +1193,9 @@ struct QuickStatsRow: View {
             )
 
             QuickStatCard(
-                icon: "clock",
-                value: formatDuration(stats.totalDuration),
-                label: "Total Time",
+                icon: "bolt.fill",
+                value: formatTimeSaved(stats.timeSavedSeconds),
+                label: "Time Saved",
                 color: .green
             )
         }
@@ -709,7 +1208,10 @@ struct QuickStatsRow: View {
         return "\(n)"
     }
 
-    private func formatDuration(_ seconds: Double) -> String {
+    private func formatTimeSaved(_ seconds: Double) -> String {
+        if seconds < 60 {
+            return "\(Int(seconds))s"
+        }
         let hours = Int(seconds) / 3600
         let minutes = (Int(seconds) % 3600) / 60
         if hours > 0 {

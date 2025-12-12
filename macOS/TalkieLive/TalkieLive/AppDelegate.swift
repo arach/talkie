@@ -156,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onRelease: { [weak self] in
                     guard let self else { return }
-                    Task { @MainActor in
+                    DispatchQueue.main.async {
                         self.liveController.pttStop()
                     }
                 }
