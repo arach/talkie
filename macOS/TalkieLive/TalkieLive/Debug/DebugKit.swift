@@ -4,9 +4,12 @@
 //
 //  Debug toolbar and logging for development
 //
+//  Uses DebugToolbarPosition from DebugKit package for consistency.
+//
 
 import SwiftUI
 import os.log
+import DebugKit
 
 // MARK: - Particle Preset
 
@@ -2171,37 +2174,7 @@ struct TacticalEventRow: View {
 
 #if DEBUG
 
-/// Position options for the debug toolbar
-enum DebugToolbarPosition: String, CaseIterable {
-    case bottomTrailing = "bottomTrailing"
-    case bottomLeading = "bottomLeading"
-    case topTrailing = "topTrailing"
-    case topLeading = "topLeading"
-
-    var alignment: Alignment {
-        switch self {
-        case .bottomTrailing: return .bottomTrailing
-        case .bottomLeading: return .bottomLeading
-        case .topTrailing: return .topTrailing
-        case .topLeading: return .topLeading
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .bottomTrailing: return "arrow.down.right"
-        case .bottomLeading: return "arrow.down.left"
-        case .topTrailing: return "arrow.up.right"
-        case .topLeading: return "arrow.up.left"
-        }
-    }
-
-    var next: DebugToolbarPosition {
-        let all = Self.allCases
-        let idx = all.firstIndex(of: self) ?? 0
-        return all[(idx + 1) % all.count]
-    }
-}
+// Using DebugToolbarPosition from DebugKit package
 
 /// Floating debug toolbar with expandable panel - wraps any content
 /// Usage: DebugToolbarOverlay { YourMainContent() }

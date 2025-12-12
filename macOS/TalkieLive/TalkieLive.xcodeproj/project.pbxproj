@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 53GRDB0022EE70000004EEAF4 /* GRDB */; };
+		E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */,
 				53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -105,6 +107,7 @@
 			);
 			name = TalkieLive;
 			packageProductDependencies = (
+				A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */,
 			);
 			productName = TalkieLive;
 			productReference = 539FB5B92EE6785C004EEAF4 /* TalkieLive.app */;
@@ -184,6 +187,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../DebugKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 539FB5BA2EE6785C004EEAF4 /* Products */;
@@ -546,6 +550,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../DebugKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../DebugKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -562,6 +573,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
 			productName = GRDB;
+		};
+		A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DebugKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
