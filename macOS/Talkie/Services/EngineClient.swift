@@ -251,7 +251,7 @@ public final class EngineClient: ObservableObject {
     // MARK: - Transcription
 
     /// Transcribe audio using TalkieEngine
-    public func transcribe(audioData: Data, modelId: String = "openai_whisper-small") async throws -> String {
+    public func transcribe(audioData: Data, modelId: String = "whisper:openai_whisper-small") async throws -> String {
         guard let proxy = engineProxy else {
             // Try to connect first
             let connected = await ensureConnected()

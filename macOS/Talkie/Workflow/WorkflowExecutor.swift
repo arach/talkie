@@ -1148,7 +1148,8 @@ class WorkflowExecutor: ObservableObject {
 
     // MARK: - Transcribe Step Execution
     private func executeTranscribeStep(_ config: TranscribeStepConfig, memo: VoiceMemo, context: WorkflowContext) async throws -> String {
-        logger.info("Executing transcribe step with model: \(config.model)")
+        logger.info("Executing transcribe step: tier=\(config.qualityTier.rawValue), primary=\(config.primaryModel), fallback=\(config.effectiveFallbackModel ?? "none")")
+
         // Check if memo already has a transcript and we're not overwriting
         if let existingTranscript = memo.currentTranscript, !existingTranscript.isEmpty, !config.overwriteExisting {
             logger.info("Memo already has transcript, skipping transcription (overwriteExisting=false)")
@@ -1160,18 +1161,63 @@ class WorkflowExecutor: ObservableObject {
             throw WorkflowError.executionFailed("No audio data available for transcription")
         }
 
-        logger.info("Transcribing audio (\(audioData.count) bytes)")
-        // Use Apple Speech for "apple_speech" model, Whisper for others
-        if config.model == "apple_speech" {
+        logger.info("Transcribing audio (\(audioData.count) bytes) with \(config.qualityTier.displayName) quality")
+
+        // Try primary model first
+        do {
+            return try await transcribeWithModel(
+                modelId: config.primaryModel,
+                audioData: audioData,
+                memo: memo,
+                config: config,
+                isPrimary: true
+            )
+        } catch {
+            logger.warning("Primary transcription failed: \(error.localizedDescription)")
+
+            // Check fallback strategy
+            guard config.fallbackStrategy != .none,
+                  let fallbackModel = config.effectiveFallbackModel else {
+                logger.error("No fallback configured, propagating error")
+                throw error
+            }
+
+            // For onTimeout strategy, only fallback if it was a timeout error
+            if config.fallbackStrategy == .onTimeout {
+                let isTimeout = error.localizedDescription.lowercased().contains("timeout") ||
+                               error.localizedDescription.lowercased().contains("timed out")
+                guard isTimeout else {
+                    logger.info("Error was not a timeout, not using fallback (strategy=onTimeout)")
+                    throw error
+                }
+            }
+
+            logger.info("Using fallback model: \(fallbackModel)")
+            await SystemEventManager.shared.log(.workflow, "Falling back", detail: "Using \(fallbackModel)")
+
+            // Try fallback model
+            return try await transcribeWithModel(
+                modelId: fallbackModel,
+                audioData: audioData,
+                memo: memo,
+                config: config,
+                isPrimary: false
+            )
+        }
+    }
+
+    /// Transcribe using a specific model ID
+    private func transcribeWithModel(modelId: String, audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig, isPrimary: Bool) async throws -> String {
+        if modelId == "apple_speech" {
             return try await transcribeWithAppleSpeech(audioData: audioData, memo: memo, config: config)
         } else {
-            return try await transcribeWithWhisper(audioData: audioData, memo: memo, config: config)
+            return try await transcribeWithWhisper(modelId: modelId, audioData: audioData, memo: memo, config: config)
         }
     }
 
     /// Transcribe using Apple Speech (no download required)
     private func transcribeWithAppleSpeech(audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
-        await SystemEventManager.shared.log(.workflow, "Transcribing with Apple Speech", detail: "On-device, no download")
+        await SystemEventManager.shared.log(.workflow, "Transcribing with Apple Speech", detail: "On-device, instant")
         do {
             let transcript = try await AppleSpeechService.shared.transcribe(audioData: audioData)
 
@@ -1197,12 +1243,14 @@ class WorkflowExecutor: ObservableObject {
         }
     }
 
-    /// Transcribe using Whisper (requires model download)
-    private func transcribeWithWhisper(audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
-        await SystemEventManager.shared.log(.workflow, "Transcribing with Whisper", detail: "Model: \(config.model)")
+    /// Transcribe using Whisper via TalkieEngine (requires model download)
+    private func transcribeWithWhisper(modelId: String, audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
+        let modelName = TranscribeStepConfig.availableModels.first { $0.id == modelId }?.name ?? modelId
+        await SystemEventManager.shared.log(.workflow, "Transcribing with Whisper", detail: modelName)
+
         // Convert model string to WhisperModel enum
         let whisperModel: WhisperModel
-        switch config.model {
+        switch modelId {
         case "openai_whisper-tiny":
             whisperModel = .tiny
         case "openai_whisper-base":

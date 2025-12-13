@@ -246,7 +246,8 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
             WorkflowStep(
                 type: .transcribe,
                 config: .transcribe(TranscribeStepConfig(
-                    model: "apple_speech",
+                    qualityTier: .fast,  // Apple Speech - instant, no download
+                    fallbackStrategy: .none,
                     overwriteExisting: false,  // Don't overwrite existing transcripts
                     saveAsVersion: true
                 )),
@@ -275,7 +276,8 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
                 id: UUID(uuidString: "57E90001-0000-0000-0000-000000000001")!,
                 type: .transcribe,
                 config: .transcribe(TranscribeStepConfig(
-                    model: "openai_whisper-small",
+                    qualityTier: .balanced,  // Whisper Small via TalkieEngine
+                    fallbackStrategy: .automatic,
                     overwriteExisting: false,
                     saveAsVersion: true
                 )),
@@ -1647,30 +1649,179 @@ struct TransformStepConfig: Codable {
 
 // MARK: - Transcribe Step Configuration
 
+/// Quality tier for transcription - user-facing preference, not architectural choice
+enum TranscriptionQualityTier: String, Codable, CaseIterable {
+    case fast = "fast"           // Prioritize speed
+    case balanced = "balanced"   // Balance speed and accuracy
+    case high = "high"           // Prioritize accuracy
+
+    var displayName: String {
+        switch self {
+        case .fast: return "Fast"
+        case .balanced: return "Balanced"
+        case .high: return "Best"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .fast: return "Prioritize speed"
+        case .balanced: return "Balance speed & accuracy"
+        case .high: return "Prioritize accuracy"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .fast: return "hare"
+        case .balanced: return "scale.3d"
+        case .high: return "sparkles"
+        }
+    }
+
+    /// Primary model for this tier (implementation detail, not exposed to user)
+    var primaryModel: String {
+        switch self {
+        case .fast: return "apple_speech"
+        case .balanced: return "openai_whisper-small"
+        case .high: return "distil-whisper_distil-large-v3"
+        }
+    }
+
+    /// Default fallback model (nil for fast tier)
+    var defaultFallbackModel: String? {
+        switch self {
+        case .fast: return nil
+        case .balanced: return "openai_whisper-base"
+        case .high: return "openai_whisper-small"
+        }
+    }
+}
+
+/// Fallback strategy when primary transcription fails or times out
+enum TranscriptionFallbackStrategy: String, Codable, CaseIterable {
+    case automatic = "automatic"   // Fallback on any error
+    case onTimeout = "on_timeout"  // Only fallback on timeout
+    case none = "none"             // No fallback
+
+    var displayName: String {
+        switch self {
+        case .automatic: return "Automatic"
+        case .onTimeout: return "On Timeout"
+        case .none: return "None"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .automatic: return "Use fallback if primary fails for any reason"
+        case .onTimeout: return "Only use fallback if primary times out"
+        case .none: return "No fallback - fail if primary fails"
+        }
+    }
+}
+
 /// Configuration for local speech-to-text transcription
 struct TranscribeStepConfig: Codable {
-    var model: String               // Transcription model ID
+    // New quality-based configuration
+    var qualityTier: TranscriptionQualityTier
+    var fallbackStrategy: TranscriptionFallbackStrategy
+    var fallbackModel: String?      // Explicit fallback (uses tier default if nil)
+
+    // Options
     var overwriteExisting: Bool     // Overwrite if transcript already exists
     var saveAsVersion: Bool         // Save as new transcript version
 
+    // Legacy field for migration
+    private var model: String?
+
     init(
-        model: String = "apple_speech",  // Default to Apple Speech (no download required)
+        qualityTier: TranscriptionQualityTier = .balanced,
+        fallbackStrategy: TranscriptionFallbackStrategy = .automatic,
+        fallbackModel: String? = nil,
         overwriteExisting: Bool = false,
         saveAsVersion: Bool = true
     ) {
-        self.model = model
+        self.qualityTier = qualityTier
+        self.fallbackStrategy = fallbackStrategy
+        self.fallbackModel = fallbackModel
         self.overwriteExisting = overwriteExisting
         self.saveAsVersion = saveAsVersion
     }
 
-    /// Available transcription models
-    /// Apple Speech is first (no download), then Whisper models (require download)
-    static let availableModels: [(id: String, name: String, description: String)] = [
-        ("apple_speech", "Apple Speech", "Built-in, no download required"),
-        ("openai_whisper-tiny", "Whisper Tiny (~40MB)", "Fast, requires download"),
-        ("openai_whisper-base", "Whisper Base (~75MB)", "Good quality, requires download"),
-        ("openai_whisper-small", "Whisper Small (~250MB)", "Balanced, requires download"),
-        ("distil-whisper_distil-large-v3", "Whisper Large V3 (~750MB)", "Best quality, requires download")
+    /// Primary model to use (derived from quality tier)
+    var primaryModel: String {
+        qualityTier.primaryModel
+    }
+
+    /// Effective fallback model (explicit or tier default)
+    var effectiveFallbackModel: String? {
+        guard fallbackStrategy != .none else { return nil }
+        return fallbackModel ?? qualityTier.defaultFallbackModel
+    }
+
+    // MARK: - Migration from legacy format
+
+    private enum CodingKeys: String, CodingKey {
+        case qualityTier, fallbackStrategy, fallbackModel
+        case overwriteExisting, saveAsVersion
+        case model // Legacy
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Try new format first
+        if let tier = try? container.decode(TranscriptionQualityTier.self, forKey: .qualityTier) {
+            self.qualityTier = tier
+            self.fallbackStrategy = try container.decodeIfPresent(TranscriptionFallbackStrategy.self, forKey: .fallbackStrategy) ?? .automatic
+            self.fallbackModel = try container.decodeIfPresent(String.self, forKey: .fallbackModel)
+        } else if let legacyModel = try? container.decode(String.self, forKey: .model) {
+            // Migrate from legacy model field
+            self.qualityTier = Self.inferTier(from: legacyModel)
+            self.fallbackStrategy = .automatic
+            self.fallbackModel = nil
+        } else {
+            // Default
+            self.qualityTier = .balanced
+            self.fallbackStrategy = .automatic
+            self.fallbackModel = nil
+        }
+
+        self.overwriteExisting = try container.decodeIfPresent(Bool.self, forKey: .overwriteExisting) ?? false
+        self.saveAsVersion = try container.decodeIfPresent(Bool.self, forKey: .saveAsVersion) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(qualityTier, forKey: .qualityTier)
+        try container.encode(fallbackStrategy, forKey: .fallbackStrategy)
+        try container.encodeIfPresent(fallbackModel, forKey: .fallbackModel)
+        try container.encode(overwriteExisting, forKey: .overwriteExisting)
+        try container.encode(saveAsVersion, forKey: .saveAsVersion)
+    }
+
+    /// Infer quality tier from legacy model ID
+    private static func inferTier(from modelId: String) -> TranscriptionQualityTier {
+        switch modelId {
+        case "apple_speech":
+            return .fast
+        case "distil-whisper_distil-large-v3":
+            return .high
+        case "openai_whisper-small", "openai_whisper-base", "openai_whisper-tiny":
+            return .balanced
+        default:
+            return .balanced
+        }
+    }
+
+    /// All available models for advanced configuration
+    static let availableModels: [(id: String, name: String, description: String, engine: String)] = [
+        ("apple_speech", "Apple Speech", "Built-in, instant", "Apple"),
+        ("openai_whisper-tiny", "Whisper Tiny", "~40MB, fastest Whisper", "TalkieEngine"),
+        ("openai_whisper-base", "Whisper Base", "~75MB, good quality", "TalkieEngine"),
+        ("openai_whisper-small", "Whisper Small", "~250MB, balanced", "TalkieEngine"),
+        ("distil-whisper_distil-large-v3", "Whisper Large V3", "~750MB, best quality", "TalkieEngine")
     ]
 }
 

@@ -214,6 +214,7 @@ struct RecordingOverlayView: View {
     @ObservedObject private var settings = LiveSettings.shared
     @ObservedObject private var overlayTuning = OverlayTuning.shared
     @ObservedObject private var whisperService = WhisperService.shared
+    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
     @State private var isOverlayHovered: Bool = false  // Track hover state for controls
     @State private var showCheckmark: Bool = false  // For transcribing → success transition
 
@@ -226,18 +227,26 @@ struct RecordingOverlayView: View {
         ZStack {
             // Recording state - visualization based on style
             if controller.state == .listening {
-                Group {
-                    switch settings.overlayStyle {
-                    case .particles:
-                        WavyParticlesView(calm: false)
-                    case .particlesCalm:
-                        WavyParticlesView(calm: true)
-                    case .waveform:
-                        WaveformBarsView(sensitive: false)
-                    case .waveformSensitive:
-                        WaveformBarsView(sensitive: true)
-                    case .pillOnly:
-                        EmptyView()  // No top overlay content for pill-only mode
+                ZStack {
+                    Group {
+                        switch settings.overlayStyle {
+                        case .particles:
+                            WavyParticlesView(calm: false)
+                        case .particlesCalm:
+                            WavyParticlesView(calm: true)
+                        case .waveform:
+                            WaveformBarsView(sensitive: false)
+                        case .waveformSensitive:
+                            WaveformBarsView(sensitive: true)
+                        case .pillOnly:
+                            EmptyView()  // No top overlay content for pill-only mode
+                        }
+                    }
+
+                    // Silent mic warning overlay
+                    if audioMonitor.isSilent {
+                        silentMicWarning
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
                 }
                 .transition(.opacity)  // Fade only, no horizontal slide
@@ -348,6 +357,29 @@ struct RecordingOverlayView: View {
         } else {
             return "Almost ready, hang tight"
         }
+    }
+
+    // Silent mic warning - polite, non-alarming
+    private var silentMicWarning: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "waveform.slash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(SemanticColor.warning)
+
+            Text("Can't hear you")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(SemanticColor.warning.opacity(0.9))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(SemanticColor.warning.opacity(0.4), lineWidth: 1)
+                )
+        )
     }
 
     // Dynamic sizing - shrinks progressively for processing states (droplet effect)

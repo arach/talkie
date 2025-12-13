@@ -484,8 +484,20 @@ struct TWFLoader {
     }
 
     private static func convertTranscribeConfig(_ twf: TWFTranscribeConfig) -> TranscribeStepConfig {
+        // Infer quality tier from model string in TWF file
+        let tier: TranscriptionQualityTier
+        switch twf.model ?? "openai_whisper-small" {
+        case "apple_speech":
+            tier = .fast
+        case "distil-whisper_distil-large-v3":
+            tier = .high
+        default:
+            tier = .balanced
+        }
+
         return TranscribeStepConfig(
-            model: twf.model ?? "openai_whisper-small",
+            qualityTier: tier,
+            fallbackStrategy: tier == .fast ? .none : .automatic,
             overwriteExisting: twf.overwriteExisting ?? false,
             saveAsVersion: twf.saveAsVersion ?? true
         )

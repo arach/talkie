@@ -47,6 +47,145 @@ struct TranscriptEngines {
     }
 }
 
+// MARK: - Memo Source (Provenance)
+
+/// Represents where a voice memo was recorded
+enum MemoSource: Equatable {
+    case iPhone(deviceName: String?)
+    case watch(deviceName: String?)
+    case mac(deviceName: String?)
+    case live                           // TalkieLive always-on recording
+    case unknown
+
+    /// Parse from originDeviceId string
+    static func from(originDeviceId: String?) -> MemoSource {
+        guard let id = originDeviceId, !id.isEmpty else {
+            return .unknown
+        }
+
+        // Check prefixes
+        if id.hasPrefix("watch-") {
+            let name = String(id.dropFirst(6))
+            return .watch(deviceName: name.isEmpty ? nil : name)
+        }
+        if id.hasPrefix("mac-") {
+            let name = String(id.dropFirst(4))
+            return .mac(deviceName: name.isEmpty ? nil : name)
+        }
+        if id.hasPrefix("live-") {
+            return .live
+        }
+
+        // No prefix = iPhone (legacy format is just UUID or device name)
+        return .iPhone(deviceName: nil)
+    }
+
+    /// SF Symbol for this source
+    var icon: String {
+        switch self {
+        case .iPhone: return "iphone"
+        case .watch: return "applewatch"
+        case .mac: return "desktopcomputer"
+        case .live: return "waveform.circle.fill"
+        case .unknown: return "questionmark.circle"
+        }
+    }
+
+    /// Short display name
+    var displayName: String {
+        switch self {
+        case .iPhone: return "iPhone"
+        case .watch: return "Watch"
+        case .mac(let name):
+            if let name = name, !name.isEmpty {
+                // Shorten "Arach's MacBook Pro" to just "MacBook Pro" or similar
+                let shortened = name
+                    .replacingOccurrences(of: "'s ", with: " ")
+                    .components(separatedBy: " ")
+                    .suffix(2)
+                    .joined(separator: " ")
+                return shortened.isEmpty ? "Mac" : shortened
+            }
+            return "Mac"
+        case .live: return "Live"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    /// Color for the source badge
+    var color: Color {
+        switch self {
+        case .iPhone: return .blue
+        case .watch: return .orange
+        case .mac: return .purple
+        case .live: return .cyan
+        case .unknown: return .secondary
+        }
+    }
+}
+
+import SwiftUI
+
+// MARK: - Source Badge View
+
+/// Compact badge showing memo source with icon
+struct MemoSourceBadge: View {
+    let source: MemoSource
+    var showLabel: Bool = true
+    var size: BadgeSize = .small
+
+    enum BadgeSize {
+        case small, medium
+
+        var iconSize: CGFloat {
+            switch self {
+            case .small: return 9
+            case .medium: return 11
+            }
+        }
+
+        var fontSize: CGFloat {
+            switch self {
+            case .small: return 8
+            case .medium: return 9
+            }
+        }
+
+        var padding: CGFloat {
+            switch self {
+            case .small: return 4
+            case .medium: return 6
+            }
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: source.icon)
+                .font(.system(size: size.iconSize))
+
+            if showLabel {
+                Text(source.displayName)
+                    .font(.system(size: size.fontSize, weight: .medium, design: .monospaced))
+            }
+        }
+        .foregroundColor(source.color)
+        .padding(.horizontal, size.padding)
+        .padding(.vertical, 2)
+        .background(source.color.opacity(0.12))
+        .cornerRadius(4)
+    }
+}
+
+// MARK: - VoiceMemo Source Extension
+
+extension VoiceMemo {
+    /// The source where this memo was recorded
+    var source: MemoSource {
+        MemoSource.from(originDeviceId: originDeviceId)
+    }
+}
+
 // MARK: - VoiceMemo Transcript Helpers
 
 extension VoiceMemo {

@@ -3,7 +3,13 @@
     "allow": [
       "Bash(lsof:*)",
       "Bash(ps:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(ffprobe:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

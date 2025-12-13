@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1640"
-   version = "2.0">
+   version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "53B43EBF2EDB539100C09544"
-               BuildableName = "TalkieWidgetExtension.appex"
-               BlueprintName = "TalkieWidgetExtension"
+               BlueprintIdentifier = "53BF5B8B2EED010000FDEB2A"
+               BuildableName = "TalkieWatch Watch App.app"
+               BlueprintName = "TalkieWatch Watch App"
                ReferencedContainer = "container:Talkie OS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -43,75 +43,41 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
-      <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "539C694C2ED39ADF00BC034F"
-               BuildableName = "Talkie OSUITests.xctest"
-               BlueprintName = "Talkie OSUITests"
-               ReferencedContainer = "container:Talkie OS.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
-      selectedDebuggerIdentifier = ""
-      selectedLauncherIdentifier = "Xcode.IDEFoundation.Launcher.PosixSpawn"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
-      askForAppToLaunch = "Yes"
       useCustomWorkingDirectory = "NO"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
-      allowLocationSimulation = "YES"
-      launchAutomaticallySubstyle = "2">
+      allowLocationSimulation = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "539C69302ED39ADE00BC034F"
-            BuildableName = "Talkie OS.app"
-            BlueprintName = "Talkie OS"
+            BlueprintIdentifier = "53BF5B8B2EED010000FDEB2A"
+            BuildableName = "TalkieWatch Watch App.app"
+            BlueprintName = "TalkieWatch Watch App"
             ReferencedContainer = "container:Talkie OS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "_XCWidgetKind"
-            value = ""
-            isEnabled = "YES">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "_XCWidgetDefaultView"
-            value = "timeline"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "_XCWidgetFamily"
-            value = "systemMedium"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
       shouldUseLaunchSchemeArgsEnv = "YES"
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
-      debugDocumentVersioning = "YES"
-      askForAppToLaunch = "Yes"
-      launchAutomaticallySubstyle = "2">
+      debugDocumentVersioning = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "539C69302ED39ADE00BC034F"
-            BuildableName = "Talkie OS.app"
-            BlueprintName = "Talkie OS"
+            BlueprintIdentifier = "53BF5B8B2EED010000FDEB2A"
+            BuildableName = "TalkieWatch Watch App.app"
+            BlueprintName = "TalkieWatch Watch App"
             ReferencedContainer = "container:Talkie OS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

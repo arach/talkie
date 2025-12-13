@@ -49,8 +49,15 @@ struct MemoRowView: View {
                     .foregroundColor(Theme.current.foreground)
                     .lineLimit(1)
 
-                // Minimal metadata: duration + relative time
+                // Minimal metadata: source + duration + relative time
                 HStack(spacing: 4) {
+                    // Source badge (icon only for compactness)
+                    if memo.source != .unknown {
+                        Image(systemName: memo.source.icon)
+                            .font(.system(size: 9))
+                            .foregroundColor(memo.source.color)
+                    }
+
                     Text(formatDuration(memo.duration))
                         .font(settings.fontXS)
 

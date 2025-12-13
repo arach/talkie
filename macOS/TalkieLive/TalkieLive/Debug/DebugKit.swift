@@ -2234,7 +2234,7 @@ struct DebugToolbarOverlay<Content: View>: View {
         let isLeading = position == .bottomLeading || position == .topLeading
         let horizontalAlignment: HorizontalAlignment = isLeading ? .leading : .trailing
         let slideEdge: Edge = isLeading ? .leading : .trailing
-        let scaleAnchor: UnitPoint = isTop
+        let _: UnitPoint = isTop
             ? (isLeading ? .topLeading : .topTrailing)
             : (isLeading ? .bottomLeading : .bottomTrailing)
 

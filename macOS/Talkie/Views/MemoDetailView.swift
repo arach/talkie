@@ -151,6 +151,11 @@ struct MemoDetailView: View {
                             }
 
                             HStack(spacing: Spacing.xs) {
+                                // Source badge
+                                if memo.source != .unknown {
+                                    MemoSourceBadge(source: memo.source, showLabel: true, size: .small)
+                                }
+
                                 Text(formatDate(memoCreatedAt).uppercased())
                                     .font(.techLabelSmall)
 
@@ -219,8 +224,13 @@ struct MemoDetailView: View {
                             }
                         }
 
-                        // Date and duration
+                        // Source, date and duration
                         HStack(spacing: Spacing.xs) {
+                            // Source badge
+                            if memo.source != .unknown {
+                                MemoSourceBadge(source: memo.source, showLabel: true, size: .small)
+                            }
+
                             Text(formatDate(memoCreatedAt).uppercased())
                                 .font(.techLabelSmall)
                             Text("·")
@@ -423,6 +433,7 @@ struct MemoDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.current.background)
+        .quickOpenShortcuts(content: memo.currentTranscript ?? "", enabled: memo.currentTranscript != nil)
         .onAppear {
             editedTitle = memoTitle
             editedNotes = memo.notes ?? ""
@@ -968,8 +979,8 @@ struct MemoDetailView: View {
                                 }
                             }
 
-                        // Quick actions toolbar
-                        TranscriptQuickActions(transcript: transcript)
+                        // Quick actions toolbar (Quick Open bar)
+                        InlineQuickOpenBar(transcript: transcript)
                             .padding(8)
                     }
                 }

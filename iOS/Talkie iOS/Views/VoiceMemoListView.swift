@@ -95,8 +95,7 @@ struct VoiceMemoListView: View {
         let voiceMemos = Array(filteredMemos.prefix(displayLimit))
         let hasMore = filteredMemos.count > displayLimit
 
-        return
-        NavigationView {
+        return NavigationView {
             ZStack(alignment: .bottom) {
                 Color.surfacePrimary
                     .ignoresSafeArea()

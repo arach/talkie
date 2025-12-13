@@ -11,6 +11,7 @@ import CloudKit
 enum SettingsSection: String, Hashable {
     case appearance
     case quickActions
+    case quickOpen
     case autoRun
     case apiKeys
     case allowedCommands
@@ -57,13 +58,20 @@ struct SettingsView: View {
                         }
 
                         // WORKFLOWS
-                        SettingsSidebarSection(title: "WORKFLOWS", isActive: selectedSection == .quickActions || selectedSection == .autoRun) {
+                        SettingsSidebarSection(title: "WORKFLOWS", isActive: selectedSection == .quickActions || selectedSection == .quickOpen || selectedSection == .autoRun) {
                             SettingsSidebarItem(
                                 icon: "bolt",
                                 title: "QUICK ACTIONS",
                                 isSelected: selectedSection == .quickActions
                             ) {
                                 selectedSection = .quickActions
+                            }
+                            SettingsSidebarItem(
+                                icon: "arrow.up.forward.app",
+                                title: "QUICK OPEN",
+                                isSelected: selectedSection == .quickOpen
+                            ) {
+                                selectedSection = .quickOpen
                             }
                             SettingsSidebarItem(
                                 icon: "play.circle",
@@ -146,6 +154,8 @@ struct SettingsView: View {
                         AppearanceSettingsView()
                     case .quickActions:
                         QuickActionsSettingsView()
+                    case .quickOpen:
+                        QuickOpenSettingsView()
                     case .autoRun:
                         AutoRunSettingsView()
                     case .apiKeys:

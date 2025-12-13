@@ -119,38 +119,204 @@ struct WorkflowListItem: View {
 struct WorkflowToggle: View {
     @Binding var isOn: Bool
     let label: String
+    let description: String?
     let icon: String
     let activeColor: Color
 
-    @State private var isHovered = false
+    init(isOn: Binding<Bool>, label: String, description: String? = nil, icon: String, activeColor: Color) {
+        self._isOn = isOn
+        self.label = label
+        self.description = description
+        self.icon = icon
+        self.activeColor = activeColor
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Icon
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(isOn ? activeColor : .secondary.opacity(0.5))
+                .frame(width: 16)
+
+            // Label and description
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(isOn ? .primary : .secondary)
+
+                if let description = description {
+                    Text(description)
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+            }
+
+            Spacer()
+
+            // Toggle switch
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Compact Toggle (icon-based)
+
+struct CompactToggle: View {
+    @Binding var isOn: Bool
+    let icon: String
+    let label: String
+    let activeColor: Color
 
     var body: some View {
         Button(action: { isOn.toggle() }) {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 10))
-                    .foregroundColor(isOn ? activeColor : .secondary.opacity(0.4))
-
                 Text(label)
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(isOn ? activeColor : .secondary.opacity(0.6))
+                    .font(.techLabelSmall)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(isOn ? activeColor.opacity(0.15) : Color.secondary.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(isOn ? activeColor.opacity(0.3) : Color.secondary.opacity(isHovered ? 0.2 : 0.1), lineWidth: 1)
-            )
+            .foregroundColor(isOn ? .white : .secondary)
+            .padding(.horizontal, Spacing.xs)
+            .padding(.vertical, 4)
+            .background(isOn ? activeColor : Color.secondary.opacity(0.15))
+            .cornerRadius(CornerRadius.xs)
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
+    }
+}
+
+// MARK: - Icon & Color Picker (Combined)
+
+struct WorkflowIconColorPicker: View {
+    @Binding var selectedIcon: String
+    @Binding var selectedColor: WorkflowColor
+    let isEditing: Bool
+
+    @State private var showingPicker = false
+
+    /// Common workflow icons organized by category
+    private static let iconCategories: [(name: String, icons: [String])] = [
+        ("Processing", ["waveform", "waveform.and.mic", "brain.head.profile", "sparkles", "bolt.fill", "gearshape.fill"]),
+        ("Communication", ["message.fill", "envelope.fill", "bell.fill", "megaphone.fill", "bubble.left.fill", "phone.fill"]),
+        ("Data", ["doc.fill", "folder.fill", "tray.fill", "archivebox.fill", "externaldrive.fill", "icloud.fill"]),
+        ("Actions", ["play.fill", "arrow.right.circle.fill", "checkmark.circle.fill", "xmark.circle.fill", "arrow.triangle.2.circlepath", "repeat"]),
+        ("Objects", ["lightbulb.fill", "star.fill", "heart.fill", "flag.fill", "bookmark.fill", "tag.fill"]),
+        ("Tools", ["wrench.fill", "hammer.fill", "paintbrush.fill", "scissors", "pencil", "terminal.fill"])
+    ]
+
+    var body: some View {
+        Button(action: { if isEditing { showingPicker.toggle() } }) {
+            ZStack {
+                // Color pill background
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(selectedColor.color.opacity(Opacity.medium))
+                    .frame(width: 28, height: 28)
+
+                // Icon
+                Image(systemName: selectedIcon)
+                    .font(.headlineSmall)
+                    .foregroundColor(selectedColor.color)
             }
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .strokeBorder(isEditing ? selectedColor.color.opacity(0.5) : Color.clear, lineWidth: 1)
+            )
+            .overlay(alignment: .bottomTrailing) {
+                // Edit badge when in edit mode
+                if isEditing {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                        .background(Circle().fill(selectedColor.color).frame(width: 14, height: 14))
+                        .offset(x: 4, y: 4)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEditing)
+        .popover(isPresented: $showingPicker, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                // Color selector at top
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("COLOR")
+                        .font(.techLabelSmall)
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    HStack(spacing: 6) {
+                        ForEach(WorkflowColor.allCases, id: \.self) { color in
+                            Button(action: { selectedColor = color }) {
+                                Circle()
+                                    .fill(color.color)
+                                    .frame(width: 24, height: 24)
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(selectedColor == color ? Color.primary : Color.clear, lineWidth: 2)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Divider()
+
+                // Icon selector
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("ICON")
+                        .font(.techLabelSmall)
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Self.iconCategories, id: \.name) { category in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(category.name.uppercased())
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.secondary.opacity(0.6))
+
+                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 4), count: 6), spacing: 4) {
+                                    ForEach(category.icons, id: \.self) { icon in
+                                        Button(action: {
+                                            selectedIcon = icon
+                                        }) {
+                                            Image(systemName: icon)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(selectedIcon == icon ? selectedColor.color : .secondary)
+                                                .frame(width: 28, height: 28)
+                                                .background(selectedIcon == icon ? selectedColor.color.opacity(0.2) : Color.secondary.opacity(0.1))
+                                                .cornerRadius(4)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Divider()
+
+                // Custom input for power users
+                HStack(spacing: 6) {
+                    Text("Custom:")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                    TextField("SF Symbol name", text: $selectedIcon)
+                        .font(.system(size: 9, design: .monospaced))
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(4)
+                        .frame(width: 140)
+                }
+            }
+            .padding(12)
+            .frame(width: 230)
         }
     }
 }
@@ -856,15 +1022,19 @@ struct TransformStepDetails: View {
 struct TranscribeStepDetails: View {
     let config: TranscribeStepConfig
 
-    private var modelName: String {
-        TranscribeStepConfig.availableModels.first { $0.id == config.model }?.name ?? config.model
+    private var tierColor: Color {
+        switch config.qualityTier {
+        case .fast: return .cyan
+        case .balanced: return .blue
+        case .high: return .purple
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                DetailBadge(label: "WHISPER", color: .purple)
-                DetailBadge(label: modelName.uppercased(), color: .secondary)
+                DetailBadge(label: config.qualityTier.displayName.uppercased(), color: tierColor)
+                DetailBadge(label: config.qualityTier == .fast ? "APPLE" : "ENGINE", color: .secondary)
             }
             if config.overwriteExisting {
                 Text("Will overwrite existing transcript")
@@ -1011,12 +1181,12 @@ struct WorkflowInlineEditor: View {
         VStack(spacing: 0) {
             // Header bar
             HStack(spacing: Spacing.xs) {
-                Image(systemName: editedWorkflow.wrappedValue.icon)
-                    .font(.headlineSmall)
-                    .foregroundColor(editedWorkflow.wrappedValue.color.color)
-                    .frame(width: 28, height: 28)
-                    .background(editedWorkflow.wrappedValue.color.color.opacity(Opacity.medium))
-                    .cornerRadius(CornerRadius.xs)
+                // Inline icon/color picker - clickable in edit mode
+                WorkflowIconColorPicker(
+                    selectedIcon: editedWorkflow.icon,
+                    selectedColor: editedWorkflow.color,
+                    isEditing: isEditing
+                )
 
                 if isEditing {
                     TextField("Workflow name", text: editedWorkflow.name)
@@ -1144,113 +1314,67 @@ struct WorkflowInlineEditor: View {
             // Editor content
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    // Description
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text("DESCRIPTION")
-                            .font(.techLabelSmall)
-                            .foregroundColor(.secondary.opacity(0.6))
+                    // Description + Settings row (compact)
+                    if isEditing {
+                        HStack(alignment: .top, spacing: Spacing.md) {
+                            // Description (flexible width)
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text("DESCRIPTION")
+                                    .font(.techLabelSmall)
+                                    .foregroundColor(.secondary.opacity(0.6))
 
-                        if isEditing {
-                            TextField("What does this workflow do?", text: editedWorkflow.description)
-                                .font(.monoSmall)
-                                .textFieldStyle(.plain)
-                                .padding(Spacing.xs)
-                                .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(CornerRadius.xs)
-                        } else {
+                                TextField("What does this workflow do?", text: editedWorkflow.description)
+                                    .font(.monoSmall)
+                                    .textFieldStyle(.plain)
+                                    .padding(Spacing.xs)
+                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .cornerRadius(CornerRadius.xs)
+                            }
+
+                            // Compact toggles
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text("OPTIONS")
+                                    .font(.techLabelSmall)
+                                    .foregroundColor(.secondary.opacity(0.6))
+
+                                HStack(spacing: Spacing.sm) {
+                                    // Enabled
+                                    CompactToggle(
+                                        isOn: editedWorkflow.isEnabled,
+                                        icon: "checkmark.circle.fill",
+                                        label: "Enabled",
+                                        activeColor: SemanticColor.success
+                                    )
+
+                                    // Pinned
+                                    CompactToggle(
+                                        isOn: editedWorkflow.isPinned,
+                                        icon: "pin.fill",
+                                        label: "Pinned",
+                                        activeColor: editedWorkflow.wrappedValue.color.color
+                                    )
+
+                                    // Auto-run
+                                    CompactToggle(
+                                        isOn: editedWorkflow.autoRun,
+                                        icon: "bolt.fill",
+                                        label: "Auto-run",
+                                        activeColor: SemanticColor.warning
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // View mode - just show description
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("DESCRIPTION")
+                                .font(.techLabelSmall)
+                                .foregroundColor(.secondary.opacity(0.6))
+
                             Text(editedWorkflow.wrappedValue.description.isEmpty ? "No description" : editedWorkflow.wrappedValue.description)
                                 .font(.monoSmall)
                                 .foregroundColor(editedWorkflow.wrappedValue.description.isEmpty ? .secondary.opacity(Opacity.half) : .primary)
                                 .padding(Spacing.xs)
-                        }
-                    }
-
-                    // Icon & Color selector (only in edit mode)
-                    if isEditing {
-                        HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                Text("ICON")
-                                    .font(.techLabelSmall)
-                                    .foregroundColor(.secondary.opacity(0.6))
-
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: editedWorkflow.wrappedValue.icon)
-                                        .font(.bodySmall)
-                                        .foregroundColor(editedWorkflow.wrappedValue.color.color)
-                                        .frame(width: 28, height: 28)
-                                        .background(editedWorkflow.wrappedValue.color.color.opacity(Opacity.medium))
-                                        .cornerRadius(CornerRadius.xs)
-
-                                    TextField("SF Symbol", text: editedWorkflow.icon)
-                                        .font(.monoXSmall)
-                                        .textFieldStyle(.plain)
-                                        .padding(.horizontal, Spacing.xs)
-                                        .padding(.vertical, Spacing.xs)
-                                        .background(Color(NSColor.controlBackgroundColor))
-                                        .cornerRadius(CornerRadius.xs)
-                                        .frame(width: 120)
-                                }
-                            }
-
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                Text("COLOR")
-                                    .font(.techLabelSmall)
-                                    .foregroundColor(.secondary.opacity(0.6))
-
-                                Picker("", selection: editedWorkflow.color) {
-                                    ForEach(WorkflowColor.allCases, id: \.self) { color in
-                                        HStack {
-                                            Circle()
-                                                .fill(color.color)
-                                                .frame(width: 10, height: 10)
-                                            Text(color.displayName)
-                                        }
-                                        .tag(color)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: 100)
-                            }
-
-                            Spacer()
-                        }
-
-                        // Workflow toggles section
-                        Divider()
-                            .opacity(Opacity.strong)
-
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("OPTIONS")
-                                .font(.techLabelSmall)
-                                .foregroundColor(.secondary.opacity(0.6))
-
-                            HStack(spacing: 20) {
-                                // Enabled toggle
-                                WorkflowToggle(
-                                    isOn: editedWorkflow.isEnabled,
-                                    label: "ENABLED",
-                                    icon: "checkmark.circle.fill",
-                                    activeColor: SemanticColor.success
-                                )
-
-                                // Pinned toggle
-                                WorkflowToggle(
-                                    isOn: editedWorkflow.isPinned,
-                                    label: "PINNED",
-                                    icon: "pin.fill",
-                                    activeColor: editedWorkflow.wrappedValue.color.color
-                                )
-
-                                // Auto-run toggle
-                                WorkflowToggle(
-                                    isOn: editedWorkflow.autoRun,
-                                    label: "AUTO-RUN",
-                                    icon: "bolt.fill",
-                                    activeColor: SemanticColor.warning
-                                )
-
-                                Spacer()
-                            }
                         }
                     }
 
@@ -1473,43 +1597,17 @@ struct WorkflowEditorSheet: View {
                                 .font(.system(size: 11, design: .monospaced))
                         }
 
-                        HStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("ICON")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                        HStack(spacing: 8) {
+                            // Inline icon/color picker
+                            WorkflowIconColorPicker(
+                                selectedIcon: $editedWorkflow.icon,
+                                selectedColor: $editedWorkflow.color,
+                                isEditing: true
+                            )
 
-                                HStack(spacing: 8) {
-                                    Image(systemName: editedWorkflow.icon)
-                                        .font(.system(size: 16))
-                                        .foregroundColor(editedWorkflow.color.color)
-                                        .frame(width: 32, height: 32)
-                                        .background(editedWorkflow.color.color.opacity(0.1))
-                                        .cornerRadius(6)
-
-                                    TextField("SF Symbol", text: $editedWorkflow.icon)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(size: 11, design: .monospaced))
-                                }
-                            }
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("COLOR")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                                Picker("", selection: $editedWorkflow.color) {
-                                    ForEach(WorkflowColor.allCases, id: \.self) { color in
-                                        HStack {
-                                            Circle()
-                                                .fill(color.color)
-                                                .frame(width: 10, height: 10)
-                                            Text(color.displayName)
-                                        }
-                                        .tag(color)
-                                    }
-                                }
-                                .labelsHidden()
-                            }
+                            Text("Click to customize icon & color")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
                         }
                     }
 
@@ -3048,56 +3146,48 @@ struct TransformStepReadView: View {
 struct TranscribeStepReadView: View {
     let config: TranscribeStepConfig
 
-    private var modelName: String {
-        TranscribeStepConfig.availableModels.first { $0.id == config.model }?.name ?? config.model
+    private var tierColor: Color {
+        switch config.qualityTier {
+        case .fast: return .cyan
+        case .balanced: return .blue
+        case .high: return .purple
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Row 1: Model info
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: "waveform.and.mic")
-                    .font(.system(size: 10))
-                    .foregroundColor(SemanticColor.processing)
+            // Row 1: Quality preference
+            HStack(spacing: Spacing.sm) {
+                // Quality tier pill
+                HStack(spacing: 4) {
+                    Image(systemName: config.qualityTier.icon)
+                        .font(.system(size: 9))
+                    Text(config.qualityTier.displayName)
+                        .font(.techLabelSmall)
+                }
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 3)
+                .background(tierColor.opacity(0.15))
+                .foregroundColor(tierColor)
+                .cornerRadius(CornerRadius.sm)
 
-                Text("Whisper")
-                    .font(.techLabelSmall)
-                    .padding(.horizontal, Spacing.xs)
-                    .padding(.vertical, 2)
-                    .background(SemanticColor.processing.opacity(0.2))
-                    .foregroundColor(SemanticColor.processing)
-                    .cornerRadius(CornerRadius.xs)
-
-                Text(modelName)
-                    .font(.monoSmall)
-                    .foregroundColor(.primary)
+                // Brief description
+                Text(config.qualityTier.description)
+                    .font(.monoXSmall)
+                    .foregroundColor(.secondary)
 
                 Spacer()
             }
 
-            // Row 2: Options
-            HStack(spacing: Spacing.sm) {
-                if config.overwriteExisting {
-                    HStack(spacing: 2) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 9))
-                        Text("Overwrite")
-                            .font(.monoXSmall)
-                    }
-                    .foregroundColor(.orange)
+            // Row 2: Options (only if non-default)
+            if config.overwriteExisting {
+                HStack(spacing: 2) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 9))
+                    Text("Overwrites existing")
+                        .font(.monoXSmall)
                 }
-
-                if config.saveAsVersion {
-                    HStack(spacing: 2) {
-                        Image(systemName: "doc.badge.plus")
-                            .font(.system(size: 9))
-                        Text("Save version")
-                            .font(.monoXSmall)
-                    }
-                    .foregroundColor(SemanticColor.success)
-                }
-
-                Spacer()
+                .foregroundColor(.orange)
             }
         }
     }
@@ -4578,94 +4668,131 @@ struct TranscribeStepConfigEditor: View {
         return TranscribeStepConfig()
     }
 
+    private func updateConfig(_ update: (inout TranscribeStepConfig) -> Void) {
+        var newConfig = config
+        update(&newConfig)
+        step.config = .transcribe(newConfig)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Model selection
-            VStack(alignment: .leading, spacing: 6) {
-                Text("WHISPER MODEL")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
-
-                Picker("", selection: Binding(
-                    get: { config.model },
-                    set: { newValue in
-                        var newConfig = config
-                        newConfig.model = newValue
-                        step.config = .transcribe(newConfig)
-                    }
-                )) {
-                    ForEach(TranscribeStepConfig.availableModels, id: \.id) { model in
-                        Text(model.name).tag(model.id)
-                    }
-                }
-                .labelsHidden()
-
-                // Model description
-                if let model = TranscribeStepConfig.availableModels.first(where: { $0.id == config.model }) {
-                    Text(model.description)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Divider()
-                .opacity(0.3)
-
-            // Options
+        VStack(alignment: .leading, spacing: 16) {
+            // Quality Preference - simple segmented picker
             VStack(alignment: .leading, spacing: 8) {
-                Text("OPTIONS")
+                Text("QUALITY PREFERENCE")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .foregroundColor(.secondary)
 
-                Toggle(isOn: Binding(
-                    get: { config.overwriteExisting },
-                    set: { newValue in
-                        var newConfig = config
-                        newConfig.overwriteExisting = newValue
-                        step.config = .transcribe(newConfig)
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Overwrite existing transcript")
-                            .font(.system(size: 10, design: .monospaced))
-                        Text("Re-transcribe even if memo already has a transcript")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.secondary)
+                // Segmented quality selector
+                HStack(spacing: 0) {
+                    ForEach(TranscriptionQualityTier.allCases, id: \.self) { tier in
+                        QualitySegment(
+                            tier: tier,
+                            isSelected: config.qualityTier == tier,
+                            isFirst: tier == .fast,
+                            isLast: tier == .high,
+                            onSelect: { updateConfig { $0.qualityTier = tier } }
+                        )
                     }
                 }
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(8)
 
-                Toggle(isOn: Binding(
-                    get: { config.saveAsVersion },
-                    set: { newValue in
-                        var newConfig = config
-                        newConfig.saveAsVersion = newValue
-                        step.config = .transcribe(newConfig)
-                    }
-                )) {
+                // Description of selected tier
+                Text(config.qualityTier.description)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .padding(.top, 2)
+            }
+
+            Divider().opacity(0.3)
+
+            // Options as proper form toggles
+            VStack(alignment: .leading, spacing: 12) {
+                Text("BEHAVIOR")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+
+                // Overwrite toggle
+                HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Save as transcript version")
-                            .font(.system(size: 10, design: .monospaced))
-                        Text("Store the transcript in memo's version history")
-                            .font(.system(size: 8, design: .monospaced))
+                        Text("Overwrite existing")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Re-transcribe even if memo has a transcript")
+                            .font(.system(size: 9))
                             .foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { config.overwriteExisting },
+                        set: { newValue in updateConfig { $0.overwriteExisting = newValue } }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
                 }
-                .toggleStyle(.switch)
-                .controlSize(.small)
-            }
 
-            // Info note
-            HStack(spacing: 4) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 9))
-                Text("Model will be downloaded on first use (~40MB-750MB)")
-                    .font(.system(size: 8, design: .monospaced))
+                // Save version toggle
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Save as version")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Store transcript in memo's history")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { config.saveAsVersion },
+                        set: { newValue in updateConfig { $0.saveAsVersion = newValue } }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                }
             }
-            .foregroundColor(.secondary)
-            .padding(.top, 4)
         }
+    }
+}
+
+// MARK: - Quality Segment
+
+private struct QualitySegment: View {
+    let tier: TranscriptionQualityTier
+    let isSelected: Bool
+    let isFirst: Bool
+    let isLast: Bool
+    let onSelect: () -> Void
+
+    private var tierColor: Color {
+        switch tier {
+        case .fast: return .cyan
+        case .balanced: return .blue
+        case .high: return .purple
+        }
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 4) {
+                Image(systemName: tier.icon)
+                    .font(.system(size: 10))
+                Text(tier.displayName)
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular, design: .monospaced))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(isSelected ? tierColor.opacity(0.2) : Color.clear)
+            .foregroundColor(isSelected ? tierColor : .secondary)
+        }
+        .buttonStyle(.plain)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: isFirst ? 8 : 0,
+                bottomLeadingRadius: isFirst ? 8 : 0,
+                bottomTrailingRadius: isLast ? 8 : 0,
+                topTrailingRadius: isLast ? 8 : 0
+            )
+        )
     }
 }
 

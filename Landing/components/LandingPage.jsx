@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import {
   Mic,
@@ -31,6 +31,15 @@ export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [iosHover, setIosHover] = useState(false)
   const [scrollProgress, setScrollProgress] = useState(0)
+  const [mobileVideoVisible, setMobileVideoVisible] = useState(false)
+  const expandedVideoRef = useRef(null)
+
+  // Ensure expanded video plays when visible
+  useEffect(() => {
+    if (mobileVideoVisible && expandedVideoRef.current) {
+      expandedVideoRef.current.play().catch(() => {})
+    }
+  }, [mobileVideoVisible])
 
   useEffect(() => {
     const onScroll = () => {
@@ -69,11 +78,11 @@ export default function LandingPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-900 selection:text-white dark:selection:bg-white dark:selection:text-black">
       {/* Navigation */}
       <a href="#get" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 btn-ghost">Skip to content</a>
-      <nav className={`fixed top-0 left-0 right-0 z-50 border-b transition-colors duration-200 backdrop-blur-md ${
+      <nav className={`fixed top-0 left-0 right-0 z-50 border-b transition-all duration-300 backdrop-blur-md ${
         scrolled
           ? 'bg-white/85 dark:bg-zinc-950/85 border-zinc-200/60 dark:border-zinc-800/60 shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
           : 'bg-white/70 dark:bg-zinc-950/70 border-zinc-200/40 dark:border-zinc-800/40'
-      }`}>
+      } ${mobileVideoVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <Container className="h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-emerald-500 to-teal-400 text-white shadow-sm">
@@ -168,7 +177,9 @@ export default function LandingPage() {
       </nav>
 
       {/* Announcement Banner - below nav */}
-      <div className="fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30 group/banner">
+      <div className={`fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30 group/banner transition-opacity duration-300 ${
+        mobileVideoVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}>
         <Link href="/live" className="block">
           <div className="h-10 flex items-center justify-center text-[11px] px-4">
             {/* Left spacer to counterbalance right reserved area */}
@@ -193,19 +204,23 @@ export default function LandingPage() {
       <section className="relative pt-36 pb-12 md:pt-40 md:pb-16 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
         <div className={`absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] pointer-events-none transition-opacity duration-300 ease-out ${iosHover ? 'opacity-0' : 'opacity-60'}`} />
 
-        {/* Left hover zone for video reveal */}
+        {/* Left hover zone for video reveal - only on larger screens */}
         <div
-          className="absolute left-0 top-0 w-1/2 h-full hidden sm:block z-20"
+          className="absolute left-0 top-0 w-1/2 h-full hidden md:block z-20"
           onMouseEnter={() => setIosHover(true)}
           onMouseLeave={() => setIosHover(false)}
         />
 
-        {/* iPhone video - half resolution source, displayed at 330px (2x for retina) */}
+        {/* iPhone video - responsive sizing:
+            - Hidden below md (768px)
+            - Smaller (250px) between md and xl (768-1280px)
+            - Full size (330px) at xl+ (1280px+)
+        */}
         <div
-          className={`fixed left-8 md:left-16 top-[52px] w-[330px] pointer-events-none select-none hidden sm:block rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${iosHover ? 'z-50' : 'z-20'} transition-opacity duration-150`}
+          className={`fixed left-4 lg:left-8 xl:left-16 top-1/2 -translate-y-1/2 xl:top-[52px] xl:translate-y-0 w-[220px] lg:w-[260px] xl:w-[330px] pointer-events-none select-none hidden md:block rounded-[1.5rem] lg:rounded-[1.75rem] xl:rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${iosHover ? 'z-50' : 'z-20'} transition-opacity duration-150`}
           style={{ isolation: 'isolate', opacity: 1 - scrollProgress }}
         >
-          <div className={`rounded-[2rem] border-[3px] border-zinc-700 overflow-hidden transition-opacity duration-300 ease-out ${iosHover ? 'opacity-100' : 'opacity-30'}`}>
+          <div className={`rounded-[1.5rem] lg:rounded-[1.75rem] xl:rounded-[2rem] border-[2px] lg:border-[3px] border-zinc-700 overflow-hidden transition-opacity duration-300 ease-out ${iosHover ? 'opacity-100' : 'opacity-30'}`}>
             <video
               src="/recording-preview-half.mp4"
               autoPlay
@@ -231,6 +246,95 @@ export default function LandingPage() {
           <p className="mx-auto max-w-2xl text-lg text-zinc-600 dark:text-zinc-400 mb-10 leading-relaxed">
             Capture on iPhone. Process on Mac. Synced through your encrypted iCloud — not our servers. Your data never leaves your Apple ecosystem.
           </p>
+
+          {/* Mobile Video Preview - shows below md (768px) */}
+          <div className="md:hidden mb-8">
+            {/* Container - slice and expanded phone share same video position */}
+            <div className="relative flex flex-col items-center gap-3">
+
+              {/* Backdrop - fades in, covers everything including header */}
+              <div
+                className={`fixed inset-0 z-[100] bg-black/90 backdrop-blur-md transition-opacity duration-300 ${
+                  mobileVideoVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                onClick={() => setMobileVideoVisible(false)}
+              />
+
+              {/* Video container - holds both slice view and expanded view */}
+              <div className="relative">
+                {/* Expanded phone frame - emerges around the slice */}
+                {/* Starts higher, settles down to create breathing room at top */}
+                <div
+                  className={`absolute z-[110] transition-all duration-700 ${
+                    mobileVideoVisible
+                      ? 'opacity-100 translate-y-10'
+                      : 'opacity-0 -translate-y-4 pointer-events-none'
+                  }`}
+                  style={{
+                    top: '-445px',  // Position so video at 445px aligns with slice
+                    left: '-3px',   // Account for border
+                    width: '306px', // 300px video + 6px border
+                    transitionTimingFunction: 'cubic-bezier(0.33, 1, 0.68, 1)', // easeOutCubic
+                  }}
+                >
+                  <div className="rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
+                    <div className="rounded-[2rem] border-[3px] border-zinc-700 overflow-hidden">
+                      <video
+                        ref={expandedVideoRef}
+                        src="/recording-preview-half.mp4"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-[300px] h-auto block"
+                        style={{ marginBottom: '-10px' }}
+                      />
+                    </div>
+                  </div>
+                  {/* Dismiss button */}
+                  <button
+                    onClick={() => setMobileVideoVisible(false)}
+                    className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-white/90 text-black/70 flex items-center justify-center shadow-md hover:bg-white hover:text-black transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Slice - the window into the video */}
+                <button
+                  onClick={() => setMobileVideoVisible(true)}
+                  className="group relative z-30 w-[300px] h-[72px] overflow-hidden rounded-2xl bg-black shadow-lg border border-zinc-700/50 hover:border-zinc-600 transition-all"
+                >
+                  {/* Video positioned to show particle waveform area */}
+                  <video
+                    src="/recording-preview-half.mp4"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-[300px] h-auto block absolute left-0"
+                    style={{ top: '-445px' }}
+                  />
+                  {/* Play button overlay - fades out when expanded */}
+                  <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
+                    mobileVideoVisible ? 'opacity-0' : 'opacity-100'
+                  }`}>
+                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm group-hover:bg-white/30 flex items-center justify-center transition-all group-hover:scale-110 shadow-lg">
+                      <div className="w-0 h-0 border-l-[14px] border-l-white border-y-[8px] border-y-transparent ml-1" />
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Text label */}
+              <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-opacity duration-300 ${
+                mobileVideoVisible ? 'opacity-0' : 'opacity-100'
+              }`}>
+                <span>See it in action</span>
+                <ArrowRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a

@@ -44,11 +44,13 @@ final class OnboardingManager: ObservableObject {
     @Published var isModelWarmedUp = false
     @Published var isCheckingEngine = false
     @Published var isWarmingUp = false
+    @Published var isDownloading = false
     @Published var warmupStatusMessage = ""
     @Published var downloadProgress: Double = 0
     @Published var downloadStatus: String = ""
     @Published var errorMessage: String?
     @Published var shouldShowOnboarding: Bool
+    @Published var selectedModelType: String = "parakeet"  // "parakeet" or "whisper"
 
     // Permissions state
     @Published var hasMicrophonePermission = false
@@ -128,18 +130,20 @@ final class OnboardingManager: ObservableObject {
         }
     }
 
-    func downloadDefaultModel() async {
-        downloadStatus = "Connecting to engine..."
+    /// Get the model ID based on selected type
+    var selectedModelId: String {
+        selectedModelType == "parakeet" ? "parakeet:v3" : "whisper:large-v3-turbo"
+    }
+
+    /// Get the display name for the selected model
+    var selectedModelDisplayName: String {
+        selectedModelType == "parakeet" ? "Parakeet v3" : "Whisper Large v3"
+    }
+
+    func downloadSelectedModel() async {
+        isDownloading = true
+        downloadStatus = "Downloading \(selectedModelDisplayName)..."
         errorMessage = nil
-
-        // Ensure engine is connected
-        let connected = await engineClient.ensureConnected()
-        guard connected else {
-            errorMessage = "Could not connect to TalkieEngine"
-            return
-        }
-
-        downloadStatus = "Downloading Parakeet model..."
 
         // Subscribe to download progress
         let progressTask = Task {
@@ -153,10 +157,8 @@ final class OnboardingManager: ObservableObject {
             }
         }
 
-        // Request model preload (Parakeet v3 is the default)
-        let modelId = "parakeet:v3"
         do {
-            try await engineClient.preloadModel(modelId)
+            try await engineClient.preloadModel(selectedModelId)
             isModelDownloaded = true
             downloadStatus = "Model ready!"
             downloadProgress = 1.0
@@ -166,17 +168,19 @@ final class OnboardingManager: ObservableObject {
         }
 
         progressTask.cancel()
+        isDownloading = false
     }
 
     func cancelDownload() async {
         await engineClient.cancelDownload()
+        isDownloading = false
         downloadProgress = 0
         downloadStatus = ""
     }
 
-    /// Perform warmup - checks engine connection and model status
-    /// Only runs if not already warmed up
-    func performWarmup() async {
+    /// Perform full status check: connect → download (if needed) → warmup
+    /// This is called when entering the status check step
+    func performStatusCheck() async {
         // Skip if already warmed up
         guard !isModelWarmedUp else {
             warmupStatusMessage = "Ready to transcribe"
@@ -195,19 +199,49 @@ final class OnboardingManager: ObservableObject {
             return
         }
 
-        // Step 2: Check if model is loaded
-        warmupStatusMessage = "Checking model status..."
+        // Step 2: Check if model needs download
+        engineClient.refreshStatus()
+        if let status = engineClient.status, status.loadedModelId != nil {
+            // Model already loaded, skip download
+            isModelDownloaded = true
+            downloadProgress = 1.0
+        } else {
+            // Need to download
+            warmupStatusMessage = "Downloading \(selectedModelDisplayName)..."
+            await downloadSelectedModel()
+
+            guard isModelDownloaded else {
+                warmupStatusMessage = "Download failed"
+                return
+            }
+        }
+
+        // Step 3: Warmup the model
+        warmupStatusMessage = "Warming up engine..."
         isWarmingUp = true
 
+        // Refresh status to confirm model is loaded
         engineClient.refreshStatus()
         if let status = engineClient.status, status.loadedModelId != nil {
             isModelWarmedUp = true
             warmupStatusMessage = "Ready to transcribe"
         } else {
-            warmupStatusMessage = "Model not loaded - download required"
+            warmupStatusMessage = "Waiting for model warmup..."
+            // Give it a moment to warm up
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            engineClient.refreshStatus()
+            if let status = engineClient.status, status.loadedModelId != nil {
+                isModelWarmedUp = true
+                warmupStatusMessage = "Ready to transcribe"
+            }
         }
 
         isWarmingUp = false
+    }
+
+    /// Legacy warmup function - kept for compatibility
+    func performWarmup() async {
+        await performStatusCheck()
     }
 
     func completeOnboarding() {
@@ -222,10 +256,12 @@ final class OnboardingManager: ObservableObject {
         isModelWarmedUp = false
         isCheckingEngine = false
         isWarmingUp = false
+        isDownloading = false
         warmupStatusMessage = ""
         downloadProgress = 0
         downloadStatus = ""
         errorMessage = nil
+        selectedModelType = "parakeet"
     }
 }
 
@@ -621,7 +657,8 @@ private struct WelcomeStepView: View {
             illustration: {
                 // Animated pill demo with cursor
                 PillDemoAnimation(colors: colors, phase: $animationPhase)
-                    .frame(width: 120, height: 80)
+                    .frame(width: 150, height: 90)
+                    .padding(.bottom, 8)  // Push screen higher, more space from title
                     .onAppear {
                         // Start animation loop
                         animatePillDemo()
@@ -642,25 +679,45 @@ private struct WelcomeStepView: View {
     }
 
     private func animatePillDemo() {
-        // Phase 0: Sliver only (1.5s)
-        // Phase 1: Cursor approaches (0.5s)
-        // Phase 2: Expanded with cursor (1.5s)
-        // Phase 3: Cursor leaves (0.5s)
+        // Full recording lifecycle (slowed down for impact):
+        // Phase 0: Sliver idle, cursor approaches (2s)
+        // Phase 1: Cursor at pill, pill expands to "REC" (1.5s)
+        // Phase 2: Click starts recording - cursor stays briefly (1.2s) - LONGER
+        // Phase 3: Cursor moves away, pill becomes red sliver, waveform shows (4s) - LONGER
+        // Phase 4: Keys appear, processing dots (2s) - LONGER keys visible
+        // Phase 5: Success (checkmark) (1.5s)
+        // Phase 6: Back to sliver, cursor leaves (1s)
         // Loop back to 0
 
         Task {
             while true {
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // Show sliver
+                // Phase 0: Idle sliver, cursor approaching
+                withAnimation(.easeIn(duration: 0.4)) { animationPhase = 0 }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+
+                // Phase 1: Cursor arrives, pill expands to "REC"
                 withAnimation(.easeOut(duration: 0.4)) { animationPhase = 1 }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
 
-                try? await Task.sleep(nanoseconds: 400_000_000) // Cursor arriving
-                withAnimation(.easeOut(duration: 0.2)) { animationPhase = 2 }
+                // Phase 2: Click - recording starts, cursor still there (longer to enjoy)
+                withAnimation(.easeOut(duration: 0.15)) { animationPhase = 2 }
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
 
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // Show expanded
-                withAnimation(.easeIn(duration: 0.4)) { animationPhase = 3 }
+                // Phase 3: Cursor moves away, pill becomes red sliver with pulsing (longer)
+                withAnimation(.easeInOut(duration: 0.5)) { animationPhase = 3 }
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
 
-                try? await Task.sleep(nanoseconds: 400_000_000) // Cursor leaving
-                withAnimation(.easeIn(duration: 0.2)) { animationPhase = 0 }
+                // Phase 4: Keys appear, processing (longer to see keys)
+                withAnimation(.easeOut(duration: 0.3)) { animationPhase = 4 }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+
+                // Phase 5: Success (checkmark)
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { animationPhase = 5 }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+                // Phase 6: Cursor leaves, back to idle
+                withAnimation(.easeIn(duration: 0.4)) { animationPhase = 6 }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
     }
@@ -671,81 +728,159 @@ private struct WelcomeStepView: View {
 private struct PillDemoAnimation: View {
     let colors: OnboardingColors
     @Binding var phase: Int
+    @State private var recordingTime: Double = 0
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var dotsCount: Int = 0
+    @State private var waveformLevels: [CGFloat] = Array(repeating: 0.2, count: 16)
+    @State private var showKeys: Bool = false
+    @State private var clickRippleScale: CGFloat = 0.3
+    @State private var clickRippleOpacity: Double = 0
 
-    // Phase 0: Sliver only
-    // Phase 1: Cursor approaching, pill starting to expand
-    // Phase 2: Fully expanded with cursor hovering
-    // Phase 3: Cursor leaving, pill collapsing
+    // Phase 0: Idle sliver, cursor approaching
+    // Phase 1: Cursor at pill, expanded "REC"
+    // Phase 2: Click - recording starts, cursor still at pill briefly
+    // Phase 3: Cursor moved away, red sliver pulsing, waveform visible
+    // Phase 4: Keys appear (⌥⌘L), processing dots - cursor stays away
+    // Phase 5: Success (checkmark) - cursor still away
+    // Phase 6: Keys fade, cursor leaves, back to idle sliver
 
-    private var isExpanded: Bool {
-        phase == 1 || phase == 2
+    private var isRecordingExpanded: Bool { phase == 2 }
+    private var isRecordingSliver: Bool { phase == 3 }
+    private var isProcessing: Bool { phase == 4 }
+    private var isSuccess: Bool { phase == 5 }
+    private var showExpandedPill: Bool { phase == 1 || phase == 2 || phase == 4 || phase == 5 }
+    private var showWaveform: Bool { phase == 2 || phase == 3 }
+
+    // Cursor position - stays away after recording
+    private var cursorOffsetX: CGFloat {
+        switch phase {
+        case 0: return 40    // Approaching from right
+        case 1, 2: return 12 // At the pill
+        case 3, 4, 5: return -35  // Moved away, stays there
+        case 6: return -50   // Leaves from current position
+        default: return 12
+        }
     }
 
-    private var cursorOffset: CGFloat {
+    private var cursorOffsetY: CGFloat {
         switch phase {
-        case 0: return 50    // Far right, off screen
-        case 1: return 15    // Approaching
-        case 2: return 8     // Hovering close
-        case 3: return 30    // Leaving
-        default: return 50
+        case 0: return 20    // Approaching
+        case 1, 2: return 32 // At pill (bottom)
+        case 3, 4, 5: return 5  // Away (middle area)
+        case 6: return -10   // Leaves upward
+        default: return 32
         }
     }
 
     private var cursorOpacity: Double {
         switch phase {
-        case 0: return 0
-        case 1, 2: return 1
-        case 3: return 0.5
+        case 0: return 0.5
+        case 1, 2: return 1.0
+        case 3, 4, 5: return 0.5  // Dimmer when away
+        case 6: return 0.1
         default: return 0
         }
     }
 
     var body: some View {
         ZStack {
-            // Screen mockup background for contrast
-            RoundedRectangle(cornerRadius: 8)
+            // Screen mockup background
+            RoundedRectangle(cornerRadius: 10)
                 .fill(
                     LinearGradient(
-                        colors: [Color.black.opacity(0.6), Color.black.opacity(0.8)],
+                        colors: [Color.black.opacity(0.5), Color.black.opacity(0.75)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
+                .clipped()  // Clip content to viewport
+
+            // Waveform overlay at top during recording (clipped to viewport)
+            if showWaveform {
+                VStack {
+                    WaveformDemoView(levels: waveformLevels)
+                        .padding(.top, 10)  // More room from top edge
+                    Spacer()
+                }
+                .transition(.opacity)  // Just fade, no movement
+            }
+
+            // Keyboard shortcut display (right side)
+            if showKeys {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        KeyboardShortcutView()
+                            .padding(.trailing, 8)
+                            .padding(.bottom, 25)
+                    }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
 
             // The pill (bottom center)
             VStack {
                 Spacer()
                 ZStack {
-                    if isExpanded {
-                        // Expanded pill
+                    if showExpandedPill {
                         HStack(spacing: 4) {
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 6, height: 6)
-                            Text("REC")
-                                .font(.system(size: 9, weight: .semibold))
-                                .tracking(1)
-                                .foregroundColor(Color.white.opacity(0.5))
+                            if isRecordingExpanded {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 6, height: 6)
+                                    .scaleEffect(pulseScale)
+                                Text(formatTime(recordingTime))
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.8))
+                            } else if isProcessing {
+                                HStack(spacing: 2) {
+                                    ForEach(0..<3) { i in
+                                        Circle()
+                                            .fill(Color.white.opacity(i < dotsCount ? 0.8 : 0.2))
+                                            .frame(width: 3, height: 3)
+                                    }
+                                }
+                                .frame(width: 40)  // Fixed width to match timer
+                            } else if isSuccess {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(colors.accent)
+                                    .frame(width: 40)  // Fixed width to match timer
+                            } else {
+                                Circle()
+                                    .fill(Color.white)
+                                    .frame(width: 6, height: 6)
+                                Text("REC")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .tracking(1)
+                                    .foregroundColor(Color.white.opacity(0.5))
+                            }
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .frame(height: 18)  // Fixed height to prevent jumping
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.12))
+                                .fill(isRecordingExpanded ? Color.red.opacity(0.2) : Color.white.opacity(0.12))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 4)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                                        .stroke(isRecordingExpanded ? Color.red.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.5)
                                 )
                         )
                         .transition(.scale.combined(with: .opacity))
-                    } else {
-                        // Collapsed sliver - more visible
+                    } else if isRecordingSliver {
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(0.35))
+                            .fill(Color.red.opacity(0.8))
+                            .frame(width: 24 * (1.0 + pulseScale * 0.15), height: 2)
+                            .transition(.scale.combined(with: .opacity))
+                    } else {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.white.opacity(0.25))
                             .frame(width: 24, height: 2)
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -753,14 +888,161 @@ private struct PillDemoAnimation: View {
                 .padding(.bottom, 6)
             }
 
-            // Cursor
-            Image(systemName: "cursorarrow")
-                .font(.system(size: 14))
-                .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.5), radius: 1, x: 1, y: 1)
-                .opacity(cursorOpacity)
-                .offset(x: cursorOffset, y: 8)
+            // Cursor with click ripple effect
+            ZStack {
+                // Click ripple effect (expanding circle that fades)
+                Circle()
+                    .stroke(Color.white, lineWidth: 1.5)
+                    .frame(width: 16, height: 16)
+                    .scaleEffect(clickRippleScale)
+                    .opacity(clickRippleOpacity)
+
+                Image(systemName: "cursorarrow")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 2, x: 1, y: 1)
+            }
+            .opacity(cursorOpacity)
+            .offset(x: cursorOffsetX, y: cursorOffsetY)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 10))  // Clip everything to viewport
+        .onChange(of: phase) { _, newPhase in
+            if newPhase == 2 {
+                // Click ripple effect - starts small and opaque, expands and fades
+                clickRippleScale = 0.3
+                clickRippleOpacity = 0.8
+                withAnimation(.easeOut(duration: 0.4)) {
+                    clickRippleScale = 2.5
+                    clickRippleOpacity = 0
+                }
+                recordingTime = 0
+                startRecordingAnimation()
+                startWaveformAnimation()
+            } else if newPhase == 4 {
+                // Show keys when stopping recording
+                withAnimation(.easeOut(duration: 0.15)) {
+                    showKeys = true
+                }
+                startDotsAnimation()
+                // Hide keys after 1.2s (longer to enjoy)
+                Task {
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    await MainActor.run {
+                        withAnimation(.easeIn(duration: 0.3)) {
+                            showKeys = false
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                pulseScale = 1.4
+            }
+        }
+    }
+
+    private func formatTime(_ time: Double) -> String {
+        let seconds = Int(time) % 60
+        let tenths = Int((time * 10).truncatingRemainder(dividingBy: 10))
+        return String(format: "0:%02d.%d", seconds, tenths)
+    }
+
+    private func startRecordingAnimation() {
+        Task {
+            while phase == 2 || phase == 3 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                await MainActor.run {
+                    recordingTime += 0.1
+                }
+            }
+        }
+    }
+
+    private func startWaveformAnimation() {
+        Task {
+            while phase == 2 || phase == 3 {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                await MainActor.run {
+                    var newLevels = waveformLevels
+                    for i in 0..<(newLevels.count - 1) {
+                        newLevels[i] = newLevels[i + 1]
+                    }
+                    let newLevel = CGFloat.random(in: 0.15...0.85)
+                    newLevels[newLevels.count - 1] = newLevel
+                    waveformLevels = newLevels
+                }
+            }
+        }
+    }
+
+    private func startDotsAnimation() {
+        dotsCount = 1
+        Task {
+            while phase == 4 {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                await MainActor.run {
+                    dotsCount = (dotsCount % 3) + 1
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Keyboard Shortcut Display
+
+private struct KeyboardShortcutView: View {
+    var body: some View {
+        HStack(spacing: 2) {
+            KeyCapView(symbol: "⌥")
+            KeyCapView(symbol: "⌘")
+            KeyCapView(symbol: "L")
+        }
+    }
+}
+
+private struct KeyCapView: View {
+    let symbol: String
+
+    var body: some View {
+        Text(symbol)
+            .font(.system(size: 7, weight: .medium))
+            .foregroundColor(.white.opacity(0.9))
+            .frame(width: 12, height: 12)
+            .background(
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.white.opacity(0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                    )
+            )
+    }
+}
+
+// MARK: - Waveform Demo (simplified bars visualization)
+
+private struct WaveformDemoView: View {
+    let levels: [CGFloat]
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(0..<levels.count, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 0.5)
+                    .fill(Color.white.opacity(0.35 + Double(levels[i]) * 0.4))
+                    .frame(width: 1.5, height: max(2, 10 * levels[i]))
+            }
+        }
+        .padding(.horizontal, 10)  // More horizontal padding
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill(Color.black.opacity(0.4))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+        )
     }
 }
 
@@ -1091,13 +1373,12 @@ private struct ModelDownloadStepView: View {
     let colors: OnboardingColors
     let onNext: () -> Void
     @ObservedObject private var manager = OnboardingManager.shared
-    @State private var isDownloading = false
     @State private var selectedModel: ModelChoice = .parakeet
 
     var body: some View {
         OnboardingStepLayout(
             colors: colors,
-            title: "POWERFUL AI MODELS",
+            title: "SELECT YOUR MODEL",
             subtitle: "Your voice stays on your Mac",
             illustration: {
                 // CPU/chip icon - represents on-device AI
@@ -1127,10 +1408,11 @@ private struct ModelDownloadStepView: View {
                             ],
                             badge: "RECOMMENDED",
                             badgeColor: colors.accent,
-                            isDownloaded: manager.isModelDownloaded && selectedModel == .parakeet,
+                            isDownloaded: false,
                             learnMoreURL: "https://huggingface.co/nvidia/parakeet-tdt-1.1b"
                         ) {
                             selectedModel = .parakeet
+                            manager.selectedModelType = "parakeet"
                         }
 
                         ModelCard(
@@ -1150,49 +1432,19 @@ private struct ModelDownloadStepView: View {
                             learnMoreURL: "https://openai.com/research/whisper"
                         ) {
                             selectedModel = .whisper
+                            manager.selectedModelType = "whisper"
                         }
                     }
 
-                    // Error message if any
-                    if let error = manager.errorMessage {
-                        Text(error)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(SemanticColor.error)
-                            .frame(height: 20)
-                    } else {
-                        Spacer().frame(height: 20)
-                    }
                 }
             },
             cta: {
-                DownloadProgressButton(
-                    colors: colors,
-                    isDownloading: isDownloading,
-                    progress: manager.downloadProgress,
-                    accentColor: selectedModel == .parakeet ? colors.accent : SemanticColor.info,
-                    onDownload: startDownload,
-                    onCancel: cancelDownload
-                )
+                OnboardingCTAButton(colors: colors, title: "DOWNLOAD", icon: "arrow.down", action: onNext)
             }
         )
-    }
-
-    private func startDownload() {
-        isDownloading = true
-        Task {
-            await manager.downloadDefaultModel()
-            isDownloading = false
-            // Auto-advance to next screen when download completes
-            if manager.isModelDownloaded {
-                onNext()
-            }
-        }
-    }
-
-    private func cancelDownload() {
-        Task {
-            await manager.cancelDownload()
-            isDownloading = false
+        .onAppear {
+            // Sync local state with manager
+            selectedModel = manager.selectedModelType == "parakeet" ? .parakeet : .whisper
         }
     }
 }
@@ -1440,7 +1692,7 @@ private struct EngineWarmupStepView: View {
     @ObservedObject private var manager = OnboardingManager.shared
 
     private var isLoading: Bool {
-        manager.isCheckingEngine || manager.isWarmingUp
+        manager.isCheckingEngine || manager.isWarmingUp || manager.isDownloading
     }
 
     private var statusSubtitle: String {
@@ -1448,10 +1700,22 @@ private struct EngineWarmupStepView: View {
             return "All checks passed"
         } else if manager.isWarmingUp {
             return "Warming up engine..."
+        } else if manager.isDownloading {
+            return "Downloading \(manager.selectedModelDisplayName)..."
         } else if manager.isCheckingEngine {
             return "Connecting to engine..."
         } else {
             return "Verifying setup..."
+        }
+    }
+
+    private var downloadValueText: String {
+        if manager.isModelDownloaded {
+            return "Complete"
+        } else if manager.isDownloading {
+            return "\(Int(manager.downloadProgress * 100))%"
+        } else {
+            return "Pending"
         }
     }
 
@@ -1473,7 +1737,7 @@ private struct EngineWarmupStepView: View {
                     StatusCheckRowRight(
                         colors: colors,
                         label: "Model Selection",
-                        value: "Parakeet v3",
+                        value: manager.selectedModelDisplayName,
                         isChecked: true,
                         isLoading: false
                     )
@@ -1487,9 +1751,9 @@ private struct EngineWarmupStepView: View {
                     StatusCheckRowRight(
                         colors: colors,
                         label: "File Download",
-                        value: manager.isModelDownloaded ? "Complete" : "Downloading...",
+                        value: downloadValueText,
                         isChecked: manager.isModelDownloaded,
-                        isLoading: false
+                        isLoading: manager.isDownloading
                     )
                     StatusCheckRowRight(
                         colors: colors,
@@ -1521,7 +1785,7 @@ private struct EngineWarmupStepView: View {
         )
         .onAppear {
             Task {
-                await manager.performWarmup()
+                await manager.performStatusCheck()
             }
         }
     }

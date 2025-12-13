@@ -288,10 +288,3 @@ enum SpeechError: LocalizedError {
     }
 }
 
-// MARK: - Voice Quality Extension
-
-extension AVSpeechSynthesisVoiceQuality: Comparable {
-    public static func < (lhs: AVSpeechSynthesisVoiceQuality, rhs: AVSpeechSynthesisVoiceQuality) -> Bool {
-        return lhs.rawValue < rhs.rawValue
-    }
-}

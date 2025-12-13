@@ -348,6 +348,7 @@ final class FloatingPillController: ObservableObject {
 
 struct FloatingPillView: View {
     @EnvironmentObject var controller: FloatingPillController
+    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
     @State private var isHovered = false
     @State private var pulsePhase: CGFloat = 0
 
@@ -434,14 +435,33 @@ struct FloatingPillView: View {
     private var expandedContent: some View {
         HStack(spacing: 4) {
             // State indicator dot - pulsates when recording
+            // Show warning color if silent during recording
             Circle()
-                .fill(expandedIndicatorColor)
+                .fill(audioMonitor.isSilent && controller.state == .listening ? SemanticColor.warning : expandedIndicatorColor)
                 .frame(width: 6, height: 6)
                 .scaleEffect(controller.state == .listening ? 1.0 + pulsePhase * 0.4 : 1.0)
 
             // Content varies by state
-            if controller.state == .listening || controller.state == .transcribing {
-                // Timer when recording/transcribing
+            if controller.state == .listening {
+                if audioMonitor.isSilent {
+                    // Silent mic warning
+                    Text("NO AUDIO")
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.5)
+                        .foregroundColor(SemanticColor.warning)
+                } else {
+                    // Timer with audio level indicator
+                    HStack(spacing: 3) {
+                        Text(timeString)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(TalkieTheme.textSecondary)
+
+                        // Mini audio level bar
+                        audioLevelIndicator
+                    }
+                }
+            } else if controller.state == .transcribing {
+                // Timer when transcribing
                 Text(timeString)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundColor(TalkieTheme.textSecondary)
@@ -461,10 +481,16 @@ struct FloatingPillView: View {
                 }
                 .foregroundColor(SemanticColor.warning)
             } else {
-                Text("REC")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1)
-                    .foregroundColor(TalkieTheme.textTertiary)
+                // Idle state - show mic name (truncated)
+                HStack(spacing: 3) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                    Text(truncatedMicName)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.horizontal, 10)
@@ -473,6 +499,32 @@ struct FloatingPillView: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(.ultraThinMaterial)
         )
+    }
+
+    // Mini audio level indicator bar
+    private var audioLevelIndicator: some View {
+        GeometryReader { geo in
+            RoundedRectangle(cornerRadius: 1)
+                .fill(levelColor)
+                .frame(width: max(2, geo.size.width * CGFloat(audioMonitor.level)), height: 4)
+                .animation(.easeOut(duration: 0.05), value: audioMonitor.level)
+        }
+        .frame(width: 16, height: 4)
+    }
+
+    private var levelColor: Color {
+        let level = audioMonitor.level
+        if level > 0.8 { return SemanticColor.error }
+        if level > 0.5 { return SemanticColor.warning }
+        return SemanticColor.success
+    }
+
+    private var truncatedMicName: String {
+        let name = audioMonitor.selectedMicName
+        if name.count > 12 {
+            return String(name.prefix(10)) + "..."
+        }
+        return name
     }
 
     private var expandedIndicatorColor: Color {

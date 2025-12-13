@@ -130,7 +130,8 @@ class WhisperService: ObservableObject {
         await SystemEventManager.shared.log(.transcribe, "Using TalkieEngine", detail: model.displayName)
 
         do {
-            let transcript = try await engine.transcribe(audioData: audioData, modelId: model.rawValue)
+            // Use family prefix format expected by TalkieEngine (e.g., "whisper:openai_whisper-small")
+            let transcript = try await engine.transcribe(audioData: audioData, modelId: "whisper:\(model.rawValue)")
             logger.info("[Engine] Transcription complete: \(transcript.prefix(100))...")
             await SystemEventManager.shared.log(.transcribe, "Transcription complete", detail: "\(transcript.count) chars")
             return transcript

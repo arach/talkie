@@ -6,18 +6,104 @@
 //
 
 import AVFoundation
+import AppKit
 import Combine
 import CoreAudio
 import os.log
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioCapture")
 
-/// Shared audio level for UI visualization
+/// Shared audio level for UI visualization and silent mic detection
 @MainActor
 final class AudioLevelMonitor: ObservableObject {
     static let shared = AudioLevelMonitor()
+
     @Published var level: Float = 0
-    private init() {}
+    @Published var isSilent: Bool = false  // True when mic appears silent during recording
+    @Published var selectedMicName: String = "System Default"
+
+    // Silent detection settings
+    private let silenceThreshold: Float = 0.02  // Level below this is considered silent
+    private let silenceWindowSeconds: TimeInterval = 2.0  // How long silence before warning
+    private var silentSampleCount: Int = 0
+    private var totalSampleCount: Int = 0
+    private let samplesPerSecond: Int = 10  // Approximate samples per second
+
+    private var cancellables = Set<AnyCancellable>()
+
+    private init() {
+        refreshMicName()
+
+        // Listen for device changes
+        AudioDeviceManager.shared.$inputDevices
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshMicName()
+            }
+            .store(in: &cancellables)
+
+        // Listen for settings changes (user changed mic selection)
+        LiveSettings.shared.$selectedMicrophoneID
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshMicName()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Call on each level update during recording
+    func updateLevel(_ newLevel: Float, isRecording: Bool) {
+        level = newLevel
+
+        if isRecording {
+            totalSampleCount += 1
+
+            if newLevel < silenceThreshold {
+                silentSampleCount += 1
+            } else {
+                // Reset if we get any audio
+                silentSampleCount = 0
+                if isSilent {
+                    isSilent = false
+                }
+            }
+
+            // Check if we've been silent for the window duration
+            let windowSamples = Int(silenceWindowSeconds) * samplesPerSecond
+            if silentSampleCount >= windowSamples && !isSilent {
+                isSilent = true
+                playAlertSound()
+            }
+        }
+    }
+
+    /// Reset silence tracking when recording starts/stops
+    func resetSilenceTracking() {
+        silentSampleCount = 0
+        totalSampleCount = 0
+        isSilent = false
+    }
+
+    /// Refresh the displayed mic name from current selection
+    func refreshMicName() {
+        Task { @MainActor in
+            let deviceManager = AudioDeviceManager.shared
+            let selectedID = deviceManager.selectedDeviceID
+
+            if let device = deviceManager.inputDevices.first(where: { $0.id == selectedID }) {
+                selectedMicName = device.name
+            } else if let defaultDevice = deviceManager.inputDevices.first(where: { $0.isDefault }) {
+                selectedMicName = defaultDevice.name
+            } else {
+                selectedMicName = "No Microphone"
+            }
+        }
+    }
+
+    private func playAlertSound() {
+        // Play system alert sound
+        NSSound.beep()
+    }
 }
 
 final class MicrophoneCapture: LiveAudioCapture {
@@ -39,6 +125,12 @@ final class MicrophoneCapture: LiveAudioCapture {
 
         // Set the selected input device before accessing inputNode
         setInputDevice()
+
+        // Reset silence tracking for new recording
+        Task { @MainActor in
+            AudioLevelMonitor.shared.resetSilenceTracking()
+            AudioLevelMonitor.shared.refreshMicName()
+        }
 
         let inputNode = engine.inputNode
 
@@ -65,10 +157,10 @@ final class MicrophoneCapture: LiveAudioCapture {
                 logger.error("Failed to write audio buffer: \(error.localizedDescription)")
             }
 
-            // Calculate RMS level for visualization
+            // Calculate RMS level for visualization and silence detection
             let level = self.calculateRMSLevel(buffer: buffer)
             Task { @MainActor in
-                AudioLevelMonitor.shared.level = level
+                AudioLevelMonitor.shared.updateLevel(level, isRecording: true)
             }
         }
 
@@ -129,6 +221,12 @@ final class MicrophoneCapture: LiveAudioCapture {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isCapturing = false
+
+        // Reset audio level and silence tracking
+        Task { @MainActor in
+            AudioLevelMonitor.shared.level = 0
+            AudioLevelMonitor.shared.resetSilenceTracking()
+        }
 
         // Close the audio file
         audioFile = nil

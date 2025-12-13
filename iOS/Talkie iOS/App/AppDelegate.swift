@@ -8,6 +8,8 @@
 import UIKit
 import CloudKit
 import UserNotifications
+import AVFoundation
+import CoreMedia
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
@@ -24,7 +26,82 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set up CloudKit subscription for instant sync
         setupCloudKitSubscription()
 
+        // Activate Watch connectivity and set up audio handler
+        setupWatchAudioHandler()
+
         return true
+    }
+
+    // MARK: - Watch Audio Handler
+
+    private func setupWatchAudioHandler() {
+        WatchSessionManager.shared.onAudioReceived = { [weak self] audioURL, metadata in
+            Task {
+                await self?.createMemoFromWatchAudio(audioURL: audioURL, metadata: metadata)
+            }
+        }
+    }
+
+    private func createMemoFromWatchAudio(audioURL: URL, metadata: [String: Any]) async {
+        AppLogger.app.info("[Watch] Creating memo from Watch audio: \(audioURL.lastPathComponent)")
+
+        let context = PersistenceController.shared.container.viewContext
+
+        // Get audio duration
+        let asset = AVURLAsset(url: audioURL)
+        let durationValue = try? await asset.load(.duration)
+        let duration = durationValue.map { CMTimeGetSeconds($0) } ?? 0
+
+        // Create the memo
+        let newMemo = VoiceMemo(context: context)
+        newMemo.id = UUID()
+        newMemo.title = "Watch Recording \(formatWatchDate(Date()))"
+        newMemo.createdAt = Date()
+        newMemo.duration = duration.isNaN ? 0 : duration
+        newMemo.fileURL = audioURL.lastPathComponent
+        newMemo.isTranscribing = false
+        newMemo.sortOrder = Int32(Date().timeIntervalSince1970 * -1)
+        newMemo.originDeviceId = "watch-\(PersistenceController.deviceId)"
+        newMemo.autoProcessed = false  // Mark for macOS auto-run processing
+
+        // Load and store audio data for CloudKit sync
+        do {
+            let audioData = try Data(contentsOf: audioURL)
+            newMemo.audioData = audioData
+            AppLogger.app.info("[Watch] Audio data loaded: \(audioData.count) bytes")
+        } catch {
+            AppLogger.app.warning("[Watch] Failed to load audio data: \(error.localizedDescription)")
+        }
+
+        do {
+            try context.save()
+            AppLogger.persistence.info("[Watch] Memo saved from Watch recording")
+
+            // Update widget with new memo
+            PersistenceController.refreshWidgetData(context: context)
+
+            let memoObjectID = newMemo.objectID
+
+            // Start transcription after a brief delay
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+
+                if let savedMemo = context.object(with: memoObjectID) as? VoiceMemo {
+                    AppLogger.transcription.info("[Watch] Starting transcription for Watch memo")
+                    TranscriptionService.shared.transcribeVoiceMemo(savedMemo, context: context)
+                }
+            }
+        } catch {
+            let nsError = error as NSError
+            AppLogger.persistence.error("[Watch] Error saving Watch memo: \(nsError.localizedDescription)")
+        }
+    }
+
+    private func formatWatchDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 
     private func requestNotificationPermissions() {

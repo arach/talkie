@@ -7,6 +7,7 @@
 
 import Foundation
 import WatchConnectivity
+import WatchKit
 
 @MainActor
 final class WatchSessionManager: NSObject, ObservableObject {
@@ -36,24 +37,33 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
     /// Send audio file to iPhone for transcription
     func sendAudio(fileURL: URL) {
+        print("⌚️ [Watch] sendAudio called with: \(fileURL.lastPathComponent)")
+        print("⌚️ [Watch] File exists: \(FileManager.default.fileExists(atPath: fileURL.path))")
+
         guard let session = session, session.activationState == .activated else {
+            print("⌚️ [Watch] ❌ Session not activated")
             lastSentStatus = .failed("Watch not connected")
             return
         }
 
+        print("⌚️ [Watch] Session state: \(session.activationState.rawValue), reachable: \(session.isReachable)")
+
         guard session.isReachable else {
             // iPhone not reachable - queue for background transfer
+            print("⌚️ [Watch] iPhone not reachable, using background transfer")
             transferInBackground(fileURL: fileURL)
             return
         }
 
         lastSentStatus = .sending
+        print("⌚️ [Watch] 📤 Sending file to iPhone...")
 
         // Send immediately if reachable
         session.transferFile(fileURL, metadata: [
             "type": "audio",
             "timestamp": Date().timeIntervalSince1970
         ])
+        print("⌚️ [Watch] transferFile() called")
     }
 
     private func transferInBackground(fileURL: URL) {
@@ -83,7 +93,16 @@ extension WatchSessionManager: WCSessionDelegate {
                     case .activated: "activated"
                     @unknown default: "unknown"
                 }
+                let device = WKInterfaceDevice.current()
+                let watchBundleID = Bundle.main.bundleIdentifier ?? "unknown"
+                let expectedCompanionID = watchBundleID.replacingOccurrences(of: ".watchkitapp", with: "")
+
                 print("⌚️ [Watch] ========== SESSION INFO ==========")
+                print("⌚️ [Watch] Watch Name: \(device.name)")
+                print("⌚️ [Watch] Watch Model: \(device.model)")
+                print("⌚️ [Watch] Watch OS: \(device.systemVersion)")
+                print("⌚️ [Watch] Watch Bundle ID: \(watchBundleID)")
+                print("⌚️ [Watch] Expected iOS Bundle: \(expectedCompanionID)")
                 print("⌚️ [Watch] State: \(stateStr)")
                 print("⌚️ [Watch] Reachable: \(session.isReachable)")
                 print("⌚️ [Watch] Companion installed: \(session.isCompanionAppInstalled)")
@@ -97,7 +116,8 @@ extension WatchSessionManager: WCSessionDelegate {
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in
             self.isReachable = session.isReachable
-            print("⌚️ [Watch] Reachability → \(session.isReachable) | Companion: \(session.isCompanionAppInstalled)")
+            let device = WKInterfaceDevice.current()
+            print("⌚️ [Watch] Reachability → \(session.isReachable) | Companion: \(session.isCompanionAppInstalled) | Watch: \(device.name)")
         }
     }
 

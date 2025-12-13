@@ -20,8 +20,5 @@
       <FileRef
          location = "group:Talkie OS.xcodeproj">
       </FileRef>
-      <FileRef
-         location = "group:TalkieWatch/TalkieWatch.xcodeproj">
-      </FileRef>
    </Group>
 </Workspace>
