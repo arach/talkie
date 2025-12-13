@@ -45,12 +45,12 @@ final class FailedQueueController {
         let view = FailedQueueView(viewModel: viewModel)
         let hostingView = NSHostingView(rootView: view)
 
-        // Calculate size based on items
-        let itemHeight: CGFloat = 72
-        let headerHeight: CGFloat = 56
-        let footerHeight: CGFloat = 56
-        let maxItems = min(items.count, 5)
-        let height = headerHeight + CGFloat(maxItems) * itemHeight + footerHeight + 16
+        // Calculate size based on items - compact rows
+        let itemHeight: CGFloat = 36  // More compact
+        let headerHeight: CGFloat = 52
+        let footerHeight: CGFloat = 52
+        let maxItems = min(items.count, 8)  // Show more items
+        let height = headerHeight + CGFloat(maxItems) * itemHeight + footerHeight + 12
 
         hostingView.frame = NSRect(x: 0, y: 0, width: 440, height: height)
 
@@ -90,12 +90,36 @@ final class FailedQueueController {
         }
 
         // Local monitor for keyboard and clicks
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self, weak viewModel] event in
             guard let self, let panel = self.panel else { return event }
 
-            if event.type == .keyDown && event.keyCode == 53 {
-                self.dismiss()
-                return nil
+            if event.type == .keyDown {
+                switch event.keyCode {
+                case 53:  // Escape
+                    self.dismiss()
+                    return nil
+                case 125:  // Down arrow
+                    viewModel?.selectNext()
+                    return nil
+                case 126:  // Up arrow
+                    viewModel?.selectPrevious()
+                    return nil
+                case 36:  // Enter - retry selected
+                    if viewModel?.isEngineConnected == true {
+                        viewModel?.retrySelected()
+                    }
+                    return nil
+                case 51:  // Delete/Backspace - delete selected
+                    viewModel?.deleteSelected()
+                    return nil
+                case 15 where event.modifierFlags.contains(.command):  // Cmd+R - retry all
+                    if viewModel?.isEngineConnected == true {
+                        viewModel?.retryAll()
+                    }
+                    return nil
+                default:
+                    break
+                }
             }
 
             // Click outside to dismiss
@@ -130,6 +154,7 @@ final class FailedQueueController {
 final class FailedQueueViewModel: ObservableObject {
     @Published var items: [LiveUtterance]
     @Published var retryingItems: Set<Int64> = []
+    @Published var selectedIndex: Int = 0  // For keyboard navigation
 
     var onDismiss: (() -> Void)?
     var onRetryAll: (() -> Void)?
@@ -140,6 +165,33 @@ final class FailedQueueViewModel: ObservableObject {
 
     init(items: [LiveUtterance]) {
         self.items = items
+    }
+
+    // Keyboard navigation
+    func selectNext() {
+        if selectedIndex < items.count - 1 {
+            selectedIndex += 1
+        }
+    }
+
+    func selectPrevious() {
+        if selectedIndex > 0 {
+            selectedIndex -= 1
+        }
+    }
+
+    func retrySelected() {
+        guard selectedIndex < items.count else { return }
+        retry(items[selectedIndex])
+    }
+
+    func deleteSelected() {
+        guard selectedIndex < items.count else { return }
+        delete(items[selectedIndex])
+        // Adjust selection if needed
+        if selectedIndex >= items.count && selectedIndex > 0 {
+            selectedIndex -= 1
+        }
     }
 
     func retry(_ item: LiveUtterance) {
@@ -227,18 +279,20 @@ struct FailedQueueView: View {
 
             // Items list
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 2) {
-                    ForEach(viewModel.items, id: \.id) { item in
+                VStack(spacing: 1) {
+                    ForEach(Array(viewModel.items.enumerated()), id: \.element.id) { index, item in
                         FailedItemRow(
                             item: item,
                             isRetrying: viewModel.retryingItems.contains(item.id ?? -1),
                             isEngineConnected: viewModel.isEngineConnected,
+                            isSelected: index == viewModel.selectedIndex,
                             onRetry: { viewModel.retry(item) },
-                            onDelete: { viewModel.delete(item) }
+                            onDelete: { viewModel.delete(item) },
+                            onSelect: { viewModel.selectedIndex = index }
                         )
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
 
             // Divider
@@ -250,36 +304,45 @@ struct FailedQueueView: View {
             HStack {
                 Button(action: { viewModel.dismiss() }) {
                     Text("Close")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(TalkieTheme.textSecondary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         .background(TalkieTheme.surfaceCard)
-                        .cornerRadius(6)
+                        .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
 
                 Spacer()
 
+                // Keyboard hints
+                HStack(spacing: 8) {
+                    KeyboardHint(key: "↑↓", label: "nav")
+                    KeyboardHint(key: "⏎", label: "retry")
+                    KeyboardHint(key: "⌫", label: "delete")
+                }
+
+                Spacer()
+
                 if viewModel.isEngineConnected {
                     Button(action: { viewModel.retryAll() }) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 10, weight: .semibold))
                             Text("Retry All")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 11, weight: .semibold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         .background(SemanticColor.success)
-                        .cornerRadius(6)
+                        .cornerRadius(5)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .frame(width: 440)
         .background(
@@ -297,106 +360,100 @@ struct FailedItemRow: View {
     let item: LiveUtterance
     let isRetrying: Bool
     let isEngineConnected: Bool
+    let isSelected: Bool
     let onRetry: () -> Void
     let onDelete: () -> Void
+    let onSelect: () -> Void
 
     @State private var isHovered = false
 
+    private var statusColor: Color {
+        item.transcriptionStatus == .failed ? SemanticColor.error : SemanticColor.warning
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Audio icon with duration
-            VStack(spacing: 2) {
+        HStack(spacing: 8) {
+            // Compact: waveform + duration inline
+            HStack(spacing: 4) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 16))
+                    .font(.system(size: 12))
                     .foregroundColor(TalkieTheme.textTertiary)
 
                 if let duration = item.durationSeconds {
                     Text(formatDuration(duration))
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(TalkieTheme.textMuted)
                 }
             }
-            .frame(width: 44)
+            .frame(width: 50, alignment: .leading)
 
-            // Info
-            VStack(alignment: .leading, spacing: 4) {
-                // Status and time
-                HStack(spacing: 8) {
-                    // Status badge
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(item.transcriptionStatus == .failed ? SemanticColor.error : SemanticColor.warning)
-                            .frame(width: 5, height: 5)
-                        Text(item.transcriptionStatus == .failed ? "Failed" : "Pending")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(item.transcriptionStatus == .failed ? SemanticColor.error : SemanticColor.warning)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background((item.transcriptionStatus == .failed ? SemanticColor.error : SemanticColor.warning).opacity(0.1))
-                    .cornerRadius(4)
+            // Status dot
+            Circle()
+                .fill(statusColor)
+                .frame(width: 5, height: 5)
 
-                    Text(timeAgo(from: item.createdAt))
-                        .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+            // Time ago
+            Text(timeAgo(from: item.createdAt))
+                .font(.system(size: 10))
+                .foregroundColor(TalkieTheme.textTertiary)
 
-                    if let appName = item.appName {
-                        Text("• \(appName)")
-                            .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textMuted)
-                    }
-                }
-
-                // Error message if present
-                if let error = item.transcriptionError, item.transcriptionStatus == .failed {
-                    Text(error)
-                        .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
-                        .lineLimit(1)
-                }
+            // App name
+            if let appName = item.appName {
+                Text("•")
+                    .foregroundColor(TalkieTheme.textMuted)
+                Text(appName)
+                    .font(.system(size: 10))
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .lineLimit(1)
             }
 
             Spacer()
 
-            // Actions
-            HStack(spacing: 8) {
-                // Retry button
+            // Actions - smaller buttons
+            HStack(spacing: 6) {
                 Button(action: onRetry) {
                     if isRetrying {
                         ProgressView()
-                            .scaleEffect(0.6)
-                            .frame(width: 28, height: 28)
+                            .scaleEffect(0.5)
+                            .frame(width: 24, height: 24)
                     } else {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(isEngineConnected ? SemanticColor.success : TalkieTheme.textMuted)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 24, height: 24)
                             .background(isEngineConnected ? SemanticColor.success.opacity(0.1) : TalkieTheme.surfaceCard)
-                            .cornerRadius(6)
+                            .cornerRadius(5)
                     }
                 }
                 .buttonStyle(.plain)
                 .disabled(!isEngineConnected || isRetrying)
 
-                // Delete button
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(SemanticColor.error.opacity(0.8))
-                        .frame(width: 28, height: 28)
+                        .frame(width: 24, height: 24)
                         .background(SemanticColor.error.opacity(0.1))
-                        .cornerRadius(6)
+                        .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? TalkieTheme.hover : Color.clear)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
+        }
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.1)) {
                 isHovered = hovering
@@ -420,6 +477,28 @@ struct FailedItemRow: View {
             return "\(seconds / 3600)h ago"
         } else {
             return "\(seconds / 86400)d ago"
+        }
+    }
+}
+
+// MARK: - Keyboard Hint
+
+struct KeyboardHint: View {
+    let key: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(key)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(TalkieTheme.textTertiary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(TalkieTheme.surfaceCard)
+                .cornerRadius(3)
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundColor(TalkieTheme.textMuted)
         }
     }
 }

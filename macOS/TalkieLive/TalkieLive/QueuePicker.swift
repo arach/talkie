@@ -43,11 +43,11 @@ final class QueuePickerController {
         let view = QueuePickerView(viewModel: viewModel)
         let hostingView = NSHostingView(rootView: view)
 
-        // Calculate size based on items
-        let itemHeight: CGFloat = 56
-        let headerHeight: CGFloat = 40
-        let maxItems = min(items.count, 6)
-        let height = headerHeight + CGFloat(maxItems) * itemHeight + 16
+        // Calculate size based on items - compact view
+        let itemHeight: CGFloat = 40  // More compact
+        let headerHeight: CGFloat = 36
+        let maxItems = min(items.count, 8)  // Show more items
+        let height = headerHeight + CGFloat(maxItems) * itemHeight + 12
 
         hostingView.frame = NSRect(x: 0, y: 0, width: 420, height: height)
 
@@ -74,21 +74,33 @@ final class QueuePickerController {
         }
 
         panel.orderFront(nil)
+        panel.makeKey()  // Make panel accept keyboard input
         self.panel = panel
         self.hostingView = hostingView
 
-        // Global monitor for escape key (works even when app is not focused)
+        // Global monitor for keyboard events (works even when app is not focused)
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             guard let self else { return }
 
-            if event.keyCode == 53 { // Escape
-                DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                switch event.keyCode {
+                case 53: // Escape
                     self.dismiss()
+                case 125: // Down arrow
+                    viewModel.selectNext()
+                case 126: // Up arrow
+                    viewModel.selectPrevious()
+                case 36: // Return
+                    if let selected = viewModel.selectedItem {
+                        self.pasteAndDismiss(selected)
+                    }
+                default:
+                    break
                 }
             }
         }
 
-        // Local monitor for keyboard navigation and clicks
+        // Local monitor for keyboard navigation and clicks (when app is focused)
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self, let panel = self.panel else { return event }
 
@@ -296,53 +308,44 @@ struct QueueItemRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Text preview
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.text.prefix(80) + (item.text.count > 80 ? "..." : ""))
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(white: isSelected ? 1.0 : 0.85))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                HStack(spacing: 8) {
-                    // Time ago
-                    Text(timeAgo(from: item.createdAt))
-                        .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
-
-                    // Word count
-                    if let wordCount = item.wordCount {
-                        Text("\(wordCount) words")
-                            .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
-                    }
-
-                    // Source app
-                    if let appName = item.appName {
-                        Text(appName)
-                            .font(.system(size: 10))
-                            .foregroundColor(TalkieTheme.textTertiary)
-                    }
-                }
-            }
+        HStack(spacing: 10) {
+            // Text preview - single line for compact view
+            Text(item.text.prefix(60) + (item.text.count > 60 ? "…" : ""))
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: isSelected ? 1.0 : 0.85))
+                .lineLimit(1)
 
             Spacer()
+
+            // Inline metadata
+            HStack(spacing: 6) {
+                Text(timeAgo(from: item.createdAt))
+                    .font(.system(size: 9))
+                    .foregroundColor(TalkieTheme.textMuted)
+
+                if let wordCount = item.wordCount {
+                    Text("·")
+                        .foregroundColor(TalkieTheme.textMuted)
+                    Text("\(wordCount)w")
+                        .font(.system(size: 9))
+                        .foregroundColor(TalkieTheme.textMuted)
+                }
+            }
 
             // Return key hint when selected
             if isSelected {
                 Text("↵")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(TalkieTheme.textTertiary)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 5)
                 .fill(isSelected ? Color.white.opacity(0.1) : Color.clear)
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
     }
 
     private func timeAgo(from date: Date) -> String {
