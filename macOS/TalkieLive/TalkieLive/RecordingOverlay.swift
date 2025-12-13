@@ -359,27 +359,36 @@ struct RecordingOverlayView: View {
         }
     }
 
-    // Silent mic warning - polite, non-alarming
+    // Silent mic warning - polite, non-alarming, with fix action
     private var silentMicWarning: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "waveform.slash")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(SemanticColor.warning)
+        Button(action: {
+            AudioTroubleshooterController.shared.show()
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.slash")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(SemanticColor.warning)
 
-            Text("Can't hear you")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(SemanticColor.warning.opacity(0.9))
+                Text("Can't hear you")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(SemanticColor.warning.opacity(0.9))
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(SemanticColor.warning.opacity(0.6))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.7))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(SemanticColor.warning.opacity(0.4), lineWidth: 1)
+                    )
+            )
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(SemanticColor.warning.opacity(0.4), lineWidth: 1)
-                )
-        )
+        .buttonStyle(.plain)
     }
 
     // Dynamic sizing - shrinks progressively for processing states (droplet effect)

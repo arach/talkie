@@ -18,11 +18,12 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "QuickOpen")
 struct QuickOpenTarget: Identifiable, Codable, Equatable {
     let id: String                    // Unique identifier (e.g., "claude", "chatgpt")
     var name: String                  // Display name
-    var icon: QuickOpenIcon           // Icon type
+    var bundleId: String?             // Bundle ID for getting real app icon
     var openMethod: OpenMethod        // How to open content in this app
     var isEnabled: Bool               // Whether to show in quick open bar
     var keyboardShortcut: Int?        // 1-9 for ⌘1-⌘9, nil for no shortcut
     var promptPrefix: String?         // Optional prefix (e.g., "Please help me with:")
+    var autoPaste: Bool               // Whether to auto-paste using accessibility
 
     /// How to open content in the target app
     enum OpenMethod: Codable, Equatable {
@@ -32,49 +33,13 @@ struct QuickOpenTarget: Identifiable, Codable, Equatable {
         case custom(String)                       // Custom shell command
     }
 
-    /// Icon representation
-    enum QuickOpenIcon: Codable, Equatable {
-        case asset(String)                        // Asset catalog image name
-        case symbol(String)                       // SF Symbol name
-        case initials(String, Color)              // Text initials with background color
-
-        // Codable support for Color
-        enum CodingKeys: String, CodingKey {
-            case type, value, color
+    /// Check if the app is installed
+    var isInstalled: Bool {
+        if let bundleId = bundleId {
+            return AppIconProvider.shared.isAppInstalled(bundleIdentifier: bundleId)
         }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            let type = try container.decode(String.self, forKey: .type)
-            switch type {
-            case "asset":
-                self = .asset(try container.decode(String.self, forKey: .value))
-            case "symbol":
-                self = .symbol(try container.decode(String.self, forKey: .value))
-            case "initials":
-                let value = try container.decode(String.self, forKey: .value)
-                let colorHex = try container.decode(String.self, forKey: .color)
-                self = .initials(value, Color(hex: colorHex) ?? .gray)
-            default:
-                self = .symbol("questionmark.app")
-            }
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            switch self {
-            case .asset(let name):
-                try container.encode("asset", forKey: .type)
-                try container.encode(name, forKey: .value)
-            case .symbol(let name):
-                try container.encode("symbol", forKey: .type)
-                try container.encode(name, forKey: .value)
-            case .initials(let text, let color):
-                try container.encode("initials", forKey: .type)
-                try container.encode(text, forKey: .value)
-                try container.encode(color.hexString, forKey: .color)
-            }
-        }
+        // For URL scheme targets, assume installed
+        return true
     }
 }
 
@@ -86,74 +51,82 @@ extension QuickOpenTarget {
         QuickOpenTarget(
             id: "claude",
             name: "Claude",
-            icon: .initials("C", .orange),
+            bundleId: "com.anthropic.claudefordesktop",
             openMethod: .bundleId("com.anthropic.claudefordesktop"),
             isEnabled: true,
             keyboardShortcut: 1,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: true
         ),
         QuickOpenTarget(
             id: "chatgpt",
             name: "ChatGPT",
-            icon: .initials("G", Color(hex: "#10a37f") ?? .green),
+            bundleId: "com.openai.chat",
             openMethod: .bundleId("com.openai.chat"),
             isEnabled: true,
             keyboardShortcut: 2,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: true
         ),
         QuickOpenTarget(
             id: "notes",
             name: "Notes",
-            icon: .symbol("note.text"),
+            bundleId: "com.apple.Notes",
             openMethod: .bundleId("com.apple.Notes"),
             isEnabled: true,
             keyboardShortcut: 3,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: false
         ),
         QuickOpenTarget(
             id: "obsidian",
             name: "Obsidian",
-            icon: .initials("O", .purple),
+            bundleId: "md.obsidian",
             openMethod: .urlScheme("obsidian://new?content="),
             isEnabled: false,
             keyboardShortcut: 4,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: false
         ),
         QuickOpenTarget(
             id: "bear",
             name: "Bear",
-            icon: .initials("B", Color(hex: "#c0392b") ?? .red),
+            bundleId: "net.shinyfrog.bear",
             openMethod: .urlScheme("bear://x-callback-url/create?text="),
             isEnabled: false,
             keyboardShortcut: nil,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: false
         ),
         QuickOpenTarget(
             id: "notion",
             name: "Notion",
-            icon: .initials("N", .primary),
+            bundleId: "notion.id",
             openMethod: .bundleId("notion.id"),
             isEnabled: false,
             keyboardShortcut: nil,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: true
         ),
         QuickOpenTarget(
             id: "things",
             name: "Things",
-            icon: .symbol("checkmark.circle"),
+            bundleId: "com.culturedcode.ThingsMac",
             openMethod: .urlScheme("things:///add?title=From Talkie&notes="),
             isEnabled: false,
             keyboardShortcut: nil,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: false
         ),
         QuickOpenTarget(
             id: "reminders",
             name: "Reminders",
-            icon: .symbol("checklist"),
+            bundleId: "com.apple.reminders",
             openMethod: .bundleId("com.apple.reminders"),
             isEnabled: false,
             keyboardShortcut: nil,
-            promptPrefix: nil
+            promptPrefix: nil,
+            autoPaste: false
         )
     ]
 }
@@ -216,7 +189,7 @@ class QuickOpenService: ObservableObject {
             openViaURLScheme(scheme, content: finalContent)
 
         case .bundleId(let bundleId):
-            openViaBundleId(bundleId, content: finalContent)
+            openViaBundleId(bundleId, content: finalContent, autoPaste: target.autoPaste)
 
         case .applescript(let script):
             openViaAppleScript(script, content: finalContent)
@@ -255,7 +228,7 @@ class QuickOpenService: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    private func openViaBundleId(_ bundleId: String, content: String) {
+    private func openViaBundleId(_ bundleId: String, content: String, autoPaste: Bool) {
         // Copy to clipboard first
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(content, forType: .string)
@@ -277,13 +250,132 @@ class QuickOpenService: ObservableObject {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
 
-        NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, error in
+        NSWorkspace.shared.openApplication(at: appURL, configuration: config) { [weak self] app, error in
             if let error = error {
                 logger.error("Failed to open app: \(error.localizedDescription)")
             } else {
                 logger.info("Opened app, content in clipboard")
+
+                // Auto-paste if enabled
+                if autoPaste {
+                    Task { @MainActor in
+                        // Wait for app to be ready
+                        try? await Task.sleep(for: .milliseconds(500))
+                        self?.performAutoPaste()
+                    }
+                }
             }
         }
+    }
+
+    /// Auto-paste into the frontmost app's input field
+    private func performAutoPaste() {
+        // Get the frontmost application
+        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+            logger.warning("No frontmost application")
+            return
+        }
+
+        let pid = frontApp.processIdentifier
+        let appElement = AXUIElementCreateApplication(pid)
+
+        // Try to find and focus the main text input field
+        if focusMainTextInput(in: appElement) {
+            // Small delay to ensure focus is set
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.simulatePaste()
+            }
+        } else {
+            // Fallback: just try to paste anyway (might work if input is already focused)
+            logger.info("Could not find text input, attempting paste anyway")
+            simulatePaste()
+        }
+    }
+
+    /// Find and focus the main text input field in an app
+    private func focusMainTextInput(in appElement: AXUIElement) -> Bool {
+        // First try to get the focused window
+        var focusedWindow: CFTypeRef?
+        let windowResult = AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &focusedWindow)
+
+        let searchElement: AXUIElement
+        if windowResult == .success, let window = focusedWindow {
+            searchElement = (window as! AXUIElement)
+        } else {
+            searchElement = appElement
+        }
+
+        // Search for text fields/text areas
+        if let textInput = findTextInput(in: searchElement) {
+            // Focus the text input
+            AXUIElementSetAttributeValue(textInput, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+            logger.info("Focused text input field")
+            return true
+        }
+
+        return false
+    }
+
+    /// Recursively search for a text input element
+    private func findTextInput(in element: AXUIElement, depth: Int = 0) -> AXUIElement? {
+        guard depth < 15 else { return nil } // Prevent infinite recursion
+
+        // Check the role of this element
+        var roleRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
+
+        if let role = roleRef as? String {
+            // Look for text fields, text areas, or combo boxes
+            if role == kAXTextFieldRole as String ||
+               role == kAXTextAreaRole as String ||
+               role == "AXWebArea" {  // For Electron apps like Claude/ChatGPT
+
+                // Check if it's enabled/editable
+                var enabledRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXEnabledAttribute as CFString, &enabledRef)
+                if let enabled = enabledRef as? Bool, enabled {
+                    return element
+                }
+                // If no enabled attribute, assume it's editable
+                return element
+            }
+        }
+
+        // Get children and search recursively
+        var childrenRef: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef)
+
+        guard result == .success, let children = childrenRef as? [AXUIElement] else {
+            return nil
+        }
+
+        // For web-based apps, prioritize certain elements
+        for child in children {
+            if let found = findTextInput(in: child, depth: depth + 1) {
+                return found
+            }
+        }
+
+        return nil
+    }
+
+    /// Simulate Cmd+V keystroke
+    private func simulatePaste() {
+        let source = CGEventSource(stateID: .hidSystemState)
+
+        // Key down: V with Cmd modifier
+        if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) {
+            keyDown.flags = .maskCommand
+            keyDown.post(tap: .cghidEventTap)
+        }
+
+        // Key up: V
+        if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) {
+            keyUp.flags = .maskCommand
+            keyUp.post(tap: .cghidEventTap)
+        }
+
+        logger.info("Simulated Cmd+V paste")
     }
 
     private func openViaAppleScript(_ script: String, content: String) {
@@ -344,33 +436,5 @@ class QuickOpenService: ObservableObject {
             let indexB = newOrder.firstIndex(of: b.id) ?? Int.max
             return indexA < indexB
         }
-    }
-}
-
-// MARK: - Color Hex Extension
-
-extension Color {
-    init?(hex: String) {
-        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
-
-        var rgb: UInt64 = 0
-        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
-
-        let r = Double((rgb & 0xFF0000) >> 16) / 255.0
-        let g = Double((rgb & 0x00FF00) >> 8) / 255.0
-        let b = Double(rgb & 0x0000FF) / 255.0
-
-        self.init(red: r, green: g, blue: b)
-    }
-
-    var hexString: String {
-        guard let components = NSColor(self).cgColor.components, components.count >= 3 else {
-            return "#808080"
-        }
-        let r = Int(components[0] * 255)
-        let g = Int(components[1] * 255)
-        let b = Int(components[2] * 255)
-        return String(format: "#%02X%02X%02X", r, g, b)
     }
 }

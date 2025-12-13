@@ -77,12 +77,19 @@ struct EmbeddedSettingsView: View {
                         ) {
                             selectedSection = .overlay
                         }
+                        EmbeddedSettingsRow(
+                            icon: "mic",
+                            title: "Audio",
+                            isSelected: selectedSection == .audio
+                        ) {
+                            selectedSection = .audio
+                        }
 
                         // SYSTEM
                         EmbeddedSettingsSectionHeader(title: "SYSTEM")
                         EmbeddedSettingsRow(
-                            icon: "server.rack",
-                            title: "Engine",
+                            icon: "waveform",
+                            title: "Transcription",
                             isSelected: selectedSection == .engine
                         ) {
                             selectedSection = .engine
@@ -125,6 +132,8 @@ struct EmbeddedSettingsView: View {
                     OutputSettingsSection()
                 case .overlay:
                     OverlaySettingsSection()
+                case .audio:
+                    AudioSettingsSection()
                 case .engine:
                     EngineSettingsSection()
                 case .storage:
@@ -204,8 +213,9 @@ enum SettingsSection: String, Hashable, CaseIterable {
     case sounds
     case output
     case overlay
+    case audio  // Microphone & audio troubleshooting
     // System
-    case engine
+    case engine  // Now "Transcription" - AI models
     case storage
     case about
 
@@ -216,7 +226,8 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .sounds: return "SOUNDS"
         case .output: return "OUTPUT"
         case .overlay: return "OVERLAY"
-        case .engine: return "ENGINE"
+        case .audio: return "AUDIO"
+        case .engine: return "TRANSCRIPTION"
         case .storage: return "STORAGE"
         case .about: return "ABOUT"
         }
@@ -229,7 +240,8 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .sounds: return "speaker.wave.2"
         case .output: return "arrow.right.doc.on.clipboard"
         case .overlay: return "rectangle.inset.topright.filled"
-        case .engine: return "server.rack"
+        case .audio: return "mic"
+        case .engine: return "waveform"
         case .storage: return "folder"
         case .about: return "info.circle"
         }
@@ -311,6 +323,13 @@ struct SettingsView: View {
                             ) {
                                 selectedSection = .overlay
                             }
+                            SettingsSidebarItem(
+                                icon: "mic",
+                                title: "AUDIO",
+                                isSelected: selectedSection == .audio
+                            ) {
+                                selectedSection = .audio
+                            }
                         }
 
                         // SYSTEM
@@ -319,8 +338,8 @@ struct SettingsView: View {
                             isActive: selectedSection == .engine || selectedSection == .storage || selectedSection == .about
                         ) {
                             SettingsSidebarItem(
-                                icon: "server.rack",
-                                title: "ENGINE",
+                                icon: "waveform",
+                                title: "TRANSCRIPTION",
                                 isSelected: selectedSection == .engine
                             ) {
                                 selectedSection = .engine
@@ -368,6 +387,8 @@ struct SettingsView: View {
                         OutputSettingsSection()
                     case .overlay:
                         OverlaySettingsSection()
+                    case .audio:
+                        AudioSettingsSection()
                     case .engine:
                         EngineSettingsSection()
                     case .storage:
@@ -1969,156 +1990,28 @@ struct WhisperModelRow: View {
     }
 }
 
-// MARK: - Engine Settings Section
+// MARK: - Audio Settings Section
 
-struct EngineSettingsSection: View {
-    @ObservedObject private var settings = LiveSettings.shared
-    @ObservedObject private var engineClient = EngineClient.shared
+struct AudioSettingsSection: View {
     @ObservedObject private var audioDevices = AudioDeviceManager.shared
-    @StateObject private var whisperService = WhisperService.shared
-    @State private var downloadingModelId: String?
-    @State private var downloadTask: Task<Void, Never>?
 
-    /// Group available models by family
-    private var modelsByFamily: [String: [ModelInfo]] {
-        Dictionary(grouping: engineClient.availableModels) { $0.family }
+    private var selectedDeviceName: String {
+        if let device = audioDevices.inputDevices.first(where: { $0.id == audioDevices.selectedDeviceID }) {
+            return device.name
+        } else if let defaultDevice = audioDevices.inputDevices.first(where: { $0.isDefault }) {
+            return defaultDevice.name
+        }
+        return "System Default"
     }
 
     var body: some View {
         SettingsPageContainer {
             SettingsPageHeader(
-                icon: "server.rack",
-                title: "ENGINE",
-                subtitle: "Transcription engine status and model management."
+                icon: "mic",
+                title: "AUDIO",
+                subtitle: "Microphone selection and audio troubleshooting."
             )
         } content: {
-            // Engine Connection Status
-            SettingsCard(title: "ENGINE STATUS") {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    // Connection state
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(engineStatusColor)
-                                    .frame(width: 8, height: 8)
-                                Text(engineClient.connectionState.rawValue)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(TalkieTheme.textPrimary)
-                            }
-
-                            if engineClient.isConnected, let status = engineClient.status {
-                                HStack(spacing: 6) {
-                                    Text("PID \(String(status.pid))")
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(TalkieTheme.textTertiary)
-                                    Text("•")
-                                        .foregroundColor(TalkieTheme.textMuted)
-                                    Text(status.bundleId)
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(TalkieTheme.textTertiary)
-
-                                    // Show Engine's dev/prod status
-                                    if let isDebug = status.isDebugBuild {
-                                        Text(isDebug ? "DEV" : "PROD")
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundColor(isDebug ? SemanticColor.warning : SemanticColor.success)
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 2)
-                                            .background(isDebug ? SemanticColor.warning.opacity(0.2) : SemanticColor.success.opacity(0.2))
-                                            .cornerRadius(3)
-                                    }
-                                }
-                            } else if let error = engineClient.lastError {
-                                Text(error)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(SemanticColor.error.opacity(0.8))
-                            } else {
-                                Text("TalkieEngine daemon not running")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(TalkieTheme.textTertiary)
-                            }
-                        }
-
-                        Spacer()
-
-                        // Reconnect button
-                        Button(action: {
-                            engineClient.reconnect()
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 10))
-                                Text(engineClient.isConnected ? "Refresh" : "Connect")
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                            .foregroundColor(.accentColor)
-                            .padding(.horizontal, Spacing.sm)
-                            .padding(.vertical, 6)
-                            .background(Color.accentColor.opacity(0.15))
-                            .cornerRadius(CornerRadius.xs)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if engineClient.isConnected, let status = engineClient.status {
-                        Divider()
-                            .background(TalkieTheme.surfaceElevated)
-
-                        // Engine process stats (from Engine itself)
-                        HStack(spacing: Spacing.lg) {
-                            EngineStatBadge(
-                                icon: "clock",
-                                label: "Engine Uptime",
-                                value: status.uptimeFormatted
-                            )
-
-                            EngineStatBadge(
-                                icon: "text.bubble",
-                                label: "Transcriptions",
-                                value: "\(status.totalTranscriptions)"
-                            )
-
-                            if let memory = status.memoryFormatted {
-                                EngineStatBadge(
-                                    icon: "memorychip",
-                                    label: "Memory",
-                                    value: memory
-                                )
-                            }
-                        }
-
-                        // Client session stats
-                        if engineClient.transcriptionCount > 0 {
-                            Divider()
-                                .background(TalkieTheme.surfaceElevated)
-
-                            HStack(spacing: Spacing.lg) {
-                                EngineStatBadge(
-                                    icon: "link",
-                                    label: "Session",
-                                    value: formatUptime(engineClient.connectedAt)
-                                )
-
-                                EngineStatBadge(
-                                    icon: "waveform",
-                                    label: "This Session",
-                                    value: "\(engineClient.transcriptionCount)"
-                                )
-
-                                if let lastAt = engineClient.lastTranscriptionAt {
-                                    EngineStatBadge(
-                                        icon: "checkmark.circle",
-                                        label: "Last",
-                                        value: formatTimeAgo(lastAt)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
             // Microphone Selection
             SettingsCard(title: "MICROPHONE") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -2169,6 +2062,120 @@ struct EngineSettingsSection: View {
                         }
                         .menuStyle(.borderlessButton)
                         .fixedSize()
+                    }
+                }
+            }
+
+            // Troubleshooting
+            SettingsCard(title: "TROUBLESHOOTING") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Audio Diagnostics")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(TalkieTheme.textPrimary)
+                            Text("Check input levels, permissions, and fix common issues")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            AudioTroubleshooterController.shared.show()
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "wrench.and.screwdriver")
+                                    .font(.system(size: 11))
+                                Text("Run Diagnostics")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(TalkieTheme.textPrimary)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, 6)
+                            .background(TalkieTheme.surfaceElevated)
+                            .cornerRadius(CornerRadius.xs)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Transcription Settings Section
+
+struct EngineSettingsSection: View {
+    @ObservedObject private var settings = LiveSettings.shared
+    @ObservedObject private var engineClient = EngineClient.shared
+    @ObservedObject private var audioDevices = AudioDeviceManager.shared
+    @StateObject private var whisperService = WhisperService.shared
+    @State private var downloadingModelId: String?
+    @State private var downloadTask: Task<Void, Never>?
+
+    /// Group available models by family
+    private var modelsByFamily: [String: [ModelInfo]] {
+        Dictionary(grouping: engineClient.availableModels) { $0.family }
+    }
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "waveform",
+                title: "TRANSCRIPTION",
+                subtitle: "Speech recognition models and settings."
+            )
+        } content: {
+            // Service Status - simplified, user-friendly
+            SettingsCard(title: "STATUS") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(engineStatusColor)
+                                    .frame(width: 8, height: 8)
+                                Text(engineClient.isConnected ? "Ready" : "Connecting...")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(TalkieTheme.textPrimary)
+                            }
+
+                            if engineClient.isConnected, let status = engineClient.status {
+                                Text("\(status.totalTranscriptions) transcriptions processed")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(TalkieTheme.textTertiary)
+                            } else if let error = engineClient.lastError {
+                                Text(error)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(SemanticColor.error.opacity(0.8))
+                            } else {
+                                Text("Starting transcription service...")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(TalkieTheme.textTertiary)
+                            }
+                        }
+
+                        Spacer()
+
+                        if !engineClient.isConnected {
+                            Button(action: {
+                                engineClient.reconnect()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 10))
+                                    Text("Retry")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .foregroundColor(.accentColor)
+                                .padding(.horizontal, Spacing.sm)
+                                .padding(.vertical, 6)
+                                .background(Color.accentColor.opacity(0.15))
+                                .cornerRadius(CornerRadius.xs)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }

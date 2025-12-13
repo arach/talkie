@@ -153,8 +153,16 @@ private struct QuickOpenButton: View {
                         .font(.system(size: compact ? 9 : 10, weight: .bold))
                         .foregroundColor(.green)
                 } else {
-                    // Normal state - icon
-                    targetIcon
+                    // Normal state - real app icon
+                    if let bundleId = target.bundleId {
+                        AppIconView(bundleIdentifier: bundleId, size: compact ? 16 : 20)
+                            .opacity(target.isInstalled ? 1.0 : 0.4)
+                    } else {
+                        // Fallback to generic icon
+                        Image(systemName: "app")
+                            .font(.system(size: compact ? 11 : 13))
+                            .foregroundColor(isHovered ? .primary : .secondary)
+                    }
                 }
             }
             .frame(width: compact ? 20 : 24, height: compact ? 20 : 24)
@@ -172,38 +180,17 @@ private struct QuickOpenButton: View {
                     .offset(x: 2, y: 2)
             }
         }
-    }
-
-    @ViewBuilder
-    private var targetIcon: some View {
-        switch target.icon {
-        case .asset(let name):
-            Image(name)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: compact ? 16 : 18, height: compact ? 16 : 18)
-
-        case .symbol(let name):
-            Image(systemName: name)
-                .font(.system(size: compact ? 11 : 13))
-                .foregroundColor(isHovered ? .primary : .secondary)
-
-        case .initials(let text, let color):
-            Text(text)
-                .font(.system(size: compact ? 9 : 10, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(width: compact ? 16 : 18, height: compact ? 16 : 18)
-                .background(
-                    RoundedRectangle(cornerRadius: compact ? 3 : 4)
-                        .fill(color)
-                )
-        }
+        // Dim if app not installed
+        .opacity(target.isInstalled ? 1.0 : 0.5)
     }
 
     private var helpText: String {
         var text = "Open in \(target.name)"
         if let shortcut = target.keyboardShortcut {
             text += " (⌘\(shortcut))"
+        }
+        if !target.isInstalled {
+            text += " (not installed)"
         }
         return text
     }

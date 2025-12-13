@@ -188,35 +188,18 @@ private struct QuickOpenTargetRow: View {
 
     @ViewBuilder
     private var targetIcon: some View {
-        switch target.icon {
-        case .asset(let name):
-            Image(name)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 18, height: 18)
-
-        case .symbol(let name):
-            Image(systemName: name)
+        if let bundleId = target.bundleId {
+            AppIconView(bundleIdentifier: bundleId, size: 22)
+                .opacity(target.isInstalled ? 1.0 : 0.4)
+        } else {
+            Image(systemName: "app")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
-
-        case .initials(let text, let color):
-            Text(text)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(width: 18, height: 18)
-                .background(color)
-                .cornerRadius(4)
         }
     }
 
     private var iconBackgroundColor: Color {
-        switch target.icon {
-        case .initials(_, let color):
-            return color.opacity(0.15)
-        default:
-            return Color.secondary.opacity(0.1)
-        }
+        Color.clear // Real app icons don't need a background
     }
 
     private var openMethodDescription: String {

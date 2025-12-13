@@ -164,7 +164,7 @@ struct WorkflowToggle: View {
     }
 }
 
-// MARK: - Compact Toggle (icon-based)
+// MARK: - Compact Toggle (with actual switch)
 
 struct CompactToggle: View {
     @Binding var isOn: Bool
@@ -173,20 +173,18 @@ struct CompactToggle: View {
     let activeColor: Color
 
     var body: some View {
-        Button(action: { isOn.toggle() }) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 10))
-                Text(label)
-                    .font(.techLabelSmall)
-            }
-            .foregroundColor(isOn ? .white : .secondary)
-            .padding(.horizontal, Spacing.xs)
-            .padding(.vertical, 4)
-            .background(isOn ? activeColor : Color.secondary.opacity(0.15))
-            .cornerRadius(CornerRadius.xs)
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundColor(isOn ? activeColor : .secondary.opacity(0.5))
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(isOn ? .primary : .secondary)
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -247,12 +245,12 @@ struct WorkflowIconColorPicker: View {
                         .font(.techLabelSmall)
                         .foregroundColor(.secondary.opacity(0.6))
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         ForEach(WorkflowColor.allCases, id: \.self) { color in
                             Button(action: { selectedColor = color }) {
                                 Circle()
                                     .fill(color.color)
-                                    .frame(width: 24, height: 24)
+                                    .frame(width: 20, height: 20)
                                     .overlay(
                                         Circle()
                                             .strokeBorder(selectedColor == color ? Color.primary : Color.clear, lineWidth: 2)
@@ -265,37 +263,40 @@ struct WorkflowIconColorPicker: View {
 
                 Divider()
 
-                // Icon selector
+                // Icon selector with scroll
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("ICON")
                         .font(.techLabelSmall)
                         .foregroundColor(.secondary.opacity(0.6))
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Self.iconCategories, id: \.name) { category in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(category.name.uppercased())
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.secondary.opacity(0.6))
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Self.iconCategories, id: \.name) { category in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(category.name.uppercased())
+                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.secondary.opacity(0.6))
 
-                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 4), count: 6), spacing: 4) {
-                                    ForEach(category.icons, id: \.self) { icon in
-                                        Button(action: {
-                                            selectedIcon = icon
-                                        }) {
-                                            Image(systemName: icon)
-                                                .font(.system(size: 12))
-                                                .foregroundColor(selectedIcon == icon ? selectedColor.color : .secondary)
-                                                .frame(width: 28, height: 28)
-                                                .background(selectedIcon == icon ? selectedColor.color.opacity(0.2) : Color.secondary.opacity(0.1))
-                                                .cornerRadius(4)
+                                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(26), spacing: 4), count: 6), spacing: 4) {
+                                        ForEach(category.icons, id: \.self) { icon in
+                                            Button(action: {
+                                                selectedIcon = icon
+                                            }) {
+                                                Image(systemName: icon)
+                                                    .font(.system(size: 11))
+                                                    .foregroundColor(selectedIcon == icon ? selectedColor.color : .secondary)
+                                                    .frame(width: 26, height: 26)
+                                                    .background(selectedIcon == icon ? selectedColor.color.opacity(0.2) : Color.secondary.opacity(0.1))
+                                                    .cornerRadius(4)
+                                            }
+                                            .buttonStyle(.plain)
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
                         }
                     }
+                    .frame(maxHeight: 200)
                 }
 
                 Divider()
@@ -312,11 +313,10 @@ struct WorkflowIconColorPicker: View {
                         .padding(.vertical, 4)
                         .background(Color.secondary.opacity(0.1))
                         .cornerRadius(4)
-                        .frame(width: 140)
                 }
             }
             .padding(12)
-            .frame(width: 230)
+            .frame(width: 210)
         }
     }
 }

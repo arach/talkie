@@ -4,6 +4,7 @@ import SwiftUI
 struct TalkieLiveApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var onboarding = OnboardingManager.shared
+    @StateObject private var troubleshooter = AudioTroubleshooterController.shared
 
     var body: some Scene {
         // Main window - History (hidden title for cleaner look)
@@ -11,6 +12,9 @@ struct TalkieLiveApp: App {
             mainContent
                 .sheet(isPresented: $onboarding.shouldShowOnboarding) {
                     OnboardingView()
+                }
+                .sheet(isPresented: $troubleshooter.isShowing) {
+                    AudioTroubleshooterView()
                 }
         }
         .windowStyle(.hiddenTitleBar)

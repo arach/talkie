@@ -444,11 +444,20 @@ struct FloatingPillView: View {
             // Content varies by state
             if controller.state == .listening {
                 if audioMonitor.isSilent {
-                    // Silent mic warning
-                    Text("NO AUDIO")
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(0.5)
+                    // Silent mic warning with troubleshoot action
+                    Button(action: {
+                        AudioTroubleshooterController.shared.show()
+                    }) {
+                        HStack(spacing: 4) {
+                            Text("NO AUDIO")
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(0.5)
+                            Image(systemName: "wrench.and.screwdriver")
+                                .font(.system(size: 8, weight: .medium))
+                        }
                         .foregroundColor(SemanticColor.warning)
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     // Timer with audio level indicator
                     HStack(spacing: 3) {
@@ -501,22 +510,15 @@ struct FloatingPillView: View {
         )
     }
 
-    // Mini audio level indicator bar
+    // Mini audio level indicator bar - subtle, monochrome
     private var audioLevelIndicator: some View {
         GeometryReader { geo in
             RoundedRectangle(cornerRadius: 1)
-                .fill(levelColor)
-                .frame(width: max(2, geo.size.width * CGFloat(audioMonitor.level)), height: 4)
-                .animation(.easeOut(duration: 0.05), value: audioMonitor.level)
+                .fill(TalkieTheme.textTertiary.opacity(0.5 + Double(audioMonitor.level) * 0.4))
+                .frame(width: max(2, geo.size.width * CGFloat(audioMonitor.level)), height: 3)
+                .animation(.easeOut(duration: 0.08), value: audioMonitor.level)
         }
-        .frame(width: 16, height: 4)
-    }
-
-    private var levelColor: Color {
-        let level = audioMonitor.level
-        if level > 0.8 { return SemanticColor.error }
-        if level > 0.5 { return SemanticColor.warning }
-        return SemanticColor.success
+        .frame(width: 14, height: 3)
     }
 
     private var truncatedMicName: String {
