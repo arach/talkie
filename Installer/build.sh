@@ -23,7 +23,7 @@ PACKAGES_DIR="$SCRIPT_DIR/packages"
 RESOURCES_DIR="$SCRIPT_DIR/resources"
 
 # Version
-VERSION="${VERSION:-1.5.0}"
+VERSION="${VERSION:-1.5.4}"
 
 # Target: full (default), core, live, or all
 TARGET="${1:-full}"
@@ -213,7 +213,7 @@ cp -R "$LIVE_APP" "$STAGING_DIR/live/Applications/"
 sign_app "$STAGING_DIR/live/Applications/TalkieLive.app"
 
 # ═══════════════════════════════════════════════════════════
-# BUILD TALKIE CORE
+# BUILD TALKIE CORE (uses archive/export for iCloud entitlements)
 # ═══════════════════════════════════════════════════════════
 echo ""
 echo "🔧 Building Talkie (Core)..."
@@ -224,26 +224,56 @@ if [ -f "project.yml" ]; then
     xcodegen generate 2>/dev/null || true
 fi
 
-xcodebuild -project Talkie.xcodeproj \
-    -scheme Talkie \
-    -configuration Release \
-    -derivedDataPath "$BUILD_DIR/TalkieCore" \
-    -arch arm64 \
-    $BUILD_ACTION 2>&1 | grep -E "(error:|warning:|BUILD)" || true
+# Talkie Core has iCloud entitlements which require proper provisioning
+# Use archive → export workflow so Xcode handles signing correctly
+# Archives are versioned so you can compare builds (clean up old versions manually)
+CORE_ARCHIVE="$BUILD_DIR/TalkieCore/Talkie-$VERSION.xcarchive"
+CORE_EXPORT="$BUILD_DIR/TalkieCore/Export-$VERSION"
+CORE_APP="$CORE_EXPORT/Talkie.app"
 
-CORE_APP="$BUILD_DIR/TalkieCore/Build/Products/Release/Talkie.app"
-if [ ! -d "$CORE_APP" ]; then
-    echo "❌ Talkie Core build failed"
-    exit 1
+# SKIP_CLEAN: reuse existing export if available (archive builds are always full)
+if [ "$SKIP_CLEAN" = "1" ] && [ -d "$CORE_APP" ]; then
+    echo "  ⏭️  Reusing existing Talkie.app export (SKIP_CLEAN=1)"
+else
+    echo "  📦 Creating archive..."
+    xcodebuild -project Talkie.xcodeproj \
+        -scheme Talkie \
+        -configuration Release \
+        -archivePath "$CORE_ARCHIVE" \
+        -arch arm64 \
+        archive 2>&1 | grep -E "(error:|warning:|ARCHIVE)" || true
+
+    if [ ! -d "$CORE_ARCHIVE" ]; then
+        echo "❌ Talkie Core archive failed"
+        exit 1
+    fi
+
+    echo "  📤 Exporting with Developer ID..."
+    xcodebuild -exportArchive \
+        -archivePath "$CORE_ARCHIVE" \
+        -exportPath "$CORE_EXPORT" \
+        -exportOptionsPlist "$SCRIPT_DIR/exportOptions-core.plist" \
+        2>&1 | grep -E "(error:|warning:|EXPORT)" || true
+
+    if [ ! -d "$CORE_APP" ]; then
+        echo "❌ Talkie Core export failed"
+        exit 1
+    fi
+    echo "✅ Talkie Core built and signed via Xcode export"
 fi
-echo "✅ Talkie Core built"
 
-# Stage Core - goes to /Applications
+# Stage Core - goes to /Applications (already properly signed by Xcode)
+rm -rf "$STAGING_DIR/core"
 mkdir -p "$STAGING_DIR/core/Applications"
 cp -R "$CORE_APP" "$STAGING_DIR/core/Applications/"
 
-# Sign the staged app
-sign_app "$STAGING_DIR/core/Applications/Talkie.app"
+# Verify signature (no re-signing needed - Xcode handled it)
+echo "  🔍 Verifying signature..."
+if codesign --verify --deep --strict "$STAGING_DIR/core/Applications/Talkie.app" 2>/dev/null; then
+    echo "  ✅ Talkie.app signature verified"
+else
+    echo "  ⚠️  Signature verification issue"
+fi
 
 # ═══════════════════════════════════════════════════════════
 # CREATE COMPONENT PACKAGES

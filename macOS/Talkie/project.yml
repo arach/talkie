@@ -56,7 +56,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.core
-        MARKETING_VERSION: "1.1.0"
+        MARKETING_VERSION: "1.5.4"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
