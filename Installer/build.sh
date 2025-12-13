@@ -5,10 +5,11 @@ set -e
 # Builds all components with proper signing and notarization
 #
 # Usage:
-#   ./build.sh              # Build full installer (all 3 apps)
+#   ./build.sh              # Build full installer (all 3 apps separate)
+#   ./build.sh unified      # Build unified bundle (single Talkie.app with embedded helpers)
 #   ./build.sh core         # Build Talkie-Core installer (Engine + Core)
 #   ./build.sh live         # Build Talkie-Live installer (Engine + Live)
-#   ./build.sh all          # Build all 3 installers
+#   ./build.sh all          # Build all installers
 #
 # Environment variables:
 #   VERSION=1.3.0           # Set version (default: 1.5.0)
@@ -46,9 +47,9 @@ if [ "$SKIP_CLEAN" = "1" ]; then
 fi
 
 # Validate target
-if [[ ! "$TARGET" =~ ^(full|core|live|all)$ ]]; then
+if [[ ! "$TARGET" =~ ^(full|unified|core|live|all)$ ]]; then
     echo "❌ Invalid target: $TARGET"
-    echo "   Valid targets: full, core, live, all"
+    echo "   Valid targets: full, unified, core, live, all"
     exit 1
 fi
 
@@ -276,6 +277,75 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════
+# CREATE UNIFIED BUNDLE (if target is unified)
+# ═══════════════════════════════════════════════════════════
+if [ "$TARGET" = "unified" ] || [ "$TARGET" = "all" ]; then
+    echo ""
+    echo "📦 Creating unified Talkie.app bundle..."
+
+    # Create unified staging directory
+    rm -rf "$STAGING_DIR/unified"
+    mkdir -p "$STAGING_DIR/unified/Applications"
+
+    # Copy main Talkie.app
+    cp -R "$STAGING_DIR/core/Applications/Talkie.app" "$STAGING_DIR/unified/Applications/"
+
+    UNIFIED_APP="$STAGING_DIR/unified/Applications/Talkie.app"
+    LOGIN_ITEMS_DIR="$UNIFIED_APP/Contents/Library/LoginItems"
+
+    # Create LoginItems directory
+    mkdir -p "$LOGIN_ITEMS_DIR"
+
+    # Copy helper apps into LoginItems
+    echo "  📁 Embedding TalkieEngine.app..."
+    cp -R "$STAGING_DIR/engine/Applications/TalkieEngine.app" "$LOGIN_ITEMS_DIR/"
+
+    echo "  📁 Embedding TalkieLive.app..."
+    cp -R "$STAGING_DIR/live/Applications/TalkieLive.app" "$LOGIN_ITEMS_DIR/"
+
+    # Re-sign embedded helper apps (they need to be signed when embedded)
+    echo "  🔏 Re-signing embedded helpers..."
+
+    # Sign TalkieEngine
+    codesign --force --options runtime --timestamp \
+        --sign "$DEVELOPER_ID_APP" \
+        "$LOGIN_ITEMS_DIR/TalkieEngine.app"
+    echo "    ✅ TalkieEngine.app signed"
+
+    # Sign TalkieLive
+    codesign --force --options runtime --timestamp \
+        --sign "$DEVELOPER_ID_APP" \
+        "$LOGIN_ITEMS_DIR/TalkieLive.app"
+    echo "    ✅ TalkieLive.app signed"
+
+    # Re-sign the main bundle (must be done last, after embedding)
+    echo "  🔏 Re-signing unified Talkie.app..."
+    codesign --force --options runtime --timestamp --deep \
+        --sign "$DEVELOPER_ID_APP" \
+        --entitlements "$ROOT_DIR/macOS/Talkie/Talkie.entitlements" \
+        "$UNIFIED_APP"
+
+    # Verify unified bundle signature
+    echo "  🔍 Verifying unified bundle signature..."
+    if codesign --verify --deep --strict "$UNIFIED_APP" 2>/dev/null; then
+        echo "  ✅ Unified Talkie.app signature verified"
+    else
+        echo "  ⚠️  Unified bundle signature verification issue"
+    fi
+
+    # Show bundle structure
+    echo "  📂 Unified bundle structure:"
+    echo "     Talkie.app/"
+    echo "       └── Contents/"
+    echo "           └── Library/"
+    echo "               └── LoginItems/"
+    echo "                   ├── TalkieEngine.app"
+    echo "                   └── TalkieLive.app"
+
+    echo "✅ Unified bundle created"
+fi
+
+# ═══════════════════════════════════════════════════════════
 # CREATE COMPONENT PACKAGES
 # ═══════════════════════════════════════════════════════════
 echo ""
@@ -354,6 +424,33 @@ pkgbuild --root "$STAGING_DIR/core" \
     --install-location "/" \
     "$PACKAGES_DIR/TalkieCore.pkg"
 echo "  ✅ TalkieCore.pkg"
+
+# TalkieUnified package (only if building unified)
+if [ "$TARGET" = "unified" ] || [ "$TARGET" = "all" ]; then
+    # Create component plist for unified bundle
+    cat > "$STAGING_DIR/unified-components.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+    <dict>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/Talkie.app</string>
+    </dict>
+</array>
+</plist>
+PLIST
+
+    pkgbuild --root "$STAGING_DIR/unified" \
+        --component-plist "$STAGING_DIR/unified-components.plist" \
+        --identifier "jdi.talkie.unified" \
+        --version "$VERSION" \
+        --install-location "/" \
+        "$PACKAGES_DIR/TalkieUnified.pkg"
+    echo "  ✅ TalkieUnified.pkg"
+fi
 
 # ═══════════════════════════════════════════════════════════
 # FUNCTION: Build, sign, notarize a distribution package
@@ -434,6 +531,11 @@ fi
 if [ "$TARGET" = "live" ] || [ "$TARGET" = "all" ]; then
     build_distribution "distribution-live.xml" "Talkie-Live"
     BUILT_PACKAGES+=("Talkie-Live.pkg")
+fi
+
+if [ "$TARGET" = "unified" ] || [ "$TARGET" = "all" ]; then
+    build_distribution "distribution-unified.xml" "Talkie-Unified"
+    BUILT_PACKAGES+=("Talkie-Unified.pkg")
 fi
 
 # ═══════════════════════════════════════════════════════════

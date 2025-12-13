@@ -30,6 +30,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // Set up CloudKit subscription for instant sync
         setupCloudKitSubscription()
+
+        // Ensure helper apps (TalkieLive, TalkieEngine) are running
+        // This registers them as login items and launches them if needed
+        Task { @MainActor in
+            AppLauncher.shared.ensureHelpersRunning()
+        }
     }
 
     private func configureWindowAppearance() {

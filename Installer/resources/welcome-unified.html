@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-card: rgba(0,0,0,0.03);
+            --border-card: rgba(0,0,0,0.08);
+            --text-primary: #1a1a1a;
+            --text-secondary: #525252;
+            --text-muted: #71717a;
+            --logo-bg: #1a1a1a;
+            --logo-fill: #ffffff;
+            --accent: #007AFF;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-primary: #ffffff;
+                --bg-card: rgba(255,255,255,0.05);
+                --border-card: rgba(255,255,255,0.1);
+                --text-primary: #ffffff;
+                --text-secondary: rgba(255,255,255,0.7);
+                --text-muted: rgba(255,255,255,0.5);
+                --logo-bg: #ffffff;
+                --logo-fill: #0a0a0a;
+                --accent: #0A84FF;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            padding: 24px 28px;
+            background: transparent;
+            color: var(--text-primary);
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: var(--logo-bg);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--logo-fill);
+        }
+
+        .brand {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+        }
+
+        .badge {
+            background: var(--accent);
+            color: white;
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 8px;
+        }
+
+        .tagline {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .section-label {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .features {
+            margin: 0;
+        }
+
+        .feature {
+            margin-bottom: 14px;
+            line-height: 1.5;
+        }
+
+        .feature-icon {
+            display: inline;
+            font-size: 10px;
+            margin-right: 10px;
+        }
+
+        .feature-icon.unified { color: #007AFF; }
+        .feature-icon.live { color: #30d158; }
+        .feature-icon.engine { color: #af52de; }
+
+        .feature-name {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .highlight {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-top: 16px;
+        }
+
+        .highlight-text {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+        </div>
+        <span class="brand">Talkie_OS</span>
+        <span class="badge">Unified</span>
+    </div>
+
+    <p class="tagline">The complete Talkie experience in a single app. Voice memos, live capture, transcription, and AI workflows - all in one.</p>
+
+    <div class="section-label">Included Components</div>
+
+    <div class="features">
+        <div class="feature">
+            <span class="feature-icon unified">●</span> <span class="feature-name">Talkie:</span> <span class="feature-desc">Voice memo library with iCloud sync, workflows, and AI-powered actions.</span>
+        </div>
+
+        <div class="feature">
+            <span class="feature-icon live">●</span> <span class="feature-name">Talkie Live:</span> <span class="feature-desc">Always-on voice capture with instant paste. Speak anywhere, paste everywhere.</span>
+        </div>
+
+        <div class="feature">
+            <span class="feature-icon engine">●</span> <span class="feature-name">Talkie Engine:</span> <span class="feature-desc">Background transcription service. Private, fast, and fully offline.</span>
+        </div>
+    </div>
+
+    <div class="highlight">
+        <div class="highlight-text">
+            This unified installer places everything in a single Talkie.app bundle. Helper apps start automatically at login - no configuration needed.
+        </div>
+    </div>
+</body>
+</html>

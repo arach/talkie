@@ -17,6 +17,7 @@ enum SettingsSection: String, Hashable {
     case allowedCommands
     case outputSettings
     case localFiles
+    case helperApps
     case permissions
     case debugInfo
 }
@@ -124,7 +125,14 @@ struct SettingsView: View {
                         }
 
                         // SYSTEM
-                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .permissions || selectedSection == .debugInfo) {
+                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helperApps || selectedSection == .permissions || selectedSection == .debugInfo) {
+                            SettingsSidebarItem(
+                                icon: "app.connected.to.app.below.fill",
+                                title: "HELPER APPS",
+                                isSelected: selectedSection == .helperApps
+                            ) {
+                                selectedSection = .helperApps
+                            }
                             SettingsSidebarItem(
                                 icon: "lock.shield",
                                 title: "PERMISSIONS",
@@ -174,6 +182,8 @@ struct SettingsView: View {
                         OutputSettingsView()
                     case .localFiles:
                         LocalFilesSettingsView()
+                    case .helperApps:
+                        HelperAppsSettingsView()
                     case .permissions:
                         PermissionsSettingsView()
                     case .debugInfo:

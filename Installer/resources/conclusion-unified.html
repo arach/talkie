@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --bg-card: rgba(0,0,0,0.03);
+            --bg-step: rgba(0,0,0,0.06);
+            --border-card: rgba(0,0,0,0.08);
+            --text-primary: #1a1a1a;
+            --text-body: #3f3f46;
+            --text-secondary: #525252;
+            --text-muted: #71717a;
+            --logo-bg: #1a1a1a;
+            --logo-fill: #ffffff;
+            --badge-bg: rgba(34,197,94,0.12);
+            --badge-text: #16a34a;
+            --info-bg: rgba(0,122,255,0.08);
+            --info-border: rgba(0,122,255,0.3);
+            --info-text: #007AFF;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-card: rgba(255,255,255,0.05);
+                --bg-step: rgba(255,255,255,0.1);
+                --border-card: rgba(255,255,255,0.1);
+                --text-primary: #ffffff;
+                --text-body: rgba(255,255,255,0.8);
+                --text-secondary: rgba(255,255,255,0.6);
+                --text-muted: rgba(255,255,255,0.5);
+                --logo-bg: #ffffff;
+                --logo-fill: #0a0a0a;
+                --badge-bg: rgba(52,199,89,0.2);
+                --badge-text: #34c759;
+                --info-bg: rgba(10,132,255,0.1);
+                --info-border: rgba(10,132,255,0.4);
+                --info-text: #0A84FF;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            padding: 24px 28px;
+            background: transparent;
+            color: var(--text-primary);
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: var(--logo-bg);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--logo-fill);
+        }
+
+        .brand {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+        }
+
+        .status-badge {
+            display: inline-block;
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            background: var(--badge-bg);
+            color: var(--badge-text);
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+
+        .tagline {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .section-label {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .steps {
+            margin: 0;
+        }
+
+        .step {
+            margin-bottom: 14px;
+            line-height: 1.5;
+        }
+
+        .step-number {
+            display: inline;
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-right: 10px;
+        }
+
+        .step-label {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .step-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .info-box {
+            margin-top: 20px;
+            padding: 14px 16px;
+            background: var(--info-bg);
+            border: 1px solid var(--info-border);
+            border-radius: 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .info-label {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--info-text);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .kbd {
+            font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+            font-size: 10px;
+            font-weight: 600;
+            background: var(--bg-step);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+        </div>
+        <span class="brand">Talkie_OS</span>
+    </div>
+
+    <span class="status-badge">Installation Complete</span>
+
+    <p class="tagline">Talkie is ready. Everything is set up - just open the app and start recording.</p>
+
+    <div class="section-label">Getting Started</div>
+
+    <div class="steps">
+        <div class="step">
+            <span class="step-number">1</span> <span class="step-label">Open Talkie:</span> <span class="step-desc">Find it in your Applications folder and launch it.</span>
+        </div>
+
+        <div class="step">
+            <span class="step-number">2</span> <span class="step-label">Grant Permissions:</span> <span class="step-desc">Allow microphone access when prompted.</span>
+        </div>
+
+        <div class="step">
+            <span class="step-number">3</span> <span class="step-label">Start Recording:</span> <span class="step-desc">Press <span class="kbd">R</span> to record, or use Talkie Live's menu bar icon.</span>
+        </div>
+    </div>
+
+    <div class="info-box">
+        <span class="info-label">Automatic Setup</span>
+        Helper services (Talkie Live and Talkie Engine) will start automatically at login. You can manage them in Talkie's Settings under Helper Apps.
+    </div>
+</body>
+</html>
