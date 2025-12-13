@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Keyboard,
   Circle,
+  AudioWaveform,
 } from 'lucide-react'
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
@@ -83,6 +84,7 @@ const StatCard = ({ value, label }) => (
 
 export default function LivePage() {
   const [scrolled, setScrolled] = useState(false)
+  const [activeFeature, setActiveFeature] = useState(null) // 'hotkeys' | 'models' | 'paste' | null
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -169,55 +171,8 @@ export default function LivePage() {
         </Container>
       </section>
 
-      {/* Quick Start - Two Ways to Record */}
-      <section className="py-16 md:py-20 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
-        <Container>
-          <div className="text-center mb-10">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Two Ways to Record</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-            {/* Keyboard Shortcut */}
-            <div className="group border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 rounded-xl hover:border-emerald-500/50 transition-all text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-2xl mb-5 group-hover:bg-emerald-500/10 transition-colors">
-                <Keyboard className="w-7 h-7 text-zinc-600 dark:text-zinc-400 group-hover:text-emerald-500 transition-colors" />
-              </div>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Keyboard</h3>
-              <div className="inline-flex items-center gap-1.5 px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg mb-4">
-                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">⌥</span>
-                <span className="text-xs font-mono text-zinc-400">+</span>
-                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">⌘</span>
-                <span className="text-xs font-mono text-zinc-400">+</span>
-                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">L</span>
-              </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Press anywhere to record</p>
-            </div>
-
-            {/* Menu Bar Pill */}
-            <div className="group border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 rounded-xl hover:border-emerald-500/50 transition-all text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-2xl mb-5 group-hover:bg-emerald-500/10 transition-colors">
-                <div className="flex items-center gap-1">
-                  <Circle className="w-2.5 h-2.5 text-emerald-500 fill-emerald-500" />
-                  <div className="w-8 h-2.5 bg-zinc-300 dark:bg-zinc-600 rounded-full group-hover:bg-emerald-500/50 transition-colors"></div>
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-2">Menu Bar</h3>
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg mb-4">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400">Always-on pill</span>
-              </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Click to start talking</p>
-            </div>
-          </div>
-
-          <p className="text-center text-xs text-zinc-400 mt-8 max-w-md mx-auto">
-            Text appears exactly where your cursor was. No copy-paste needed.
-          </p>
-        </Container>
-      </section>
-
       {/* Why Voice - Benefits */}
-      <section className="py-20 md:py-28 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+      <section className="py-16 md:py-20 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
         <Container>
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-6">
@@ -262,15 +217,260 @@ export default function LivePage() {
             />
           </div>
 
-          {/* + AI Teaser */}
-          <div className="mt-16 pt-16 border-t border-zinc-200 dark:border-zinc-800">
+          {/* Works in Any App */}
+          <div className="mt-16 pt-12 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="max-w-2xl mx-auto">
+              {/* Mock Menu Bar */}
+              <div className="bg-zinc-800/80 backdrop-blur rounded-lg px-3 py-1.5 flex items-center justify-between mb-3 mx-auto max-w-md">
+                <div className="flex items-center gap-3 text-[10px] text-zinc-400 font-medium">
+                  <span></span>
+                  <span>Cursor</span>
+                  <span className="text-zinc-600">File</span>
+                  <span className="text-zinc-600">Edit</span>
+                  <span className="text-zinc-600">View</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-zinc-700 flex items-center justify-center">
+                    <Circle className="w-2 h-2 text-zinc-500" />
+                  </div>
+                  <div className="w-4 h-4 rounded bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center">
+                    <Mic className="w-2 h-2 text-emerald-400" />
+                  </div>
+                  <div className="w-4 h-4 rounded bg-zinc-700 flex items-center justify-center">
+                    <span className="text-[8px] text-zinc-500">≡</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 ml-1">9:41 AM</span>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-500 text-center mb-8">Find it in your menu bar</p>
+
+              {/* Headline */}
+              <h3 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight text-center mb-2">
+                Works in Any App
+              </h3>
+              <p className="text-sm text-zinc-500 text-center mb-10">
+                Global hotkey triggers recording anywhere
+              </p>
+
+              {/* Three Features with Shared Slide-Down Panel */}
+              <div
+                className="relative"
+                onMouseLeave={() => setActiveFeature(null)}
+              >
+                {/* Feature Columns */}
+                <div className="grid grid-cols-3 gap-8">
+                  {/* Global Hotkeys */}
+                  <div
+                    className="text-center cursor-pointer"
+                    onMouseEnter={() => setActiveFeature('hotkeys')}
+                  >
+                    <div className={`w-14 h-14 mx-auto mb-4 bg-zinc-100 dark:bg-zinc-800 border rounded-xl flex items-center justify-center transition-all duration-200 ${activeFeature === 'hotkeys' ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/10 scale-110' : 'border-zinc-200 dark:border-zinc-700'}`}>
+                      <Command className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-1">Global Hotkeys</h4>
+                    <p className="text-xs text-zinc-500 leading-relaxed">Works in any app</p>
+                  </div>
+
+                  {/* No Latency */}
+                  <div
+                    className="text-center cursor-pointer"
+                    onMouseEnter={() => setActiveFeature('models')}
+                  >
+                    <div className={`w-14 h-14 mx-auto mb-4 bg-zinc-100 dark:bg-zinc-800 border rounded-xl flex items-center justify-center transition-all duration-200 ${activeFeature === 'models' ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/10 scale-110' : 'border-zinc-200 dark:border-zinc-700'}`}>
+                      <AudioWaveform className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-1">No Latency</h4>
+                    <p className="text-xs text-zinc-500 leading-relaxed">On-device AI models</p>
+                  </div>
+
+                  {/* Smart Paste */}
+                  <div
+                    className="text-center cursor-pointer"
+                    onMouseEnter={() => setActiveFeature('paste')}
+                  >
+                    <div className={`w-14 h-14 mx-auto mb-4 bg-zinc-100 dark:bg-zinc-800 border rounded-xl flex items-center justify-center transition-all duration-200 ${activeFeature === 'paste' ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/10 scale-110' : 'border-zinc-200 dark:border-zinc-700'}`}>
+                      <Clipboard className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-1">Smart Paste</h4>
+                    <p className="text-xs text-zinc-500 leading-relaxed">Text appears instantly</p>
+                  </div>
+                </div>
+
+                {/* Slide-Down Panel */}
+                <div className={`transition-all duration-300 ease-out ${activeFeature ? 'opacity-100 mt-8' : 'opacity-0 mt-0 pointer-events-none'}`}>
+                  {/* Triangle Pointer - Outside overflow container */}
+                  <div className="relative h-2 overflow-visible">
+                    <div
+                      className={`absolute w-4 h-4 bg-zinc-950 border-l border-t border-zinc-800 rotate-45 transition-all duration-300 ease-out ${activeFeature ? 'opacity-100' : 'opacity-0'}`}
+                      style={{
+                        left: activeFeature === 'hotkeys' ? 'calc(16.67% - 8px)' :
+                              activeFeature === 'models' ? 'calc(50% - 8px)' :
+                              'calc(83.33% - 8px)',
+                        top: '-4px'
+                      }}
+                    />
+                  </div>
+
+                  <div className="relative bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden -mt-1">
+                    {/* Texture overlay */}
+                    <div className="absolute inset-0 bg-tactical-grid-dark opacity-30 pointer-events-none" />
+
+                    {/* Content Container - Fixed Height for Stability */}
+                    <div className="relative h-[280px] overflow-hidden">
+                      {/* Hotkeys Content */}
+                      <div className={`absolute inset-0 p-6 transition-all duration-300 ease-out ${activeFeature === 'hotkeys' ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8 pointer-events-none'}`}>
+                        <p className="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-4">Recording Modes</p>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="flex flex-col items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                            <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
+                              <Keyboard className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-white mb-1">Push to Talk</p>
+                              <p className="text-xs text-zinc-500 mb-2">Hold to record</p>
+                              <span className="text-xs font-mono text-zinc-400 bg-zinc-800 px-2 py-1 rounded">⌥⌘L</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                            <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
+                              <Mic className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-white mb-1">Toggle Mode</p>
+                              <p className="text-xs text-zinc-500 mb-2">Hands-free recording</p>
+                              <span className="text-xs font-mono text-zinc-400 bg-zinc-800 px-2 py-1 rounded">⌥⌘;</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                            <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
+                              <Circle className="w-4 h-4 text-emerald-500 fill-emerald-500" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-white mb-1">Always-on Pill</p>
+                              <p className="text-xs text-zinc-500 mb-2">Click to talk</p>
+                              <span className="text-xs font-mono text-zinc-400 bg-zinc-800 px-2 py-1 rounded">Menu Bar</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Models Content */}
+                      <div className={`absolute inset-0 p-6 transition-all duration-300 ease-out ${activeFeature === 'models' ? 'opacity-100 translate-x-0' : activeFeature === 'hotkeys' ? 'opacity-0 translate-x-8 pointer-events-none' : 'opacity-0 -translate-x-8 pointer-events-none'}`}>
+                        <p className="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-4">Choose Your Model</p>
+                        <div className="grid grid-cols-2 gap-6 max-w-xl mx-auto">
+                          {/* Parakeet Card */}
+                          <a href="https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2" target="_blank" rel="noopener noreferrer" className="relative bg-zinc-900/50 border-2 border-emerald-500 rounded-xl p-5 block hover:bg-emerald-500/10 transition-colors">
+                            <div className="absolute -top-2.5 left-4">
+                              <span className="px-2 py-0.5 bg-emerald-500 text-[10px] font-mono font-bold uppercase tracking-wider text-white rounded">Recommended</span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-2 mb-4">
+                              <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center p-1.5">
+                                <img src="/nvidia-logo.png" alt="NVIDIA" className="w-full h-full object-contain" />
+                              </div>
+                              <div>
+                                <span className="text-base text-white font-bold">Parakeet</span>
+                                <span className="text-zinc-500 text-sm ml-1.5">v3</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">Size</span>
+                                <span className="text-zinc-300 font-mono">~200 MB</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">Speed</span>
+                                <span className="text-emerald-400 font-mono">Ultra-fast</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">Languages</span>
+                                <span className="text-zinc-300 font-mono">English</span>
+                              </div>
+                            </div>
+                          </a>
+
+                          {/* Whisper Card */}
+                          <a href="https://huggingface.co/openai/whisper-large-v3" target="_blank" rel="noopener noreferrer" className="relative bg-zinc-900/50 border border-zinc-700 rounded-xl p-5 block hover:border-cyan-500/50 hover:bg-cyan-500/10 transition-colors">
+                            <div className="absolute -top-2.5 left-4">
+                              <span className="px-2 py-0.5 bg-cyan-600 text-[10px] font-mono font-bold uppercase tracking-wider text-white rounded">Multilingual</span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-2 mb-4">
+                              <div className="w-10 h-10 bg-zinc-700 rounded-lg flex items-center justify-center p-1.5">
+                                <img src="/openai-logo.png" alt="OpenAI" className="w-full h-full object-contain opacity-70" />
+                              </div>
+                              <div>
+                                <span className="text-base text-white font-bold">Whisper</span>
+                                <span className="text-zinc-500 text-sm ml-1.5">lg-v3</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">Size</span>
+                                <span className="text-zinc-300 font-mono">~1.5 GB</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">Speed</span>
+                                <span className="text-zinc-300 font-mono">Fast</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-zinc-500">Languages</span>
+                                <span className="text-zinc-300 font-mono">99+</span>
+                              </div>
+                            </div>
+                          </a>
+                        </div>
+                        <p className="text-xs text-zinc-500 text-center mt-4">Click cards to learn more • Switch anytime in settings</p>
+                      </div>
+
+                      {/* Paste Content */}
+                      <div className={`absolute inset-0 p-6 transition-all duration-300 ease-out ${activeFeature === 'paste' ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8 pointer-events-none'}`}>
+                        <p className="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-4">Smart Features</p>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="flex flex-col items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                            <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
+                              <Target className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-white mb-1">App Awareness</p>
+                              <p className="text-xs text-zinc-500 leading-snug">Tracks which app you started from</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                            <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
+                              <MousePointer2 className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-white mb-1">Auto-paste</p>
+                              <p className="text-xs text-zinc-500 leading-snug">Paste directly or copy to clipboard</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                            <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center">
+                              <Zap className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-white mb-1">Return to Origin</p>
+                              <p className="text-xs text-zinc-500 leading-snug">Text lands exactly where cursor was</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Talkie AI Teaser */}
+          <div className="mt-16 pt-12 border-t border-zinc-200 dark:border-zinc-800">
             <div className="max-w-3xl mx-auto text-center">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-6">
+                <AudioWaveform className="w-3 h-3 text-emerald-500" />
                 <Sparkles className="w-3 h-3 text-emerald-500" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">+ AI</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Talkie AI</span>
               </div>
               <h3 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
-                Your workflow, in high resolution.
+                Your workflow. Your data. Your insights.
               </h3>
               <div className="space-y-4 text-zinc-600 dark:text-zinc-400 leading-relaxed text-left max-w-2xl mx-auto">
                 <p>
@@ -612,90 +812,6 @@ export default function LivePage() {
               description="Lives silently in your menu bar. No app to launch, no window to find. Ready the instant you need it."
             />
           </div>
-        </Container>
-      </section>
-
-      {/* Powerful AI Models - Feature Section */}
-      <section className="py-16 md:py-20 bg-zinc-950 border-t border-b border-zinc-800">
-        <Container>
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-xl mb-4">
-              <Cpu className="w-6 h-6 text-emerald-500" />
-            </div>
-            <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight mb-3">
-              Powerful AI Models
-            </h2>
-            <p className="text-sm text-zinc-400 max-w-md mx-auto">
-              Your voice stays on your Mac. Choose the model that fits your workflow.
-            </p>
-          </div>
-
-          {/* Model Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-            {/* Parakeet Card */}
-            <div className="relative bg-zinc-900 border-2 border-emerald-500 rounded-xl p-5">
-              <div className="absolute -top-2.5 left-4">
-                <span className="px-2 py-0.5 bg-emerald-500 text-[9px] font-mono font-bold uppercase tracking-wider text-white rounded">Recommended</span>
-              </div>
-              <div className="flex items-center gap-2.5 mt-1 mb-4">
-                <div className="w-9 h-9 bg-emerald-500/20 rounded-lg flex items-center justify-center p-1.5">
-                  <img src="/nvidia-logo.png" alt="NVIDIA" className="w-full h-full object-contain" />
-                </div>
-                <div>
-                  <span className="text-base text-white font-bold">Parakeet</span>
-                  <span className="text-zinc-500 text-sm ml-1">v3</span>
-                </div>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Size</span>
-                  <span className="text-zinc-300 font-mono">~200 MB</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Speed</span>
-                  <span className="text-emerald-400 font-mono">Ultra-fast</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Languages</span>
-                  <span className="text-zinc-300 font-mono">English</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Whisper Card */}
-            <div className="relative bg-zinc-900 border border-zinc-700 rounded-xl p-5 hover:border-zinc-600 transition-colors">
-              <div className="absolute -top-2.5 left-4">
-                <span className="px-2 py-0.5 bg-cyan-600 text-[9px] font-mono font-bold uppercase tracking-wider text-white rounded">Multilingual</span>
-              </div>
-              <div className="flex items-center gap-2.5 mt-1 mb-4">
-                <div className="w-9 h-9 bg-zinc-800 rounded-lg flex items-center justify-center p-1.5">
-                  <img src="/openai-logo.png" alt="OpenAI" className="w-full h-full object-contain opacity-70" />
-                </div>
-                <div>
-                  <span className="text-base text-white font-bold">Whisper</span>
-                  <span className="text-zinc-500 text-sm ml-1">large-v3</span>
-                </div>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Size</span>
-                  <span className="text-zinc-300 font-mono">~1.5 GB</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Speed</span>
-                  <span className="text-zinc-300 font-mono">Fast</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Languages</span>
-                  <span className="text-zinc-300 font-mono">99+</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-center text-[10px] text-zinc-500 mt-6">
-            Both run locally via MLX on Apple Silicon • No internet required • Switch anytime
-          </p>
         </Container>
       </section>
 

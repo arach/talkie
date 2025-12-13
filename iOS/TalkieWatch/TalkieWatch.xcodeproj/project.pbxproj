@@ -1,0 +1,323 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2B947D7D56AE82E107133444 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A5ACF496FBCC9C68094121D /* Assets.xcassets */; };
+		9B9A2B76F89D3AF544468ED2 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 713FD05A3DFC8A185936F3B9 /* AudioRecorder.swift */; };
+		B05EB616EF601B038317BC3A /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D6027A9BCB827C66CA5207 /* RecordingView.swift */; };
+		C1BFE8221B1EDF4F63C8FA85 /* TalkieWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A31658065FAC403DC36D2F9 /* TalkieWatchApp.swift */; };
+		EDF8E3E42CDA4F117E523304 /* WatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393DB4CFCB1A4157572FCC25 /* WatchSessionManager.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		2A31658065FAC403DC36D2F9 /* TalkieWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWatchApp.swift; sourceTree = "<group>"; };
+		393DB4CFCB1A4157572FCC25 /* WatchSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionManager.swift; sourceTree = "<group>"; };
+		3A5ACF496FBCC9C68094121D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		713FD05A3DFC8A185936F3B9 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
+		A4D6027A9BCB827C66CA5207 /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
+		BBDE93D955FC352753D10089 /* TalkieWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		3D755522E376D58BAA4A281B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BBDE93D955FC352753D10089 /* TalkieWatch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8D35337399DB639413B4D0AE /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A4D6027A9BCB827C66CA5207 /* RecordingView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A98C9F6ADF4C10249F1F7033 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				713FD05A3DFC8A185936F3B9 /* AudioRecorder.swift */,
+				2A31658065FAC403DC36D2F9 /* TalkieWatchApp.swift */,
+				393DB4CFCB1A4157572FCC25 /* WatchSessionManager.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		CCF28AE39656CBA4CD6BD699 = {
+			isa = PBXGroup;
+			children = (
+				3A5ACF496FBCC9C68094121D /* Assets.xcassets */,
+				A98C9F6ADF4C10249F1F7033 /* App */,
+				8D35337399DB639413B4D0AE /* Views */,
+				3D755522E376D58BAA4A281B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		68646C0BEDFC577F2261A8F7 /* TalkieWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C58510E866BA7E4D396CCF15 /* Build configuration list for PBXNativeTarget "TalkieWatch" */;
+			buildPhases = (
+				E94016ADBA62F45DD957B5DF /* Sources */,
+				BF0A9913B5686AD10008A02C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TalkieWatch;
+			packageProductDependencies = (
+			);
+			productName = TalkieWatch;
+			productReference = BBDE93D955FC352753D10089 /* TalkieWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D48F8D7B1B23E5FBFB14EA19 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					68646C0BEDFC577F2261A8F7 = {
+						DevelopmentTeam = 2U83JFPW66;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = D6AE08DE4F42FFE8E7DC5406 /* Build configuration list for PBXProject "TalkieWatch" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CCF28AE39656CBA4CD6BD699;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				68646C0BEDFC577F2261A8F7 /* TalkieWatch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		BF0A9913B5686AD10008A02C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2B947D7D56AE82E107133444 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E94016ADBA62F45DD957B5DF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9B9A2B76F89D3AF544468ED2 /* AudioRecorder.swift in Sources */,
+				B05EB616EF601B038317BC3A /* RecordingView.swift in Sources */,
+				C1BFE8221B1EDF4F63C8FA85 /* TalkieWatchApp.swift in Sources */,
+				EDF8E3E42CDA4F117E523304 /* WatchSessionManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		9B17AA19BA1B77B0D7836767 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		B5C198D0B6EE2C9AAA24A0B0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os.watchkitapp";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WK_COMPANION_APP_BUNDLE_IDENTIFIER = "jdi.talkie-os";
+			};
+			name = Debug;
+		};
+		C09735AB0DD68E0DC8B06C06 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		DDC4C5F1A96C7D612A112725 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os.watchkitapp";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WK_COMPANION_APP_BUNDLE_IDENTIFIER = "jdi.talkie-os";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C58510E866BA7E4D396CCF15 /* Build configuration list for PBXNativeTarget "TalkieWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B5C198D0B6EE2C9AAA24A0B0 /* Debug */,
+				DDC4C5F1A96C7D612A112725 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D6AE08DE4F42FFE8E7DC5406 /* Build configuration list for PBXProject "TalkieWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C09735AB0DD68E0DC8B06C06 /* Debug */,
+				9B17AA19BA1B77B0D7836767 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D48F8D7B1B23E5FBFB14EA19 /* Project object */;
+}

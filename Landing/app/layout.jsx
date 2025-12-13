@@ -1,8 +1,8 @@
 import './globals.css'
 import Script from 'next/script'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
+const grotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
 const jetmono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
 
 export const metadata = {
@@ -56,7 +56,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetmono.variable} dark`}>
+    <html lang="en" className={`${grotesk.variable} ${jetmono.variable} dark`}>
       <head>
         {/* Apply saved/system theme before paint to prevent FOUC */}
         <Script id="theme-init" strategy="beforeInteractive">
@@ -83,7 +83,7 @@ export default function RootLayout({ children }) {
           `}
         </Script>
       </head>
-      <body className={`${inter.className} min-h-screen bg-white text-slate-800 antialiased`}>
+      <body className={`${grotesk.className} min-h-screen bg-white text-slate-800 antialiased`}>
         {children}
       </body>
     </html>

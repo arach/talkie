@@ -30,6 +30,6 @@
 		<string>jdi.talkie.engine.xpc.debug</string>
 	</array>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
-	<string>$(TeamIdentifierPrefix)com.jdi.talkie</string>
+	<string>2U83JFPW66.com.jdi.talkie</string>
 </dict>
 </plist>
