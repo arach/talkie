@@ -26,6 +26,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Log to status manager
         EngineStatusManager.shared.log(.info, "AppDelegate", "TalkieEngine ready")
+
+        // Auto-preload default model (parakeet:v3) on startup
+        Task {
+            await autoPreloadDefaultModel()
+        }
+    }
+
+    // MARK: - Auto Preload
+
+    /// Automatically preload the default model on startup so clients don't have to
+    @MainActor
+    private func autoPreloadDefaultModel() async {
+        let defaultModelId = "parakeet:v3"
+        logger.info("Auto-preloading default model: \(defaultModelId)")
+        EngineStatusManager.shared.log(.info, "AutoPreload", "Preloading default model: \(defaultModelId)")
+
+        let startTime = Date()
+
+        await withCheckedContinuation { continuation in
+            engineService.preloadModel(defaultModelId) { error in
+                Task { @MainActor in
+                    if let error = error {
+                        logger.error("Auto-preload failed: \(error)")
+                        EngineStatusManager.shared.log(.error, "AutoPreload", "Failed: \(error)")
+                    } else {
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        logger.info("Auto-preload complete in \(String(format: "%.1f", elapsed))s")
+                        EngineStatusManager.shared.log(.info, "AutoPreload", "✓ Default model ready in \(String(format: "%.1f", elapsed))s")
+                    }
+                    continuation.resume()
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

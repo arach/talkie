@@ -354,8 +354,18 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         do {
             if family == "parakeet" {
+                // Skip if already loaded
+                if currentParakeetModelId == actualModelId && asrManager != nil {
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    logger.info("Parakeet model \(actualModelId) already loaded")
+                    EngineStatusManager.shared.log(.info, "Preload", "✓ Parakeet \(actualModelId) already loaded (\(String(format: "%.0f", elapsed * 1000))ms)")
+                    reply(nil)
+                    return
+                }
+
                 let asrVersion: AsrModelVersion = actualModelId == "v2" ? .v2 : .v3
-                EngineStatusManager.shared.log(.debug, "Preload", "Downloading Parakeet models...")
+                let isCached = downloadedParakeetModels.contains(actualModelId)
+                EngineStatusManager.shared.log(.debug, "Preload", isCached ? "Loading Parakeet from cache..." : "Downloading Parakeet models...")
                 let models = try await AsrModels.downloadAndLoad(version: asrVersion)
                 EngineStatusManager.shared.log(.debug, "Preload", "Initializing Parakeet ASR manager...")
                 asrManager = AsrManager(config: .default)
@@ -447,10 +457,11 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
             // Determine loaded model ID
             var loadedId: String?
-            if let whisperModel = self.currentWhisperModelId {
-                loadedId = "whisper:\(whisperModel)"
-            } else if let parakeetModel = self.currentParakeetModelId {
+            // Prefer Parakeet (faster, more commonly used) over Whisper in status
+            if let parakeetModel = self.currentParakeetModelId {
                 loadedId = "parakeet:\(parakeetModel)"
+            } else if let whisperModel = self.currentWhisperModelId {
+                loadedId = "whisper:\(whisperModel)"
             }
 
             #if DEBUG
