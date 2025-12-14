@@ -20,7 +20,14 @@ struct PresetPickerView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
+                // Title
+                Text("TALKIE")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundColor(.white)
+                    .padding(.top, 6)
+
                 // Big GO button
                 GoButton {
                     selectAndRecord(goPreset)
@@ -35,17 +42,6 @@ struct PresetPickerView: View {
                     }
                 }
                 .padding(.horizontal, 4)
-
-                // Connection status
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(sessionManager.isReachable ? Color.green : Color.orange)
-                        .frame(width: 5, height: 5)
-                    Text(sessionManager.isReachable ? "Ready" : "Will queue")
-                        .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.4))
-                }
-                .padding(.top, 2)
             }
             .padding(.horizontal, 8)
             .padding(.top, 4)
@@ -72,22 +68,16 @@ struct GoButton: View {
                     .fill(Color.red)
                     .frame(width: 90, height: 90)
                     .blur(radius: 20)
-                    .opacity(0.4)
+                    .opacity(0.5)
 
-                // Main button
+                // Filled circle (familiar start button)
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.red, Color.red.opacity(0.8)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .fill(Color.red)
                     .frame(width: 80, height: 80)
 
-                // Just the icon
+                // Bright white mic icon
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.system(size: 30, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
