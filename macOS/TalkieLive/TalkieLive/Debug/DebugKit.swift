@@ -1160,6 +1160,8 @@ struct StatusBar: View {
         switch engineClient.connectionState {
         case .connected:
             return .green
+        case .connectedWrongBuild:
+            return .yellow
         case .connecting:
             return .orange
         case .disconnected, .error:

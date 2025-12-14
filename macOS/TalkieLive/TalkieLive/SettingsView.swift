@@ -102,6 +102,13 @@ struct EmbeddedSettingsView: View {
                             selectedSection = .storage
                         }
                         EmbeddedSettingsRow(
+                            icon: "lock.shield",
+                            title: "Permissions",
+                            isSelected: selectedSection == .permissions
+                        ) {
+                            selectedSection = .permissions
+                        }
+                        EmbeddedSettingsRow(
                             icon: "info.circle",
                             title: "About",
                             isSelected: selectedSection == .about
@@ -138,6 +145,8 @@ struct EmbeddedSettingsView: View {
                     EngineSettingsSection()
                 case .storage:
                     StorageSettingsSection()
+                case .permissions:
+                    PermissionsSettingsSection()
                 case .about:
                     AboutSettingsSection()
                 }
@@ -217,6 +226,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
     // System
     case engine  // Now "Transcription" - AI models
     case storage
+    case permissions  // Permission Center
     case about
 
     var title: String {
@@ -229,6 +239,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .audio: return "AUDIO"
         case .engine: return "TRANSCRIPTION"
         case .storage: return "STORAGE"
+        case .permissions: return "PERMISSIONS"
         case .about: return "ABOUT"
         }
     }
@@ -243,6 +254,7 @@ enum SettingsSection: String, Hashable, CaseIterable {
         case .audio: return "mic"
         case .engine: return "waveform"
         case .storage: return "folder"
+        case .permissions: return "lock.shield"
         case .about: return "info.circle"
         }
     }
@@ -335,7 +347,7 @@ struct SettingsView: View {
                         // SYSTEM
                         SettingsSidebarSection(
                             title: "SYSTEM",
-                            isActive: selectedSection == .engine || selectedSection == .storage || selectedSection == .about
+                            isActive: selectedSection == .engine || selectedSection == .storage || selectedSection == .permissions || selectedSection == .about
                         ) {
                             SettingsSidebarItem(
                                 icon: "waveform",
@@ -350,6 +362,13 @@ struct SettingsView: View {
                                 isSelected: selectedSection == .storage
                             ) {
                                 selectedSection = .storage
+                            }
+                            SettingsSidebarItem(
+                                icon: "lock.shield",
+                                title: "PERMISSIONS",
+                                isSelected: selectedSection == .permissions
+                            ) {
+                                selectedSection = .permissions
                             }
                             SettingsSidebarItem(
                                 icon: "info.circle",
@@ -393,6 +412,8 @@ struct SettingsView: View {
                         EngineSettingsSection()
                     case .storage:
                         StorageSettingsSection()
+                    case .permissions:
+                        PermissionsSettingsSection()
                     case .about:
                         AboutSettingsSection()
                     }
@@ -2260,6 +2281,7 @@ struct EngineSettingsSection: View {
     private var engineStatusColor: Color {
         switch engineClient.connectionState {
         case .connected: return SemanticColor.success
+        case .connectedWrongBuild: return SemanticColor.warning
         case .connecting: return SemanticColor.warning
         case .disconnected: return .gray
         case .error: return SemanticColor.error

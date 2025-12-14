@@ -180,18 +180,59 @@ class AudioRecorderManager: NSObject, ObservableObject {
             // But only if we're not recording in background
             AppLogger.recording.info("Audio route changed: device unavailable")
             if !isRecording {
-                configureAudioSession()
+                // Delay reconfiguration to let hardware settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                    self?.configureAudioSessionSafely()
+                }
             }
         case .newDeviceAvailable:
             // New headphones/Bluetooth connected
             AppLogger.recording.info("Audio route changed: new device available")
             if !isRecording {
-                configureAudioSession()
+                // Delay reconfiguration to let hardware settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                    self?.configureAudioSessionSafely()
+                }
             }
         case .categoryChange, .override, .routeConfigurationChange:
             AppLogger.recording.debug("Audio route changed: \(reason.rawValue)")
         default:
             break
+        }
+    }
+
+    /// Reconfigure audio session with retry on failure
+    private func configureAudioSessionSafely(retryCount: Int = 0) {
+        let audioSession = AVAudioSession.sharedInstance()
+
+        do {
+            // Check if Bluetooth/headphones are connected
+            let currentRoute = audioSession.currentRoute
+            let hasExternalOutput = currentRoute.outputs.contains { output in
+                [.bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .headphones, .airPlay].contains(output.portType)
+            }
+
+            // Configure options based on current audio route
+            var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .allowBluetoothA2DP]
+            if !hasExternalOutput {
+                options.insert(.defaultToSpeaker)
+            }
+
+            try audioSession.setCategory(.playAndRecord, mode: .default, options: options)
+            try audioSession.setPreferredIOBufferDuration(0.005)
+            try audioSession.setActive(true)
+
+            AppLogger.recording.info("Audio session reconfigured - external output: \(hasExternalOutput)")
+        } catch {
+            if retryCount < 2 {
+                AppLogger.recording.warning("Audio reconfiguration failed, retrying... (\(error.localizedDescription))")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.configureAudioSessionSafely(retryCount: retryCount + 1)
+                }
+            } else {
+                // Don't log as error - this is expected during rapid route changes
+                AppLogger.recording.debug("Audio reconfiguration skipped - hardware busy")
+            }
         }
     }
 

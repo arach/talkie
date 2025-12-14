@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		531A90C32EEE73370084EC25 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
+		531A90C42EEE73370084EC25 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
+		531A90CF2EEE73380084EC25 /* TalkieWatchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
 		53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
 		53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -14,6 +17,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		531A90CD2EEE73380084EC25 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 531A90C12EEE73370084EC25;
+			remoteInfo = TalkieWatchWidgetExtension;
+		};
 		539C69442ED39ADF00BC034F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
@@ -45,6 +55,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		531A90D42EEE73380084EC25 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				531A90CF2EEE73380084EC25 /* TalkieWatchWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		53B43EDB2EDB539400C09544 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -70,6 +91,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C69312ED39ADE00BC034F /* Talkie OS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie OS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -95,9 +117,24 @@
 			);
 			target = 53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */;
 		};
+		531A90D52EEE73380084EC25 /* Exceptions for "TalkieWatchWidget" folder in "TalkieWatchWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		531A90C52EEE73370084EC25 /* TalkieWatchWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				531A90D52EEE73380084EC25 /* Exceptions for "TalkieWatchWidget" folder in "TalkieWatchWidgetExtension" target */,
+			);
+			path = TalkieWatchWidget;
+			sourceTree = "<group>";
+		};
 		539C69332ED39ADE00BC034F /* Talkie iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -122,6 +159,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		531A90BF2EEE73370084EC25 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				531A90C42EEE73370084EC25 /* SwiftUI.framework in Frameworks */,
+				531A90C32EEE73370084EC25 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		539C692E2ED39ADE00BC034F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -169,6 +215,7 @@
 				539C69332ED39ADE00BC034F /* Talkie iOS */,
 				53B43EC62EDB539200C09544 /* TalkieWidget */,
 				53BF5B8D2EED010000FDEB2A /* TalkieWatch Watch App */,
+				531A90C52EEE73370084EC25 /* TalkieWatchWidget */,
 				53B43EC12EDB539100C09544 /* Frameworks */,
 				539C69322ED39ADE00BC034F /* Products */,
 			);
@@ -182,6 +229,7 @@
 				539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */,
 				53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */,
 				53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */,
+				531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -198,6 +246,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 531A90D02EEE73380084EC25 /* Build configuration list for PBXNativeTarget "TalkieWatchWidgetExtension" */;
+			buildPhases = (
+				531A90BE2EEE73370084EC25 /* Sources */,
+				531A90BF2EEE73370084EC25 /* Frameworks */,
+				531A90C02EEE73370084EC25 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				531A90C52EEE73370084EC25 /* TalkieWatchWidget */,
+			);
+			name = TalkieWatchWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = TalkieWatchWidgetExtension;
+			productReference = 531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		539C69302ED39ADE00BC034F /* Talkie OS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OS" */;
@@ -293,10 +363,12 @@
 				53BF5B882EED010000FDEB2A /* Sources */,
 				53BF5B892EED010000FDEB2A /* Frameworks */,
 				53BF5B8A2EED010000FDEB2A /* Resources */,
+				531A90D42EEE73380084EC25 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				531A90CE2EEE73380084EC25 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				53BF5B8D2EED010000FDEB2A /* TalkieWatch Watch App */,
@@ -318,6 +390,9 @@
 				LastSwiftUpdateCheck = 1640;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
+					531A90C12EEE73370084EC25 = {
+						CreatedOnToolsVersion = 16.4;
+					};
 					539C69302ED39ADE00BC034F = {
 						CreatedOnToolsVersion = 16.4;
 					};
@@ -356,11 +431,19 @@
 				539C694C2ED39ADF00BC034F /* Talkie OSUITests */,
 				53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */,
 				53BF5B8B2EED010000FDEB2A /* TalkieWatch Watch App */,
+				531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		531A90C02EEE73370084EC25 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		539C692F2ED39ADE00BC034F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -399,6 +482,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		531A90BE2EEE73370084EC25 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		539C692D2ED39ADE00BC034F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -437,6 +527,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		531A90CE2EEE73380084EC25 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */;
+			targetProxy = 531A90CD2EEE73380084EC25 /* PBXContainerItemProxy */;
+		};
 		539C69452ED39ADF00BC034F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
@@ -460,6 +555,68 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		531A90D12EEE73380084EC25 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os.watchkitapp.TalkieWatchWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Debug;
+		};
+		531A90D22EEE73380084EC25 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jdi.talkie-os.watchkitapp.TalkieWatchWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Release;
+		};
 		539C69552ED39ADF00BC034F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -860,6 +1017,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		531A90D02EEE73380084EC25 /* Build configuration list for PBXNativeTarget "TalkieWatchWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				531A90D12EEE73380084EC25 /* Debug */,
+				531A90D22EEE73380084EC25 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie OS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

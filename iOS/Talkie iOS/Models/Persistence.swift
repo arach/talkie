@@ -366,13 +366,8 @@ struct PersistenceController {
 
         // Save recent memos as JSON
         let snapshots = recentMemos.prefix(10).map { memo in
-            // Calculate file size from audioData or estimate from duration
-            let fileSize: Int
-            if let data = memo.audioData {
-                fileSize = data.count
-            } else {
-                fileSize = Int(memo.duration * 16000) // Estimate ~16KB/sec for M4A
-            }
+            // Estimate file size from duration (avoid loading audioData blob into memory)
+            let fileSize = Int(memo.duration * 16000) // ~16KB/sec for M4A
 
             // Get audio format from filename extension
             let audioFormat: String

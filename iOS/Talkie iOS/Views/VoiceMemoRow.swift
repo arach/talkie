@@ -22,11 +22,10 @@ struct VoiceMemoRow: View {
         memo.createdAt ?? Date()
     }
 
-    /// File size from audioData or estimated from duration
+    /// File size estimated from duration (avoids loading audioData into memory)
     private var fileSize: String {
-        if let data = memo.audioData {
-            return formatFileSize(data.count)
-        }
+        // Estimate: ~16KB/sec for AAC audio at typical quality
+        // Accessing audioData.count would load entire blob into memory!
         let estimatedBytes = Int(memo.duration * 16000)
         return formatFileSize(estimatedBytes)
     }
