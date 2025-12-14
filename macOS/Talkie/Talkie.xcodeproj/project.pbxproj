@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -38,6 +38,12 @@
 		4E8DA6F51463650780FAC5F3 /* WorkflowExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42D075A51DACCCAA5F00B0AC /* WorkflowExecutor.swift */; };
 		4EC4B8E82D2655A97E4AE952 /* ModelLibrarySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CD4F236A4ADCF517083503 /* ModelLibrarySettings.swift */; };
 		4F5A6DF3769EF9034B8F2C01 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA115E69E2A9DEA695B5B87 /* KeychainManager.swift */; };
+		XTERM0HTML0BUILD012345678 /* xterm.html in Resources */ = {isa = PBXBuildFile; fileRef = XTERM0HTML0FILEREF12345 /* xterm.html */; };
+		XTERM0JS00BUILD0123456789 /* xterm.js in Resources */ = {isa = PBXBuildFile; fileRef = XTERM0JS00FILEREF012345 /* xterm.js */; };
+		XTERM0CSS0BUILD0123456789 /* xterm.css in Resources */ = {isa = PBXBuildFile; fileRef = XTERM0CSS0FILEREF012345 /* xterm.css */; };
+		XTERM0FIT0BUILD0123456789 /* addon-fit.js in Resources */ = {isa = PBXBuildFile; fileRef = XTERM0FIT0FILEREF012345 /* addon-fit.js */; };
+		XTERM0WEB0BUILD0123456789 /* addon-web-links.js in Resources */ = {isa = PBXBuildFile; fileRef = XTERM0WEB0FILEREF012345 /* addon-web-links.js */; };
+		XTERM0WGL0BUILD0123456789 /* addon-webgl.js in Resources */ = {isa = PBXBuildFile; fileRef = XTERM0WGL0FILEREF012345 /* addon-webgl.js */; };
 		57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */; };
 		59F341C52213699C8F4592A0 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741882426A451E5DC9B3BEEA /* GroqProvider.swift */; };
 		5A8FB727E018EBC503E01329 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = E488AD1F887CCD0880A88457 /* FluidAudio */; };
@@ -49,6 +55,7 @@
 		642DEC0586D865075007587F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */; };
 		6562B1C0819BB0A465A98458 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32E922E7292E91230F71AD6 /* SettingsView.swift */; };
 		673E5DD45505795431156EAB /* TranscriptFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */; };
+		JSONEXP01234567890ABCDEF /* JSONExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = JSONEXP0FILEREF1234567 /* JSONExportService.swift */; };
 		67A5249D6D764042BF21594F /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6F3171CA8771D255AD77C856 /* DebugKit */; };
 		67CD427670A2C17B12FACBDE /* WhisperModelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF85D803DB667E4820E2185 /* WhisperModelViews.swift */; };
 		6E43A0752EB325768C3E9E5E /* WalkieConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7873E71319209F4F26C64705 /* WalkieConversationView.swift */; };
@@ -59,6 +66,7 @@
 		7C73D44F696517840837A126 /* AutoRunSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA41231D39AFC78BA015C74 /* AutoRunSettings.swift */; };
 		7F82DFFA1B16E6E8BC6F68A0 /* PendingActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35028147CAD1F8AA00F3561D /* PendingActionsView.swift */; };
 		8063B685266428801B46BC43 /* SystemConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CF75F0011D8585DD8DB871 /* SystemConsoleView.swift */; };
+LHQ0804XVYJFDVL5MNRN7KHZ /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ZWQL51B55IEBXJ7LIQWP5XCI /* TerminalView.swift */; };
 		806D5D8AD2E97E227825DAB6 /* extract-action-items.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = BF2EA8008751E53C9D1E7494 /* extract-action-items.twf.json */; };
 		85961B2244A61045B2F3FB1A /* LiveListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C48C1F46F4D3B1AB63DD86 /* LiveListView.swift */; };
 		86AB1DC695648B3EAE1A3E1A /* LiveDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520CBF473DEAA070AE19E802 /* LiveDataStore.swift */; };
@@ -120,6 +128,12 @@
 		1D392E981B2154D58DB42703 /* ExpandableModelCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandableModelCards.swift; sourceTree = "<group>"; };
 		20D24FE1F81720CC4E6F9728 /* PendingActionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingActionsManager.swift; sourceTree = "<group>"; };
 		20E3B700B7E61994A9DB21B2 /* LLMConfig.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LLMConfig.json; sourceTree = "<group>"; };
+		XTERM0HTML0FILEREF12345 /* xterm.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = xterm.html; sourceTree = "<group>"; };
+		XTERM0JS00FILEREF012345 /* xterm.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = xterm.js; sourceTree = "<group>"; };
+		XTERM0CSS0FILEREF012345 /* xterm.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = xterm.css; sourceTree = "<group>"; };
+		XTERM0FIT0FILEREF012345 /* addon-fit.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "addon-fit.js"; sourceTree = "<group>"; };
+		XTERM0WEB0FILEREF012345 /* addon-web-links.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "addon-web-links.js"; sourceTree = "<group>"; };
+		XTERM0WGL0FILEREF012345 /* addon-webgl.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "addon-webgl.js"; sourceTree = "<group>"; };
 		21BD9BDA1979A48C8AD411E9 /* hq-transcribe.twf.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "hq-transcribe.twf.json"; sourceTree = "<group>"; };
 		21E7CFB7BA19EE59D1A229FC /* SpeechSynthesisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechSynthesisService.swift; sourceTree = "<group>"; };
 		25ED5D4E4005E57CAEF96F7F /* quick-summary.twf.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "quick-summary.twf.json"; sourceTree = "<group>"; };
@@ -143,6 +157,7 @@
 		53C628E8435C070BDA2131C1 /* MigrationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationRunner.swift; sourceTree = "<group>"; };
 		5696777625C75E91EA7F8DC1 /* TalkieServiceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieServiceMonitor.swift; sourceTree = "<group>"; };
 		5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
+		JSONEXP0FILEREF1234567 /* JSONExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONExportService.swift; sourceTree = "<group>"; };
 		57C6047C0D7A6847288E7B3C /* cloud-transcribe.twf.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "cloud-transcribe.twf.json"; sourceTree = "<group>"; };
 		5C53F14BB9B3E5C883A47FCF /* LiveUtterance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveUtterance.swift; sourceTree = "<group>"; };
 		5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenBar.swift; sourceTree = "<group>"; };
@@ -196,6 +211,7 @@
 		E0152A90AD692E6C4E8BA106 /* TWFLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TWFLoader.swift; sourceTree = "<group>"; };
 		E30DDF9CB041E54430249019 /* AppleSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechService.swift; sourceTree = "<group>"; };
 		E7CF75F0011D8585DD8DB871 /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
+ZWQL51B55IEBXJ7LIQWP5XCI /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsCatalog.swift; sourceTree = "<group>"; };
 		EA0F1D288CD155489B664F4C /* ModelsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsContentView.swift; sourceTree = "<group>"; };
 		EDF6CBE76775757D53F5AF8E /* WFKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WFKit; path = ../../WFKit; sourceTree = SOURCE_ROOT; };
@@ -273,6 +289,7 @@
 				35028147CAD1F8AA00F3561D /* PendingActionsView.swift */,
 				5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */,
 				E7CF75F0011D8585DD8DB871 /* SystemConsoleView.swift */,
+				ZWQL51B55IEBXJ7LIQWP5XCI /* TerminalView.swift */,
 				A14A87E96F08E223610F4D08 /* TalkieLiveMonitorView.swift */,
 				720EC90439850FC3D809A9BC /* TalkieServiceMonitorView.swift */,
 				7873E71319209F4F26C64705 /* WalkieConversationView.swift */,
@@ -375,8 +392,21 @@
 			children = (
 				20E3B700B7E61994A9DB21B2 /* LLMConfig.json */,
 				6DD9AF9BD073A2F1F691D0BC /* StarterWorkflows */,
+				XTERM0TERMINALGROUP123 /* Terminal */,
 			);
 			path = Resources;
+		};
+		XTERM0TERMINALGROUP123 /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				XTERM0HTML0FILEREF12345 /* xterm.html */,
+				XTERM0JS00FILEREF012345 /* xterm.js */,
+				XTERM0CSS0FILEREF012345 /* xterm.css */,
+				XTERM0FIT0FILEREF012345 /* addon-fit.js */,
+				XTERM0WEB0FILEREF012345 /* addon-web-links.js */,
+				XTERM0WGL0FILEREF012345 /* addon-webgl.js */,
+			);
+			path = Terminal;
 			sourceTree = "<group>";
 		};
 		A467CE2E477CD03D3FDDE965 /* Workflows */ = {
@@ -458,6 +488,7 @@
 				BDBC1DB4720A4F23D881C75A /* TalkieLiveMonitor.swift */,
 				5696777625C75E91EA7F8DC1 /* TalkieServiceMonitor.swift */,
 				5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */,
+				JSONEXP0FILEREF1234567 /* JSONExportService.swift */,
 				4E35708A082682B2EEEEFB9B /* WalkieService.swift */,
 				CB3C446E2274B6FF1A3F7F55 /* WhisperService.swift */,
 				783857020847BE4C82B25EFE /* LLM */,
@@ -528,7 +559,6 @@
 				42C3CD2203F5E4A8B6CE2FC7 /* XCLocalSwiftPackageReference "../../../DebugKit" */,
 				05193DEAEA1A4AFDF888739F /* XCLocalSwiftPackageReference "../../WFKit" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -544,6 +574,12 @@
 			files = (
 				105F1CFFCA8FF0A934729073 /* Assets.xcassets in Resources */,
 				4C04381A06CF96C923D0C452 /* LLMConfig.json in Resources */,
+				XTERM0HTML0BUILD012345678 /* xterm.html in Resources */,
+				XTERM0JS00BUILD0123456789 /* xterm.js in Resources */,
+				XTERM0CSS0BUILD0123456789 /* xterm.css in Resources */,
+				XTERM0FIT0BUILD0123456789 /* addon-fit.js in Resources */,
+				XTERM0WEB0BUILD0123456789 /* addon-web-links.js in Resources */,
+				XTERM0WGL0BUILD0123456789 /* addon-webgl.js in Resources */,
 				B51587461BFB51452F58FC6A /* TWF_GENERATION_PROMPT.md in Resources */,
 				00173E73B5BB8FBA6B9C5892 /* TWF_SPEC.md in Resources */,
 				C95A1F5BA10EBE178A095D04 /* brain-dump-processor.twf.json in Resources */,
@@ -621,6 +657,7 @@
 				6562B1C0819BB0A465A98458 /* SettingsView.swift in Sources */,
 				B2D45FD680D49E959CDF36F1 /* SpeechSynthesisService.swift in Sources */,
 				8063B685266428801B46BC43 /* SystemConsoleView.swift in Sources */,
+				LHQ0804XVYJFDVL5MNRN7KHZ /* TerminalView.swift in Sources */,
 				E111B4E4E4F135881F1E138E /* TWFLoader.swift in Sources */,
 				A23C030ECADDC780B883F3E2 /* TalkieApp.swift in Sources */,
 				DB6FA5CFAF83919FDC6FE506 /* TalkieLiveMonitor.swift in Sources */,
@@ -630,6 +667,7 @@
 				57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */,
 				EFDB9037C949557D2EA24D12 /* TalkieWorkflowSchema.swift in Sources */,
 				673E5DD45505795431156EAB /* TranscriptFileManager.swift in Sources */,
+				JSONEXP01234567890ABCDEF /* JSONExportService.swift in Sources */,
 				A17C2CCEA40F3C168D8100E5 /* VoiceMemo+Transcripts.swift in Sources */,
 				6E43A0752EB325768C3E9E5E /* WalkieConversationView.swift in Sources */,
 				DA7E5F307F15FEA3F6FD6448 /* WalkieService.swift in Sources */,
@@ -732,7 +770,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.5.4;
 				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.core;
 				SDKROOT = macosx;
 			};
@@ -814,7 +852,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.5.4;
 				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.core;
 				SDKROOT = macosx;
 			};
