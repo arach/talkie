@@ -615,6 +615,10 @@ extension XTermWebView: WKScriptMessageHandler {
         case "terminalReady":
             isTerminalReady = true
 
+            // Apply theme font size
+            let fontSize = Int(SettingsManager.shared.uiFontSize.terminal)
+            evaluateJavaScript("terminalAPI.setFontSize(\(fontSize))", completionHandler: nil)
+
             // Start the shell now that terminal is ready
             startShell()
 

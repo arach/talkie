@@ -48,8 +48,8 @@
     <script>
         // Initialize terminal with Talkie-style theme
         const term = new Terminal({
-            fontFamily: 'SF Mono, Menlo, Monaco, monospace',
-            fontSize: 12,
+            fontFamily: 'JetBrains Mono, SF Mono, Menlo, Monaco, monospace',
+            fontSize: 11,
             lineHeight: 1.2,
             cursorBlink: true,
             cursorStyle: 'bar',
@@ -197,6 +197,19 @@
             // Select all
             selectAll: function() {
                 term.selectAll();
+            },
+
+            // Set font family and size
+            setFont: function(family, size) {
+                term.options.fontFamily = family || 'JetBrains Mono, SF Mono, Menlo, Monaco, monospace';
+                term.options.fontSize = size || 11;
+                fitAddon.fit();
+            },
+
+            // Set just font size
+            setFontSize: function(size) {
+                term.options.fontSize = size;
+                fitAddon.fit();
             }
         };
 
