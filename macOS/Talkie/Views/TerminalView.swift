@@ -170,7 +170,6 @@ private enum TalkieTerminalBootstrap {
         # Talkie Shell bootstrap (boring + deterministic)
         if [[ -o interactive ]]; then
           unsetopt BEEP
-          unsetopt MONITOR
 
           setopt PROMPT_CR
           setopt PROMPT_SP
@@ -179,6 +178,9 @@ private enum TalkieTerminalBootstrap {
           RPROMPT=''
           PROMPT_EOL_MARK=''
           PS2=''
+
+          # Initialize zsh completion system (required for tab completion)
+          autoload -Uz compinit && compinit -u
 
           # Some zsh configs can reintroduce PROMPT_EOL_MARK; force it off every prompt.
           function precmd() { PROMPT_EOL_MARK='' }
@@ -221,26 +223,43 @@ private enum TalkieTerminalBootstrap {
             "TALKIE_PLAY": playURL.path
         ]
 
-        // Interactive shell; -f disables reading /etc/zshrc and ~/.zshrc, +m disables job control
-        let args = ["-f", "-i", "+m"]
+        // Interactive shell; -f disables reading /etc/zshrc and ~/.zshrc (we use our own .zshenv)
+        let args = ["-f", "-i"]
         return (env, args)
     }
 }
 
-// MARK: - PTY Process Manager
+// MARK: - Terminal Session Actor
 
-/// Manages a pseudo-terminal running zsh
-final class PTYProcess {
+/// Actor-isolated terminal session managing a PTY
+actor TerminalSession {
     private var masterFD: Int32 = -1
     private var pid: pid_t = 0
-    private var readSource: DispatchSourceRead?
     private var isRunning = false
 
-    var onOutput: ((Data) -> Void)?
-    var onExit: ((Int32) -> Void)?
+    private var outputContinuation: AsyncStream<Data>.Continuation?
+    private var exitContinuation: CheckedContinuation<Int32, Never>?
+
+    /// Stream of output data from the PTY
+    nonisolated let output: AsyncStream<Data>
+
+    init() {
+        var continuation: AsyncStream<Data>.Continuation?
+        output = AsyncStream { continuation = $0 }
+
+        // Store continuation after init
+        Task { await self.setOutputContinuation(continuation) }
+    }
+
+    private func setOutputContinuation(_ cont: AsyncStream<Data>.Continuation?) {
+        outputContinuation = cont
+    }
 
     deinit {
-        terminate()
+        outputContinuation?.finish()
+        if masterFD >= 0 {
+            close(masterFD)
+        }
     }
 
     /// Start the shell process
@@ -266,14 +285,13 @@ final class PTYProcess {
         pid = forkpty(&masterFD, nil, nil, &winSize)
 
         if pid < 0 {
-            // Fork failed
             return false
         } else if pid == 0 {
-            // Child process - execve expects null-terminated arrays of optional pointers
+            // Child process
             var argsCopy: [UnsafeMutablePointer<CChar>?] = cArgs
             var envCopy: [UnsafeMutablePointer<CChar>?] = cEnv
             execve(executable, &argsCopy, &envCopy)
-            _exit(1) // execve failed
+            _exit(1)
         }
 
         // Parent process
@@ -283,50 +301,65 @@ final class PTYProcess {
         let flags = fcntl(masterFD, F_GETFL)
         _ = fcntl(masterFD, F_SETFL, flags | O_NONBLOCK)
 
-        // Create dispatch source for reading
-        readSource = DispatchSource.makeReadSource(fileDescriptor: masterFD, queue: .global(qos: .userInteractive))
-
-        readSource?.setEventHandler { [weak self] in
-            self?.handleRead()
-        }
-
-        readSource?.setCancelHandler { [weak self] in
-            if let fd = self?.masterFD, fd >= 0 {
-                close(fd)
-            }
-            self?.masterFD = -1
-        }
-
-        readSource?.resume()
+        // Start read loop
+        let fd = masterFD
+        Task { await self.readLoop(fd: fd) }
 
         // Monitor child process
-        DispatchQueue.global().async { [weak self] in
-            var status: Int32 = 0
-            waitpid(self?.pid ?? 0, &status, 0)
-
-            DispatchQueue.main.async {
-                self?.isRunning = false
-                self?.onExit?(status)
+        let childPid = pid
+        Task {
+            let exitStatus = await withCheckedContinuation { (cont: CheckedContinuation<Int32, Never>) in
+                Task.detached {
+                    var status: Int32 = 0
+                    waitpid(childPid, &status, 0)
+                    cont.resume(returning: status)
+                }
             }
+            self.handleExit(status: exitStatus)
         }
 
         return true
     }
 
-    private func handleRead() {
-        var buffer = [UInt8](repeating: 0, count: 4096)
+    private func readLoop(fd: Int32) async {
+        var buffer = [UInt8](repeating: 0, count: 16384)
 
-        let bytesRead = read(masterFD, &buffer, buffer.count)
+        while isRunning {
+            // Read available data
+            var allData = Data()
 
-        if bytesRead > 0 {
-            let data = Data(bytes: buffer, count: bytesRead)
-            DispatchQueue.main.async { [weak self] in
-                self?.onOutput?(data)
+            while true {
+                let bytesRead = read(fd, &buffer, buffer.count)
+
+                if bytesRead > 0 {
+                    allData.append(contentsOf: buffer.prefix(bytesRead))
+                } else if bytesRead < 0 {
+                    if errno == EAGAIN || errno == EWOULDBLOCK {
+                        break
+                    } else {
+                        // Error - stop reading
+                        isRunning = false
+                        break
+                    }
+                } else {
+                    // EOF
+                    isRunning = false
+                    break
+                }
             }
-        } else if bytesRead < 0 && errno != EAGAIN && errno != EWOULDBLOCK {
-            // Error or EOF
-            readSource?.cancel()
+
+            if !allData.isEmpty {
+                outputContinuation?.yield(allData)
+            }
+
+            // Small delay to prevent busy-waiting
+            try? await Task.sleep(for: .milliseconds(1))
         }
+    }
+
+    private func handleExit(status: Int32) {
+        isRunning = false
+        outputContinuation?.finish()
     }
 
     /// Write data to the PTY
@@ -360,8 +393,12 @@ final class PTYProcess {
         if isRunning, pid > 0 {
             kill(pid, SIGTERM)
         }
-        readSource?.cancel()
         isRunning = false
+        if masterFD >= 0 {
+            close(masterFD)
+            masterFD = -1
+        }
+        outputContinuation?.finish()
     }
 }
 
@@ -369,9 +406,15 @@ final class PTYProcess {
 
 /// WKWebView subclass that hosts xterm.js and manages the PTY
 final class XTermWebView: WKWebView {
-    private var ptyProcess: PTYProcess?
+    private var session: TerminalSession?
+    private var outputTask: Task<Void, Never>?
     private var isTerminalReady = false
     private var pendingOutput: [Data] = []
+
+    // Output batching for performance
+    private var outputBuffer = Data()
+    private var outputTimer: Timer?
+    private let outputFlushInterval: TimeInterval = 0.008 // ~120fps max
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -408,7 +451,11 @@ final class XTermWebView: WKWebView {
     }
 
     deinit {
-        ptyProcess?.terminate()
+        outputTimer?.invalidate()
+        outputTask?.cancel()
+        if let session = session {
+            Task { await session.terminate() }
+        }
         configuration.userContentController.removeAllScriptMessageHandlers()
     }
 
@@ -494,36 +541,61 @@ final class XTermWebView: WKWebView {
     private func startShell() {
         let boot = TalkieTerminalBootstrap.prepare()
 
-        ptyProcess = PTYProcess()
+        let newSession = TerminalSession()
+        session = newSession
 
-        ptyProcess?.onOutput = { [weak self] data in
-            self?.handlePTYOutput(data)
+        // Subscribe to output stream
+        outputTask = Task { [weak self] in
+            for await data in newSession.output {
+                await MainActor.run {
+                    self?.handlePTYOutput(data)
+                }
+            }
+            // Stream finished - shell exited
+            await MainActor.run {
+                self?.evaluateJavaScript("terminalAPI.write('\\r\\n[Shell exited]\\r\\n')", completionHandler: nil)
+            }
         }
 
-        ptyProcess?.onExit = { [weak self] status in
-            // Shell exited, could restart or show message
-            self?.evaluateJavaScript("terminalAPI.write('\\r\\n[Process exited with code \(status)]\\r\\n')", completionHandler: nil)
+        Task {
+            _ = await newSession.start(args: boot.args, environment: boot.env)
         }
-
-        _ = ptyProcess?.start(args: boot.args, environment: boot.env)
     }
 
     private func handlePTYOutput(_ data: Data) {
         if isTerminalReady {
-            sendToTerminal(data)
+            bufferOutput(data)
         } else {
             pendingOutput.append(data)
         }
     }
 
-    private func sendToTerminal(_ data: Data) {
-        let base64 = data.base64EncodedString()
+    private func bufferOutput(_ data: Data) {
+        outputBuffer.append(data)
+
+        // Start coalescing timer if not already running
+        if outputTimer == nil {
+            outputTimer = Timer.scheduledTimer(withTimeInterval: outputFlushInterval, repeats: false) { [weak self] _ in
+                self?.flushOutputBuffer()
+            }
+        }
+    }
+
+    private func flushOutputBuffer() {
+        outputTimer?.invalidate()
+        outputTimer = nil
+
+        guard !outputBuffer.isEmpty else { return }
+
+        let base64 = outputBuffer.base64EncodedString()
+        outputBuffer.removeAll(keepingCapacity: true)
+
         evaluateJavaScript("terminalAPI.writeBase64('\(base64)')", completionHandler: nil)
     }
 
     private func flushPendingOutput() {
         for data in pendingOutput {
-            sendToTerminal(data)
+            bufferOutput(data)
         }
         pendingOutput.removeAll()
     }
@@ -556,7 +628,8 @@ final class XTermWebView: WKWebView {
     override func keyDown(with event: NSEvent) {
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        if mods.contains(.command) {
+        // Handle Cmd shortcuts
+        if mods.contains(.command) && !mods.contains(.control) {
             if let chars = event.charactersIgnoringModifiers?.lowercased() {
                 switch chars {
                 case "c":
@@ -573,6 +646,18 @@ final class XTermWebView: WKWebView {
                     return
                 default:
                     break
+                }
+            }
+        }
+
+        // Handle Ctrl+key combinations (send to terminal as control codes)
+        if mods.contains(.control) && !mods.contains(.command) {
+            if let chars = event.charactersIgnoringModifiers?.lowercased(), let char = chars.first {
+                // Convert to control code (Ctrl+A = 0x01, Ctrl+C = 0x03, etc.)
+                let controlCode = char.asciiValue.map { Int($0) - Int(Character("a").asciiValue!) + 1 }
+                if let code = controlCode, code >= 1 && code <= 26 {
+                    Task { await session?.write(Data([UInt8(code)])) }
+                    return
                 }
             }
         }
@@ -602,14 +687,14 @@ extension XTermWebView: WKScriptMessageHandler {
         switch message.name {
         case "terminalInput":
             if let input = message.body as? String {
-                ptyProcess?.write(input)
+                Task { await session?.write(input) }
             }
 
         case "terminalResize":
             if let dict = message.body as? [String: Int],
                let cols = dict["cols"],
                let rows = dict["rows"] {
-                ptyProcess?.resize(cols: UInt16(cols), rows: UInt16(rows))
+                Task { await session?.resize(cols: UInt16(cols), rows: UInt16(rows)) }
             }
 
         case "terminalReady":
@@ -625,11 +710,11 @@ extension XTermWebView: WKScriptMessageHandler {
             // Flush any pending output
             flushPendingOutput()
 
-            // Get initial dimensions
+            // Get initial dimensions and resize
             if let dict = message.body as? [String: Int],
                let cols = dict["cols"],
                let rows = dict["rows"] {
-                ptyProcess?.resize(cols: UInt16(cols), rows: UInt16(rows))
+                Task { await session?.resize(cols: UInt16(cols), rows: UInt16(rows)) }
             }
 
         case "terminalTitle":
