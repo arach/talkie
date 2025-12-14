@@ -785,9 +785,21 @@ struct StatusBar: View {
         if showSuccess { return SemanticColor.success }
         switch controller.state {
         case .idle: return TalkieTheme.textMuted
-        case .listening: return SemanticColor.error
+        case .listening: return .red  // Keep red for the indicator, but not alarming
         case .transcribing: return SemanticColor.warning
         case .routing: return SemanticColor.success
+        }
+    }
+
+    /// Background stays dark even during recording - no red flood
+    private var barBackgroundColor: Color {
+        if whisperService.isWarmingUp { return SemanticColor.info.opacity(0.08) }
+        if showSuccess { return SemanticColor.success.opacity(0.08) }
+        switch controller.state {
+        case .idle: return TalkieTheme.surfaceElevated
+        case .listening: return TalkieTheme.surfaceElevated  // Stay dark, not red!
+        case .transcribing: return SemanticColor.warning.opacity(0.06)
+        case .routing: return SemanticColor.success.opacity(0.08)
         }
     }
 
@@ -843,7 +855,7 @@ struct StatusBar: View {
         }
         // Fixed height - never changes, prevents layout propagation
         .frame(height: 28)
-        .background(isActive ? statusColor.opacity(0.08) : TalkieTheme.surfaceElevated)
+        .background(barBackgroundColor)
         // Isolate all animations within this view - don't let them leak to parent
         .animation(.easeInOut(duration: 0.2), value: isActive)
         .drawingGroup()  // Composites to single layer, isolates animations
@@ -895,17 +907,72 @@ struct StatusBar: View {
 
     @ViewBuilder
     private var statusIndicator: some View {
-        HStack(spacing: 6) {
-            // Pulsing dot
-            pulsingDot
+        if controller.state == .listening {
+            // Recording: concise floating pill with red dot + timer
+            recordingPill
+        } else {
+            // Other states: standard indicator
+            HStack(spacing: 6) {
+                pulsingDot
 
-            Text(statusText)
-                .font(.monoXSmall)
-                .fontWeight(isActive ? .medium : .regular)
-                .foregroundColor(isActive ? statusColor : TalkieTheme.textMuted)
+                Text(statusText)
+                    .font(.monoXSmall)
+                    .fontWeight(isActive ? .medium : .regular)
+                    .foregroundColor(isActive ? statusColor : TalkieTheme.textMuted)
+            }
+        }
+    }
 
-            // State-specific content
-            stateContent
+    /// Concise recording pill: matches FloatingPill design exactly
+    private var recordingPill: some View {
+        HStack(spacing: 4) {
+            // Pulsing red dot
+            Circle()
+                .fill(Color.red)
+                .frame(width: 6, height: 6)
+                .scaleEffect(1.0 + (pulseScale - 1.0) * 0.4)
+
+            // Timer - simple seconds format
+            Text(formatRecordingTime(recordingDuration))
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(TalkieTheme.textSecondary)
+
+            // Vertical audio level indicator
+            verticalAudioLevel
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.ultraThinMaterial)
+        )
+    }
+
+    /// Vertical audio level indicator
+    private var verticalAudioLevel: some View {
+        let level = CGFloat(AudioLevelMonitor.shared.level)
+        return GeometryReader { geo in
+            VStack {
+                Spacer()
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(TalkieTheme.textTertiary.opacity(0.5 + Double(level) * 0.4))
+                    .frame(width: 3, height: max(2, geo.size.height * level))
+                    .animation(.easeOut(duration: 0.08), value: level)
+            }
+        }
+        .frame(width: 3, height: 12)
+    }
+
+    /// Format recording time - simple seconds (no leading zeros)
+    private func formatRecordingTime(_ time: TimeInterval) -> String {
+        let totalSeconds = Int(time)
+        let tenths = Int((time * 10).truncatingRemainder(dividingBy: 10))
+        if totalSeconds < 60 {
+            return "\(totalSeconds).\(tenths)"
+        } else {
+            let minutes = totalSeconds / 60
+            let seconds = totalSeconds % 60
+            return "\(minutes):\(String(format: "%02d", seconds)).\(tenths)"
         }
     }
 
@@ -948,16 +1015,7 @@ struct StatusBar: View {
         }
     }
 
-    @ViewBuilder
-    private var stateContent: some View {
-        // Show model during active states only (not during success)
-        if controller.state == .listening || controller.state == .transcribing {
-            Text(currentModelShortName)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(statusColor.opacity(0.6))
-        }
-        // Don't show anything extra for routing or success - the status text handles it
-    }
+    // Model info now shown in engine status indicator, not here
 
     @ViewBuilder
     private var rightSideContent: some View {
@@ -990,11 +1048,8 @@ struct StatusBar: View {
     private var regularRightContent: some View {
         switch controller.state {
         case .listening:
-            // Timer on the right during recording - muted to not distract
-            Text(formatDuration(recordingDuration))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(statusColor.opacity(0.5))
-                .padding(.trailing, 4)
+            // Timer now on left side - nothing here
+            EmptyView()
 
         case .transcribing:
             // Milestone trail on the right - shows checkpoints as they happen
@@ -1111,28 +1166,26 @@ struct StatusBar: View {
 
                 // Engine label with model
                 if let status = engineClient.status {
-                    Text("Engine")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(TalkieTheme.textMuted.opacity(0.8))
-
                     if let model = status.loadedModelId {
-                        Text("•")
-                            .font(.system(size: 8))
-                            .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
-
+                        // Model loaded - show in green
                         Text(formatModelName(model))
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textMuted.opacity(0.6))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(SemanticColor.success)
+                    } else {
+                        // Connected but no model
+                        Text("Engine")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(TalkieTheme.textMuted.opacity(0.8))
                     }
 
-                    // DEV/PROD badge
-                    if let isDebug = status.isDebugBuild {
-                        Text(isDebug ? "DEV" : "")
+                    // DEV badge only
+                    if let isDebug = status.isDebugBuild, isDebug {
+                        Text("DEV")
                             .font(.system(size: 7, weight: .bold))
                             .foregroundColor(.orange)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
-                            .background(Color.orange.opacity(isDebug ? 0.2 : 0))
+                            .background(Color.orange.opacity(0.2))
                             .cornerRadius(2)
                     }
                 } else {
@@ -2187,6 +2240,7 @@ struct DebugToolbarOverlay<Content: View>: View {
     @State private var showWaveformTuning = false
     @State private var showOverlayTuning = false
     @State private var showCopiedFeedback = false
+    @State private var showObjectInspector = false
     @ObservedObject private var events = SystemEventManager.shared
 
     // Persisted settings
@@ -2439,6 +2493,34 @@ struct DebugToolbarOverlay<Content: View>: View {
                             SystemEventManager.shared.log(.system, "Model state reset", detail: "Simulating no model installed")
                         }
                     }
+                }
+
+                // Database section
+                DebugSection(title: "DATABASE") {
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text("\(PastLivesDatabase.count()) records")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.7))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+
+                        DebugActionButton(icon: "eye", label: "Inspect Latest") {
+                            showObjectInspector = true
+                        }
+
+                        DebugActionButton(icon: "folder", label: "Reveal Database") {
+                            NSWorkspace.shared.selectFile(
+                                PastLivesDatabase.databaseURL.path,
+                                inFileViewerRootedAtPath: PastLivesDatabase.databaseURL.deletingLastPathComponent().path
+                            )
+                        }
+                    }
+                }
+                .sheet(isPresented: $showObjectInspector) {
+                    ObjectInspectorView()
                 }
             }
             .padding(10)
@@ -3195,6 +3277,145 @@ struct OverlayTuningPanel: View {
                 .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
         )
         .padding(.bottom, 8)
+    }
+}
+
+// MARK: - Object Inspector View
+
+struct ObjectInspectorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedIndex: Int = 0
+
+    private let utterances = PastLivesDatabase.all()
+    private let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return f
+    }()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Object Inspector")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                if !utterances.isEmpty {
+                    Picker("", selection: $selectedIndex) {
+                        ForEach(Array(utterances.prefix(20).enumerated()), id: \.offset) { index, u in
+                            Text("ID \(u.id ?? 0) – \(u.appName ?? "Unknown")").tag(index)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 200)
+                }
+
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            .background(Color(white: 0.12))
+
+            if utterances.isEmpty {
+                Text("No records")
+                    .foregroundColor(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let u = utterances[min(selectedIndex, utterances.count - 1)]
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Schema columns section
+                        inspectorSection("DATABASE COLUMNS") {
+                            inspectorRow("id", "\(u.id ?? 0)")
+                            inspectorRow("createdAt", dateFormatter.string(from: u.createdAt))
+                            inspectorRow("text", String(u.text.prefix(100)) + (u.text.count > 100 ? "..." : ""))
+                            inspectorRow("mode", u.mode)
+                            inspectorRow("appBundleID", u.appBundleID)
+                            inspectorRow("appName", u.appName)
+                            inspectorRow("windowTitle", u.windowTitle)
+                            inspectorRow("durationSeconds", u.durationSeconds.map { String(format: "%.2f", $0) })
+                            inspectorRow("wordCount", u.wordCount.map { String($0) })
+                            inspectorRow("whisperModel", u.whisperModel)
+                            inspectorRow("transcriptionMs", u.transcriptionMs.map { String($0) })
+                            inspectorRow("sessionID", u.sessionID)
+                            inspectorRow("audioFilename", u.audioFilename)
+                            inspectorRow("transcriptionStatus", u.transcriptionStatus.rawValue)
+                            inspectorRow("transcriptionError", u.transcriptionError)
+                            inspectorRow("promotionStatus", u.promotionStatus.rawValue)
+                            inspectorRow("talkieMemoID", u.talkieMemoID)
+                            inspectorRow("commandID", u.commandID)
+                            inspectorRow("createdInTalkieView", u.createdInTalkieView ? "true" : "false")
+                            inspectorRow("pasteTimestamp", u.pasteTimestamp.map { dateFormatter.string(from: $0) })
+                        }
+
+                        // Metadata blob section
+                        inspectorSection("METADATA BLOB (JSON)") {
+                            if let meta = u.metadata, !meta.isEmpty {
+                                ForEach(Array(meta.keys.sorted()), id: \.self) { key in
+                                    inspectorRow(key, meta[key], highlight: true)
+                                }
+                            } else {
+                                Text("null")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.orange)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                            }
+                        }
+
+                        // Computed properties
+                        inspectorSection("COMPUTED") {
+                            inspectorRow("hasAudio", u.hasAudio ? "true" : "false")
+                            inspectorRow("isQueued", u.isQueued ? "true" : "false")
+                            inspectorRow("canPromote", u.canPromote ? "true" : "false")
+                            inspectorRow("canRetryTranscription", u.canRetryTranscription ? "true" : "false")
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+        .frame(width: 600, height: 500)
+        .background(Color(white: 0.08))
+    }
+
+    @ViewBuilder
+    private func inspectorSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(.cyan.opacity(0.8))
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+
+            content()
+        }
+    }
+
+    @ViewBuilder
+    private func inspectorRow(_ label: String, _ value: String?, highlight: Bool = false) -> some View {
+        HStack(alignment: .top) {
+            Text(label)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 160, alignment: .leading)
+
+            Text(value ?? "null")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(value == nil ? .orange : (highlight ? .green : .white.opacity(0.9)))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 3)
+        .background(Color.white.opacity(0.02))
     }
 }
 #endif

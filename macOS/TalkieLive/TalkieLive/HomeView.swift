@@ -1633,6 +1633,7 @@ struct RecentActivityCard: View {
 struct RecentActivityRow: View {
     let utterance: Utterance
     var onSelect: ((Utterance) -> Void)?
+    @ObservedObject private var settings = LiveSettings.shared
 
     @State private var isHovered = false
 
@@ -1663,9 +1664,9 @@ struct RecentActivityRow: View {
                         .frame(width: 20, height: 20)
                 }
 
-                // 3. Text preview (like app name in Top Apps)
+                // 3. Text preview (like app name in Top Apps) - scales with fontSize setting
                 Text(utterance.text.isEmpty ? "No transcription" : String(utterance.text.prefix(50)) + (utterance.text.count > 50 ? "..." : ""))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(settings.fontSize.smFont)
                     .foregroundColor(isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
                     .lineLimit(1)
 
@@ -1673,7 +1674,7 @@ struct RecentActivityRow: View {
 
                 // 4. Time ago (like count in Top Apps)
                 Text(timeAgo(from: utterance.timestamp))
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(.system(size: settings.fontSize.sm, weight: .medium, design: .rounded))
                     .foregroundColor(TalkieTheme.textTertiary)
 
                 // Arrow indicator on hover

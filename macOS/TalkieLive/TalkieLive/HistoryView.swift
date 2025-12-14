@@ -7,6 +7,8 @@
 
 import SwiftUI
 import Carbon.HIToolbox
+import UniformTypeIdentifiers
+import AVFoundation
 
 // MARK: - Navigation
 
@@ -31,6 +33,11 @@ struct LiveNavigationView: View {
     @State private var isChevronHovered: Bool = false
     @State private var isChevronPressed: Bool = false
     @State private var appFilter: String? = nil  // Filter by app name
+
+    // Drop zone state
+    @State private var isDropTargeted = false
+    @State private var dropMessage: String?
+    @State private var isTranscribingDrop = false
 
     private var filteredUtterances: [Utterance] {
         var result = store.utterances
@@ -108,6 +115,320 @@ struct LiveNavigationView: View {
                     selectedUtterance = utterance
                 }
             }
+        }
+        // MARK: - Drop Zone for Audio Files
+        .onDrop(of: [.audio, .fileURL], isTargeted: $isDropTargeted) { providers in
+            handleAudioDrop(providers)
+        }
+        .overlay {
+            // Drop zone visual feedback
+            if isDropTargeted || isTranscribingDrop {
+                dropZoneOverlay
+            }
+        }
+    }
+
+    // MARK: - Drop Zone
+
+    /// Supported audio file extensions
+    private static let supportedAudioExtensions = Set(["m4a", "mp3", "wav", "aac", "flac", "ogg", "mp4", "caf"])
+
+    /// Visual overlay when dragging audio files
+    private var dropZoneOverlay: some View {
+        ZStack {
+            // Dim background
+            Color.black.opacity(0.6)
+
+            // Drop zone indicator
+            VStack(spacing: 16) {
+                if isTranscribingDrop {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                    Text(dropMessage ?? "Transcribing...")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                } else {
+                    Image(systemName: "waveform.badge.plus")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white)
+                    Text("Drop audio file to transcribe")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("Supports: m4a, mp3, wav, aac, flac")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+            }
+            .padding(40)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.1)))
+            )
+        }
+        .animation(.easeInOut(duration: 0.2), value: isDropTargeted)
+    }
+
+    /// Handle dropped audio files
+    private func handleAudioDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        // Log what types we're getting for debugging
+        let types = provider.registeredTypeIdentifiers
+        SystemEventManager.shared.log(.system, "Drop types", detail: types.joined(separator: ", "))
+
+        // Try multiple approaches to get the file URL
+        let validTypes = [
+            UTType.audio.identifier,
+            UTType.fileURL.identifier,
+            "public.file-url",
+            "public.audio"
+        ]
+
+        for typeId in validTypes {
+            if provider.hasItemConformingToTypeIdentifier(typeId) {
+                isTranscribingDrop = true
+                dropMessage = "Reading file..."
+
+                provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, error in
+                    guard let url = url else {
+                        Task { @MainActor in
+                            self.showDropError("Could not read: \(error?.localizedDescription ?? "unknown")")
+                        }
+                        return
+                    }
+
+                    // loadFileRepresentation gives us a temporary copy - we need to copy it before the callback ends
+                    let ext = url.pathExtension.lowercased()
+                    guard Self.supportedAudioExtensions.contains(ext) else {
+                        Task { @MainActor in
+                            self.showDropError("Unsupported format: .\(ext)")
+                        }
+                        return
+                    }
+
+                    // Copy to our storage immediately (temp file may be deleted after callback)
+                    let originalFilename = url.lastPathComponent
+                    guard let storedFilename = AudioStorage.copyToStorage(url) else {
+                        Task { @MainActor in
+                            self.showDropError("Failed to copy file")
+                        }
+                        return
+                    }
+
+                    Task { @MainActor in
+                        await self.processDroppedAudioFromStorage(storedFilename: storedFilename, originalFilename: originalFilename)
+                    }
+                }
+                return true
+            }
+        }
+
+        SystemEventManager.shared.log(.error, "Drop rejected", detail: "No matching type")
+        return false
+    }
+
+    /// Extract metadata from an audio file using AVFoundation
+    private func extractAudioMetadata(from url: URL, originalFilename: String) -> (duration: Double?, metadata: [String: String]) {
+        var metadata: [String: String] = [:]
+        metadata["sourceFilename"] = originalFilename
+
+        // File size
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) {
+            if let size = attrs[.size] as? Int64 {
+                metadata["sourceSize"] = "\(size)"
+            }
+            if let created = attrs[.creationDate] as? Date {
+                metadata["fileCreatedAt"] = ISO8601DateFormatter().string(from: created)
+            }
+            if let modified = attrs[.modificationDate] as? Date {
+                metadata["fileModifiedAt"] = ISO8601DateFormatter().string(from: modified)
+            }
+        }
+
+        // AVAsset metadata
+        let asset = AVAsset(url: url)
+        var duration: Double? = nil
+
+        // Duration
+        let assetDuration = asset.duration
+        if assetDuration.isValid && !assetDuration.isIndefinite {
+            let seconds = CMTimeGetSeconds(assetDuration)
+            if seconds.isFinite && seconds > 0 {
+                duration = seconds
+                metadata["audioDuration"] = String(format: "%.2f", seconds)
+            }
+        }
+
+        // Audio track info
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            // Sample rate and channels from format descriptions
+            if let formatDescriptions = audioTrack.formatDescriptions as? [CMFormatDescription],
+               let formatDesc = formatDescriptions.first {
+                if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
+                    metadata["sampleRate"] = "\(Int(asbd.pointee.mSampleRate))"
+                    metadata["channels"] = "\(asbd.pointee.mChannelsPerFrame)"
+                    metadata["bitsPerChannel"] = "\(asbd.pointee.mBitsPerChannel)"
+                }
+            }
+            // Estimated bitrate
+            metadata["estimatedBitrate"] = "\(Int(audioTrack.estimatedDataRate))"
+        }
+
+        // File type
+        metadata["fileExtension"] = url.pathExtension.lowercased()
+
+        // Apple/Common metadata (recording date, device, location, etc.)
+        let metadataItems = asset.metadata
+        for item in metadataItems {
+            guard let key = item.commonKey?.rawValue ?? item.key as? String,
+                  let value = item.stringValue else { continue }
+
+            switch key {
+            case "creationDate", AVMetadataKey.commonKeyCreationDate.rawValue:
+                metadata["recordingDate"] = value
+            case "make", AVMetadataKey.commonKeyMake.rawValue:
+                metadata["deviceMake"] = value
+            case "model", AVMetadataKey.commonKeyModel.rawValue:
+                metadata["deviceModel"] = value
+            case "software", AVMetadataKey.commonKeySoftware.rawValue:
+                metadata["recordingSoftware"] = value
+            case "author", AVMetadataKey.commonKeyAuthor.rawValue:
+                metadata["author"] = value
+            case "title", AVMetadataKey.commonKeyTitle.rawValue:
+                metadata["title"] = value
+            case "album", AVMetadataKey.commonKeyAlbumName.rawValue:
+                metadata["album"] = value
+            case "artist", AVMetadataKey.commonKeyArtist.rawValue:
+                metadata["artist"] = value
+            case "location", AVMetadataKey.commonKeyLocation.rawValue:
+                metadata["recordingLocation"] = value
+            case "description", AVMetadataKey.commonKeyDescription.rawValue:
+                metadata["description"] = value
+            default:
+                // Store any other interesting metadata with a prefix
+                if !key.isEmpty && !value.isEmpty && value.count < 500 {
+                    let sanitizedKey = key.replacingOccurrences(of: " ", with: "_")
+                    metadata["meta_\(sanitizedKey)"] = value
+                }
+            }
+        }
+
+        // Also check ID3 and iTunes metadata for MP3/M4A
+        let id3Items = asset.metadata(forFormat: .id3Metadata)
+        let itunesItems = asset.metadata(forFormat: .iTunesMetadata)
+        for item in (id3Items + itunesItems) {
+            if let key = item.key as? String, let value = item.stringValue {
+                if !metadata.keys.contains(key) && !value.isEmpty && value.count < 500 {
+                    metadata["tag_\(key)"] = value
+                }
+            }
+        }
+
+        return (duration, metadata)
+    }
+
+    /// Process a dropped audio file that's already been copied to storage
+    private func processDroppedAudioFromStorage(storedFilename: String, originalFilename: String) async {
+        SystemEventManager.shared.log(.file, "Audio file dropped", detail: originalFilename)
+
+        // Get file info and audio metadata from stored file
+        let storedURL = AudioStorage.url(for: storedFilename)
+        let (duration, metadata) = extractAudioMetadata(from: storedURL, originalFilename: originalFilename)
+
+        let fileSize = Int64(metadata["sourceSize"] ?? "0") ?? 0
+        let fileSizeStr = ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
+        let durationStr = duration.map { String(format: "%.1fs", $0) } ?? ""
+        let detailStr = durationStr.isEmpty ? fileSizeStr : "\(durationStr) • \(fileSizeStr)"
+
+        dropMessage = "Transcribing \(detailStr)..."
+        SystemEventManager.shared.log(.transcription, "Transcribing dropped file", detail: "\(originalFilename) (\(detailStr))")
+
+        // Create pending utterance first (so we have audio saved even if transcription fails)
+        let pendingUtterance = LiveUtterance(
+            text: "[Transcription pending...]",
+            mode: "dropped",
+            appBundleID: "dropped.file",
+            appName: "File Drop",
+            windowTitle: originalFilename,
+            durationSeconds: duration,
+            whisperModel: settings.selectedModelId,
+            transcriptionMs: nil,
+            metadata: metadata,
+            audioFilename: storedFilename,
+            transcriptionStatus: .pending,
+            createdInTalkieView: true,
+            pasteTimestamp: nil
+        )
+        PastLivesDatabase.store(pendingUtterance)
+        store.refresh()
+
+        // Get the ID of the just-stored utterance
+        let storedId = PastLivesDatabase.all().first { $0.audioFilename == storedFilename }?.id
+
+        do {
+            // Read audio data
+            let audioData = try Data(contentsOf: storedURL)
+
+            // Transcribe via engine
+            let startTime = Date()
+            let text = try await EngineClient.shared.transcribe(
+                audioData: audioData,
+                modelId: settings.selectedModelId
+            )
+            let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
+
+            // Update the database record with success
+            if let id = storedId {
+                PastLivesDatabase.markTranscriptionSuccess(
+                    id: id,
+                    text: text,
+                    transcriptionMs: transcriptionMs,
+                    model: settings.selectedModelId
+                )
+            }
+
+            let wordCount = text.split(separator: " ").count
+            let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", Double(transcriptionMs) / 1000.0)
+            SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr)")
+
+            // Refresh and select the new utterance
+            store.refresh()
+            selectedSection = .history
+            if let newUtterance = store.utterances.first(where: { $0.metadata.audioFilename == storedFilename }) {
+                selectedUtterance = newUtterance
+            }
+
+            SoundManager.shared.playPasted()
+            isTranscribingDrop = false
+            dropMessage = nil
+
+        } catch {
+            SystemEventManager.shared.log(.error, "Transcription failed", detail: error.localizedDescription)
+
+            // Mark as failed in database
+            if let id = storedId {
+                PastLivesDatabase.markTranscriptionFailed(id: id, error: error.localizedDescription)
+            }
+
+            store.refresh()
+            showDropError("Transcription failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Show a drop error message briefly
+    private func showDropError(_ message: String) {
+        dropMessage = message
+        SystemEventManager.shared.log(.error, "Drop failed", detail: message)
+        SoundManager.shared.playFinish() // Different sound for error
+
+        // Keep showing for a moment then hide
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            isTranscribingDrop = false
+            dropMessage = nil
         }
     }
 
@@ -510,32 +831,33 @@ struct LiveNavigationView: View {
 
 struct UtteranceRowView: View {
     let utterance: Utterance
+    @ObservedObject private var settings = LiveSettings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Preview text
+            // Preview text - scales with fontSize setting
             Text(utterance.text)
-                .font(Design.fontBody)
+                .font(settings.fontSize.bodyFont)
                 .foregroundColor(TalkieTheme.textPrimary)
                 .lineLimit(2)
 
-            // Metadata
+            // Metadata - scales with fontSize setting
             HStack(spacing: 4) {
                 if let duration = utterance.durationSeconds {
                     Text(formatDuration(duration))
-                        .font(Design.fontXS)
+                        .font(settings.fontSize.xsFont)
 
                     Text("·")
-                        .font(Design.fontXS)
+                        .font(settings.fontSize.xsFont)
                         .foregroundColor(TalkieTheme.textMuted)
                 }
 
                 Text(formatDate(utterance.timestamp))
-                    .font(Design.fontXS)
+                    .font(settings.fontSize.xsFont)
 
                 if let appName = utterance.metadata.activeAppName {
                     Text("·")
-                        .font(Design.fontXS)
+                        .font(settings.fontSize.xsFont)
                         .foregroundColor(TalkieTheme.textMuted)
 
                     HStack(spacing: 4) {
@@ -545,7 +867,7 @@ struct UtteranceRowView: View {
                         }
 
                         Text(appName)
-                            .font(Design.fontXS)
+                            .font(settings.fontSize.xsFont)
                             .lineLimit(1)
                     }
                 }
@@ -792,6 +1114,7 @@ private struct TranscriptContainer: View {
     @Binding var showJSON: Bool
     @Binding var copied: Bool
     let onCopy: () -> Void
+    @ObservedObject private var settings = LiveSettings.shared
 
     @State private var isHovered = false
     @State private var isCopyHovered = false
@@ -821,7 +1144,7 @@ private struct TranscriptContainer: View {
                         JSONContentView(utterance: utterance)
                     } else {
                         Text(utterance.text)
-                            .font(.system(size: 14, weight: .regular))
+                            .font(settings.fontSize.detailFont)
                             .foregroundColor(Self.textPrimary)
                             .lineSpacing(6)
                             .textSelection(.enabled)
@@ -905,23 +1228,62 @@ private struct JSONContentView: View {
     let utterance: Utterance
 
     var body: some View {
+        let m = utterance.metadata
         let json = """
         {
           "id": "\(utterance.id.uuidString)",
-          "text": "\(utterance.text.prefix(50))...",
+          "liveID": \(utterance.liveID.map { String($0) } ?? "null"),
           "timestamp": "\(ISO8601DateFormatter().string(from: utterance.timestamp))",
+          "text": "\(escapeJSON(utterance.text.prefix(100).description))...",
+
+          // Stats
           "words": \(utterance.wordCount),
           "chars": \(utterance.characterCount),
-          "model": "\(utterance.metadata.whisperModel ?? "unknown")"
+          "durationSeconds": \(utterance.durationSeconds.map { String(format: "%.2f", $0) } ?? "null"),
+
+          // Source Context
+          "appBundleID": \(jsonString(m.activeAppBundleID)),
+          "appName": \(jsonString(m.activeAppName)),
+          "windowTitle": \(jsonString(m.activeWindowTitle)),
+
+          // Rich Context (Accessibility API)
+          "documentURL": \(jsonString(m.documentURL)),
+          "browserURL": \(jsonString(m.browserURL)),
+          "focusedElementRole": \(jsonString(m.focusedElementRole)),
+          "focusedElementValue": \(jsonString(m.focusedElementValue?.prefix(100).description)),
+          "terminalWorkingDir": \(jsonString(m.terminalWorkingDir)),
+
+          // Transcription
+          "whisperModel": \(jsonString(m.whisperModel)),
+          "transcriptionMs": \(m.transcriptionDurationMs.map { String($0) } ?? "null"),
+
+          // Routing
+          "routingMode": \(jsonString(m.routingMode)),
+          "wasRouted": \(m.wasRouted)
         }
         """
 
-        Text(json)
-            .font(.system(size: 11, weight: .regular, design: .monospaced))
-            .foregroundColor(TalkieTheme.textSecondary)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+        ScrollView {
+            Text(json)
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .foregroundColor(TalkieTheme.textSecondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+        }
+    }
+
+    private func jsonString(_ value: String?) -> String {
+        guard let v = value else { return "null" }
+        return "\"\(escapeJSON(v))\""
+    }
+
+    private func escapeJSON(_ s: String) -> String {
+        s.replacingOccurrences(of: "\\", with: "\\\\")
+         .replacingOccurrences(of: "\"", with: "\\\"")
+         .replacingOccurrences(of: "\n", with: "\\n")
+         .replacingOccurrences(of: "\r", with: "\\r")
+         .replacingOccurrences(of: "\t", with: "\\t")
     }
 }
 
@@ -1548,6 +1910,43 @@ private struct TranscriptionInfoCard: View {
                 Spacer()
             }
 
+            // Row 1.5: Rich context (URL, document, etc.)
+            if hasRichContext {
+                HStack(spacing: Spacing.lg) {
+                    // Browser URL
+                    if let url = utterance.metadata.browserURL ?? utterance.metadata.documentURL {
+                        InfoPill(
+                            icon: url.hasPrefix("http") ? "globe" : "doc.text",
+                            label: url.hasPrefix("http") ? "URL" : "Document",
+                            value: formatURL(url),
+                            color: url.hasPrefix("http") ? .cyan : .orange
+                        )
+                    }
+
+                    // Focused element type
+                    if let role = utterance.metadata.focusedElementRole {
+                        InfoPill(
+                            icon: focusedRoleIcon(role),
+                            label: "Focus",
+                            value: formatRole(role),
+                            color: .indigo
+                        )
+                    }
+
+                    // Terminal working directory
+                    if let dir = utterance.metadata.terminalWorkingDir {
+                        InfoPill(
+                            icon: "folder",
+                            label: "Directory",
+                            value: dir,
+                            color: .mint
+                        )
+                    }
+
+                    Spacer()
+                }
+            }
+
             // Divider
             Rectangle()
                 .fill(TalkieTheme.surface)
@@ -1624,6 +2023,57 @@ private struct TranscriptionInfoCard: View {
             let seconds = Double(ms) / 1000.0
             return String(format: "%.1fs", seconds)
         }
+    }
+
+    // MARK: - Rich Context Helpers
+
+    private var hasRichContext: Bool {
+        utterance.metadata.browserURL != nil ||
+        utterance.metadata.documentURL != nil ||
+        utterance.metadata.focusedElementRole != nil ||
+        utterance.metadata.terminalWorkingDir != nil
+    }
+
+    private func formatURL(_ url: String) -> String {
+        // Extract domain or filename for compact display
+        if url.hasPrefix("http") {
+            if let urlObj = URL(string: url), let host = urlObj.host {
+                let path = urlObj.path
+                if path.count > 1 {
+                    return "\(host)\(path.prefix(20))"
+                }
+                return host
+            }
+        } else if url.hasPrefix("file://") {
+            // File path - show last component
+            return URL(string: url)?.lastPathComponent ?? url.suffix(30).description
+        }
+        return String(url.suffix(30))
+    }
+
+    private func focusedRoleIcon(_ role: String) -> String {
+        switch role {
+        case "AXTextArea", "AXTextField": return "text.cursor"
+        case "AXWebArea": return "globe"
+        case "AXScrollArea": return "scroll"
+        case "AXGroup": return "square.stack"
+        case "AXButton": return "rectangle.and.hand.point.up.left"
+        default: return "cursorarrow.rays"
+        }
+    }
+
+    private func formatRole(_ role: String) -> String {
+        // Convert AXRole to friendly name
+        let mapping: [String: String] = [
+            "AXTextArea": "Text Editor",
+            "AXTextField": "Text Field",
+            "AXWebArea": "Web Content",
+            "AXScrollArea": "Scroll Area",
+            "AXGroup": "Group",
+            "AXButton": "Button",
+            "AXStaticText": "Text"
+        ]
+        return mapping[role] ?? role.replacingOccurrences(of: "AX", with: "")
     }
 }
 
@@ -2981,7 +3431,7 @@ struct AppearanceSettingsContent: View {
         return Button(action: { settings.fontSize = size }) {
             VStack(spacing: 4) {
                 Text("Aa")
-                    .font(.system(size: size == .small ? 12 : (size == .medium ? 14 : 16)))
+                    .font(size.bodyFont)  // Use actual scaled font for accurate preview
                     .foregroundColor(isSelected ? settings.accentColor.color : .secondary)
 
                 Text(size.displayName)

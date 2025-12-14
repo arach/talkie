@@ -24,6 +24,13 @@ struct UtteranceMetadata: Codable, Hashable {
     var endAppName: String?
     var endWindowTitle: String?
 
+    // Rich context: deeper insight into what user was doing
+    var documentURL: String?           // File path or web URL
+    var focusedElementRole: String?    // AXTextArea, AXWebArea, etc.
+    var focusedElementValue: String?   // Code snippet, terminal excerpt, form content (truncated)
+    var browserURL: String?            // Full URL for browsers (extracted from AX)
+    var terminalWorkingDir: String?    // For terminal apps, the cwd if detectable
+
     // Routing: what happened after transcription?
     var routingMode: String?  // "paste", "clipboardOnly"
     var wasRouted: Bool = false
@@ -162,21 +169,12 @@ struct ContextCapture {
     }
 
     /// Capture start context (frontmost app when recording begins)
+    /// Now uses ContextCaptureService for rich context capture
     static func captureCurrentContext() -> UtteranceMetadata {
+        // Use the new rich context capture service
+        let context = ContextCaptureService.shared.captureCurrentContext()
         var metadata = UtteranceMetadata()
-
-        // Get frontmost app info
-        if let frontApp = NSWorkspace.shared.frontmostApplication {
-            metadata.activeAppBundleID = frontApp.bundleIdentifier
-            metadata.activeAppName = frontApp.localizedName
-        }
-
-        // Try to get active window title via Accessibility API
-        // (requires accessibility permissions)
-        if let windowTitle = getActiveWindowTitle() {
-            metadata.activeWindowTitle = windowTitle
-        }
-
+        context.applyTo(&metadata)
         return metadata
     }
 
@@ -257,6 +255,14 @@ final class UtteranceStore: ObservableObject {
 
     /// Add a new utterance (stores to SQLite database)
     func add(_ text: String, durationSeconds: Double? = nil, metadata: UtteranceMetadata = UtteranceMetadata()) {
+        // Build rich context metadata dictionary
+        var metadataDict: [String: String] = [:]
+        if let url = metadata.documentURL { metadataDict["documentURL"] = url }
+        if let url = metadata.browserURL { metadataDict["browserURL"] = url }
+        if let role = metadata.focusedElementRole { metadataDict["focusedElementRole"] = role }
+        if let value = metadata.focusedElementValue { metadataDict["focusedElementValue"] = value }
+        if let dir = metadata.terminalWorkingDir { metadataDict["terminalWorkingDir"] = dir }
+
         // Convert to LiveUtterance for database storage
         let liveUtterance = LiveUtterance(
             text: text,
@@ -268,6 +274,7 @@ final class UtteranceStore: ObservableObject {
             wordCount: text.split(separator: " ").count,
             whisperModel: metadata.whisperModel,
             transcriptionMs: metadata.transcriptionDurationMs,
+            metadata: metadataDict.isEmpty ? nil : metadataDict,
             audioFilename: metadata.audioFilename,
             transcriptionStatus: .success
         )
@@ -330,19 +337,35 @@ final class UtteranceStore: ObservableObject {
             Utterance(
                 text: live.text,
                 durationSeconds: live.durationSeconds,
-                metadata: UtteranceMetadata(
-                    activeAppBundleID: live.appBundleID,
-                    activeAppName: live.appName,
-                    activeWindowTitle: live.windowTitle,
-                    whisperModel: live.whisperModel,
-                    transcriptionDurationMs: live.transcriptionMs,
-                    audioFilename: live.audioFilename
-                ),
+                metadata: buildMetadata(from: live),
                 timestamp: live.createdAt,
                 liveID: live.id
             )
         }
         logger.debug("Refreshed \(self.utterances.count) utterances from database")
+    }
+
+    /// Build UtteranceMetadata from LiveUtterance, including rich context from metadata dict
+    private func buildMetadata(from live: LiveUtterance) -> UtteranceMetadata {
+        var metadata = UtteranceMetadata(
+            activeAppBundleID: live.appBundleID,
+            activeAppName: live.appName,
+            activeWindowTitle: live.windowTitle,
+            whisperModel: live.whisperModel,
+            transcriptionDurationMs: live.transcriptionMs,
+            audioFilename: live.audioFilename
+        )
+
+        // Extract rich context from metadata dictionary
+        if let dict = live.metadata {
+            metadata.documentURL = dict["documentURL"]
+            metadata.browserURL = dict["browserURL"]
+            metadata.focusedElementRole = dict["focusedElementRole"]
+            metadata.focusedElementValue = dict["focusedElementValue"]
+            metadata.terminalWorkingDir = dict["terminalWorkingDir"]
+        }
+
+        return metadata
     }
 
     /// Get total count
@@ -357,14 +380,7 @@ final class UtteranceStore: ObservableObject {
             Utterance(
                 text: live.text,
                 durationSeconds: live.durationSeconds,
-                metadata: UtteranceMetadata(
-                    activeAppBundleID: live.appBundleID,
-                    activeAppName: live.appName,
-                    activeWindowTitle: live.windowTitle,
-                    whisperModel: live.whisperModel,
-                    transcriptionDurationMs: live.transcriptionMs,
-                    audioFilename: live.audioFilename
-                ),
+                metadata: buildMetadata(from: live),
                 timestamp: live.createdAt,
                 liveID: live.id
             )

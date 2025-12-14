@@ -93,6 +93,24 @@ enum AudioStorage {
         return formatter.string(fromByteCount: bytes)
     }
 
+    /// Copy an external audio file to storage
+    /// Returns the new filename if successful
+    static func copyToStorage(_ sourceURL: URL) -> String? {
+        let ext = sourceURL.pathExtension.isEmpty ? "m4a" : sourceURL.pathExtension
+        let filename = "\(UUID().uuidString).\(ext)"
+        let destURL = audioDirectory.appendingPathComponent(filename)
+
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destURL)
+            let size = (try? destURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            logger.info("Copied audio file: \(filename) (\(size) bytes)")
+            return filename
+        } catch {
+            logger.error("Failed to copy audio file: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Delete all audio files
     static func deleteAll() {
         let fm = FileManager.default

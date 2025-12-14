@@ -39,6 +39,7 @@ final class FloatingPillController: ObservableObject {
 
     // Engine & queue status
     @Published var isEngineConnected: Bool = false
+    @Published var isWrongEngineBuild: Bool = false
     @Published var pendingQueueCount: Int = 0
 
     // Track last published proximity to avoid redundant updates
@@ -85,7 +86,9 @@ final class FloatingPillController: ObservableObject {
         EngineClient.shared.$connectionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
-                self?.isEngineConnected = (state == .connected)
+                // Connected includes wrong build (still functional, just a warning)
+                self?.isEngineConnected = (state == .connected || state == .connectedWrongBuild)
+                self?.isWrongEngineBuild = (state == .connectedWrongBuild)
             }
             .store(in: &settingsCancellables)
 
@@ -400,8 +403,8 @@ struct FloatingPillView: View {
     // Minimal sliver when far from cursor
     private var sliverContent: some View {
         HStack(spacing: 4) {
-            // Engine offline indicator (yellow dot)
-            if !controller.isEngineConnected {
+            // Engine offline or wrong build indicator (yellow dot)
+            if !controller.isEngineConnected || controller.isWrongEngineBuild {
                 Circle()
                     .fill(SemanticColor.warning)
                     .frame(width: 4, height: 4)
@@ -425,8 +428,8 @@ struct FloatingPillView: View {
     }
 
     private var sliverIndicatorColor: Color {
-        if !controller.isEngineConnected {
-            return SemanticColor.warning  // Yellow when engine offline
+        if !controller.isEngineConnected || controller.isWrongEngineBuild {
+            return SemanticColor.warning  // Yellow when engine offline or wrong build
         }
         return indicatorColor
     }
@@ -480,6 +483,12 @@ struct FloatingPillView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1)
                     .foregroundColor(SemanticColor.warning)
+            } else if controller.isWrongEngineBuild {
+                // Wrong engine build warning
+                Text("WRONG BUILD")
+                    .font(.system(size: 8, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundColor(SemanticColor.warning)
             } else if controller.pendingQueueCount > 0 {
                 // Queue count - tap to retry
                 HStack(spacing: 3) {
@@ -530,7 +539,7 @@ struct FloatingPillView: View {
     }
 
     private var expandedIndicatorColor: Color {
-        if !controller.isEngineConnected && controller.state == .idle {
+        if (!controller.isEngineConnected || controller.isWrongEngineBuild) && controller.state == .idle {
             return SemanticColor.warning
         }
         if controller.pendingQueueCount > 0 && controller.state == .idle {

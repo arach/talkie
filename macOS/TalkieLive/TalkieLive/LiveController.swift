@@ -268,6 +268,7 @@ final class LiveController: ObservableObject {
                     durationSeconds: durationSeconds,
                     whisperModel: metadata.whisperModel,
                     transcriptionMs: transcriptionMs,
+                    metadata: buildMetadataDict(from: metadata),
                     audioFilename: audioFilename,
                     createdInTalkieView: true,
                     pasteTimestamp: nil  // Not pasted yet → queued
@@ -306,6 +307,7 @@ final class LiveController: ObservableObject {
                     durationSeconds: durationSeconds,
                     whisperModel: metadata.whisperModel,
                     transcriptionMs: transcriptionMs,
+                    metadata: buildMetadataDict(from: metadata),
                     audioFilename: audioFilename,
                     createdInTalkieView: false,
                     pasteTimestamp: Date()  // Already pasted
@@ -345,6 +347,7 @@ final class LiveController: ObservableObject {
                     windowTitle: capturedContext?.activeWindowTitle,
                     durationSeconds: durationSeconds,
                     whisperModel: settings.selectedModelId,
+                    metadata: capturedContext.flatMap { buildMetadataDict(from: $0) },
                     audioFilename: filename,
                     transcriptionStatus: .failed,
                     transcriptionError: error.localizedDescription,
@@ -361,5 +364,18 @@ final class LiveController: ObservableObject {
         capturedContext = nil
         createdInTalkieView = false
         state = .idle
+    }
+
+    // MARK: - Metadata Helpers
+
+    /// Build metadata dictionary with rich context for database storage
+    private func buildMetadataDict(from metadata: UtteranceMetadata) -> [String: String]? {
+        var dict: [String: String] = [:]
+        if let url = metadata.documentURL { dict["documentURL"] = url }
+        if let url = metadata.browserURL { dict["browserURL"] = url }
+        if let role = metadata.focusedElementRole { dict["focusedElementRole"] = role }
+        if let value = metadata.focusedElementValue { dict["focusedElementValue"] = value }
+        if let dir = metadata.terminalWorkingDir { dict["terminalWorkingDir"] = dir }
+        return dict.isEmpty ? nil : dict
     }
 }

@@ -49,7 +49,8 @@ struct TranscriptRouter: LiveRouter {
 
         // Paste if requested
         if mode == .paste {
-            try? await Task.sleep(for: .milliseconds(50))
+            // Give clipboard time to settle before simulating paste
+            try? await Task.sleep(for: .milliseconds(100))
             simulatePaste()
         }
     }
@@ -62,22 +63,27 @@ struct TranscriptRouter: LiveRouter {
     }
 
     private func simulatePaste() {
-        // Simulate ⌘V
-        let source = CGEventSource(stateID: .hidSystemState)
+        // Simulate ⌘V with explicit key sequence for better reliability
+        let source = CGEventSource(stateID: .combinedSessionState)
 
-        // V key = keycode 9
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
-            logger.error("Failed to create paste events")
-            return
-        }
+        // Command key down
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
+        cmdDown?.flags = .maskCommand
+        cmdDown?.post(tap: .cghidEventTap)
 
-        // Add Command modifier
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
+        // V key down (keycode 9)
+        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+        vDown?.flags = .maskCommand
+        vDown?.post(tap: .cghidEventTap)
 
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
+        // V key up
+        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        vUp?.flags = .maskCommand
+        vUp?.post(tap: .cghidEventTap)
+
+        // Command key up
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
+        cmdUp?.post(tap: .cghidEventTap)
 
         logger.info("Simulated paste (⌘V)")
     }

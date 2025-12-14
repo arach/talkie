@@ -202,6 +202,8 @@ enum VisualTheme: String, CaseIterable, Codable {
 @available(*, deprecated, message: "Use AppearanceMode and VisualTheme instead")
 typealias AppTheme = AppearanceMode
 
+/// Design system font sizes - canonical integer sizes, no fractional scaling
+/// Each size tier defines proper integer point sizes for crisp rendering
 enum FontSize: String, CaseIterable, Codable {
     case small = "small"
     case medium = "medium"
@@ -215,21 +217,63 @@ enum FontSize: String, CaseIterable, Codable {
         }
     }
 
-    var scale: CGFloat {
+    // MARK: - Design System Sizes (integers only, no scaling)
+
+    /// Extra-small: metadata, timestamps, labels
+    var xs: CGFloat {
         switch self {
-        case .small: return 0.9
-        case .medium: return 1.0
-        case .large: return 1.15
+        case .small: return 9
+        case .medium: return 10
+        case .large: return 11
         }
     }
 
-    var previewSize: CGFloat {
+    /// Small: secondary text, captions
+    var sm: CGFloat {
         switch self {
-        case .small: return 11
+        case .small: return 10
+        case .medium: return 11
+        case .large: return 12
+        }
+    }
+
+    /// Body: primary transcription text
+    var body: CGFloat {
+        switch self {
+        case .small: return 12
         case .medium: return 13
         case .large: return 15
         }
     }
+
+    /// Detail: expanded view text
+    var detail: CGFloat {
+        switch self {
+        case .small: return 13
+        case .medium: return 14
+        case .large: return 16
+        }
+    }
+
+    /// Title: headings
+    var title: CGFloat {
+        switch self {
+        case .small: return 14
+        case .medium: return 15
+        case .large: return 17
+        }
+    }
+
+    // MARK: - Convenience Font Accessors
+
+    var xsFont: Font { .system(size: xs) }
+    var smFont: Font { .system(size: sm) }
+    var bodyFont: Font { .system(size: body) }
+    var detailFont: Font { .system(size: detail) }
+    var titleFont: Font { .system(size: title, weight: .medium) }
+
+    // Legacy compatibility
+    var previewSize: CGFloat { body }
 }
 
 enum AccentColorOption: String, CaseIterable, Codable {

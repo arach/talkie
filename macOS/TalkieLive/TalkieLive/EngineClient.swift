@@ -169,6 +169,7 @@ public enum EngineConnectionState: String {
     case disconnected = "Disconnected"
     case connecting = "Connecting..."
     case connected = "Connected"
+    case connectedWrongBuild = "Wrong Engine"  // Connected to prod when expecting debug, or vice versa
     case error = "Error"
 }
 
@@ -192,7 +193,32 @@ public final class EngineClient: ObservableObject {
     @Published public private(set) var availableModels: [ModelInfo] = []
 
     /// Computed property for backwards compatibility
-    public var isConnected: Bool { connectionState == .connected }
+    public var isConnected: Bool { connectionState == .connected || connectionState == .connectedWrongBuild }
+
+    /// Whether we're in DEBUG build
+    public var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Whether the connected engine matches our build type
+    public var isMatchingBuild: Bool {
+        guard let engineDebug = status?.isDebugBuild else { return true }  // Assume match if unknown
+        return engineDebug == isDebugBuild
+    }
+
+    /// Warning message if connected to wrong engine
+    public var buildMismatchWarning: String? {
+        guard isConnected, !isMatchingBuild else { return nil }
+        if isDebugBuild {
+            return "Connected to RELEASE engine (expected DEBUG)"
+        } else {
+            return "Connected to DEBUG engine (expected RELEASE)"
+        }
+    }
 
     private var connection: NSXPCConnection?
     private var engineProxy: TalkieEngineProtocol?
@@ -517,13 +543,27 @@ public final class EngineClient: ObservableObject {
 
         proxy.getStatus { [weak self] statusJSON in
             Task { @MainActor in
+                guard let self else { return }
+
                 if let data = statusJSON,
                    let status = try? JSONDecoder().decode(EngineStatus.self, from: data) {
-                    self?.status = status
+                    self.status = status
+
+                    // Check for build mismatch
+                    if let engineDebug = status.isDebugBuild {
+                        if engineDebug != self.isDebugBuild {
+                            self.connectionState = .connectedWrongBuild
+                            logger.warning("[Engine] ⚠️ Build mismatch! App=\(self.isDebugBuild ? "DEBUG" : "RELEASE"), Engine=\(engineDebug ? "DEBUG" : "RELEASE")")
+                        } else if self.connectionState == .connectedWrongBuild {
+                            // Was mismatched, now correct
+                            self.connectionState = .connected
+                        }
+                    }
+
                     if let modelId = status.loadedModelId {
-                        logger.debug("[Engine] Status: model='\(modelId)', transcribing=\(status.isTranscribing)")
+                        logger.debug("[Engine] Status: model='\(modelId)', transcribing=\(status.isTranscribing), debug=\(status.isDebugBuild ?? false)")
                     } else {
-                        logger.debug("[Engine] Status: no model loaded")
+                        logger.debug("[Engine] Status: no model loaded, debug=\(status.isDebugBuild ?? false)")
                     }
                 }
             }
