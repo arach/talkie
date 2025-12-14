@@ -297,6 +297,9 @@ struct PersistenceController {
             // Start local file manager (syncs transcripts/audio to local folder if enabled)
             TranscriptFileManager.shared.configure(with: viewContext)
 
+            // Start JSON export service (scheduled exports to recordings.json)
+            JSONExportService.shared.configure(with: viewContext)
+
             // Mark existing memos as received by Mac (for sync status indicator)
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
 

@@ -108,6 +108,8 @@ enum FontStyleOption: String, CaseIterable {
 }
 
 // MARK: - Font Size Options
+/// Design system font sizes - canonical integer sizes, no fractional scaling
+/// Each size tier defines proper integer point sizes for crisp rendering
 enum FontSizeOption: String, CaseIterable {
     case small = "small"
     case medium = "medium"
@@ -115,14 +117,6 @@ enum FontSizeOption: String, CaseIterable {
 
     var displayName: String {
         rawValue.capitalized
-    }
-
-    var scale: CGFloat {
-        switch self {
-        case .small: return 0.9   // Tight but readable
-        case .medium: return 1.0
-        case .large: return 1.15
-        }
     }
 
     var icon: String {
@@ -133,12 +127,63 @@ enum FontSizeOption: String, CaseIterable {
         }
     }
 
-    /// Preview font size for the label itself
-    var previewFontSize: CGFloat {
+    // MARK: - Design System Sizes (integers only, no fractional scaling)
+
+    /// Extra-small: metadata, timestamps, badges
+    var xs: CGFloat {
         switch self {
         case .small: return 9
+        case .medium: return 10
+        case .large: return 11
+        }
+    }
+
+    /// Small: secondary text, captions, labels
+    var sm: CGFloat {
+        switch self {
+        case .small: return 10
         case .medium: return 11
-        case .large: return 13
+        case .large: return 12
+        }
+    }
+
+    /// Body: primary content text
+    var body: CGFloat {
+        switch self {
+        case .small: return 12
+        case .medium: return 13
+        case .large: return 15
+        }
+    }
+
+    /// Detail: expanded view text
+    var detail: CGFloat {
+        switch self {
+        case .small: return 13
+        case .medium: return 14
+        case .large: return 16
+        }
+    }
+
+    /// Title: headings
+    var title: CGFloat {
+        switch self {
+        case .small: return 14
+        case .medium: return 15
+        case .large: return 17
+        }
+    }
+
+    /// Preview font size for the settings label itself
+    var previewFontSize: CGFloat { body }
+
+    // Legacy compatibility - maps to a rough scale for existing code
+    // that uses `baseSize * scale`. Will produce integer results for common base sizes.
+    var scale: CGFloat {
+        switch self {
+        case .small: return 0.9
+        case .medium: return 1.0
+        case .large: return 1.15
         }
     }
 }
@@ -1015,6 +1060,7 @@ class SettingsManager: ObservableObject {
     // Controls how often automatic sync occurs (manual sync always available)
 
     private let syncIntervalMinutesKey = "syncIntervalMinutes"
+    private let jsonExportScheduleKey = "jsonExportSchedule"
 
     /// CloudKit sync interval in minutes (default: 10 minutes)
     /// Manual sync button is always available regardless of this setting
@@ -1032,6 +1078,18 @@ class SettingsManager: ObservableObject {
     /// Sync interval converted to seconds for use by CloudKitSyncManager
     var syncIntervalSeconds: TimeInterval {
         TimeInterval(syncIntervalMinutes * 60)
+    }
+
+    /// JSON export schedule (default: daily shallow, weekly deep)
+    @Published var jsonExportSchedule: JSONExportSchedule {
+        didSet {
+            let schedule = jsonExportSchedule
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(schedule.rawValue, forKey: self.jsonExportScheduleKey)
+            }
+            // Notify JSONExportService to update its timer
+            NotificationCenter.default.post(name: .jsonExportScheduleDidChange, object: nil)
+        }
     }
 
     // Internal storage - API keys now use Keychain (secure)
@@ -1191,6 +1249,15 @@ class SettingsManager: ObservableObject {
             self.syncIntervalMinutes = savedMinutes
         } else {
             self.syncIntervalMinutes = 10
+        }
+
+        // Initialize JSON export schedule
+        // Default: daily shallow (recent memos), weekly deep (everything)
+        if let scheduleString = UserDefaults.standard.string(forKey: jsonExportScheduleKey),
+           let schedule = JSONExportSchedule(rawValue: scheduleString) {
+            self.jsonExportSchedule = schedule
+        } else {
+            self.jsonExportSchedule = .dailyShallowWeeklyDeep
         }
 
         // Apply appearance mode on launch
@@ -1375,4 +1442,31 @@ class SettingsManager: ObservableObject {
 // MARK: - Notification Names
 extension Notification.Name {
     static let syncIntervalDidChange = Notification.Name("syncIntervalDidChange")
+    static let jsonExportScheduleDidChange = Notification.Name("jsonExportScheduleDidChange")
+}
+
+// MARK: - JSON Export Schedule
+enum JSONExportSchedule: String, Codable, CaseIterable {
+    case manual = "manual"
+    case dailyShallow = "dailyShallow"
+    case dailyShallowWeeklyDeep = "dailyShallowWeeklyDeep"
+    case weeklyDeep = "weeklyDeep"
+
+    var displayName: String {
+        switch self {
+        case .manual: return "Manual only"
+        case .dailyShallow: return "Daily (recent)"
+        case .dailyShallowWeeklyDeep: return "Daily + Weekly"
+        case .weeklyDeep: return "Weekly (all)"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .manual: return "Export manually when needed"
+        case .dailyShallow: return "Daily export of recent recordings"
+        case .dailyShallowWeeklyDeep: return "Daily recent + weekly full export"
+        case .weeklyDeep: return "Weekly full export of all recordings"
+        }
+    }
 }
