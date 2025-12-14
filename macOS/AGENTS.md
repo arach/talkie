@@ -209,6 +209,84 @@ AutoRunProcessor
 | `~/Library/Application Support/Talkie/WhisperModels/` | Downloaded models |
 | Core Data | `~/Library/Containers/.../Data/Library/Application Support/` |
 
+---
+
+## TalkieLive Data Architecture
+
+### Shared Database (Single Source of Truth)
+
+TalkieLive stores all utterances in a SQLite database shared via App Group:
+
+```
+~/Library/Group Containers/group.com.jdi.talkie/TalkieLive/PastLives.sqlite
+```
+
+**Access Pattern:**
+- **TalkieLive** → Read/Write (creates utterances on transcription)
+- **Talkie.app** → Read-only (displays Live history in sidebar)
+- **TalkieEngine** → No direct access (XPC service for transcription only)
+
+### Database Schema: `live_utterance`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER | Primary key (auto-increment) |
+| `createdAt` | DOUBLE | Unix timestamp |
+| `text` | TEXT | Transcribed text |
+| `mode` | TEXT | `paste`, `clipboard`, `queued`, `failed` |
+| `appBundleID` | TEXT | Source app bundle ID |
+| `appName` | TEXT | Source app display name |
+| `windowTitle` | TEXT | Active window title |
+| `durationSeconds` | DOUBLE | Recording duration |
+| `wordCount` | INTEGER | Word count |
+| `whisperModel` | TEXT | Model used (e.g., `parakeet:v3`) |
+| `transcriptionMs` | INTEGER | Transcription time in ms |
+| `metadata` | TEXT | JSON blob with rich context (see below) |
+| `audioFilename` | TEXT | Audio file name (stored separately) |
+| `transcriptionStatus` | TEXT | `success`, `failed`, `pending` |
+| `promotionStatus` | TEXT | `none`, `memo`, `command`, `ignored` |
+| `createdInTalkieView` | INTEGER | Boolean: created in TalkieLive UI |
+| `pasteTimestamp` | DOUBLE | When pasted (null = queued) |
+
+### Rich Context Metadata (JSON)
+
+The `metadata` column stores rich context captured via Accessibility API:
+
+```json
+{
+  "documentURL": "file:///path/to/file.swift",
+  "browserURL": "https://example.com/page",
+  "focusedElementRole": "AXTextArea",
+  "focusedElementValue": "// code snippet...",
+  "terminalWorkingDir": "~/dev/project"
+}
+```
+
+Captured at recording start time using `ContextCaptureService` (no screen recording required).
+
+### Audio Storage
+
+Audio files stored separately:
+
+```
+~/Library/Group Containers/group.com.jdi.talkie/TalkieLive/Audio/
+└── {uuid}.m4a
+```
+
+### Code Locations
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Database | `TalkieLive/Database/PastLivesDatabase.swift` | GRDB wrapper |
+| Model | `TalkieLive/Database/LiveUtterance.swift` | Data model |
+| Context Capture | `TalkieLive/ContextCaptureService.swift` | Accessibility API |
+| Talkie Read | `Talkie/Services/LiveDataStore.swift` | Read-only access |
+| Talkie Model | `Talkie/Models/LiveUtterance.swift` | Read-only mirror |
+
+### Migration
+
+Legacy JSON storage (`utterances.json`) is automatically migrated on first launch. Migrated files renamed to `.migrated.json`.
+
 ## Debugging
 
 - **System Console**: View in-app at `NavigationView` → System Console
