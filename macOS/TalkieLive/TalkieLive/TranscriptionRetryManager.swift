@@ -103,16 +103,8 @@ final class TranscriptionRetryManager: ObservableObject {
 
                 logger.info("[RetryManager] ✓ Retry succeeded for \(utterance.id ?? -1): \(text.prefix(50))...")
 
-                // Also update UtteranceStore for UI (legacy)
-                var metadata = UtteranceMetadata()
-                metadata.whisperModel = modelId
-                metadata.transcriptionDurationMs = transcriptionMs
-                metadata.audioFilename = utterance.audioFilename
-                UtteranceStore.shared.add(
-                    text,
-                    durationSeconds: utterance.durationSeconds,
-                    metadata: metadata
-                )
+                // Refresh UtteranceStore to pick up the updated record from DB
+                UtteranceStore.shared.refresh()
 
             } catch {
                 logger.error("[RetryManager] ✗ Retry failed for \(utterance.id ?? -1): \(error.localizedDescription)")

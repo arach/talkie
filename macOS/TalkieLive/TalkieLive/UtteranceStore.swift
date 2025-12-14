@@ -45,6 +45,23 @@ struct UtteranceMetadata: Codable, Hashable {
 
     init() {}
 
+    /// Initialize with specific fields (used when converting from LiveUtterance)
+    init(
+        activeAppBundleID: String? = nil,
+        activeAppName: String? = nil,
+        activeWindowTitle: String? = nil,
+        whisperModel: String? = nil,
+        transcriptionDurationMs: Int? = nil,
+        audioFilename: String? = nil
+    ) {
+        self.activeAppBundleID = activeAppBundleID
+        self.activeAppName = activeAppName
+        self.activeWindowTitle = activeWindowTitle
+        self.whisperModel = whisperModel
+        self.transcriptionDurationMs = transcriptionDurationMs
+        self.audioFilename = audioFilename
+    }
+
     /// Full URL to the audio file if it exists
     var audioURL: URL? {
         guard let filename = audioFilename else { return nil }
@@ -91,6 +108,9 @@ struct Utterance: Identifiable, Codable, Hashable {
     let durationSeconds: Double?
     var metadata: UtteranceMetadata
 
+    /// Database ID (from LiveUtterance) - used for linking to database records
+    var liveID: Int64?
+
     // Computed properties
     var wordCount: Int {
         text.split(separator: " ").count
@@ -106,6 +126,17 @@ struct Utterance: Identifiable, Codable, Hashable {
         self.timestamp = Date()
         self.durationSeconds = durationSeconds
         self.metadata = metadata
+        self.liveID = nil
+    }
+
+    /// Initialize from database record
+    init(text: String, durationSeconds: Double?, metadata: UtteranceMetadata, timestamp: Date, liveID: Int64?) {
+        self.id = UUID()
+        self.text = text
+        self.timestamp = timestamp
+        self.durationSeconds = durationSeconds
+        self.metadata = metadata
+        self.liveID = liveID
     }
 
     func hash(into hasher: inout Hasher) {
@@ -211,77 +242,132 @@ struct ContextCapture {
 final class UtteranceStore: ObservableObject {
     static let shared = UtteranceStore()
 
+    /// Published utterances - now backed by SQLite database
     @Published private(set) var utterances: [Utterance] = []
 
-    /// TTL in seconds - default 48 hours
-    var ttlSeconds: TimeInterval = 48 * 60 * 60
-
-    private let storageURL: URL
+    /// TTL in hours - default 48 hours
+    var ttlHours: Int = 48
 
     private init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appDir = appSupport.appendingPathComponent("TalkieLive", isDirectory: true)
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        self.storageURL = appDir.appendingPathComponent("utterances.json")
-
-        load()
-        pruneExpired()
+        // Load from database on init
+        refresh()
     }
 
+    // MARK: - Public API
+
+    /// Add a new utterance (stores to SQLite database)
     func add(_ text: String, durationSeconds: Double? = nil, metadata: UtteranceMetadata = UtteranceMetadata()) {
-        let utterance = Utterance(text: text, durationSeconds: durationSeconds, metadata: metadata)
-        utterances.insert(utterance, at: 0)
+        // Convert to LiveUtterance for database storage
+        let liveUtterance = LiveUtterance(
+            text: text,
+            mode: metadata.routingMode ?? "typing",
+            appBundleID: metadata.activeAppBundleID,
+            appName: metadata.activeAppName,
+            windowTitle: metadata.activeWindowTitle,
+            durationSeconds: durationSeconds,
+            wordCount: text.split(separator: " ").count,
+            whisperModel: metadata.whisperModel,
+            transcriptionMs: metadata.transcriptionDurationMs,
+            audioFilename: metadata.audioFilename,
+            transcriptionStatus: .success
+        )
+
+        PastLivesDatabase.store(liveUtterance)
         logger.info("Added utterance: \(text.prefix(50))... from \(metadata.activeAppName ?? "unknown")")
-        save()
+
+        // Refresh to get the new utterance with its ID
+        refresh()
     }
 
+    /// Add a LiveUtterance directly (for new recordings)
+    func addLive(_ liveUtterance: LiveUtterance) {
+        PastLivesDatabase.store(liveUtterance)
+        logger.info("Added live utterance: \(liveUtterance.text.prefix(50))...")
+        refresh()
+    }
+
+    /// Update an existing utterance
     func update(_ utterance: Utterance) {
-        if let index = utterances.firstIndex(where: { $0.id == utterance.id }) {
-            utterances[index] = utterance
-            save()
-        }
+        // For now, just refresh - updates go through PastLivesDatabase directly
+        refresh()
     }
 
+    /// Delete an utterance
     func delete(_ utterance: Utterance) {
-        utterances.removeAll { $0.id == utterance.id }
-        save()
-        logger.info("Deleted utterance: \(utterance.text.prefix(30))...")
+        // Use liveID if available, otherwise match by timestamp
+        if let liveID = utterance.liveID,
+           let live = PastLivesDatabase.fetch(id: liveID) {
+            PastLivesDatabase.delete(live)
+            logger.info("Deleted utterance by ID: \(utterance.text.prefix(30))...")
+        } else {
+            // Fallback: match by timestamp
+            let liveUtterances = PastLivesDatabase.all()
+            if let live = liveUtterances.first(where: { $0.createdAt == utterance.timestamp }) {
+                PastLivesDatabase.delete(live)
+                logger.info("Deleted utterance by timestamp: \(utterance.text.prefix(30))...")
+            }
+        }
+        refresh()
     }
 
+    /// Clear all utterances
     func clear() {
-        utterances.removeAll()
-        save()
+        PastLivesDatabase.deleteAll()
         logger.info("Cleared all utterances")
+        refresh()
     }
 
+    /// Prune expired utterances
     func pruneExpired() {
-        let cutoff = Date().addingTimeInterval(-ttlSeconds)
-        let before = utterances.count
-        utterances.removeAll { $0.timestamp < cutoff }
-        let removed = before - utterances.count
-        if removed > 0 {
-            logger.info("Pruned \(removed) expired utterances")
-            save()
-        }
+        PastLivesDatabase.prune(olderThanHours: ttlHours)
+        refresh()
     }
 
-    private func save() {
-        do {
-            let data = try JSONEncoder().encode(utterances)
-            try data.write(to: storageURL)
-        } catch {
-            logger.error("Failed to save utterances: \(error.localizedDescription)")
+    /// Refresh from database
+    func refresh() {
+        let liveUtterances = PastLivesDatabase.all()
+        utterances = liveUtterances.map { live in
+            Utterance(
+                text: live.text,
+                durationSeconds: live.durationSeconds,
+                metadata: UtteranceMetadata(
+                    activeAppBundleID: live.appBundleID,
+                    activeAppName: live.appName,
+                    activeWindowTitle: live.windowTitle,
+                    whisperModel: live.whisperModel,
+                    transcriptionDurationMs: live.transcriptionMs,
+                    audioFilename: live.audioFilename
+                ),
+                timestamp: live.createdAt,
+                liveID: live.id
+            )
         }
+        logger.debug("Refreshed \(self.utterances.count) utterances from database")
     }
 
-    private func load() {
-        guard FileManager.default.fileExists(atPath: storageURL.path) else { return }
-        do {
-            let data = try Data(contentsOf: storageURL)
-            utterances = try JSONDecoder().decode([Utterance].self, from: data)
-            logger.info("Loaded \(self.utterances.count) utterances")
-        } catch {
-            logger.error("Failed to load utterances: \(error.localizedDescription)")
+    /// Get total count
+    var count: Int {
+        PastLivesDatabase.count()
+    }
+
+    /// Search utterances
+    func search(_ query: String) -> [Utterance] {
+        let results = PastLivesDatabase.search(query)
+        return results.map { live in
+            Utterance(
+                text: live.text,
+                durationSeconds: live.durationSeconds,
+                metadata: UtteranceMetadata(
+                    activeAppBundleID: live.appBundleID,
+                    activeAppName: live.appName,
+                    activeWindowTitle: live.windowTitle,
+                    whisperModel: live.whisperModel,
+                    transcriptionDurationMs: live.transcriptionMs,
+                    audioFilename: live.audioFilename
+                ),
+                timestamp: live.createdAt,
+                liveID: live.id
+            )
         }
     }
 }

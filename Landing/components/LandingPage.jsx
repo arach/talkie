@@ -204,23 +204,22 @@ export default function LandingPage() {
       <section className="relative pt-36 pb-12 md:pt-40 md:pb-16 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
         <div className={`absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] pointer-events-none transition-opacity duration-300 ease-out ${iosHover ? 'opacity-0' : 'opacity-60'}`} />
 
-        {/* Left hover zone for video reveal - only on larger screens */}
+        {/* Left hover zone for video reveal - only at xl+ where fixed video is visible */}
         <div
-          className="absolute left-0 top-0 w-1/2 h-full hidden md:block z-20"
+          className="absolute left-0 top-0 w-1/2 h-full hidden xl:block z-20"
           onMouseEnter={() => setIosHover(true)}
           onMouseLeave={() => setIosHover(false)}
         />
 
-        {/* iPhone video - responsive sizing:
-            - Hidden below md (768px)
-            - Smaller (250px) between md and xl (768-1280px)
-            - Full size (330px) at xl+ (1280px+)
+        {/* iPhone video - only shows at xl+ (1280px+)
+            - Hidden below xl to avoid covering hero content
+            - Below xl, the expandable slice preview is shown instead
         */}
         <div
-          className={`fixed left-4 lg:left-8 xl:left-16 top-1/2 -translate-y-1/2 xl:top-[52px] xl:translate-y-0 w-[220px] lg:w-[260px] xl:w-[330px] pointer-events-none select-none hidden md:block rounded-[1.5rem] lg:rounded-[1.75rem] xl:rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${iosHover ? 'z-50' : 'z-20'} transition-opacity duration-150`}
+          className={`fixed left-16 top-[52px] w-[330px] pointer-events-none select-none hidden xl:block rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${iosHover ? 'z-50' : 'z-20'} transition-opacity duration-150`}
           style={{ isolation: 'isolate', opacity: 1 - scrollProgress }}
         >
-          <div className={`rounded-[1.5rem] lg:rounded-[1.75rem] xl:rounded-[2rem] border-[2px] lg:border-[3px] border-zinc-700 overflow-hidden transition-opacity duration-300 ease-out ${iosHover ? 'opacity-100' : 'opacity-30'}`}>
+          <div className={`rounded-[2rem] border-[3px] border-zinc-700 overflow-hidden transition-opacity duration-300 ease-out ${iosHover ? 'opacity-100' : 'opacity-30'}`}>
             <video
               src="/recording-preview-half.mp4"
               autoPlay
@@ -247,8 +246,8 @@ export default function LandingPage() {
             Capture on iPhone. Process on Mac. Synced through your encrypted iCloud — not our servers. Your data never leaves your Apple ecosystem.
           </p>
 
-          {/* Mobile Video Preview - shows below md (768px) */}
-          <div className="md:hidden mb-8">
+          {/* Video Preview - shows below xl (1280px) as expandable slice */}
+          <div className="xl:hidden mb-8">
             {/* Container - slice and expanded phone share same video position */}
             <div className="relative flex flex-col items-center gap-3">
 

@@ -60,6 +60,8 @@
 		7F82DFFA1B16E6E8BC6F68A0 /* PendingActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35028147CAD1F8AA00F3561D /* PendingActionsView.swift */; };
 		8063B685266428801B46BC43 /* SystemConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CF75F0011D8585DD8DB871 /* SystemConsoleView.swift */; };
 		806D5D8AD2E97E227825DAB6 /* extract-action-items.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = BF2EA8008751E53C9D1E7494 /* extract-action-items.twf.json */; };
+		85961B2244A61045B2F3FB1A /* LiveListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C48C1F46F4D3B1AB63DD86 /* LiveListView.swift */; };
+		86AB1DC695648B3EAE1A3E1A /* LiveDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520CBF473DEAA070AE19E802 /* LiveDataStore.swift */; };
 		871EC1E845E8071556467FFC /* QuickOpenSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A2AA3D0376EDA1A44A3C31 /* QuickOpenSettings.swift */; };
 		8BB3696770DDD4A71196892D /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31777395717FAEC0695EF5AC /* LLMProvider.swift */; };
 		8D9519FCEB25EE8F01B82594 /* quick-summary.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 25ED5D4E4005E57CAEF96F7F /* quick-summary.twf.json */; };
@@ -78,6 +80,7 @@
 		B51587461BFB51452F58FC6A /* TWF_GENERATION_PROMPT.md in Resources */ = {isa = PBXBuildFile; fileRef = 394615BAE0B9C87F889FE23A /* TWF_GENERATION_PROMPT.md */; };
 		B93B60C64B35A0BB5C82BB98 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = 888B917F1D14A6981B3952DF /* MLX */; };
 		BB2616B0993300F4C54E9E0B /* talkie.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 4F1A26DD0EB35BB47991023F /* talkie.xcdatamodeld */; };
+		C68922D0665D7587B04CCD96 /* LiveUtterance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C53F14BB9B3E5C883A47FCF /* LiveUtterance.swift */; };
 		C71513A0A6EF966DD60FF8C7 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C368F29870833A22EA1F5E0 /* DesignSystem.swift */; };
 		C95A1F5BA10EBE178A095D04 /* brain-dump-processor.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 6F3F74262D51A295C8C6E020 /* brain-dump-processor.twf.json */; };
 		CA38C7C6CFE0057E73773A3B /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */; };
@@ -136,10 +139,12 @@
 		499C191C937A588B1FC14A1B /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
 		4E35708A082682B2EEEEFB9B /* WalkieService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieService.swift; sourceTree = "<group>"; };
 		5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettings.swift; sourceTree = "<group>"; };
+		520CBF473DEAA070AE19E802 /* LiveDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDataStore.swift; sourceTree = "<group>"; };
 		53C628E8435C070BDA2131C1 /* MigrationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationRunner.swift; sourceTree = "<group>"; };
 		5696777625C75E91EA7F8DC1 /* TalkieServiceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieServiceMonitor.swift; sourceTree = "<group>"; };
 		5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
 		57C6047C0D7A6847288E7B3C /* cloud-transcribe.twf.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "cloud-transcribe.twf.json"; sourceTree = "<group>"; };
+		5C53F14BB9B3E5C883A47FCF /* LiveUtterance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveUtterance.swift; sourceTree = "<group>"; };
 		5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenBar.swift; sourceTree = "<group>"; };
 		6004FB1AB3BD3324B0E0F903 /* WorkflowContentViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowContentViews.swift; sourceTree = "<group>"; };
 		6320567449625417C05E9521 /* WorkflowDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowDefinition.swift; sourceTree = "<group>"; };
@@ -168,6 +173,7 @@
 		A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoTableViews.swift; sourceTree = "<group>"; };
 		A64BF792ECAB5F2F70A7A085 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProvider.swift; sourceTree = "<group>"; };
 		B6A2AA3D0376EDA1A44A3C31 /* QuickOpenSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenSettings.swift; sourceTree = "<group>"; };
+		B6C48C1F46F4D3B1AB63DD86 /* LiveListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListView.swift; sourceTree = "<group>"; };
 		B85E11D8D3E8BED31169CF0F /* Migrations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Migrations.swift; sourceTree = "<group>"; };
 		BB66A9AB5F11CD75E0C5CD7A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugToolbar.swift; sourceTree = "<group>"; };
@@ -272,6 +278,7 @@
 				7873E71319209F4F26C64705 /* WalkieConversationView.swift */,
 				684E68244668F49BFE901621 /* Activity */,
 				DA139020BF07C1F2E23AAAEE /* AIResults */,
+				93BC57849B0132956BBB7950 /* Live */,
 				C29E4780F3D169C72DF59E2C /* Memos */,
 				07EC6608E6DA26A94F36034F /* Models */,
 				9A4651765758DD61801D03CA /* Settings */,
@@ -318,6 +325,14 @@
 				03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */,
 			);
 			path = LLM;
+			sourceTree = "<group>";
+		};
+		93BC57849B0132956BBB7950 /* Live */ = {
+			isa = PBXGroup;
+			children = (
+				B6C48C1F46F4D3B1AB63DD86 /* LiveListView.swift */,
+			);
+			path = Live;
 			sourceTree = "<group>";
 		};
 		976DB5AE94679723D8726EDE /* Workflow */ = {
@@ -376,6 +391,7 @@
 		BBCA253BAE0A58F03D33736C /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				5C53F14BB9B3E5C883A47FCF /* LiveUtterance.swift */,
 				C4EF64A25E468DE9A83C8056 /* Persistence.swift */,
 				4F1A26DD0EB35BB47991023F /* talkie.xcdatamodeld */,
 				03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */,
@@ -432,6 +448,7 @@
 				1C368F29870833A22EA1F5E0 /* DesignSystem.swift */,
 				363C7359197DE3D1F85A6715 /* EngineClient.swift */,
 				BFA115E69E2A9DEA695B5B87 /* KeychainManager.swift */,
+				520CBF473DEAA070AE19E802 /* LiveDataStore.swift */,
 				E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */,
 				D0BEB64626022A478D00AB94 /* ParakeetService.swift */,
 				20D24FE1F81720CC4E6F9728 /* PendingActionsManager.swift */,
@@ -459,7 +476,6 @@
 				EA194AA771EAE7B4558378F9 /* Sources */,
 				50E43F8F207F190E1D0EBDAD /* Resources */,
 				7E24B069041EDB999AC50581 /* Frameworks */,
-				EMBED_HELPERS_PHASE /* Embed Helper Apps */,
 			);
 			buildRules = (
 			);
@@ -545,27 +561,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		EMBED_HELPERS_PHASE /* Embed Helper Apps */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Embed Helper Apps";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "# Embed TalkieLive and TalkieEngine into LoginItems\n# This runs as part of the Xcode build so signing is handled automatically\n\nLOGINITEMS_DIR=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Library/LoginItems\"\nmkdir -p \"$LOGINITEMS_DIR\"\n\n# Copy TalkieEngine if built (check workspace build dir)\nENGINE_APP=\"${BUILT_PRODUCTS_DIR}/TalkieEngine.app\"\nif [ -d \"$ENGINE_APP\" ]; then\n    echo \"Embedding TalkieEngine.app...\"\n    rm -rf \"$LOGINITEMS_DIR/TalkieEngine.app\"\n    cp -R \"$ENGINE_APP\" \"$LOGINITEMS_DIR/\"\nelse\n    echo \"warning: TalkieEngine.app not found at $ENGINE_APP\"\n    echo \"note: Build TalkieEngine first, or use workspace scheme\"\nfi\n\n# Copy TalkieLive if built\nLIVE_APP=\"${BUILT_PRODUCTS_DIR}/TalkieLive.app\"\nif [ -d \"$LIVE_APP\" ]; then\n    echo \"Embedding TalkieLive.app...\"\n    rm -rf \"$LOGINITEMS_DIR/TalkieLive.app\"\n    cp -R \"$LIVE_APP\" \"$LOGINITEMS_DIR/\"\nelse\n    echo \"warning: TalkieLive.app not found at $LIVE_APP\"\n    echo \"note: Build TalkieLive first, or use workspace scheme\"\nfi\n\necho \"LoginItems directory contents:\"\nls -la \"$LOGINITEMS_DIR\" 2>/dev/null || echo \"(empty)\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
 		EA194AA771EAE7B4558378F9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -596,6 +591,9 @@
 				4B7FA677771D42FAC5CC4AC6 /* LLMModelCards.swift in Sources */,
 				8BB3696770DDD4A71196892D /* LLMProvider.swift in Sources */,
 				217A8AB59A41C52DFAB13BE4 /* LegacyModelCards.swift in Sources */,
+				86AB1DC695648B3EAE1A3E1A /* LiveDataStore.swift in Sources */,
+				85961B2244A61045B2F3FB1A /* LiveListView.swift in Sources */,
+				C68922D0665D7587B04CCD96 /* LiveUtterance.swift in Sources */,
 				4DFC1D0D69DDD70AEE5E475B /* LocalFilesSettings.swift in Sources */,
 				44D1058029445380B96AA35E /* MLXProvider.swift in Sources */,
 				74F25F70F5FB72E219B3B2EE /* MemoDetailView.swift in Sources */,

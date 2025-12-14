@@ -16,11 +16,30 @@ struct TalkieLiveApp: App {
                 .sheet(isPresented: $troubleshooter.isShowing) {
                     AudioTroubleshooterView()
                 }
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 800, height: 500)
         .commands {
             CommandGroup(replacing: .newItem) { }
+        }
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        // Handle talkielive://utterance/{id}
+        guard url.scheme == "talkielive" else { return }
+
+        if url.host == "utterance",
+           let idString = url.pathComponents.last,
+           let id = Int64(idString) {
+            // Post notification to select this utterance
+            NotificationCenter.default.post(
+                name: .selectUtterance,
+                object: nil,
+                userInfo: ["id": id]
+            )
         }
     }
 
@@ -38,4 +57,10 @@ struct TalkieLiveApp: App {
 
 #Preview {
     LiveNavigationView()
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let selectUtterance = Notification.Name("selectUtterance")
 }

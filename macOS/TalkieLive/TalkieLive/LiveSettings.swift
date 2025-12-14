@@ -411,7 +411,7 @@ final class LiveSettings: ObservableObject {
     @Published var utteranceTTLHours: Int {
         didSet {
             save()
-            UtteranceStore.shared.ttlSeconds = TimeInterval(utteranceTTLHours * 3600)
+            UtteranceStore.shared.ttlHours = utteranceTTLHours
         }
     }
 
@@ -639,7 +639,7 @@ final class LiveSettings: ObservableObject {
         self.returnToOriginAfterPaste = UserDefaults.standard.bool(forKey: returnToOriginAfterPasteKey)
 
         // Apply TTL to store
-        UtteranceStore.shared.ttlSeconds = TimeInterval(utteranceTTLHours * 3600)
+        UtteranceStore.shared.ttlHours = utteranceTTLHours
     }
 
     // MARK: - Persistence

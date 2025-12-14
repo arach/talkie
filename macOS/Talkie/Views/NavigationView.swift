@@ -10,6 +10,7 @@ import CoreData
 
 enum NavigationSection: Hashable {
     case allMemos
+    case live
     case aiResults
     case workflows
     case activityLog
@@ -26,6 +27,7 @@ struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
     // Use let for singletons - @ObservedObject causes full rerender on every settings change
     private let settings = SettingsManager.shared
+    @ObservedObject private var liveDataStore = LiveDataStore.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -123,6 +125,11 @@ struct TalkieNavigationView: View {
             // (monitoring is now lazy - only starts when monitor view is shown)
             talkieServiceMonitor.refreshState()
             serviceIsRunning = (talkieServiceMonitor.state == .running)
+            // Start Live data monitoring
+            liveDataStore.startMonitoring()
+        }
+        .onDisappear {
+            liveDataStore.stopMonitoring()
         }
         #if DEBUG
         .overlay(alignment: .bottomTrailing) {
@@ -314,6 +321,7 @@ struct TalkieNavigationView: View {
                 // Collapsed: simple VStack, no scroll, natural sizing
                 VStack(spacing: 0) {
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
+                    sidebarButton(section: .live, icon: "waveform.badge.mic", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
                     sidebarButton(section: .aiResults, icon: "chart.line.uptrend.xyaxis", title: "Actions")
                     sidebarButton(section: .pendingActions, icon: "clock.arrow.circlepath", title: "Pending", badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil, badgeColor: .accentColor, showSpinner: pendingActionsManager.hasActiveActions)
                     sidebarButton(section: .workflows, icon: "wand.and.stars", title: "Workflows")
@@ -334,6 +342,13 @@ struct TalkieNavigationView: View {
                             title: "All Memos",
                             badge: allMemos.count > 0 ? "\(allMemos.count)" : nil,
                             badgeColor: .secondary
+                        )
+                        sidebarButton(
+                            section: .live,
+                            icon: "waveform.badge.mic",
+                            title: "Live",
+                            badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil,
+                            badgeColor: .cyan
                         )
 
                         // Activity section
@@ -550,6 +565,8 @@ struct TalkieNavigationView: View {
             ActivityLogFullView()
         case .allMemos:
             MemoTableFullView()
+        case .live:
+            LiveListView()
         case .systemConsole:
             SystemConsoleView(onClose: {
                 // Return to previous section, or allMemos if none
@@ -577,7 +594,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models, .allowedCommands, .aiResults, .allMemos, .systemConsole, .pendingActions, .talkieService, .settings:
+        case .models, .allowedCommands, .aiResults, .allMemos, .live, .systemConsole, .pendingActions, .talkieService, .settings:
             return true
         default:
             return false
@@ -638,6 +655,7 @@ struct TalkieNavigationView: View {
     private var sectionTitle: String {
         switch selectedSection {
         case .allMemos: return "ALL MEMOS"
+        case .live: return "LIVE"
         case .aiResults: return "ACTIVITY LOG"
         case .workflows: return "WORKFLOWS"
         case .activityLog: return "ACTIVITY LOG"

@@ -104,6 +104,7 @@ mkdir -p "$PACKAGES_DIR"
 sign_app() {
     local APP_PATH="$1"
     local APP_NAME=$(basename "$APP_PATH")
+    local APP_BASE="${APP_NAME%.app}"
 
     echo "  🔏 Signing $APP_NAME..."
 
@@ -113,13 +114,29 @@ sign_app() {
             --sign "$DEVELOPER_ID_APP" "$item" 2>/dev/null || true
     done
 
+    # Find entitlements file (handles different project structures)
+    local ENTITLEMENTS=""
+    for path in \
+        "$ROOT_DIR/macOS/$APP_BASE/$APP_BASE/$APP_BASE.entitlements" \
+        "$ROOT_DIR/macOS/$APP_BASE/$APP_BASE.entitlements" \
+        "$ROOT_DIR/macOS/$APP_BASE/Talkie.entitlements"; do
+        if [ -f "$path" ]; then
+            ENTITLEMENTS="$path"
+            break
+        fi
+    done
+
     # Sign the main app bundle
-    codesign --force --options runtime --timestamp \
-        --sign "$DEVELOPER_ID_APP" \
-        --entitlements "$ROOT_DIR/macOS/$(echo $APP_NAME | sed 's/.app//')/$(echo $APP_NAME | sed 's/.app//').entitlements" \
-        "$APP_PATH" 2>/dev/null || \
-    codesign --force --options runtime --timestamp \
-        --sign "$DEVELOPER_ID_APP" "$APP_PATH"
+    if [ -n "$ENTITLEMENTS" ]; then
+        codesign --force --options runtime --timestamp \
+            --sign "$DEVELOPER_ID_APP" \
+            --entitlements "$ENTITLEMENTS" \
+            "$APP_PATH"
+    else
+        echo "  ⚠️  No entitlements file found for $APP_NAME"
+        codesign --force --options runtime --timestamp \
+            --sign "$DEVELOPER_ID_APP" "$APP_PATH"
+    fi
 
     # Verify signature
     if codesign --verify --deep --strict "$APP_PATH" 2>/dev/null; then
@@ -278,59 +295,89 @@ fi
 
 # ═══════════════════════════════════════════════════════════
 # CREATE UNIFIED BUNDLE (if target is unified)
+# Uses workspace archive → export for proper iCloud signing
 # ═══════════════════════════════════════════════════════════
 if [ "$TARGET" = "unified" ] || [ "$TARGET" = "all" ]; then
     echo ""
-    echo "📦 Creating unified Talkie.app bundle..."
+    echo "📦 Building unified Talkie.app bundle..."
+    echo "   (Using workspace archive for proper CloudKit signing)"
+
+    UNIFIED_ARCHIVE="$BUILD_DIR/TalkieUnified/Talkie-Unified-$VERSION.xcarchive"
+    UNIFIED_EXPORT="$BUILD_DIR/TalkieUnified/Export-$VERSION"
+    UNIFIED_APP="$UNIFIED_EXPORT/Talkie.app"
+
+    # SKIP_CLEAN: reuse existing export if available
+    if [ "$SKIP_CLEAN" = "1" ] && [ -d "$UNIFIED_APP" ]; then
+        echo "  ⏭️  Reusing existing unified Talkie.app export (SKIP_CLEAN=1)"
+    else
+        # Archive using the workspace scheme "Talkie for Mac"
+        # This scheme:
+        #   - Builds TalkieEngine and TalkieLive (Archive unchecked)
+        #   - Builds Talkie with embed phase that copies helpers to LoginItems
+        #   - Archives only Talkie.app (Archive checked)
+        echo "  📦 Creating archive via workspace..."
+        cd "$ROOT_DIR"
+        xcodebuild -workspace TalkieSuite.xcworkspace \
+            -scheme "Talkie for Mac" \
+            -configuration Release \
+            -archivePath "$UNIFIED_ARCHIVE" \
+            -destination "generic/platform=macOS" \
+            archive 2>&1 | grep -E "(error:|warning:|ARCHIVE|Signing)" || true
+
+        if [ ! -d "$UNIFIED_ARCHIVE" ]; then
+            echo "❌ Unified archive failed"
+            exit 1
+        fi
+        echo "  ✅ Archive created"
+
+        echo "  📤 Exporting with Developer ID..."
+        xcodebuild -exportArchive \
+            -archivePath "$UNIFIED_ARCHIVE" \
+            -exportPath "$UNIFIED_EXPORT" \
+            -exportOptionsPlist "$SCRIPT_DIR/exportOptions-unified.plist" \
+            2>&1 | grep -E "(error:|warning:|EXPORT)" || true
+
+        if [ ! -d "$UNIFIED_APP" ]; then
+            echo "❌ Unified export failed"
+            exit 1
+        fi
+        echo "  ✅ Exported with proper signing (iCloud entitlements preserved)"
+    fi
 
     # Create unified staging directory
     rm -rf "$STAGING_DIR/unified"
     mkdir -p "$STAGING_DIR/unified/Applications"
+    cp -R "$UNIFIED_APP" "$STAGING_DIR/unified/Applications/"
 
-    # Copy main Talkie.app
-    cp -R "$STAGING_DIR/core/Applications/Talkie.app" "$STAGING_DIR/unified/Applications/"
-
-    UNIFIED_APP="$STAGING_DIR/unified/Applications/Talkie.app"
-    LOGIN_ITEMS_DIR="$UNIFIED_APP/Contents/Library/LoginItems"
-
-    # Create LoginItems directory
-    mkdir -p "$LOGIN_ITEMS_DIR"
-
-    # Copy helper apps into LoginItems
-    echo "  📁 Embedding TalkieEngine.app..."
-    cp -R "$STAGING_DIR/engine/Applications/TalkieEngine.app" "$LOGIN_ITEMS_DIR/"
-
-    echo "  📁 Embedding TalkieLive.app..."
-    cp -R "$STAGING_DIR/live/Applications/TalkieLive.app" "$LOGIN_ITEMS_DIR/"
-
-    # Re-sign embedded helper apps (they need to be signed when embedded)
-    echo "  🔏 Re-signing embedded helpers..."
-
-    # Sign TalkieEngine
-    codesign --force --options runtime --timestamp \
-        --sign "$DEVELOPER_ID_APP" \
-        "$LOGIN_ITEMS_DIR/TalkieEngine.app"
-    echo "    ✅ TalkieEngine.app signed"
-
-    # Sign TalkieLive
-    codesign --force --options runtime --timestamp \
-        --sign "$DEVELOPER_ID_APP" \
-        "$LOGIN_ITEMS_DIR/TalkieLive.app"
-    echo "    ✅ TalkieLive.app signed"
-
-    # Re-sign the main bundle (must be done last, after embedding)
-    echo "  🔏 Re-signing unified Talkie.app..."
-    codesign --force --options runtime --timestamp --deep \
-        --sign "$DEVELOPER_ID_APP" \
-        --entitlements "$ROOT_DIR/macOS/Talkie/Talkie.entitlements" \
-        "$UNIFIED_APP"
-
-    # Verify unified bundle signature
-    echo "  🔍 Verifying unified bundle signature..."
-    if codesign --verify --deep --strict "$UNIFIED_APP" 2>/dev/null; then
-        echo "  ✅ Unified Talkie.app signature verified"
+    # Verify unified bundle signature and structure
+    echo "  🔍 Verifying unified bundle..."
+    if codesign --verify --deep --strict "$STAGING_DIR/unified/Applications/Talkie.app" 2>/dev/null; then
+        echo "  ✅ Signature verified"
     else
-        echo "  ⚠️  Unified bundle signature verification issue"
+        echo "  ⚠️  Signature verification issue"
+    fi
+
+    # Verify helpers are embedded, if not - embed them manually
+    UNIFIED_LOGIN_ITEMS="$STAGING_DIR/unified/Applications/Talkie.app/Contents/Library/LoginItems"
+    if [ -d "$UNIFIED_LOGIN_ITEMS/TalkieEngine.app" ] && \
+       [ -d "$UNIFIED_LOGIN_ITEMS/TalkieLive.app" ]; then
+        echo "  ✅ Helper apps embedded in LoginItems (via build phase)"
+    else
+        echo "  📁 Embedding helper apps manually..."
+        mkdir -p "$UNIFIED_LOGIN_ITEMS"
+
+        # Copy from staging (already built and signed)
+        cp -R "$STAGING_DIR/engine/Applications/TalkieEngine.app" "$UNIFIED_LOGIN_ITEMS/"
+        cp -R "$STAGING_DIR/live/Applications/TalkieLive.app" "$UNIFIED_LOGIN_ITEMS/"
+
+        # Re-seal the main bundle (preserve provisioning profile)
+        echo "  🔏 Re-sealing unified bundle..."
+        codesign --force --options runtime --timestamp \
+            --sign "$DEVELOPER_ID_APP" \
+            --preserve-metadata=identifier,entitlements,requirements \
+            "$STAGING_DIR/unified/Applications/Talkie.app"
+
+        echo "  ✅ Helper apps embedded manually"
     fi
 
     # Show bundle structure
@@ -339,8 +386,7 @@ if [ "$TARGET" = "unified" ] || [ "$TARGET" = "all" ]; then
     echo "       └── Contents/"
     echo "           └── Library/"
     echo "               └── LoginItems/"
-    echo "                   ├── TalkieEngine.app"
-    echo "                   └── TalkieLive.app"
+    ls "$STAGING_DIR/unified/Applications/Talkie.app/Contents/Library/LoginItems/" 2>/dev/null | sed 's/^/                   ├── /' || echo "                   (empty)"
 
     echo "✅ Unified bundle created"
 fi

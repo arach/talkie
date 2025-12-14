@@ -319,12 +319,8 @@ final class LiveController: ObservableObject {
             // Track milestone
             ProcessingMilestones.shared.markDbRecordStored()
 
-            // Also update legacy store for UI (until we migrate)
-            UtteranceStore.shared.add(
-                result.text,
-                durationSeconds: durationSeconds,
-                metadata: metadata
-            )
+            // Refresh UtteranceStore to pick up the new record from DB
+            UtteranceStore.shared.refresh()
 
             // Final success log
             SystemEventManager.shared.log(.system, "Pipeline complete", detail: "Ready for next recording")

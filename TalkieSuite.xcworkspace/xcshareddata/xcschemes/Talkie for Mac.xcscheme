@@ -125,6 +125,7 @@
    </AnalyzeAction>
    <ArchiveAction
       buildConfiguration = "Release"
+      customArchiveName = "Talkie"
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>

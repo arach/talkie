@@ -98,6 +98,17 @@ struct LiveNavigationView: View {
         .onReceive(NotificationCenter.default.publisher(for: .switchToRecent)) { _ in
             selectedSection = .history
         }
+        .onReceive(NotificationCenter.default.publisher(for: .selectUtterance)) { notification in
+            // Handle deep link to select specific utterance
+            if let id = notification.userInfo?["id"] as? Int64 {
+                // Switch to history view
+                selectedSection = .history
+                // Find and select the utterance by liveID
+                if let utterance = store.utterances.first(where: { $0.liveID == id }) {
+                    selectedUtterance = utterance
+                }
+            }
+        }
     }
 
     // MARK: - Sidebar Content (Collapsible)
