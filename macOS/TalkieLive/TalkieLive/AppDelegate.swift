@@ -23,10 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Initialize retry manager (watches for engine reconnection)
         _ = TranscriptionRetryManager.shared
 
-        // Start action observer (proof of concept - watches for task completions)
-        #if DEBUG
-        ActionObserver.shared.startObserving()
-        #endif
+        // Action observer disabled - POC needs more work before it's useful
+        // The polling approach adds overhead without clear benefit yet
+        // #if DEBUG
+        // ActionObserver.shared.startObserving()
+        // #endif
 
         let audio = MicrophoneCapture()
 
