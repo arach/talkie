@@ -15,7 +15,7 @@ import AVFoundation
 enum LiveNavigationSection: Hashable {
     case home
     case history
-    case console
+    case logs
     case settings
 }
 
@@ -71,6 +71,7 @@ struct LiveNavigationView: View {
 
     @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedUtterance: Utterance?
+    @State private var settingsSection: SettingsSection? = nil  // Deep link to specific settings section
     @State private var searchText = ""
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
@@ -100,7 +101,7 @@ struct LiveNavigationView: View {
 
     /// Sections that need full-width (no detail column)
     private var needsFullWidth: Bool {
-        selectedSection == .home || selectedSection == .console || selectedSection == .settings
+        selectedSection == .home || selectedSection == .logs || selectedSection == .settings
     }
 
     private var sidebarWidth: CGFloat {
@@ -141,11 +142,22 @@ struct LiveNavigationView: View {
         .onAppear {
             LiveSettings.shared.applyAppearance()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToConsole)) { _ in
-            selectedSection = .console
+        .onReceive(NotificationCenter.default.publisher(for: .switchToLogs)) { _ in
+            selectedSection = .logs
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToRecent)) { _ in
             selectedSection = .history
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
+            selectedSection = .settings
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsAudio)) { _ in
+            settingsSection = .audio
+            selectedSection = .settings
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsEngine)) { _ in
+            settingsSection = .engine
+            selectedSection = .settings
         }
         .onReceive(NotificationCenter.default.publisher(for: .selectUtterance)) { notification in
             // Handle deep link to select specific utterance
@@ -479,50 +491,79 @@ struct LiveNavigationView: View {
             // App branding header with collapse toggle
             sidebarHeader
 
-            // Navigation list
-            List(selection: $selectedSection) {
-                Section {
-                    sidebarItem(
-                        section: .home,
+            // Navigation items with hover feedback
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 2) {
+                    // Home
+                    SidebarNavItem(
+                        isSelected: selectedSection == .home,
+                        isCollapsed: isSidebarCollapsed,
                         icon: "house",
                         title: "Home"
-                    )
-                }
+                    ) {
+                        selectedSection = .home
+                    }
 
-                Section(isSidebarCollapsed ? "" : "Library") {
-                    sidebarItem(
-                        section: .history,
+                    if !isSidebarCollapsed {
+                        sidebarSectionHeader("Library")
+                    }
+
+                    // Recent
+                    SidebarNavItem(
+                        isSelected: selectedSection == .history,
+                        isCollapsed: isSidebarCollapsed,
                         icon: "waveform",
                         title: "Recent",
-                        badge: store.utterances.count > 0 ? "\(store.utterances.count)" : nil,
-                        badgeColor: .secondary
-                    )
-                }
+                        badge: store.utterances.count > 0 ? "\(store.utterances.count)" : nil
+                    ) {
+                        selectedSection = .history
+                    }
 
-                Section(isSidebarCollapsed ? "" : "System") {
+                    if !isSidebarCollapsed {
+                        sidebarSectionHeader("System")
+                    }
+
+                    // Logs
                     let errorCount = SystemEventManager.shared.events.filter { $0.type == .error }.count
-                    sidebarItem(
-                        section: .console,
+                    SidebarNavItem(
+                        isSelected: selectedSection == .logs,
+                        isCollapsed: isSidebarCollapsed,
                         icon: "terminal",
-                        title: "Console",
+                        title: "Logs",
                         badge: errorCount > 0 ? "\(errorCount)" : nil,
                         badgeColor: SemanticColor.error
-                    )
+                    ) {
+                        selectedSection = .logs
+                    }
                 }
+                .padding(.top, 4)
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
 
             Spacer()
 
             // Settings pinned to bottom
-            sidebarBottomItem(
-                section: .settings,
+            SidebarNavItem(
+                isSelected: selectedSection == .settings,
+                isCollapsed: isSidebarCollapsed,
                 icon: "gearshape",
-                title: "Settings"
-            )
+                title: "Settings",
+                isSubtle: true
+            ) {
+                selectedSection = .settings
+            }
+            .padding(.bottom, 4)
         }
         .background(TalkieTheme.surfaceElevated)
+    }
+
+    private func sidebarSectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(TalkieTheme.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.top, 16)
+            .padding(.bottom, 4)
     }
 
     /// Sidebar header with app branding and collapse toggle
@@ -586,80 +627,7 @@ struct LiveNavigationView: View {
         }
     }
 
-    /// Adaptive sidebar item - shows icon only when collapsed, full label when expanded
-    @ViewBuilder
-    private func sidebarItem(
-        section: LiveNavigationSection,
-        icon: String,
-        title: String,
-        badge: String? = nil,
-        badgeColor: Color = .secondary
-    ) -> some View {
-        if isSidebarCollapsed {
-            // Icon-only mode
-            Image(systemName: icon)
-                .frame(maxWidth: .infinity)
-                .tag(section)
-                .help(title) // Tooltip on hover
-        } else {
-            // Full label mode
-            Label {
-                HStack {
-                    Text(title)
-                    Spacer()
-                    if let badge = badge {
-                        Text(badge)
-                            .font(.caption)
-                            .foregroundColor(badgeColor)
-                    }
-                }
-            } icon: {
-                Image(systemName: icon)
-            }
-            .tag(section)
-        }
-    }
-
-    /// Bottom-pinned sidebar item (outside List)
-    @ViewBuilder
-    private func sidebarBottomItem(
-        section: LiveNavigationSection,
-        icon: String,
-        title: String
-    ) -> some View {
-        Button {
-            selectedSection = section
-        } label: {
-            if isSidebarCollapsed {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(selectedSection == section ? .accentColor : TalkieTheme.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 32)
-            } else {
-                HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.system(size: 13))
-                    Text(title)
-                        .font(.system(size: 13))
-                    Spacer()
-                }
-                .foregroundColor(selectedSection == section ? .accentColor : TalkieTheme.textSecondary)
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-            }
-        }
-        .buttonStyle(.plain)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(selectedSection == section ? TalkieTheme.hover : Color.clear)
-                .padding(.horizontal, 8)
-        )
-        .padding(.bottom, 8)
-        .help(title)
-    }
-
-    // MARK: - Full Width Content (for Home, Console and Settings)
+    // MARK: - Full Width Content (for Home, Logs and Settings)
 
     @ViewBuilder
     private var fullWidthContentView: some View {
@@ -679,7 +647,7 @@ struct LiveNavigationView: View {
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .console:
+        case .logs:
             consoleContentView
                 .padding(16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -828,7 +796,7 @@ struct LiveNavigationView: View {
     }
 
     private var settingsContentView: some View {
-        EmbeddedSettingsView()
+        EmbeddedSettingsView(initialSection: $settingsSection)
     }
 
     // MARK: - Console Content
@@ -860,7 +828,7 @@ struct LiveNavigationView: View {
     private var detailColumnView: some View {
         if selectedSection == .settings {
             settingsDetailPlaceholder
-        } else if selectedSection == .console {
+        } else if selectedSection == .logs {
             consoleDetailPlaceholder
         } else if let utterance = selectedUtterance {
             UtteranceDetailView(utterance: utterance)
@@ -1230,7 +1198,7 @@ private struct TranscriptContainer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Transcript content with copy button overlay
+            // Transcript content with actions overlay (top-right)
             ZStack(alignment: .topTrailing) {
                 HStack(spacing: 0) {
                     // Left accent bar
@@ -1249,41 +1217,41 @@ private struct TranscriptContainer: View {
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(16)
-                            .padding(.trailing, 36)
+                            .padding(.trailing, 80) // Room for toggle + copy
                     }
                 }
 
-                // Copy button inside text area
-                if isHovered || copied {
-                    Button(action: onCopy) {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(copied ? SemanticColor.success : (isCopyHovered ? .white : TalkieTheme.textPrimary))
-                            .frame(width: 36, height: 36)
-                            .background(
-                                RoundedRectangle(cornerRadius: 7)
-                                    .fill(isCopyHovered ? TalkieTheme.border : TalkieTheme.surfaceCard.opacity(0.7))
-                            )
-                            .contentShape(Rectangle())
+                // Top-right actions: Toggle + Copy (fixed position)
+                HStack(spacing: 6) {
+                    ContentToggle(showJSON: $showJSON)
+
+                    if isHovered || copied {
+                        Button(action: onCopy) {
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(copied ? SemanticColor.success : (isCopyHovered ? .white : TalkieTheme.textSecondary))
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(isCopyHovered ? TalkieTheme.border : TalkieTheme.surfaceCard.opacity(0.7))
+                                )
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { isCopyHovered = $0 }
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        .animation(.easeOut(duration: 0.12), value: isCopyHovered)
                     }
-                    .buttonStyle(.plain)
-                    .onHover { isCopyHovered = $0 }
-                    .padding(10)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    .animation(.easeOut(duration: 0.12), value: isCopyHovered)
                 }
+                .padding(10)
             }
 
-            // Bottom bar: Stats left, Toggle center, Tokens right
+            // Bottom bar: Stats left, Tokens right
             HStack(alignment: .center) {
                 HStack(spacing: 16) {
                     StatPill(label: "WORDS", value: "\(utterance.wordCount)")
                     StatPill(label: "CHARS", value: "\(utterance.characterCount)")
                 }
-
-                Spacer()
-
-                ContentToggle(showJSON: $showJSON)
 
                 Spacer()
 
@@ -1510,6 +1478,7 @@ private struct InfoCard: View {
 private struct PerformanceCard: View {
     let utterance: Utterance
     @State private var isHovered = false
+    @State private var showPopover = false
     @State private var showCopied = false
 
     // End-to-End: total perceived latency (stop recording → delivered)
@@ -1536,76 +1505,85 @@ private struct PerformanceCard: View {
         let hoverFill = TalkieTheme.hover
         let borderColor = isHovered ? iconColor.opacity(0.35) : TalkieTheme.surfaceCard
 
-        VStack(alignment: .leading, spacing: 8) {
-            // Label row - matches InfoCard
-            Text("PERFORMANCE")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(TalkieTheme.textTertiary)
+        Button(action: { if hasBreakdown { showPopover.toggle() } }) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Label row - matches InfoCard
+                Text("PERFORMANCE")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(TalkieTheme.textTertiary)
 
-            // Value row - matches InfoCard
-            HStack(spacing: 6) {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(iconColor.opacity(isHovered ? 1.0 : 0.8))
+                // Value row - matches InfoCard
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(iconColor.opacity(isHovered ? 1.0 : 0.8))
 
-                Text(displayValue)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textPrimary)
-            }
+                    Text(displayValue)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(TalkieTheme.textPrimary)
 
-            // Breakdown on hover
-            if isHovered && hasBreakdown {
-                VStack(alignment: .leading, spacing: 6) {
-                    Rectangle()
-                        .fill(TalkieTheme.divider)
-                        .frame(height: 1)
-
-                    HStack(spacing: 12) {
-                        if let engine = engineMs {
-                            PerfBreakdownItem(label: "Engine", value: formatTime(engine), color: SemanticColor.success)
-                        }
-                        if let app = appMs, app > 0 {
-                            PerfBreakdownItem(label: "App", value: formatTime(app), color: .orange)
-                        }
+                    if hasBreakdown {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(TalkieTheme.textTertiary)
                     }
-
-                    // Copy diagnostics button
-                    Button(action: copyDiagnostics) {
-                        HStack(spacing: 4) {
-                            Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 9))
-                            Text(showCopied ? "Copied" : "Copy Diagnostics")
-                                .font(.system(size: 9, weight: .medium))
-                        }
-                        .foregroundColor(showCopied ? SemanticColor.success : TalkieTheme.textTertiary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(TalkieTheme.surfaceCard)
-                        )
-                    }
-                    .buttonStyle(.plain)
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isHovered ? hoverFill : baseFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(borderColor, lineWidth: 1)
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? hoverFill : baseFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(borderColor, lineWidth: 1)
-        )
+        .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
         .animation(.easeOut(duration: 0.15), value: isHovered)
+        .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Header
+                Text("PERFORMANCE BREAKDOWN")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(TalkieTheme.textTertiary)
+
+                // Breakdown items
+                VStack(alignment: .leading, spacing: 8) {
+                    if let total = endToEndMs {
+                        PerfBreakdownItem(label: "End-to-End", value: formatTime(total), color: TalkieTheme.textPrimary)
+                    }
+                    if let engine = engineMs {
+                        PerfBreakdownItem(label: "Engine", value: formatTime(engine), color: SemanticColor.success)
+                    }
+                    if let app = appMs, app > 0 {
+                        PerfBreakdownItem(label: "App", value: formatTime(app), color: .orange)
+                    }
+                }
+
+                Divider()
+
+                // Copy diagnostics button
+                Button(action: copyDiagnostics) {
+                    HStack(spacing: 4) {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 10))
+                        Text(showCopied ? "Copied" : "Copy Diagnostics")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(showCopied ? SemanticColor.success : TalkieTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .frame(minWidth: 180)
+        }
     }
 
     private var hasBreakdown: Bool {
@@ -3781,6 +3759,95 @@ struct AppearanceSettingsContent: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Sidebar Navigation Item (with hover feedback + collapsed support)
+
+private struct SidebarNavItem: View {
+    let isSelected: Bool
+    let isCollapsed: Bool
+    let icon: String
+    let title: String
+    var badge: String? = nil
+    var badgeColor: Color = .secondary
+    var isSubtle: Bool = false  // For settings - more muted
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    private var foregroundColor: Color {
+        if isSubtle {
+            if isSelected { return TalkieTheme.textSecondary }
+            if isHovered { return TalkieTheme.textTertiary }
+            return TalkieTheme.textMuted
+        } else {
+            if isSelected { return TalkieTheme.textPrimary }
+            if isHovered { return TalkieTheme.textSecondary }
+            return TalkieTheme.textTertiary
+        }
+    }
+
+    private var backgroundColor: Color {
+        if isSelected { return TalkieTheme.hover }
+        if isHovered { return TalkieTheme.hover.opacity(0.5) }
+        return Color.clear
+    }
+
+    var body: some View {
+        Button(action: action) {
+            if isCollapsed {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundColor(foregroundColor)
+                        .frame(width: 32, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(backgroundColor)
+                        )
+
+                    // Badge dot for collapsed mode
+                    if badge != nil {
+                        Circle()
+                            .fill(badgeColor)
+                            .frame(width: 6, height: 6)
+                            .offset(x: -2, y: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 32)
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundColor(foregroundColor)
+                        .frame(width: 20)
+
+                    Text(title)
+                        .font(.system(size: 12))
+                        .foregroundColor(foregroundColor)
+
+                    Spacer()
+
+                    if let badge = badge {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(badgeColor)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(backgroundColor)
+                )
+                .padding(.horizontal, 6)
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(title)
     }
 }
 

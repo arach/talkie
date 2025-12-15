@@ -814,22 +814,8 @@ struct StatusBar: View {
                 .fill(TalkieTheme.border)
                 .frame(height: 1)
 
-            HStack(spacing: Spacing.sm) {
-                // Left - Hotkey hints (only when idle)
-                if controller.state == .idle && !showSuccess && !whisperService.isWarmingUp {
-                    ShortcutHint(
-                        label: "Record",
-                        shortcut: LiveSettings.shared.hotkey.displayString
-                    )
-                    ShortcutHint(
-                        label: "Queue",
-                        shortcut: "⌥⌘V"
-                    )
-                }
-
-                Spacer()
-
-                // Center - StatePill (fixedSize so hover expansion doesn't affect layout)
+            ZStack {
+                // Center - StatePill (truly centered, independent of other content)
                 StatePill(
                     state: controller.state,
                     isWarmingUp: whisperService.isWarmingUp,
@@ -843,15 +829,30 @@ struct StatusBar: View {
                 )
                 .fixedSize()
 
-                Spacer()
+                // Left/Right content (won't affect pill centering)
+                HStack(spacing: Spacing.sm) {
+                    // Left - Hotkey hints (always visible since pill is independently centered)
+                    ShortcutHint(
+                        label: "Record",
+                        shortcut: LiveSettings.shared.hotkey.displayString
+                    )
+                    ShortcutHint(
+                        label: "Queue",
+                        shortcut: "⌥⌘V"
+                    )
 
-                // Right side - engine status and logs
-                engineStatusIndicator
-                LogPreview(
-                    errorCount: errorCount,
-                    warningCount: warningCount,
-                    infoCount: infoCount
-                )
+                    Spacer()
+
+                    // Right side - status icons: Mic → Engine → Model → Logs
+                    MicStatusIcon()
+                    EngineStatusIcon()
+                    ModelStatusIcon()
+                    LogStatusIcon(
+                        errorCount: errorCount,
+                        warningCount: warningCount,
+                        infoCount: infoCount
+                    )
+                }
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.xs)
@@ -1372,6 +1373,246 @@ struct StatusBar: View {
     }
 }
 
+// MARK: - Status Icons (Mic → Engine → Model)
+
+/// Unified status icon style - icon with color, always shows label
+struct StatusIcon: View {
+    let icon: String
+    let color: Color
+    let label: String
+    let detail: String?
+    var badge: String? = nil
+    var badgeColor: Color = .orange
+    var action: (() -> Void)? = nil
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: { action?() }) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(color)
+
+                Text(label)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(TalkieTheme.textTertiary)
+                    .lineLimit(1)
+
+                if let badge = badge {
+                    Text(badge)
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(badgeColor)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(badgeColor.opacity(0.2))
+                        .cornerRadius(2)
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(detail ?? label)
+    }
+}
+
+/// Mic input status
+struct MicStatusIcon: View {
+    @ObservedObject private var audioDevices = AudioDeviceManager.shared
+    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+
+    private var selectedDevice: AudioInputDevice? {
+        audioDevices.inputDevices.first { $0.id == audioDevices.selectedDeviceID }
+    }
+
+    private var deviceName: String {
+        guard let device = selectedDevice else { return "No Input" }
+        let name = device.name
+        if name.contains("MacBook") { return "Built-in" }
+        if name.contains("AirPods") { return "AirPods" }
+        if name.lowercased().contains("microphone") {
+            return name.replacingOccurrences(of: " Microphone", with: "", options: .caseInsensitive)
+        }
+        return name.count > 12 ? String(name.prefix(10)) + "…" : name
+    }
+
+    private var statusColor: Color {
+        if selectedDevice == nil { return SemanticColor.error }
+        if audioMonitor.isSilent { return SemanticColor.warning }
+        return SemanticColor.success
+    }
+
+    var body: some View {
+        StatusIcon(
+            icon: selectedDevice == nil ? "mic.slash" : "mic",
+            color: statusColor,
+            label: deviceName,
+            detail: selectedDevice?.name ?? "No audio input - Click to open Audio settings",
+            action: navigateToAudioSettings
+        )
+    }
+
+    private func navigateToAudioSettings() {
+        NotificationCenter.default.post(name: .switchToSettingsAudio, object: nil)
+    }
+}
+
+/// Engine connection status
+struct EngineStatusIcon: View {
+    @ObservedObject private var engineClient = EngineClient.shared
+
+    private var statusColor: Color {
+        switch engineClient.connectionState {
+        case .connected: return SemanticColor.success
+        case .connectedWrongBuild: return SemanticColor.warning
+        case .connecting: return SemanticColor.info
+        case .disconnected, .error: return SemanticColor.error
+        }
+    }
+
+    private var label: String {
+        switch engineClient.connectionState {
+        case .connected, .connectedWrongBuild: return "Engine"
+        case .connecting: return "Connecting"
+        case .disconnected, .error: return "Offline"
+        }
+    }
+
+    private var badge: String? {
+        if let status = engineClient.status, let isDebug = status.isDebugBuild, isDebug {
+            return "DEV"
+        }
+        return nil
+    }
+
+    var body: some View {
+        StatusIcon(
+            icon: "cpu",
+            color: statusColor,
+            label: label,
+            detail: "TalkieEngine - Click to open Transcription settings",
+            badge: badge,
+            action: navigateToEngineSettings
+        )
+    }
+
+    private func navigateToEngineSettings() {
+        NotificationCenter.default.post(name: .switchToSettingsEngine, object: nil)
+    }
+}
+
+/// Model status
+struct ModelStatusIcon: View {
+    @ObservedObject private var engineClient = EngineClient.shared
+
+    private var modelName: String {
+        guard let status = engineClient.status, let modelId = status.loadedModelId else {
+            return "No Model"
+        }
+        // Format model name
+        if modelId.contains(":") {
+            let parts = modelId.split(separator: ":")
+            if parts.count == 2 {
+                let family = String(parts[0])
+                if family == "parakeet" { return "Parakeet" }
+                return String(parts[1])
+                    .replacingOccurrences(of: "openai_whisper-", with: "")
+                    .replacingOccurrences(of: "distil-whisper_distil-", with: "distil-")
+            }
+        }
+        return modelId
+    }
+
+    private var statusColor: Color {
+        guard let status = engineClient.status else { return TalkieTheme.textMuted }
+        if status.loadedModelId != nil { return SemanticColor.success }
+        return SemanticColor.warning
+    }
+
+    private var hasModel: Bool {
+        engineClient.status?.loadedModelId != nil
+    }
+
+    var body: some View {
+        StatusIcon(
+            icon: hasModel ? "waveform" : "waveform.slash",
+            color: statusColor,
+            label: modelName,
+            detail: (engineClient.status?.loadedModelId ?? "No model loaded") + " - Click to open Transcription settings",
+            action: navigateToEngineSettings
+        )
+    }
+
+    private func navigateToEngineSettings() {
+        NotificationCenter.default.post(name: .switchToSettingsEngine, object: nil)
+    }
+}
+
+/// Log/Console status - shows error/warning/info counts
+struct LogStatusIcon: View {
+    let errorCount: Int
+    let warningCount: Int
+    let infoCount: Int
+
+    @State private var isHovered = false
+    @State private var showConsolePopover = false
+
+    private var statusColor: Color {
+        if errorCount > 0 { return SemanticColor.error }
+        if warningCount > 0 { return SemanticColor.warning }
+        return SemanticColor.success
+    }
+
+    private var icon: String {
+        if errorCount > 0 { return "xmark.circle" }
+        if warningCount > 0 { return "exclamationmark.triangle" }
+        return "checkmark.circle"
+    }
+
+    var body: some View {
+        Button(action: { showConsolePopover.toggle() }) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(statusColor)
+
+                // Always show counts
+                if errorCount > 0 {
+                    Text("\(errorCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(SemanticColor.error)
+                }
+                if warningCount > 0 {
+                    Text("\(warningCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(SemanticColor.warning)
+                }
+                Text("\(infoCount)")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(TalkieTheme.textTertiary)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Console - \(errorCount) errors, \(warningCount) warnings, \(infoCount) info")
+        .popover(isPresented: $showConsolePopover, arrowEdge: .bottom) {
+            ConsolePopover()
+        }
+    }
+}
+
 // MARK: - Shortcut Hint (label + keyboard shortcut)
 
 struct ShortcutHint: View {
@@ -1472,14 +1713,14 @@ struct ConsolePopover: View {
 
                 Spacer()
 
-                // Expand to full console (arrows icon)
-                Button(action: openFullConsole) {
+                // Expand to full logs view (arrows icon)
+                Button(action: openFullLogs) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white.opacity(0.6))
                 }
                 .buttonStyle(.plain)
-                .help("Open full console")
+                .help("Open full logs")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -1529,15 +1770,18 @@ struct ConsolePopover: View {
         .background(Color(white: 0.08))
     }
 
-    private func openFullConsole() {
+    private func openFullLogs() {
         dismiss()
-        // Post notification to switch to console section
-        NotificationCenter.default.post(name: .switchToConsole, object: nil)
+        // Post notification to switch to logs section
+        NotificationCenter.default.post(name: .switchToLogs, object: nil)
     }
 }
 
 extension Notification.Name {
-    static let switchToConsole = Notification.Name("switchToConsole")
+    static let switchToLogs = Notification.Name("switchToLogs")
+    static let switchToSettings = Notification.Name("switchToSettings")
+    static let switchToSettingsAudio = Notification.Name("switchToSettingsAudio")
+    static let switchToSettingsEngine = Notification.Name("switchToSettingsEngine")
     static let toggleRecording = Notification.Name("toggleRecording")
 }
 

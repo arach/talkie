@@ -12,8 +12,13 @@ import Carbon.HIToolbox
 // MARK: - Embedded Settings View (for main app navigation)
 
 struct EmbeddedSettingsView: View {
+    @Binding var initialSection: SettingsSection?
     @ObservedObject private var settings = LiveSettings.shared
     @State private var selectedSection: SettingsSection = .appearance
+
+    init(initialSection: Binding<SettingsSection?> = .constant(nil)) {
+        self._initialSection = initialSection
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -156,6 +161,20 @@ struct EmbeddedSettingsView: View {
         }
         .background(TalkieTheme.surface)
         .ignoresSafeArea(.all, edges: .all)
+        .onChange(of: initialSection) { _, newSection in
+            if let section = newSection {
+                selectedSection = section
+                // Clear the initial section after applying it
+                initialSection = nil
+            }
+        }
+        .onAppear {
+            // Apply initial section on appear if set
+            if let section = initialSection {
+                selectedSection = section
+                initialSection = nil
+            }
+        }
     }
 }
 
