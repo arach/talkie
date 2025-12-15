@@ -23,6 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Initialize retry manager (watches for engine reconnection)
         _ = TranscriptionRetryManager.shared
 
+        // Start action observer (proof of concept - watches for task completions)
+        #if DEBUG
+        ActionObserver.shared.startObserving()
+        #endif
+
         let audio = MicrophoneCapture()
 
         // Use EngineTranscriptionService - requires TalkieEngine to be running (no fallback)
