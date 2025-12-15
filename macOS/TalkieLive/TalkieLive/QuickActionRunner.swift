@@ -99,7 +99,7 @@ final class QuickActionRunner {
         let memoID = "memo_\(UUID().uuidString.prefix(8))"
 
         // Mark as promoted in database
-        PastLivesDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
+        LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
 
         logger.info("Promoted Live #\(live.id ?? 0) to memo: \(memoID)")
         SystemEventManager.shared.log(.database, "Promoted to memo", detail: memoID)
@@ -114,7 +114,7 @@ final class QuickActionRunner {
         // TODO: Create research memo with additional context
         let memoID = "research_\(UUID().uuidString.prefix(8))"
 
-        PastLivesDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
+        LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
 
         logger.info("Created research memo from Live #\(live.id ?? 0): \(memoID)")
         SystemEventManager.shared.log(.database, "Research memo created", detail: memoID)
@@ -131,7 +131,7 @@ final class QuickActionRunner {
         // TODO: Create command via CommandLedger when available
         let commandID = "claude_\(UUID().uuidString.prefix(8))"
 
-        PastLivesDatabase.markAsCommand(id: live.id, commandID: commandID)
+        LiveDatabase.markAsCommand(id: live.id, commandID: commandID)
 
         logger.info("Sent Live #\(live.id ?? 0) to Claude: \(commandID)")
         SystemEventManager.shared.log(.system, "Sent to Claude", detail: commandID)
@@ -146,7 +146,7 @@ final class QuickActionRunner {
         // TODO: Launch workflow picker or default workflow
         let commandID = "workflow_\(UUID().uuidString.prefix(8))"
 
-        PastLivesDatabase.markAsCommand(id: live.id, commandID: commandID)
+        LiveDatabase.markAsCommand(id: live.id, commandID: commandID)
 
         logger.info("Started workflow for Live #\(live.id ?? 0): \(commandID)")
         SystemEventManager.shared.log(.system, "Workflow started", detail: commandID)
@@ -155,7 +155,7 @@ final class QuickActionRunner {
     // MARK: - Meta Actions
 
     private func markIgnored(_ live: LiveUtterance) {
-        PastLivesDatabase.markAsIgnored(id: live.id)
+        LiveDatabase.markAsIgnored(id: live.id)
         logger.info("Marked Live #\(live.id ?? 0) as ignored")
         SystemEventManager.shared.log(.database, "Marked ignored", detail: "Live #\(live.id ?? 0)")
     }

@@ -220,9 +220,6 @@ final class AudioDiagnostics: ObservableObject {
         let hasVirtualDevices = deviceManager.inputDevices.contains { device in
             virtualDeviceNames.contains { device.name.contains($0) }
         }
-        let isVirtualSelected = selectedDevice.map { device in
-            virtualDeviceNames.contains { device.name.contains($0) }
-        } ?? false
 
         // Build the checklist
         var checks: [DiagnosticCheck] = []

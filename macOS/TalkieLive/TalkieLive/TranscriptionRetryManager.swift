@@ -50,7 +50,7 @@ final class TranscriptionRetryManager: ObservableObject {
     }
 
     func refreshPendingCount() {
-        pendingCount = PastLivesDatabase.countNeedsRetry()
+        pendingCount = LiveDatabase.countNeedsRetry()
     }
 
     /// Retry all failed/pending transcriptions
@@ -60,7 +60,7 @@ final class TranscriptionRetryManager: ObservableObject {
             return
         }
 
-        let pending = PastLivesDatabase.fetchNeedsRetry()
+        let pending = LiveDatabase.fetchNeedsRetry()
         guard !pending.isEmpty else {
             logger.info("[RetryManager] No failed transcriptions to retry")
             pendingCount = 0
@@ -78,26 +78,23 @@ final class TranscriptionRetryManager: ObservableObject {
             guard let audioURL = utterance.audioURL, utterance.hasAudio else {
                 logger.warning("[RetryManager] Skipping \(utterance.id ?? -1) - no audio file")
                 // Mark as failed permanently (no audio to retry with)
-                PastLivesDatabase.markTranscriptionFailed(id: utterance.id, error: "Audio file missing")
+                LiveDatabase.markTranscriptionFailed(id: utterance.id, error: "Audio file missing")
                 continue
             }
 
             logger.info("[RetryManager] Retrying transcription for \(utterance.id ?? -1)")
 
             do {
-                // Read audio file
-                let audioData = try Data(contentsOf: audioURL)
-
-                // Transcribe via Engine
+                // Transcribe via Engine - pass path directly, engine reads the file
                 let startTime = Date()
-                let text = try await client.transcribe(audioData: audioData, modelId: modelId)
+                let text = try await client.transcribe(audioPath: audioURL.path, modelId: modelId)
                 let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
                 // Update database with success
-                PastLivesDatabase.markTranscriptionSuccess(
+                LiveDatabase.markTranscriptionSuccess(
                     id: utterance.id,
                     text: text,
-                    transcriptionMs: transcriptionMs,
+                    perfEngineMs: transcriptionMs,
                     model: modelId
                 )
 
@@ -110,7 +107,7 @@ final class TranscriptionRetryManager: ObservableObject {
                 logger.error("[RetryManager] ✗ Retry failed for \(utterance.id ?? -1): \(error.localizedDescription)")
 
                 // Update database with new error
-                PastLivesDatabase.markTranscriptionFailed(id: utterance.id, error: error.localizedDescription)
+                LiveDatabase.markTranscriptionFailed(id: utterance.id, error: error.localizedDescription)
             }
 
             pendingCount = max(0, pendingCount - 1)
@@ -134,15 +131,15 @@ final class TranscriptionRetryManager: ObservableObject {
         let modelId = LiveSettings.shared.selectedModelId
 
         do {
-            let audioData = try Data(contentsOf: audioURL)
+            // Pass path directly - engine reads the file
             let startTime = Date()
-            let text = try await client.transcribe(audioData: audioData, modelId: modelId)
+            let text = try await client.transcribe(audioPath: audioURL.path, modelId: modelId)
             let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
-            PastLivesDatabase.markTranscriptionSuccess(
+            LiveDatabase.markTranscriptionSuccess(
                 id: utterance.id,
                 text: text,
-                transcriptionMs: transcriptionMs,
+                perfEngineMs: transcriptionMs,
                 model: modelId
             )
 
@@ -150,7 +147,7 @@ final class TranscriptionRetryManager: ObservableObject {
             return true
 
         } catch {
-            PastLivesDatabase.markTranscriptionFailed(id: utterance.id, error: error.localizedDescription)
+            LiveDatabase.markTranscriptionFailed(id: utterance.id, error: error.localizedDescription)
             return false
         }
     }

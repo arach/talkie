@@ -46,7 +46,37 @@ struct EngineModelInfo: Identifiable {
     var isLoaded: Bool
 }
 
+// MARK: - Transcription Metric
+
+struct TranscriptionMetric: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let elapsedSeconds: Double
+    let audioDurationSeconds: Double?
+    let wordCount: Int
+    let transcriptPreview: String?  // First ~30 chars for reference
+}
+
+// MARK: - Process Snapshot (for monitoring)
+
+struct ProcessSnapshot: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let memoryMB: Double          // Process memory in MB
+    let cpuPercent: Double        // Process CPU %
+    let systemCpuPercent: Double? // System-wide CPU % (optional)
+
+    var memoryFormatted: String {
+        if memoryMB < 1024 {
+            return String(format: "%.0f MB", memoryMB)
+        }
+        return String(format: "%.1f GB", memoryMB / 1024)
+    }
+}
+
 // MARK: - Engine Status Manager
+
+// Note: Uses EngineServiceMode from EngineProtocol.swift for launch mode
 
 @MainActor
 class EngineStatusManager: ObservableObject {
@@ -58,8 +88,29 @@ class EngineStatusManager: ObservableObject {
     @Published var totalTranscriptions = 0
     @Published var uptime: TimeInterval = 0
 
+    // Launch mode info (set from main.swift)
+    @Published var launchMode: EngineServiceMode = .dev
+    @Published var activeServiceName: String = ""
+
+    // Executable path for debugging
+    let executablePath: String = Bundle.main.executablePath ?? "Unknown"
+
     // Model management
     @Published var models: [EngineModelInfo] = []
+
+    // Latency metrics (dev only)
+    @Published var recentMetrics: [TranscriptionMetric] = []
+    private let maxMetrics = 100
+
+    // Process monitoring (dev only)
+    #if DEBUG
+    @Published var processSnapshots: [ProcessSnapshot] = []
+    @Published var currentMemoryMB: Double = 0
+    @Published var currentCpuPercent: Double = 0
+    @Published var peakMemoryMB: Double = 0
+    private let maxSnapshots = 300  // ~5 min at 1s intervals
+    private var processMonitorTimer: Timer?
+    #endif
 
     private let maxLogs = 500
     private let startedAt = Date()
@@ -67,17 +118,119 @@ class EngineStatusManager: ObservableObject {
 
     private init() {
         log(.info, "EngineService", "TalkieEngine started")
-        startUptimeTimer()
         loadModels()
     }
 
-    private func startUptimeTimer() {
+    /// Configure launch mode (called from main.swift)
+    func configure(mode: EngineServiceMode, serviceName: String) {
+        self.launchMode = mode
+        self.activeServiceName = serviceName
+        log(.info, "Config", "Mode: \(mode.displayName), XPC: \(serviceName)")
+    }
+
+    // MARK: - Timer Management (only runs when status window visible)
+
+    func startUptimeTimer() {
+        guard uptimeTimer == nil else { return }
+        uptime = Date().timeIntervalSince(startedAt)  // Immediate update
         uptimeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.uptime = Date().timeIntervalSince(self?.startedAt ?? Date())
             }
         }
     }
+
+    func stopUptimeTimer() {
+        uptimeTimer?.invalidate()
+        uptimeTimer = nil
+    }
+
+    // MARK: - Process Monitoring (DEBUG only)
+
+    #if DEBUG
+    func startProcessMonitor() {
+        guard processMonitorTimer == nil else { return }
+        sampleProcessStats()  // Immediate sample
+        processMonitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.sampleProcessStats()
+            }
+        }
+    }
+
+    func stopProcessMonitor() {
+        processMonitorTimer?.invalidate()
+        processMonitorTimer = nil
+    }
+
+    private func sampleProcessStats() {
+        let memoryMB = getProcessMemoryMB()
+        let cpuPercent = getProcessCPUPercent()
+
+        currentMemoryMB = memoryMB
+        currentCpuPercent = cpuPercent
+        peakMemoryMB = max(peakMemoryMB, memoryMB)
+
+        let snapshot = ProcessSnapshot(
+            timestamp: Date(),
+            memoryMB: memoryMB,
+            cpuPercent: cpuPercent,
+            systemCpuPercent: nil  // Could add system CPU later
+        )
+        processSnapshots.append(snapshot)
+        if processSnapshots.count > maxSnapshots {
+            processSnapshots.removeFirst(processSnapshots.count - maxSnapshots)
+        }
+    }
+
+    /// Get current process memory usage in MB
+    private func getProcessMemoryMB() -> Double {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        if result == KERN_SUCCESS {
+            return Double(info.resident_size) / 1_000_000  // Convert to MB
+        }
+        return 0
+    }
+
+    /// Get current process CPU usage (rough estimate)
+    /// Note: This is a point-in-time sample, not a rolling average
+    private func getProcessCPUPercent() -> Double {
+        var threadList: thread_act_array_t?
+        var threadCount: mach_msg_type_number_t = 0
+
+        let result = task_threads(mach_task_self_, &threadList, &threadCount)
+        guard result == KERN_SUCCESS, let threads = threadList else { return 0 }
+
+        var totalCPU: Double = 0
+        for i in 0..<Int(threadCount) {
+            var info = thread_basic_info()
+            var count = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
+
+            let infoResult = withUnsafeMutablePointer(to: &info) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                    thread_info(threads[i], thread_flavor_t(THREAD_BASIC_INFO), $0, &count)
+                }
+            }
+
+            if infoResult == KERN_SUCCESS {
+                let cpuUsage = Double(info.cpu_usage) / Double(TH_USAGE_SCALE) * 100
+                totalCPU += cpuUsage
+            }
+        }
+
+        // Deallocate thread list
+        let threadListSize = vm_size_t(MemoryLayout<thread_t>.size * Int(threadCount))
+        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), threadListSize)
+
+        return totalCPU
+    }
+    #endif
 
     func log(_ level: EngineLogEntry.LogLevel, _ category: String, _ message: String) {
         let entry = EngineLogEntry(
@@ -95,6 +248,40 @@ class EngineStatusManager: ObservableObject {
     func clearLogs() {
         logs.removeAll()
         log(.info, "Console", "Logs cleared")
+    }
+
+    // MARK: - Latency Metrics
+
+    func recordMetric(elapsed: Double, audioDuration: Double? = nil, wordCount: Int, transcript: String? = nil) {
+        let preview = transcript.map { String($0.prefix(40)) }
+        let metric = TranscriptionMetric(
+            timestamp: Date(),
+            elapsedSeconds: elapsed,
+            audioDurationSeconds: audioDuration,
+            wordCount: wordCount,
+            transcriptPreview: preview
+        )
+        recentMetrics.insert(metric, at: 0)
+        if recentMetrics.count > maxMetrics {
+            recentMetrics = Array(recentMetrics.prefix(maxMetrics))
+        }
+    }
+
+    /// Average transcription latency in seconds
+    var averageLatency: Double? {
+        guard !recentMetrics.isEmpty else { return nil }
+        return recentMetrics.map(\.elapsedSeconds).reduce(0, +) / Double(recentMetrics.count)
+    }
+
+    /// Average realtime multiplier (audioDuration / elapsed)
+    /// e.g., 10x means we transcribe 10 seconds of audio in 1 second
+    var averageRealtimeMultiplier: Double? {
+        let withDuration = recentMetrics.compactMap { m -> Double? in
+            guard let dur = m.audioDurationSeconds, dur > 0, m.elapsedSeconds > 0 else { return nil }
+            return dur / m.elapsedSeconds
+        }
+        guard !withDuration.isEmpty else { return nil }
+        return withDuration.reduce(0, +) / Double(withDuration.count)
     }
 
     var formattedUptime: String {
@@ -190,11 +377,13 @@ class EngineStatusManager: ObservableObject {
 enum EngineTab: String, CaseIterable {
     case console = "Console"
     case models = "Models"
+    case performance = "Performance"
 
     var icon: String {
         switch self {
         case .console: return "terminal"
         case .models: return "square.stack.3d.up"
+        case .performance: return "gauge.with.dots.needle.bottom.50percent"
         }
     }
 }
@@ -257,6 +446,8 @@ struct EngineStatusView: View {
                 consoleContent
             case .models:
                 modelsContent
+            case .performance:
+                performanceContent
             }
 
             // Status bar
@@ -264,17 +455,21 @@ struct EngineStatusView: View {
         }
         .background(bgColor)
         .frame(minWidth: 600, minHeight: 400)
+        .onAppear {
+            statusManager.startUptimeTimer()
+            #if DEBUG
+            statusManager.startProcessMonitor()
+            #endif
+        }
+        .onDisappear {
+            statusManager.stopUptimeTimer()
+            #if DEBUG
+            statusManager.stopProcessMonitor()
+            #endif
+        }
     }
 
     // MARK: - Header
-
-    private var isDebugBuild: Bool {
-        #if DEBUG
-        return true
-        #else
-        return false
-        #endif
-    }
 
     private var headerView: some View {
         HStack(spacing: 12) {
@@ -289,19 +484,30 @@ struct EngineStatusView: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
 
-                    // Dev/Production badge
-                    Text(isDebugBuild ? "DEV" : "PROD")
+                    // Launch mode badge (DEV/DEBUG/PROD)
+                    Text(statusManager.launchMode.rawValue)
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundColor(isDebugBuild ? .orange : accentGreen)
+                        .foregroundColor(statusManager.launchMode.color)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(isDebugBuild ? Color.orange.opacity(0.2) : accentGreen.opacity(0.2))
+                        .background(statusManager.launchMode.color.opacity(0.2))
                         .cornerRadius(3)
                 }
 
-                Text("Transcription Service")
-                    .font(.system(size: 10))
+                // XPC service name
+                Text(statusManager.activeServiceName.isEmpty ? "Transcription Service" : statusManager.activeServiceName)
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.gray)
+
+                // Executable path (debug builds only)
+                #if DEBUG
+                Text(statusManager.executablePath)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.gray.opacity(0.6))
+                    .lineLimit(1)
+                    .truncationMode(.head)  // Show end of path (most useful part)
+                    .help(statusManager.executablePath)  // Full path on hover
+                #endif
             }
 
             Spacer()
@@ -330,17 +536,29 @@ struct EngineStatusView: View {
     // MARK: - Stats Bar
 
     private var statsBar: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             statItem(icon: "clock", label: "UPTIME", value: statusManager.formattedUptime)
             statItem(icon: "waveform", label: "TRANSCRIPTIONS", value: "\(statusManager.totalTranscriptions)")
             statItem(icon: "cpu", label: "MODEL", value: statusManager.currentModel ?? "None")
-            statItem(icon: "memorychip", label: "PID", value: "\(ProcessInfo.processInfo.processIdentifier)")
+            statItem(icon: "number", label: "PID", value: "\(ProcessInfo.processInfo.processIdentifier)")
+
+            #if DEBUG
+            // Process stats (dev only)
+            statItem(icon: "memorychip", label: "MEMORY", value: String(format: "%.0f MB", statusManager.currentMemoryMB))
+            statItem(icon: "gauge.with.needle", label: "CPU", value: String(format: "%.1f%%", statusManager.currentCpuPercent))
+            #endif
 
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(surfaceColor.opacity(0.5))
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(accentGreen.opacity(0.3)),
+            alignment: .top
+        )
     }
 
     private func statItem(icon: String, label: String, value: String) -> some View {
@@ -620,20 +838,170 @@ struct EngineStatusView: View {
         .cornerRadius(6)
     }
 
+    // MARK: - Performance Content
+
+    private var performanceContent: some View {
+        VStack(spacing: 0) {
+            // Summary stats
+            HStack(spacing: 20) {
+                performanceStat(
+                    label: "TOTAL",
+                    value: "\(statusManager.totalTranscriptions)"
+                )
+
+                performanceStat(
+                    label: "RECENT",
+                    value: "\(statusManager.recentMetrics.count)"
+                )
+
+                #if DEBUG
+                performanceStat(
+                    label: "PEAK MEM",
+                    value: String(format: "%.0f MB", statusManager.peakMemoryMB)
+                )
+
+                performanceStat(
+                    label: "SNAPSHOTS",
+                    value: "\(statusManager.processSnapshots.count)"
+                )
+                #endif
+
+                Spacer()
+            }
+            .padding(12)
+            .background(surfaceColor)
+
+            Divider()
+                .background(borderColor)
+
+            // Table header
+            HStack(spacing: 0) {
+                Text("#")
+                    .frame(width: 40, alignment: .leading)
+                Text("TIME")
+                    .frame(width: 70, alignment: .leading)
+                Text("LATENCY")
+                    .frame(width: 70, alignment: .trailing)
+                Text("WORDS")
+                    .frame(width: 50, alignment: .trailing)
+                Text("RTF")
+                    .frame(width: 50, alignment: .trailing)
+                Text("PREVIEW")
+                    .frame(minWidth: 100, alignment: .leading)
+                    .padding(.leading, 12)
+                Spacer()
+            }
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .foregroundColor(.gray)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(surfaceColor.opacity(0.5))
+
+            // Table rows
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(statusManager.recentMetrics.enumerated()), id: \.offset) { index, metric in
+                        performanceRow(index: statusManager.totalTranscriptions - index, metric: metric)
+                    }
+                }
+            }
+            .background(bgColor)
+        }
+    }
+
+    private func performanceStat(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(.gray)
+            Text(value)
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+        }
+    }
+
+    private func performanceRow(index: Int, metric: TranscriptionMetric) -> some View {
+        let timeFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm:ss"
+            return f
+        }()
+
+        let latencyMs = Int(metric.elapsedSeconds * 1000)
+        let latencyStr = latencyMs < 1000 ? "\(latencyMs)ms" : String(format: "%.2fs", metric.elapsedSeconds)
+
+        return HStack(spacing: 0) {
+            Text("#\(index)")
+                .frame(width: 40, alignment: .leading)
+                .foregroundColor(.gray)
+
+            Text(timeFormatter.string(from: metric.timestamp))
+                .frame(width: 70, alignment: .leading)
+                .foregroundColor(.white)
+
+            Text(latencyStr)
+                .frame(width: 70, alignment: .trailing)
+                .foregroundColor(latencyMs < 500 ? accentGreen : (latencyMs < 2000 ? .orange : .red))
+
+            Text("\(metric.wordCount)")
+                .frame(width: 50, alignment: .trailing)
+                .foregroundColor(.white)
+
+            if let audioDuration = metric.audioDurationSeconds, audioDuration > 0 {
+                let rtf = metric.elapsedSeconds / audioDuration
+                Text(String(format: "%.1f%%", rtf * 100))
+                    .frame(width: 50, alignment: .trailing)
+                    .foregroundColor(rtf < 0.02 ? accentGreen : (rtf < 0.05 ? .white : .orange))
+            } else {
+                Text("-")
+                    .frame(width: 50, alignment: .trailing)
+                    .foregroundColor(.gray)
+            }
+
+            // Transcript preview
+            Text(metric.transcriptPreview ?? "-")
+                .frame(minWidth: 100, alignment: .leading)
+                .padding(.leading, 12)
+                .foregroundColor(.gray)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer()
+        }
+        .font(.system(size: 11, design: .monospaced))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(index % 2 == 0 ? Color.clear : surfaceColor.opacity(0.3))
+    }
+
     // MARK: - Status Bar
 
     private var statusBar: some View {
         HStack(spacing: 12) {
-            if selectedTab == .console {
+            switch selectedTab {
+            case .console:
                 Text("\(filteredLogs.count) entries")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.gray)
-            } else {
+            case .models:
                 let downloaded = statusManager.models.filter { $0.isDownloaded }.count
                 let total = statusManager.models.count
                 Text("\(downloaded)/\(total) models installed")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.gray)
+            case .performance:
+                if !statusManager.recentMetrics.isEmpty {
+                    let latencies = statusManager.recentMetrics.map { $0.elapsedSeconds * 1000 }
+                    let min = latencies.min() ?? 0
+                    let max = latencies.max() ?? 0
+                    Text("Range: \(String(format: "%.0f", min))–\(String(format: "%.0f", max))ms • \(statusManager.recentMetrics.count) samples")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.gray)
+                } else {
+                    Text("No metrics yet")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.gray)
+                }
             }
 
             Spacer()

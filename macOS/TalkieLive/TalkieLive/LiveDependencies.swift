@@ -6,7 +6,7 @@ private let logger = Logger(subsystem: "jdi.talkie.live", category: "Dependencie
 // MARK: - Protocols
 
 protocol LiveAudioCapture {
-    func startCapture(onChunk: @escaping (Data) -> Void)
+    func startCapture(onChunk: @escaping (String) -> Void)  // Receives file path
     func stopCapture()
 }
 
@@ -19,12 +19,12 @@ protocol LiveRouter {
 final class StubAudioCapture: LiveAudioCapture {
     private var timer: Timer?
 
-    func startCapture(onChunk: @escaping (Data) -> Void) {
+    func startCapture(onChunk: @escaping (String) -> Void) {
         logger.info("Audio capture started")
         // Simulate listening for 2 seconds, then deliver a "buffer"
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
             logger.info("Audio buffer captured")
-            onChunk(Data())
+            onChunk("/tmp/stub-audio.m4a")  // Stub path
         }
     }
 
@@ -37,7 +37,7 @@ final class StubAudioCapture: LiveAudioCapture {
 
 struct StubTranscriptionService: TranscriptionService {
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
-        logger.info("Transcribing audio buffer (\(request.audioData.count) bytes, live: \(request.isLive))...")
+        logger.info("Transcribing audio file: \(request.audioPath) (live: \(request.isLive))...")
         // Simulate transcription taking 1.5 seconds
         try await Task.sleep(for: .milliseconds(1500))
         let transcript = "This is a stub transcript from Talkie Live."
@@ -72,16 +72,17 @@ struct EngineTranscriptionService: TranscriptionService {
             throw EngineTranscriptionError.engineNotRunning
         }
 
+        let fileName = URL(fileURLWithPath: request.audioPath).lastPathComponent
         logger.notice("═══════════════════════════════════════════════════════════")
         logger.notice("  🎙️ TRANSCRIBING VIA TALKIE ENGINE (XPC)")
         logger.notice("  Model: \(self.modelId)")
-        logger.notice("  Audio: \(request.audioData.count) bytes")
+        logger.notice("  Audio: \(fileName)")
         logger.notice("═══════════════════════════════════════════════════════════")
 
         let startTime = Date()
 
         // EngineClient.transcribe() now handles retry logic for "Already transcribing"
-        let text = try await client.transcribe(audioData: request.audioData, modelId: modelId)
+        let text = try await client.transcribe(audioPath: request.audioPath, modelId: modelId)
         let elapsed = Date().timeIntervalSince(startTime)
 
         logger.notice("═══════════════════════════════════════════════════════════")

@@ -110,11 +110,11 @@ final class MicrophoneCapture: LiveAudioCapture {
     private let engine = AVAudioEngine()
     private var audioFile: AVAudioFile?
     private var tempFileURL: URL?
-    private var onChunk: ((Data) -> Void)?
+    private var onChunk: ((String) -> Void)?  // Callback receives file path
     private var isCapturing = false
     private var fileCreated = false
 
-    func startCapture(onChunk: @escaping (Data) -> Void) {
+    func startCapture(onChunk: @escaping (String) -> Void) {
         guard !isCapturing else {
             logger.warning("Already capturing")
             return
@@ -231,22 +231,22 @@ final class MicrophoneCapture: LiveAudioCapture {
         // Close the audio file
         audioFile = nil
 
-        // Read the recorded audio and deliver it
+        // Deliver the file path - caller is responsible for cleanup after transcription
         if let fileURL = tempFileURL {
-            do {
-                let audioData = try Data(contentsOf: fileURL)
-                logger.info("Captured \(audioData.count) bytes of audio")
+            // Check file size to validate recording
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+               let size = attrs[.size] as? Int {
+                logger.info("Captured audio file: \(fileURL.lastPathComponent) (\(size) bytes)")
 
-                if audioData.count > 1000 {
-                    onChunk?(audioData)
+                if size > 1000 {
+                    onChunk?(fileURL.path)  // Pass path, not data - engine reads directly
                 } else {
-                    logger.warning("Audio file too small (\(audioData.count) bytes), likely empty recording")
+                    logger.warning("Audio file too small (\(size) bytes), likely empty recording")
+                    try? FileManager.default.removeItem(at: fileURL)
                 }
-
-                // Clean up temp file
+            } else {
+                logger.error("Failed to get audio file attributes")
                 try? FileManager.default.removeItem(at: fileURL)
-            } catch {
-                logger.error("Failed to read audio file: \(error.localizedDescription)")
             }
         } else {
             logger.warning("No temp file URL - file may not have been created")

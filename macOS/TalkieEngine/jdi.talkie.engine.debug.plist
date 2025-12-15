@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>jdi.talkie.engine.debug</string>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Points to the same binary as dev, but launchd won't auto-start it -->
+        <string>/Users/arach/Library/Developer/Xcode/DerivedData/TalkieSuite-guavpoyqmfbntrgcygyesivttxyh/Build/Products/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
+    </array>
+    <key>MachServices</key>
+    <dict>
+        <key>jdi.talkie.engine.xpc.dev.debug</key>
+        <true/>
+    </dict>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <!-- NO RunAtLoad, NO KeepAlive - Xcode manages the process -->
+</dict>
+</plist>

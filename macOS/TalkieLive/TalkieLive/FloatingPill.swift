@@ -127,7 +127,7 @@ final class FloatingPillController: ObservableObject {
         let pillView = FloatingPillView()
         let hostingView = NSHostingView(rootView: pillView.environmentObject(self))
         // Larger frame to accommodate expanded state
-        hostingView.frame = NSRect(x: 0, y: 0, width: 80, height: 28)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 80, height: 22)
 
         let panel = NSPanel(
             contentRect: hostingView.frame,
@@ -163,17 +163,17 @@ final class FloatingPillController: ObservableObject {
         case .bottomCenter:
             return NSPoint(
                 x: screenFrame.midX - panelSize.width / 2,
-                y: screenFrame.minY + 2  // Flush to bottom
+                y: screenFrame.minY + 6  // Slight offset from bottom for breathing room
             )
         case .bottomLeft:
             return NSPoint(
                 x: screenFrame.minX + margin,
-                y: screenFrame.minY + 2
+                y: screenFrame.minY + 6
             )
         case .bottomRight:
             return NSPoint(
                 x: screenFrame.maxX - panelSize.width - margin,
-                y: screenFrame.minY + 2
+                y: screenFrame.minY + 6
             )
         case .topCenter:
             return NSPoint(
@@ -334,13 +334,20 @@ final class FloatingPillController: ObservableObject {
     var onTap: (() -> Void)?
 
     func handleTap() {
+        // If transcribing/routing and stuck, allow pushing to queue for later retry
+        if state == .transcribing || state == .routing {
+            onPushToQueue?()  // Save audio to queue and reset state
+        }
         // If there are queued items and we're idle, show the failed queue picker
-        if pendingQueueCount > 0 && state == .idle {
+        else if pendingQueueCount > 0 && state == .idle {
             showFailedQueue()
         } else {
             onTap?()
         }
     }
+
+    // Push-to-queue callback (for escaping stuck transcription)
+    var onPushToQueue: (() -> Void)?
 
     func showFailedQueue() {
         FailedQueueController.shared.show()
@@ -351,9 +358,7 @@ final class FloatingPillController: ObservableObject {
 
 struct FloatingPillView: View {
     @EnvironmentObject var controller: FloatingPillController
-    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
     @State private var isHovered = false
-    @State private var pulsePhase: CGFloat = 0
 
     // Expansion threshold - only expand when very close (proximity > 0.7) or hovered
     private let expandThreshold: CGFloat = 0.7
@@ -362,223 +367,24 @@ struct FloatingPillView: View {
         controller.proximity > expandThreshold || isHovered
     }
 
-    private var expansionProgress: CGFloat {
-        if isHovered { return 1.0 }
-        let progress = (controller.proximity - expandThreshold) / (1.0 - expandThreshold)
-        return max(0, min(1, progress))
-    }
-
     var body: some View {
-        Button(action: { controller.handleTap() }) {
-            ZStack {
-                if isExpanded {
-                    // Expanded button state with timer
-                    expandedContent
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                } else {
-                    // Minimal sliver state
-                    sliverContent
-                        .transition(.opacity.combined(with: .scale(scale: 1.2)))
-                }
-            }
-            .frame(width: 80, height: 28)
-        }
-        .buttonStyle(.plain)
+        StatePill(
+            state: controller.state,
+            isWarmingUp: false,
+            showSuccess: false,
+            recordingDuration: controller.elapsedTime,
+            processingDuration: controller.processingTime,
+            isEngineConnected: controller.isEngineConnected,
+            pendingQueueCount: controller.pendingQueueCount,
+            forceExpanded: isExpanded,
+            onTap: { controller.handleTap() },
+            onQueueTap: { FailedQueueController.shared.show() }
+        )
+        .frame(width: 80, height: 22)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
-        }
-        .onAppear {
-            startPulseAnimation()
-        }
-        .onChange(of: controller.state) { _, newState in
-            pulsePhase = 0
-            if newState == .listening {
-                startPulseAnimation()
-            }
-        }
-    }
-
-    // Minimal sliver when far from cursor
-    private var sliverContent: some View {
-        HStack(spacing: 4) {
-            // Engine offline or wrong build indicator (yellow dot)
-            if !controller.isEngineConnected || controller.isWrongEngineBuild {
-                Circle()
-                    .fill(SemanticColor.warning)
-                    .frame(width: 4, height: 4)
-            }
-
-            RoundedRectangle(cornerRadius: 1)
-                .fill(sliverIndicatorColor.opacity(sliverOpacity))
-                .frame(width: 24, height: 2)
-                .scaleEffect(x: controller.state == .listening ? 1.0 + pulsePhase * 0.3 : 1.0, y: 1.0)
-
-            // Queue count badge
-            if controller.pendingQueueCount > 0 && controller.state == .idle {
-                Text("\(controller.pendingQueueCount)")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(SemanticColor.warning))
-            }
-        }
-    }
-
-    private var sliverIndicatorColor: Color {
-        if !controller.isEngineConnected || controller.isWrongEngineBuild {
-            return SemanticColor.warning  // Yellow when engine offline or wrong build
-        }
-        return indicatorColor
-    }
-
-    // Expanded button with timer when close to cursor
-    private var expandedContent: some View {
-        HStack(spacing: 4) {
-            // State indicator dot - pulsates when recording
-            // Show warning color if silent during recording
-            Circle()
-                .fill(audioMonitor.isSilent && controller.state == .listening ? SemanticColor.warning : expandedIndicatorColor)
-                .frame(width: 6, height: 6)
-                .scaleEffect(controller.state == .listening ? 1.0 + pulsePhase * 0.4 : 1.0)
-
-            // Content varies by state
-            if controller.state == .listening {
-                if audioMonitor.isSilent {
-                    // Silent mic warning with troubleshoot action
-                    Button(action: {
-                        AudioTroubleshooterController.shared.show()
-                    }) {
-                        HStack(spacing: 4) {
-                            Text("NO AUDIO")
-                                .font(.system(size: 9, weight: .semibold))
-                                .tracking(0.5)
-                            Image(systemName: "wrench.and.screwdriver")
-                                .font(.system(size: 8, weight: .medium))
-                        }
-                        .foregroundColor(SemanticColor.warning)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    // Timer with audio level indicator
-                    HStack(spacing: 3) {
-                        Text(timeString)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textSecondary)
-
-                        // Mini audio level bar
-                        audioLevelIndicator
-                    }
-                }
-            } else if controller.state == .transcribing {
-                // Timer when transcribing
-                Text(timeString)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textSecondary)
-            } else if !controller.isEngineConnected {
-                // Engine offline message
-                Text("OFFLINE")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1)
-                    .foregroundColor(SemanticColor.warning)
-            } else if controller.isWrongEngineBuild {
-                // Wrong engine build warning
-                Text("WRONG BUILD")
-                    .font(.system(size: 8, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundColor(SemanticColor.warning)
-            } else if controller.pendingQueueCount > 0 {
-                // Queue count - tap to retry
-                HStack(spacing: 3) {
-                    Text("\(controller.pendingQueueCount)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 8, weight: .semibold))
-                }
-                .foregroundColor(SemanticColor.warning)
-            } else {
-                // Idle state - show mic name (truncated)
-                HStack(spacing: 3) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 8))
-                        .foregroundColor(TalkieTheme.textTertiary)
-                    Text(truncatedMicName)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(TalkieTheme.textTertiary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.ultraThinMaterial)
-        )
-    }
-
-    // Mini audio level indicator bar - subtle, monochrome
-    private var audioLevelIndicator: some View {
-        GeometryReader { geo in
-            RoundedRectangle(cornerRadius: 1)
-                .fill(TalkieTheme.textTertiary.opacity(0.5 + Double(audioMonitor.level) * 0.4))
-                .frame(width: max(2, geo.size.width * CGFloat(audioMonitor.level)), height: 3)
-                .animation(.easeOut(duration: 0.08), value: audioMonitor.level)
-        }
-        .frame(width: 14, height: 3)
-    }
-
-    private var truncatedMicName: String {
-        let name = audioMonitor.selectedMicName
-        if name.count > 12 {
-            return String(name.prefix(10)) + "..."
-        }
-        return name
-    }
-
-    private var expandedIndicatorColor: Color {
-        if (!controller.isEngineConnected || controller.isWrongEngineBuild) && controller.state == .idle {
-            return SemanticColor.warning
-        }
-        if controller.pendingQueueCount > 0 && controller.state == .idle {
-            return SemanticColor.warning
-        }
-        return indicatorColor
-    }
-
-    private var timeString: String {
-        // Show processing time during transcribing, recording time during listening
-        let time = controller.state == .transcribing ? controller.processingTime : controller.elapsedTime
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        let tenths = Int((time * 10).truncatingRemainder(dividingBy: 10))
-        return String(format: "%d:%02d.%d", minutes, seconds, tenths)
-    }
-
-    private func startPulseAnimation() {
-        guard controller.state == .listening else { return }
-        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-            pulsePhase = 1.0
-        }
-    }
-
-    private var indicatorColor: Color {
-        switch controller.state {
-        case .idle: return .white
-        case .listening: return SemanticColor.error
-        case .transcribing: return SemanticColor.warning
-        case .routing: return SemanticColor.success
-        }
-    }
-
-    private var sliverOpacity: Double {
-        switch controller.state {
-        case .idle: return 0.15
-        case .listening: return 0.8
-        case .transcribing: return 0.6
-        case .routing: return 0.6
         }
     }
 }

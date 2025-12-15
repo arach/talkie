@@ -1653,6 +1653,36 @@ struct OutputSettingsSection: View {
                     }
                 }
             }
+
+            SettingsCard(title: "CONTEXT CAPTURE") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Toggle(isOn: $settings.contextCaptureSessionAllowed) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Capture context this session")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(TalkieTheme.textPrimary)
+                            Text("Front app, window titles, and (optionally) focused text. Resets when you quit Talkie Live.")
+                                .font(.system(size: 9))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+
+                    Text("Detail level")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                        .textCase(.uppercase)
+
+                    ForEach(ContextCaptureDetail.allCases, id: \.rawValue) { detail in
+                        ContextCaptureDetailRow(
+                            detail: detail,
+                            isSelected: settings.contextCaptureDetail == detail
+                        ) {
+                            settings.contextCaptureDetail = detail
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1672,6 +1702,43 @@ struct PrimaryContextRow: View {
                     .foregroundColor(TalkieTheme.textPrimary)
 
                 Text(source.description)
+                    .font(.system(size: 9))
+                    .foregroundColor(TalkieTheme.textTertiary)
+            }
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.accentColor)
+            }
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { action() }
+        .onHover { isHovered = $0 }
+    }
+}
+
+struct ContextCaptureDetailRow: View {
+    let detail: ContextCaptureDetail
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(detail.displayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(TalkieTheme.textPrimary)
+
+                Text(detail.description)
                     .font(.system(size: 9))
                     .foregroundColor(TalkieTheme.textTertiary)
             }
@@ -2711,7 +2778,7 @@ struct StorageSettingsSection: View {
                             label: "Prune Old",
                             color: SemanticColor.warning
                         ) {
-                            PastLivesDatabase.prune(olderThanHours: settings.utteranceTTLHours)
+                            LiveDatabase.prune(olderThanHours: settings.utteranceTTLHours)
                             refreshStats()
                         }
 
@@ -2743,7 +2810,7 @@ struct StorageSettingsSection: View {
         .alert("Delete All Data?", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Delete All", role: .destructive) {
-                PastLivesDatabase.deleteAll()
+                LiveDatabase.deleteAll()
                 refreshStats()
             }
         } message: {
@@ -2763,7 +2830,7 @@ struct StorageSettingsSection: View {
     }
 
     private func cleanOrphanedAudio() {
-        let utterances = PastLivesDatabase.all()
+        let utterances = LiveDatabase.all()
         let referencedFilenames = Set(utterances.compactMap { $0.audioFilename })
         AudioStorage.pruneOrphanedFiles(referencedFilenames: referencedFilenames)
     }
@@ -2841,7 +2908,7 @@ struct StorageStats {
     }
 
     static func calculate() async -> StorageStats {
-        let utterances = PastLivesDatabase.all()
+        let utterances = LiveDatabase.all()
         var stats = StorageStats()
 
         stats.totalUtterances = utterances.count

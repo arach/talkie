@@ -120,17 +120,17 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     // MARK: - TalkieEngineProtocol
 
     nonisolated func transcribe(
-        audioData: Data,
+        audioPath: String,
         modelId: String,
         reply: @escaping (String?, String?) -> Void
     ) {
         Task { @MainActor in
-            await self.doTranscribe(audioData: audioData, modelId: modelId, reply: reply)
+            await self.doTranscribe(audioPath: audioPath, modelId: modelId, reply: reply)
         }
     }
 
     private func doTranscribe(
-        audioData: Data,
+        audioPath: String,
         modelId: String,
         reply: @escaping (String?, String?) -> Void
     ) async {
@@ -146,6 +146,13 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             return
         }
 
+        // Verify file exists
+        guard FileManager.default.fileExists(atPath: audioPath) else {
+            EngineStatusManager.shared.log(.error, "Transcribe", "File not found: \(audioPath)")
+            reply(nil, "Audio file not found")
+            return
+        }
+
         isTranscribing = true
         EngineStatusManager.shared.isTranscribing = true
         defer {
@@ -154,39 +161,44 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         }
 
         let (family, actualModelId) = parseModelId(modelId)
-        let audioSizeKB = audioData.count / 1024
-        logger.info("Transcribing \(audioSizeKB) KB with \(family):\(actualModelId)")
-        EngineStatusManager.shared.log(.info, "Transcribe", "Starting \(audioSizeKB) KB with \(family):\(actualModelId)")
+        let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
+        logger.info("Transcribing \(fileName) with \(family):\(actualModelId)")
+        EngineStatusManager.shared.log(.info, "Transcribe", "Starting \(fileName) with \(family):\(actualModelId)")
 
         let startTime = Date()
 
         do {
             let transcript: String
             if family == "parakeet" {
-                transcript = try await transcribeWithParakeet(audioData: audioData, modelId: actualModelId)
+                transcript = try await transcribeWithParakeet(audioPath: audioPath, modelId: actualModelId)
             } else {
-                transcript = try await transcribeWithWhisper(audioData: audioData, modelId: actualModelId)
+                transcript = try await transcribeWithWhisper(audioPath: audioPath, modelId: actualModelId)
             }
 
             totalTranscriptions += 1
             let elapsed = Date().timeIntervalSince(startTime)
+            let elapsedMs = Int(elapsed * 1000)
             let wordCount = transcript.split(separator: " ").count
             logger.info("Transcribed #\(self.totalTranscriptions): \(transcript.prefix(50))...")
-            EngineStatusManager.shared.log(.info, "Transcribe", "✓ Completed #\(totalTranscriptions) in \(String(format: "%.1f", elapsed))s (\(wordCount) words)")
+            let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
+            EngineStatusManager.shared.log(.info, "Transcribe", "✓ #\(totalTranscriptions) in \(timeStr) (\(wordCount) words)")
             EngineStatusManager.shared.totalTranscriptions = totalTranscriptions
+            EngineStatusManager.shared.recordMetric(elapsed: elapsed, wordCount: wordCount)
             reply(transcript, nil)
 
         } catch {
             let elapsed = Date().timeIntervalSince(startTime)
+            let elapsedMs = Int(elapsed * 1000)
+            let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
             logger.error("Transcription failed: \(error.localizedDescription)")
-            EngineStatusManager.shared.log(.error, "Transcribe", "✗ Failed after \(String(format: "%.1f", elapsed))s: \(error.localizedDescription)")
+            EngineStatusManager.shared.log(.error, "Transcribe", "✗ Failed after \(timeStr): \(error.localizedDescription)")
             reply(nil, error.localizedDescription)
         }
     }
 
     // MARK: - Whisper Transcription
 
-    private func transcribeWithWhisper(audioData: Data, modelId: String) async throws -> String {
+    private func transcribeWithWhisper(audioPath: String, modelId: String) async throws -> String {
         // Load model if needed
         if whisperKit == nil || currentWhisperModelId != modelId {
             logger.info("Loading Whisper model: \(modelId)")
@@ -218,17 +230,9 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             throw EngineError.modelNotLoaded
         }
 
-        // Write audio to temp file
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("m4a")
-
-        try audioData.write(to: tempURL)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-
-        // Transcribe
+        // Transcribe directly from client's file - no temp file needed
         let startTime = Date()
-        let results = try await whisper.transcribe(audioPath: tempURL.path)
+        let results = try await whisper.transcribe(audioPath: audioPath)
         let elapsed = Date().timeIntervalSince(startTime)
 
         let transcript = results.map { $0.text }
@@ -241,7 +245,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     // MARK: - Parakeet Transcription
 
-    private func transcribeWithParakeet(audioData: Data, modelId: String) async throws -> String {
+    private func transcribeWithParakeet(audioPath: String, modelId: String) async throws -> String {
         let asrVersion: AsrModelVersion = modelId == "v2" ? .v2 : .v3
 
         // Load model if needed
@@ -269,63 +273,15 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             throw EngineError.modelNotLoaded
         }
 
-        // Write audio to temp file and convert to samples
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("m4a")
-
-        try audioData.write(to: tempURL)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-
-        // Convert to audio samples
+        // Transcribe directly from client's file - FluidAudio handles the conversion
         let startTime = Date()
-        let samples = try await loadAudioSamples(from: tempURL)
-        EngineStatusManager.shared.log(.debug, "Parakeet", "Audio converted to \(samples.count) samples")
-        let result = try await manager.transcribe(samples)
+        let audioURL = URL(fileURLWithPath: audioPath)
+        let result = try await manager.transcribe(audioURL)
         let elapsed = Date().timeIntervalSince(startTime)
 
         let transcript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         logger.info("Parakeet transcribed in \(String(format: "%.1f", elapsed))s")
         return transcript
-    }
-
-    /// Load audio samples from file for Parakeet
-    private func loadAudioSamples(from url: URL) async throws -> [Float] {
-        let file = try AVAudioFile(forReading: url)
-        let format = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1)!
-
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw EngineError.audioConversionFailed
-        }
-
-        // Convert to target format
-        let converter = AVAudioConverter(from: file.processingFormat, to: format)!
-
-        var error: NSError?
-        let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
-            do {
-                let tempBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: inNumPackets)!
-                try file.read(into: tempBuffer)
-                outStatus.pointee = .haveData
-                return tempBuffer
-            } catch {
-                outStatus.pointee = .endOfStream
-                return nil
-            }
-        }
-
-        converter.convert(to: buffer, error: &error, withInputFrom: inputBlock)
-
-        if let error = error {
-            throw error
-        }
-
-        // Convert buffer to float array
-        guard let floatData = buffer.floatChannelData?[0] else {
-            throw EngineError.audioConversionFailed
-        }
-
-        return Array(UnsafeBufferPointer(start: floatData, count: Int(buffer.frameLength)))
     }
 
     // MARK: - Model Preloading

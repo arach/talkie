@@ -197,13 +197,50 @@ final class AppLauncher: ObservableObject {
 
     // MARK: - Launch/Terminate
 
-    /// Launch TalkieEngine
+    /// Launch TalkieEngine based on current service mode
     func launchEngine() {
-        launchHelper(bundleId: Self.engineBundleId)
+        // Guard: don't launch if already running
+        if isAppRunning(bundleId: Self.engineBundleId) {
+            logger.info("TalkieEngine already running, skipping launch")
+            refreshStatus()
+            return
+        }
+
+        let mode = EngineClient.shared.connectedMode ?? .dev
+
+        switch mode {
+        case .production:
+            // Launch production app from /Applications
+            launchHelper(bundleId: Self.engineBundleId)
+
+        case .dev:
+            // Start launchd daemon
+            logger.info("Starting dev engine via launchctl...")
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            task.arguments = ["start", "jdi.talkie.engine.dev"]
+            try? task.run()
+
+        case .debug:
+            // Debug mode requires Xcode
+            logger.warning("Debug engine must be launched from Xcode")
+            // Could show alert to user here
+        }
+
+        // Refresh status after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.refreshStatus()
+        }
     }
 
     /// Launch TalkieLive
     func launchLive() {
+        // Guard: don't launch if already running
+        if isAppRunning(bundleId: Self.liveBundleId) {
+            logger.info("TalkieLive already running, skipping launch")
+            refreshStatus()
+            return
+        }
         launchHelper(bundleId: Self.liveBundleId)
     }
 

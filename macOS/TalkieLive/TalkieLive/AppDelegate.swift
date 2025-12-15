@@ -113,6 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleListening()
         }
 
+        // Wire up push-to-queue - escape hatch when stuck in transcribing
+        floatingPill.onPushToQueue = { [weak self] in
+            self?.liveController.pushToQueue()
+        }
+
         // Show floating pill on launch
         floatingPill.show()
 
@@ -133,6 +138,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(hotkeyDidChange),
             name: .hotkeyDidChange,
+            object: nil
+        )
+
+        // Listen for toggle recording from status bar button
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(toggleListening),
+            name: .toggleRecording,
             object: nil
         )
     }
@@ -271,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showQueuePicker() {
         // Only show if there are queued items
-        let queuedCount = PastLivesDatabase.countQueued()
+        let queuedCount = LiveDatabase.countQueued()
         guard queuedCount > 0 else {
             // Could play a "nothing queued" sound here
             return

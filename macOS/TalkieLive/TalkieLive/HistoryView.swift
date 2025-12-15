@@ -19,6 +19,50 @@ enum LiveNavigationSection: Hashable {
     case settings
 }
 
+// MARK: - Safe AVMetadata helpers
+
+private extension AVURLAsset {
+    func safeLoadMetadata() async -> [(String, String)] {
+        do {
+            let items = try await load(.metadata)
+            return await items.asyncCompactMap { item in
+                guard let key = item.commonKey?.rawValue ?? item.key as? String,
+                      let value = try? await item.load(.stringValue),
+                      !value.isEmpty else { return nil }
+                return (key, value)
+            }
+        } catch {
+            return []
+        }
+    }
+
+    func safeLoadMetadata(for format: AVMetadataFormat) async -> [(String, String)] {
+        do {
+            let items = try await loadMetadata(for: format)
+            return await items.asyncCompactMap { item in
+                guard let key = item.key as? String,
+                      let value = try? await item.load(.stringValue),
+                      !value.isEmpty else { return nil }
+                return (key, value)
+            }
+        } catch {
+            return []
+        }
+    }
+}
+
+private extension Sequence {
+    func asyncCompactMap<T>(_ transform: (Element) async throws -> T?) async rethrows -> [T] {
+        var results: [T] = []
+        for element in self {
+            if let value = try await transform(element) {
+                results.append(value)
+            }
+        }
+        return results
+    }
+}
+
 // MARK: - Main Navigation View
 
 struct LiveNavigationView: View {
@@ -28,7 +72,6 @@ struct LiveNavigationView: View {
     @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedUtterance: Utterance?
     @State private var searchText = ""
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
     @State private var isChevronPressed: Bool = false
@@ -60,39 +103,38 @@ struct LiveNavigationView: View {
         selectedSection == .home || selectedSection == .console || selectedSection == .settings
     }
 
+    private var sidebarWidth: CGFloat {
+        isSidebarCollapsed ? 56 : 180
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                // Sidebar - toggleable between icon-only and full labels
-                // Use fixed width (min=max) to prevent sidebar from resizing when content column is dragged
-                sidebarContent
-                    .navigationSplitViewColumnWidth(
-                        min: isSidebarCollapsed ? 56 : 180,
-                        ideal: isSidebarCollapsed ? 56 : 180,
-                        max: isSidebarCollapsed ? 56 : 180
-                    )
-            } content: {
-                // Content column - shows list for history, minimal for full-width views
-                if needsFullWidth {
-                    // Minimal placeholder - content renders in detail column
-                    Color.clear
-                        .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
-                } else {
-                    historyListView
-                        .navigationSplitViewColumnWidth(min: 280, ideal: 400, max: .infinity)
-                }
-            } detail: {
-                // Detail column - shows utterance detail or full-width content
+        HStack(spacing: 0) {
+            // Full-height sidebar
+            sidebarContent
+                .frame(width: sidebarWidth)
+
+            // Subtle divider between sidebar and content
+            Rectangle()
+                .fill(TalkieTheme.border.opacity(0.5))
+                .frame(width: 1)
+
+            // Main content area with StatusBar at bottom
+            VStack(spacing: 0) {
+                // Content/detail area
                 if needsFullWidth {
                     fullWidthContentView
                 } else {
-                    detailColumnView
+                    // Two-column layout for history
+                    HSplitView {
+                        historyListView
+                            .frame(minWidth: 280, idealWidth: 400)
+                        detailColumnView
+                    }
                 }
-            }
-            .navigationSplitViewStyle(.prominentDetail)
 
-            // Full-width status bar at bottom
-            StatusBar()
+                // StatusBar only under content, not sidebar
+                StatusBar()
+            }
         }
         .frame(minWidth: 700, minHeight: 500)
         .observeTheme()
@@ -249,81 +291,82 @@ struct LiveNavigationView: View {
         }
 
         // AVAsset metadata
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         var duration: Double? = nil
 
         // Duration
-        let assetDuration = asset.duration
-        if assetDuration.isValid && !assetDuration.isIndefinite {
-            let seconds = CMTimeGetSeconds(assetDuration)
-            if seconds.isFinite && seconds > 0 {
-                duration = seconds
-                metadata["audioDuration"] = String(format: "%.2f", seconds)
-            }
+        Task {
+            do {
+                let assetDuration = try await asset.load(.duration)
+                if assetDuration.isValid && !assetDuration.isIndefinite {
+                    let seconds = CMTimeGetSeconds(assetDuration)
+                    if seconds.isFinite && seconds > 0 {
+                        duration = seconds
+                        metadata["audioDuration"] = String(format: "%.2f", seconds)
+                    }
+                }
+            } catch { }
         }
 
         // Audio track info
-        if let audioTrack = asset.tracks(withMediaType: .audio).first {
-            // Sample rate and channels from format descriptions
-            if let formatDescriptions = audioTrack.formatDescriptions as? [CMFormatDescription],
-               let formatDesc = formatDescriptions.first {
-                if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
+        Task {
+            if let audioTrack = try? await asset.loadTracks(withMediaType: .audio).first {
+                let formatDescriptions = (try? await audioTrack.load(.formatDescriptions)) ?? []
+                if let formatDesc = formatDescriptions.first,
+                   let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
                     metadata["sampleRate"] = "\(Int(asbd.pointee.mSampleRate))"
                     metadata["channels"] = "\(asbd.pointee.mChannelsPerFrame)"
                     metadata["bitsPerChannel"] = "\(asbd.pointee.mBitsPerChannel)"
                 }
+                if let estimatedRate = try? await audioTrack.load(.estimatedDataRate) {
+                    metadata["estimatedBitrate"] = "\(Int(estimatedRate))"
+                }
             }
-            // Estimated bitrate
-            metadata["estimatedBitrate"] = "\(Int(audioTrack.estimatedDataRate))"
         }
 
         // File type
         metadata["fileExtension"] = url.pathExtension.lowercased()
 
         // Apple/Common metadata (recording date, device, location, etc.)
-        let metadataItems = asset.metadata
-        for item in metadataItems {
-            guard let key = item.commonKey?.rawValue ?? item.key as? String,
-                  let value = item.stringValue else { continue }
-
-            switch key {
-            case "creationDate", AVMetadataKey.commonKeyCreationDate.rawValue:
-                metadata["recordingDate"] = value
-            case "make", AVMetadataKey.commonKeyMake.rawValue:
-                metadata["deviceMake"] = value
-            case "model", AVMetadataKey.commonKeyModel.rawValue:
-                metadata["deviceModel"] = value
-            case "software", AVMetadataKey.commonKeySoftware.rawValue:
-                metadata["recordingSoftware"] = value
-            case "author", AVMetadataKey.commonKeyAuthor.rawValue:
-                metadata["author"] = value
-            case "title", AVMetadataKey.commonKeyTitle.rawValue:
-                metadata["title"] = value
-            case "album", AVMetadataKey.commonKeyAlbumName.rawValue:
-                metadata["album"] = value
-            case "artist", AVMetadataKey.commonKeyArtist.rawValue:
-                metadata["artist"] = value
-            case "location", AVMetadataKey.commonKeyLocation.rawValue:
-                metadata["recordingLocation"] = value
-            case "description", AVMetadataKey.commonKeyDescription.rawValue:
-                metadata["description"] = value
-            default:
-                // Store any other interesting metadata with a prefix
-                if !key.isEmpty && !value.isEmpty && value.count < 500 {
-                    let sanitizedKey = key.replacingOccurrences(of: " ", with: "_")
-                    metadata["meta_\(sanitizedKey)"] = value
+        Task {
+            let metadataItems = await asset.safeLoadMetadata()
+            for (key, value) in metadataItems {
+                switch key {
+                case "creationDate", AVMetadataKey.commonKeyCreationDate.rawValue:
+                    metadata["recordingDate"] = value
+                case "make", AVMetadataKey.commonKeyMake.rawValue:
+                    metadata["deviceMake"] = value
+                case "model", AVMetadataKey.commonKeyModel.rawValue:
+                    metadata["deviceModel"] = value
+                case "software", AVMetadataKey.commonKeySoftware.rawValue:
+                    metadata["recordingSoftware"] = value
+                case "author", AVMetadataKey.commonKeyAuthor.rawValue:
+                    metadata["author"] = value
+                case "title", AVMetadataKey.commonKeyTitle.rawValue:
+                    metadata["title"] = value
+                case "album", AVMetadataKey.commonKeyAlbumName.rawValue:
+                    metadata["album"] = value
+                case "artist", AVMetadataKey.commonKeyArtist.rawValue:
+                    metadata["artist"] = value
+                case "location", AVMetadataKey.commonKeyLocation.rawValue:
+                    metadata["recordingLocation"] = value
+                case "description", AVMetadataKey.commonKeyDescription.rawValue:
+                    metadata["description"] = value
+                default:
+                    if !key.isEmpty && !value.isEmpty && value.count < 500 {
+                        let sanitizedKey = key.replacingOccurrences(of: " ", with: "_")
+                        metadata["meta_\(sanitizedKey)"] = value
+                    }
                 }
             }
         }
 
         // Also check ID3 and iTunes metadata for MP3/M4A
-        let id3Items = asset.metadata(forFormat: .id3Metadata)
-        let itunesItems = asset.metadata(forFormat: .iTunesMetadata)
-        for item in (id3Items + itunesItems) {
-            if let key = item.key as? String, let value = item.stringValue {
-                if !metadata.keys.contains(key) && !value.isEmpty && value.count < 500 {
-                    metadata["tag_\(key)"] = value
-                }
+        Task {
+            let id3Items = await asset.safeLoadMetadata(for: .id3Metadata)
+            let itunesItems = await asset.safeLoadMetadata(for: .iTunesMetadata)
+            for (key, value) in (id3Items + itunesItems) where !metadata.keys.contains(key) && !value.isEmpty && value.count < 500 {
+                metadata["tag_\(key)"] = value
             }
         }
 
@@ -355,37 +398,34 @@ struct LiveNavigationView: View {
             windowTitle: originalFilename,
             durationSeconds: duration,
             whisperModel: settings.selectedModelId,
-            transcriptionMs: nil,
+            perfEngineMs: nil,
             metadata: metadata,
             audioFilename: storedFilename,
             transcriptionStatus: .pending,
             createdInTalkieView: true,
             pasteTimestamp: nil
         )
-        PastLivesDatabase.store(pendingUtterance)
+        LiveDatabase.store(pendingUtterance)
         store.refresh()
 
         // Get the ID of the just-stored utterance
-        let storedId = PastLivesDatabase.all().first { $0.audioFilename == storedFilename }?.id
+        let storedId = LiveDatabase.all().first { $0.audioFilename == storedFilename }?.id
 
         do {
-            // Read audio data
-            let audioData = try Data(contentsOf: storedURL)
-
-            // Transcribe via engine
+            // Transcribe via engine - pass path directly, engine reads the file
             let startTime = Date()
             let text = try await EngineClient.shared.transcribe(
-                audioData: audioData,
+                audioPath: storedURL.path,
                 modelId: settings.selectedModelId
             )
             let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
             // Update the database record with success
             if let id = storedId {
-                PastLivesDatabase.markTranscriptionSuccess(
+                LiveDatabase.markTranscriptionSuccess(
                     id: id,
                     text: text,
-                    transcriptionMs: transcriptionMs,
+                    perfEngineMs: transcriptionMs,
                     model: settings.selectedModelId
                 )
             }
@@ -410,7 +450,7 @@ struct LiveNavigationView: View {
 
             // Mark as failed in database
             if let id = storedId {
-                PastLivesDatabase.markTranscriptionFailed(id: id, error: error.localizedDescription)
+                LiveDatabase.markTranscriptionFailed(id: id, error: error.localizedDescription)
             }
 
             store.refresh()
@@ -468,16 +508,19 @@ struct LiveNavigationView: View {
                         badge: errorCount > 0 ? "\(errorCount)" : nil,
                         badgeColor: SemanticColor.error
                     )
-
-                    sidebarItem(
-                        section: .settings,
-                        icon: "gearshape",
-                        title: "Settings"
-                    )
                 }
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+
+            Spacer()
+
+            // Settings pinned to bottom
+            sidebarBottomItem(
+                section: .settings,
+                icon: "gearshape",
+                title: "Settings"
+            )
         }
         .background(TalkieTheme.surfaceElevated)
     }
@@ -575,6 +618,45 @@ struct LiveNavigationView: View {
             }
             .tag(section)
         }
+    }
+
+    /// Bottom-pinned sidebar item (outside List)
+    @ViewBuilder
+    private func sidebarBottomItem(
+        section: LiveNavigationSection,
+        icon: String,
+        title: String
+    ) -> some View {
+        Button {
+            selectedSection = section
+        } label: {
+            if isSidebarCollapsed {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(selectedSection == section ? .accentColor : TalkieTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 32)
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                    Text(title)
+                        .font(.system(size: 13))
+                    Spacer()
+                }
+                .foregroundColor(selectedSection == section ? .accentColor : TalkieTheme.textSecondary)
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+            }
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(selectedSection == section ? TalkieTheme.hover : Color.clear)
+                .padding(.horizontal, 8)
+        )
+        .padding(.bottom, 8)
+        .help(title)
     }
 
     // MARK: - Full Width Content (for Home, Console and Settings)
@@ -920,7 +1002,12 @@ struct UtteranceDetailView: View {
                     MinimalHeader(utterance: utterance)
 
                     // Combined transcript + stats container
-                    TranscriptContainer(utterance: utterance, showJSON: $showJSON, copied: $copied, onCopy: copyToClipboard)
+                    TranscriptContainer(
+                        utterance: utterance,
+                        showJSON: $showJSON,
+                        copied: $copied,
+                        onCopy: copyCurrentContent
+                    )
 
                     // Info cards row
                     MinimalInfoCards(utterance: utterance)
@@ -937,17 +1024,29 @@ struct UtteranceDetailView: View {
         .background(TalkieTheme.surface)  // Near black background
     }
 
-    private func copyToClipboard() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(utterance.text, forType: .string)
+    private func copyCurrentContent() {
+        // Copy JSON when JSON view is active; otherwise copy plain text
+        if showJSON {
+            let json = JSONContentView(utterance: utterance).renderedString()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(json, forType: .string)
+        } else {
+            copyPlainText()
+        }
+
         withAnimation { copied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation { copied = false }
         }
     }
 
+    private func copyPlainText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(utterance.text, forType: .string)
+    }
+
     private func pasteText() {
-        copyToClipboard()
+        copyPlainText()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             let source = CGEventSource(stateID: .hidSystemState)
             guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
@@ -1120,7 +1219,7 @@ private struct TranscriptContainer: View {
     @State private var isCopyHovered = false
 
     // Crisp text colors - solid grays instead of opacity
-    private static let textPrimary = TalkieTheme.textPrimary
+    private static let textPrimary = Color.white
     private static let textSecondary = TalkieTheme.textSecondary
     private static let textMuted = TalkieTheme.textTertiary
 
@@ -1158,19 +1257,20 @@ private struct TranscriptContainer: View {
                 if isHovered || copied {
                     Button(action: onCopy) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 11))
-                            .foregroundColor(copied ? SemanticColor.success : (isCopyHovered ? .white : TalkieTheme.textTertiary))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(copied ? SemanticColor.success : (isCopyHovered ? .white : TalkieTheme.textPrimary))
+                            .frame(width: 36, height: 36)
+                            .background(
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(isCopyHovered ? TalkieTheme.border : TalkieTheme.surfaceCard.opacity(0.7))
+                            )
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(isCopyHovered ? TalkieTheme.border : Color.clear)
-                    )
                     .onHover { isCopyHovered = $0 }
-                    .padding(8)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    .animation(.easeOut(duration: 0.15), value: isCopyHovered)
+                    .padding(10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .animation(.easeOut(duration: 0.12), value: isCopyHovered)
                 }
             }
 
@@ -1227,41 +1327,46 @@ private struct StatPill: View {
 private struct JSONContentView: View {
     let utterance: Utterance
 
-    var body: some View {
+    /// Render the JSON content as a string for copying
+    func renderedString() -> String {
         let m = utterance.metadata
-        let json = """
-        {
-          "id": "\(utterance.id.uuidString)",
-          "liveID": \(utterance.liveID.map { String($0) } ?? "null"),
-          "timestamp": "\(ISO8601DateFormatter().string(from: utterance.timestamp))",
-          "text": "\(escapeJSON(utterance.text.prefix(100).description))...",
+        var lines: [String] = []
+        lines.append("{")
+        appendLine(&lines, key: "id", value: "\"\(utterance.id.uuidString)\"")
+        appendLine(&lines, key: "liveID", value: utterance.liveID.map { String($0) } ?? "null")
+        appendLine(&lines, key: "timestamp", value: "\"\(ISO8601DateFormatter().string(from: utterance.timestamp))\"")
+        appendLine(&lines, key: "text", value: "\"\(escapeJSON(utterance.text))\"")
 
-          // Stats
-          "words": \(utterance.wordCount),
-          "chars": \(utterance.characterCount),
-          "durationSeconds": \(utterance.durationSeconds.map { String(format: "%.2f", $0) } ?? "null"),
-
-          // Source Context
-          "appBundleID": \(jsonString(m.activeAppBundleID)),
-          "appName": \(jsonString(m.activeAppName)),
-          "windowTitle": \(jsonString(m.activeWindowTitle)),
-
-          // Rich Context (Accessibility API)
-          "documentURL": \(jsonString(m.documentURL)),
-          "browserURL": \(jsonString(m.browserURL)),
-          "focusedElementRole": \(jsonString(m.focusedElementRole)),
-          "focusedElementValue": \(jsonString(m.focusedElementValue?.prefix(100).description)),
-          "terminalWorkingDir": \(jsonString(m.terminalWorkingDir)),
-
-          // Transcription
-          "whisperModel": \(jsonString(m.whisperModel)),
-          "transcriptionMs": \(m.transcriptionDurationMs.map { String($0) } ?? "null"),
-
-          // Routing
-          "routingMode": \(jsonString(m.routingMode)),
-          "wasRouted": \(m.wasRouted)
+        appendLine(&lines, key: "words", value: "\(utterance.wordCount)")
+        appendLine(&lines, key: "chars", value: "\(utterance.characterCount)")
+        if let duration = utterance.durationSeconds {
+            appendLine(&lines, key: "durationSeconds", value: String(format: "%.2f", duration))
         }
-        """
+
+        appendIfPresent(&lines, key: "appBundleID", value: m.activeAppBundleID)
+        appendIfPresent(&lines, key: "appName", value: m.activeAppName)
+        appendIfPresent(&lines, key: "windowTitle", value: m.activeWindowTitle)
+
+        appendIfPresent(&lines, key: "documentURL", value: m.documentURL)
+        appendIfPresent(&lines, key: "browserURL", value: m.browserURL)
+        appendIfPresent(&lines, key: "focusedElementRole", value: m.focusedElementRole)
+        appendIfPresent(&lines, key: "focusedElementValue", value: m.focusedElementValue)
+        appendIfPresent(&lines, key: "terminalWorkingDir", value: m.terminalWorkingDir)
+
+        appendIfPresent(&lines, key: "whisperModel", value: m.whisperModel)
+        appendIfPresent(&lines, key: "perfEngineMs", value: m.perfEngineMs.map { "\($0)" })
+        appendIfPresent(&lines, key: "perfEndToEndMs", value: m.perfEndToEndMs.map { "\($0)" })
+        appendIfPresent(&lines, key: "perfInAppMs", value: m.perfInAppMs.map { "\($0)" })
+
+        appendIfPresent(&lines, key: "routingMode", value: m.routingMode)
+        appendLine(&lines, key: "wasRouted", value: "\(m.wasRouted)", isLast: true)
+
+        lines.append("}")
+        return lines.joined(separator: "\n")
+    }
+
+    var body: some View {
+        let json = renderedString()
 
         ScrollView {
             Text(json)
@@ -1284,6 +1389,16 @@ private struct JSONContentView: View {
          .replacingOccurrences(of: "\n", with: "\\n")
          .replacingOccurrences(of: "\r", with: "\\r")
          .replacingOccurrences(of: "\t", with: "\\t")
+    }
+
+    private func appendIfPresent(_ lines: inout [String], key: String, value: String?) {
+        guard let value, !value.isEmpty else { return }
+        appendLine(&lines, key: key, value: "\"\(escapeJSON(value))\"")
+    }
+
+    private func appendLine(_ lines: inout [String], key: String, value: String, isLast: Bool = false) {
+        let suffix = isLast ? "" : ","
+        lines.append("  \"\(key)\": \(value)\(suffix)")
     }
 }
 
@@ -1323,15 +1438,8 @@ private struct MinimalInfoCards: View {
                 )
             }
 
-            // Transcription time - green (shows processing speed)
-            if let transcriptionMs = utterance.metadata.transcriptionDurationMs {
-                InfoCard(
-                    label: "TRANSCRIBED",
-                    icon: "bolt",
-                    value: formatTranscriptionTime(transcriptionMs),
-                    iconColor: SemanticColor.success
-                )
-            }
+            // Performance breakdown
+            PerformanceCard(utterance: utterance)
         }
     }
 
@@ -1359,10 +1467,14 @@ private struct InfoCard: View {
     @State private var isHovered = false
 
     var body: some View {
+        let baseFill = TalkieTheme.surface
+        let hoverFill = TalkieTheme.hover
+        let borderColor = isHovered ? iconColor.opacity(0.35) : TalkieTheme.surfaceCard
+
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(isHovered ? TalkieTheme.textTertiary : TalkieTheme.textTertiary)
+                .foregroundColor(TalkieTheme.textTertiary)
 
             HStack(spacing: 6) {
                 if let bundleID = appBundleID {
@@ -1371,12 +1483,12 @@ private struct InfoCard: View {
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 10))
-                        .foregroundColor(isHovered ? iconColor : iconColor.opacity(0.8))
+                        .foregroundColor(iconColor.opacity(isHovered ? 1.0 : 0.8))
                 }
 
                 Text(value)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(isHovered ? TalkieTheme.surface : TalkieTheme.textPrimary)
+                    .foregroundColor(TalkieTheme.textPrimary)
                     .lineLimit(1)
             }
         }
@@ -1384,17 +1496,202 @@ private struct InfoCard: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? TalkieTheme.surfaceElevated : TalkieTheme.surface)
+                .fill(isHovered ? hoverFill : baseFill)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isHovered ? iconColor.opacity(0.3) : TalkieTheme.surfaceCard, lineWidth: 1)
+                .stroke(borderColor, lineWidth: 1)
         )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
     }
 }
 
+private struct PerformanceCard: View {
+    let utterance: Utterance
+    @State private var isHovered = false
+    @State private var showCopied = false
+
+    // End-to-End: total perceived latency (stop recording → delivered)
+    private var endToEndMs: Int? { utterance.metadata.perfEndToEndMs ?? utterance.metadata.perfEngineMs }
+    // Engine: transcription time in TalkieEngine
+    private var engineMs: Int? { utterance.metadata.perfEngineMs }
+    // App: everything TalkieLive does (file save, context, routing, paste)
+    private var appMs: Int? {
+        if let stored = utterance.metadata.perfInAppMs { return stored }
+        if let total = endToEndMs, let engine = engineMs { return max(0, total - engine) }
+        return nil
+    }
+
+    private var displayValue: String {
+        if let total = endToEndMs { return formatTime(total) }
+        if let engine = engineMs { return formatTime(engine) }
+        return "—"
+    }
+
+    private let iconColor = SemanticColor.success
+
+    var body: some View {
+        let baseFill = TalkieTheme.surface
+        let hoverFill = TalkieTheme.hover
+        let borderColor = isHovered ? iconColor.opacity(0.35) : TalkieTheme.surfaceCard
+
+        VStack(alignment: .leading, spacing: 8) {
+            // Label row - matches InfoCard
+            Text("PERFORMANCE")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(TalkieTheme.textTertiary)
+
+            // Value row - matches InfoCard
+            HStack(spacing: 6) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(iconColor.opacity(isHovered ? 1.0 : 0.8))
+
+                Text(displayValue)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(TalkieTheme.textPrimary)
+            }
+
+            // Breakdown on hover
+            if isHovered && hasBreakdown {
+                VStack(alignment: .leading, spacing: 6) {
+                    Rectangle()
+                        .fill(TalkieTheme.divider)
+                        .frame(height: 1)
+
+                    HStack(spacing: 12) {
+                        if let engine = engineMs {
+                            PerfBreakdownItem(label: "Engine", value: formatTime(engine), color: SemanticColor.success)
+                        }
+                        if let app = appMs, app > 0 {
+                            PerfBreakdownItem(label: "App", value: formatTime(app), color: .orange)
+                        }
+                    }
+
+                    // Copy diagnostics button
+                    Button(action: copyDiagnostics) {
+                        HStack(spacing: 4) {
+                            Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 9))
+                            Text(showCopied ? "Copied" : "Copy Diagnostics")
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                        .foregroundColor(showCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(TalkieTheme.surfaceCard)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovered ? hoverFill : baseFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(borderColor, lineWidth: 1)
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+    }
+
+    private var hasBreakdown: Bool {
+        engineMs != nil || appMs != nil
+    }
+
+    private func formatTime(_ ms: Int) -> String {
+        if ms < 1000 { return "\(ms)ms" }
+        let seconds = Double(ms) / 1000.0
+        return String(format: "%.1fs", seconds)
+    }
+
+    private func copyDiagnostics() {
+        var lines: [String] = []
+        lines.append("Performance Diagnostics")
+        lines.append("=======================")
+        lines.append("Utterance ID: \(utterance.id)")
+        lines.append("Created: \(utterance.timestamp)")
+        if let total = endToEndMs { lines.append("End-to-End: \(total)ms") }
+        if let engine = engineMs { lines.append("Engine: \(engine)ms") }
+        if let app = appMs { lines.append("App: \(app)ms") }
+        if let model = utterance.metadata.whisperModel { lines.append("Model: \(model)") }
+        if let duration = utterance.durationSeconds { lines.append("Audio Duration: \(String(format: "%.2f", duration))s") }
+        if let app = utterance.metadata.activeAppName { lines.append("Input App: \(app)") }
+        lines.append("Word Count: \(utterance.wordCount)")
+        lines.append("Char Count: \(utterance.text.count)")
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+
+        withAnimation {
+            showCopied = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopied = false
+            }
+        }
+    }
+}
+
+private struct PerfBreakdownItem: View {
+    let label: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 5, height: 5)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(TalkieTheme.textTertiary)
+            Text(value)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(TalkieTheme.textSecondary)
+        }
+    }
+}
+
+private struct PerfChip: View {
+    let label: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(TalkieTheme.textSecondary)
+            Text(value)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(TalkieTheme.textPrimary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(TalkieTheme.surface)
+        )
+    }
+}
 private struct MinimalAudioCard: View {
     let utterance: Utterance
     @ObservedObject private var playback = AudioPlaybackManager.shared
@@ -1975,12 +2272,30 @@ private struct TranscriptionInfoCard: View {
                 }
 
                 // Transcription time
-                if let transcriptionMs = utterance.metadata.transcriptionDurationMs {
+                if let transcriptionMs = utterance.metadata.perfEngineMs {
                     InfoPill(
                         icon: "bolt",
-                        label: "Processed",
+                        label: "Engine",
                         value: formatTranscriptionTime(transcriptionMs),
                         color: SemanticColor.success
+                    )
+                }
+
+                if let totalMs = utterance.metadata.perfEndToEndMs {
+                    InfoPill(
+                        icon: "timer",
+                        label: "End-to-End",
+                        value: formatTranscriptionTime(totalMs),
+                        color: .cyan
+                    )
+                }
+
+                if let appMs = utterance.metadata.perfInAppMs {
+                    InfoPill(
+                        icon: "app",
+                        label: "App",
+                        value: formatTranscriptionTime(appMs),
+                        color: .orange
                     )
                 }
 
@@ -2467,10 +2782,28 @@ private struct StatsCard: View {
                     )
                 }
 
-                if let transcriptionMs = utterance.metadata.transcriptionDurationMs {
+                if let totalMs = utterance.metadata.perfEndToEndMs {
+                    StatBox(
+                        value: formatTranscriptionTime(totalMs),
+                        label: "End-to-End",
+                        icon: "timer",
+                        color: .cyan
+                    )
+                }
+
+                if let appMs = utterance.metadata.perfInAppMs {
+                    StatBox(
+                        value: formatTranscriptionTime(appMs),
+                        label: "App",
+                        icon: "app",
+                        color: .orange
+                    )
+                }
+
+                if let transcriptionMs = utterance.metadata.perfEngineMs {
                     StatBox(
                         value: formatTranscriptionTime(transcriptionMs),
-                        label: "Transcription",
+                        label: "Engine",
                         icon: "bolt",
                         color: SemanticColor.success
                     )
@@ -2583,7 +2916,7 @@ private struct SmartActionsCard: View {
     // Map Utterance to LiveUtterance for database operations
     private var liveUtterance: LiveUtterance? {
         // Find matching LiveUtterance by timestamp and text
-        PastLivesDatabase.recent(limit: 50).first { live in
+        LiveDatabase.recent(limit: 50).first { live in
             live.text == utterance.text &&
             abs(live.createdAt.timeIntervalSince(utterance.timestamp)) < 5
         }
@@ -3125,7 +3458,7 @@ struct SoundPickerRow: View {
 
 struct StorageInfoRow: View {
     @State private var storageSize = AudioStorage.formattedStorageSize()
-    @State private var pastLivesCount = PastLivesDatabase.count()
+    @State private var pastLivesCount = LiveDatabase.count()
 
     var body: some View {
         HStack {
@@ -3140,7 +3473,7 @@ struct StorageInfoRow: View {
             Spacer()
 
             Button("Clear All") {
-                PastLivesDatabase.deleteAll()
+                LiveDatabase.deleteAll()
                 refreshStats()
             }
             .font(Design.fontXS)
@@ -3154,7 +3487,7 @@ struct StorageInfoRow: View {
 
     private func refreshStats() {
         storageSize = AudioStorage.formattedStorageSize()
-        pastLivesCount = PastLivesDatabase.count()
+        pastLivesCount = LiveDatabase.count()
     }
 }
 

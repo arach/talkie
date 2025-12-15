@@ -6,12 +6,51 @@
 //
 
 import Foundation
+import SwiftUI
 
-/// Mach service name for XPC connection
+/// Mach service names for XPC connection
+public enum EngineServiceMode: String, CaseIterable {
+    case production = "jdi.talkie.engine.xpc"
+    case dev = "jdi.talkie.engine.xpc.dev"
+    case debug = "jdi.talkie.engine.xpc.dev.debug"
+
+    public var displayName: String {
+        switch self {
+        case .production: return "Production"
+        case .dev: return "Dev (Daemon)"
+        case .debug: return "Debug (Xcode)"
+        }
+    }
+
+    /// Badge text for menu bar
+    public var badge: String {
+        switch self {
+        case .production: return "PROD"
+        case .dev: return "DEV"
+        case .debug: return "DBG"
+        }
+    }
+
+    /// Whether this mode uses orange color (debugging) vs green (stable)
+    public var isDebugMode: Bool {
+        self == .debug
+    }
+
+    /// Color for UI display (SwiftUI Color)
+    public var color: Color {
+        switch self {
+        case .debug: return .orange
+        case .dev: return Color(red: 0.4, green: 0.8, blue: 0.4)  // Green
+        case .production: return .gray
+        }
+    }
+}
+
+/// Default service name based on build configuration
 #if DEBUG
-public let kTalkieEngineServiceName = "jdi.talkie.engine.xpc.debug"
+public let kTalkieEngineServiceName = EngineServiceMode.dev.rawValue
 #else
-public let kTalkieEngineServiceName = "jdi.talkie.engine.xpc"
+public let kTalkieEngineServiceName = EngineServiceMode.production.rawValue
 #endif
 
 /// Model family identifiers
@@ -37,13 +76,13 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
 /// XPC protocol for TalkieEngine transcription service
 @objc public protocol TalkieEngineProtocol {
 
-    /// Transcribe audio data to text
+    /// Transcribe audio file to text
     /// - Parameters:
-    ///   - audioData: Audio data (m4a, wav, etc.)
+    ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
     ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
     ///   - reply: Callback with transcript or error message
     func transcribe(
-        audioData: Data,
+        audioPath: String,
         modelId: String,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )

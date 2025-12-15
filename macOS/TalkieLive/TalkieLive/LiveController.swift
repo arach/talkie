@@ -25,9 +25,15 @@ final class LiveController: ObservableObject {
 
     // Metadata captured at recording start
     private var recordingStartTime: Date?
+    private var contextCaptureHandle: ContextCaptureHandle?
     private var capturedContext: UtteranceMetadata?
     private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
     private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
+    private var traceID: String?
+
+    // Transcription task - stored so we can cancel it
+    private var transcriptionTask: Task<Void, Never>?
+    private var pendingAudioFilename: String?  // For saving on cancel
 
     init(
         audio: LiveAudioCapture,
@@ -79,16 +85,64 @@ final class LiveController: ObservableObject {
     /// Works in any active state - sets cancelled flag to prevent paste
     @Published private(set) var isCancelled = false
 
+    /// Cancel recording during listening phase (before transcription starts)
     func cancelListening() {
-        guard state != .idle else { return }
-        let previousState = state
+        guard state == .listening else { return }
         isCancelled = true
         audio.stopCapture()
         recordingStartTime = nil
+        contextCaptureHandle = nil
         capturedContext = nil
         startApp = nil
+        pendingAudioFilename = nil
+        traceID = nil
         state = .idle
-        logger.info("Recording cancelled (was \(String(describing: previousState)))")
+        logger.info("Recording cancelled during listening")
+    }
+
+    /// Push current transcription to queue for later retry
+    /// Use this when stuck in transcribing state and want to move on
+    func pushToQueue() {
+        guard state == .transcribing || state == .routing else { return }
+        let previousState = state
+        isCancelled = true
+
+        // Cancel any in-flight transcription task
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+
+        // Save the audio file for retry
+        if let audioFilename = pendingAudioFilename {
+            let utterance = LiveUtterance(
+                text: "[Queued for retry]",
+                mode: "queued",
+                appBundleID: capturedContext?.activeAppBundleID,
+                appName: capturedContext?.activeAppName,
+                windowTitle: capturedContext?.activeWindowTitle,
+                durationSeconds: recordingStartTime.map { Date().timeIntervalSince($0) },
+                whisperModel: LiveSettings.shared.selectedModelId,
+                metadata: capturedContext.flatMap { buildMetadataDict(from: $0) },
+                audioFilename: audioFilename,
+                transcriptionStatus: .pending,
+                createdInTalkieView: createdInTalkieView,
+                pasteTimestamp: nil
+            )
+            LiveDatabase.store(utterance)
+            SystemEventManager.shared.log(.database, "Pushed to queue", detail: "Audio saved for retry")
+            SoundManager.shared.playPasted()  // Confirmation sound
+        }
+
+        recordingStartTime = nil
+        contextCaptureHandle = nil
+        capturedContext = nil
+        startApp = nil
+        pendingAudioFilename = nil
+        traceID = nil
+        state = .idle
+        logger.info("Pushed to queue (was \(previousState.rawValue))")
+
+        // Refresh the queue count
+        UtteranceStore.shared.refresh()
     }
 
     /// Reset cancelled flag when starting a new recording
@@ -104,6 +158,7 @@ final class LiveController: ObservableObject {
     private func start() async {
         // Reset cancelled flag for new recording
         resetCancelled()
+        traceID = nil
 
         // Check if Talkie Live is frontmost BEFORE capturing context
         // This determines if the Live goes into the implicit queue
@@ -113,7 +168,8 @@ final class LiveController: ObservableObject {
         startApp = ContextCapture.getFrontmostApp()
 
         // Capture context BEFORE recording starts (user is in their target app)
-        capturedContext = ContextCapture.captureCurrentContext()
+        contextCaptureHandle = ContextCaptureService.shared.captureUsingSettings()
+        capturedContext = contextCaptureHandle?.baseline
         recordingStartTime = Date()
 
         // Log context capture
@@ -133,9 +189,9 @@ final class LiveController: ObservableObject {
         NotificationCenter.default.post(name: .recordingDidStart, object: nil)
 
         state = .listening
-        audio.startCapture { [weak self] buffer in
+        audio.startCapture { [weak self] audioPath in
             Task { [weak self] in
-                await self?.process(buffer: buffer)
+                await self?.process(tempAudioPath: audioPath)
             }
         }
     }
@@ -145,8 +201,46 @@ final class LiveController: ObservableObject {
         // Don't set state to idle - let process() handle state transitions
     }
 
-    private func process(buffer: Data) async {
+    private func process(tempAudioPath: String) async {
+        let pipelineStart = Date()  // Track end-to-end timing
         let settings = LiveSettings.shared
+
+        // CRITICAL: Copy temp audio to permanent storage FIRST before anything else
+        // This ensures the recording is sacrosanct even if transcription fails
+        // Once copied, the permanent file is NEVER moved or modified - only read or copied
+        let tempURL = URL(fileURLWithPath: tempAudioPath)
+        guard let audioFilename = AudioStorage.copyToStorage(tempURL) else {
+            SystemEventManager.shared.log(.error, "Audio save failed", detail: "Could not copy temp file to storage")
+            state = .idle
+            return
+        }
+        traceID = makeTraceID(from: audioFilename)
+
+        // Store for push-to-queue in case user wants to bail during transcription
+        pendingAudioFilename = audioFilename
+
+        // Clean up temp file now that permanent copy is safe
+        try? FileManager.default.removeItem(atPath: tempAudioPath)
+
+        let fileSaveMs = Int(Date().timeIntervalSince(pipelineStart) * 1000)
+
+        // Get size from the permanent file
+        let permanentURL = AudioStorage.url(for: audioFilename)
+        let audioSizeBytes = (try? permanentURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        let audioSizeKB = Double(audioSizeBytes) / 1024.0
+        let fileSizeStr = String(format: "%.1f KB", audioSizeKB)
+        #if DEBUG
+        let traceSuffix = traceID.map { " • trace=\($0)" } ?? ""
+        #else
+        let traceSuffix = ""
+        #endif
+        SystemEventManager.shared.log(.file, "Audio saved", detail: "\(audioFilename) (\(fileSizeStr)) • \(fileSaveMs)ms\(traceSuffix)")
+
+        // Get permanent path for transcription
+        let permanentAudioPath = AudioStorage.url(for: audioFilename).path
+
+        // Update milestone for status bar
+        ProcessingMilestones.shared.markFileSaved(filename: audioFilename)
 
         // Capture end context IMMEDIATELY when recording stops
         // This captures where the user is NOW (may be different from start)
@@ -163,12 +257,8 @@ final class LiveController: ObservableObject {
         }
 
         // Calculate recording duration
-        let durationSeconds: Double?
-        if let start = recordingStartTime {
-            durationSeconds = Date().timeIntervalSince(start)
-        } else {
-            durationSeconds = nil
-        }
+        let recordStart = recordingStartTime ?? pipelineStart
+        let durationSeconds = Date().timeIntervalSince(recordStart)
 
         // Play finish sound (recording stopped, now processing)
         SoundManager.shared.playFinish()
@@ -177,52 +267,30 @@ final class LiveController: ObservableObject {
         ProcessingMilestones.shared.markRecordingStopped()
 
         // Detailed audio info
-        let audioSizeKB = Double(buffer.count) / 1024.0
-        let durationStr = durationSeconds.map { String(format: "%.1fs", $0) } ?? "?"
-        SystemEventManager.shared.log(.audio, "Recording finished", detail: "\(durationStr) • \(String(format: "%.1f", audioSizeKB)) KB")
-
-        // CRITICAL: Save audio FIRST before anything else
-        // This ensures the recording is sacrosanct even if transcription fails
-        let audioFilename = AudioStorage.save(buffer)
-        if let filename = audioFilename {
-            let fileSizeStr = String(format: "%.1f KB", audioSizeKB)
-            SystemEventManager.shared.log(.file, "Audio saved", detail: "\(filename) (\(fileSizeStr))")
-            // Update milestone for status bar
-            ProcessingMilestones.shared.markFileSaved(filename: filename)
-        } else {
-            SystemEventManager.shared.log(.error, "Audio save failed", detail: "Could not write audio file")
-        }
+        let durationStr = String(format: "%.1fs", durationSeconds)
+        SystemEventManager.shared.log(.audio, "Recording finished", detail: "\(durationStr) • \(fileSizeStr)")
 
         state = .transcribing
-        let transcriptionStart = Date()
+        let engineStart = Date()
 
-        // Log transcription start with model info
+        // Log transcription start with model info and overhead
         let modelName = settings.selectedModelId
-        SystemEventManager.shared.log(.transcription, "Transcribing...", detail: "Model: \(modelName)")
+        let preMs = Int(engineStart.timeIntervalSince(pipelineStart) * 1000)  // Time from stop-recording to engine-submit
+        SystemEventManager.shared.log(.transcription, "Transcribing...", detail: "Model: \(modelName) • pre: \(preMs)ms\(traceSuffix)")
 
         // Track milestone
         ProcessingMilestones.shared.markTranscribing()
 
         do {
-            let request = TranscriptionRequest(audioData: buffer, isLive: true)
+            // Pass the permanent audio path - engine reads directly, never modifies
+            let request = TranscriptionRequest(audioPath: permanentAudioPath, isLive: true)
             let result = try await transcription.transcribe(request)
+            let engineEnd = Date()
 
-            let transcriptionMs = Int(Date().timeIntervalSince(transcriptionStart) * 1000)
+            let transcriptionMs = Int(engineEnd.timeIntervalSince(engineStart) * 1000)
             let transcriptionSec = Double(transcriptionMs) / 1000.0
             let wordCount = result.text.split(separator: " ").count
-
-            // Calculate real-time factor (RTF) - how many seconds to process 1 second of audio
-            let rtfStr: String
-            if let audioDuration = durationSeconds, audioDuration > 0 {
-                let rtf = transcriptionSec / audioDuration
-                rtfStr = String(format: "%.1fx", rtf)
-            } else {
-                rtfStr = "?"
-            }
-
-            // Log transcription result with detailed stats
-            let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
-            SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • RTF: \(rtfStr)")
+            // preMs already calculated above (time from stop-recording to engine-submit)
 
             // Track milestone
             ProcessingMilestones.shared.markTranscriptionComplete(wordCount: wordCount)
@@ -230,10 +298,12 @@ final class LiveController: ObservableObject {
             // Notify for onboarding (dismiss after first transcription)
             NotificationCenter.default.post(name: .transcriptionDidComplete, object: nil)
 
-            // Build complete metadata
+            // Build complete metadata (timing fields set after routing completes)
+            _ = await resolveCapturedContext()
             var metadata = capturedContext ?? UtteranceMetadata()
             metadata.whisperModel = settings.selectedModelId
-            metadata.transcriptionDurationMs = transcriptionMs
+            metadata.perfEngineMs = transcriptionMs
+            metadata.perfPreMs = preMs
             metadata.routingMode = settings.routingMode.rawValue
             metadata.audioFilename = audioFilename
 
@@ -256,7 +326,23 @@ final class LiveController: ObservableObject {
 
                 // Play a different sound for queued (reuse pasted for now)
                 SoundManager.shared.playPasted()
-                SystemEventManager.shared.log(.ui, "Transcript queued", detail: "\(result.text.prefix(40))...")
+                SystemEventManager.shared.log(.ui, "Transcript queued", detail: "\(result.text.prefix(40))...\(traceSuffix)")
+
+                let routeEnd = Date()
+                let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)  // End-to-end: stop-recording → delivery
+                let postMs = Int(routeEnd.timeIntervalSince(engineEnd) * 1000)
+                let appMs = max(0, totalMs - transcriptionMs)  // App time = total - engine
+
+                metadata.perfEndToEndMs = totalMs
+                metadata.perfInAppMs = appMs
+                metadata.perfPreMs = preMs
+                metadata.perfPostMs = postMs
+
+                let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
+                SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
+                #if DEBUG
+                SystemEventManager.shared.log(.transcription, "Latency breakdown", detail: "e2e: \(totalMs)ms • engine: \(transcriptionMs)ms • app: \(appMs)ms (pre: \(preMs)ms, post: \(postMs)ms)\(traceSuffix)")
+                #endif
 
                 // Store in GRDB with createdInTalkieView = true, pasteTimestamp = nil
                 let utterance = LiveUtterance(
@@ -267,13 +353,15 @@ final class LiveController: ObservableObject {
                     windowTitle: metadata.activeWindowTitle,
                     durationSeconds: durationSeconds,
                     whisperModel: metadata.whisperModel,
-                    transcriptionMs: transcriptionMs,
+                    perfEngineMs: transcriptionMs,
+                    perfEndToEndMs: metadata.perfEndToEndMs,
+                    perfInAppMs: metadata.perfInAppMs,
                     metadata: buildMetadataDict(from: metadata),
                     audioFilename: audioFilename,
                     createdInTalkieView: true,
                     pasteTimestamp: nil  // Not pasted yet → queued
                 )
-                PastLivesDatabase.store(utterance)
+                LiveDatabase.store(utterance)
 
             } else {
                 // Normal flow: paste immediately
@@ -285,7 +373,23 @@ final class LiveController: ObservableObject {
 
                 // Play pasted sound
                 SoundManager.shared.playPasted()
-                SystemEventManager.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...")
+                SystemEventManager.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...\(traceSuffix)")
+
+                let routeEnd = Date()
+                let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)  // End-to-end: stop-recording → delivery
+                let postMs = Int(routeEnd.timeIntervalSince(engineEnd) * 1000)
+                let appMs = max(0, totalMs - transcriptionMs)  // App time = total - engine
+
+                metadata.perfEndToEndMs = totalMs
+                metadata.perfInAppMs = appMs
+                metadata.perfPreMs = preMs
+                metadata.perfPostMs = postMs
+
+                let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
+                SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
+                #if DEBUG
+                SystemEventManager.shared.log(.transcription, "Latency breakdown", detail: "e2e: \(totalMs)ms • engine: \(transcriptionMs)ms • app: \(appMs)ms (pre: \(preMs)ms, post: \(postMs)ms)\(traceSuffix)")
+                #endif
 
                 // Return to origin app if enabled and context changed
                 if settings.returnToOriginAfterPaste,
@@ -306,17 +410,19 @@ final class LiveController: ObservableObject {
                     windowTitle: metadata.activeWindowTitle,
                     durationSeconds: durationSeconds,
                     whisperModel: metadata.whisperModel,
-                    transcriptionMs: transcriptionMs,
+                    perfEngineMs: transcriptionMs,
+                    perfEndToEndMs: metadata.perfEndToEndMs,
+                    perfInAppMs: metadata.perfInAppMs,
                     metadata: buildMetadataDict(from: metadata),
                     audioFilename: audioFilename,
                     createdInTalkieView: false,
                     pasteTimestamp: Date()  // Already pasted
                 )
-                PastLivesDatabase.store(utterance)
+                LiveDatabase.store(utterance)
             }
 
-            let dbRecordCount = PastLivesDatabase.count()
-            SystemEventManager.shared.log(.database, "Record stored", detail: "Total: \(dbRecordCount) utterances")
+            let dbRecordCount = LiveDatabase.count()
+            SystemEventManager.shared.log(.database, "Record stored", detail: "Total: \(dbRecordCount) utterances\(traceSuffix)")
 
             // Track milestone
             ProcessingMilestones.shared.markDbRecordStored()
@@ -332,37 +438,40 @@ final class LiveController: ObservableObject {
 
         } catch {
             logger.error("Transcription error: \(error.localizedDescription)")
-            SystemEventManager.shared.log(.error, "Transcription failed", detail: error.localizedDescription)
+            SystemEventManager.shared.log(.error, "Transcription failed", detail: "\(error.localizedDescription)\(traceSuffix)")
 
             // Even on failure, we saved the audio - store a record for retry
-            if let filename = audioFilename {
-                SystemEventManager.shared.log(.file, "Audio preserved", detail: "\(filename) - queued for retry")
+            // audioFilename is guaranteed valid (we guard at the start of process())
+            SystemEventManager.shared.log(.file, "Audio preserved", detail: "\(audioFilename) - queued for retry")
 
-                // Store a record with failed status so we can retry later
-                let utterance = LiveUtterance(
-                    text: "[Transcription failed - retry pending]",
-                    mode: "failed",
-                    appBundleID: capturedContext?.activeAppBundleID,
-                    appName: capturedContext?.activeAppName,
-                    windowTitle: capturedContext?.activeWindowTitle,
-                    durationSeconds: durationSeconds,
-                    whisperModel: settings.selectedModelId,
-                    metadata: capturedContext.flatMap { buildMetadataDict(from: $0) },
-                    audioFilename: filename,
-                    transcriptionStatus: .failed,
-                    transcriptionError: error.localizedDescription,
-                    createdInTalkieView: createdInTalkieView,
-                    pasteTimestamp: nil
-                )
-                PastLivesDatabase.store(utterance)
+            // Store a record with failed status so we can retry later
+            let utterance = LiveUtterance(
+                text: "[Transcription failed - retry pending]",
+                mode: "failed",
+                appBundleID: capturedContext?.activeAppBundleID,
+                appName: capturedContext?.activeAppName,
+                windowTitle: capturedContext?.activeWindowTitle,
+                durationSeconds: durationSeconds,
+                whisperModel: settings.selectedModelId,
+                perfEndToEndMs: nil,
+                perfInAppMs: nil,
+                metadata: capturedContext.flatMap { buildMetadataDict(from: $0) },
+                audioFilename: audioFilename,
+                transcriptionStatus: .failed,
+                transcriptionError: error.localizedDescription,
+                createdInTalkieView: createdInTalkieView,
+                pasteTimestamp: nil
+            )
+            LiveDatabase.store(utterance)
 
-                SystemEventManager.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
-            }
+            SystemEventManager.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
         }
 
         recordingStartTime = nil
         capturedContext = nil
         createdInTalkieView = false
+        pendingAudioFilename = nil
+        traceID = nil
         state = .idle
     }
 
@@ -376,6 +485,27 @@ final class LiveController: ObservableObject {
         if let role = metadata.focusedElementRole { dict["focusedElementRole"] = role }
         if let value = metadata.focusedElementValue { dict["focusedElementValue"] = value }
         if let dir = metadata.terminalWorkingDir { dict["terminalWorkingDir"] = dir }
+        if let total = metadata.perfEndToEndMs { dict["perfEndToEndMs"] = String(total) }
+        if let inApp = metadata.perfInAppMs { dict["perfInAppMs"] = String(inApp) }
         return dict.isEmpty ? nil : dict
+    }
+
+    /// Resolve enriched context without delaying the critical path
+    private func resolveCapturedContext() async -> UtteranceMetadata? {
+        guard let handle = contextCaptureHandle else { return capturedContext }
+        let enriched = await handle.resolvedMetadata()
+        if let existing = capturedContext {
+            capturedContext = existing.mergingMissing(from: enriched)
+        } else {
+            capturedContext = enriched
+        }
+        return capturedContext
+    }
+
+    /// Create a short trace ID from the audio filename for correlating logs (debug-only)
+    private func makeTraceID(from filename: String) -> String {
+        let base = filename.components(separatedBy: ".").first ?? filename
+        let trimmed = base.replacingOccurrences(of: "-", with: "")
+        return String(trimmed.suffix(8))
     }
 }

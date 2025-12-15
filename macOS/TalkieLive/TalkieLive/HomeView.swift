@@ -32,7 +32,7 @@ struct HomeView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let containerWidth = geometry.size.width
+            let containerWidth = max(geometry.size.width, 320)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -501,9 +501,10 @@ enum GridLayout {
 
     /// Calculate width for N slots within a container
     static func width(slots: Int, in containerWidth: CGFloat) -> CGFloat {
-        let availableWidth = containerWidth - (padding * 2) - (gutter * CGFloat(columns - 1))
-        let singleSlot = availableWidth / CGFloat(columns)
-        return singleSlot * CGFloat(slots) + gutter * CGFloat(max(0, slots - 1))
+        let safeWidth = max(containerWidth, padding * 2 + gutter * CGFloat(columns - 1) + 100)
+        let availableWidth = safeWidth - (padding * 2) - (gutter * CGFloat(columns - 1))
+        let singleSlot = max(0, availableWidth / CGFloat(columns))
+        return max(100, singleSlot * CGFloat(slots) + gutter * CGFloat(max(0, slots - 1)))
     }
 }
 

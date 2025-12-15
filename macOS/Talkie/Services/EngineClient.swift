@@ -11,17 +11,38 @@ import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Engine")
 
-/// Mach service name for XPC connection (must match TalkieEngine)
-#if DEBUG
-private let kTalkieEngineServiceName = "jdi.talkie.engine.xpc.debug"
-#else
-private let kTalkieEngineServiceName = "jdi.talkie.engine.xpc"
-#endif
+/// Engine service modes for XPC connection
+public enum EngineServiceMode: String, CaseIterable, Identifiable {
+    case production = "jdi.talkie.engine.xpc"
+    case dev = "jdi.talkie.engine.xpc.dev"
+    case debug = "jdi.talkie.engine.xpc.dev.debug"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .production: return "Production"
+        case .dev: return "Dev (Daemon)"
+        case .debug: return "Debug (Xcode)"
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .production: return "PROD"
+        case .dev: return "DEV"
+        case .debug: return "DBG"
+        }
+    }
+
+    /// Whether this is debug mode (orange indicator)
+    public var isDebugMode: Bool { self == .debug }
+}
 
 /// XPC protocol for TalkieEngine (must match TalkieEngine's protocol)
 @objc protocol TalkieEngineProtocol {
     func transcribe(
-        audioData: Data,
+        audioPath: String,
         modelId: String,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
@@ -66,6 +87,9 @@ public final class EngineClient: ObservableObject {
     @Published public var status: EngineStatus?
     @Published public var lastError: String?
 
+    /// The mode we're currently connected to (for UI display)
+    @Published public private(set) var connectedMode: EngineServiceMode?
+
     // MARK: - Session Stats
     @Published public private(set) var connectedAt: Date?
     @Published public private(set) var transcriptionCount: Int = 0
@@ -83,85 +107,169 @@ public final class EngineClient: ObservableObject {
 
     // MARK: - Connection Management
 
-    /// Connect to TalkieEngine XPC service
+    /// Connect using honor system: try debug first, fall back to dev
     public func connect() {
         guard connection == nil else { return }
 
-        connectionState = .connecting
-        logger.info("[Engine] Connecting to XPC service: \(kTalkieEngineServiceName)")
+        #if DEBUG
+        // Honor system: try debug (Xcode) first, fall back to dev (daemon)
+        connectWithFallback(modes: [.debug, .dev])
+        #else
+        // Production: only try production
+        connectToMode(.production)
+        #endif
+    }
 
-        let conn = NSXPCConnection(machServiceName: kTalkieEngineServiceName)
+    /// Try connecting to modes in order until one succeeds
+    private func connectWithFallback(modes: [EngineServiceMode]) {
+        guard !modes.isEmpty else {
+            connectionState = .error
+            lastError = "No engines available"
+            return
+        }
+
+        let mode = modes[0]
+        let remainingModes = Array(modes.dropFirst())
+
+        connectionState = .connecting
+        logger.info("[Engine] Trying \(mode.shortName) (\(mode.rawValue))...")
+
+        tryConnect(to: mode) { [weak self] success in
+            guard let self = self else { return }
+
+            if success {
+                self.connectedMode = mode
+                logger.info("[Engine] ✓ Connected to \(mode.shortName)")
+            } else if !remainingModes.isEmpty {
+                // Try next mode
+                logger.info("[Engine] \(mode.shortName) not available, trying next...")
+                self.connectWithFallback(modes: remainingModes)
+            } else {
+                self.connectionState = .error
+                self.lastError = "No engines available"
+                logger.warning("[Engine] All connection attempts failed")
+            }
+        }
+    }
+
+    /// Connect directly to a specific mode
+    private func connectToMode(_ mode: EngineServiceMode) {
+        connectionState = .connecting
+        logger.info("[Engine] Connecting to \(mode.shortName) (\(mode.rawValue))")
+
+        tryConnect(to: mode) { [weak self] success in
+            if success {
+                self?.connectedMode = mode
+            } else {
+                self?.connectionState = .error
+            }
+        }
+    }
+
+    /// Attempt to connect to a specific mode
+    private func tryConnect(to mode: EngineServiceMode, completion: @escaping (Bool) -> Void) {
+        let serviceName = mode.rawValue
+
+        let conn = NSXPCConnection(machServiceName: serviceName)
         conn.remoteObjectInterface = NSXPCInterface(with: TalkieEngineProtocol.self)
+
+        // Quick timeout for connection test
+        var completed = false
 
         conn.invalidationHandler = { [weak self] in
             Task { @MainActor in
-                logger.warning("[Engine] XPC connection invalidated")
-                self?.handleDisconnection(reason: "Connection invalidated")
-            }
-        }
-
-        conn.interruptionHandler = { [weak self] in
-            Task { @MainActor in
-                logger.warning("[Engine] XPC connection interrupted - will attempt to resume")
-                self?.handleDisconnection(reason: "Connection interrupted")
+                if !completed {
+                    completed = true
+                    completion(false)
+                } else {
+                    self?.handleDisconnection(reason: "Connection invalidated")
+                }
             }
         }
 
         conn.resume()
-        connection = conn
 
-        // Test connection with ping
-        Task {
-            await testConnection()
-        }
-    }
-
-    private func testConnection() async {
-        guard let conn = connection else { return }
-
-        let proxy = conn.remoteObjectProxyWithErrorHandler { error in
+        // Test with ping
+        let proxy = conn.remoteObjectProxyWithErrorHandler { _ in
             Task { @MainActor in
-                logger.error("[Engine] XPC proxy error: \(error.localizedDescription)")
-                self.lastError = error.localizedDescription
-                self.handleDisconnection(reason: error.localizedDescription)
+                if !completed {
+                    completed = true
+                    conn.invalidate()
+                    completion(false)
+                }
             }
         } as? TalkieEngineProtocol
 
         guard let proxy = proxy else {
-            logger.error("[Engine] Failed to create XPC proxy")
-            handleDisconnection(reason: "Failed to create proxy")
+            conn.invalidate()
+            completion(false)
             return
         }
 
-        // Ping to verify connection
         proxy.ping { [weak self] pong in
             Task { @MainActor in
+                guard !completed else { return }
+                completed = true
+
                 if pong {
+                    // Success! Keep this connection
+                    self?.connection = conn
+                    self?.engineProxy = proxy
                     self?.connectionState = .connected
                     self?.connectedAt = Date()
-                    self?.engineProxy = proxy
                     self?.lastError = nil
-                    logger.info("[Engine] ✓ Connected to TalkieEngine")
+
+                    // Set up real disconnection handler now
+                    conn.interruptionHandler = { [weak self] in
+                        Task { @MainActor in
+                            self?.handleDisconnection(reason: "Connection interrupted")
+                        }
+                    }
+
                     self?.refreshStatus()
+                    completion(true)
                 } else {
-                    logger.warning("[Engine] Ping failed - engine not responding")
-                    self?.handleDisconnection(reason: "Ping failed")
+                    conn.invalidate()
+                    completion(false)
                 }
+            }
+        }
+
+        // Timeout after 500ms
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if !completed {
+                completed = true
+                conn.invalidate()
+                completion(false)
             }
         }
     }
 
     private func handleDisconnection(reason: String) {
         let wasConnected = connectionState == .connected
+        let wasMode = connectedMode
+
         connectionState = .disconnected
         engineProxy = nil
         connection?.invalidate()
         connection = nil
         status = nil
+        connectedMode = nil
 
         if wasConnected {
             let sessionDuration = connectedAt.map { formatDuration(since: $0) } ?? "unknown"
-            logger.info("[Engine] Disconnected after \(sessionDuration) (\(self.transcriptionCount) transcriptions)")
+            logger.info("[Engine] Disconnected from \(wasMode?.shortName ?? "?") after \(sessionDuration)")
+
+            // If we were on debug, try falling back to dev
+            #if DEBUG
+            if wasMode == .debug {
+                logger.info("[Engine] Debug disconnected, falling back to dev daemon...")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.connectToMode(.dev)
+                }
+            }
+            #endif
         }
 
         connectedAt = nil
@@ -251,27 +359,49 @@ public final class EngineClient: ObservableObject {
     // MARK: - Transcription
 
     /// Transcribe audio using TalkieEngine
+    /// Audio is written to a temp file, engine reads from path, temp file is cleaned up after
     public func transcribe(audioData: Data, modelId: String = "whisper:openai_whisper-small") async throws -> String {
+        // Write audio data to temp file for engine to read
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("m4a")
+
+        do {
+            try audioData.write(to: tempURL)
+        } catch {
+            throw EngineClientError.transcriptionFailed("Failed to write temp audio file: \(error.localizedDescription)")
+        }
+
+        // Ensure cleanup
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+
+        return try await transcribe(audioPath: tempURL.path, modelId: modelId)
+    }
+
+    /// Transcribe audio from a file path using TalkieEngine
+    public func transcribe(audioPath: String, modelId: String = "whisper:openai_whisper-small") async throws -> String {
         guard let proxy = engineProxy else {
             // Try to connect first
             let connected = await ensureConnected()
             guard connected, let proxy = engineProxy else {
                 throw EngineClientError.notConnected
             }
-            return try await doTranscribe(proxy: proxy, audioData: audioData, modelId: modelId)
+            return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId)
         }
 
-        return try await doTranscribe(proxy: proxy, audioData: audioData, modelId: modelId)
+        return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId)
     }
 
-    private func doTranscribe(proxy: TalkieEngineProtocol, audioData: Data, modelId: String) async throws -> String {
-        let audioSizeKB = audioData.count / 1024
-        logger.info("[Engine] Transcribing \(audioSizeKB)KB audio with model '\(modelId)'")
+    private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String) async throws -> String {
+        let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
+        logger.info("[Engine] Transcribing '\(fileName)' with model '\(modelId)'")
 
         let startTime = Date()
 
         return try await withCheckedThrowingContinuation { continuation in
-            proxy.transcribe(audioData: audioData, modelId: modelId) { [weak self] transcript, error in
+            proxy.transcribe(audioPath: audioPath, modelId: modelId) { [weak self] transcript, error in
                 Task { @MainActor in
                     let elapsed = Date().timeIntervalSince(startTime)
 

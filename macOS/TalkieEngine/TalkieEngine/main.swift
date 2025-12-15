@@ -155,12 +155,40 @@ func waitForProcessesToExit(pids: [Int32], timeout: TimeInterval) {
     Thread.sleep(forTimeInterval: 0.5)
 }
 
+// MARK: - Launch Mode
+
+/// Check if running as daemon (launched by launchd with --daemon flag)
+let isDaemonMode = CommandLine.arguments.contains("--daemon")
+
 // MARK: - Main Entry Point
 
-logger.info("TalkieEngine starting (PID: \(ProcessInfo.processInfo.processIdentifier))...")
+logger.info("TalkieEngine starting (PID: \(ProcessInfo.processInfo.processIdentifier), mode: \(isDaemonMode ? "daemon" : "debug"))...")
 
-// Ensure we're the only instance - new one wins, old one gracefully exits
-ensureSingleInstance()
+// Determine XPC service name based on launch mode
+// Debug and Dev can run side-by-side on different XPC services
+let activeServiceName: String
+let activeMode: EngineServiceMode
+
+#if DEBUG
+if isDaemonMode {
+    // Daemon mode: use dev XPC (always running in background)
+    activeServiceName = EngineServiceMode.dev.rawValue
+    activeMode = .dev
+    logger.info("Running as DEV daemon → \(activeServiceName)")
+} else {
+    // Xcode mode: use debug XPC (active development)
+    activeServiceName = EngineServiceMode.debug.rawValue
+    activeMode = .debug
+    logger.info("Running as DEBUG from Xcode → \(activeServiceName)")
+}
+#else
+// Production build - always use production XPC
+activeServiceName = EngineServiceMode.production.rawValue
+activeMode = .production
+logger.info("Running as PROD → \(activeServiceName)")
+#endif
+
+// No ensureSingleInstance() - debug and dev can coexist!
 
 // Global references to prevent deallocation
 var xpcListener: NSXPCListener!
@@ -183,14 +211,21 @@ serviceWrapper = XPCServiceWrapper(engine: engineService)
 listenerDelegate = EngineListenerDelegate(wrapper: serviceWrapper)
 
 // Create listener for the Mach service
-logger.info("TalkieEngine: Setting up XPC listener for \(kTalkieEngineServiceName)")
-xpcListener = NSXPCListener(machServiceName: kTalkieEngineServiceName)
+logger.info("TalkieEngine: Setting up XPC listener for \(activeServiceName)")
+xpcListener = NSXPCListener(machServiceName: activeServiceName)
 xpcListener.delegate = listenerDelegate
 xpcListener.resume()
 
 logger.info("TalkieEngine: XPC listener resumed, starting app...")
 
+// Configure status manager with launch mode info
+MainActor.assumeIsolated {
+    EngineStatusManager.shared.configure(mode: activeMode, serviceName: activeServiceName)
+}
+
 // Now start the app
-let delegate = AppDelegate()
-NSApplication.shared.delegate = delegate
+MainActor.assumeIsolated {
+    let delegate = AppDelegate()
+    NSApplication.shared.delegate = delegate
+}
 _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)

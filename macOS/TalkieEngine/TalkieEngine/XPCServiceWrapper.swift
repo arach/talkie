@@ -21,10 +21,9 @@ final class XPCServiceWrapper: NSObject, TalkieEngineProtocol {
         logger.info("XPCServiceWrapper initialized with engine")
     }
 
-    func transcribe(audioData: Data, modelId: String, reply: @escaping (String?, String?) -> Void) {
-        logger.info("XPC: transcribe called, \(audioData.count) bytes")
-        // EngineService.transcribe is nonisolated and handles MainActor dispatch internally
-        engine.transcribe(audioData: audioData, modelId: modelId, reply: reply)
+    func transcribe(audioPath: String, modelId: String, reply: @escaping (String?, String?) -> Void) {
+        logger.info("XPC: transcribe called for \(audioPath)")
+        engine.transcribe(audioPath: audioPath, modelId: modelId, reply: reply)
     }
 
     func preloadModel(_ modelId: String, reply: @escaping (String?) -> Void) {

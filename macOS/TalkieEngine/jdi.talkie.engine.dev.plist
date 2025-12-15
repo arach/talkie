@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>jdi.talkie.engine</string>
+    <string>jdi.talkie.engine.dev</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Applications/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
+        <string>/Users/arach/Library/Developer/Xcode/DerivedData/TalkieEngine-cmecdpfodydvvictztemgqrzuwij/Build/Products/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
         <string>--daemon</string>
     </array>
     <key>MachServices</key>
     <dict>
-        <key>jdi.talkie.engine.xpc</key>
+        <key>jdi.talkie.engine.xpc.dev</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>

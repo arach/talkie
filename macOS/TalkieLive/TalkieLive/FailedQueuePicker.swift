@@ -28,7 +28,7 @@ final class FailedQueueController {
             return
         }
 
-        let items = PastLivesDatabase.fetchNeedsRetry()
+        let items = LiveDatabase.fetchNeedsRetry()
         guard !items.isEmpty else { return }
 
         let viewModel = FailedQueueViewModel(items: items)
@@ -216,7 +216,7 @@ final class FailedQueueViewModel: ObservableObject {
         guard let id = item.id else { return }
 
         // Delete from database (this also removes the audio file)
-        PastLivesDatabase.delete(item)
+        LiveDatabase.delete(item)
 
         // Remove from list
         items.removeAll { $0.id == id }

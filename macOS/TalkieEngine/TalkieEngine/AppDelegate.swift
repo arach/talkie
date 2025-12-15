@@ -13,6 +13,7 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.engine", category: "AppDelegate")
 
 // Note: @main is in main.swift which sets up XPC before NSApplication
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem?
@@ -20,6 +21,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logger.info("TalkieEngine app delegate ready")
+
+        // Ensure we have window server access (needed when launched by launchd)
+        NSApp.setActivationPolicy(.accessory)
 
         // Set up menu bar item
         setupMenuBar()
@@ -72,11 +76,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
-            // Use a gear/engine icon
-            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+            // Use a gear/engine icon with mode-specific color
+            let mode = EngineStatusManager.shared.launchMode
+            let iconColor: NSColor = switch mode {
+            case .debug: .orange
+            case .dev: NSColor(red: 0.4, green: 0.8, blue: 0.4, alpha: 1.0)
+            case .production: .gray
+            }
+
+            let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+                .applying(NSImage.SymbolConfiguration(paletteColors: [iconColor]))
             let image = NSImage(systemSymbolName: "engine.combustion", accessibilityDescription: "TalkieEngine")
-            image?.isTemplate = true
+            image?.isTemplate = false  // Allow custom coloring
             button.image = image?.withSymbolConfiguration(config)
+            button.imagePosition = .imageOnly
             button.action = #selector(toggleStatusWindow)
             button.target = self
         }
@@ -84,7 +97,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Build menu
         let menu = NSMenu()
 
-        menu.addItem(NSMenuItem(title: "TalkieEngine", action: nil, keyEquivalent: ""))
+        let mode = EngineStatusManager.shared.launchMode
+        menu.addItem(NSMenuItem(title: "TalkieEngine (\(mode.rawValue))", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
 
         let statusMenuItem = NSMenuItem(title: "Show Status...", action: #selector(showStatusWindow), keyEquivalent: "s")
@@ -137,4 +151,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quitApp() {
         NSApp.terminate(nil)
     }
+
 }

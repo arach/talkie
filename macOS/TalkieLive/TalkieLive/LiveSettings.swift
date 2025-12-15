@@ -403,6 +403,7 @@ final class LiveSettings: ObservableObject {
     private let fontSizeKey = "fontSize"
     private let accentColorKey = "accentColor"
     private let primaryContextSourceKey = "primaryContextSource"
+    private let contextCaptureDetailKey = "contextCaptureDetail"
     private let returnToOriginAfterPasteKey = "returnToOriginAfterPaste"
     private let selectedMicrophoneIDKey = "selectedMicrophoneID"
     // Legacy key for migration
@@ -521,6 +522,14 @@ final class LiveSettings: ObservableObject {
     @Published var primaryContextSource: PrimaryContextSource {
         didSet { save() }
     }
+
+    /// How much context to capture from the Accessibility API
+    @Published var contextCaptureDetail: ContextCaptureDetail {
+        didSet { save() }
+    }
+
+    /// Session-scoped permission for capturing context (resets on app restart)
+    @Published var contextCaptureSessionAllowed: Bool = true
 
     /// Whether to activate the start app after pasting
     @Published var returnToOriginAfterPaste: Bool {
@@ -679,6 +688,14 @@ final class LiveSettings: ObservableObject {
             self.primaryContextSource = .startApp
         }
 
+        // Load context capture detail (default: rich)
+        if let rawValue = UserDefaults.standard.string(forKey: contextCaptureDetailKey),
+           let detail = ContextCaptureDetail(rawValue: rawValue) {
+            self.contextCaptureDetail = detail
+        } else {
+            self.contextCaptureDetail = .rich
+        }
+
         // Load return to origin setting (default: false)
         self.returnToOriginAfterPaste = UserDefaults.standard.bool(forKey: returnToOriginAfterPasteKey)
 
@@ -713,6 +730,7 @@ final class LiveSettings: ObservableObject {
         UserDefaults.standard.set(fontSize.rawValue, forKey: fontSizeKey)
         UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
         UserDefaults.standard.set(primaryContextSource.rawValue, forKey: primaryContextSourceKey)
+        UserDefaults.standard.set(contextCaptureDetail.rawValue, forKey: contextCaptureDetailKey)
         UserDefaults.standard.set(returnToOriginAfterPaste, forKey: returnToOriginAfterPasteKey)
     }
 

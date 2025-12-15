@@ -42,12 +42,6 @@ extension FocusedValues {
     }
 }
 
-// MARK: - Terminal Toggle Notification
-
-extension Notification.Name {
-    static let toggleTerminal = Notification.Name("toggleTerminal")
-}
-
 @main
 struct TalkieApp: App {
     // Wire up AppDelegate for push notification handling
@@ -76,13 +70,6 @@ struct TalkieApp: App {
                     sidebarToggle?.toggle()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
-
-                Divider()
-
-                Button("Toggle Terminal") {
-                    NotificationCenter.default.post(name: .toggleTerminal, object: nil)
-                }
-                .keyboardShortcut("t", modifiers: [.command, .option])
             }
 
             // Replace default Settings menu item with inline navigation

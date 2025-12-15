@@ -13,6 +13,97 @@ import os.log
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "ContextCapture")
 
+// MARK: - Configuration
+
+enum ContextCaptureDetail: String, CaseIterable, Codable {
+    case off
+    case metadataOnly
+    case rich
+
+    var displayName: String {
+        switch self {
+        case .off: return "Off"
+        case .metadataOnly: return "Apps & titles only"
+        case .rich: return "Full context"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .off: return "Do not capture context"
+        case .metadataOnly: return "Capture app name and window title only"
+        case .rich: return "Capture URLs and focused content when available"
+        }
+    }
+}
+
+/// Runtime options for a single capture request
+struct ContextCaptureOptions {
+    var enabled: Bool = true
+    var detail: ContextCaptureDetail = .rich
+    var includeFocusedValue: Bool = true
+    var includeSelectedText: Bool = true
+    var includeBrowserURLFallback: Bool = true
+    var includeTerminalWorkingDir: Bool = true
+    var logFailures: Bool = false
+    var timeoutMs: Int = 250
+
+    @MainActor static func fromSettings() -> ContextCaptureOptions {
+        let settings = LiveSettings.shared
+        // Session switch is the first gate
+        guard settings.contextCaptureSessionAllowed else {
+            return ContextCaptureOptions(enabled: false, detail: .off, includeFocusedValue: false, includeSelectedText: false, includeBrowserURLFallback: false, includeTerminalWorkingDir: false)
+        }
+
+        switch settings.contextCaptureDetail {
+        case .off:
+            return ContextCaptureOptions(enabled: false, detail: .off, includeFocusedValue: false, includeSelectedText: false, includeBrowserURLFallback: false, includeTerminalWorkingDir: false)
+        case .metadataOnly:
+            return ContextCaptureOptions(enabled: true, detail: .metadataOnly, includeFocusedValue: false, includeSelectedText: false, includeBrowserURLFallback: true, includeTerminalWorkingDir: false)
+        case .rich:
+            return ContextCaptureOptions(enabled: true, detail: .rich, includeFocusedValue: true, includeSelectedText: true, includeBrowserURLFallback: true, includeTerminalWorkingDir: true, logFailures: true, timeoutMs: 400)
+        }
+    }
+}
+
+/// Wrapper that returns immediately but can finish enrichment later
+struct ContextCaptureHandle {
+    let baseline: UtteranceMetadata
+    private let enrichmentTask: Task<UtteranceMetadata?, Never>?
+    private let timeoutMs: Int
+
+    init(baseline: UtteranceMetadata, enrichmentTask: Task<UtteranceMetadata?, Never>? = nil, timeoutMs: Int = 600) {
+        self.baseline = baseline
+        self.enrichmentTask = enrichmentTask
+        self.timeoutMs = timeoutMs
+    }
+
+    /// Resolve enriched metadata, merging into the baseline without clobbering non-nil fields
+    func resolvedMetadata() async -> UtteranceMetadata {
+        guard let enrichmentTask else { return baseline }
+
+        let timeout = Task<UtteranceMetadata?, Never> {
+            try? await Task.sleep(for: .milliseconds(timeoutMs))
+            return nil
+        }
+
+        let enriched: UtteranceMetadata? = await withTaskGroup(of: UtteranceMetadata?.self) { group in
+            group.addTask { await enrichmentTask.value }
+            group.addTask { await timeout.value }
+
+            for await result in group {
+                if let result {
+                    group.cancelAll()
+                    return result
+                }
+            }
+            return nil
+        }
+
+        return baseline.mergingMissing(from: enriched ?? UtteranceMetadata())
+    }
+}
+
 /// Rich context snapshot captured at a moment in time
 struct CapturedContext {
     // Basic app info
@@ -59,7 +150,8 @@ final class ContextCaptureService {
         "com.brave.Browser",
         "com.operasoftware.Opera",
         "company.thebrowser.Browser",  // Arc
-        "com.vivaldi.Vivaldi"
+        "com.vivaldi.Vivaldi",
+        "com.openai.chat" // ChatGPT desktop (Electron)
     ]
 
     // Known terminal bundle IDs
@@ -83,65 +175,126 @@ final class ContextCaptureService {
 
     private init() {}
 
-    /// Capture rich context for the current frontmost app
-    func captureCurrentContext() -> CapturedContext {
-        var context = CapturedContext()
-
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-            logger.debug("No frontmost application")
-            return context
+    /// Capture context quickly and kick off asynchronous enrichment so the main pipeline never blocks
+    func capture(options: ContextCaptureOptions) -> ContextCaptureHandle {
+        // Early out if disabled
+        guard options.enabled else {
+            return ContextCaptureHandle(baseline: UtteranceMetadata(), timeoutMs: options.timeoutMs)
         }
 
-        context.appBundleID = frontApp.bundleIdentifier
-        context.appName = frontApp.localizedName
+        // Baseline is lightweight: app + window
+        let baseline = captureBaseline()
 
-        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
-
-        // Get focused window
-        if let (windowTitle, documentURL) = getFocusedWindowInfo(appElement) {
-            context.windowTitle = windowTitle
-            context.documentURL = documentURL
-        }
-
-        // Get focused element details
-        if let focusedInfo = getFocusedElementInfo(appElement) {
-            context.focusedRole = focusedInfo.role
-            context.focusedDescription = focusedInfo.description
-
-            // Capture value with app-specific truncation
-            if let value = focusedInfo.value {
-                context.focusedValue = truncateValue(value, forApp: frontApp.bundleIdentifier)
+        // Enrichment runs off the critical path and respects the detail level
+        let enrichmentTask: Task<UtteranceMetadata?, Never>?
+        if options.detail == .off || options.detail == .metadataOnly {
+            enrichmentTask = nil
+        } else {
+            enrichmentTask = Task.detached(priority: .utility) { [weak self] in
+                guard let self else { return nil }
+                return await self.captureRichContext(options: options)
             }
         }
 
-        // App-specific enrichment
-        if let bundleID = frontApp.bundleIdentifier {
-            // Browser: extract URL
-            if browserBundleIDs.contains(bundleID) {
-                context.browserURL = extractBrowserURL(appElement) ?? context.documentURL
-            }
+        return ContextCaptureHandle(baseline: baseline, enrichmentTask: enrichmentTask, timeoutMs: options.timeoutMs)
+    }
 
-            // Terminal: extract working directory and detect Claude Code
-            if terminalBundleIDs.contains(bundleID) {
-                if let windowTitle = context.windowTitle {
-                    context.terminalWorkingDir = extractWorkingDirectory(from: windowTitle)
-                    context.isClaudeCodeSession = windowTitle.hasPrefix("✳")
-                }
-            }
-        }
-
-        logger.debug("Captured context: \(context.appName ?? "?") - \(context.windowTitle ?? "no title")")
-        return context
+    /// Convenience helper for main-actor callers that want to respect user settings
+    @MainActor
+    func captureUsingSettings() -> ContextCaptureHandle {
+        let options = ContextCaptureOptions.fromSettings()
+        return capture(options: options)
     }
 
     // MARK: - Private Helpers
 
-    private func getFocusedWindowInfo(_ appElement: AXUIElement) -> (title: String?, documentURL: String?)? {
-        var windowRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) == .success else {
-            return nil
+    private func captureBaseline() -> UtteranceMetadata {
+        var metadata = UtteranceMetadata()
+
+        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+            logger.debug("No frontmost application")
+            return metadata
         }
 
+        metadata.activeAppBundleID = frontApp.bundleIdentifier
+        metadata.activeAppName = frontApp.localizedName
+
+        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
+
+        if let (windowTitle, documentURL) = getFocusedWindowInfo(appElement) {
+            metadata.activeWindowTitle = windowTitle
+            metadata.documentURL = documentURL
+        }
+
+        return metadata
+    }
+
+    /// Capture richer AX context (runs asynchronously)
+    private func captureRichContext(options: ContextCaptureOptions) async -> UtteranceMetadata {
+        var metadata = UtteranceMetadata()
+
+        if !AXIsProcessTrusted() {
+            if options.logFailures {
+                logger.error("Accessibility permission missing - context capture limited")
+            }
+            return metadata
+        }
+
+        guard let frontApp = await MainActor.run(body: { NSWorkspace.shared.frontmostApplication }) else {
+            return metadata
+        }
+
+        metadata.activeAppBundleID = frontApp.bundleIdentifier
+        metadata.activeAppName = frontApp.localizedName
+
+        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
+
+        // Window info
+        if let (windowTitle, documentURL) = getFocusedWindowInfo(appElement) {
+            metadata.activeWindowTitle = windowTitle
+            metadata.documentURL = documentURL
+        }
+
+        // Browser URL
+        if let bundleID = frontApp.bundleIdentifier, browserBundleIDs.contains(bundleID) {
+            metadata.browserURL = extractBrowserURL(appElement, allowFallback: options.includeBrowserURLFallback) ?? metadata.documentURL
+        }
+
+        // Focused element details
+        if options.detail == .rich, let focusedInfo = getFocusedElementInfo(appElement, allowValue: options.includeFocusedValue, allowSelectedText: options.includeSelectedText, bundleID: frontApp.bundleIdentifier) {
+            metadata.focusedElementRole = focusedInfo.role
+            metadata.focusedElementValue = focusedInfo.value
+        }
+
+        // Terminal enrichment
+        if options.includeTerminalWorkingDir,
+           let bundleID = frontApp.bundleIdentifier,
+           terminalBundleIDs.contains(bundleID),
+           let title = metadata.activeWindowTitle {
+            metadata.terminalWorkingDir = extractWorkingDirectory(from: title)
+        }
+
+        logger.debug("Enriched context: \(metadata.activeAppName ?? "?") - \(metadata.activeWindowTitle ?? "no title")")
+        return metadata
+    }
+
+    private func getFocusedWindowInfo(_ appElement: AXUIElement) -> (title: String?, documentURL: String?)? {
+        var windowRef: CFTypeRef?
+        var result = AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef)
+
+        // Fallback: first window in kAXWindows if no focused window (common for some Electron apps)
+        if result != .success {
+            var windowsRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+               let windows = windowsRef as? [AXUIElement],
+               let first = windows.first {
+                windowRef = first
+                result = .success
+                logger.debug("Focused window missing; used first window as fallback")
+            }
+        }
+
+        guard result == .success, let windowRef else { return nil }
         let window = windowRef as! AXUIElement
 
         // Get title
@@ -157,9 +310,20 @@ final class ContextCaptureService {
         return (title, documentURL)
     }
 
-    private func getFocusedElementInfo(_ appElement: AXUIElement) -> (role: String?, description: String?, value: String?)? {
+    private func getFocusedElementInfo(_ appElement: AXUIElement, allowValue: Bool, allowSelectedText: Bool, bundleID: String?) -> (role: String?, description: String?, value: String?)? {
         var focusedRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success else {
+        var result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+
+        // Fallback: ask focused window for focused element if app-wide attribute fails
+        if result != .success {
+            var windowRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
+               let window = windowRef {
+                result = AXUIElementCopyAttributeValue(window as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+            }
+        }
+
+        guard result == .success, let focusedRef else {
             return nil
         }
 
@@ -175,15 +339,31 @@ final class ContextCaptureService {
         AXUIElementCopyAttributeValue(focused, kAXDescriptionAttribute as CFString, &descRef)
         let description = descRef as? String
 
-        // Value (text content)
-        var valueRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(focused, kAXValueAttribute as CFString, &valueRef)
-        let value = valueRef as? String
+        var chosenValue: String?
 
-        return (role, description, value)
+        // Selected text is the highest-signal, lowest-noise field
+        if allowSelectedText {
+            var selectedRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(focused, kAXSelectedTextAttribute as CFString, &selectedRef) == .success,
+               let selected = selectedRef as? String,
+               !selected.isEmpty {
+                chosenValue = selected
+            }
+        }
+
+        // Value (text content)
+        if chosenValue == nil, allowValue {
+            var valueRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(focused, kAXValueAttribute as CFString, &valueRef)
+            if let value = valueRef as? String {
+                chosenValue = truncateValue(value, forApp: bundleID)
+            }
+        }
+
+        return (role, description, chosenValue)
     }
 
-    private func extractBrowserURL(_ appElement: AXUIElement) -> String? {
+    private func extractBrowserURL(_ appElement: AXUIElement, allowFallback: Bool) -> String? {
         // For browsers, the URL is often in the focused window's document attribute
         // or in a text field (URL bar)
         var windowRef: CFTypeRef?
@@ -199,6 +379,18 @@ final class ContextCaptureService {
             if let url = docRef as? String, url.hasPrefix("http") {
                 return url
             }
+        }
+
+        if !allowFallback {
+            return nil
+        }
+
+        // Fallback: try URL attribute on the window (Safari exposes this)
+        var urlRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(window, kAXURLAttribute as CFString, &urlRef) == .success,
+           let url = urlRef as? String,
+           url.hasPrefix("http") {
+            return url
         }
 
         // Could also traverse to find the URL bar, but document usually works
@@ -265,10 +457,7 @@ final class ContextCaptureService {
 
 extension ContextCapture {
     /// Capture rich context using the new ContextCaptureService
-    static func captureRichContext() -> UtteranceMetadata {
-        var metadata = UtteranceMetadata()
-        let context = ContextCaptureService.shared.captureCurrentContext()
-        context.applyTo(&metadata)
-        return metadata
+    @MainActor static func captureRichContext() -> UtteranceMetadata {
+        ContextCaptureService.shared.captureUsingSettings().baseline
     }
 }

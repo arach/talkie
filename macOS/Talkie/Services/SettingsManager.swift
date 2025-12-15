@@ -165,15 +165,6 @@ enum FontSizeOption: String, CaseIterable {
         }
     }
 
-    /// Terminal: monospace font size for embedded terminal
-    var terminal: CGFloat {
-        switch self {
-        case .small: return 10
-        case .medium: return 11
-        case .large: return 13
-        }
-    }
-
     /// Title: headings
     var title: CGFloat {
         switch self {

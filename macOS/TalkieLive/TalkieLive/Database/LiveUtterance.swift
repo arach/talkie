@@ -141,10 +141,12 @@ struct LiveUtterance: Identifiable, Hashable {
     var appBundleID: String?
     var appName: String?
     var windowTitle: String?
-    var durationSeconds: Double?
+    var durationSeconds: Double?       // Recording duration (how long user talked)
     var wordCount: Int?
     var whisperModel: String?
-    var transcriptionMs: Int?
+    var perfEngineMs: Int?             // Time in TalkieEngine (transcription)
+    var perfEndToEndMs: Int?           // Total: stop recording → delivery
+    var perfInAppMs: Int?              // TalkieLive in-app processing (endToEnd - engine)
     var sessionID: String?
     var metadata: [String: String]?
     var audioFilename: String?
@@ -162,11 +164,12 @@ struct LiveUtterance: Identifiable, Hashable {
     var createdInTalkieView: Bool   // Was this recorded inside Talkie Live UI?
     var pasteTimestamp: Date?       // When was this pasted? (nil = still queued)
 
-    static let databaseTableName = "live_utterance"
+    static let databaseTableName = "utterances"
 
     enum Columns: String, ColumnExpression {
         case id, createdAt, text, mode, appBundleID, appName, windowTitle
-        case durationSeconds, wordCount, whisperModel, transcriptionMs
+        case durationSeconds, wordCount, whisperModel
+        case perfEngineMs, perfEndToEndMs, perfInAppMs
         case sessionID, metadata, audioFilename
         case transcriptionStatus, transcriptionError
         case promotionStatus, talkieMemoID, commandID
@@ -216,7 +219,9 @@ struct LiveUtterance: Identifiable, Hashable {
         durationSeconds: Double? = nil,
         wordCount: Int? = nil,
         whisperModel: String? = nil,
-        transcriptionMs: Int? = nil,
+        perfEngineMs: Int? = nil,
+        perfEndToEndMs: Int? = nil,
+        perfInAppMs: Int? = nil,
         sessionID: String? = nil,
         metadata: [String: String]? = nil,
         audioFilename: String? = nil,
@@ -238,7 +243,9 @@ struct LiveUtterance: Identifiable, Hashable {
         self.durationSeconds = durationSeconds
         self.wordCount = wordCount ?? text.split(separator: " ").count
         self.whisperModel = whisperModel
-        self.transcriptionMs = transcriptionMs
+        self.perfEngineMs = perfEngineMs
+        self.perfEndToEndMs = perfEndToEndMs
+        self.perfInAppMs = perfInAppMs
         self.sessionID = sessionID
         self.metadata = metadata
         self.audioFilename = audioFilename
@@ -267,7 +274,9 @@ extension LiveUtterance: FetchableRecord {
         durationSeconds = row[Columns.durationSeconds]
         wordCount = row[Columns.wordCount]
         whisperModel = row[Columns.whisperModel]
-        transcriptionMs = row[Columns.transcriptionMs]
+        perfEngineMs = row[Columns.perfEngineMs]
+        perfEndToEndMs = row[Columns.perfEndToEndMs]
+        perfInAppMs = row[Columns.perfInAppMs]
         sessionID = row[Columns.sessionID]
         audioFilename = row[Columns.audioFilename]
 
@@ -321,7 +330,9 @@ extension LiveUtterance: PersistableRecord {
         container[Columns.durationSeconds] = durationSeconds
         container[Columns.wordCount] = wordCount
         container[Columns.whisperModel] = whisperModel
-        container[Columns.transcriptionMs] = transcriptionMs
+        container[Columns.perfEngineMs] = perfEngineMs
+        container[Columns.perfEndToEndMs] = perfEndToEndMs
+        container[Columns.perfInAppMs] = perfInAppMs
         container[Columns.sessionID] = sessionID
         container[Columns.audioFilename] = audioFilename
 

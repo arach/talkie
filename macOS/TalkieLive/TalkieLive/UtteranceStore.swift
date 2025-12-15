@@ -37,9 +37,15 @@ struct UtteranceMetadata: Codable, Hashable {
 
     // Transcription details
     var whisperModel: String?
-    var transcriptionDurationMs: Int?
     var language: String?
     var confidence: Double?
+
+    // Performance metrics (perf prefix)
+    var perfEngineMs: Int?        // Time in TalkieEngine
+    var perfEndToEndMs: Int?      // Stop recording → delivery
+    var perfInAppMs: Int?         // TalkieLive processing (endToEnd - engine)
+    var perfPreMs: Int?           // Debug: pre-engine time
+    var perfPostMs: Int?          // Debug: post-engine time
 
     // Audio details
     var peakAmplitude: Float?
@@ -58,14 +64,22 @@ struct UtteranceMetadata: Codable, Hashable {
         activeAppName: String? = nil,
         activeWindowTitle: String? = nil,
         whisperModel: String? = nil,
-        transcriptionDurationMs: Int? = nil,
+        perfEngineMs: Int? = nil,
+        perfEndToEndMs: Int? = nil,
+        perfInAppMs: Int? = nil,
+        perfPreMs: Int? = nil,
+        perfPostMs: Int? = nil,
         audioFilename: String? = nil
     ) {
         self.activeAppBundleID = activeAppBundleID
         self.activeAppName = activeAppName
         self.activeWindowTitle = activeWindowTitle
         self.whisperModel = whisperModel
-        self.transcriptionDurationMs = transcriptionDurationMs
+        self.perfEngineMs = perfEngineMs
+        self.perfEndToEndMs = perfEndToEndMs
+        self.perfInAppMs = perfInAppMs
+        self.perfPreMs = perfPreMs
+        self.perfPostMs = perfPostMs
         self.audioFilename = audioFilename
     }
 
@@ -103,6 +117,44 @@ struct UtteranceMetadata: Codable, Hashable {
             return endAppBundleID ?? activeAppBundleID
         }
         return activeAppBundleID ?? endAppBundleID
+    }
+
+    /// Merge missing values from another metadata instance without overwriting existing fields
+    func mergingMissing(from other: UtteranceMetadata) -> UtteranceMetadata {
+        var merged = self
+        if merged.activeAppBundleID == nil { merged.activeAppBundleID = other.activeAppBundleID }
+        if merged.activeAppName == nil { merged.activeAppName = other.activeAppName }
+        if merged.activeWindowTitle == nil { merged.activeWindowTitle = other.activeWindowTitle }
+
+        if merged.endAppBundleID == nil { merged.endAppBundleID = other.endAppBundleID }
+        if merged.endAppName == nil { merged.endAppName = other.endAppName }
+        if merged.endWindowTitle == nil { merged.endWindowTitle = other.endWindowTitle }
+
+        if merged.documentURL == nil { merged.documentURL = other.documentURL }
+        if merged.focusedElementRole == nil { merged.focusedElementRole = other.focusedElementRole }
+        if merged.focusedElementValue == nil { merged.focusedElementValue = other.focusedElementValue }
+        if merged.browserURL == nil { merged.browserURL = other.browserURL }
+        if merged.terminalWorkingDir == nil { merged.terminalWorkingDir = other.terminalWorkingDir }
+
+        if merged.routingMode == nil { merged.routingMode = other.routingMode }
+        if merged.whisperModel == nil { merged.whisperModel = other.whisperModel }
+        if merged.perfEngineMs == nil { merged.perfEngineMs = other.perfEngineMs }
+        if merged.perfEndToEndMs == nil { merged.perfEndToEndMs = other.perfEndToEndMs }
+        if merged.perfInAppMs == nil { merged.perfInAppMs = other.perfInAppMs }
+        if merged.perfPreMs == nil { merged.perfPreMs = other.perfPreMs }
+        if merged.perfPostMs == nil { merged.perfPostMs = other.perfPostMs }
+        if merged.language == nil { merged.language = other.language }
+        if merged.confidence == nil { merged.confidence = other.confidence }
+
+        if merged.peakAmplitude == nil { merged.peakAmplitude = other.peakAmplitude }
+        if merged.averageAmplitude == nil { merged.averageAmplitude = other.averageAmplitude }
+        if merged.audioFilename == nil { merged.audioFilename = other.audioFilename }
+
+        if merged.originalText == nil { merged.originalText = other.originalText }
+        merged.wasEdited = merged.wasEdited || other.wasEdited
+        merged.wasRouted = merged.wasRouted || other.wasRouted
+
+        return merged
     }
 }
 
@@ -170,12 +222,8 @@ struct ContextCapture {
 
     /// Capture start context (frontmost app when recording begins)
     /// Now uses ContextCaptureService for rich context capture
-    static func captureCurrentContext() -> UtteranceMetadata {
-        // Use the new rich context capture service
-        let context = ContextCaptureService.shared.captureCurrentContext()
-        var metadata = UtteranceMetadata()
-        context.applyTo(&metadata)
-        return metadata
+    @MainActor static func captureCurrentContext() -> UtteranceMetadata {
+        ContextCaptureService.shared.captureUsingSettings().baseline
     }
 
     /// Fill in end context on existing metadata (when recording stops)
@@ -262,6 +310,10 @@ final class UtteranceStore: ObservableObject {
         if let role = metadata.focusedElementRole { metadataDict["focusedElementRole"] = role }
         if let value = metadata.focusedElementValue { metadataDict["focusedElementValue"] = value }
         if let dir = metadata.terminalWorkingDir { metadataDict["terminalWorkingDir"] = dir }
+        if let total = metadata.perfEndToEndMs { metadataDict["perfEndToEndMs"] = String(total) }
+        if let inApp = metadata.perfInAppMs { metadataDict["perfInAppMs"] = String(inApp) }
+        if let pre = metadata.perfPreMs { metadataDict["perfPreMs"] = String(pre) }
+        if let post = metadata.perfPostMs { metadataDict["perfPostMs"] = String(post) }
 
         // Convert to LiveUtterance for database storage
         let liveUtterance = LiveUtterance(
@@ -273,13 +325,15 @@ final class UtteranceStore: ObservableObject {
             durationSeconds: durationSeconds,
             wordCount: text.split(separator: " ").count,
             whisperModel: metadata.whisperModel,
-            transcriptionMs: metadata.transcriptionDurationMs,
+            perfEngineMs: metadata.perfEngineMs,
+            perfEndToEndMs: metadata.perfEndToEndMs,
+            perfInAppMs: metadata.perfInAppMs,
             metadata: metadataDict.isEmpty ? nil : metadataDict,
             audioFilename: metadata.audioFilename,
             transcriptionStatus: .success
         )
 
-        PastLivesDatabase.store(liveUtterance)
+        LiveDatabase.store(liveUtterance)
         logger.info("Added utterance: \(text.prefix(50))... from \(metadata.activeAppName ?? "unknown")")
 
         // Refresh to get the new utterance with its ID
@@ -288,14 +342,14 @@ final class UtteranceStore: ObservableObject {
 
     /// Add a LiveUtterance directly (for new recordings)
     func addLive(_ liveUtterance: LiveUtterance) {
-        PastLivesDatabase.store(liveUtterance)
+        LiveDatabase.store(liveUtterance)
         logger.info("Added live utterance: \(liveUtterance.text.prefix(50))...")
         refresh()
     }
 
     /// Update an existing utterance
     func update(_ utterance: Utterance) {
-        // For now, just refresh - updates go through PastLivesDatabase directly
+        // For now, just refresh - updates go through LiveDatabase directly
         refresh()
     }
 
@@ -303,14 +357,14 @@ final class UtteranceStore: ObservableObject {
     func delete(_ utterance: Utterance) {
         // Use liveID if available, otherwise match by timestamp
         if let liveID = utterance.liveID,
-           let live = PastLivesDatabase.fetch(id: liveID) {
-            PastLivesDatabase.delete(live)
+           let live = LiveDatabase.fetch(id: liveID) {
+            LiveDatabase.delete(live)
             logger.info("Deleted utterance by ID: \(utterance.text.prefix(30))...")
         } else {
             // Fallback: match by timestamp
-            let liveUtterances = PastLivesDatabase.all()
+            let liveUtterances = LiveDatabase.all()
             if let live = liveUtterances.first(where: { $0.createdAt == utterance.timestamp }) {
-                PastLivesDatabase.delete(live)
+                LiveDatabase.delete(live)
                 logger.info("Deleted utterance by timestamp: \(utterance.text.prefix(30))...")
             }
         }
@@ -319,20 +373,20 @@ final class UtteranceStore: ObservableObject {
 
     /// Clear all utterances
     func clear() {
-        PastLivesDatabase.deleteAll()
+        LiveDatabase.deleteAll()
         logger.info("Cleared all utterances")
         refresh()
     }
 
     /// Prune expired utterances
     func pruneExpired() {
-        PastLivesDatabase.prune(olderThanHours: ttlHours)
+        LiveDatabase.prune(olderThanHours: ttlHours)
         refresh()
     }
 
     /// Refresh from database
     func refresh() {
-        let liveUtterances = PastLivesDatabase.all()
+        let liveUtterances = LiveDatabase.all()
         utterances = liveUtterances.map { live in
             Utterance(
                 text: live.text,
@@ -352,7 +406,11 @@ final class UtteranceStore: ObservableObject {
             activeAppName: live.appName,
             activeWindowTitle: live.windowTitle,
             whisperModel: live.whisperModel,
-            transcriptionDurationMs: live.transcriptionMs,
+            perfEngineMs: live.perfEngineMs,
+            perfEndToEndMs: live.perfEndToEndMs,
+            perfInAppMs: live.perfInAppMs,
+            perfPreMs: nil,
+            perfPostMs: nil,
             audioFilename: live.audioFilename
         )
 
@@ -363,6 +421,35 @@ final class UtteranceStore: ObservableObject {
             metadata.focusedElementRole = dict["focusedElementRole"]
             metadata.focusedElementValue = dict["focusedElementValue"]
             metadata.terminalWorkingDir = dict["terminalWorkingDir"]
+            // Also check for legacy key names for backwards compatibility
+            if metadata.perfEndToEndMs == nil {
+                if let totalStr = dict["perfEndToEndMs"], let total = Int(totalStr) {
+                    metadata.perfEndToEndMs = total
+                } else if let totalStr = dict["latencyTotalMs"], let total = Int(totalStr) {
+                    metadata.perfEndToEndMs = total
+                }
+            }
+            if metadata.perfInAppMs == nil {
+                if let inAppStr = dict["perfInAppMs"], let inApp = Int(inAppStr) {
+                    metadata.perfInAppMs = inApp
+                } else if let pipelineStr = dict["latencyPipelineMs"], let pipeline = Int(pipelineStr) {
+                    metadata.perfInAppMs = pipeline
+                }
+            }
+            if metadata.perfPreMs == nil {
+                if let preStr = dict["perfPreMs"], let pre = Int(preStr) {
+                    metadata.perfPreMs = pre
+                } else if let preStr = dict["latencyPreMs"], let pre = Int(preStr) {
+                    metadata.perfPreMs = pre
+                }
+            }
+            if metadata.perfPostMs == nil {
+                if let postStr = dict["perfPostMs"], let post = Int(postStr) {
+                    metadata.perfPostMs = post
+                } else if let postStr = dict["latencyPostMs"], let post = Int(postStr) {
+                    metadata.perfPostMs = post
+                }
+            }
         }
 
         return metadata
@@ -370,12 +457,12 @@ final class UtteranceStore: ObservableObject {
 
     /// Get total count
     var count: Int {
-        PastLivesDatabase.count()
+        LiveDatabase.count()
     }
 
     /// Search utterances
     func search(_ query: String) -> [Utterance] {
-        let results = PastLivesDatabase.search(query)
+        let results = LiveDatabase.search(query)
         return results.map { live in
             Utterance(
                 text: live.text,

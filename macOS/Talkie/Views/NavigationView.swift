@@ -7,7 +7,6 @@
 
 import SwiftUI
 import CoreData
-import SwiftTerm
 
 enum NavigationSection: Hashable {
     case allMemos
@@ -58,12 +57,6 @@ struct TalkieNavigationView: View {
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
 
-    // Terminal panel state (Cursor-style bottom drawer)
-    @State private var isTerminalVisible: Bool = false
-    @State private var terminalHeight: CGFloat = 250
-    private let terminalMinHeight: CGFloat = 150
-    private let terminalMaxHeight: CGFloat = 500
-
     // Sidebar width constants - use fixed values to avoid NavigationSplitView recalculations
     private let sidebarExpandedWidth: CGFloat = 180
     private let sidebarCollapsedWidth: CGFloat = 56
@@ -106,21 +99,12 @@ struct TalkieNavigationView: View {
                 }
             }
 
-            // Terminal panel (Cursor-style bottom drawer)
-            if isTerminalVisible {
-                terminalPanelView
-            }
-
             // Full-width status bar (like VS Code/Cursor)
             statusBarView
         }
         .animation(.snappy(duration: 0.2), value: isSidebarCollapsed)
-        .animation(.snappy(duration: 0.2), value: isTerminalVisible)
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
-        .onReceive(NotificationCenter.default.publisher(for: .toggleTerminal)) { _ in
-            toggleTerminal()
-        }
         .onChange(of: allMemos.count) { _, _ in
             // Mark any new memos as received when they appear in the list
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
@@ -218,15 +202,6 @@ struct TalkieNavigationView: View {
             }
 
             Spacer()
-
-            // Terminal toggle button
-            Button(action: toggleTerminal) {
-                Image(systemName: "terminal.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(isTerminalVisible ? .accentColor : .secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Toggle Terminal (⌥⌘T)")
 
             // Console button - opens log popover with error/warning counts
             Button(action: { showConsolePopover.toggle() }) {
@@ -613,83 +588,6 @@ struct TalkieNavigationView: View {
     /// Toggle sidebar visibility (now just toggles collapse state)
     private func toggleSidebar() {
         toggleSidebarCollapse()
-    }
-
-    /// Toggle terminal panel visibility
-    private func toggleTerminal() {
-        withAnimation(.snappy(duration: 0.2)) {
-            isTerminalVisible.toggle()
-        }
-    }
-
-    // MARK: - Terminal Panel View (Cursor-style bottom drawer)
-
-    private var terminalPanelView: some View {
-        VStack(spacing: 0) {
-            // Drag handle / resize bar
-            terminalResizeHandle
-
-            // Terminal header
-            HStack(spacing: 8) {
-                Text("TERMINAL")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(Theme.current.foregroundMuted.opacity(0.6))
-
-                Spacer()
-
-                // Data directory path
-                Text(terminalDataDirectory)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(Theme.current.foregroundMuted.opacity(0.4))
-                    .lineLimit(1)
-                    .truncationMode(.head)
-
-                // Close button
-                Button(action: toggleTerminal) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(Theme.current.foregroundMuted)
-                }
-                .buttonStyle(.plain)
-                .help("Close Terminal (⌥⌘T)")
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color(red: 0.08, green: 0.08, blue: 0.08))
-
-            // SwiftTerm terminal
-            EmbeddedTerminalView()
-                .frame(height: terminalHeight)
-        }
-        .background(Color(red: 0.1, green: 0.1, blue: 0.1))
-    }
-
-    private var terminalResizeHandle: some View {
-        Rectangle()
-            .fill(Theme.current.divider)
-            .frame(height: 4)
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeUpDown.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newHeight = terminalHeight - value.translation.height
-                        terminalHeight = min(terminalMaxHeight, max(terminalMinHeight, newHeight))
-                    }
-            )
-    }
-
-    private var terminalDataDirectory: String {
-        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            return appSupport.appendingPathComponent("Talkie").path
-        }
-        return "~/Library/Application Support/Talkie"
     }
 
     /// Whether the current section uses a 2-column layout (sidebar + full content)

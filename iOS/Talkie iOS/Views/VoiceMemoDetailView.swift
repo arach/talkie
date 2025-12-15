@@ -2464,7 +2464,7 @@ struct TalkieToast: View {
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.md)
                 .fill(Color.surfaceSecondary)
-                .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 4)
+                .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.md)

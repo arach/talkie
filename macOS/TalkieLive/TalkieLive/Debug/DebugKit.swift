@@ -809,41 +809,44 @@ struct StatusBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Clear top border
+            // Top border
             Rectangle()
-                .fill(TalkieTheme.divider)
+                .fill(TalkieTheme.border)
                 .frame(height: 1)
 
             HStack(spacing: Spacing.sm) {
-                // Status indicator (left) - simpler now
-                statusIndicator
-
-                // Hotkey hints (only when idle and not showing success)
-                if controller.state == .idle && !showSuccess {
-                    HStack(spacing: Spacing.sm) {
-                        // Record shortcut
-                        ShortcutHint(
-                            label: "Record",
-                            shortcut: LiveSettings.shared.hotkey.displayString
-                        )
-
-                        // Queue paste shortcut
-                        ShortcutHint(
-                            label: "Paste Queue",
-                            shortcut: "⌥⌘V"
-                        )
-                    }
+                // Left - Hotkey hints (only when idle)
+                if controller.state == .idle && !showSuccess && !whisperService.isWarmingUp {
+                    ShortcutHint(
+                        label: "Record",
+                        shortcut: LiveSettings.shared.hotkey.displayString
+                    )
+                    ShortcutHint(
+                        label: "Queue",
+                        shortcut: "⌥⌘V"
+                    )
                 }
 
                 Spacer()
 
-                // Engine status indicator (clickable to open TalkieEngine)
+                // Center - StatePill (fixedSize so hover expansion doesn't affect layout)
+                StatePill(
+                    state: controller.state,
+                    isWarmingUp: whisperService.isWarmingUp,
+                    showSuccess: showSuccess,
+                    recordingDuration: recordingDuration,
+                    processingDuration: processingDuration,
+                    isEngineConnected: engineClient.isConnected,
+                    pendingQueueCount: LiveDatabase.countNeedsRetry(),
+                    onTap: toggleRecording,
+                    onQueueTap: { FailedQueueController.shared.show() }
+                )
+                .fixedSize()
+
+                Spacer()
+
+                // Right side - engine status and logs
                 engineStatusIndicator
-
-                // Right side content - timer during recording, file saved during processing
-                rightSideContent
-
-                // Log preview (right side) - compact icons with counts
                 LogPreview(
                     errorCount: errorCount,
                     warningCount: warningCount,
@@ -853,12 +856,10 @@ struct StatusBar: View {
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.xs)
         }
-        // Fixed height - never changes, prevents layout propagation
-        .frame(height: 28)
+        .frame(height: 32)
         .background(barBackgroundColor)
-        // Isolate all animations within this view - don't let them leak to parent
         .animation(.easeInOut(duration: 0.2), value: isActive)
-        .drawingGroup()  // Composites to single layer, isolates animations
+        .drawingGroup()
         .onChange(of: controller.state) { oldState, newState in
             handleStateChange(from: oldState, to: newState)
         }
@@ -905,22 +906,102 @@ struct StatusBar: View {
         }
     }
 
+    /// Status indicator - embedded pill style (matches FloatingPill exactly)
     @ViewBuilder
     private var statusIndicator: some View {
-        if controller.state == .listening {
-            // Recording: concise floating pill with red dot + timer
-            recordingPill
-        } else {
-            // Other states: standard indicator
-            HStack(spacing: 6) {
-                pulsingDot
+        Button(action: toggleRecording) {
+            HStack(spacing: 4) {
+                // State indicator dot
+                statusDot
 
-                Text(statusText)
-                    .font(.monoXSmall)
-                    .fontWeight(isActive ? .medium : .regular)
-                    .foregroundColor(isActive ? statusColor : TalkieTheme.textMuted)
+                // Content varies by state
+                statusContent
+            }
+            .frame(minWidth: 70, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+            )
+            .overlay(
+                Rectangle()
+                    .frame(height: 0.5)
+                    .foregroundColor(Color.white.opacity(0.15)),
+                alignment: .top
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var statusDot: some View {
+        let dotColor: Color = {
+            if whisperService.isWarmingUp { return SemanticColor.info }
+            if showSuccess { return SemanticColor.success }
+            switch controller.state {
+            case .idle: return TalkieTheme.textMuted
+            case .listening: return .red
+            case .transcribing: return SemanticColor.warning
+            case .routing: return SemanticColor.success
+            }
+        }()
+
+        Circle()
+            .fill(dotColor)
+            .frame(width: 6, height: 6)
+            .scaleEffect(controller.state == .listening ? 1.0 + pulseScale * 0.4 : 1.0)
+            .opacity(controller.state == .listening ? 0.7 + pulseScale * 0.3 : 1.0)
+            .shadow(color: controller.state == .listening ? dotColor.opacity(0.5) : .clear, radius: 3)
+    }
+
+    @ViewBuilder
+    private var statusContent: some View {
+        if whisperService.isWarmingUp {
+            Text("Warming up")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(SemanticColor.info)
+        } else if showSuccess {
+            // Success: green checkmark icon
+            Image(systemName: "checkmark")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(SemanticColor.success)
+        } else {
+            switch controller.state {
+            case .idle:
+                Text("Ready")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(TalkieTheme.textTertiary)
+            case .listening:
+                // Timer + audio level (like pill)
+                HStack(spacing: 3) {
+                    Text(formatRecordingTime(recordingDuration))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(TalkieTheme.textSecondary)
+                    verticalAudioLevel
+                }
+            case .transcribing:
+                // Processing dots (ellipsis)
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(SemanticColor.warning)
+            case .routing:
+                // Green checkmark
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(SemanticColor.success)
             }
         }
+    }
+
+    private func toggleRecording() {
+        // Post notification to toggle recording (AppDelegate handles this)
+        NotificationCenter.default.post(name: .toggleRecording, object: nil)
     }
 
     /// Concise recording pill: matches FloatingPill design exactly
@@ -948,17 +1029,15 @@ struct StatusBar: View {
         )
     }
 
-    /// Vertical audio level indicator
+    /// Vertical audio level indicator - bar grows upward from the bottom
     private var verticalAudioLevel: some View {
         let level = CGFloat(AudioLevelMonitor.shared.level)
-        return GeometryReader { geo in
-            VStack {
-                Spacer()
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(TalkieTheme.textTertiary.opacity(0.5 + Double(level) * 0.4))
-                    .frame(width: 3, height: max(2, geo.size.height * level))
-                    .animation(.easeOut(duration: 0.08), value: level)
-            }
+        let barHeight = max(2, 12 * level)
+        return ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(TalkieTheme.textTertiary.opacity(0.5 + Double(level) * 0.4))
+                .frame(width: 3, height: barHeight)
+                .animation(.easeOut(duration: 0.08), value: level)
         }
         .frame(width: 3, height: 12)
     }
@@ -1459,6 +1538,7 @@ struct ConsolePopover: View {
 
 extension Notification.Name {
     static let switchToConsole = Notification.Name("switchToConsole")
+    static let toggleRecording = Notification.Name("toggleRecording")
 }
 
 struct ConsolePopoverRow: View {
@@ -2412,7 +2492,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                 // Stats section
                 DebugSection(title: "STATE") {
                     VStack(spacing: 0) {
-                        debugInfoRow("Echoes", "\(PastLivesDatabase.count())")
+                        debugInfoRow("Echoes", "\(LiveDatabase.count())")
                         debugInfoRow("Events", "\(events.events.count)")
                         debugInfoRow("Errors", "\(events.events.filter { $0.type == .error }.count)")
                     }
@@ -2468,7 +2548,7 @@ struct DebugToolbarOverlay<Content: View>: View {
 
                         DebugActionButton(icon: "trash", label: "Prune Old Data") {
                             let hours = LiveSettings.shared.utteranceTTLHours
-                            PastLivesDatabase.prune(olderThanHours: hours)
+                            LiveDatabase.prune(olderThanHours: hours)
                             SystemEventManager.shared.log(.database, "Pruned data", detail: "Older than \(hours)h")
                         }
 
@@ -2499,7 +2579,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                 DebugSection(title: "DATABASE") {
                     VStack(spacing: 4) {
                         HStack {
-                            Text("\(PastLivesDatabase.count()) records")
+                            Text("\(LiveDatabase.count()) records")
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.7))
                             Spacer()
@@ -2513,8 +2593,8 @@ struct DebugToolbarOverlay<Content: View>: View {
 
                         DebugActionButton(icon: "folder", label: "Reveal Database") {
                             NSWorkspace.shared.selectFile(
-                                PastLivesDatabase.databaseURL.path,
-                                inFileViewerRootedAtPath: PastLivesDatabase.databaseURL.deletingLastPathComponent().path
+                                LiveDatabase.databaseURL.path,
+                                inFileViewerRootedAtPath: LiveDatabase.databaseURL.deletingLastPathComponent().path
                             )
                         }
                     }
@@ -2566,7 +2646,7 @@ struct DebugToolbarOverlay<Content: View>: View {
 
         // State
         lines.append("State:")
-        lines.append("  Echoes: \(PastLivesDatabase.count())")
+        lines.append("  Echoes: \(LiveDatabase.count())")
         lines.append("  Events: \(events.events.count)")
         lines.append("  Errors: \(events.events.filter { $0.type == .error }.count)")
         lines.append("")
@@ -3286,7 +3366,7 @@ struct ObjectInspectorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedIndex: Int = 0
 
-    private let utterances = PastLivesDatabase.all()
+    private let utterances = LiveDatabase.all()
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
@@ -3343,7 +3423,9 @@ struct ObjectInspectorView: View {
                             inspectorRow("durationSeconds", u.durationSeconds.map { String(format: "%.2f", $0) })
                             inspectorRow("wordCount", u.wordCount.map { String($0) })
                             inspectorRow("whisperModel", u.whisperModel)
-                            inspectorRow("transcriptionMs", u.transcriptionMs.map { String($0) })
+                            inspectorRow("perfEngineMs", u.perfEngineMs.map { String($0) })
+                            inspectorRow("perfEndToEndMs", u.perfEndToEndMs.map { String($0) })
+                            inspectorRow("perfInAppMs", u.perfInAppMs.map { String($0) })
                             inspectorRow("sessionID", u.sessionID)
                             inspectorRow("audioFilename", u.audioFilename)
                             inspectorRow("transcriptionStatus", u.transcriptionStatus.rawValue)

@@ -11,12 +11,12 @@ import SwiftUI
 // MARK: - Transcription Types
 
 public struct TranscriptionRequest {
-    public let audioData: Data
+    public let audioPath: String  // Path to audio file - caller owns the file
     public let languageHint: String?
     public let isLive: Bool
 
-    public init(audioData: Data, languageHint: String? = nil, isLive: Bool = false) {
-        self.audioData = audioData
+    public init(audioPath: String, languageHint: String? = nil, isLive: Bool = false) {
+        self.audioPath = audioPath
         self.languageHint = languageHint
         self.isLive = isLive
     }

@@ -29,7 +29,7 @@ final class QueuePickerController {
             return
         }
 
-        let items = PastLivesDatabase.fetchQueued()
+        let items = LiveDatabase.fetchQueued()
         guard !items.isEmpty else { return }
 
         let viewModel = QueuePickerViewModel(items: items)
@@ -162,7 +162,7 @@ final class QueuePickerController {
         pasteboard.setString(item.text, forType: .string)
 
         // Mark as pasted in database
-        PastLivesDatabase.markPasted(id: id)
+        LiveDatabase.markPasted(id: id)
 
         dismiss()
 
