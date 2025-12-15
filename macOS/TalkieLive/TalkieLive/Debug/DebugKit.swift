@@ -791,16 +791,11 @@ struct StatusBar: View {
         }
     }
 
-    /// Background stays dark even during recording - no red flood
+    /// Background stays neutral - pill handles state colors
     private var barBackgroundColor: Color {
+        // Only subtle tint during warmup, otherwise stay neutral
         if whisperService.isWarmingUp { return SemanticColor.info.opacity(0.08) }
-        if showSuccess { return SemanticColor.success.opacity(0.08) }
-        switch controller.state {
-        case .idle: return TalkieTheme.surfaceElevated
-        case .listening: return TalkieTheme.surfaceElevated  // Stay dark, not red!
-        case .transcribing: return SemanticColor.warning.opacity(0.06)
-        case .routing: return SemanticColor.success.opacity(0.08)
-        }
+        return TalkieTheme.surfaceElevated
     }
 
     private var isActive: Bool {

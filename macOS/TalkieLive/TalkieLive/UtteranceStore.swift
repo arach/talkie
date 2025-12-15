@@ -221,9 +221,9 @@ struct ContextCapture {
     }
 
     /// Capture start context (frontmost app when recording begins)
-    /// Now uses ContextCaptureService for rich context capture
+    /// Now uses ContextCaptureService for baseline capture
     @MainActor static func captureCurrentContext() -> UtteranceMetadata {
-        ContextCaptureService.shared.captureUsingSettings().baseline
+        ContextCaptureService.shared.captureBaseline()
     }
 
     /// Fill in end context on existing metadata (when recording stops)

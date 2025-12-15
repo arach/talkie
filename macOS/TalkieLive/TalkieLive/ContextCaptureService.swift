@@ -66,42 +66,9 @@ struct ContextCaptureOptions {
     }
 }
 
-/// Wrapper that returns immediately but can finish enrichment later
-struct ContextCaptureHandle {
-    let baseline: UtteranceMetadata
-    private let enrichmentTask: Task<UtteranceMetadata?, Never>?
-    private let timeoutMs: Int
-
-    init(baseline: UtteranceMetadata, enrichmentTask: Task<UtteranceMetadata?, Never>? = nil, timeoutMs: Int = 600) {
-        self.baseline = baseline
-        self.enrichmentTask = enrichmentTask
-        self.timeoutMs = timeoutMs
-    }
-
-    /// Resolve enriched metadata, merging into the baseline without clobbering non-nil fields
-    func resolvedMetadata() async -> UtteranceMetadata {
-        guard let enrichmentTask else { return baseline }
-
-        let timeout = Task<UtteranceMetadata?, Never> {
-            try? await Task.sleep(for: .milliseconds(timeoutMs))
-            return nil
-        }
-
-        let enriched: UtteranceMetadata? = await withTaskGroup(of: UtteranceMetadata?.self) { group in
-            group.addTask { await enrichmentTask.value }
-            group.addTask { await timeout.value }
-
-            for await result in group {
-                if let result {
-                    group.cancelAll()
-                    return result
-                }
-            }
-            return nil
-        }
-
-        return baseline.mergingMissing(from: enriched ?? UtteranceMetadata())
-    }
+/// Simple baseline metadata capture result
+struct ContextCaptureResult {
+    let metadata: UtteranceMetadata
 }
 
 /// Rich context snapshot captured at a moment in time
@@ -175,40 +142,41 @@ final class ContextCaptureService {
 
     private init() {}
 
-    /// Capture context quickly and kick off asynchronous enrichment so the main pipeline never blocks
-    func capture(options: ContextCaptureOptions) -> ContextCaptureHandle {
-        // Early out if disabled
+    // MARK: - Public API
+
+    /// Capture baseline context synchronously (fast: ~1ms)
+    /// Returns app name, bundle ID, and window title - no blocking AX calls
+    @MainActor
+    func captureBaseline() -> UtteranceMetadata {
+        let options = ContextCaptureOptions.fromSettings()
         guard options.enabled else {
-            return ContextCaptureHandle(baseline: UtteranceMetadata(), timeoutMs: options.timeoutMs)
+            return UtteranceMetadata()
         }
-
-        // Baseline is lightweight: app + window
-        let baseline = captureBaseline()
-
-        // Enrichment runs off the critical path and respects the detail level
-        let enrichmentTask: Task<UtteranceMetadata?, Never>?
-        if options.detail == .off || options.detail == .metadataOnly {
-            enrichmentTask = nil
-        } else {
-            enrichmentTask = Task.detached(priority: .utility) { [weak self] in
-                guard let self else { return nil }
-                return await self.captureRichContext(options: options)
-            }
-        }
-
-        return ContextCaptureHandle(baseline: baseline, enrichmentTask: enrichmentTask, timeoutMs: options.timeoutMs)
+        return captureBaselineInternal()
     }
 
-    /// Convenience helper for main-actor callers that want to respect user settings
-    @MainActor
-    func captureUsingSettings() -> ContextCaptureHandle {
-        let options = ContextCaptureOptions.fromSettings()
-        return capture(options: options)
+    /// Schedule background enrichment that updates the DB record after paste
+    /// Fire-and-forget: runs in background and updates the record when complete
+    func scheduleEnrichment(utteranceId: Int64, baseline: UtteranceMetadata) {
+        let options = ContextCaptureOptions(enabled: true, detail: .rich)
+        guard options.detail == .rich else { return }
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let enriched = await self.captureRichContext(options: options)
+            let merged = baseline.mergingMissing(from: enriched)
+
+            // Update the database record with enriched metadata
+            await MainActor.run {
+                LiveDatabase.updateMetadata(id: utteranceId, metadata: merged)
+                logger.debug("Enriched context for utterance \(utteranceId)")
+            }
+        }
     }
 
     // MARK: - Private Helpers
 
-    private func captureBaseline() -> UtteranceMetadata {
+    private func captureBaselineInternal() -> UtteranceMetadata {
         var metadata = UtteranceMetadata()
 
         guard let frontApp = NSWorkspace.shared.frontmostApplication else {
@@ -456,8 +424,8 @@ final class ContextCaptureService {
 // MARK: - Integration with existing ContextCapture
 
 extension ContextCapture {
-    /// Capture rich context using the new ContextCaptureService
+    /// Capture baseline context using the new ContextCaptureService
     @MainActor static func captureRichContext() -> UtteranceMetadata {
-        ContextCaptureService.shared.captureUsingSettings().baseline
+        ContextCaptureService.shared.captureBaseline()
     }
 }

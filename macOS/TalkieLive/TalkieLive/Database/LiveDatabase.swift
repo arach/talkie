@@ -117,13 +117,43 @@ enum LiveDatabase {
 // MARK: - CRUD Operations
 
 extension LiveDatabase {
-    static func store(_ utterance: LiveUtterance) {
+    /// Store utterance and return its ID (for fire-and-forget enrichment)
+    @discardableResult
+    static func store(_ utterance: LiveUtterance) -> Int64? {
         do {
-            try shared.write { db in
-                _ = try utterance.inserted(db)
+            return try shared.write { db -> Int64? in
+                var mutable = utterance
+                try mutable.insert(db)
+                return mutable.id
             }
         } catch {
             logger.error("[LiveDatabase] store error: \(error)")
+            return nil
+        }
+    }
+
+    /// Update metadata fields for an existing utterance (used by fire-and-forget enrichment)
+    static func updateMetadata(id: Int64, metadata: UtteranceMetadata) {
+        do {
+            try shared.write { db in
+                // Build JSON from enriched fields
+                var metaDict: [String: String] = [:]
+                if let url = metadata.documentURL { metaDict["documentURL"] = url }
+                if let url = metadata.browserURL { metaDict["browserURL"] = url }
+                if let role = metadata.focusedElementRole { metaDict["focusedElementRole"] = role }
+                if let value = metadata.focusedElementValue { metaDict["focusedElementValue"] = value }
+                if let dir = metadata.terminalWorkingDir { metaDict["terminalWorkingDir"] = dir }
+
+                let metadataJSON = metaDict.isEmpty ? nil : (try? JSONEncoder().encode(metaDict)).flatMap { String(data: $0, encoding: .utf8) }
+
+                try db.execute(
+                    sql: "UPDATE utterances SET metadata = ? WHERE id = ?",
+                    arguments: [metadataJSON, id]
+                )
+            }
+            logger.debug("[LiveDatabase] Updated metadata for utterance \(id)")
+        } catch {
+            logger.error("[LiveDatabase] updateMetadata error: \(error)")
         }
     }
 

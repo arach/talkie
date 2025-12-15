@@ -25,8 +25,7 @@ final class LiveController: ObservableObject {
 
     // Metadata captured at recording start
     private var recordingStartTime: Date?
-    private var contextCaptureHandle: ContextCaptureHandle?
-    private var capturedContext: UtteranceMetadata?
+    private var capturedContext: UtteranceMetadata?  // Baseline only - enrichment happens after paste
     private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
     private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
     private var traceID: String?
@@ -91,7 +90,6 @@ final class LiveController: ObservableObject {
         isCancelled = true
         audio.stopCapture()
         recordingStartTime = nil
-        contextCaptureHandle = nil
         capturedContext = nil
         startApp = nil
         pendingAudioFilename = nil
@@ -133,7 +131,6 @@ final class LiveController: ObservableObject {
         }
 
         recordingStartTime = nil
-        contextCaptureHandle = nil
         capturedContext = nil
         startApp = nil
         pendingAudioFilename = nil
@@ -167,9 +164,9 @@ final class LiveController: ObservableObject {
         // Store the start app for potential return-to-origin after paste
         startApp = ContextCapture.getFrontmostApp()
 
-        // Capture context BEFORE recording starts (user is in their target app)
-        contextCaptureHandle = ContextCaptureService.shared.captureUsingSettings()
-        capturedContext = contextCaptureHandle?.baseline
+        // Capture baseline context BEFORE recording starts (user is in their target app)
+        // This is instant (~1ms) - enrichment happens after paste
+        capturedContext = ContextCaptureService.shared.captureBaseline()
         recordingStartTime = Date()
 
         // Log context capture
@@ -205,6 +202,14 @@ final class LiveController: ObservableObject {
         let pipelineStart = Date()  // Track end-to-end timing
         let settings = LiveSettings.shared
 
+        // Helper to log timing milestones
+        func logTiming(_ step: String) {
+            let ms = Int(Date().timeIntervalSince(pipelineStart) * 1000)
+            SystemEventManager.shared.log(.transcription, "⏱ \(step)", detail: "+\(ms)ms")
+        }
+
+        logTiming("Pipeline start")
+
         // CRITICAL: Copy temp audio to permanent storage FIRST before anything else
         // This ensures the recording is sacrosanct even if transcription fails
         // Once copied, the permanent file is NEVER moved or modified - only read or copied
@@ -214,6 +219,8 @@ final class LiveController: ObservableObject {
             state = .idle
             return
         }
+        logTiming("Audio copied to storage")
+
         traceID = makeTraceID(from: audioFilename)
 
         // Store for push-to-queue in case user wants to bail during transcription
@@ -221,6 +228,7 @@ final class LiveController: ObservableObject {
 
         // Clean up temp file now that permanent copy is safe
         try? FileManager.default.removeItem(atPath: tempAudioPath)
+        logTiming("Temp file cleaned")
 
         let fileSaveMs = Int(Date().timeIntervalSince(pipelineStart) * 1000)
 
@@ -241,6 +249,7 @@ final class LiveController: ObservableObject {
 
         // Update milestone for status bar
         ProcessingMilestones.shared.markFileSaved(filename: audioFilename)
+        logTiming("Milestone: file saved")
 
         // Capture end context IMMEDIATELY when recording stops
         // This captures where the user is NOW (may be different from start)
@@ -255,6 +264,7 @@ final class LiveController: ObservableObject {
                 SystemEventManager.shared.log(.system, "Context changed", detail: "\(startApp) → \(endApp)")
             }
         }
+        logTiming("End context captured")
 
         // Calculate recording duration
         let recordStart = recordingStartTime ?? pipelineStart
@@ -262,6 +272,7 @@ final class LiveController: ObservableObject {
 
         // Play finish sound (recording stopped, now processing)
         SoundManager.shared.playFinish()
+        logTiming("Finish sound triggered")
 
         // Track milestone
         ProcessingMilestones.shared.markRecordingStopped()
@@ -271,6 +282,7 @@ final class LiveController: ObservableObject {
         SystemEventManager.shared.log(.audio, "Recording finished", detail: "\(durationStr) • \(fileSizeStr)")
 
         state = .transcribing
+        logTiming("State → transcribing")
         let engineStart = Date()
 
         // Log transcription start with model info and overhead
@@ -283,8 +295,10 @@ final class LiveController: ObservableObject {
 
         do {
             // Pass the permanent audio path - engine reads directly, never modifies
+            logTiming("Sending to engine")
             let request = TranscriptionRequest(audioPath: permanentAudioPath, isLive: true)
             let result = try await transcription.transcribe(request)
+            logTiming("Engine returned")
             let engineEnd = Date()
 
             let transcriptionMs = Int(engineEnd.timeIntervalSince(engineStart) * 1000)
@@ -294,18 +308,22 @@ final class LiveController: ObservableObject {
 
             // Track milestone
             ProcessingMilestones.shared.markTranscriptionComplete(wordCount: wordCount)
+            logTiming("Milestone: transcription complete")
 
             // Notify for onboarding (dismiss after first transcription)
             NotificationCenter.default.post(name: .transcriptionDidComplete, object: nil)
+            logTiming("NotificationCenter posted")
 
-            // Build complete metadata (timing fields set after routing completes)
-            _ = await resolveCapturedContext()
+            // Use baseline metadata immediately - don't block on enrichment
+            // Enrichment runs async and can update the record later if needed
             var metadata = capturedContext ?? UtteranceMetadata()
+            logTiming("Using baseline metadata (no enrichment wait)")
             metadata.whisperModel = settings.selectedModelId
             metadata.perfEngineMs = transcriptionMs
             metadata.perfPreMs = preMs
             metadata.routingMode = settings.routingMode.rawValue
             metadata.audioFilename = audioFilename
+            logTiming("Metadata built")
 
             // Check if user cancelled during transcription
             if isCancelled {
@@ -315,6 +333,7 @@ final class LiveController: ObservableObject {
             }
 
             state = .routing
+            logTiming("State → routing")
 
             // Track milestone
             ProcessingMilestones.shared.markRouting()
@@ -326,6 +345,7 @@ final class LiveController: ObservableObject {
 
                 // Play a different sound for queued (reuse pasted for now)
                 SoundManager.shared.playPasted()
+                logTiming("Pasted sound triggered")
                 SystemEventManager.shared.log(.ui, "Transcript queued", detail: "\(result.text.prefix(40))...\(traceSuffix)")
 
                 let routeEnd = Date()
@@ -345,6 +365,7 @@ final class LiveController: ObservableObject {
                 #endif
 
                 // Store in GRDB with createdInTalkieView = true, pasteTimestamp = nil
+                logTiming("Creating LiveUtterance")
                 let utterance = LiveUtterance(
                     text: result.text,
                     mode: "queued",
@@ -361,18 +382,24 @@ final class LiveController: ObservableObject {
                     createdInTalkieView: true,
                     pasteTimestamp: nil  // Not pasted yet → queued
                 )
-                LiveDatabase.store(utterance)
+                if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
+                    ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                }
+                logTiming("Database stored")
 
             } else {
                 // Normal flow: paste immediately
                 let routingMode = settings.routingMode == .paste ? "Paste" : "Clipboard"
                 SystemEventManager.shared.log(.system, "Routing transcript", detail: "\(routingMode) mode")
 
+                logTiming("Calling router.handle")
                 await router.handle(transcript: result.text)
+                logTiming("Router finished")
                 metadata.wasRouted = true
 
                 // Play pasted sound
                 SoundManager.shared.playPasted()
+                logTiming("Pasted sound triggered")
                 SystemEventManager.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...\(traceSuffix)")
 
                 let routeEnd = Date()
@@ -395,13 +422,16 @@ final class LiveController: ObservableObject {
                 if settings.returnToOriginAfterPaste,
                    let originApp = startApp,
                    metadata.contextChanged {
+                    logTiming("Waiting for paste delay")
                     // Small delay to let paste complete
                     try? await Task.sleep(for: .milliseconds(100))
                     ContextCapture.activateApp(originApp)
+                    logTiming("Returned to origin app")
                     SystemEventManager.shared.log(.system, "Returned to origin", detail: originApp.localizedName ?? "Unknown")
                 }
 
                 // Store in GRDB with pasteTimestamp = now (already pasted)
+                logTiming("Creating LiveUtterance")
                 let utterance = LiveUtterance(
                     text: result.text,
                     mode: settings.routingMode == .paste ? "paste" : "clipboard",
@@ -418,23 +448,31 @@ final class LiveController: ObservableObject {
                     createdInTalkieView: false,
                     pasteTimestamp: Date()  // Already pasted
                 )
-                LiveDatabase.store(utterance)
+                if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
+                    ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                }
+                logTiming("Database stored")
             }
 
+            logTiming("Counting DB records")
             let dbRecordCount = LiveDatabase.count()
             SystemEventManager.shared.log(.database, "Record stored", detail: "Total: \(dbRecordCount) utterances\(traceSuffix)")
 
             // Track milestone
             ProcessingMilestones.shared.markDbRecordStored()
+            logTiming("Milestone: DB stored")
 
             // Refresh UtteranceStore to pick up the new record from DB
+            logTiming("Refreshing UtteranceStore")
             UtteranceStore.shared.refresh()
+            logTiming("UtteranceStore refreshed")
 
             // Final success log
             SystemEventManager.shared.log(.system, "Pipeline complete", detail: "Ready for next recording")
 
             // Track final milestone
             ProcessingMilestones.shared.markSuccess()
+            logTiming("Pipeline complete")
 
         } catch {
             logger.error("Transcription error: \(error.localizedDescription)")
@@ -488,18 +526,6 @@ final class LiveController: ObservableObject {
         if let total = metadata.perfEndToEndMs { dict["perfEndToEndMs"] = String(total) }
         if let inApp = metadata.perfInAppMs { dict["perfInAppMs"] = String(inApp) }
         return dict.isEmpty ? nil : dict
-    }
-
-    /// Resolve enriched context without delaying the critical path
-    private func resolveCapturedContext() async -> UtteranceMetadata? {
-        guard let handle = contextCaptureHandle else { return capturedContext }
-        let enriched = await handle.resolvedMetadata()
-        if let existing = capturedContext {
-            capturedContext = existing.mergingMissing(from: enriched)
-        } else {
-            capturedContext = enriched
-        }
-        return capturedContext
     }
 
     /// Create a short trace ID from the audio filename for correlating logs (debug-only)
