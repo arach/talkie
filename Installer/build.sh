@@ -549,6 +549,15 @@ build_distribution() {
             mkdir -p "$ARCHIVE_DIR"
             cp "$OUTPUT_PKG" "$ARCHIVE_DIR/"
             echo "📂 Archived to releases/$VERSION/$PKG_NAME.pkg"
+
+            # Also archive .app bundles for quick dev testing (no install needed)
+            for APP_DIR in "$STAGING_DIR"/{live,core,engine}/Applications/*.app; do
+                if [ -d "$APP_DIR" ]; then
+                    APP_NAME=$(basename "$APP_DIR")
+                    cp -R "$APP_DIR" "$ARCHIVE_DIR/"
+                    echo "📂 Archived $APP_NAME for quick testing"
+                fi
+            done
         else
             echo "❌ Notarization failed for $PKG_NAME"
             echo "   Check: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE"
