@@ -77,6 +77,24 @@ struct LiveNavigationView: View {
     private var filteredUtterances: [Utterance] {
         var result = store.utterances
 
+        // Apply section-based filters (Queue, Today)
+        switch selectedSection {
+        case .queue:
+            // Items created in Talkie view that haven't been pasted yet
+            result = result.filter { utterance in
+                guard let liveID = utterance.liveID,
+                      let live = LiveDatabase.fetch(id: liveID) else { return false }
+                return live.createdInTalkieView && live.pasteTimestamp == nil
+            }
+        case .today:
+            // Items from today
+            let calendar = Calendar.current
+            let startOfToday = calendar.startOfDay(for: Date())
+            result = result.filter { $0.timestamp >= startOfToday }
+        default:
+            break
+        }
+
         // Apply app filter
         if let appFilter = appFilter {
             result = result.filter { $0.metadata.activeAppName == appFilter }
@@ -102,8 +120,9 @@ struct LiveNavigationView: View {
     }
 
     /// Sections that need full-width (no detail column)
+    /// History-based sections (Recent, Queue, Today) show detail column; others are full-width
     private var needsFullWidth: Bool {
-        selectedSection == .home || selectedSection == .logs || selectedSection == .settings
+        !(selectedSection?.isHistoryBased ?? false)
     }
 
     private var sidebarWidth: CGFloat {
@@ -519,6 +538,31 @@ struct LiveNavigationView: View {
                         badge: store.utterances.count > 0 ? "\(store.utterances.count)" : nil
                     ) {
                         selectedSection = .history
+                    }
+
+                    // Queue (items waiting to be pasted)
+                    let queueCount = LiveDatabase.countQueued()
+                    SidebarNavItem(
+                        isSelected: selectedSection == .queue,
+                        isCollapsed: isSidebarCollapsed,
+                        icon: "tray.and.arrow.down",
+                        title: "Queue",
+                        badge: queueCount > 0 ? "\(queueCount)" : nil,
+                        badgeColor: SemanticColor.info
+                    ) {
+                        selectedSection = .queue
+                    }
+
+                    // Today
+                    let todayCount = store.utterances.filter { Calendar.current.isDateInToday($0.timestamp) }.count
+                    SidebarNavItem(
+                        isSelected: selectedSection == .today,
+                        isCollapsed: isSidebarCollapsed,
+                        icon: "calendar",
+                        title: "Today",
+                        badge: todayCount > 0 ? "\(todayCount)" : nil
+                    ) {
+                        selectedSection = .today
                     }
 
                     if !isSidebarCollapsed {

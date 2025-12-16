@@ -11,9 +11,19 @@ import SwiftUI
 
 enum LiveNavigationSection: Hashable {
     case home
-    case history
+    case history      // All items (Recent)
+    case queue        // Items waiting to be pasted
+    case today        // Today's items
     case logs
     case settings
+
+    /// Whether this section shows the history list (with filters)
+    var isHistoryBased: Bool {
+        switch self {
+        case .history, .queue, .today: return true
+        default: return false
+        }
+    }
 }
 
 // MARK: - Sidebar Navigation Item (with hover feedback + collapsed support)
