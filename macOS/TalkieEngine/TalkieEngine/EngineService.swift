@@ -273,15 +273,59 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             throw EngineError.modelNotLoaded
         }
 
-        // Transcribe directly from client's file - FluidAudio handles the conversion
+        // Load audio samples and add end padding to prevent truncation
         let startTime = Date()
         let audioURL = URL(fileURLWithPath: audioPath)
-        let result = try await manager.transcribe(audioURL)
+        var samples = try await loadAudioSamples(from: audioURL)
+
+        // Add 500ms of silence at the end (8000 samples at 16kHz)
+        // This gives the transducer decoder time to finish without cutting off final words
+        let paddingSamples = [Float](repeating: 0.0, count: 8000)
+        samples.append(contentsOf: paddingSamples)
+
+        let result = try await manager.transcribe(samples)
         let elapsed = Date().timeIntervalSince(startTime)
 
         let transcript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        logger.info("Parakeet transcribed in \(String(format: "%.1f", elapsed))s")
+        logger.info("Parakeet transcribed in \(String(format: "%.1f", elapsed))s (\(samples.count) samples, +500ms padding)")
         return transcript
+    }
+
+    /// Load audio file and convert to 16kHz mono Float32 samples
+    private func loadAudioSamples(from url: URL) async throws -> [Float] {
+        let file = try AVAudioFile(forReading: url)
+        let targetFormat = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1)!
+
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw EngineError.audioConversionFailed
+        }
+
+        let converter = AVAudioConverter(from: file.processingFormat, to: targetFormat)!
+
+        var conversionError: NSError?
+        let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
+            do {
+                let tempBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: inNumPackets)!
+                try file.read(into: tempBuffer)
+                outStatus.pointee = .haveData
+                return tempBuffer
+            } catch {
+                outStatus.pointee = .endOfStream
+                return nil
+            }
+        }
+
+        converter.convert(to: buffer, error: &conversionError, withInputFrom: inputBlock)
+
+        if let error = conversionError {
+            throw error
+        }
+
+        guard let floatData = buffer.floatChannelData?[0] else {
+            throw EngineError.audioConversionFailed
+        }
+
+        return Array(UnsafeBufferPointer(start: floatData, count: Int(buffer.frameLength)))
     }
 
     // MARK: - Model Preloading

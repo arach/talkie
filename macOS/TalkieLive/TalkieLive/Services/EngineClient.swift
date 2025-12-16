@@ -1,6 +1,6 @@
 //
 //  EngineClient.swift
-//  Talkie
+//  TalkieLive
 //
 //  XPC client to connect to TalkieEngine for transcription
 //
@@ -9,7 +9,7 @@ import Foundation
 import AppKit
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Engine")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
 
 /// Engine service modes for XPC connection
 public enum EngineServiceMode: String, CaseIterable, Identifiable {
@@ -57,16 +57,132 @@ public enum EngineServiceMode: String, CaseIterable, Identifiable {
     func getStatus(reply: @escaping (_ statusJSON: Data?) -> Void)
 
     func ping(reply: @escaping (_ pong: Bool) -> Void)
+
+    // Download management
+    func downloadModel(_ modelId: String, reply: @escaping (_ error: String?) -> Void)
+    func getDownloadProgress(reply: @escaping (_ progressJSON: Data?) -> Void)
+    func cancelDownload(reply: @escaping () -> Void)
+    func getAvailableModels(reply: @escaping (_ modelsJSON: Data?) -> Void)
 }
 
 /// Engine status (matches TalkieEngine's EngineStatus)
 public struct EngineStatus: Codable, Sendable {
-    public let pid: Int32?
-    public let isDebugBuild: Bool?
+    // Process info
+    public let pid: Int32
+    public let version: String
+    public let startedAt: Date
+    public let bundleId: String
+    public let isDebugBuild: Bool?  // Optional for backwards compat
+
+    // Model state
     public let loadedModelId: String?
     public let isTranscribing: Bool
     public let isWarmingUp: Bool
     public let downloadedModels: [String]
+
+    // Stats
+    public let totalTranscriptions: Int
+    public let memoryUsageMB: Int?
+
+    /// Computed: Engine uptime
+    public var uptime: TimeInterval {
+        Date().timeIntervalSince(startedAt)
+    }
+
+    /// Computed: Formatted uptime string
+    public var uptimeFormatted: String {
+        let seconds = Int(uptime)
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        return "\(hours)h \(minutes % 60)m"
+    }
+
+    /// Computed: Memory usage formatted
+    public var memoryFormatted: String? {
+        guard let mb = memoryUsageMB else { return nil }
+        if mb < 1024 { return "\(mb) MB" }
+        return String(format: "%.1f GB", Double(mb) / 1024.0)
+    }
+}
+
+/// Download progress (matches TalkieEngine's DownloadProgress)
+public struct DownloadProgress: Codable, Sendable {
+    public let modelId: String
+    public let progress: Double  // 0.0 to 1.0
+    public let downloadedBytes: Int64
+    public let totalBytes: Int64?
+    public let isDownloading: Bool
+
+    /// Formatted progress string (e.g., "45%")
+    public var progressFormatted: String {
+        "\(Int(progress * 100))%"
+    }
+
+    /// Formatted size string (e.g., "150 MB / 300 MB")
+    public var sizeFormatted: String {
+        let downloaded = formatBytes(downloadedBytes)
+        if let total = totalBytes {
+            return "\(downloaded) / \(formatBytes(total))"
+        }
+        return downloaded
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let mb = Double(bytes) / 1_000_000
+        if mb < 1000 {
+            return String(format: "%.0f MB", mb)
+        }
+        return String(format: "%.1f GB", mb / 1000)
+    }
+}
+
+/// Model family identifiers (matches TalkieEngine's ModelFamily)
+public enum ModelFamily: String, Codable, Sendable, CaseIterable {
+    case whisper = "whisper"
+    case parakeet = "parakeet"
+
+    public var displayName: String {
+        switch self {
+        case .whisper: return "Whisper"
+        case .parakeet: return "Parakeet"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .whisper: return "OpenAI Whisper (WhisperKit)"
+        case .parakeet: return "NVIDIA Parakeet (FluidAudio)"
+        }
+    }
+}
+
+/// Model info for display (matches TalkieEngine's ModelInfo)
+public struct ModelInfo: Codable, Sendable, Identifiable {
+    public let id: String           // Full ID including family prefix (e.g., "whisper:openai_whisper-small")
+    public let family: String       // Model family ("whisper" or "parakeet")
+    public let modelId: String      // Model ID without family prefix
+    public let displayName: String
+    public let sizeDescription: String
+    public let description: String  // Quality/speed description
+    public let isDownloaded: Bool
+    public let isLoaded: Bool
+
+    /// Parse a model ID string into family and model components
+    public static func parseModelId(_ fullId: String) -> (family: String, modelId: String) {
+        let parts = fullId.split(separator: ":", maxSplits: 1)
+        if parts.count == 2 {
+            return (String(parts[0]), String(parts[1]))
+        }
+        // Default to whisper for backwards compatibility
+        return ("whisper", fullId)
+    }
+
+    /// Get the ModelFamily enum for this model
+    public var modelFamily: ModelFamily? {
+        ModelFamily(rawValue: family)
+    }
 }
 
 /// Connection state for UI display
@@ -74,6 +190,7 @@ public enum EngineConnectionState: String {
     case disconnected = "Disconnected"
     case connecting = "Connecting..."
     case connected = "Connected"
+    case connectedWrongBuild = "Wrong Engine"  // Connected to prod when expecting debug, or vice versa
     case error = "Error"
 }
 
@@ -95,8 +212,37 @@ public final class EngineClient: ObservableObject {
     @Published public private(set) var transcriptionCount: Int = 0
     @Published public private(set) var lastTranscriptionAt: Date?
 
+    // MARK: - Download State
+    @Published public private(set) var downloadProgress: DownloadProgress?
+    @Published public private(set) var availableModels: [ModelInfo] = []
+
     /// Computed property for backwards compatibility
-    public var isConnected: Bool { connectionState == .connected }
+    public var isConnected: Bool { connectionState == .connected || connectionState == .connectedWrongBuild }
+
+    /// Whether we're in DEBUG build
+    public var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Whether the connected engine matches our build type
+    public var isMatchingBuild: Bool {
+        guard let engineDebug = status?.isDebugBuild else { return true }  // Assume match if unknown
+        return engineDebug == isDebugBuild
+    }
+
+    /// Warning message if connected to wrong engine
+    public var buildMismatchWarning: String? {
+        guard isConnected, !isMatchingBuild else { return nil }
+        if isDebugBuild {
+            return "Connected to RELEASE engine (expected DEBUG)"
+        } else {
+            return "Connected to DEBUG engine (expected RELEASE)"
+        }
+    }
 
     private var connection: NSXPCConnection?
     private var engineProxy: TalkieEngineProtocol?
@@ -109,7 +255,10 @@ public final class EngineClient: ObservableObject {
 
     /// Connect using honor system: try debug first, fall back to dev
     public func connect() {
-        guard connection == nil else { return }
+        guard connection == nil else {
+            logger.debug("[Connect] Already have connection, state=\(self.connectionState.rawValue)")
+            return
+        }
 
         #if DEBUG
         // Honor system: try debug (Xcode) first, fall back to dev (daemon)
@@ -227,6 +376,10 @@ public final class EngineClient: ObservableObject {
                     }
 
                     self?.refreshStatus()
+                    // Also fetch available models on connect
+                    Task {
+                        await self?.refreshAvailableModels()
+                    }
                     completion(true)
                 } else {
                     conn.invalidate()
@@ -247,7 +400,7 @@ public final class EngineClient: ObservableObject {
     }
 
     private func handleDisconnection(reason: String) {
-        let wasConnected = connectionState == .connected
+        let wasConnected = connectionState == .connected || connectionState == .connectedWrongBuild
         let wasMode = connectedMode
 
         connectionState = .disconnected
@@ -358,40 +511,52 @@ public final class EngineClient: ObservableObject {
 
     // MARK: - Transcription
 
-    /// Transcribe audio using TalkieEngine
-    /// Audio is written to a temp file, engine reads from path, temp file is cleaned up after
-    public func transcribe(audioData: Data, modelId: String = "whisper:openai_whisper-small") async throws -> String {
-        // Write audio data to temp file for engine to read
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("m4a")
-
-        do {
-            try audioData.write(to: tempURL)
-        } catch {
-            throw EngineClientError.transcriptionFailed("Failed to write temp audio file: \(error.localizedDescription)")
-        }
-
-        // Ensure cleanup
-        defer {
-            try? FileManager.default.removeItem(at: tempURL)
-        }
-
-        return try await transcribe(audioPath: tempURL.path, modelId: modelId)
-    }
-
-    /// Transcribe audio from a file path using TalkieEngine
-    public func transcribe(audioPath: String, modelId: String = "whisper:openai_whisper-small") async throws -> String {
+    /// Transcribe audio file using TalkieEngine
+    /// Automatically waits and retries if engine is busy (loading model or transcribing)
+    /// - Parameters:
+    ///   - audioPath: Path to audio file (client owns the file, engine reads directly)
+    ///   - modelId: Model to use for transcription
+    public func transcribe(audioPath: String, modelId: String = "parakeet:v3") async throws -> String {
         guard let proxy = engineProxy else {
             // Try to connect first
             let connected = await ensureConnected()
             guard connected, let proxy = engineProxy else {
                 throw EngineClientError.notConnected
             }
-            return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId)
+            return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId)
         }
 
-        return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId)
+        return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId)
+    }
+
+    /// Transcribe with automatic retry for "Already transcribing" errors
+    /// This handles the case where engine is busy loading a model (can take 60+ seconds)
+    /// or processing another transcription
+    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioPath: String, modelId: String) async throws -> String {
+        let maxAttempts = 30  // 30 attempts × 2s = 60s max wait
+        let retryDelay: UInt64 = 2_000_000_000  // 2 seconds
+
+        var lastError: Error?
+
+        for attempt in 1...maxAttempts {
+            do {
+                return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId)
+            } catch let error as EngineClientError {
+                // Check if it's "Already transcribing" - wait and retry
+                if case .transcriptionFailed(let message) = error, message.contains("Already transcribing") {
+                    logger.info("[Engine] Engine busy (attempt \(attempt)/\(maxAttempts)), waiting 2s...")
+                    lastError = error
+                    try? await Task.sleep(nanoseconds: retryDelay)
+                    continue
+                }
+                // Other errors - don't retry
+                throw error
+            }
+        }
+
+        // Exhausted retries
+        logger.error("[Engine] Engine still busy after \(maxAttempts) attempts (~60s)")
+        throw lastError ?? EngineClientError.transcriptionFailed("Engine busy timeout")
     }
 
     private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String) async throws -> String {
@@ -497,14 +662,127 @@ public final class EngineClient: ObservableObject {
 
         proxy.getStatus { [weak self] statusJSON in
             Task { @MainActor in
+                guard let self else { return }
+
                 if let data = statusJSON,
                    let status = try? JSONDecoder().decode(EngineStatus.self, from: data) {
-                    self?.status = status
-                    if let modelId = status.loadedModelId {
-                        logger.debug("[Engine] Status: model='\(modelId)', transcribing=\(status.isTranscribing)")
-                    } else {
-                        logger.debug("[Engine] Status: no model loaded")
+                    self.status = status
+
+                    // Check for build mismatch
+                    if let engineDebug = status.isDebugBuild {
+                        if engineDebug != self.isDebugBuild {
+                            self.connectionState = .connectedWrongBuild
+                            logger.warning("[Engine] ⚠️ Build mismatch! App=\(self.isDebugBuild ? "DEBUG" : "RELEASE"), Engine=\(engineDebug ? "DEBUG" : "RELEASE")")
+                        } else if self.connectionState == .connectedWrongBuild {
+                            // Was mismatched, now correct
+                            self.connectionState = .connected
+                        }
                     }
+
+                    if let modelId = status.loadedModelId {
+                        logger.debug("[Engine] Status: model='\(modelId)', transcribing=\(status.isTranscribing), debug=\(status.isDebugBuild ?? false)")
+                    } else {
+                        logger.debug("[Engine] Status: no model loaded, debug=\(status.isDebugBuild ?? false)")
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Download Management
+
+    /// Download a model by ID
+    public func downloadModel(_ modelId: String) async throws {
+        logger.info("[Engine] Downloading model '\(modelId)'...")
+
+        guard let proxy = engineProxy else {
+            logger.error("[Engine] Cannot download - not connected")
+            throw EngineClientError.notConnected
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            proxy.downloadModel(modelId) { error in
+                if let error = error {
+                    logger.error("[Engine] Download failed: \(error)")
+                    continuation.resume(throwing: EngineClientError.downloadFailed(error))
+                } else {
+                    logger.info("[Engine] ✓ Model '\(modelId)' downloaded")
+                    continuation.resume()
+                }
+            }
+        }
+
+        // Refresh available models after download
+        await refreshAvailableModels()
+        refreshStatus()
+    }
+
+    /// Get current download progress
+    public func getDownloadProgress() async -> DownloadProgress? {
+        guard let proxy = engineProxy else { return nil }
+
+        return await withCheckedContinuation { continuation in
+            proxy.getDownloadProgress { progressJSON in
+                if let data = progressJSON,
+                   let progress = try? JSONDecoder().decode(DownloadProgress.self, from: data) {
+                    continuation.resume(returning: progress)
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    /// Cancel any ongoing download
+    public func cancelDownload() async {
+        logger.info("[Engine] Cancelling download...")
+
+        guard let proxy = engineProxy else {
+            logger.warning("[Engine] Cannot cancel - not connected")
+            return
+        }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            proxy.cancelDownload {
+                logger.info("[Engine] ✓ Download cancelled")
+                continuation.resume()
+            }
+        }
+
+        downloadProgress = nil
+    }
+
+    /// Refresh available models list
+    public func refreshAvailableModels() async {
+        logger.info("[Models] refreshAvailableModels called, connectionState=\(self.connectionState.rawValue)")
+
+        guard let proxy = engineProxy else {
+            logger.warning("[Models] Cannot refresh models - engineProxy is nil")
+            return
+        }
+
+        logger.info("[Models] Calling getAvailableModels on XPC proxy...")
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            proxy.getAvailableModels { [weak self] modelsJSON in
+                Task { @MainActor in
+                    logger.info("[Models] XPC callback received, data=\(modelsJSON != nil ? "\(modelsJSON!.count) bytes" : "nil")")
+
+                    if let data = modelsJSON {
+                        do {
+                            let models = try JSONDecoder().decode([ModelInfo].self, from: data)
+                            self?.availableModels = models
+                            logger.info("[Models] ✓ Decoded \(models.count) models: \(models.map { "\($0.id)(\($0.isDownloaded ? "downloaded" : "remote"))" }.joined(separator: ", "))")
+                        } catch {
+                            logger.error("[Models] JSON decode failed: \(error.localizedDescription)")
+                            if let jsonString = String(data: data, encoding: .utf8) {
+                                logger.error("[Models] Raw JSON (first 500 chars): \(jsonString.prefix(500))")
+                            }
+                        }
+                    } else {
+                        logger.warning("[Models] Engine returned nil for getAvailableModels")
+                    }
+                    continuation.resume()
                 }
             }
         }
@@ -517,6 +795,7 @@ public enum EngineClientError: LocalizedError {
     case notConnected
     case transcriptionFailed(String)
     case preloadFailed(String)
+    case downloadFailed(String)
     case emptyResponse
 
     public var errorDescription: String? {
@@ -527,6 +806,8 @@ public enum EngineClientError: LocalizedError {
             return "Transcription failed: \(message)"
         case .preloadFailed(let message):
             return "Failed to preload model: \(message)"
+        case .downloadFailed(let message):
+            return "Failed to download model: \(message)"
         case .emptyResponse:
             return "Empty response from engine"
         }
