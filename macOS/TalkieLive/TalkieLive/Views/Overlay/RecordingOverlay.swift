@@ -90,9 +90,9 @@ final class RecordingOverlayController: ObservableObject {
 
         self.window = panel
 
-        // Start timer
+        // Start timer (2Hz is plenty for displaying seconds)
         startTime = Date()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let start = self.startTime else { return }
                 self.elapsedTime = Date().timeIntervalSince(start)

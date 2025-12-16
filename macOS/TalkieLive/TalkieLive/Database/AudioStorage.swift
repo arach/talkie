@@ -68,8 +68,35 @@ enum AudioStorage {
         FileManager.default.fileExists(atPath: audioDirectory.appendingPathComponent(filename).path)
     }
 
-    /// Calculate total storage used by audio files
-    static func totalStorageBytes() -> Int64 {
+    // MARK: - Storage Size (Async with Caching)
+
+    /// Cached storage size to avoid blocking UI
+    private static var cachedStorageBytes: Int64?
+    private static var cacheTimestamp: Date?
+    private static let cacheDuration: TimeInterval = 30 // Cache for 30 seconds
+
+    /// Calculate total storage used by audio files (async, off main thread)
+    static func totalStorageBytesAsync() async -> Int64 {
+        // Return cached value if fresh
+        if let cached = cachedStorageBytes,
+           let timestamp = cacheTimestamp,
+           Date().timeIntervalSince(timestamp) < cacheDuration {
+            return cached
+        }
+
+        // Calculate on background thread
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let bytes = calculateStorageBytes()
+                cachedStorageBytes = bytes
+                cacheTimestamp = Date()
+                continuation.resume(returning: bytes)
+            }
+        }
+    }
+
+    /// Calculate storage bytes synchronously (internal use only)
+    private static func calculateStorageBytes() -> Int64 {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(at: audioDirectory, includingPropertiesForKeys: [.fileSizeKey]) else {
             return 0
@@ -84,9 +111,42 @@ enum AudioStorage {
         return total
     }
 
-    /// Human-readable storage size
+    /// Human-readable storage size (async)
+    static func formattedStorageSizeAsync() async -> String {
+        let bytes = await totalStorageBytesAsync()
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    /// Get cached storage size immediately (returns "Calculating..." if not cached)
+    static func cachedFormattedStorageSize() -> String {
+        guard let bytes = cachedStorageBytes else {
+            return "Calculating..."
+        }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    /// Invalidate cache (call after deleting files)
+    static func invalidateCache() {
+        cachedStorageBytes = nil
+        cacheTimestamp = nil
+    }
+
+    /// Legacy sync method - deprecated, use async version
+    @available(*, deprecated, message: "Use totalStorageBytesAsync() to avoid blocking UI")
+    static func totalStorageBytes() -> Int64 {
+        calculateStorageBytes()
+    }
+
+    /// Legacy sync method - deprecated, use async version
+    @available(*, deprecated, message: "Use formattedStorageSizeAsync() to avoid blocking UI")
     static func formattedStorageSize() -> String {
-        let bytes = totalStorageBytes()
+        let bytes = calculateStorageBytes()
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB, .useGB]
         formatter.countStyle = .file
@@ -121,6 +181,7 @@ enum AudioStorage {
         for fileURL in contents {
             try? fm.removeItem(at: fileURL)
         }
+        invalidateCache()
         logger.info("Deleted all audio files")
     }
 

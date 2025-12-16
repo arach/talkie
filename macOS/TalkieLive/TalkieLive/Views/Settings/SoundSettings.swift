@@ -38,8 +38,9 @@ struct SoundPickerRow: View {
 // MARK: - Storage Info Row
 
 struct StorageInfoRow: View {
-    @State private var storageSize = AudioStorage.formattedStorageSize()
+    @State private var storageSize = AudioStorage.cachedFormattedStorageSize()
     @State private var pastLivesCount = LiveDatabase.count()
+    @State private var isLoading = false
 
     var body: some View {
         HStack {
@@ -55,19 +56,20 @@ struct StorageInfoRow: View {
 
             Button("Clear All") {
                 LiveDatabase.deleteAll()
-                refreshStats()
+                AudioStorage.invalidateCache()
+                Task { await refreshStats() }
             }
             .font(Design.fontXS)
             .buttonStyle(.tiny)
             .foregroundColor(SemanticColor.error.opacity(0.8))
         }
-        .onAppear {
-            refreshStats()
+        .task {
+            await refreshStats()
         }
     }
 
-    private func refreshStats() {
-        storageSize = AudioStorage.formattedStorageSize()
+    private func refreshStats() async {
+        storageSize = await AudioStorage.formattedStorageSizeAsync()
         pastLivesCount = LiveDatabase.count()
     }
 }

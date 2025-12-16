@@ -107,6 +107,41 @@ enum LiveDatabase {
                 try db.execute(sql: "ALTER TABLE utterances RENAME COLUMN whisperModel TO transcriptionModel")
             }
 
+            // v3: Add indexes for common queries (major performance improvement)
+            migrator.registerMigration("v3_add_indexes") { db in
+                // Index for ORDER BY createdAt DESC (used in almost every query)
+                try db.create(
+                    index: "idx_utterances_createdAt",
+                    on: "utterances",
+                    columns: ["createdAt"]
+                )
+
+                // Composite index for queue picker (fetchQueued, countQueued)
+                // Covers: createdInTalkieView = 1 AND pasteTimestamp IS NULL AND promotionStatus = 'none'
+                try db.create(
+                    index: "idx_utterances_queue",
+                    on: "utterances",
+                    columns: ["createdInTalkieView", "promotionStatus", "pasteTimestamp"]
+                )
+
+                // Index for retry queries (fetchNeedsRetry, countNeedsRetry)
+                // Covers: transcriptionStatus IN ('failed', 'pending') AND audioFilename IS NOT NULL
+                try db.create(
+                    index: "idx_utterances_retry",
+                    on: "utterances",
+                    columns: ["transcriptionStatus", "audioFilename"]
+                )
+
+                // Index for app-based filtering (byApp)
+                try db.create(
+                    index: "idx_utterances_appBundleID",
+                    on: "utterances",
+                    columns: ["appBundleID"]
+                )
+
+                logger.info("[LiveDatabase] Created performance indexes")
+            }
+
             try migrator.migrate(dbQueue)
 
             // One-time migration from old PastLives.sqlite

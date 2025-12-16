@@ -2933,7 +2933,7 @@ struct StorageStats {
         stats.totalUtterances = utterances.count
         stats.totalWords = utterances.compactMap { $0.wordCount }.reduce(0, +)
         stats.totalDurationSeconds = utterances.compactMap { $0.durationSeconds }.reduce(0, +)
-        stats.audioStorageBytes = AudioStorage.totalStorageBytes()
+        stats.audioStorageBytes = await AudioStorage.totalStorageBytesAsync()
 
         // Database size
         if let dbPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
