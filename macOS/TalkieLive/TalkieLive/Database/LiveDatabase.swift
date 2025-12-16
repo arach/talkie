@@ -78,7 +78,7 @@ enum LiveDatabase {
                     t.column("audioFilename", .text)
 
                     // Transcription
-                    t.column("whisperModel", .text)
+                    t.column("transcriptionModel", .text)
                     t.column("transcriptionStatus", .text).notNull().defaults(to: "success")
                     t.column("transcriptionError", .text)
 
@@ -100,6 +100,11 @@ enum LiveDatabase {
                     t.column("sessionID", .text)
                     t.column("metadata", .text)
                 }
+            }
+
+            // v2: Rename whisperModel → transcriptionModel (now supports Parakeet, etc.)
+            migrator.registerMigration("v2_rename_whisperModel") { db in
+                try db.execute(sql: "ALTER TABLE utterances RENAME COLUMN whisperModel TO transcriptionModel")
             }
 
             try migrator.migrate(dbQueue)
@@ -404,7 +409,7 @@ extension LiveDatabase {
                 sql: """
                     UPDATE utterances
                     SET transcriptionStatus = ?, transcriptionError = NULL,
-                        text = ?, wordCount = ?, perfEngineMs = ?, whisperModel = ?
+                        text = ?, wordCount = ?, perfEngineMs = ?, transcriptionModel = ?
                     WHERE id = ?
                     """,
                 arguments: [
@@ -521,7 +526,7 @@ private extension LiveDatabase {
                             sql: """
                                 INSERT INTO utterances (
                                     createdAt, text, mode, appBundleID, appName, windowTitle,
-                                    durationSeconds, wordCount, whisperModel, audioFilename,
+                                    durationSeconds, wordCount, transcriptionModel, audioFilename,
                                     perfEngineMs, perfEndToEndMs, perfInAppMs,
                                     transcriptionStatus, transcriptionError,
                                     promotionStatus, talkieMemoID, commandID,
@@ -592,7 +597,7 @@ private extension LiveDatabase {
                             sql: """
                                 INSERT INTO utterances (
                                     createdAt, text, mode, appBundleID, appName, windowTitle,
-                                    durationSeconds, whisperModel, audioFilename,
+                                    durationSeconds, transcriptionModel, audioFilename,
                                     transcriptionStatus, promotionStatus, createdInTalkieView
                                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', 'none', 0)
                                 """,

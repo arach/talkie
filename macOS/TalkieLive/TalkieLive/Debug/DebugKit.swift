@@ -2939,7 +2939,7 @@ struct DebugToolbarOverlay<Content: View>: View {
             windowTitle: "Test Window",
             durationSeconds: 1.5,
             wordCount: testText.split(separator: " ").count,
-            whisperModel: "debug-test",
+            transcriptionModel: "debug-test",
             perfEngineMs: 100,
             perfEndToEndMs: 200,
             perfInAppMs: 100,
@@ -3724,7 +3724,7 @@ struct ObjectInspectorView: View {
                             inspectorRow("windowTitle", u.windowTitle)
                             inspectorRow("durationSeconds", u.durationSeconds.map { String(format: "%.2f", $0) })
                             inspectorRow("wordCount", u.wordCount.map { String($0) })
-                            inspectorRow("whisperModel", u.whisperModel)
+                            inspectorRow("transcriptionModel", u.transcriptionModel)
                             inspectorRow("perfEngineMs", u.perfEngineMs.map { String($0) })
                             inspectorRow("perfEndToEndMs", u.perfEndToEndMs.map { String($0) })
                             inspectorRow("perfInAppMs", u.perfInAppMs.map { String($0) })

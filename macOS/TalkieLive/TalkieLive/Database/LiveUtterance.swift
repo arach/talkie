@@ -143,7 +143,7 @@ struct LiveUtterance: Identifiable, Hashable {
     var windowTitle: String?
     var durationSeconds: Double?       // Recording duration (how long user talked)
     var wordCount: Int?
-    var whisperModel: String?
+    var transcriptionModel: String?
     var perfEngineMs: Int?             // Time in TalkieEngine (transcription)
     var perfEndToEndMs: Int?           // Total: stop recording → delivery
     var perfInAppMs: Int?              // TalkieLive in-app processing (endToEnd - engine)
@@ -168,7 +168,7 @@ struct LiveUtterance: Identifiable, Hashable {
 
     enum Columns: String, ColumnExpression {
         case id, createdAt, text, mode, appBundleID, appName, windowTitle
-        case durationSeconds, wordCount, whisperModel
+        case durationSeconds, wordCount, transcriptionModel
         case perfEngineMs, perfEndToEndMs, perfInAppMs
         case sessionID, metadata, audioFilename
         case transcriptionStatus, transcriptionError
@@ -218,7 +218,7 @@ struct LiveUtterance: Identifiable, Hashable {
         windowTitle: String? = nil,
         durationSeconds: Double? = nil,
         wordCount: Int? = nil,
-        whisperModel: String? = nil,
+        transcriptionModel: String? = nil,
         perfEngineMs: Int? = nil,
         perfEndToEndMs: Int? = nil,
         perfInAppMs: Int? = nil,
@@ -242,7 +242,7 @@ struct LiveUtterance: Identifiable, Hashable {
         self.windowTitle = windowTitle
         self.durationSeconds = durationSeconds
         self.wordCount = wordCount ?? text.split(separator: " ").count
-        self.whisperModel = whisperModel
+        self.transcriptionModel = transcriptionModel
         self.perfEngineMs = perfEngineMs
         self.perfEndToEndMs = perfEndToEndMs
         self.perfInAppMs = perfInAppMs
@@ -273,7 +273,7 @@ extension LiveUtterance: FetchableRecord {
         windowTitle = row[Columns.windowTitle]
         durationSeconds = row[Columns.durationSeconds]
         wordCount = row[Columns.wordCount]
-        whisperModel = row[Columns.whisperModel]
+        transcriptionModel = row[Columns.transcriptionModel]
         perfEngineMs = row[Columns.perfEngineMs]
         perfEndToEndMs = row[Columns.perfEndToEndMs]
         perfInAppMs = row[Columns.perfInAppMs]
@@ -329,7 +329,7 @@ extension LiveUtterance: PersistableRecord {
         container[Columns.windowTitle] = windowTitle
         container[Columns.durationSeconds] = durationSeconds
         container[Columns.wordCount] = wordCount
-        container[Columns.whisperModel] = whisperModel
+        container[Columns.transcriptionModel] = transcriptionModel
         container[Columns.perfEngineMs] = perfEngineMs
         container[Columns.perfEndToEndMs] = perfEndToEndMs
         container[Columns.perfInAppMs] = perfInAppMs

@@ -411,7 +411,7 @@ struct LiveNavigationView: View {
             appName: "File Drop",
             windowTitle: originalFilename,
             durationSeconds: duration,
-            whisperModel: settings.selectedModelId,
+            transcriptionModel: settings.selectedModelId,
             perfEngineMs: nil,
             metadata: metadata,
             audioFilename: storedFilename,
@@ -1387,7 +1387,7 @@ private struct JSONContentView: View {
         appendIfPresent(&lines, key: "focusedElementValue", value: m.focusedElementValue)
         appendIfPresent(&lines, key: "terminalWorkingDir", value: m.terminalWorkingDir)
 
-        appendIfPresent(&lines, key: "whisperModel", value: m.whisperModel)
+        appendIfPresent(&lines, key: "transcriptionModel", value: m.transcriptionModel)
         appendIfPresent(&lines, key: "perfEngineMs", value: m.perfEngineMs.map { "\($0)" })
         appendIfPresent(&lines, key: "perfEndToEndMs", value: m.perfEndToEndMs.map { "\($0)" })
         appendIfPresent(&lines, key: "perfInAppMs", value: m.perfInAppMs.map { "\($0)" })
@@ -1453,7 +1453,7 @@ private struct MinimalInfoCards: View {
             }
 
             // Model config - blue
-            if let model = utterance.metadata.whisperModel {
+            if let model = utterance.metadata.transcriptionModel {
                 InfoCard(
                     label: "MODEL CONFIG",
                     icon: "cpu",
@@ -1671,7 +1671,7 @@ private struct PerformanceCard: View {
         if let total = endToEndMs { lines.append("End-to-End: \(total)ms") }
         if let engine = engineMs { lines.append("Engine: \(engine)ms") }
         if let app = appMs { lines.append("App: \(app)ms") }
-        if let model = utterance.metadata.whisperModel { lines.append("Model: \(model)") }
+        if let model = utterance.metadata.transcriptionModel { lines.append("Model: \(model)") }
         if let duration = utterance.durationSeconds { lines.append("Audio Duration: \(String(format: "%.2f", duration))s") }
         if let app = utterance.metadata.activeAppName { lines.append("Input App: \(app)") }
         lines.append("Word Count: \(utterance.wordCount)")
@@ -2123,7 +2123,7 @@ private struct TranscriptionInfoCard: View {
             // Row 2: Transcription metadata
             HStack(spacing: Spacing.lg) {
                 // Model
-                if let model = utterance.metadata.whisperModel {
+                if let model = utterance.metadata.transcriptionModel {
                     InfoPill(
                         icon: "cpu",
                         label: "Model",
@@ -2435,11 +2435,11 @@ private struct StatsCard: View {
             }
 
             // Additional stats row
-            if utterance.metadata.whisperModel != nil || utterance.metadata.routingMode != nil {
+            if utterance.metadata.transcriptionModel != nil || utterance.metadata.routingMode != nil {
                 Divider().background(TalkieTheme.surfaceElevated)
 
                 HStack(spacing: Spacing.lg) {
-                    if let model = utterance.metadata.whisperModel {
+                    if let model = utterance.metadata.transcriptionModel {
                         HStack(spacing: 4) {
                             Image(systemName: "cpu")
                                 .font(.system(size: 9))

@@ -145,7 +145,7 @@ final class LiveController: ObservableObject {
                 appName: capturedContext?.activeAppName,
                 windowTitle: capturedContext?.activeWindowTitle,
                 durationSeconds: recordingStartTime.map { Date().timeIntervalSince($0) },
-                whisperModel: LiveSettings.shared.selectedModelId,
+                transcriptionModel: LiveSettings.shared.selectedModelId,
                 metadata: capturedContext.flatMap { buildMetadataDict(from: $0) },
                 audioFilename: audioFilename,
                 transcriptionStatus: .pending,
@@ -382,7 +382,7 @@ final class LiveController: ObservableObject {
             // Enrichment runs async and can update the record later if needed
             var metadata = capturedContext ?? UtteranceMetadata()
             logTiming("Using baseline metadata (no enrichment wait)")
-            metadata.whisperModel = settings.selectedModelId
+            metadata.transcriptionModel = settings.selectedModelId
             metadata.perfEngineMs = transcriptionMs
             metadata.perfPreMs = preMs
             metadata.routingMode = settings.routingMode.rawValue
@@ -444,7 +444,7 @@ final class LiveController: ObservableObject {
                     appName: metadata.activeAppName,
                     windowTitle: metadata.activeWindowTitle,
                     durationSeconds: durationSeconds,
-                    whisperModel: metadata.whisperModel,
+                    transcriptionModel: metadata.transcriptionModel,
                     perfEngineMs: transcriptionMs,
                     perfEndToEndMs: metadata.perfEndToEndMs,
                     perfInAppMs: metadata.perfInAppMs,
@@ -521,7 +521,7 @@ final class LiveController: ObservableObject {
                     appName: metadata.activeAppName,
                     windowTitle: metadata.activeWindowTitle,
                     durationSeconds: durationSeconds,
-                    whisperModel: metadata.whisperModel,
+                    transcriptionModel: metadata.transcriptionModel,
                     perfEngineMs: transcriptionMs,
                     perfEndToEndMs: metadata.perfEndToEndMs,
                     perfInAppMs: metadata.perfInAppMs,
@@ -587,7 +587,7 @@ final class LiveController: ObservableObject {
                     appName: metadata.activeAppName,
                     windowTitle: metadata.activeWindowTitle,
                     durationSeconds: durationSeconds,
-                    whisperModel: metadata.whisperModel,
+                    transcriptionModel: metadata.transcriptionModel,
                     perfEngineMs: transcriptionMs,
                     perfEndToEndMs: metadata.perfEndToEndMs,
                     perfInAppMs: metadata.perfInAppMs,
@@ -638,7 +638,7 @@ final class LiveController: ObservableObject {
                 appName: capturedContext?.activeAppName,
                 windowTitle: capturedContext?.activeWindowTitle,
                 durationSeconds: durationSeconds,
-                whisperModel: settings.selectedModelId,
+                transcriptionModel: settings.selectedModelId,
                 perfEndToEndMs: nil,
                 perfInAppMs: nil,
                 metadata: capturedContext.flatMap { buildMetadataDict(from: $0) },

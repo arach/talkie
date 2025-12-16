@@ -36,7 +36,7 @@ struct UtteranceMetadata: Codable, Hashable {
     var wasRouted: Bool = false
 
     // Transcription details
-    var whisperModel: String?
+    var transcriptionModel: String?
     var language: String?
     var confidence: Double?
 
@@ -63,7 +63,7 @@ struct UtteranceMetadata: Codable, Hashable {
         activeAppBundleID: String? = nil,
         activeAppName: String? = nil,
         activeWindowTitle: String? = nil,
-        whisperModel: String? = nil,
+        transcriptionModel: String? = nil,
         perfEngineMs: Int? = nil,
         perfEndToEndMs: Int? = nil,
         perfInAppMs: Int? = nil,
@@ -74,7 +74,7 @@ struct UtteranceMetadata: Codable, Hashable {
         self.activeAppBundleID = activeAppBundleID
         self.activeAppName = activeAppName
         self.activeWindowTitle = activeWindowTitle
-        self.whisperModel = whisperModel
+        self.transcriptionModel = transcriptionModel
         self.perfEngineMs = perfEngineMs
         self.perfEndToEndMs = perfEndToEndMs
         self.perfInAppMs = perfInAppMs
@@ -137,7 +137,7 @@ struct UtteranceMetadata: Codable, Hashable {
         if merged.terminalWorkingDir == nil { merged.terminalWorkingDir = other.terminalWorkingDir }
 
         if merged.routingMode == nil { merged.routingMode = other.routingMode }
-        if merged.whisperModel == nil { merged.whisperModel = other.whisperModel }
+        if merged.transcriptionModel == nil { merged.transcriptionModel = other.transcriptionModel }
         if merged.perfEngineMs == nil { merged.perfEngineMs = other.perfEngineMs }
         if merged.perfEndToEndMs == nil { merged.perfEndToEndMs = other.perfEndToEndMs }
         if merged.perfInAppMs == nil { merged.perfInAppMs = other.perfInAppMs }
@@ -324,7 +324,7 @@ final class UtteranceStore: ObservableObject {
             windowTitle: metadata.activeWindowTitle,
             durationSeconds: durationSeconds,
             wordCount: text.split(separator: " ").count,
-            whisperModel: metadata.whisperModel,
+            transcriptionModel: metadata.transcriptionModel,
             perfEngineMs: metadata.perfEngineMs,
             perfEndToEndMs: metadata.perfEndToEndMs,
             perfInAppMs: metadata.perfInAppMs,
@@ -405,7 +405,7 @@ final class UtteranceStore: ObservableObject {
             activeAppBundleID: live.appBundleID,
             activeAppName: live.appName,
             activeWindowTitle: live.windowTitle,
-            whisperModel: live.whisperModel,
+            transcriptionModel: live.transcriptionModel,
             perfEngineMs: live.perfEngineMs,
             perfEndToEndMs: live.perfEndToEndMs,
             perfInAppMs: live.perfInAppMs,
