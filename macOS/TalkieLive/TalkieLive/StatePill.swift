@@ -36,10 +36,16 @@ struct StatePill: View {
 
     @State private var isHovered = false
     @State private var pulsePhase: CGFloat = 0
+    @State private var isShiftHeld = false
     @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
 
     private var isExpanded: Bool {
         forceExpanded || isHovered
+    }
+
+    /// Show interstitial hint when recording + hovering + Shift held
+    private var showInterstitialHint: Bool {
+        state == .listening && isHovered && isShiftHeld
     }
 
     private var isActive: Bool {
@@ -62,6 +68,13 @@ struct StatePill: View {
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
+            if hovering {
+                // Start monitoring modifier keys
+                startModifierMonitor()
+            } else {
+                stopModifierMonitor()
+                isShiftHeld = false
+            }
         }
         .onAppear {
             if state == .listening {
@@ -217,7 +230,16 @@ struct StatePill: View {
                         .foregroundColor(TalkieTheme.textSecondary)
                 }
             case .listening:
-                if audioMonitor.isSilent {
+                if showInterstitialHint {
+                    // Shift held during hover - show interstitial mode hint
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                        Text("→ Edit")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(.purple)
+                } else if audioMonitor.isSilent {
                     HStack(spacing: 4) {
                         Text("No Audio")
                             .font(.system(size: 10, weight: .medium))
@@ -314,6 +336,26 @@ struct StatePill: View {
         withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
             pulsePhase = 1.0
         }
+    }
+
+    // MARK: - Modifier Key Monitoring
+
+    @State private var modifierTimer: Timer?
+
+    private func startModifierMonitor() {
+        // Poll modifier flags at 20Hz while hovering
+        modifierTimer?.invalidate()
+        modifierTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+            let shift = NSEvent.modifierFlags.contains(.shift)
+            if shift != isShiftHeld {
+                isShiftHeld = shift
+            }
+        }
+    }
+
+    private func stopModifierMonitor() {
+        modifierTimer?.invalidate()
+        modifierTimer = nil
     }
 }
 

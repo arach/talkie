@@ -53,11 +53,11 @@ final class LiveDataStore: ObservableObject {
 
         var possiblePaths: [URL] = []
 
-        // 1. App Group container (shared with TalkieLive)
+        // 1. App Group container (shared with TalkieLive) - current filename
         if let groupContainer = fm.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupID) {
             let groupPath = groupContainer
                 .appendingPathComponent("TalkieLive", isDirectory: true)
-                .appendingPathComponent("PastLives.sqlite")
+                .appendingPathComponent("live.sqlite")
             possiblePaths.append(groupPath)
             logger.info("[LiveDataStore] Checking App Group: \(groupPath.path)")
         }
@@ -66,7 +66,7 @@ final class LiveDataStore: ObservableObject {
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             let localPath = appSupport
                 .appendingPathComponent("TalkieLive", isDirectory: true)
-                .appendingPathComponent("PastLives.sqlite")
+                .appendingPathComponent("live.sqlite")
             possiblePaths.append(localPath)
         }
 
@@ -133,7 +133,7 @@ final class LiveDataStore: ObservableObject {
                     SELECT id, createdAt, text, mode, appBundleID, appName, windowTitle,
                            durationSeconds, wordCount, whisperModel, audioFilename,
                            transcriptionStatus, promotionStatus, talkieMemoID
-                    FROM live_utterance
+                    FROM utterances
                     ORDER BY createdAt DESC
                     LIMIT 500
                     """)
@@ -195,6 +195,15 @@ final class LiveDataStore: ObservableObject {
 
     func utterance(id: Int64) -> LiveUtterance? {
         utterances.first { $0.id == id }
+    }
+
+    /// Fetch the most recent utterance (for debug/test purposes)
+    func fetchRecentUtterance() -> LiveUtterance? {
+        // Ensure we have fresh data
+        if utterances.isEmpty {
+            refresh()
+        }
+        return utterances.first
     }
 
     // MARK: - Statistics

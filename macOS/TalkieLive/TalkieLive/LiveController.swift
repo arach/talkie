@@ -27,6 +27,7 @@ final class LiveController: ObservableObject {
     private var recordingStartTime: Date?
     private var capturedContext: UtteranceMetadata?  // Baseline only - enrichment happens after paste
     private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
+    private var routeToInterstitial: Bool = false  // Shift-click: route to Talkie Core interstitial instead of paste
     private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
     private var traceID: String?
 
@@ -46,12 +47,13 @@ final class LiveController: ObservableObject {
     }
 
     /// Toggle mode: press to start, press to stop
-    func toggleListening() async {
+    /// - Parameter interstitial: If true (Shift-click), route to Talkie Core interstitial instead of paste
+    func toggleListening(interstitial: Bool = false) async {
         switch state {
         case .idle:
             await start()
         case .listening:
-            stop()
+            stop(interstitial: interstitial)
         case .transcribing, .routing:
             // Don't interrupt processing
             break
@@ -193,7 +195,14 @@ final class LiveController: ObservableObject {
         }
     }
 
-    private func stop() {
+    private func stop(interstitial: Bool = false) {
+        NSLog("[LiveController] stop() called with interstitial=\(interstitial)")
+        logger.info("stop() called with interstitial=\(interstitial)")
+        routeToInterstitial = interstitial
+        if interstitial {
+            NSLog("[LiveController] Stopping with interstitial routing (Shift-click)")
+            logger.info("Stopping with interstitial routing (Shift-click)")
+        }
         audio.stopCapture()
         // Don't set state to idle - let process() handle state transitions
     }
@@ -337,6 +346,78 @@ final class LiveController: ObservableObject {
 
             // Track milestone
             ProcessingMilestones.shared.markRouting()
+
+            // Interstitial mode: Shift-click to route to Talkie Core for editing
+            NSLog("[LiveController] Checking routeToInterstitial flag: \(self.routeToInterstitial)")
+            logger.info("Checking routeToInterstitial flag: \(self.routeToInterstitial)")
+            if routeToInterstitial {
+                NSLog("[LiveController] === INTERSTITIAL MODE ACTIVATED ===")
+                logger.info("=== INTERSTITIAL MODE ACTIVATED ===")
+                SystemEventManager.shared.log(.system, "Routing to interstitial", detail: "Shift-click mode")
+
+                let routeEnd = Date()
+                let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
+                let postMs = Int(routeEnd.timeIntervalSince(engineEnd) * 1000)
+                let appMs = max(0, totalMs - transcriptionMs)
+
+                metadata.perfEndToEndMs = totalMs
+                metadata.perfInAppMs = appMs
+                metadata.perfPreMs = preMs
+                metadata.perfPostMs = postMs
+
+                let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
+                SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
+
+                // Store in GRDB with mode "interstitial", pasteTimestamp = nil
+                logTiming("Creating LiveUtterance for interstitial")
+                let utterance = LiveUtterance(
+                    text: result.text,
+                    mode: "interstitial",
+                    appBundleID: metadata.activeAppBundleID,
+                    appName: metadata.activeAppName,
+                    windowTitle: metadata.activeWindowTitle,
+                    durationSeconds: durationSeconds,
+                    whisperModel: metadata.whisperModel,
+                    perfEngineMs: transcriptionMs,
+                    perfEndToEndMs: metadata.perfEndToEndMs,
+                    perfInAppMs: metadata.perfInAppMs,
+                    metadata: buildMetadataDict(from: metadata),
+                    audioFilename: audioFilename,
+                    createdInTalkieView: createdInTalkieView,
+                    pasteTimestamp: nil  // Not pasted yet → interstitial will handle
+                )
+
+                if let id = LiveDatabase.store(utterance) {
+                    logTiming("Database stored")
+
+                    // Schedule enrichment
+                    if let baseline = capturedContext {
+                        ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                    }
+
+                    // Launch Talkie Core with interstitial URL
+                    launchInterstitialEditor(utteranceId: id)
+                    logTiming("Interstitial URL launched")
+                }
+
+                // Play sound to confirm
+                SoundManager.shared.playPasted()
+                logTiming("Sound triggered")
+
+                // Reset flag and finish
+                routeToInterstitial = false
+                state = .idle
+                recordingStartTime = nil
+                capturedContext = nil
+                startApp = nil
+                pendingAudioFilename = nil
+                traceID = nil
+
+                // Refresh stores
+                UtteranceStore.shared.refresh()
+                logTiming("Pipeline complete (interstitial)")
+                return
+            }
 
             // Decide: queue or paste immediately?
             if createdInTalkieView {
@@ -533,5 +614,22 @@ final class LiveController: ObservableObject {
         let base = filename.components(separatedBy: ".").first ?? filename
         let trimmed = base.replacingOccurrences(of: "-", with: "")
         return String(trimmed.suffix(8))
+    }
+
+    // MARK: - Interstitial Editor
+
+    /// Launch Talkie Core's interstitial editor with the given utterance ID
+    private func launchInterstitialEditor(utteranceId: Int64) {
+        let urlString = "talkie://interstitial/\(utteranceId)"
+        guard let url = URL(string: urlString) else {
+            NSLog("[LiveController] ERROR: Failed to create interstitial URL for utterance \(utteranceId)")
+            logger.error("Failed to create interstitial URL for utterance \(utteranceId)")
+            return
+        }
+
+        NSLog("[LiveController] Launching interstitial editor: \(urlString)")
+        logger.info("Launching interstitial editor for utterance \(utteranceId)")
+        NSWorkspace.shared.open(url)
+        NSLog("[LiveController] NSWorkspace.shared.open() called")
     }
 }

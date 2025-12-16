@@ -70,7 +70,7 @@ struct LiveNavigationView: View {
     @ObservedObject private var settings = LiveSettings.shared
 
     @State private var selectedSection: LiveNavigationSection? = .home
-    @State private var selectedUtterance: Utterance?
+    @State private var selectedUtteranceIDs: Set<Utterance.ID> = []  // Multi-select support
     @State private var settingsSection: SettingsSection? = nil  // Deep link to specific settings section
     @State private var searchText = ""
     @State private var isSidebarCollapsed: Bool = false
@@ -97,6 +97,17 @@ struct LiveNavigationView: View {
         }
 
         return result
+    }
+
+    /// Selected utterances for batch operations
+    private var selectedUtterances: [Utterance] {
+        filteredUtterances.filter { selectedUtteranceIDs.contains($0.id) }
+    }
+
+    /// Single selected utterance for detail view (uses first selected if multi)
+    private var selectedUtterance: Utterance? {
+        guard let firstID = selectedUtteranceIDs.first else { return nil }
+        return filteredUtterances.first { $0.id == firstID }
     }
 
     /// Sections that need full-width (no detail column)
@@ -166,7 +177,7 @@ struct LiveNavigationView: View {
                 selectedSection = .history
                 // Find and select the utterance by liveID
                 if let utterance = store.utterances.first(where: { $0.liveID == id }) {
-                    selectedUtterance = utterance
+                    selectedUtteranceIDs = [utterance.id]
                 }
             }
         }
@@ -450,7 +461,7 @@ struct LiveNavigationView: View {
             store.refresh()
             selectedSection = .history
             if let newUtterance = store.utterances.first(where: { $0.metadata.audioFilename == storedFilename }) {
-                selectedUtterance = newUtterance
+                selectedUtteranceIDs = [newUtterance.id]
             }
 
             SoundManager.shared.playPasted()
@@ -637,13 +648,13 @@ struct LiveNavigationView: View {
                 onSelectUtterance: { utterance in
                     // Navigate to history and select this utterance
                     selectedSection = .history
-                    selectedUtterance = utterance
+                    selectedUtteranceIDs = [utterance.id]
                 },
                 onSelectApp: { appName, _ in
                     // Navigate to history filtered by this app
                     appFilter = appName
                     selectedSection = .history
-                    selectedUtterance = nil
+                    selectedUtteranceIDs = []
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -699,12 +710,17 @@ struct LiveNavigationView: View {
                 .fill(TalkieTheme.divider)
                 .frame(height: 0.5)
 
+            // Multi-select toolbar
+            if selectedUtteranceIDs.count > 1 {
+                multiSelectToolbar
+            }
+
             if filteredUtterances.isEmpty {
                 emptyHistoryState
             } else {
-                List(filteredUtterances, selection: $selectedUtterance) { utterance in
+                List(filteredUtterances, selection: $selectedUtteranceIDs) { utterance in
                     UtteranceRowView(utterance: utterance)
-                        .tag(utterance)
+                        .tag(utterance.id)
                         .contextMenu {
                             Button {
                                 NSPasteboard.general.clearContents()
@@ -741,9 +757,7 @@ struct LiveNavigationView: View {
 
                             Button(role: .destructive) {
                                 withAnimation {
-                                    if selectedUtterance == utterance {
-                                        selectedUtterance = nil
-                                    }
+                                    selectedUtteranceIDs.remove(utterance.id)
                                     store.delete(utterance)
                                 }
                             } label: {
@@ -753,10 +767,7 @@ struct LiveNavigationView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 withAnimation {
-                                    // Clear selection if deleting selected item
-                                    if selectedUtterance == utterance {
-                                        selectedUtterance = nil
-                                    }
+                                    selectedUtteranceIDs.remove(utterance.id)
                                     store.delete(utterance)
                                 }
                             } label: {
@@ -820,6 +831,70 @@ struct LiveNavigationView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Multi-Select Toolbar
+
+    private var multiSelectToolbar: some View {
+        HStack(spacing: 10) {
+            // Selection count with subtle badge
+            HStack(spacing: 6) {
+                Text("\(selectedUtteranceIDs.count)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .frame(minWidth: 18, minHeight: 18)
+                    .background(TalkieTheme.accent)
+                    .clipShape(Circle())
+
+                Text("selected")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(TalkieTheme.textSecondary)
+            }
+
+            Spacer()
+
+            // Cancel - text only
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    selectedUtteranceIDs.removeAll()
+                }
+            } label: {
+                Text("Cancel")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(TalkieTheme.textTertiary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+            }
+            .buttonStyle(.plain)
+
+            // Delete - red button
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    for utterance in selectedUtterances {
+                        store.delete(utterance)
+                    }
+                    selectedUtteranceIDs.removeAll()
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("Delete")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(SemanticColor.error)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(TalkieTheme.surfaceElevated)
     }
 
     // MARK: - Detail Column

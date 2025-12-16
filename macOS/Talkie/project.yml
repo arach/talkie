@@ -13,6 +13,8 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
 
 packages:
+  TalkieKit:
+    path: ../TalkieKit
   DebugKit:
     path: ../../../DebugKit
   FluidAudio:
@@ -42,7 +44,16 @@ targets:
       - Workflow
       - Resources
       - Assets.xcassets
+      - Interstitial
+    info:
+      path: Talkie-Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: Talkie URL
+            CFBundleURLSchemes:
+              - talkie
     dependencies:
+      - package: TalkieKit
       - package: DebugKit
       - package: FluidAudio
       - package: GRDB

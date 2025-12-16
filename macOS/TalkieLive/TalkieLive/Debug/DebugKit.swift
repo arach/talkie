@@ -2811,6 +2811,10 @@ struct DebugToolbarOverlay<Content: View>: View {
                             OnboardingManager.shared.currentStep = .modelDownload
                             SystemEventManager.shared.log(.system, "Model state reset", detail: "Simulating no model installed")
                         }
+
+                        DebugActionButton(icon: "sparkles", label: "Test Interstitial") {
+                            testInterstitialFlow()
+                        }
                     }
                 }
 
@@ -2913,6 +2917,65 @@ struct DebugToolbarOverlay<Content: View>: View {
                 showCopiedFeedback = false
             }
         }
+    }
+
+    /// Test interstitial flow: creates a test utterance and opens Talkie Core's interstitial editor
+    private func testInterstitialFlow() {
+        NSLog("[DEBUG] Testing interstitial flow")
+        NSLog("[DEBUG] Database path: \(LiveDatabase.databaseURL.path)")
+        NSLog("[DEBUG] Database count: \(LiveDatabase.count())")
+        SystemEventManager.shared.log(.system, "Testing interstitial", detail: "Creating test utterance")
+
+        // Create a test utterance in the database
+        let testText = "This is a test utterance for interstitial debugging at \(Date())"
+
+        let utterance = LiveUtterance(
+            id: nil,
+            createdAt: Date(),
+            text: testText,
+            mode: "interstitial",
+            appBundleID: "com.debug.test",
+            appName: "Debug Test",
+            windowTitle: "Test Window",
+            durationSeconds: 1.5,
+            wordCount: testText.split(separator: " ").count,
+            whisperModel: "debug-test",
+            perfEngineMs: 100,
+            perfEndToEndMs: 200,
+            perfInAppMs: 100,
+            sessionID: nil,
+            metadata: nil,
+            audioFilename: nil,
+            transcriptionStatus: .success,
+            transcriptionError: nil,
+            promotionStatus: .none,
+            talkieMemoID: nil,
+            commandID: nil,
+            createdInTalkieView: false,
+            pasteTimestamp: nil
+        )
+
+        // Store test record and get its ID
+        guard let utteranceId = LiveDatabase.store(utterance) else {
+            NSLog("[DEBUG] Failed to create test utterance")
+            SystemEventManager.shared.log(.error, "Interstitial test failed", detail: "Could not create utterance")
+            return
+        }
+
+        NSLog("[DEBUG] Created test utterance ID: \(utteranceId)")
+        SystemEventManager.shared.log(.system, "Test utterance created", detail: "ID: \(utteranceId)")
+
+        // Open the interstitial URL
+        let urlString = "talkie://interstitial/\(utteranceId)"
+        guard let url = URL(string: urlString) else {
+            NSLog("[DEBUG] Invalid URL: \(urlString)")
+            return
+        }
+
+        NSLog("[DEBUG] Opening URL: \(urlString)")
+        SystemEventManager.shared.log(.system, "Opening interstitial", detail: urlString)
+
+        NSWorkspace.shared.open(url)
     }
 }
 

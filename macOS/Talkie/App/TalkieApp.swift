@@ -58,6 +58,9 @@ struct TalkieApp: App {
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .frame(minWidth: 900, minHeight: 600)
                 .tint(settingsManager.accentColor.color)
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
@@ -78,6 +81,22 @@ struct TalkieApp: App {
                     settingsNavigation?.showSettings()
                 }
                 .keyboardShortcut(",", modifiers: .command)
+            }
+        }
+    }
+
+    // MARK: - Deep Link Handling (backup for SwiftUI)
+
+    private func handleDeepLink(_ url: URL) {
+        // Primary URL handling is done via Apple Events in AppDelegate
+        // This is a backup in case SwiftUI's onOpenURL fires
+        guard url.scheme == "talkie" else { return }
+
+        if url.host == "interstitial",
+           let idString = url.pathComponents.dropFirst().first,
+           let id = Int64(idString) {
+            Task { @MainActor in
+                InterstitialManager.shared.show(utteranceId: id)
             }
         }
     }

@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Create menu
         let menu = NSMenu()
 
-        let recordItem = NSMenuItem(title: "Start Recording", action: #selector(toggleListening), keyEquivalent: "")
+        let recordItem = NSMenuItem(title: "Start Recording", action: #selector(toggleListeningFromMenu), keyEquivalent: "")
         recordItem.target = self
         menu.addItem(recordItem)
 
@@ -115,8 +115,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Wire up floating pill - tap to toggle recording
-        floatingPill.onTap = { [weak self] in
-            self?.toggleListening()
+        // Shift-click triggers interstitial mode (route to Talkie Core for editing)
+        floatingPill.onTapWithShift = { [weak self] shiftHeld in
+            self?.toggleListening(interstitial: shiftHeld)
         }
 
         // Wire up push-to-queue - escape hatch when stuck in transcribing
@@ -150,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Listen for toggle recording from status bar button
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(toggleListening),
+            selector: #selector(toggleListeningFromMenu),
             name: .toggleRecording,
             object: nil
         )
@@ -160,12 +161,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = LiveSettings.shared
 
         // Register toggle hotkey (press to start, press to stop)
+        // Note: Hotkey-triggered stops don't check for Shift modifier (intentional)
         hotKeyManager.registerHotKey(
             modifiers: settings.hotkey.modifiers,
             keyCode: settings.hotkey.keyCode
         ) { [weak self] in
             guard let self else { return }
-            self.toggleListening()
+            self.toggleListening(interstitial: false)
         }
 
         // Register push-to-talk hotkey if enabled
@@ -201,7 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateMenuKeyEquivalent() {
         guard let menu = statusItem.menu,
-              let recordItem = menu.items.first(where: { $0.action == #selector(toggleListening) }) else {
+              let recordItem = menu.items.first(where: { $0.action == #selector(toggleListeningFromMenu) }) else {
             return
         }
 
@@ -236,9 +238,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.toolTip = "Talkie Live (\(shortcut) to record)"
     }
 
-    @objc private func toggleListening() {
+    @objc private func toggleListeningFromMenu() {
+        toggleListening(interstitial: false)
+    }
+
+    private func toggleListening(interstitial: Bool) {
         Task {
-            await liveController.toggleListening()
+            await liveController.toggleListening(interstitial: interstitial)
         }
     }
 

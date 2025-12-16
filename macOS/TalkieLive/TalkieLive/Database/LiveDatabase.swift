@@ -124,9 +124,13 @@ extension LiveDatabase {
             return try shared.write { db -> Int64? in
                 var mutable = utterance
                 try mutable.insert(db)
-                return mutable.id
+                // Use lastInsertedRowID as fallback if didInsert didn't populate id
+                let insertedId = mutable.id ?? db.lastInsertedRowID
+                NSLog("[LiveDatabase] Stored utterance with ID: \(insertedId)")
+                return insertedId
             }
         } catch {
+            NSLog("[LiveDatabase] store error: \(error)")
             logger.error("[LiveDatabase] store error: \(error)")
             return nil
         }

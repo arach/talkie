@@ -36,6 +36,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         Task { @MainActor in
             AppLauncher.shared.ensureHelpersRunning()
         }
+
+        // Register URL handler for Apple Events
+        let eventManager = NSAppleEventManager.shared()
+        eventManager.setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+        logger.info("URL handler registered")
+    }
+
+    // MARK: - URL Handling
+
+    @objc func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: urlString) else {
+            NSLog("[AppDelegate] Invalid URL event received")
+            logger.warning("Invalid URL event received")
+            return
+        }
+
+        NSLog("[AppDelegate] Received URL: \(urlString)")
+        logger.info("Received URL: \(urlString)")
+
+        // Handle talkie://interstitial/{id}
+        if url.scheme == "talkie", url.host == "interstitial",
+           let idString = url.pathComponents.dropFirst().first,
+           let id = Int64(idString) {
+            NSLog("[AppDelegate] Opening interstitial for utterance ID: \(id)")
+            logger.info("Opening interstitial for utterance ID: \(id)")
+            Task { @MainActor in
+                InterstitialManager.shared.show(utteranceId: id)
+            }
+        } else {
+            NSLog("[AppDelegate] URL not handled: scheme=\(url.scheme ?? "nil"), host=\(url.host ?? "nil")")
+        }
     }
 
     private func configureWindowAppearance() {

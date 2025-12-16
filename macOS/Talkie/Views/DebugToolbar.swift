@@ -272,6 +272,9 @@ struct ListViewDebugContent: View {
                     DebugActionButton(icon: "bell.badge", label: "Test Notification") {
                         sendTestNotification()
                     }
+                    DebugActionButton(icon: "sparkles", label: "Test Interstitial") {
+                        testInterstitial()
+                    }
                 }
             }
 
@@ -382,6 +385,27 @@ struct ListViewDebugContent: View {
             SystemEventManager.shared.logSync(.system, "iOS push notification queued")
         } catch {
             SystemEventManager.shared.logSync(.error, "Failed to queue notification", detail: error.localizedDescription)
+        }
+    }
+
+    private func testInterstitial() {
+        NSLog("[DEBUG] Testing interstitial panel directly")
+        SystemEventManager.shared.logSync(.system, "Testing interstitial panel")
+
+        // Test with a fake utterance ID - the panel should show an error if not found
+        // or work if there's a matching record in the Live database
+        Task { @MainActor in
+            // First try to find a recent utterance from the Live database
+            if let recentUtterance = LiveDataStore.shared.fetchRecentUtterance() {
+                NSLog("[DEBUG] Found recent utterance ID: \(recentUtterance.id)")
+                SystemEventManager.shared.logSync(.system, "Testing with utterance", detail: "ID: \(recentUtterance.id)")
+                InterstitialManager.shared.show(utteranceId: recentUtterance.id)
+            } else {
+                // Show with test ID - will demonstrate error handling
+                NSLog("[DEBUG] No recent utterance, testing with ID 999")
+                SystemEventManager.shared.logSync(.system, "No utterance found", detail: "Testing with ID 999")
+                InterstitialManager.shared.show(utteranceId: 999)
+            }
         }
     }
 }

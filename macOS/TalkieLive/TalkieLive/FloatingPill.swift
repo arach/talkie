@@ -8,6 +8,9 @@
 import SwiftUI
 import AppKit
 import Combine
+import os
+
+private let pillLogger = Logger(subsystem: "jdi.talkie.live", category: "FloatingPill")
 
 // MARK: - Floating Pill Controller
 
@@ -126,8 +129,9 @@ final class FloatingPillController: ObservableObject {
     private func createPill(on screen: NSScreen) {
         let pillView = FloatingPillView()
         let hostingView = NSHostingView(rootView: pillView.environmentObject(self))
-        // Larger frame to accommodate expanded state
-        hostingView.frame = NSRect(x: 0, y: 0, width: 80, height: 22)
+        // Frame must be large enough to accommodate expanded state for proper hit testing
+        // Expanded pill shows text like "✨ → Edit", timer, etc. - needs ~150px width
+        hostingView.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
 
         let panel = NSPanel(
             contentRect: hostingView.frame,
@@ -330,19 +334,26 @@ final class FloatingPillController: ObservableObject {
         }
     }
 
-    // Control callback
-    var onTap: (() -> Void)?
+    // Control callback - takes Bool indicating if Shift was held (for interstitial mode)
+    var onTapWithShift: ((Bool) -> Void)?
 
     func handleTap() {
+        // Check if Shift is held for interstitial mode
+        let shiftHeld = NSEvent.modifierFlags.contains(.shift)
+        NSLog("[FloatingPill] handleTap: state=%@, shiftHeld=%d", state.rawValue, shiftHeld ? 1 : 0)
+
         // If transcribing/routing and stuck, allow pushing to queue for later retry
         if state == .transcribing || state == .routing {
+            NSLog("[FloatingPill] → pushing to queue")
             onPushToQueue?()  // Save audio to queue and reset state
         }
         // If there are queued items and we're idle, show the failed queue picker
         else if pendingQueueCount > 0 && state == .idle {
+            NSLog("[FloatingPill] → showing failed queue")
             showFailedQueue()
         } else {
-            onTap?()
+            NSLog("[FloatingPill] → calling onTapWithShift(%d)", shiftHeld ? 1 : 0)
+            onTapWithShift?(shiftHeld)
         }
     }
 
@@ -380,7 +391,8 @@ struct FloatingPillView: View {
             onTap: { controller.handleTap() },
             onQueueTap: { FailedQueueController.shared.show() }
         )
-        .frame(width: 80, height: 22)
+        // Frame must accommodate expanded state for proper hit testing
+        .frame(width: 160, height: 30)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
