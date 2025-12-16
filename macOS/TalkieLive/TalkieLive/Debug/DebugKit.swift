@@ -164,7 +164,7 @@ final class WaveformTuning: ObservableObject {
         variationAmount = 0.3
         inputSensitivity = 1.0
 
-        SystemEventManager.shared.log(.ui, "Waveform tuning reset")
+        AppLogger.shared.log(.ui, "Waveform tuning reset")
     }
 
     private func saveSettings() {
@@ -251,7 +251,7 @@ final class OverlayTuning: ObservableObject {
         overlayWidth = 400.0
         overlayHeight = 56.0
 
-        SystemEventManager.shared.log(.ui, "Overlay tuning reset")
+        AppLogger.shared.log(.ui, "Overlay tuning reset")
     }
 
     private func saveSettings() {
@@ -372,7 +372,7 @@ final class ParticleTuning: ObservableObject {
         inputSensitivity = 1.0  // Reset to default when applying preset
         activePresetId = preset.id
 
-        SystemEventManager.shared.log(.ui, "Applied preset", detail: preset.name)
+        AppLogger.shared.log(.ui, "Applied preset", detail: preset.name)
     }
 
     func saveAsPreset(name: String) -> ParticlePreset {
@@ -394,7 +394,7 @@ final class ParticleTuning: ObservableObject {
         activePresetId = preset.id
         saveCustomPresets()
 
-        SystemEventManager.shared.log(.ui, "Saved preset", detail: name)
+        AppLogger.shared.log(.ui, "Saved preset", detail: name)
         return preset
     }
 
@@ -408,12 +408,12 @@ final class ParticleTuning: ObservableObject {
         }
         saveCustomPresets()
 
-        SystemEventManager.shared.log(.ui, "Deleted preset", detail: preset.name)
+        AppLogger.shared.log(.ui, "Deleted preset", detail: preset.name)
     }
 
     func reset() {
         apply(preset: .defaultPreset)
-        SystemEventManager.shared.log(.ui, "Particle tuning reset")
+        AppLogger.shared.log(.ui, "Particle tuning reset")
     }
 
     // MARK: - Persistence
@@ -514,7 +514,7 @@ final class SystemEventManager: ObservableObject {
     }
 }
 
-struct SystemEvent: Identifiable {
+struct SystemEvent: Identifiable, Equatable {
     let id = UUID()
     let timestamp = Date()
     let type: EventType
@@ -2788,7 +2788,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                         DebugActionButton(icon: "trash", label: "Prune Old Data") {
                             let hours = LiveSettings.shared.utteranceTTLHours
                             LiveDatabase.prune(olderThanHours: hours)
-                            SystemEventManager.shared.log(.database, "Pruned data", detail: "Older than \(hours)h")
+                            AppLogger.shared.log(.database, "Pruned data", detail: "Older than \(hours)h")
                         }
 
                         DebugActionButton(icon: "xmark.circle", label: "Clear Events") {
@@ -2796,12 +2796,12 @@ struct DebugToolbarOverlay<Content: View>: View {
                         }
 
                         DebugActionButton(icon: "text.bubble", label: "Test Log") {
-                            SystemEventManager.shared.log(.system, "Test event", detail: "This is a test log entry")
+                            AppLogger.shared.log(.system, "Test event", detail: "This is a test log entry")
                         }
 
                         DebugActionButton(icon: "arrow.counterclockwise", label: "Reset Onboarding") {
                             OnboardingManager.shared.resetOnboarding()
-                            SystemEventManager.shared.log(.system, "Onboarding reset", detail: "Will show on next app launch")
+                            AppLogger.shared.log(.system, "Onboarding reset", detail: "Will show on next app launch")
                         }
 
                         DebugActionButton(icon: "arrow.down.circle", label: "Simulate No Model") {
@@ -2809,7 +2809,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                             OnboardingManager.shared.downloadProgress = 0
                             OnboardingManager.shared.downloadStatus = ""
                             OnboardingManager.shared.currentStep = .modelDownload
-                            SystemEventManager.shared.log(.system, "Model state reset", detail: "Simulating no model installed")
+                            AppLogger.shared.log(.system, "Model state reset", detail: "Simulating no model installed")
                         }
 
                         DebugActionButton(icon: "sparkles", label: "Test Interstitial") {
@@ -2924,7 +2924,7 @@ struct DebugToolbarOverlay<Content: View>: View {
         NSLog("[DEBUG] Testing interstitial flow")
         NSLog("[DEBUG] Database path: \(LiveDatabase.databaseURL.path)")
         NSLog("[DEBUG] Database count: \(LiveDatabase.count())")
-        SystemEventManager.shared.log(.system, "Testing interstitial", detail: "Creating test utterance")
+        AppLogger.shared.log(.system, "Testing interstitial", detail: "Creating test utterance")
 
         // Create a test utterance in the database
         let testText = "This is a test utterance for interstitial debugging at \(Date())"
@@ -2958,12 +2958,12 @@ struct DebugToolbarOverlay<Content: View>: View {
         // Store test record and get its ID
         guard let utteranceId = LiveDatabase.store(utterance) else {
             NSLog("[DEBUG] Failed to create test utterance")
-            SystemEventManager.shared.log(.error, "Interstitial test failed", detail: "Could not create utterance")
+            AppLogger.shared.log(.error, "Interstitial test failed", detail: "Could not create utterance")
             return
         }
 
         NSLog("[DEBUG] Created test utterance ID: \(utteranceId)")
-        SystemEventManager.shared.log(.system, "Test utterance created", detail: "ID: \(utteranceId)")
+        AppLogger.shared.log(.system, "Test utterance created", detail: "ID: \(utteranceId)")
 
         // Open the interstitial URL
         let urlString = "talkie://interstitial/\(utteranceId)"
@@ -2973,7 +2973,7 @@ struct DebugToolbarOverlay<Content: View>: View {
         }
 
         NSLog("[DEBUG] Opening URL: \(urlString)")
-        SystemEventManager.shared.log(.system, "Opening interstitial", detail: urlString)
+        AppLogger.shared.log(.system, "Opening interstitial", detail: urlString)
 
         NSWorkspace.shared.open(url)
     }
@@ -2988,7 +2988,7 @@ struct DebugConsoleSheet: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("System Console")
+                Text("System Logs")
                     .font(.headline)
                     .foregroundColor(.white)
 
@@ -3003,10 +3003,10 @@ struct DebugConsoleSheet: View {
 
             Divider()
 
-            // Console view
-            EmbeddedConsoleView()
+            // OSLogStore-based console view
+            LogViewerConsole()
         }
-        .frame(width: 700, height: 500)
+        .frame(width: 800, height: 550)
         .background(Color(white: 0.08))
     }
 }

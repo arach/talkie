@@ -3065,6 +3065,24 @@ struct AboutSettingsSection: View {
         appPath.hasPrefix("/Applications")
     }
 
+    private var buildTypeLabel: String {
+        if isProductionRelease && isInstalledLocation {
+            return "Production"
+        } else if isProductionRelease {
+            return "Release"
+        } else {
+            return "Debug"
+        }
+    }
+
+    private var buildTypeColor: Color {
+        if isProductionRelease && isInstalledLocation {
+            return SemanticColor.success
+        } else {
+            return SemanticColor.warning
+        }
+    }
+
     var body: some View {
         SettingsPageContainer {
             SettingsPageHeader(
@@ -3073,24 +3091,19 @@ struct AboutSettingsSection: View {
                 subtitle: "Version information and system diagnostics."
             )
         } content: {
-            // App Info
+            // App Info (consolidated)
             SettingsCard(title: "APPLICATION") {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     AboutInfoRow(label: "Talkie Live", value: "v\(appVersion) (\(buildNumber))")
-                    AboutInfoRow(label: "Bundle ID", value: bundleID)
-                    AboutInfoRow(label: "Build Type", value: isProductionRelease ? "Release" : "Debug", valueColor: isProductionRelease ? SemanticColor.success : SemanticColor.warning)
-                }
-            }
+                    AboutInfoRow(label: "Process ID", value: String(ProcessInfo.processInfo.processIdentifier), isMonospaced: true)
+                    AboutInfoRow(label: "Bundle ID", value: bundleID, isMonospaced: true)
+                    AboutInfoRow(label: "Build", value: buildTypeLabel, valueColor: buildTypeColor)
 
-            // Installation
-            SettingsCard(title: "INSTALLATION") {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    AboutInfoRow(
-                        label: "Install Location",
-                        value: isInstalledLocation ? "System Applications" : "Development",
-                        valueColor: isInstalledLocation ? SemanticColor.success : SemanticColor.warning
-                    )
+                    Divider()
+                        .background(TalkieTheme.border.opacity(0.5))
+
                     AboutInfoRow(label: "Path", value: appPath, isMonospaced: true, canCopy: true)
+                    AboutInfoRow(label: "macOS", value: ProcessInfo.processInfo.operatingSystemVersionString)
                 }
             }
 
@@ -3113,17 +3126,9 @@ struct AboutSettingsSection: View {
                     }
 
                     if engineClient.isConnected, let status = engineClient.status {
-                        AboutInfoRow(label: "Process ID", value: String(status.pid))
-                        AboutInfoRow(label: "Engine Bundle", value: status.bundleId, isMonospaced: true)
+                        AboutInfoRow(label: "Engine PID", value: String(status.pid), isMonospaced: true)
+                        AboutInfoRow(label: "Bundle", value: status.bundleId, isMonospaced: true)
                     }
-                }
-            }
-
-            // System Info
-            SettingsCard(title: "SYSTEM") {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    AboutInfoRow(label: "macOS", value: ProcessInfo.processInfo.operatingSystemVersionString)
-                    AboutInfoRow(label: "Process ID", value: String(ProcessInfo.processInfo.processIdentifier))
                 }
             }
 
@@ -3162,11 +3167,11 @@ struct AboutSettingsSection: View {
         Talkie Live Diagnostics
         =======================
         Version: \(appVersion) (\(buildNumber))
+        PID: \(ProcessInfo.processInfo.processIdentifier)
         Bundle ID: \(bundleID)
-        Build Type: \(isProductionRelease ? "Release" : "Debug")
-        Install Location: \(appPath)
+        Build: \(buildTypeLabel)
+        Path: \(appPath)
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
-        Process ID: \(ProcessInfo.processInfo.processIdentifier)
 
         TalkieEngine:
         """

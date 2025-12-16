@@ -8,6 +8,7 @@ private let logger = Logger(subsystem: "jdi.talkie.live", category: "Dependencie
 protocol LiveAudioCapture {
     func startCapture(onChunk: @escaping (String) -> Void)  // Receives file path
     func stopCapture()
+    var onCaptureError: ((String) -> Void)? { get set }  // Called when capture fails to start
 }
 
 protocol LiveRouter {
@@ -18,6 +19,7 @@ protocol LiveRouter {
 
 final class StubAudioCapture: LiveAudioCapture {
     private var timer: Timer?
+    var onCaptureError: ((String) -> Void)?
 
     func startCapture(onChunk: @escaping (String) -> Void) {
         logger.info("Audio capture started")

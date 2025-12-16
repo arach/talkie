@@ -1102,7 +1102,7 @@ private struct PermissionsStepView: View {
                             Task {
                                 await manager.requestMicrophonePermission()
                                 if !manager.hasMicrophonePermission {
-                                    SystemEventManager.shared.log(.error, "Microphone permission denied", detail: "User denied or dismissed the permission dialog")
+                                    AppLogger.shared.log(.error, "Microphone permission denied", detail: "User denied or dismissed the permission dialog")
                                 }
                             }
                         }

@@ -23,7 +23,7 @@ final class QuickActionRunner {
     /// Execute a quick action on a Live utterance
     func run(_ action: QuickActionKind, for live: LiveUtterance) async {
         logger.info("Running action: \(action.displayName) for Live #\(live.id ?? 0)")
-        SystemEventManager.shared.log(.system, "Quick Action", detail: action.displayName)
+        AppLogger.shared.log(.system, "Quick Action", detail: action.displayName)
 
         switch action {
         // Execute-only actions (no promotion)
@@ -63,27 +63,27 @@ final class QuickActionRunner {
         let router = TranscriptRouter(mode: .paste)
         await router.handle(transcript: live.text)
         logger.info("Typed text again for Live #\(live.id ?? 0)")
-        SystemEventManager.shared.log(.ui, "Text typed", detail: "\(live.text.prefix(40))...")
+        AppLogger.shared.log(.ui, "Text typed", detail: "\(live.text.prefix(40))...")
     }
 
     private func copyToClipboard(_ live: LiveUtterance) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(live.text, forType: .string)
         logger.info("Copied to clipboard for Live #\(live.id ?? 0)")
-        SystemEventManager.shared.log(.ui, "Copied", detail: "\(live.wordCount ?? 0) words")
+        AppLogger.shared.log(.ui, "Copied", detail: "\(live.wordCount ?? 0) words")
     }
 
     private func retryTranscription(_ live: LiveUtterance) async {
         guard live.hasAudio, let audioURL = live.audioURL else {
             logger.error("No audio file for Live #\(live.id ?? 0)")
-            SystemEventManager.shared.log(.error, "Retry failed", detail: "No audio file available")
+            AppLogger.shared.log(.error, "Retry failed", detail: "No audio file available")
             return
         }
 
         // TODO: Re-transcribe from the saved audio file
         // This will need access to the transcription service
         logger.info("Retry transcription requested for Live #\(live.id ?? 0)")
-        SystemEventManager.shared.log(.transcription, "Retry requested", detail: audioURL.lastPathComponent)
+        AppLogger.shared.log(.transcription, "Retry requested", detail: audioURL.lastPathComponent)
     }
 
     // MARK: - Promote-to-Memo Actions
@@ -102,7 +102,7 @@ final class QuickActionRunner {
         LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
 
         logger.info("Promoted Live #\(live.id ?? 0) to memo: \(memoID)")
-        SystemEventManager.shared.log(.database, "Promoted to memo", detail: memoID)
+        AppLogger.shared.log(.database, "Promoted to memo", detail: memoID)
     }
 
     private func createResearchMemo(_ live: LiveUtterance) async {
@@ -117,7 +117,7 @@ final class QuickActionRunner {
         LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
 
         logger.info("Created research memo from Live #\(live.id ?? 0): \(memoID)")
-        SystemEventManager.shared.log(.database, "Research memo created", detail: memoID)
+        AppLogger.shared.log(.database, "Research memo created", detail: memoID)
     }
 
     // MARK: - Promote-to-Command Actions
@@ -134,7 +134,7 @@ final class QuickActionRunner {
         LiveDatabase.markAsCommand(id: live.id, commandID: commandID)
 
         logger.info("Sent Live #\(live.id ?? 0) to Claude: \(commandID)")
-        SystemEventManager.shared.log(.system, "Sent to Claude", detail: commandID)
+        AppLogger.shared.log(.system, "Sent to Claude", detail: commandID)
     }
 
     private func runWorkflow(_ live: LiveUtterance) async {
@@ -149,7 +149,7 @@ final class QuickActionRunner {
         LiveDatabase.markAsCommand(id: live.id, commandID: commandID)
 
         logger.info("Started workflow for Live #\(live.id ?? 0): \(commandID)")
-        SystemEventManager.shared.log(.system, "Workflow started", detail: commandID)
+        AppLogger.shared.log(.system, "Workflow started", detail: commandID)
     }
 
     // MARK: - Meta Actions
@@ -157,7 +157,7 @@ final class QuickActionRunner {
     private func markIgnored(_ live: LiveUtterance) {
         LiveDatabase.markAsIgnored(id: live.id)
         logger.info("Marked Live #\(live.id ?? 0) as ignored")
-        SystemEventManager.shared.log(.database, "Marked ignored", detail: "Live #\(live.id ?? 0)")
+        AppLogger.shared.log(.database, "Marked ignored", detail: "Live #\(live.id ?? 0)")
     }
 }
 

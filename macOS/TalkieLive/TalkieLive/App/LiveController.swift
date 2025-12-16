@@ -19,7 +19,7 @@ final class LiveController: ObservableObject {
         }
     }
 
-    private let audio: LiveAudioCapture
+    private var audio: LiveAudioCapture
     private let transcription: any TranscriptionService
     private let router: LiveRouter
 
@@ -43,7 +43,34 @@ final class LiveController: ObservableObject {
         self.audio = audio
         self.transcription = transcription
         self.router = router
+
+        // Wire up capture error handler
+        self.audio.onCaptureError = { [weak self] errorMsg in
+            Task { @MainActor [weak self] in
+                self?.handleCaptureError(errorMsg)
+            }
+        }
+
         logger.info("LiveController initialized")
+    }
+
+    /// Handle audio capture startup failure
+    private func handleCaptureError(_ errorMsg: String) {
+        guard state == .listening else { return }
+
+        logger.error("Audio capture failed: \(errorMsg)")
+        AppLogger.shared.log(.error, "Mic capture failed", detail: errorMsg)
+
+        // Play error sound
+        NSSound.beep()
+
+        // Reset state
+        recordingStartTime = nil
+        capturedContext = nil
+        startApp = nil
+        pendingAudioFilename = nil
+        traceID = nil
+        state = .idle
     }
 
     /// Toggle mode: press to start, press to stop
@@ -87,17 +114,15 @@ final class LiveController: ObservableObject {
     @Published private(set) var isCancelled = false
 
     /// Cancel recording during listening phase (before transcription starts)
+    /// Audio is still preserved in the queue for later access
     func cancelListening() {
         guard state == .listening else { return }
         isCancelled = true
+        // stopCapture() will trigger process() which will see isCancelled
+        // and save the audio with mode="cancelled"
         audio.stopCapture()
-        recordingStartTime = nil
-        capturedContext = nil
-        startApp = nil
-        pendingAudioFilename = nil
-        traceID = nil
-        state = .idle
-        logger.info("Recording cancelled during listening")
+        // Don't clear state here - let process() handle cleanup after saving audio
+        logger.info("Recording cancelled during listening - audio will be preserved")
     }
 
     /// Push current transcription to queue for later retry
@@ -128,7 +153,7 @@ final class LiveController: ObservableObject {
                 pasteTimestamp: nil
             )
             LiveDatabase.store(utterance)
-            SystemEventManager.shared.log(.database, "Pushed to queue", detail: "Audio saved for retry")
+            AppLogger.shared.log(.database, "Pushed to queue", detail: "Audio saved for retry")
             SoundManager.shared.playPasted()  // Confirmation sound
         }
 
@@ -147,6 +172,36 @@ final class LiveController: ObservableObject {
     /// Reset cancelled flag when starting a new recording
     private func resetCancelled() {
         isCancelled = false
+    }
+
+    /// Force reset to idle state - use when stuck or as emergency exit
+    /// This will cancel any in-flight transcription and reset all state
+    func forceReset() {
+        logger.warning("Force reset requested from state: \(self.state.rawValue)")
+        AppLogger.shared.log(.system, "Force reset", detail: "Was in \(state.rawValue)")
+
+        // Cancel any pending transcription
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+
+        // Stop any active capture
+        if state == .listening {
+            audio.stopCapture()
+        }
+
+        // Clear all state
+        isCancelled = false
+        recordingStartTime = nil
+        capturedContext = nil
+        startApp = nil
+        pendingAudioFilename = nil
+        traceID = nil
+        routeToInterstitial = false
+        createdInTalkieView = false
+
+        // Reset to idle
+        state = .idle
+        logger.info("Force reset complete - now idle")
     }
 
     /// Get the start app for return-to-origin feature
@@ -175,11 +230,11 @@ final class LiveController: ObservableObject {
         let appName = capturedContext?.activeAppName ?? "Unknown"
         let windowTitle = capturedContext?.activeWindowTitle ?? ""
         let queueNote = createdInTalkieView ? " [will queue]" : ""
-        SystemEventManager.shared.log(.system, "Context captured", detail: "\(appName) — \(windowTitle.prefix(30))\(queueNote)")
+        AppLogger.shared.log(.system, "Context captured", detail: "\(appName) — \(windowTitle.prefix(30))\(queueNote)")
 
         // Play start sound
         SoundManager.shared.playStart()
-        SystemEventManager.shared.log(.audio, "Recording started", detail: "Listening for audio input...")
+        AppLogger.shared.log(.audio, "Recording started", detail: "Listening for audio input...")
 
         // Track milestone
         ProcessingMilestones.shared.markRecordingStarted()
@@ -214,7 +269,7 @@ final class LiveController: ObservableObject {
         // Helper to log timing milestones
         func logTiming(_ step: String) {
             let ms = Int(Date().timeIntervalSince(pipelineStart) * 1000)
-            SystemEventManager.shared.log(.transcription, "⏱ \(step)", detail: "+\(ms)ms")
+            AppLogger.shared.log(.transcription, "⏱ \(step)", detail: "+\(ms)ms")
         }
 
         logTiming("Pipeline start")
@@ -224,7 +279,7 @@ final class LiveController: ObservableObject {
         // Once copied, the permanent file is NEVER moved or modified - only read or copied
         let tempURL = URL(fileURLWithPath: tempAudioPath)
         guard let audioFilename = AudioStorage.copyToStorage(tempURL) else {
-            SystemEventManager.shared.log(.error, "Audio save failed", detail: "Could not copy temp file to storage")
+            AppLogger.shared.log(.error, "Audio save failed", detail: "Could not copy temp file to storage")
             state = .idle
             return
         }
@@ -251,7 +306,7 @@ final class LiveController: ObservableObject {
         #else
         let traceSuffix = ""
         #endif
-        SystemEventManager.shared.log(.file, "Audio saved", detail: "\(audioFilename) (\(fileSizeStr)) • \(fileSaveMs)ms\(traceSuffix)")
+        AppLogger.shared.log(.file, "Audio saved", detail: "\(audioFilename) (\(fileSizeStr)) • \(fileSaveMs)ms\(traceSuffix)")
 
         // Get permanent path for transcription
         let permanentAudioPath = AudioStorage.url(for: audioFilename).path
@@ -270,7 +325,7 @@ final class LiveController: ObservableObject {
             if context.contextChanged {
                 let startApp = context.activeAppName ?? "?"
                 let endApp = context.endAppName ?? "?"
-                SystemEventManager.shared.log(.system, "Context changed", detail: "\(startApp) → \(endApp)")
+                AppLogger.shared.log(.system, "Context changed", detail: "\(startApp) → \(endApp)")
             }
         }
         logTiming("End context captured")
@@ -288,7 +343,7 @@ final class LiveController: ObservableObject {
 
         // Detailed audio info
         let durationStr = String(format: "%.1fs", durationSeconds)
-        SystemEventManager.shared.log(.audio, "Recording finished", detail: "\(durationStr) • \(fileSizeStr)")
+        AppLogger.shared.log(.audio, "Recording finished", detail: "\(durationStr) • \(fileSizeStr)")
 
         state = .transcribing
         logTiming("State → transcribing")
@@ -297,7 +352,7 @@ final class LiveController: ObservableObject {
         // Log transcription start with model info and overhead
         let modelName = settings.selectedModelId
         let preMs = Int(engineStart.timeIntervalSince(pipelineStart) * 1000)  // Time from stop-recording to engine-submit
-        SystemEventManager.shared.log(.transcription, "Transcribing...", detail: "Model: \(modelName) • pre: \(preMs)ms\(traceSuffix)")
+        AppLogger.shared.log(.transcription, "Transcribing...", detail: "Model: \(modelName) • pre: \(preMs)ms\(traceSuffix)")
 
         // Track milestone
         ProcessingMilestones.shared.markTranscribing()
@@ -336,7 +391,19 @@ final class LiveController: ObservableObject {
 
             // Check if user cancelled during transcription
             if isCancelled {
-                logger.info("Recording was cancelled - skipping paste")
+                // Don't save to database - user explicitly cancelled
+                // Audio file is already preserved in AudioStorage, user can drop it back in if they change their mind
+                let audioPath = AudioStorage.url(for: audioFilename).path
+                logger.info("Recording cancelled - audio preserved at: \(audioPath)")
+                AppLogger.shared.log(.system, "Recording cancelled", detail: "Audio saved: \(audioFilename)")
+
+                // Reset state
+                recordingStartTime = nil
+                capturedContext = nil
+                startApp = nil
+                pendingAudioFilename = nil
+                traceID = nil
+                isCancelled = false
                 state = .idle
                 return
             }
@@ -353,7 +420,7 @@ final class LiveController: ObservableObject {
             if routeToInterstitial {
                 NSLog("[LiveController] === INTERSTITIAL MODE ACTIVATED ===")
                 logger.info("=== INTERSTITIAL MODE ACTIVATED ===")
-                SystemEventManager.shared.log(.system, "Routing to interstitial", detail: "Shift-click mode")
+                AppLogger.shared.log(.system, "Routing to interstitial", detail: "Shift-click mode")
 
                 let routeEnd = Date()
                 let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
@@ -366,7 +433,7 @@ final class LiveController: ObservableObject {
                 metadata.perfPostMs = postMs
 
                 let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
-                SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
+                AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
 
                 // Store in GRDB with mode "interstitial", pasteTimestamp = nil
                 logTiming("Creating LiveUtterance for interstitial")
@@ -422,12 +489,12 @@ final class LiveController: ObservableObject {
             // Decide: queue or paste immediately?
             if createdInTalkieView {
                 // Created inside Talkie Live → queue it (don't paste)
-                SystemEventManager.shared.log(.system, "Queueing transcript", detail: "Created in Talkie Live")
+                AppLogger.shared.log(.system, "Queueing transcript", detail: "Created in Talkie Live")
 
                 // Play a different sound for queued (reuse pasted for now)
                 SoundManager.shared.playPasted()
                 logTiming("Pasted sound triggered")
-                SystemEventManager.shared.log(.ui, "Transcript queued", detail: "\(result.text.prefix(40))...\(traceSuffix)")
+                AppLogger.shared.log(.ui, "Transcript queued", detail: "\(result.text.prefix(40))...\(traceSuffix)")
 
                 let routeEnd = Date()
                 let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)  // End-to-end: stop-recording → delivery
@@ -440,9 +507,9 @@ final class LiveController: ObservableObject {
                 metadata.perfPostMs = postMs
 
                 let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
-                SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
+                AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
                 #if DEBUG
-                SystemEventManager.shared.log(.transcription, "Latency breakdown", detail: "e2e: \(totalMs)ms • engine: \(transcriptionMs)ms • app: \(appMs)ms (pre: \(preMs)ms, post: \(postMs)ms)\(traceSuffix)")
+                AppLogger.shared.log(.transcription, "Latency breakdown", detail: "e2e: \(totalMs)ms • engine: \(transcriptionMs)ms • app: \(appMs)ms (pre: \(preMs)ms, post: \(postMs)ms)\(traceSuffix)")
                 #endif
 
                 // Store in GRDB with createdInTalkieView = true, pasteTimestamp = nil
@@ -471,7 +538,7 @@ final class LiveController: ObservableObject {
             } else {
                 // Normal flow: paste immediately
                 let routingMode = settings.routingMode == .paste ? "Paste" : "Clipboard"
-                SystemEventManager.shared.log(.system, "Routing transcript", detail: "\(routingMode) mode")
+                AppLogger.shared.log(.system, "Routing transcript", detail: "\(routingMode) mode")
 
                 logTiming("Calling router.handle")
                 await router.handle(transcript: result.text)
@@ -481,7 +548,7 @@ final class LiveController: ObservableObject {
                 // Play pasted sound
                 SoundManager.shared.playPasted()
                 logTiming("Pasted sound triggered")
-                SystemEventManager.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...\(traceSuffix)")
+                AppLogger.shared.log(.ui, "Text delivered", detail: "\(result.text.prefix(40))...\(traceSuffix)")
 
                 let routeEnd = Date()
                 let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)  // End-to-end: stop-recording → delivery
@@ -494,9 +561,9 @@ final class LiveController: ObservableObject {
                 metadata.perfPostMs = postMs
 
                 let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
-                SystemEventManager.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
+                AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
                 #if DEBUG
-                SystemEventManager.shared.log(.transcription, "Latency breakdown", detail: "e2e: \(totalMs)ms • engine: \(transcriptionMs)ms • app: \(appMs)ms (pre: \(preMs)ms, post: \(postMs)ms)\(traceSuffix)")
+                AppLogger.shared.log(.transcription, "Latency breakdown", detail: "e2e: \(totalMs)ms • engine: \(transcriptionMs)ms • app: \(appMs)ms (pre: \(preMs)ms, post: \(postMs)ms)\(traceSuffix)")
                 #endif
 
                 // Return to origin app if enabled and context changed
@@ -508,7 +575,7 @@ final class LiveController: ObservableObject {
                     try? await Task.sleep(for: .milliseconds(100))
                     ContextCapture.activateApp(originApp)
                     logTiming("Returned to origin app")
-                    SystemEventManager.shared.log(.system, "Returned to origin", detail: originApp.localizedName ?? "Unknown")
+                    AppLogger.shared.log(.system, "Returned to origin", detail: originApp.localizedName ?? "Unknown")
                 }
 
                 // Store in GRDB with pasteTimestamp = now (already pasted)
@@ -537,7 +604,7 @@ final class LiveController: ObservableObject {
 
             logTiming("Counting DB records")
             let dbRecordCount = LiveDatabase.count()
-            SystemEventManager.shared.log(.database, "Record stored", detail: "Total: \(dbRecordCount) utterances\(traceSuffix)")
+            AppLogger.shared.log(.database, "Record stored", detail: "Total: \(dbRecordCount) utterances\(traceSuffix)")
 
             // Track milestone
             ProcessingMilestones.shared.markDbRecordStored()
@@ -549,7 +616,7 @@ final class LiveController: ObservableObject {
             logTiming("UtteranceStore refreshed")
 
             // Final success log
-            SystemEventManager.shared.log(.system, "Pipeline complete", detail: "Ready for next recording")
+            AppLogger.shared.log(.system, "Pipeline complete", detail: "Ready for next recording")
 
             // Track final milestone
             ProcessingMilestones.shared.markSuccess()
@@ -557,11 +624,11 @@ final class LiveController: ObservableObject {
 
         } catch {
             logger.error("Transcription error: \(error.localizedDescription)")
-            SystemEventManager.shared.log(.error, "Transcription failed", detail: "\(error.localizedDescription)\(traceSuffix)")
+            AppLogger.shared.log(.error, "Transcription failed", detail: "\(error.localizedDescription)\(traceSuffix)")
 
             // Even on failure, we saved the audio - store a record for retry
             // audioFilename is guaranteed valid (we guard at the start of process())
-            SystemEventManager.shared.log(.file, "Audio preserved", detail: "\(audioFilename) - queued for retry")
+            AppLogger.shared.log(.file, "Audio preserved", detail: "\(audioFilename) - queued for retry")
 
             // Store a record with failed status so we can retry later
             let utterance = LiveUtterance(
@@ -583,7 +650,7 @@ final class LiveController: ObservableObject {
             )
             LiveDatabase.store(utterance)
 
-            SystemEventManager.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
+            AppLogger.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
         }
 
         recordingStartTime = nil

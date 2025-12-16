@@ -114,6 +114,9 @@ final class MicrophoneCapture: LiveAudioCapture {
     private var isCapturing = false
     private var fileCreated = false
 
+    /// Callback for capture failure - called on main thread
+    var onCaptureError: ((String) -> Void)?
+
     func startCapture(onChunk: @escaping (String) -> Void) {
         guard !isCapturing else {
             logger.warning("Already capturing")
@@ -171,6 +174,14 @@ final class MicrophoneCapture: LiveAudioCapture {
         } catch {
             logger.error("Failed to start audio engine: \(error.localizedDescription)")
             inputNode.removeTap(onBus: 0)
+            tempFileURL = nil
+            fileCreated = false
+
+            // Notify about the failure
+            let errorMsg = error.localizedDescription
+            Task { @MainActor [weak self] in
+                self?.onCaptureError?(errorMsg)
+            }
         }
     }
 

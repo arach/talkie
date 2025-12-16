@@ -14,6 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let floatingPill = FloatingPillController.shared
     private var cancellables = Set<AnyCancellable>()
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Menu bar app - keep running when windows are closed
+        return false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settings = LiveSettings.shared
 
@@ -311,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Engine must be running for TalkieLive to work
     private func preloadModel(settings: LiveSettings) async {
         let modelId = settings.selectedModelId
-        SystemEventManager.shared.log(.system, "Loading model", detail: modelId)
+        AppLogger.shared.log(.system, "Loading model", detail: modelId)
         let loadStart = Date()
 
         // Connect to TalkieEngine - NO FALLBACK
@@ -319,24 +324,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let engineConnected = await client.ensureConnected()
 
         guard engineConnected else {
-            SystemEventManager.shared.log(.error, "═══════════════════════════════════════════════════")
-            SystemEventManager.shared.log(.error, "  ❌ TALKIE ENGINE NOT RUNNING")
-            SystemEventManager.shared.log(.error, "  TalkieLive requires TalkieEngine to be running.")
-            SystemEventManager.shared.log(.error, "  Please start the Engine service.")
-            SystemEventManager.shared.log(.error, "═══════════════════════════════════════════════════")
+            AppLogger.shared.log(.error, "═══════════════════════════════════════════════════")
+            AppLogger.shared.log(.error, "  ❌ TALKIE ENGINE NOT RUNNING")
+            AppLogger.shared.log(.error, "  TalkieLive requires TalkieEngine to be running.")
+            AppLogger.shared.log(.error, "  Please start the Engine service.")
+            AppLogger.shared.log(.error, "═══════════════════════════════════════════════════")
             return
         }
 
-        SystemEventManager.shared.log(.system, "═══════════════════════════════════════════════════")
-        SystemEventManager.shared.log(.system, "  🔗 CONNECTED TO TALKIE ENGINE (XPC)")
-        SystemEventManager.shared.log(.system, "═══════════════════════════════════════════════════")
+        AppLogger.shared.log(.system, "═══════════════════════════════════════════════════")
+        AppLogger.shared.log(.system, "  🔗 CONNECTED TO TALKIE ENGINE (XPC)")
+        AppLogger.shared.log(.system, "═══════════════════════════════════════════════════")
 
         do {
             try await client.preloadModel(modelId)
             let totalTime = Date().timeIntervalSince(loadStart)
-            SystemEventManager.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
+            AppLogger.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
         } catch {
-            SystemEventManager.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
+            AppLogger.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
         }
     }
 }

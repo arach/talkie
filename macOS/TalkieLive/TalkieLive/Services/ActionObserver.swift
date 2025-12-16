@@ -261,7 +261,7 @@ final class ActionObserver: ObservableObject {
             logger.info("\(message)")
 
             lastCompletion = "\(appName): Task completed"
-            SystemEventManager.shared.log(.system, "Action completed", detail: "\(appName) finished a task")
+            AppLogger.shared.log(.system, "Action completed", detail: "\(appName) finished a task")
         }
     }
 

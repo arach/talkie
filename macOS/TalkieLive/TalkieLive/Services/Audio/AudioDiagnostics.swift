@@ -321,7 +321,7 @@ final class AudioDiagnostics: ObservableObject {
             fixes.append(.boostInputVolume)
         }
 
-        // 5. Check for USB connection (info only)
+        // 5. Check for USB connection (this is good - external mics are better)
         if let device = selectedDevice ?? defaultDevice {
             let isUSB = device.name.lowercased().contains("usb") ||
                         device.name.contains("ATR") ||  // Audio-Technica
@@ -332,8 +332,8 @@ final class AudioDiagnostics: ObservableObject {
             if isUSB {
                 checks.append(DiagnosticCheck(
                     name: "USB Connection",
-                    detail: "USB microphone detected",
-                    status: .info,
+                    detail: "USB microphone connected",
+                    status: .passed,  // USB is good - external mics are better quality
                     icon: "cable.connector"
                 ))
             }
@@ -360,22 +360,27 @@ final class AudioDiagnostics: ObservableObject {
             ))
         }
 
-        // Build fix list in priority order
-        if !fixes.contains(.boostInputVolume) && inputVolume < 100 {
-            // Always offer volume boost as first try
-            fixes.insert(.boostInputVolume, at: 0)
-        }
+        // Only add fixes if there are actual issues
+        let hasIssues = !issues.isEmpty || checks.contains(where: { $0.status == .failed || $0.status == .warning })
 
-        // Add standard fixes
-        if !fixes.contains(.restartAudioDaemon) {
-            fixes.append(.restartAudioDaemon)
-        }
-        if !fixes.contains(.openSystemSettings) {
-            fixes.append(.openSystemSettings)
-        }
+        if hasIssues {
+            // Build fix list in priority order
+            if !fixes.contains(.boostInputVolume) && inputVolume < 80 {
+                // Offer volume boost if volume is notably low
+                fixes.insert(.boostInputVolume, at: 0)
+            }
 
-        // Always add unplug/replug as the last resort
-        fixes.append(.unplugReplug)
+            // Add standard fixes for troubleshooting
+            if !fixes.contains(.restartAudioDaemon) {
+                fixes.append(.restartAudioDaemon)
+            }
+            if !fixes.contains(.openSystemSettings) {
+                fixes.append(.openSystemSettings)
+            }
+
+            // Add unplug/replug as last resort
+            fixes.append(.unplugReplug)
+        }
 
         // Remove duplicates while preserving order
         var seenFixes = Set<String>()
