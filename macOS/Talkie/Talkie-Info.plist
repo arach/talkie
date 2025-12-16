@@ -16,28 +16,25 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.6.1</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>TalkieEngine URL</string>
+			<string>Talkie URL</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>talkieengine</string>
+				<string>talkie</string>
 			</array>
 		</dict>
 	</array>
-	<key>LSMinimumSystemVersion</key>
-	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-	<key>LSUIElement</key>
-	<true/>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
 
-	<!-- Usage Descriptions: Explain what the background service does -->
-	<key>NSHumanReadableCopyright</key>
-	<string>TalkieEngine is a background transcription service that processes audio files using on-device AI models (Whisper and Parakeet).</string>
+	<!-- Usage Descriptions: Explain why we need each permission -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Talkie needs microphone access to record voice memos and transcribe them using on-device AI.</string>
+
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Talkie needs to control other apps to execute workflows and automation tasks you create.</string>
 </dict>
 </plist>

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1640"
+   LastUpgradeVersion = "1430"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
-      buildArchitectures = "Automatic">
+      runPostActionsOnFailure = "NO">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
-               BuildableName = "TalkieEngine.app"
-               BlueprintName = "TalkieEngine"
-               ReferencedContainer = "container:TalkieEngine.xcodeproj">
+               BlueprintIdentifier = "1EB6D14809D2E04C6D77B8BC"
+               BuildableName = "Talkie.app"
+               BlueprintName = "Talkie"
+               ReferencedContainer = "container:Talkie.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -28,7 +28,18 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "YES">
+      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "1EB6D14809D2E04C6D77B8BC"
+            BuildableName = "Talkie.app"
+            BlueprintName = "Talkie"
+            ReferencedContainer = "container:Talkie.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
+      <Testables>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -44,19 +55,12 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
-            BuildableName = "TalkieEngine.app"
-            BlueprintName = "TalkieEngine"
-            ReferencedContainer = "container:TalkieEngine.xcodeproj">
+            BlueprintIdentifier = "1EB6D14809D2E04C6D77B8BC"
+            BuildableName = "Talkie.app"
+            BlueprintName = "Talkie"
+            ReferencedContainer = "container:Talkie.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "OBJC_DEBUG_MISSING_POOLS"
-            value = "YES"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -68,10 +72,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
-            BuildableName = "TalkieEngine.app"
-            BlueprintName = "TalkieEngine"
-            ReferencedContainer = "container:TalkieEngine.xcodeproj">
+            BlueprintIdentifier = "1EB6D14809D2E04C6D77B8BC"
+            BuildableName = "Talkie.app"
+            BlueprintName = "Talkie"
+            ReferencedContainer = "container:Talkie.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

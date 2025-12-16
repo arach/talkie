@@ -14,11 +14,13 @@ public struct TranscriptionRequest {
     public let audioPath: String  // Path to audio file - caller owns the file
     public let languageHint: String?
     public let isLive: Bool
+    public let externalRefId: String?  // Reference ID for correlating with Engine traces (deep link support)
 
-    public init(audioPath: String, languageHint: String? = nil, isLive: Bool = false) {
+    public init(audioPath: String, languageHint: String? = nil, isLive: Bool = false, externalRefId: String? = nil) {
         self.audioPath = audioPath
         self.languageHint = languageHint
         self.isLive = isLive
+        self.externalRefId = externalRefId
     }
 }
 

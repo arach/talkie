@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftUI
 
 /// Mach service names for XPC connection
 public enum EngineServiceMode: String, CaseIterable {
@@ -34,15 +33,6 @@ public enum EngineServiceMode: String, CaseIterable {
     /// Whether this mode uses orange color (debugging) vs green (stable)
     public var isDebugMode: Bool {
         self == .debug
-    }
-
-    /// Color for UI display (SwiftUI Color)
-    public var color: Color {
-        switch self {
-        case .debug: return .orange
-        case .dev: return Color(red: 0.4, green: 0.8, blue: 0.4)  // Green
-        case .production: return .gray
-        }
     }
 }
 
@@ -84,6 +74,19 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
     func transcribe(
         audioPath: String,
         modelId: String,
+        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
+    )
+
+    /// Transcribe audio file to text with external reference ID for tracing
+    /// - Parameters:
+    ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
+    ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
+    ///   - externalRefId: Optional client-provided reference ID for correlating with Engine traces
+    ///   - reply: Callback with transcript or error message
+    func transcribe(
+        audioPath: String,
+        modelId: String,
+        externalRefId: String?,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 

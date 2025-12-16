@@ -31,6 +31,8 @@ NC='\033[0m'
 NO_LAUNCH=false
 CLEAN=false
 VERBOSE=false
+DEBUG_MODE=false
+EXEC_ONLY=false
 
 AVAILABLE_APPS="live engine core"
 
@@ -79,6 +81,12 @@ for arg in "$@"; do
         --verbose)
             VERBOSE=true
             ;;
+        --debug|-d)
+            DEBUG_MODE=true
+            ;;
+        -e|--exec-only)
+            EXEC_ONLY=true
+            ;;
         --list|-l)
             echo "Available apps:"
             echo "  live    - TalkieLive (always-on transcription UI)"
@@ -91,9 +99,11 @@ for arg in "$@"; do
             echo "  ./run.sh all               Build all apps"
             echo ""
             echo "Options:"
+            echo "  -e            Just run (no build)"
             echo "  --no-launch   Build only"
             echo "  --clean       Clean build"
             echo "  --verbose     Full output"
+            echo "  --debug, -d   Print PID and attach Xcode debugger"
             exit 0
             ;;
         --help|-h)
@@ -104,9 +114,11 @@ for arg in "$@"; do
             echo "Apps: live, engine, core, all"
             echo ""
             echo "Options:"
+            echo "  -e            Just run latest build (no rebuild)"
             echo "  --no-launch   Build only, don't launch"
             echo "  --clean       Clean before building"
             echo "  --verbose     Show full build output"
+            echo "  --debug, -d   Print PID and attach Xcode debugger"
             echo "  --list, -l    List available apps"
             echo "  --help, -h    Show this help"
             exit 0
@@ -212,38 +224,55 @@ build_app() {
         quit_app "$name"
     fi
 
-    # Clean if requested
-    if $CLEAN; then
-        echo -n "  Cleaning... "
-        rm -rf "$build_dir"
-        echo -e "${GREEN}done${NC}"
-    fi
-
-    # Build
-    echo "  Building..."
-    local build_result=0
-
-    if $VERBOSE; then
-        xcodebuild -project "$SCRIPT_DIR/$project" \
-            -scheme "$scheme" \
-            -configuration Debug \
-            -derivedDataPath "$build_dir" \
-            build 2>&1 || build_result=$?
+    # Check if exec-only mode
+    if $EXEC_ONLY; then
+        if [ ! -d "$app_path" ]; then
+            echo -e "  ${RED}App not found at: $app_path${NC}"
+            echo "  Run without -e to build first."
+            return 1
+        fi
+        echo -e "  ${GREEN}Using existing build${NC}"
     else
-        xcodebuild -project "$SCRIPT_DIR/$project" \
-            -scheme "$scheme" \
-            -configuration Debug \
-            -derivedDataPath "$build_dir" \
-            build 2>&1 | build_filter
-        build_result=${PIPESTATUS[0]}
-    fi
+        # Clean if requested
+        if $CLEAN; then
+            echo -n "  Cleaning... "
+            rm -rf "$build_dir"
+            echo -e "${GREEN}done${NC}"
+        fi
 
-    if [ $build_result -ne 0 ]; then
-        echo -e "  ${RED}Build FAILED${NC}"
-        return 1
-    fi
+        # Build
+        echo "  Building..."
+        local build_result=0
 
-    echo -e "  ${GREEN}Build SUCCEEDED${NC}"
+        # Always use proper code signing (not ad-hoc)
+        local SIGN_ARGS="CODE_SIGN_IDENTITY=\"Apple Development\" DEVELOPMENT_TEAM=\"2U83JFPW66\""
+
+        if $VERBOSE; then
+            xcodebuild -project "$SCRIPT_DIR/$project" \
+                -scheme "$scheme" \
+                -configuration Debug \
+                -derivedDataPath "$build_dir" \
+                CODE_SIGN_IDENTITY="Apple Development" \
+                DEVELOPMENT_TEAM="2U83JFPW66" \
+                build 2>&1 || build_result=$?
+        else
+            xcodebuild -project "$SCRIPT_DIR/$project" \
+                -scheme "$scheme" \
+                -configuration Debug \
+                -derivedDataPath "$build_dir" \
+                CODE_SIGN_IDENTITY="Apple Development" \
+                DEVELOPMENT_TEAM="2U83JFPW66" \
+                build 2>&1 | build_filter
+            build_result=${PIPESTATUS[0]}
+        fi
+
+        if [ $build_result -ne 0 ]; then
+            echo -e "  ${RED}Build FAILED${NC}"
+            return 1
+        fi
+
+        echo -e "  ${GREEN}Build SUCCEEDED${NC}"
+    fi
 
     # Launch/install
     if ! $NO_LAUNCH; then
@@ -254,10 +283,85 @@ build_app() {
             open "$app_path"
             echo -e "${GREEN}done${NC}"
         fi
+
+        # Debug mode: attach Xcode
+        if $DEBUG_MODE; then
+            attach_xcode_debugger "$name" "$app_path"
+        fi
     fi
 
     echo ""
     return 0
+}
+
+# Attach Xcode debugger to app
+attach_xcode_debugger() {
+    local app_name=$1
+    local app_path=$2
+
+    echo ""
+    echo -e "${YELLOW}━━━ DEBUG MODE ━━━${NC}"
+
+    # Wait for app to launch (longer for GUI apps)
+    sleep 2
+
+    # Get PID - try multiple patterns
+    local pid=$(pgrep -x "$app_name" | head -1)
+    if [ -z "$pid" ]; then
+        pid=$(pgrep -f "$app_name.app/Contents/MacOS/$app_name" | head -1)
+    fi
+    if [ -z "$pid" ]; then
+        pid=$(pgrep -f "$app_path" | head -1)
+    fi
+
+    if [ -z "$pid" ]; then
+        echo -e "  ${RED}⚠️  Could not find $app_name process${NC}"
+        echo -e "  ${YELLOW}Searching for: $app_name${NC}"
+        echo -e "  ${YELLOW}Running processes:${NC}"
+        ps aux | grep -i "$app_name" | grep -v grep | head -5
+        return 1
+    fi
+
+    echo -e "  📱 App Path: ${CYAN}$app_path${NC}"
+    echo -e "  🔢 PID: ${CYAN}$pid${NC}"
+    echo ""
+
+    # Try to attach Xcode debugger using accessibility
+    echo -n "  🔗 Attempting to attach Xcode debugger... "
+
+    osascript <<EOF 2>/dev/null
+tell application "Xcode"
+    activate
+    delay 0.5
+end tell
+
+tell application "System Events"
+    tell process "Xcode"
+        -- Open Debug menu
+        click menu item "Attach to Process by PID or Name…" of menu "Debug" of menu bar 1
+        delay 0.3
+
+        -- Type PID in the dialog
+        keystroke "$pid"
+        delay 0.2
+
+        -- Press Enter to attach
+        keystroke return
+    end tell
+end tell
+EOF
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${YELLOW}⚠️${NC}"
+        echo -e "  ${YELLOW}Xcode attach failed - you may need to enable accessibility${NC}"
+        echo -e "  ${YELLOW}Go to: System Settings > Privacy & Security > Accessibility${NC}"
+        echo ""
+        echo -e "  Manual attach: ${CYAN}Xcode → Debug → Attach to Process by PID or Name → $pid${NC}"
+    fi
+
+    echo ""
 }
 
 # Main

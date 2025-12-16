@@ -56,20 +56,22 @@ final class AppLogger: ObservableObject {
         return new
     }
 
-    /// Log a message - writes to os.log AND keeps in-memory copy
+    /// Log a message - logs to console (visible in Xcode debugger) AND keeps in-memory copy
     func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info) {
-        // Write to os.log
-        let osLogger = logger(for: category.rawValue)
         let fullMessage = detail != nil ? "\(message): \(detail!)" : message
 
-        switch level {
-        case .debug: osLogger.debug("\(fullMessage)")
-        case .info: osLogger.info("\(fullMessage)")
-        case .notice: osLogger.notice("\(fullMessage)")
-        case .error: osLogger.error("\(fullMessage)")
-        case .fault: osLogger.fault("\(fullMessage)")
-        default: osLogger.log("\(fullMessage)")
+        // Log to console (visible in Xcode debugger and Console.app)
+        let timestamp = Date().formatted(.dateTime.hour().minute().second().secondFraction(.fractional(2)))
+        let levelStr = switch level {
+        case .debug: "[DEBUG]"
+        case .info: "[INFO]"
+        case .notice: "[NOTICE]"
+        case .error: "[ERROR]"
+        case .fault: "[FAULT]"
+        default: "[LOG]"
         }
+        let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage)"
+        NSLog("%@", logLine)
 
         // Keep in-memory copy (newest first)
         let entry = LogEntry(

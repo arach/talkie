@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 // MARK: - Troubleshooter Sheet Controller
 
@@ -36,6 +37,9 @@ struct AudioTroubleshooterView: View {
     @ObservedObject private var diagnostics = AudioDiagnostics.shared
     @ObservedObject private var controller = AudioTroubleshooterController.shared
     @State private var selectedFixIndex: Int = 0
+    @State private var isTestingAudio = false
+    @State private var audioTestResult: (success: Bool, peakLevel: Float, message: String)?
+    @State private var isRequestingPermission = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,10 +52,16 @@ struct AudioTroubleshooterView: View {
             // Content
             ScrollView {
                 VStack(spacing: 20) {
+                    // Permission request card (if needed)
+                    permissionCard
+
                     // Status overview
                     if let result = diagnostics.lastResult {
                         statusOverview(result)
                     }
+
+                    // Audio Test button
+                    audioTestSection
 
                     // Checklist
                     if let result = diagnostics.lastResult {
@@ -77,7 +87,7 @@ struct AudioTroubleshooterView: View {
             // Footer
             footer
         }
-        .frame(width: 420, height: 520)
+        .frame(width: 520, height: 600)
         .background(TalkieTheme.surface)
         .onAppear {
             Task {
@@ -112,6 +122,175 @@ struct AudioTroubleshooterView: View {
             .buttonStyle(.plain)
         }
         .padding(16)
+    }
+
+    // MARK: - Permission Card
+
+    @ViewBuilder
+    private var permissionCard: some View {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+
+        if status != .authorized {
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(SemanticColor.warning.opacity(0.15))
+                            .frame(width: 40, height: 40)
+
+                        Image(systemName: status == .denied ? "mic.slash.fill" : "mic.badge.plus")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(SemanticColor.warning)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(status == .denied ? "Microphone Access Denied" : "Microphone Access Required")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(TalkieTheme.textPrimary)
+
+                        Text(status == .denied
+                             ? "Enable microphone access in System Settings"
+                             : "TalkieLive needs microphone access to record")
+                            .font(.system(size: 11))
+                            .foregroundColor(TalkieTheme.textSecondary)
+                    }
+
+                    Spacer()
+                }
+
+                Button(action: {
+                    isRequestingPermission = true
+                    Task {
+                        _ = await diagnostics.requestMicrophonePermission()
+                        isRequestingPermission = false
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        if isRequestingPermission {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: status == .denied ? "gear" : "mic.fill")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        Text(status == .denied ? "Open System Settings" : "Request Microphone Access")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(SemanticColor.warning)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .disabled(isRequestingPermission)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(SemanticColor.warning.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(SemanticColor.warning.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    // MARK: - Audio Test Section
+
+    private var audioTestSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("AUDIO TEST")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1)
+                .foregroundColor(TalkieTheme.textTertiary)
+
+            HStack(spacing: 12) {
+                // Test result indicator
+                if let result = audioTestResult {
+                    ZStack {
+                        Circle()
+                            .fill((result.success ? SemanticColor.success : SemanticColor.error).opacity(0.15))
+                            .frame(width: 36, height: 36)
+
+                        Image(systemName: result.success ? "waveform" : "waveform.badge.exclamationmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(result.success ? SemanticColor.success : SemanticColor.error)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(result.success ? "Audio Capture Working" : "Audio Test Failed")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(TalkieTheme.textPrimary)
+
+                        Text(result.message)
+                            .font(.system(size: 11))
+                            .foregroundColor(TalkieTheme.textSecondary)
+                    }
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(TalkieTheme.hover)
+                            .frame(width: 36, height: 36)
+
+                        Image(systemName: "waveform")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(TalkieTheme.textTertiary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Test Microphone")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(TalkieTheme.textPrimary)
+
+                        Text("Verify audio capture is working")
+                            .font(.system(size: 11))
+                            .foregroundColor(TalkieTheme.textSecondary)
+                    }
+                }
+
+                Spacer()
+
+                Button(action: {
+                    isTestingAudio = true
+                    audioTestResult = nil
+                    Task {
+                        let result = await diagnostics.performAudioTest()
+                        audioTestResult = result
+                        isTestingAudio = false
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        if isTestingAudio {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 10))
+                        }
+                        Text(isTestingAudio ? "Testing..." : "Run Test")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(SemanticColor.info)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .disabled(isTestingAudio)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(TalkieTheme.surfaceCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(TalkieTheme.border, lineWidth: 1)
+                    )
+            )
+        }
     }
 
     // MARK: - Status Overview
@@ -467,5 +646,5 @@ struct TroubleshootLink: View {
 
 #Preview {
     AudioTroubleshooterView()
-        .frame(width: 420, height: 520)
+        .frame(width: 520, height: 600)
 }

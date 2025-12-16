@@ -44,6 +44,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F1A2B3C4D5E6F7A8B9C0D1E3 /* EngineStatusView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 		CB95BE4375EE9C1CD8073A5E = {
 			isa = PBXGroup;
 			children = (
@@ -74,14 +82,6 @@
 				A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */,
 			);
 			path = TalkieEngine;
-			sourceTree = "<group>";
-		};
-		A1B2C3D4E5F6A7B8C9D0E1F2 /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				F1A2B3C4D5E6F7A8B9C0D1E3 /* EngineStatusView.swift */,
-			);
-			path = Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -115,12 +115,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1640;
-				TargetAttributes = {
-					69D76C993AFA8FB20AC2458D = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
-					};
-				};
 			};
 			buildConfigurationList = 42CBE7E742A2B6A97CCFE73B /* Build configuration list for PBXProject "TalkieEngine" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -167,10 +161,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TalkieEngine/TalkieEngine.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = TalkieEngine/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -180,6 +176,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.engine;
 				PRODUCT_NAME = TalkieEngine;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
 			};
@@ -313,10 +310,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = TalkieEngine/TalkieEngine.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 2U83JFPW66;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = TalkieEngine/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -326,6 +325,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.engine;
 				PRODUCT_NAME = TalkieEngine;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.9;
 			};

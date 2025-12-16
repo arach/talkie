@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -20,7 +20,6 @@
 		1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ADA116B700BED47718C7D9E /* ActivityLogViews.swift */; };
 		1EB339080DB651B76F45E652 /* DebugSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C96A04FEABC5B772E63AD67 /* DebugSettings.swift */; };
 		1F3FCD4DA10D6041B3D4B988 /* InterstitialManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40FC79F0471865923C8D1734 /* InterstitialManager.swift */; };
-		DPIL0001A1B2C3D4E5F60001 /* DictationPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = DPIL0001A1B2C3D4E5F60002 /* DictationPill.swift */; };
 		217A8AB59A41C52DFAB13BE4 /* LegacyModelCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00DBA02942A8A7926AC9AC6 /* LegacyModelCards.swift */; };
 		2829621A6E4A01B27CF56E78 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 9CB6A32843C8E78377EA7EE1 /* GRDB */; };
 		2B3EEAEB2371119D2137778B /* hq-transcribe.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 21BD9BDA1979A48C8AD411E9 /* hq-transcribe.twf.json */; };
@@ -88,10 +87,6 @@
 		C71513A0A6EF966DD60FF8C7 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C368F29870833A22EA1F5E0 /* DesignSystem.swift */; };
 		C95A1F5BA10EBE178A095D04 /* brain-dump-processor.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 6F3F74262D51A295C8C6E020 /* brain-dump-processor.twf.json */; };
 		CA38C7C6CFE0057E73773A3B /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */; };
-		EPHM0001A1B2C3D4E5F60001 /* EphemeralTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = EPHM0001A1B2C3D4E5F60002 /* EphemeralTranscriber.swift */; };
-		SMRT0001A1B2C3D4E5F60001 /* SmartAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMRT0001A1B2C3D4E5F60002 /* SmartAction.swift */; };
-		DIFF0001A1B2C3D4E5F60001 /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = DIFF0001A1B2C3D4E5F60002 /* TextDiff.swift */; };
-		DIFR0001A1B2C3D4E5F60001 /* DiffReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DIFR0001A1B2C3D4E5F60002 /* DiffReviewView.swift */; };
 		CB12A13CA5ECEE19E50A05A2 /* MemoTableViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */; };
 		CE3E9EFEDFC1391AF65FAAE6 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = 888B917F1D14A6981B3952DF /* MLX */; };
 		D0EC6C1DC965D20E26780A84 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = E488AD1F887CCD0880A88457 /* FluidAudio */; };
@@ -102,6 +97,9 @@
 		DB6FA5CFAF83919FDC6FE506 /* TalkieLiveMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBC1DB4720A4F23D881C75A /* TalkieLiveMonitor.swift */; };
 		DCB0588B59859EFFD31F946E /* ExpandableModelCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D392E981B2154D58DB42703 /* ExpandableModelCards.swift */; };
 		DF90361B1D0677CA2E23E506 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D0D2AC46F2B1EE67539FDB0B /* MLXLMCommon */; };
+		DIFF0001A1B2C3D4E5F60001 /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = DIFF0001A1B2C3D4E5F60002 /* TextDiff.swift */; };
+		DIFR0001A1B2C3D4E5F60001 /* DiffReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DIFR0001A1B2C3D4E5F60002 /* DiffReviewView.swift */; };
+		DPIL0001A1B2C3D4E5F60001 /* DictationPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = DPIL0001A1B2C3D4E5F60002 /* DictationPill.swift */; };
 		E111B4E4E4F135881F1E138E /* TWFLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0152A90AD692E6C4E8BA106 /* TWFLoader.swift */; };
 		E8ABB7368560E212D21F1DD8 /* ModelsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA0F1D288CD155489B664F4C /* ModelsContentView.swift */; };
 		E8BE262261A8574A55484D40 /* hey-talkie.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 28CB23B6BA216854A051295A /* hey-talkie.twf.json */; };
@@ -112,8 +110,10 @@
 		EF5110414DF00AB03DD94700 /* WorkflowContentViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6004FB1AB3BD3324B0E0F903 /* WorkflowContentViews.swift */; };
 		EF6FE1502F85661D509037A6 /* cloud-transcribe.twf.json in Resources */ = {isa = PBXBuildFile; fileRef = 57C6047C0D7A6847288E7B3C /* cloud-transcribe.twf.json */; };
 		EFDB9037C949557D2EA24D12 /* TalkieWorkflowSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEE257B3F23FA688379E9D3 /* TalkieWorkflowSchema.swift */; };
+		EPHM0001A1B2C3D4E5F60001 /* EphemeralTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = EPHM0001A1B2C3D4E5F60002 /* EphemeralTranscriber.swift */; };
 		F5E211E428DBB72A464C2879 /* CloudProviderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9019DB15700738177DC54D19 /* CloudProviderViews.swift */; };
 		FA22B90261AE2EB65814510C /* MemoRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B249E75E681770AEA53425 /* MemoRowView.swift */; };
+		SMRT0001A1B2C3D4E5F60001 /* SmartAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMRT0001A1B2C3D4E5F60002 /* SmartAction.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -144,10 +144,6 @@
 		3C96A04FEABC5B772E63AD67 /* DebugSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugSettings.swift; sourceTree = "<group>"; };
 		3F03AE42A0A83903EC8E3B2D /* NavigationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationView.swift; sourceTree = "<group>"; };
 		40FC79F0471865923C8D1734 /* InterstitialManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterstitialManager.swift; sourceTree = "<group>"; };
-		SMRT0001A1B2C3D4E5F60002 /* SmartAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartAction.swift; sourceTree = "<group>"; };
-		DIFF0001A1B2C3D4E5F60002 /* TextDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextDiff.swift; sourceTree = "<group>"; };
-		DIFR0001A1B2C3D4E5F60002 /* DiffReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffReviewView.swift; sourceTree = "<group>"; };
-		DPIL0001A1B2C3D4E5F60002 /* DictationPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationPill.swift; sourceTree = "<group>"; };
 		416914016150F1C04A3CB040 /* JSONExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONExportService.swift; sourceTree = "<group>"; };
 		42D075A51DACCCAA5F00B0AC /* WorkflowExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutor.swift; sourceTree = "<group>"; };
 		43687D8D58CDF24241B52B29 /* DebugKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DebugKit; path = ../../../DebugKit; sourceTree = SOURCE_ROOT; };
@@ -184,7 +180,6 @@
 		95F0695BC582E2740F8700BD /* GeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiService.swift; sourceTree = "<group>"; };
 		96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconProvider.swift; sourceTree = "<group>"; };
 		9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
-		EPHM0001A1B2C3D4E5F60002 /* EphemeralTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EphemeralTranscriber.swift; sourceTree = "<group>"; };
 		9CA41231D39AFC78BA015C74 /* AutoRunSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRunSettings.swift; sourceTree = "<group>"; };
 		A14A87E96F08E223610F4D08 /* TalkieLiveMonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieLiveMonitorView.swift; sourceTree = "<group>"; };
 		A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoTableViews.swift; sourceTree = "<group>"; };
@@ -210,16 +205,21 @@
 		D47F699EAAD626CBC739B841 /* TalkieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieApp.swift; sourceTree = "<group>"; };
 		D64DBBEBBB07D9C047A7F626 /* CloudKitSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSyncManager.swift; sourceTree = "<group>"; };
 		DCEE257B3F23FA688379E9D3 /* TalkieWorkflowSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowSchema.swift; sourceTree = "<group>"; };
+		DIFF0001A1B2C3D4E5F60002 /* TextDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextDiff.swift; sourceTree = "<group>"; };
+		DIFR0001A1B2C3D4E5F60002 /* DiffReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffReviewView.swift; sourceTree = "<group>"; };
+		DPIL0001A1B2C3D4E5F60002 /* DictationPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationPill.swift; sourceTree = "<group>"; };
 		E0152A90AD692E6C4E8BA106 /* TWFLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TWFLoader.swift; sourceTree = "<group>"; };
 		E30DDF9CB041E54430249019 /* AppleSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechService.swift; sourceTree = "<group>"; };
 		E7CF75F0011D8585DD8DB871 /* SystemConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemConsoleView.swift; sourceTree = "<group>"; };
 		E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsCatalog.swift; sourceTree = "<group>"; };
 		EA0F1D288CD155489B664F4C /* ModelsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsContentView.swift; sourceTree = "<group>"; };
 		EDF6CBE76775757D53F5AF8E /* WFKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WFKit; path = ../../WFKit; sourceTree = SOURCE_ROOT; };
+		EPHM0001A1B2C3D4E5F60002 /* EphemeralTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EphemeralTranscriber.swift; sourceTree = "<group>"; };
 		F10F63F44EE54D3A552CB6A0 /* key-insights.twf.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "key-insights.twf.json"; sourceTree = "<group>"; };
 		F32E922E7292E91230F71AD6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F426003DF3F7E075603239CB /* InterstitialEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterstitialEditorView.swift; sourceTree = "<group>"; };
 		FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsSettings.swift; sourceTree = "<group>"; };
+		SMRT0001A1B2C3D4E5F60002 /* SmartAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartAction.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -540,12 +540,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-					1EB6D14809D2E04C6D77B8BC = {
-						DevelopmentTeam = 2U83JFPW66;
-						ProvisioningStyle = Automatic;
-					};
-				};
 			};
 			buildConfigurationList = 585B82EC452E00A8B77B93CB /* Build configuration list for PBXProject "Talkie" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -566,7 +560,6 @@
 				4E3C4ECEA0C3CC5BEF8F10AB /* XCLocalSwiftPackageReference "../TalkieKit" */,
 				05193DEAEA1A4AFDF888739F /* XCLocalSwiftPackageReference "../../WFKit" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -766,8 +759,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Talkie.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Talkie-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
@@ -781,6 +777,7 @@
 				);
 				MARKETING_VERSION = 1.5.4;
 				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.core;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 			};
 			name = Release;

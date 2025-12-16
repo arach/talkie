@@ -2,8 +2,8 @@
 //  LiveDataStore.swift
 //  Talkie
 //
-//  Read-only access to TalkieLive's SQLite database (PastLives.sqlite).
-//  Uses shared App Group container for cross-app data sharing.
+//  Read-only access to TalkieLive's SQLite database (live.sqlite).
+//  Uses shared Application Support directory (all apps are unsandboxed).
 //
 
 import Foundation
@@ -16,9 +16,6 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveDataSto
 @MainActor
 final class LiveDataStore: ObservableObject {
     static let shared = LiveDataStore()
-
-    /// App Group identifier shared with TalkieLive
-    static let appGroupID = "group.com.jdi.talkie"
 
     // MARK: - Published State
 
@@ -47,27 +44,30 @@ final class LiveDataStore: ObservableObject {
     private func connectToDatabase() {
         let fm = FileManager.default
 
-        // Try to find the database in order of preference:
-        // 1. Shared App Group container (production)
-        // 2. Unsandboxed Application Support (dev mode)
-
+        // All apps are unsandboxed, so they share ~/Library/Application Support/Talkie/
         var possiblePaths: [URL] = []
 
-        // 1. App Group container (shared with TalkieLive) - current filename
-        if let groupContainer = fm.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupID) {
-            let groupPath = groupContainer
-                .appendingPathComponent("TalkieLive", isDirectory: true)
-                .appendingPathComponent("live.sqlite")
-            possiblePaths.append(groupPath)
-            logger.info("[LiveDataStore] Checking App Group: \(groupPath.path)")
-        }
-
-        // 2. Unsandboxed Application Support (fallback for dev)
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let localPath = appSupport
+            // 1. New shared location: ~/Library/Application Support/Talkie/live.sqlite
+            let sharedPath = appSupport
+                .appendingPathComponent("Talkie", isDirectory: true)
+                .appendingPathComponent("live.sqlite")
+            possiblePaths.append(sharedPath)
+            logger.info("[LiveDataStore] Checking shared location: \(sharedPath.path)")
+
+            // 2. Old Group Container location (for migration)
+            let oldGroupPath = fm.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Group Containers/group.com.jdi.talkie/TalkieLive/live.sqlite")
+            if fm.fileExists(atPath: oldGroupPath.path) {
+                possiblePaths.append(oldGroupPath)
+                logger.info("[LiveDataStore] Found old Group Container data: \(oldGroupPath.path)")
+            }
+
+            // 3. Old Application Support location (for migration)
+            let oldLocalPath = appSupport
                 .appendingPathComponent("TalkieLive", isDirectory: true)
                 .appendingPathComponent("live.sqlite")
-            possiblePaths.append(localPath)
+            possiblePaths.append(oldLocalPath)
         }
 
         // Try each path

@@ -308,8 +308,8 @@ final class LiveController: ObservableObject {
         #endif
         AppLogger.shared.log(.file, "Audio saved", detail: "\(audioFilename) (\(fileSizeStr)) • \(fileSaveMs)ms\(traceSuffix)")
 
-        // Get permanent path for transcription
-        let permanentAudioPath = AudioStorage.url(for: audioFilename).path
+        // Get path for transcription
+        let audioPath = AudioStorage.url(for: audioFilename).path
 
         // Update milestone for status bar
         ProcessingMilestones.shared.markFileSaved(filename: audioFilename)
@@ -357,10 +357,13 @@ final class LiveController: ObservableObject {
         // Track milestone
         ProcessingMilestones.shared.markTranscribing()
 
+        // Generate external reference ID for Engine trace correlation (short 8-char hex)
+        let externalRefId = String(UUID().uuidString.prefix(8)).lowercased()
+
         do {
             // Pass the permanent audio path - engine reads directly, never modifies
             logTiming("Sending to engine")
-            let request = TranscriptionRequest(audioPath: permanentAudioPath, isLive: true)
+            let request = TranscriptionRequest(audioPath: audioPath, isLive: true, externalRefId: externalRefId)
             let result = try await transcription.transcribe(request)
             logTiming("Engine returned")
             let engineEnd = Date()
@@ -448,6 +451,7 @@ final class LiveController: ObservableObject {
                     perfEngineMs: transcriptionMs,
                     perfEndToEndMs: metadata.perfEndToEndMs,
                     perfInAppMs: metadata.perfInAppMs,
+                    sessionID: externalRefId,  // For Engine trace deep link
                     metadata: buildMetadataDict(from: metadata),
                     audioFilename: audioFilename,
                     createdInTalkieView: createdInTalkieView,
@@ -525,6 +529,7 @@ final class LiveController: ObservableObject {
                     perfEngineMs: transcriptionMs,
                     perfEndToEndMs: metadata.perfEndToEndMs,
                     perfInAppMs: metadata.perfInAppMs,
+                    sessionID: externalRefId,  // For Engine trace deep link
                     metadata: buildMetadataDict(from: metadata),
                     audioFilename: audioFilename,
                     createdInTalkieView: true,
@@ -591,6 +596,7 @@ final class LiveController: ObservableObject {
                     perfEngineMs: transcriptionMs,
                     perfEndToEndMs: metadata.perfEndToEndMs,
                     perfInAppMs: metadata.perfInAppMs,
+                    sessionID: externalRefId,  // For Engine trace deep link
                     metadata: buildMetadataDict(from: metadata),
                     audioFilename: audioFilename,
                     createdInTalkieView: false,

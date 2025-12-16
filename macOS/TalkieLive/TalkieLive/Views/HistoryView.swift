@@ -1690,9 +1690,36 @@ private struct PerformanceCard: View {
                     .foregroundColor(showCopied ? SemanticColor.success : TalkieTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
+
+                // View in Engine button (only if sessionID exists)
+                if let sessionID = utterance.metadata.sessionID {
+                    Button(action: { openEngineTrace(sessionID) }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "engine.combustion")
+                                .font(.system(size: 10))
+                            Text("View in Engine")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(TalkieTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(12)
             .frame(minWidth: 180)
+        }
+    }
+
+    private func openEngineTrace(_ sessionID: String) {
+        // Validate sessionID format (8 lowercase hex chars)
+        let hexPattern = "^[0-9a-f]{8}$"
+        guard sessionID.range(of: hexPattern, options: .regularExpression) != nil else {
+            return
+        }
+
+        // Open Engine with deep link
+        if let url = URL(string: "talkieengine://trace/\(sessionID)") {
+            NSWorkspace.shared.open(url)
         }
     }
 
@@ -1923,8 +1950,9 @@ private struct MinimalAudioCard: View {
             .padding(.vertical, 8)
             .contentShape(Rectangle())
             .onTapGesture {
-                // Check for Cmd key
-                if NSEvent.modifierFlags.contains(.command) && hasAudio {
+                guard hasAudio else { return }
+                // Cmd+click: reveal file in Finder
+                if NSEvent.modifierFlags.contains(.command) {
                     revealInFinder()
                 }
             }

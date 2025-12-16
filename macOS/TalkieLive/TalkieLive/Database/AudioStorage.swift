@@ -11,9 +11,13 @@ import os.log
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioStorage")
 
 enum AudioStorage {
-    /// Directory where audio files are stored (permanent, sacrosanct after write)
+    /// Directory where audio files are stored (shared across all Talkie apps)
+    /// Since all apps are unsandboxed, they can all access Application Support
     static let audioDirectory: URL = {
         let fm = FileManager.default
+
+        // Use a shared Application Support directory for all Talkie apps
+        // ~/Library/Application Support/Talkie/Audio
         do {
             let appSupport = try fm.url(
                 for: .applicationSupportDirectory,
@@ -22,13 +26,15 @@ enum AudioStorage {
                 create: true
             )
             let audioDir = appSupport
-                .appendingPathComponent("TalkieLive", isDirectory: true)
+                .appendingPathComponent("Talkie", isDirectory: true)
                 .appendingPathComponent("Audio", isDirectory: true)
             try fm.createDirectory(at: audioDir, withIntermediateDirectories: true)
+            logger.info("Using shared audio directory: \(audioDir.path)")
             return audioDir
         } catch {
             logger.error("Failed to create audio directory: \(error.localizedDescription)")
-            return fm.temporaryDirectory.appendingPathComponent("TalkieLiveAudio")
+            // Ultimate fallback to temp directory
+            return fm.temporaryDirectory.appendingPathComponent("TalkieAudio")
         }
     }()
 

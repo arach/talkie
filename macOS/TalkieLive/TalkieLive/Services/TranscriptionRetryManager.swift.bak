@@ -34,7 +34,7 @@ final class TranscriptionRetryManager: ObservableObject {
         // Initial count
         refreshPendingCount()
 
-        AppLogger.shared.log(.system, "RetryManager initialized", detail: "Pending retries: \(self.pendingCount)")
+        AppLogger.shared.log(.system, "RetryManager initialized", detail: "Pending retries: \(self.pendingCount, privacy: .public)")
     }
 
     private func handleConnectionStateChange(_ state: EngineConnectionState) {
@@ -43,11 +43,11 @@ final class TranscriptionRetryManager: ObservableObject {
 
         let wasStr = wasConnected ? "connected" : "disconnected"
         let nowStr = isNowConnected ? "connected" : "disconnected"
-        AppLogger.shared.log(.system, "Engine state changed", detail: "\(state.rawValue) (was: \(wasStr), now: \(nowStr))")
+        AppLogger.shared.log(.system, "Engine state changed", detail: "\(state.rawValue, privacy: .public) (was: \(wasStr, privacy: .public), now: \(nowStr, privacy: .public))")
 
         // If we just reconnected, trigger retry
         if isNowConnected && !wasConnected {
-            AppLogger.shared.log(.system, "Engine reconnected", detail: "Checking for failed transcriptions (pendingCount: \(self.pendingCount))")
+            AppLogger.shared.log(.system, "Engine reconnected", detail: "Checking for failed transcriptions (pendingCount: \(self.pendingCount, privacy: .public))")
             Task {
                 await retryFailedTranscriptions()
             }
@@ -95,32 +95,31 @@ final class TranscriptionRetryManager: ObservableObject {
 
         // Log details about what we're retrying
         let details = pending.prefix(3).map { "ID \($0.id ?? -1)" }.joined(separator: ", ")
-        AppLogger.shared.log(.system, "Starting retry batch", detail: "\(pending.count) failed transcriptions (\(details)...)")
+        AppLogger.shared.log(.system, "Starting retry batch", detail: "\(pending.count, privacy: .public) failed transcriptions (\(details, privacy: .public)...)")
         isRetrying = true
         pendingCount = pending.count
 
         let modelId = LiveSettings.shared.selectedModelId
 
         for (index, utterance) in pending.enumerated() {
-            let progress = "[\(index + 1)/\(pending.count)]"
+            let progress = "[\(index + 1, privacy: .public)/\(pending.count, privacy: .public)]"
 
             guard let audioURL = utterance.audioURL, utterance.hasAudio else {
                 let audioPath = utterance.audioURL?.path ?? "nil"
                 let hasAudioStr = utterance.hasAudio ? "true" : "false"
-                AppLogger.shared.log(.error, "Skipping retry \(progress)", detail: "ID \(utterance.id ?? -1) - audioURL=\(audioPath), hasAudio=\(hasAudioStr)", level: .notice)
+                AppLogger.shared.log(.error, "Skipping retry \(progress)", detail: "ID \(utterance.id ?? -1, privacy: .public) - audioURL=\(audioPath, privacy: .public), hasAudio=\(hasAudioStr, privacy: .public)", level: .notice)
                 // Mark as failed permanently (no audio to retry with)
                 LiveDatabase.markTranscriptionFailed(id: utterance.id, error: "Audio file missing")
                 pendingCount = max(0, pendingCount - 1)
                 continue
             }
 
-            AppLogger.shared.log(.transcription, "Retry attempt \(progress)", detail: "ID \(utterance.id ?? -1), file: \(audioURL.lastPathComponent)")
+            AppLogger.shared.log(.transcription, "Retry attempt \(progress)", detail: "ID \(utterance.id ?? -1, privacy: .public), file: \(audioURL.lastPathComponent, privacy: .public)")
 
             do {
                 // Transcribe via Engine - pass path directly, engine reads the file
                 let startTime = Date()
-                let externalRefId = utterance.id != nil ? "retry-\(utterance.id!)" : nil
-                let text = try await client.transcribe(audioPath: audioURL.path, modelId: modelId, externalRefId: externalRefId)
+                let text = try await client.transcribe(audioPath: audioURL.path, modelId: modelId)
                 let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
                 // Update database with success
@@ -131,13 +130,13 @@ final class TranscriptionRetryManager: ObservableObject {
                     model: modelId
                 )
 
-                AppLogger.shared.log(.transcription, "Retry succeeded", detail: "ID \(utterance.id ?? -1) in \(transcriptionMs)ms")
+                AppLogger.shared.log(.transcription, "Retry succeeded", detail: "ID \(utterance.id ?? -1, privacy: .public) in \(transcriptionMs, privacy: .public)ms")
 
                 // Refresh UtteranceStore to pick up the updated record from DB
                 UtteranceStore.shared.refresh()
 
             } catch {
-                AppLogger.shared.log(.error, "Retry failed", detail: "ID \(utterance.id ?? -1): \(error.localizedDescription)")
+                AppLogger.shared.log(.error, "Retry failed", detail: "ID \(utterance.id ?? -1, privacy: .public): \(error.localizedDescription, privacy: .public)")
 
                 // Update database with new error
                 LiveDatabase.markTranscriptionFailed(id: utterance.id, error: error.localizedDescription)
@@ -156,7 +155,7 @@ final class TranscriptionRetryManager: ObservableObject {
         lastRetryAt = Date()
         refreshPendingCount()
 
-        AppLogger.shared.log(.system, "Retry batch complete", detail: "Remaining: \(self.pendingCount), isRetrying flag cleared")
+        AppLogger.shared.log(.system, "Retry batch complete", detail: "Remaining: \(self.pendingCount, privacy: .public), isRetrying flag cleared")
     }
 
     /// Manually trigger retry for a single utterance
@@ -172,8 +171,7 @@ final class TranscriptionRetryManager: ObservableObject {
         do {
             // Pass path directly - engine reads the file
             let startTime = Date()
-            let externalRefId = utterance.id != nil ? "retry-\(utterance.id!)" : nil
-            let text = try await client.transcribe(audioPath: audioURL.path, modelId: modelId, externalRefId: externalRefId)
+            let text = try await client.transcribe(audioPath: audioURL.path, modelId: modelId)
             let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
             LiveDatabase.markTranscriptionSuccess(

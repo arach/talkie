@@ -13,5 +13,12 @@
 			</array>
 		</dict>
 	</array>
+
+	<!-- Usage Descriptions: Explain why we need each permission -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TalkieLive needs microphone access to continuously transcribe your speech in real-time.</string>
+
+	<key>NSAppleEventsUsageDescription</key>
+	<string>TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.</string>
 </dict>
 </plist>

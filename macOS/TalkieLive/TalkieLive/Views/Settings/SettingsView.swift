@@ -2338,17 +2338,115 @@ struct EngineSettingsSection: View {
 
             // Info
             SettingsCard(title: "ABOUT ENGINE") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
                     Text("TalkieEngine runs as a separate process to keep ML models warm in memory across app restarts. It supports multiple speech recognition models including Whisper and Parakeet, all running locally via Apple's Neural Engine.")
                         .font(.system(size: 10))
                         .foregroundColor(TalkieTheme.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    // Technical details
+                    if let status = engineClient.status {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Divider()
+                                .padding(.vertical, Spacing.xs)
+
+                            // Process info
+                            HStack(spacing: Spacing.xs) {
+                                Text("Process ID:")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(TalkieTheme.textSecondary)
+                                Text("\(status.pid)")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(TalkieTheme.textPrimary)
+                            }
+
+                            // XPC service name
+                            if let mode = engineClient.connectedMode {
+                                HStack(spacing: Spacing.xs) {
+                                    Text("XPC Service:")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(TalkieTheme.textSecondary)
+                                    Text(mode.rawValue)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundColor(TalkieTheme.textPrimary)
+                                }
+                            }
+
+                            // Connection state
+                            HStack(spacing: Spacing.xs) {
+                                Text("Connection:")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(TalkieTheme.textSecondary)
+                                Text(engineClient.connectionState.rawValue)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(engineStatusColor)
+                            }
+
+                            // Uptime
+                            HStack(spacing: Spacing.xs) {
+                                Text("Uptime:")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(TalkieTheme.textSecondary)
+                                Text(formatUptime(status.uptime))
+                                    .font(.system(size: 9))
+                                    .foregroundColor(TalkieTheme.textPrimary)
+                            }
+
+                            // Transcriptions processed
+                            HStack(spacing: Spacing.xs) {
+                                Text("Transcriptions:")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(TalkieTheme.textSecondary)
+                                Text("\(status.totalTranscriptions)")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(TalkieTheme.textPrimary)
+                            }
+
+                            // Memory usage
+                            if let memoryMB = status.memoryUsageMB {
+                                HStack(spacing: Spacing.xs) {
+                                    Text("Memory:")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(TalkieTheme.textSecondary)
+                                    Text("\(memoryMB) MB")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(TalkieTheme.textPrimary)
+                                }
+                            }
+
+                            // Build type
+                            if let isDebug = status.isDebugBuild {
+                                HStack(spacing: Spacing.xs) {
+                                    Text("Build:")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(TalkieTheme.textSecondary)
+                                    Text(isDebug ? "Debug" : "Release")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(TalkieTheme.textPrimary)
+                                }
+                            }
+
+                            // Loaded model
+                            if let modelId = status.loadedModelId {
+                                HStack(spacing: Spacing.xs) {
+                                    Text("Loaded Model:")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(TalkieTheme.textSecondary)
+                                    Text(modelId)
+                                        .font(.system(size: 9))
+                                        .foregroundColor(TalkieTheme.textPrimary)
+                                }
+                            }
+                        }
+                        .padding(.top, Spacing.xs)
+                    }
 
                     HStack(spacing: Spacing.md) {
                         ModelInfoBadge(icon: "lock.shield", label: "Private")
                         ModelInfoBadge(icon: "bolt", label: "On-device")
                         ModelInfoBadge(icon: "memorychip", label: "Persistent")
                     }
+                    .padding(.top, Spacing.xs)
                 }
             }
         }
@@ -2394,6 +2492,17 @@ struct EngineSettingsSection: View {
         if minutes < 60 { return "\(minutes)m" }
         let hours = minutes / 60
         return "\(hours)h \(minutes % 60)m"
+    }
+
+    private func formatUptime(_ interval: TimeInterval) -> String {
+        let seconds = Int(interval)
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)h \(minutes % 60)m" }
+        let days = hours / 24
+        return "\(days)d \(hours % 24)h"
     }
 
     private func formatTimeAgo(_ date: Date) -> String {

@@ -10,9 +10,108 @@ import WhisperKit
 import FluidAudio
 import AVFoundation
 import Cocoa
-import os
+import OSLog
 
-private let logger = Logger(subsystem: "jdi.talkie.engine", category: "EngineService")
+// MARK: - AppLogger
+
+/// Event categories for logging
+enum EventType: String {
+    case system = "system"
+    case audio = "audio"
+    case transcription = "transcription"
+    case database = "database"
+    case file = "file"
+    case error = "error"
+    case xpc = "xpc"
+    case model = "model"
+    case performance = "performance"
+}
+
+/// Unified logging that prints to console without privacy redaction
+/// Interface matches TalkieLive's AppLogger for eventual consolidation
+final class AppLogger {
+    static let shared = AppLogger()
+    private let subsystem = "jdi.talkie.engine"
+    private let logFileURL: URL?
+    private let logQueue = DispatchQueue(label: "com.jdi.talkieengine.logging", qos: .utility)
+
+    private init() {
+        // Set up log file in ~/Library/Logs/TalkieEngine/
+        let logsDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Logs")
+            .appendingPathComponent("TalkieEngine")
+
+        if let logsDir = logsDir {
+            try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+            logFileURL = logsDir.appendingPathComponent("TalkieEngine.log")
+        } else {
+            logFileURL = nil
+        }
+    }
+
+    /// Log a message - prints to console and file with no privacy redaction
+    /// Matches TalkieLive AppLogger interface, with optional file/line tracking
+    func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info, file: String = #file, line: Int = #line) {
+        let fullMessage = detail != nil ? "\(message): \(detail!)" : message
+
+        // Format log line with file/line info
+        let timestamp = Date().formatted(.dateTime.hour().minute().second().secondFraction(.fractional(2)))
+        let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
+        let levelStr = switch level {
+        case .debug: "[DEBUG]"
+        case .info: "[INFO]"
+        case .notice: "[NOTICE]"
+        case .error: "[ERROR]"
+        case .fault: "[FAULT]"
+        default: "[LOG]"
+        }
+        let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) ← \(filename):\(line)"
+
+        // Log to console (visible in Xcode debugger and Console.app)
+        NSLog("%@", logLine)
+
+        // Write to log file asynchronously
+        guard let logFileURL = logFileURL else { return }
+        logQueue.async {
+            if let data = logLine.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: logFileURL.path) {
+                    // Append to existing file
+                    if let fileHandle = try? FileHandle(forWritingTo: logFileURL) {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        try? fileHandle.close()
+                    }
+                } else {
+                    // Create new file
+                    try? data.write(to: logFileURL)
+                }
+            }
+        }
+    }
+
+    /// Convenience methods for common log levels
+    func debug(_ category: EventType, _ message: String, detail: String? = nil) {
+        log(category, message, detail: detail, level: .debug)
+    }
+
+    func info(_ category: EventType, _ message: String, detail: String? = nil) {
+        log(category, message, detail: detail, level: .info)
+    }
+
+    func warning(_ category: EventType, _ message: String, detail: String? = nil) {
+        log(category, message, detail: detail, level: .notice)
+    }
+
+    func error(_ category: EventType, _ message: String, detail: String? = nil) {
+        log(category, message, detail: detail, level: .error)
+    }
+}
+
+// Simple log helper - prints to console (readable) + system log
+private func log(_ message: String) {
+    print("[Engine] \(message)")
+    AppLogger.shared.info(.transcription, "\(message)")
+}
 
 /// XPC service implementation
 @MainActor
@@ -48,7 +147,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     override init() {
         super.init()
         refreshDownloadedModels()
-        logger.info("EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
+        AppLogger.shared.info(.transcription, "EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
         EngineStatusManager.shared.log(.info, "Engine", "EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
     }
 
@@ -102,8 +201,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             return FileManager.default.fileExists(atPath: markerPath.path)
         })
 
-        logger.info("Downloaded Whisper models: \(self.downloadedWhisperModels)")
-        logger.info("Downloaded Parakeet models: \(self.downloadedParakeetModels)")
+        AppLogger.shared.info(.transcription, "Downloaded Whisper models: \(self.downloadedWhisperModels)")
+        AppLogger.shared.info(.transcription, "Downloaded Parakeet models: \(self.downloadedParakeetModels)")
     }
 
     // MARK: - Model ID Parsing
@@ -125,13 +224,25 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         reply: @escaping (String?, String?) -> Void
     ) {
         Task { @MainActor in
-            await self.doTranscribe(audioPath: audioPath, modelId: modelId, reply: reply)
+            await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, reply: reply)
+        }
+    }
+
+    nonisolated func transcribe(
+        audioPath: String,
+        modelId: String,
+        externalRefId: String?,
+        reply: @escaping (String?, String?) -> Void
+    ) {
+        Task { @MainActor in
+            await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, reply: reply)
         }
     }
 
     private func doTranscribe(
         audioPath: String,
         modelId: String,
+        externalRefId: String?,
         reply: @escaping (String?, String?) -> Void
     ) async {
         guard !isShuttingDown else {
@@ -148,10 +259,18 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         // Create trace for step-level timing
         let trace = TranscriptionTrace()
+        trace.externalRefId = externalRefId
         trace.begin("file_check")
 
+        // Micro-timing for file operations
+        let t0 = CFAbsoluteTimeGetCurrent()
+
         // Verify file exists
-        guard FileManager.default.fileExists(atPath: audioPath) else {
+        let exists = FileManager.default.fileExists(atPath: audioPath)
+        let t1 = CFAbsoluteTimeGetCurrent()
+        let existsMs = Int((t1 - t0) * 1000)
+
+        guard exists else {
             EngineStatusManager.shared.log(.error, "Transcribe", "File not found: \(audioPath)")
             reply(nil, "Audio file not found")
             return
@@ -159,7 +278,16 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         // Get file size for metadata
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: audioPath)[.size] as? Int64) ?? 0
-        trace.end("\(fileSize) bytes")
+        let t2 = CFAbsoluteTimeGetCurrent()
+        let attrMs = Int((t2 - t1) * 1000)
+
+        // Log micro-timings if any are slow (>50ms)
+        let totalMs = existsMs + attrMs
+        if totalMs > 50 {
+            EngineStatusManager.shared.log(.warning, "FileCheck", "Slow I/O: exists=\(existsMs)ms, attrs=\(attrMs)ms, total=\(totalMs)ms")
+        }
+
+        trace.end("\(fileSize) bytes • exists:\(existsMs)ms attrs:\(attrMs)ms")
 
         isTranscribing = true
         EngineStatusManager.shared.isTranscribing = true
@@ -170,7 +298,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         let (family, actualModelId) = parseModelId(modelId)
         let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
-        logger.info("Transcribing \(fileName) with \(family):\(actualModelId)")
+        AppLogger.shared.info(.transcription, "Transcribing \(fileName) with \(family):\(actualModelId)")
         EngineStatusManager.shared.log(.info, "Transcribe", "Starting \(fileName) with \(family):\(actualModelId)")
 
         trace.mark("start", metadata: "\(family):\(actualModelId)")
@@ -189,7 +317,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             let elapsed = trace.elapsedSeconds
             let elapsedMs = trace.elapsedMs
             let wordCount = result.transcript.split(separator: " ").count
-            logger.info("Transcribed #\(self.totalTranscriptions): \(result.transcript.prefix(50))...")
+            AppLogger.shared.info(.transcription, "Transcribed #\(self.totalTranscriptions): \(result.transcript.prefix(50))...")
             let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
             EngineStatusManager.shared.log(.info, "Transcribe", "✓ #\(totalTranscriptions) in \(timeStr) (\(wordCount) words)")
             EngineStatusManager.shared.totalTranscriptions = totalTranscriptions
@@ -212,7 +340,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             let elapsed = trace.elapsedSeconds
             let elapsedMs = trace.elapsedMs
             let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
-            logger.error("Transcription failed: \(error.localizedDescription)")
+            AppLogger.shared.error(.transcription, "Transcription failed: \(error.localizedDescription)")
             EngineStatusManager.shared.log(.error, "Transcribe", "✗ Failed after \(timeStr): \(error.localizedDescription)")
             reply(nil, error.localizedDescription)
         }
@@ -236,19 +364,19 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Load model if needed
         if needsModelLoad {
             trace.begin("model_load")
-            logger.info("Loading Whisper model: \(modelId)")
+            AppLogger.shared.info(.transcription, "Loading Whisper model: \(modelId)")
             EngineStatusManager.shared.log(.info, "Whisper", "Loading model: \(modelId)")
 
             let localPath = whisperModelPath(for: modelId)
             if FileManager.default.fileExists(atPath: localPath) {
                 // Model already downloaded - load from local folder
-                logger.info("Loading from local folder: \(localPath)")
+                AppLogger.shared.info(.transcription, "Loading from local folder: \(localPath)")
                 EngineStatusManager.shared.log(.debug, "Whisper", "Loading from local cache...")
                 whisperKit = try await WhisperKit(modelFolder: localPath, verbose: false)
                 trace.end("from cache")
             } else {
                 // Model not downloaded - download it
-                logger.info("Model not found locally, downloading...")
+                AppLogger.shared.info(.transcription, "Model not found locally, downloading...")
                 EngineStatusManager.shared.log(.info, "Whisper", "Downloading model (not cached)...")
                 whisperKit = try await WhisperKit(
                     model: modelId,
@@ -278,7 +406,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         trace.end()
 
-        logger.info("Whisper transcribed: \(transcript.prefix(50))...")
+        AppLogger.shared.info(.transcription, "Whisper transcribed: \(transcript.prefix(50))...")
         return TranscriptionResult(transcript: transcript, audioDuration: nil, sampleCount: nil)
     }
 
@@ -295,7 +423,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Load model if needed
         if needsModelLoad {
             trace.begin("model_load")
-            logger.info("Loading Parakeet model: \(modelId)")
+            AppLogger.shared.info(.transcription, "Loading Parakeet model: \(modelId)")
             EngineStatusManager.shared.log(.info, "Parakeet", "Loading model: \(modelId)")
 
             let models = try await AsrModels.downloadAndLoad(version: asrVersion)
@@ -345,7 +473,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         let transcript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         trace.end()
 
-        logger.info("Parakeet transcribed: \(transcript.prefix(50))... (\(samples.count) samples)")
+        AppLogger.shared.info(.transcription, "Parakeet transcribed: \(transcript.prefix(50))... (\(samples.count) samples)")
         return TranscriptionResult(transcript: transcript, audioDuration: audioDuration, sampleCount: originalSampleCount)
     }
 
@@ -405,7 +533,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         defer { isWarmingUp = false }
 
         let (family, actualModelId) = parseModelId(modelId)
-        logger.info("Preloading \(family) model: \(actualModelId)")
+        AppLogger.shared.info(.transcription, "Preloading \(family) model: \(actualModelId)")
         EngineStatusManager.shared.log(.info, "Preload", "Preloading \(family):\(actualModelId)...")
 
         let startTime = Date()
@@ -415,7 +543,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 // Skip if already loaded
                 if currentParakeetModelId == actualModelId && asrManager != nil {
                     let elapsed = Date().timeIntervalSince(startTime)
-                    logger.info("Parakeet model \(actualModelId) already loaded")
+                    AppLogger.shared.info(.transcription, "Parakeet model \(actualModelId) already loaded")
                     EngineStatusManager.shared.log(.info, "Preload", "✓ Parakeet \(actualModelId) already loaded (\(String(format: "%.0f", elapsed * 1000))ms)")
                     reply(nil)
                     return
@@ -437,26 +565,26 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 try? "downloaded".write(to: markerPath.appendingPathComponent(".marker"), atomically: true, encoding: .utf8)
 
                 // Warmup with silent audio (1 second at 16kHz)
-                logger.info("Running Parakeet warmup inference...")
+                AppLogger.shared.info(.transcription, "Running Parakeet warmup inference...")
                 EngineStatusManager.shared.log(.debug, "Preload", "Running warmup inference...")
                 let silentSamples = [Float](repeating: 0.0, count: 16000)
                 _ = try? await asrManager?.transcribe(silentSamples)
 
                 EngineStatusManager.shared.currentModel = "parakeet:\(actualModelId)"
                 let elapsed = Date().timeIntervalSince(startTime)
-                logger.info("Parakeet model \(actualModelId) preloaded and warmed up")
+                AppLogger.shared.info(.transcription, "Parakeet model \(actualModelId) preloaded and warmed up")
                 EngineStatusManager.shared.log(.info, "Preload", "✓ Parakeet \(actualModelId) ready in \(String(format: "%.1f", elapsed))s")
             } else {
                 // Check if model is already downloaded locally
                 let localPath = whisperModelPath(for: actualModelId)
                 if FileManager.default.fileExists(atPath: localPath) {
                     // Model already downloaded - load from local folder
-                    logger.info("Loading Whisper from local folder: \(localPath)")
+                    AppLogger.shared.info(.transcription, "Loading Whisper from local folder: \(localPath)")
                     EngineStatusManager.shared.log(.debug, "Preload", "Loading Whisper from cache...")
                     whisperKit = try await WhisperKit(modelFolder: localPath, verbose: false)
                 } else {
                     // Model not downloaded - download it
-                    logger.info("Whisper model not found locally, downloading...")
+                    AppLogger.shared.info(.transcription, "Whisper model not found locally, downloading...")
                     EngineStatusManager.shared.log(.info, "Preload", "Downloading Whisper model (not cached)...")
                     whisperKit = try await WhisperKit(
                         model: actualModelId,
@@ -468,14 +596,14 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 downloadedWhisperModels.insert(actualModelId)
 
                 // Warmup with silent audio
-                logger.info("Running Whisper warmup inference...")
+                AppLogger.shared.info(.transcription, "Running Whisper warmup inference...")
                 EngineStatusManager.shared.log(.debug, "Preload", "Running warmup inference...")
                 let silentAudio = [Float](repeating: 0.0, count: 16000)
                 _ = try? await whisperKit?.transcribe(audioArray: silentAudio)
 
                 EngineStatusManager.shared.currentModel = "whisper:\(actualModelId)"
                 let elapsed = Date().timeIntervalSince(startTime)
-                logger.info("Whisper model \(actualModelId) preloaded and warmed up")
+                AppLogger.shared.info(.transcription, "Whisper model \(actualModelId) preloaded and warmed up")
                 EngineStatusManager.shared.log(.info, "Preload", "✓ Whisper \(actualModelId) ready in \(String(format: "%.1f", elapsed))s")
             }
 
@@ -483,7 +611,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         } catch {
             let elapsed = Date().timeIntervalSince(startTime)
-            logger.error("Failed to preload model: \(error.localizedDescription)")
+            AppLogger.shared.error(.transcription, "Failed to preload model: \(error.localizedDescription)")
             EngineStatusManager.shared.log(.error, "Preload", "✗ Failed after \(String(format: "%.1f", elapsed))s: \(error.localizedDescription)")
             reply(error.localizedDescription)
         }
@@ -496,7 +624,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             self.asrManager = nil
             self.currentParakeetModelId = nil
             EngineStatusManager.shared.currentModel = nil
-            logger.info("All models unloaded")
+            AppLogger.shared.info(.transcription, "All models unloaded")
             EngineStatusManager.shared.log(.info, "Engine", "All models unloaded")
             reply()
         }
@@ -559,14 +687,14 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     }
 
     nonisolated func ping(reply: @escaping (Bool) -> Void) {
-        logger.info("[XPC] ping received, responding true")
+        AppLogger.shared.info(.transcription, "[XPC] ping received, responding true")
         reply(true)
     }
 
     // MARK: - Graceful Shutdown
 
     nonisolated func requestShutdown(waitForCompletion: Bool, reply: @escaping (Bool) -> Void) {
-        logger.info("[XPC] Shutdown requested (waitForCompletion: \(waitForCompletion))")
+        AppLogger.shared.info(.transcription, "[XPC] Shutdown requested (waitForCompletion: \(waitForCompletion))")
 
         Task { @MainActor in
             // Stop accepting new work immediately
@@ -593,7 +721,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
             // Give the reply a moment to send, then exit
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                logger.info("TalkieEngine exiting gracefully")
+                AppLogger.shared.info(.transcription, "TalkieEngine exiting gracefully")
                 EngineStatusManager.shared.log(.info, "Engine", "Goodbye!")
                 NSApp.terminate(nil)
             }
@@ -632,12 +760,12 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         // Check if already downloaded
         if family == "parakeet" && downloadedParakeetModels.contains(actualModelId) {
-            logger.info("Parakeet model \(actualModelId) already downloaded")
+            AppLogger.shared.info(.transcription, "Parakeet model \(actualModelId) already downloaded")
             EngineStatusManager.shared.log(.debug, "Download", "Parakeet \(actualModelId) already cached")
             reply(nil)
             return
         } else if family == "whisper" && downloadedWhisperModels.contains(actualModelId) {
-            logger.info("Whisper model \(actualModelId) already downloaded")
+            AppLogger.shared.info(.transcription, "Whisper model \(actualModelId) already downloaded")
             EngineStatusManager.shared.log(.debug, "Download", "Whisper \(actualModelId) already cached")
             reply(nil)
             return
@@ -649,7 +777,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         downloadedBytes = 0
         totalDownloadBytes = nil
 
-        logger.info("Starting download for \(family) model: \(actualModelId)")
+        AppLogger.shared.info(.transcription, "Starting download for \(family) model: \(actualModelId)")
         EngineStatusManager.shared.log(.info, "Download", "Starting download: \(family):\(actualModelId)")
 
         let startTime = Date()
@@ -672,12 +800,12 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                         self.currentDownloadModelId = nil
                         self.downloadProgress = 1.0
                         let elapsed = Date().timeIntervalSince(startTime)
-                        logger.info("Parakeet model \(actualModelId) downloaded successfully")
+                        AppLogger.shared.info(.transcription, "Parakeet model \(actualModelId) downloaded successfully")
                         EngineStatusManager.shared.log(.info, "Download", "✓ Parakeet \(actualModelId) downloaded in \(String(format: "%.1f", elapsed))s")
                     }
                 } else {
                     // Download Whisper model using model name and downloadBase
-                    logger.info("Downloading Whisper model \(actualModelId)...")
+                    AppLogger.shared.info(.transcription, "Downloading Whisper model \(actualModelId)...")
                     let _ = try await WhisperKit(
                         model: actualModelId,
                         downloadBase: self.whisperModelsBaseURL,
@@ -690,7 +818,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                         self.currentDownloadModelId = nil
                         self.downloadProgress = 1.0
                         let elapsed = Date().timeIntervalSince(startTime)
-                        logger.info("Whisper model \(actualModelId) downloaded successfully to \(self.whisperModelPath(for: actualModelId))")
+                        AppLogger.shared.info(.transcription, "Whisper model \(actualModelId) downloaded successfully to \(self.whisperModelPath(for: actualModelId))")
                         EngineStatusManager.shared.log(.info, "Download", "✓ Whisper \(actualModelId) downloaded in \(String(format: "%.1f", elapsed))s")
                     }
                 }
@@ -701,7 +829,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                     self.isDownloading = false
                     self.currentDownloadModelId = nil
                     let elapsed = Date().timeIntervalSince(startTime)
-                    logger.error("Failed to download model \(actualModelId): \(error.localizedDescription)")
+                    AppLogger.shared.error(.transcription, "Failed to download model \(actualModelId): \(error.localizedDescription)")
                     EngineStatusManager.shared.log(.error, "Download", "✗ Failed after \(String(format: "%.1f", elapsed))s: \(error.localizedDescription)")
                 }
                 reply(error.localizedDescription)
@@ -738,18 +866,18 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             self.isDownloading = false
             self.currentDownloadModelId = nil
             self.downloadProgress = 0
-            logger.info("Download cancelled")
+            AppLogger.shared.info(.transcription, "Download cancelled")
             EngineStatusManager.shared.log(.warning, "Download", "Cancelled download: \(modelId)")
             reply()
         }
     }
 
     nonisolated func getAvailableModels(reply: @escaping (Data?) -> Void) {
-        logger.info("[XPC] getAvailableModels called")
+        AppLogger.shared.info(.transcription, "[XPC] getAvailableModels called")
         Task { @MainActor in
             var models: [ModelInfo] = []
 
-            logger.info("[Models] Building model list - Whisper downloaded: \(self.downloadedWhisperModels), Parakeet downloaded: \(self.downloadedParakeetModels)")
+            AppLogger.shared.info(.transcription, "[Models] Building model list - Whisper downloaded: \(self.downloadedWhisperModels), Parakeet downloaded: \(self.downloadedParakeetModels)")
 
             // Add Whisper models
             for model in Self.knownWhisperModels {
@@ -781,14 +909,14 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 ))
             }
 
-            logger.info("[Models] Returning \(models.count) models to client")
+            AppLogger.shared.info(.transcription, "[Models] Returning \(models.count) models to client")
 
             do {
                 let data = try JSONEncoder().encode(models)
-                logger.info("[Models] Encoded \(data.count) bytes of model data")
+                AppLogger.shared.info(.transcription, "[Models] Encoded \(data.count) bytes of model data")
                 reply(data)
             } catch {
-                logger.error("[Models] Failed to encode models: \(error.localizedDescription)")
+                AppLogger.shared.error(.transcription, "[Models] Failed to encode models: \(error.localizedDescription)")
                 reply(nil)
             }
         }

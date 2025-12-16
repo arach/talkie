@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 // MARK: - Engine Log Entry
 
@@ -29,6 +30,19 @@ struct EngineLogEntry: Identifiable, Equatable {
             case .warning: return .orange
             case .error: return Color(red: 1.0, green: 0.4, blue: 0.4)
             }
+        }
+    }
+}
+
+// MARK: - Engine Service Mode UI Extension
+
+extension EngineServiceMode {
+    /// Color for UI display (SwiftUI Color)
+    var color: Color {
+        switch self {
+        case .debug: return .orange
+        case .dev: return Color(red: 0.4, green: 0.8, blue: 0.4)  // Green
+        case .production: return .gray
         }
     }
 }
@@ -63,6 +77,7 @@ struct TranscriptionStep: Identifiable {
 final class TranscriptionTrace {
     let jobId = UUID()
     let startTime: Date = Date()
+    var externalRefId: String?  // Client-provided reference ID for correlation with TalkieLive
     private var steps: [TranscriptionStep] = []
     private var stepStart: Date?
     private var currentStepName: String?
@@ -138,6 +153,7 @@ struct TranscriptionMetric: Identifiable {
     let modelId: String?
     let audioFilename: String?
     let audioSamples: Int?   // Number of samples processed
+    let externalRefId: String?  // Client-provided reference ID for correlation
 
     init(
         timestamp: Date,
@@ -148,7 +164,8 @@ struct TranscriptionMetric: Identifiable {
         steps: [TranscriptionStep] = [],
         modelId: String? = nil,
         audioFilename: String? = nil,
-        audioSamples: Int? = nil
+        audioSamples: Int? = nil,
+        externalRefId: String? = nil
     ) {
         self.timestamp = timestamp
         self.elapsedSeconds = elapsedSeconds
@@ -159,6 +176,7 @@ struct TranscriptionMetric: Identifiable {
         self.modelId = modelId
         self.audioFilename = audioFilename
         self.audioSamples = audioSamples
+        self.externalRefId = externalRefId
     }
 
     /// Has detailed step breakdown
@@ -204,6 +222,9 @@ class EngineStatusManager: ObservableObject {
     // Launch mode info (set from main.swift)
     @Published var launchMode: EngineServiceMode = .dev
     @Published var activeServiceName: String = ""
+
+    // Deep link navigation - set to highlight a specific metric by externalRefId
+    @Published var highlightedMetricRefId: String?
 
     // Executable path for debugging
     let executablePath: String = Bundle.main.executablePath ?? "Unknown"
@@ -400,12 +421,18 @@ class EngineStatusManager: ObservableObject {
             steps: trace?.getSteps() ?? [],
             modelId: modelId,
             audioFilename: audioFilename,
-            audioSamples: audioSamples
+            audioSamples: audioSamples,
+            externalRefId: trace?.externalRefId
         )
         recentMetrics.insert(metric, at: 0)
         if recentMetrics.count > maxMetrics {
             recentMetrics = Array(recentMetrics.prefix(maxMetrics))
         }
+    }
+
+    /// Find a metric by external reference ID
+    func findMetric(byExternalRefId refId: String) -> TranscriptionMetric? {
+        recentMetrics.first { $0.externalRefId == refId }
     }
 
     /// Average transcription latency in seconds
@@ -562,6 +589,91 @@ struct EngineStatusView: View {
         return result
     }
 
+    // MARK: - Copy Diagnostics
+
+    private func copyDiagnostics() {
+        var output = ""
+
+        // Header
+        output += "=== TALKIEENGINE DIAGNOSTICS ===\n"
+        output += "Generated: \(Date().formatted(.dateTime))\n\n"
+
+        // Engine Info
+        output += "--- ENGINE INFO ---\n"
+        output += "Mode: \(statusManager.launchMode.displayName) (\(statusManager.activeServiceName))\n"
+        output += "PID: \(ProcessInfo.processInfo.processIdentifier)\n"
+        output += "Version: \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown")\n"
+        output += "Uptime: \(statusManager.formattedUptime)\n"
+        output += "Started: \(statusManager.uptime > 0 ? Date(timeIntervalSinceNow: -statusManager.uptime).formatted(.dateTime) : "N/A")\n"
+        output += "Current Model: \(statusManager.currentModel ?? "None")\n"
+        output += "Debug Build: \(statusManager.launchMode == .debug ? "Yes" : "No")\n\n"
+
+        // Performance Stats
+        output += "--- PERFORMANCE ---\n"
+        output += "Total Transcriptions: \(statusManager.totalTranscriptions)\n"
+        output += "Recent Metrics: \(statusManager.recentMetrics.count)\n"
+        if let avgLatency = statusManager.averageLatency {
+            output += "Average Latency: \(String(format: "%.0f", avgLatency * 1000))ms\n"
+        }
+        if let avgRTF = statusManager.averageRealtimeMultiplier {
+            output += "Average RTF: \(String(format: "%.1f", avgRTF))x\n"
+        }
+        #if DEBUG
+        output += "Peak Memory: \(String(format: "%.0f", statusManager.peakMemoryMB)) MB\n"
+        output += "Current Memory: \(String(format: "%.0f", statusManager.currentMemoryMB)) MB\n"
+        output += "CPU: \(String(format: "%.1f", statusManager.currentCpuPercent))%\n"
+        #endif
+        output += "\n"
+
+        // Recent Metrics (last 10)
+        if !statusManager.recentMetrics.isEmpty {
+            output += "--- RECENT TRANSCRIPTIONS (last 10) ---\n"
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm:ss"
+
+            for (i, metric) in statusManager.recentMetrics.prefix(10).enumerated() {
+                let latency = String(format: "%.0f", metric.elapsedSeconds * 1000)
+                let rtf = metric.audioDurationSeconds.map { dur in
+                    String(format: "%.1fx", dur / metric.elapsedSeconds)
+                } ?? "N/A"
+                let preview = metric.transcriptPreview?.prefix(40) ?? "N/A"
+
+                output += "\(i + 1). [\(formatter.string(from: metric.timestamp))] \(latency)ms • \(metric.wordCount)w • RTF: \(rtf)\n"
+                output += "   \"\(preview)\"\n"
+
+                // Include trace steps if available
+                if !metric.steps.isEmpty {
+                    output += "   Steps: "
+                    output += metric.steps.map { step in
+                        "\(step.name)=\(step.durationMs)ms"
+                    }.joined(separator: ", ")
+                    output += "\n"
+                }
+            }
+            output += "\n"
+        }
+
+        // Model Info
+        let downloadedModels = statusManager.models.filter(\.isDownloaded)
+        if !downloadedModels.isEmpty {
+            output += "--- DOWNLOADED MODELS ---\n"
+            for model in downloadedModels {
+                let loaded = model.isLoaded ? " [LOADED]" : ""
+                output += "• \(model.displayName) (\(model.family))\(loaded)\n"
+            }
+            output += "\n"
+        }
+
+        // Copy to clipboard
+//        let pasteboard = NSPasteboard.general
+//        pasteboard.clearContents()
+//        pasteboard.setString(output, forType: .string)
+
+        // Log success
+        AppLogger.shared.info(.system, "Diagnostics copied to clipboard (\(output.count) bytes)")
+        statusManager.log(.info, "Diagnostics", "Copied \(output.count) bytes to clipboard")
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header with status
@@ -608,6 +720,23 @@ struct EngineStatusView: View {
             #if DEBUG
             statusManager.stopProcessMonitor()
             #endif
+        }
+        .onChange(of: statusManager.highlightedMetricRefId) { _, newRefId in
+            // Handle deep link navigation to a specific trace
+            if let refId = newRefId {
+                // Switch to performance tab
+                selectedTab = .performance
+
+                // Find and expand the metric with this refId
+                if let metric = statusManager.findMetric(byExternalRefId: refId) {
+                    expandedMetricId = metric.id
+                }
+
+                // Clear the highlight after processing
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    statusManager.highlightedMetricRefId = nil
+                }
+            }
         }
     }
 
@@ -870,7 +999,6 @@ struct EngineStatusView: View {
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundColor(.white)
                 .lineLimit(2)
-                .textSelection(.enabled)
 
             Spacer()
         }
@@ -1009,6 +1137,23 @@ struct EngineStatusView: View {
                 #endif
 
                 Spacer()
+
+                // Copy Diagnostics button
+                Button(action: copyDiagnostics) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 10))
+                        Text("Copy Diagnostics")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(4)
+                    .foregroundColor(.white)
+                }
+                .buttonStyle(.plain)
+                .help("Copy engine diagnostics to clipboard")
             }
             .padding(12)
             .background(surfaceColor)

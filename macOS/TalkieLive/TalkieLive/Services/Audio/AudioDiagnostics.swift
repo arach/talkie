@@ -360,25 +360,30 @@ final class AudioDiagnostics: ObservableObject {
             ))
         }
 
-        // Only add fixes if there are actual issues
-        let hasIssues = !issues.isEmpty || checks.contains(where: { $0.status == .failed || $0.status == .warning })
+        // Always show remediation actions, even if all checks pass
+        // This helps users who have intermittent issues or want to proactively fix things
 
-        if hasIssues {
-            // Build fix list in priority order
-            if !fixes.contains(.boostInputVolume) && inputVolume < 80 {
-                // Offer volume boost if volume is notably low
-                fixes.insert(.boostInputVolume, at: 0)
-            }
+        // Build fix list in priority order
+        if !fixes.contains(.grantPermission) {
+            // Always offer permission fix first - it's the most common issue after sandbox changes
+            fixes.insert(.grantPermission, at: 0)
+        }
 
-            // Add standard fixes for troubleshooting
-            if !fixes.contains(.restartAudioDaemon) {
-                fixes.append(.restartAudioDaemon)
-            }
-            if !fixes.contains(.openSystemSettings) {
-                fixes.append(.openSystemSettings)
-            }
+        if !fixes.contains(.boostInputVolume) && inputVolume < 80 {
+            // Offer volume boost if volume is notably low
+            fixes.append(.boostInputVolume)
+        }
 
-            // Add unplug/replug as last resort
+        // Add standard fixes for troubleshooting
+        if !fixes.contains(.restartAudioDaemon) {
+            fixes.append(.restartAudioDaemon)
+        }
+        if !fixes.contains(.openSystemSettings) {
+            fixes.append(.openSystemSettings)
+        }
+
+        // Add unplug/replug as last resort
+        if !fixes.contains(.unplugReplug) {
             fixes.append(.unplugReplug)
         }
 
@@ -611,6 +616,100 @@ final class AudioDiagnostics: ObservableObject {
             success: false,
             message: "Could not open Privacy settings"
         )
+    }
+
+    // MARK: - Request Permission Directly
+
+    /// Request microphone permission directly from the app
+    /// This triggers the system permission dialog if not yet determined
+    func requestMicrophonePermission() async -> Bool {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+
+        switch status {
+        case .authorized:
+            logger.info("Microphone already authorized")
+            return true
+
+        case .notDetermined:
+            logger.info("Requesting microphone permission...")
+            let granted = await AVCaptureDevice.requestAccess(for: .audio)
+            logger.info("Microphone permission \(granted ? "granted" : "denied")")
+            // Re-run diagnostics after permission change
+            _ = await runDiagnostics()
+            return granted
+
+        case .denied, .restricted:
+            logger.warning("Microphone permission denied/restricted - opening settings")
+            _ = openPrivacySettings()
+            return false
+
+        @unknown default:
+            return false
+        }
+    }
+
+    // MARK: - Real Audio Test
+
+    /// Perform a real audio capture test to verify mic is actually working
+    /// Returns (success, peakLevel) where peakLevel is 0-1
+    func performAudioTest() async -> (success: Bool, peakLevel: Float, message: String) {
+        logger.info("Performing real audio capture test...")
+
+        // First check permission
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard status == .authorized else {
+            return (false, 0, "Microphone permission not granted")
+        }
+
+        // Try to capture a brief sample using AVAudioEngine
+        do {
+            let engine = AVAudioEngine()
+            let inputNode = engine.inputNode
+            let format = inputNode.outputFormat(forBus: 0)
+
+            // Check if format is valid
+            guard format.sampleRate > 0 else {
+                return (false, 0, "Invalid audio format - no input device?")
+            }
+
+            var peakLevel: Float = 0
+
+            // Install a tap to measure audio levels
+            inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
+                guard let channelData = buffer.floatChannelData?[0] else { return }
+                let frameLength = Int(buffer.frameLength)
+                var maxSample: Float = 0
+                for i in 0..<frameLength {
+                    let sample = abs(channelData[i])
+                    if sample > maxSample {
+                        maxSample = sample
+                    }
+                }
+                if maxSample > peakLevel {
+                    peakLevel = maxSample
+                }
+            }
+
+            try engine.start()
+
+            // Capture for 500ms
+            try await Task.sleep(for: .milliseconds(500))
+
+            engine.stop()
+            inputNode.removeTap(onBus: 0)
+
+            logger.info("Audio test complete - peak level: \(peakLevel)")
+
+            if peakLevel > 0.001 {
+                return (true, peakLevel, "Audio capture working (peak: \(Int(peakLevel * 100))%)")
+            } else {
+                return (false, peakLevel, "No audio detected - check mic connection")
+            }
+
+        } catch {
+            logger.error("Audio test failed: \(error.localizedDescription)")
+            return (false, 0, "Audio test failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Quick Fix (One-tap solution)

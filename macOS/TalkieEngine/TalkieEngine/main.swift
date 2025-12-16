@@ -9,7 +9,6 @@ import Cocoa
 import os
 import Darwin
 
-private let logger = Logger(subsystem: "jdi.talkie.engine", category: "Main")
 
 // MARK: - Single Instance Enforcement (Honor System)
 
@@ -20,11 +19,11 @@ func ensureSingleInstance() {
     let existingPIDs = findExistingEngineProcesses(excludingPID: myPID)
 
     guard !existingPIDs.isEmpty else {
-        logger.info("No existing TalkieEngine processes found")
+        AppLogger.shared.info(.system, "No existing TalkieEngine processes found")
         return
     }
 
-    logger.info("Found \(existingPIDs.count) existing TalkieEngine process(es): \(existingPIDs)")
+    AppLogger.shared.info(.system, "Found \(existingPIDs.count) existing TalkieEngine process(es): \(existingPIDs)")
 
     // Try to ask the existing service to shut down gracefully via XPC
     // This only works if both are on the same namespace (both debug or both production)
@@ -37,9 +36,9 @@ func ensureSingleInstance() {
         // XPC failed - likely different namespace (debug vs prod)
         // These are separate deployments, don't interfere with each other
         #if DEBUG
-        logger.info("Existing process is likely production build - debug and production can coexist")
+        AppLogger.shared.info(.system, "Existing process is likely production build - debug and production can coexist")
         #else
-        logger.info("Existing process is likely debug build - debug and production can coexist")
+        AppLogger.shared.info(.system, "Existing process is likely debug build - debug and production can coexist")
         #endif
         // Don't wait or kill - let them coexist on different namespaces
     }
@@ -83,7 +82,7 @@ func findExistingEngineProcesses(excludingPID myPID: Int32) -> [Int32] {
 /// This is the "honor system" - we ask nicely and wait
 /// Note: Only works if both instances are on the same namespace (both debug or both production)
 func requestGracefulShutdown() -> Bool {
-    logger.info("Requesting graceful shutdown of existing instance via \(kTalkieEngineServiceName)...")
+    AppLogger.shared.info(.system, "Requesting graceful shutdown of existing instance via \(kTalkieEngineServiceName)...")
 
     let connection = NSXPCConnection(machServiceName: kTalkieEngineServiceName, options: [])
     connection.remoteObjectInterface = NSXPCInterface(with: TalkieEngineProtocol.self)
@@ -95,7 +94,7 @@ func requestGracefulShutdown() -> Bool {
 
     let proxy = connection.remoteObjectProxyWithErrorHandler { error in
         // XPC error means we can't communicate - likely different namespace (debug vs prod)
-        logger.info("XPC connection failed (likely different namespace): \(error.localizedDescription)")
+        AppLogger.shared.info(.system, "XPC connection failed (likely different namespace): \(error.localizedDescription)")
         xpcFailed = true
         semaphore.signal()
     } as? TalkieEngineProtocol
@@ -103,7 +102,7 @@ func requestGracefulShutdown() -> Bool {
     // Ask to shut down, wait for completion of any in-progress work
     proxy?.requestShutdown(waitForCompletion: true) { accepted in
         shutdownAccepted = accepted
-        logger.info("Shutdown request \(accepted ? "accepted" : "rejected")")
+        AppLogger.shared.info(.system, "Shutdown request \(accepted ? "accepted" : "rejected")")
         semaphore.signal()
     }
 
@@ -134,7 +133,7 @@ func waitForProcessesToExit(pids: [Int32], timeout: TimeInterval) {
         }
 
         if !anyRunning {
-            logger.info("All existing TalkieEngine processes have exited")
+            AppLogger.shared.info(.system, "All existing TalkieEngine processes have exited")
             return
         }
 
@@ -143,10 +142,10 @@ func waitForProcessesToExit(pids: [Int32], timeout: TimeInterval) {
     }
 
     // Timeout - force kill any remaining
-    logger.warning("Timeout waiting for graceful shutdown, forcing termination")
+    AppLogger.shared.warning(.system, "Timeout waiting for graceful shutdown, forcing termination")
     for pid in pids {
         if kill(pid, 0) == 0 {
-            logger.warning("Force killing PID \(pid)")
+            AppLogger.shared.warning(.system, "Force killing PID \(pid)")
             kill(pid, SIGKILL)
         }
     }
@@ -162,7 +161,7 @@ let isDaemonMode = CommandLine.arguments.contains("--daemon")
 
 // MARK: - Main Entry Point
 
-logger.info("TalkieEngine starting (PID: \(ProcessInfo.processInfo.processIdentifier), mode: \(isDaemonMode ? "daemon" : "debug"))...")
+AppLogger.shared.info(.system, "TalkieEngine starting (PID: \(ProcessInfo.processInfo.processIdentifier), mode: \(isDaemonMode ? "daemon" : "debug"))...")
 
 // Determine XPC service name based on launch mode
 // Debug and Dev can run side-by-side on different XPC services
@@ -174,18 +173,18 @@ if isDaemonMode {
     // Daemon mode: use dev XPC (always running in background)
     activeServiceName = EngineServiceMode.dev.rawValue
     activeMode = .dev
-    logger.info("Running as DEV daemon → \(activeServiceName)")
+    AppLogger.shared.info(.system, "Running as DEV daemon → \(activeServiceName)")
 } else {
     // Xcode mode: use debug XPC (active development)
     activeServiceName = EngineServiceMode.debug.rawValue
     activeMode = .debug
-    logger.info("Running as DEBUG from Xcode → \(activeServiceName)")
+    AppLogger.shared.info(.system, "Running as DEBUG from Xcode → \(activeServiceName)")
 }
 #else
 // Production build - always use production XPC
 activeServiceName = EngineServiceMode.production.rawValue
 activeMode = .production
-logger.info("Running as PROD → \(activeServiceName)")
+AppLogger.shared.info(.system, "Running as PROD → \(activeServiceName)")
 #endif
 
 // No ensureSingleInstance() - debug and dev can coexist!
@@ -198,12 +197,12 @@ var listenerDelegate: EngineListenerDelegate!
 
 // We're on the main thread here, so @MainActor types can be created
 // Using MainActor.assumeIsolated since we're at global scope but on main thread
-logger.info("TalkieEngine: Initializing on main thread...")
+AppLogger.shared.info(.system, "TalkieEngine: Initializing on main thread...")
 
 MainActor.assumeIsolated {
     // Create the engine service on the main actor
     engineService = EngineService()
-    logger.info("TalkieEngine: EngineService created")
+    AppLogger.shared.info(.system, "TalkieEngine: EngineService created")
 }
 
 // Create wrapper with the engine service
@@ -211,12 +210,12 @@ serviceWrapper = XPCServiceWrapper(engine: engineService)
 listenerDelegate = EngineListenerDelegate(wrapper: serviceWrapper)
 
 // Create listener for the Mach service
-logger.info("TalkieEngine: Setting up XPC listener for \(activeServiceName)")
+AppLogger.shared.info(.system, "TalkieEngine: Setting up XPC listener for \(activeServiceName)")
 xpcListener = NSXPCListener(machServiceName: activeServiceName)
 xpcListener.delegate = listenerDelegate
 xpcListener.resume()
 
-logger.info("TalkieEngine: XPC listener resumed, starting app...")
+AppLogger.shared.info(.system, "TalkieEngine: XPC listener resumed, starting app...")
 
 // Configure status manager with launch mode info
 MainActor.assumeIsolated {

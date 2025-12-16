@@ -11,6 +11,36 @@ import os
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
 
+/// Log level for dev logging
+private enum LogLevel { case debug, info, warning, error }
+
+/// Dev-friendly console logging with OS_LOG level support
+/// In DEBUG: prints to console + os_log at .debug level (visible without filter)
+/// In RELEASE: only logs to os_log at appropriate level
+private func devLog(_ message: String, level: LogLevel = .info, file: String = #file, line: Int = #line) {
+    #if DEBUG
+    let filename = (file as NSString).lastPathComponent
+    let timestamp = ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withTime, .withColonSeparatorInTime])
+    let levelIcon = switch level {
+        case .debug: "🔍"
+        case .info: "ℹ️"
+        case .warning: "⚠️"
+        case .error: "❌"
+    }
+    print("[\(timestamp)] \(levelIcon) [Engine] \(message)  ← \(filename):\(line)")
+    // Also log to os_log at debug level so it appears in Console.app without filtering
+    logger.debug("\(message)")
+    #else
+    // In release, use appropriate log level
+    switch level {
+    case .debug: logger.debug("\(message)")
+    case .info: logger.info("\(message)")
+    case .warning: logger.warning("\(message)")
+    case .error: logger.error("\(message)")
+    }
+    #endif
+}
+
 /// Engine service modes for XPC connection
 public enum EngineServiceMode: String, CaseIterable, Identifiable {
     case production = "jdi.talkie.engine.xpc"
@@ -44,6 +74,13 @@ public enum EngineServiceMode: String, CaseIterable, Identifiable {
     func transcribe(
         audioPath: String,
         modelId: String,
+        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
+    )
+
+    func transcribe(
+        audioPath: String,
+        modelId: String,
+        externalRefId: String?,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 
@@ -451,8 +488,13 @@ public final class EngineClient: ObservableObject {
         for attempt in 1...3 {
             if attempt > 1 {
                 logger.info("[Connect] Retry attempt \(attempt)/3...")
-                // Reset connection state for retry
-                handleDisconnection(reason: "Retry attempt \(attempt)")
+
+                // Clean reset for retry - don't use handleDisconnection() as it triggers
+                // the debug→dev fallback which races with our retry loop
+                connection?.invalidate()
+                connection = nil
+                engineProxy = nil
+                connectionState = .disconnected
 
                 // Try to launch TalkieEngine explicitly on retry
                 await launchEngineIfNeeded()
@@ -516,23 +558,24 @@ public final class EngineClient: ObservableObject {
     /// - Parameters:
     ///   - audioPath: Path to audio file (client owns the file, engine reads directly)
     ///   - modelId: Model to use for transcription
-    public func transcribe(audioPath: String, modelId: String = "parakeet:v3") async throws -> String {
+    ///   - externalRefId: Optional reference ID for correlating with Engine traces (deep link support)
+    public func transcribe(audioPath: String, modelId: String = "parakeet:v3", externalRefId: String? = nil) async throws -> String {
         guard let proxy = engineProxy else {
             // Try to connect first
             let connected = await ensureConnected()
             guard connected, let proxy = engineProxy else {
                 throw EngineClientError.notConnected
             }
-            return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId)
+            return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId)
         }
 
-        return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId)
+        return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId)
     }
 
     /// Transcribe with automatic retry for "Already transcribing" errors
     /// This handles the case where engine is busy loading a model (can take 60+ seconds)
     /// or processing another transcription
-    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioPath: String, modelId: String) async throws -> String {
+    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?) async throws -> String {
         let maxAttempts = 30  // 30 attempts × 2s = 60s max wait
         let retryDelay: UInt64 = 2_000_000_000  // 2 seconds
 
@@ -540,7 +583,7 @@ public final class EngineClient: ObservableObject {
 
         for attempt in 1...maxAttempts {
             do {
-                return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId)
+                return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId)
             } catch let error as EngineClientError {
                 // Check if it's "Already transcribing" - wait and retry
                 if case .transcriptionFailed(let message) = error, message.contains("Already transcribing") {
@@ -559,50 +602,61 @@ public final class EngineClient: ObservableObject {
         throw lastError ?? EngineClientError.transcriptionFailed("Engine busy timeout")
     }
 
-    private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String) async throws -> String {
+    private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?) async throws -> String {
         let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
         logger.info("[Engine] Transcribing '\(fileName)' with model '\(modelId)'")
 
         let startTime = Date()
-        let timeoutSeconds: UInt64 = 120 // 2 minute timeout for long audio files
+        let timeoutSeconds: Double = 120 // 2 minute timeout for long audio files
 
-        // Use task group with timeout to prevent continuation leaks when XPC connection dies
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            // Task 1: The actual XPC call
-            group.addTask {
-                try await withCheckedThrowingContinuation { continuation in
-                    proxy.transcribe(audioPath: audioPath, modelId: modelId) { transcript, error in
-                        if let error = error {
-                            continuation.resume(throwing: EngineClientError.transcriptionFailed(error))
-                        } else if let transcript = transcript {
-                            continuation.resume(returning: transcript)
-                        } else {
-                            continuation.resume(throwing: EngineClientError.emptyResponse)
-                        }
-                    }
+        // Use a continuation wrapper that ensures exactly one resume
+        // This prevents leaks when XPC connection dies or timeout fires
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            // Track if we've already resumed to prevent double-resume
+            var hasResumed = false
+            let lock = NSLock()
+
+            func resumeOnce(with result: Result<String, Error>) {
+                lock.lock()
+                defer { lock.unlock() }
+                guard !hasResumed else { return }
+                hasResumed = true
+
+                switch result {
+                case .success(let value):
+                    continuation.resume(returning: value)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
                 }
             }
 
-            // Task 2: Timeout watchdog
-            group.addTask {
-                try await Task.sleep(nanoseconds: timeoutSeconds * 1_000_000_000)
-                throw EngineClientError.transcriptionFailed("Timeout after \(timeoutSeconds)s - engine may have disconnected")
+            // Start timeout timer
+            let timeoutWork = DispatchWorkItem {
+                resumeOnce(with: .failure(EngineClientError.transcriptionFailed("Timeout after \(Int(timeoutSeconds))s - engine may have disconnected")))
             }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
 
-            // Return first result (success or timeout), cancel the other
-            guard let result = try await group.next() else {
-                throw EngineClientError.transcriptionFailed("Unexpected task group state")
+            // Make XPC call
+            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId) { [weak self] transcript, error in
+                // Cancel timeout since we got a response
+                timeoutWork.cancel()
+
+                if let error = error {
+                    resumeOnce(with: .failure(EngineClientError.transcriptionFailed(error)))
+                } else if let transcript = transcript {
+                    // Update stats on success
+                    if let self = self {
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        self.transcriptionCount += 1
+                        self.lastTranscriptionAt = Date()
+                        let wordCount = transcript.split(separator: " ").count
+                        logger.info("[Engine] ✓ Transcription #\(self.transcriptionCount) completed in \(String(format: "%.1f", elapsed))s (\(wordCount) words)")
+                    }
+                    resumeOnce(with: .success(transcript))
+                } else {
+                    resumeOnce(with: .failure(EngineClientError.emptyResponse))
+                }
             }
-            group.cancelAll()
-
-            // Update stats on success
-            let elapsed = Date().timeIntervalSince(startTime)
-            self.transcriptionCount += 1
-            self.lastTranscriptionAt = Date()
-            let wordCount = result.split(separator: " ").count
-            logger.info("[Engine] ✓ Transcription #\(self.transcriptionCount) completed in \(String(format: "%.1f", elapsed))s (\(wordCount) words)")
-
-            return result
         }
     }
 

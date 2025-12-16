@@ -84,7 +84,7 @@ struct EngineTranscriptionService: TranscriptionService {
         let startTime = Date()
 
         // EngineClient.transcribe() now handles retry logic for "Already transcribing"
-        let text = try await client.transcribe(audioPath: request.audioPath, modelId: modelId)
+        let text = try await client.transcribe(audioPath: request.audioPath, modelId: modelId, externalRefId: request.externalRefId)
         let elapsed = Date().timeIntervalSince(startTime)
 
         logger.notice("═══════════════════════════════════════════════════════════")

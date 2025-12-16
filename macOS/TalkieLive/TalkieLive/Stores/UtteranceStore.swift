@@ -52,6 +52,9 @@ struct UtteranceMetadata: Codable, Hashable {
     var averageAmplitude: Float?
     var audioFilename: String?
 
+    // Engine trace deep link
+    var sessionID: String?  // 8-char hex reference for Engine trace correlation
+
     // User edits
     var wasEdited: Bool = false
     var originalText: String?
@@ -69,7 +72,8 @@ struct UtteranceMetadata: Codable, Hashable {
         perfInAppMs: Int? = nil,
         perfPreMs: Int? = nil,
         perfPostMs: Int? = nil,
-        audioFilename: String? = nil
+        audioFilename: String? = nil,
+        sessionID: String? = nil
     ) {
         self.activeAppBundleID = activeAppBundleID
         self.activeAppName = activeAppName
@@ -81,6 +85,7 @@ struct UtteranceMetadata: Codable, Hashable {
         self.perfPreMs = perfPreMs
         self.perfPostMs = perfPostMs
         self.audioFilename = audioFilename
+        self.sessionID = sessionID
     }
 
     /// Full URL to the audio file if it exists
@@ -149,6 +154,7 @@ struct UtteranceMetadata: Codable, Hashable {
         if merged.peakAmplitude == nil { merged.peakAmplitude = other.peakAmplitude }
         if merged.averageAmplitude == nil { merged.averageAmplitude = other.averageAmplitude }
         if merged.audioFilename == nil { merged.audioFilename = other.audioFilename }
+        if merged.sessionID == nil { merged.sessionID = other.sessionID }
 
         if merged.originalText == nil { merged.originalText = other.originalText }
         merged.wasEdited = merged.wasEdited || other.wasEdited
@@ -411,7 +417,8 @@ final class UtteranceStore: ObservableObject {
             perfInAppMs: live.perfInAppMs,
             perfPreMs: nil,
             perfPostMs: nil,
-            audioFilename: live.audioFilename
+            audioFilename: live.audioFilename,
+            sessionID: live.sessionID
         )
 
         // Extract rich context from metadata dictionary

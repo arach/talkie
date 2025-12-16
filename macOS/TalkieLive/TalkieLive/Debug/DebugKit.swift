@@ -720,6 +720,12 @@ struct StatusBar: View {
     @State private var showSuccess: Bool = false
     @State private var successTimer: Timer?
 
+    // PID display state
+    @State private var isHovered = false
+    @State private var showPID = false
+    @State private var pidCopied = false
+    private let pid = ProcessInfo.processInfo.processIdentifier
+
     private var errorCount: Int {
         events.events.filter { $0.type == .error }.count
     }
@@ -810,18 +816,38 @@ struct StatusBar: View {
                 .frame(height: 1)
 
             ZStack {
-                // Center - StatePill (truly centered, independent of other content)
-                StatePill(
-                    state: controller.state,
-                    isWarmingUp: whisperService.isWarmingUp,
-                    showSuccess: showSuccess,
-                    recordingDuration: recordingDuration,
-                    processingDuration: processingDuration,
-                    isEngineConnected: engineClient.isConnected,
-                    pendingQueueCount: LiveDatabase.countNeedsRetry(),
-                    onTap: toggleRecording,
-                    onQueueTap: { FailedQueueController.shared.show() }
-                )
+                // Center - StatePill with optional PID display
+                HStack(spacing: 8) {
+                    StatePill(
+                        state: controller.state,
+                        isWarmingUp: whisperService.isWarmingUp,
+                        showSuccess: showSuccess,
+                        recordingDuration: recordingDuration,
+                        processingDuration: processingDuration,
+                        isEngineConnected: engineClient.isConnected,
+                        pendingQueueCount: LiveDatabase.countNeedsRetry(),
+                        onTap: toggleRecording,
+                        onQueueTap: { FailedQueueController.shared.show() }
+                    )
+
+                    // PID appears next to pill on Control+hover
+                    if showPID {
+                        Button(action: copyPID) {
+                            Text("\(pid)")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(TalkieTheme.hover)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Click to copy PID")
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
+                }
                 .fixedSize()
 
                 // Left/Right content (won't affect pill centering)
@@ -855,7 +881,28 @@ struct StatusBar: View {
         .frame(height: 32)
         .background(barBackgroundColor)
         .animation(.easeInOut(duration: 0.2), value: isActive)
+        .animation(.easeInOut(duration: 0.15), value: showPID)
         .drawingGroup()
+        .onHover { hovering in
+            isHovered = hovering
+            if !hovering {
+                withAnimation { showPID = false }
+                pidCopied = false
+            }
+        }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active:
+                // Check for Control modifier while hovering
+                let controlHeld = NSEvent.modifierFlags.contains(.control)
+                if controlHeld != showPID {
+                    withAnimation { showPID = controlHeld }
+                }
+            case .ended:
+                withAnimation { showPID = false }
+                pidCopied = false
+            }
+        }
         .onChange(of: controller.state) { oldState, newState in
             handleStateChange(from: oldState, to: newState)
         }
@@ -865,6 +912,15 @@ struct StatusBar: View {
             } else {
                 stopWarmupTimer()
             }
+        }
+    }
+
+    private func copyPID() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("\(pid)", forType: .string)
+        withAnimation { pidCopied = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation { pidCopied = false }
         }
     }
 
@@ -1461,6 +1517,9 @@ struct MicStatusIcon: View {
 /// Engine connection status
 struct EngineStatusIcon: View {
     @ObservedObject private var engineClient = EngineClient.shared
+    @State private var isHovered = false
+    @State private var showPID = false
+    @State private var pidCopied = false
 
     private var statusColor: Color {
         switch engineClient.connectionState {
@@ -1473,28 +1532,86 @@ struct EngineStatusIcon: View {
 
     private var label: String {
         switch engineClient.connectionState {
-        case .connected, .connectedWrongBuild: return "Engine"
+        case .connected, .connectedWrongBuild:
+            // Show which XPC service we're connected to
+            if let mode = engineClient.connectedMode {
+                return mode.shortName
+            }
+            return "Engine"
         case .connecting: return "Connecting"
         case .disconnected, .error: return "Offline"
         }
     }
 
-    private var badge: String? {
-        if let status = engineClient.status, let isDebug = status.isDebugBuild, isDebug {
-            return "DEV"
+    var body: some View {
+        HStack(spacing: 6) {
+            StatusIcon(
+                icon: "cpu",
+                color: statusColor,
+                label: label,
+                detail: "TalkieEngine - Click: Settings, Shift+Click: Reconnect",
+                action: handleClick
+            )
+
+            // PID appears on Ctrl+hover
+            if showPID, let pid = engineClient.status?.pid {
+                Button(action: { copyPID(pid) }) {
+                    Text("\(pid)")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(TalkieTheme.hover)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Click to copy PID")
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
         }
-        return nil
+        .onHover { hovering in
+            isHovered = hovering
+            if !hovering {
+                withAnimation { showPID = false }
+                pidCopied = false
+            }
+        }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active:
+                // Check for Control modifier while hovering
+                let controlHeld = NSEvent.modifierFlags.contains(.control)
+                if controlHeld != showPID {
+                    withAnimation { showPID = controlHeld }
+                }
+            case .ended:
+                withAnimation { showPID = false }
+                pidCopied = false
+            }
+        }
     }
 
-    var body: some View {
-        StatusIcon(
-            icon: "cpu",
-            color: statusColor,
-            label: label,
-            detail: "TalkieEngine - Click to open Transcription settings",
-            badge: badge,
-            action: navigateToEngineSettings
-        )
+    private func copyPID(_ pid: Int32) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("\(pid)", forType: .string)
+        withAnimation { pidCopied = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation { pidCopied = false }
+        }
+    }
+
+    private func handleClick() {
+        // Check for Shift modifier
+        if NSEvent.modifierFlags.contains(.shift) {
+            // Shift+Click: Reconnect engine
+            AppLogger.shared.log(.system, "Manual engine reconnect", detail: "User triggered via Shift+Click")
+            engineClient.reconnect()
+        } else {
+            // Normal click: Navigate to settings
+            navigateToEngineSettings()
+        }
     }
 
     private func navigateToEngineSettings() {

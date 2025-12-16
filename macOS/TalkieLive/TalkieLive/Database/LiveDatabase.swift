@@ -13,34 +13,24 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "LiveDatabase")
 
 enum LiveDatabase {
-    /// App Group identifier shared with main Talkie app
-    static let appGroupID = "group.com.jdi.talkie"
-
     /// Database filename
     static let dbFilename = "live.sqlite"
 
-    /// Folder name within container
-    static let folderName = "TalkieLive"
+    /// Shared folder for all Talkie apps (unsandboxed)
+    static let folderName = "Talkie"
 
-    /// The resolved database URL (App Group preferred, fallback to local)
+    /// The resolved database URL (Application Support, shared by all apps)
+    /// ~/Library/Application Support/Talkie/live.sqlite
     static let databaseURL: URL = {
         let fm = FileManager.default
 
-        // Prefer App Group container for sharing with Talkie
-        if let groupContainer = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) {
-            let folderURL = groupContainer.appendingPathComponent(folderName, isDirectory: true)
-            try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
-            let dbURL = folderURL.appendingPathComponent(dbFilename)
-            logger.info("[LiveDatabase] Using App Group path: \(dbURL.path)")
-            return dbURL
-        }
-
-        // Fallback to local Application Support (dev mode / no entitlement)
-        logger.warning("[LiveDatabase] App Group not available, using local storage")
+        // Use shared Application Support directory - all apps are unsandboxed
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             let folderURL = appSupport.appendingPathComponent(folderName, isDirectory: true)
             try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
-            return folderURL.appendingPathComponent(dbFilename)
+            let dbURL = folderURL.appendingPathComponent(dbFilename)
+            logger.info("[LiveDatabase] Using shared database path: \(dbURL.path)")
+            return dbURL
         }
 
         fatalError("Could not determine database location")
@@ -103,8 +93,15 @@ enum LiveDatabase {
             }
 
             // v2: Rename whisperModel → transcriptionModel (now supports Parakeet, etc.)
+            // Only run if the old column exists (for existing databases)
             migrator.registerMigration("v2_rename_whisperModel") { db in
-                try db.execute(sql: "ALTER TABLE utterances RENAME COLUMN whisperModel TO transcriptionModel")
+                // Check if old column exists
+                let hasOldColumn = try db.tableExists("utterances") &&
+                    (try db.columns(in: "utterances").contains { $0.name == "whisperModel" })
+
+                if hasOldColumn {
+                    try db.execute(sql: "ALTER TABLE utterances RENAME COLUMN whisperModel TO transcriptionModel")
+                }
             }
 
             // v3: Add indexes for common queries (major performance improvement)
@@ -480,20 +477,22 @@ private extension LiveDatabase {
         var oldDbPaths: [URL] = []
         var jsonPaths: [URL] = []
 
-        // 1. Check App Group container (where old PastLives.sqlite likely lives)
-        if let groupContainer = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) {
-            let groupFolder = groupContainer.appendingPathComponent(folderName, isDirectory: true)
-            oldDbPaths.append(groupFolder.appendingPathComponent("PastLives.sqlite"))
-            jsonPaths.append(groupFolder.appendingPathComponent("utterances.json"))
-            logger.info("[LiveDatabase] Checking App Group for old data: \(groupFolder.path)")
-        }
-
-        // 2. Check ~/Library/Application Support/TalkieLive/
+        // Check for old data from previous sandboxed setup
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let appSupportFolder = appSupport.appendingPathComponent("TalkieLive")
-            oldDbPaths.append(appSupportFolder.appendingPathComponent("PastLives.sqlite"))
-            jsonPaths.append(appSupportFolder.appendingPathComponent("utterances.json"))
-            logger.info("[LiveDatabase] Checking App Support for old data: \(appSupportFolder.path)")
+            // 1. Try old Group Container location (manual path, no longer accessible via API)
+            let oldGroupPath = fm.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Group Containers/group.com.jdi.talkie/TalkieLive")
+            if fm.fileExists(atPath: oldGroupPath.path) {
+                oldDbPaths.append(oldGroupPath.appendingPathComponent("PastLives.sqlite"))
+                jsonPaths.append(oldGroupPath.appendingPathComponent("utterances.json"))
+                logger.info("[LiveDatabase] Found old Group Container data for migration: \(oldGroupPath.path)")
+            }
+
+            // 2. Check old Application Support/TalkieLive/ location
+            let oldAppSupport = appSupport.appendingPathComponent("TalkieLive")
+            oldDbPaths.append(oldAppSupport.appendingPathComponent("PastLives.sqlite"))
+            jsonPaths.append(oldAppSupport.appendingPathComponent("utterances.json"))
+            logger.info("[LiveDatabase] Checking old App Support for migration: \(oldAppSupport.path)")
         }
 
         // Log existing count but continue to check for additional old data
