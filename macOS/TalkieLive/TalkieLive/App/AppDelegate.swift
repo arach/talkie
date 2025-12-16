@@ -10,9 +10,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeyManager = HotKeyManager()  // Toggle mode hotkey
     private let pttHotKeyManager = HotKeyManager(signature: "TLPT", hotkeyID: 3)  // Push-to-talk hotkey
     private let queuePickerHotKeyManager = HotKeyManager(signature: "TLQP", hotkeyID: 2)
-    private let overlayController = RecordingOverlayController.shared
-    private let floatingPill = FloatingPillController.shared
     private var cancellables = Set<AnyCancellable>()
+
+    // Lazy UI controllers - initialized during boot sequence
+    private var overlayController: RecordingOverlayController { RecordingOverlayController.shared }
+    private var floatingPill: FloatingPillController { FloatingPillController.shared }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu bar app - keep running when windows are closed
@@ -20,23 +22,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Essential sync init (settings needed for appearance)
+        BootSequence.shared.initEssentials()
+
+        // Start async boot sequence
+        Task {
+            await BootSequence.shared.execute()
+            await self.postBootSetup()
+        }
+
+        // Sync setup that can't wait for boot
+        setupStatusBar()
+        setupMenu()
+    }
+
+    /// Setup that runs after boot sequence completes
+    private func postBootSetup() async {
         let settings = LiveSettings.shared
 
-        // Apply saved appearance mode on launch
-        settings.applyAppearance()
-
-        // Initialize retry manager (watches for engine reconnection)
-        _ = TranscriptionRetryManager.shared
-
-        // Action observer disabled - POC needs more work before it's useful
-        // The polling approach adds overhead without clear benefit yet
-        // #if DEBUG
-        // ActionObserver.shared.startObserving()
-        // #endif
-
+        // Create core pipeline
         let audio = MicrophoneCapture()
-
-        // Use EngineTranscriptionService - requires TalkieEngine to be running (no fallback)
         let transcription = EngineTranscriptionService(modelId: settings.selectedModelId)
         let router = TranscriptRouter(mode: settings.routingMode)
 
@@ -47,10 +52,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         // Pre-load model via Engine (no fallback)
-        Task {
-            await preloadModel(settings: settings)
-        }
+        await preloadModel(settings: settings)
 
+        // Setup UI wiring
+        setupStateObservation()
+        setupHotkeys()
+        setupFloatingPill()
+
+        // Show floating pill on launch
+        floatingPill.show()
+    }
+
+    // MARK: - Status Bar
+
+    private func setupStatusBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             if let image = NSImage(named: "MenuBarIcon") {
@@ -61,8 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             updateStatusBarTooltip()
         }
+    }
 
-        // Create menu
+    // MARK: - Menu Setup
+
+    private func setupMenu() {
         let menu = NSMenu()
 
         let recordItem = NSMenuItem(title: "Start Recording", action: #selector(toggleListeningFromMenu), keyEquivalent: "")
@@ -98,7 +116,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Set initial key equivalents from settings
         updateMenuKeyEquivalent()
+    }
 
+    // MARK: - State Observation
+
+    private func setupStateObservation() {
         // Observe state changes to update the icon, overlay, and floating pill
         liveController.$state
             .receive(on: DispatchQueue.main)
@@ -118,7 +140,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController.onCancel = { [weak self] in
             self?.liveController.cancelListening()
         }
+    }
 
+    // MARK: - Floating Pill
+
+    private func setupFloatingPill() {
         // Wire up floating pill - tap to toggle recording
         // Shift-click triggers interstitial mode (route to Talkie Core for editing)
         floatingPill.onTapWithShift = { [weak self] shiftHeld in
@@ -129,10 +155,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         floatingPill.onPushToQueue = { [weak self] in
             self?.liveController.pushToQueue()
         }
+    }
 
-        // Show floating pill on launch
-        floatingPill.show()
+    // MARK: - Hotkeys
 
+    private func setupHotkeys() {
         // Register hotkeys from settings
         registerHotkeys()
 
