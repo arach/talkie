@@ -589,7 +589,7 @@ struct LiveNavigationView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 28)
         .padding(.horizontal, isSidebarCollapsed ? 0 : 12)
-        .padding(.top, 8) // Clear traffic light buttons
+        .padding(.top, 52) // Clear traffic light buttons (standard macOS spacing)
     }
 
     /// Interactive chevron button with hover and press feedback
@@ -934,7 +934,7 @@ struct LiveNavigationView: View {
             Image(systemName: "sparkle")
                 .font(.system(size: 36))
                 .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
-            Text("Select a past life")
+            Text("Select an item to view details")
                 .font(Design.fontSM)
                 .foregroundColor(TalkieTheme.textMuted)
         }
