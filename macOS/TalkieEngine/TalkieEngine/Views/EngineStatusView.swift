@@ -46,6 +46,83 @@ struct EngineModelInfo: Identifiable {
     var isLoaded: Bool
 }
 
+// MARK: - Transcription Trace (Step-Level Timing)
+
+/// A single step in the transcription pipeline
+struct TranscriptionStep: Identifiable {
+    let id = UUID()
+    let name: String        // e.g., "file_check", "audio_load", "inference"
+    let startMs: Int        // Milliseconds from transcription start
+    let durationMs: Int     // How long this step took
+    let metadata: String?   // Optional detail (e.g., "8000 samples", "model loaded")
+
+    var endMs: Int { startMs + durationMs }
+}
+
+/// Collects timing for all steps in a transcription job
+final class TranscriptionTrace {
+    let jobId = UUID()
+    let startTime: Date = Date()
+    private var steps: [TranscriptionStep] = []
+    private var stepStart: Date?
+    private var currentStepName: String?
+
+    /// Begin timing a step
+    func begin(_ name: String) {
+        // End any previous step first
+        if let prevName = currentStepName, let prevStart = stepStart {
+            endStep(prevName, start: prevStart)
+        }
+        currentStepName = name
+        stepStart = Date()
+    }
+
+    /// End the current step with optional metadata
+    func end(_ metadata: String? = nil) {
+        guard let name = currentStepName, let start = stepStart else { return }
+        endStep(name, start: start, metadata: metadata)
+        currentStepName = nil
+        stepStart = nil
+    }
+
+    private func endStep(_ name: String, start: Date, metadata: String? = nil) {
+        let startMs = Int(start.timeIntervalSince(startTime) * 1000)
+        let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+        steps.append(TranscriptionStep(
+            name: name,
+            startMs: startMs,
+            durationMs: durationMs,
+            metadata: metadata
+        ))
+    }
+
+    /// Mark a point in time (zero-duration step)
+    func mark(_ name: String, metadata: String? = nil) {
+        let startMs = Int(Date().timeIntervalSince(startTime) * 1000)
+        steps.append(TranscriptionStep(
+            name: name,
+            startMs: startMs,
+            durationMs: 0,
+            metadata: metadata
+        ))
+    }
+
+    /// Get all recorded steps (sorted by start time)
+    func getSteps() -> [TranscriptionStep] {
+        return steps.sorted { $0.startMs < $1.startMs }
+    }
+
+    /// Total elapsed time since start
+    var elapsedMs: Int {
+        Int(Date().timeIntervalSince(startTime) * 1000)
+    }
+
+    /// Total elapsed seconds
+    var elapsedSeconds: Double {
+        Date().timeIntervalSince(startTime)
+    }
+}
+
 // MARK: - Transcription Metric
 
 struct TranscriptionMetric: Identifiable {
@@ -55,6 +132,42 @@ struct TranscriptionMetric: Identifiable {
     let audioDurationSeconds: Double?
     let wordCount: Int
     let transcriptPreview: String?  // First ~30 chars for reference
+
+    // Step-level breakdown for drill-down
+    let steps: [TranscriptionStep]
+    let modelId: String?
+    let audioFilename: String?
+    let audioSamples: Int?   // Number of samples processed
+
+    init(
+        timestamp: Date,
+        elapsedSeconds: Double,
+        audioDurationSeconds: Double? = nil,
+        wordCount: Int,
+        transcriptPreview: String? = nil,
+        steps: [TranscriptionStep] = [],
+        modelId: String? = nil,
+        audioFilename: String? = nil,
+        audioSamples: Int? = nil
+    ) {
+        self.timestamp = timestamp
+        self.elapsedSeconds = elapsedSeconds
+        self.audioDurationSeconds = audioDurationSeconds
+        self.wordCount = wordCount
+        self.transcriptPreview = transcriptPreview
+        self.steps = steps
+        self.modelId = modelId
+        self.audioFilename = audioFilename
+        self.audioSamples = audioSamples
+    }
+
+    /// Has detailed step breakdown
+    var hasTrace: Bool { !steps.isEmpty }
+
+    /// Longest step (bottleneck)
+    var bottleneck: TranscriptionStep? {
+        steps.max { $0.durationMs < $1.durationMs }
+    }
 }
 
 // MARK: - Process Snapshot (for monitoring)
@@ -252,14 +365,42 @@ class EngineStatusManager: ObservableObject {
 
     // MARK: - Latency Metrics
 
+    /// Record a transcription metric (legacy - no trace)
     func recordMetric(elapsed: Double, audioDuration: Double? = nil, wordCount: Int, transcript: String? = nil) {
+        recordMetric(
+            elapsed: elapsed,
+            audioDuration: audioDuration,
+            wordCount: wordCount,
+            transcript: transcript,
+            trace: nil,
+            modelId: nil,
+            audioFilename: nil,
+            audioSamples: nil
+        )
+    }
+
+    /// Record a transcription metric with full trace
+    func recordMetric(
+        elapsed: Double,
+        audioDuration: Double? = nil,
+        wordCount: Int,
+        transcript: String? = nil,
+        trace: TranscriptionTrace?,
+        modelId: String?,
+        audioFilename: String?,
+        audioSamples: Int?
+    ) {
         let preview = transcript.map { String($0.prefix(40)) }
         let metric = TranscriptionMetric(
             timestamp: Date(),
             elapsedSeconds: elapsed,
             audioDurationSeconds: audioDuration,
             wordCount: wordCount,
-            transcriptPreview: preview
+            transcriptPreview: preview,
+            steps: trace?.getSteps() ?? [],
+            modelId: modelId,
+            audioFilename: audioFilename,
+            audioSamples: audioSamples
         )
         recentMetrics.insert(metric, at: 0)
         if recentMetrics.count > maxMetrics {
@@ -396,6 +537,7 @@ struct EngineStatusView: View {
     @State private var filterLevel: EngineLogEntry.LogLevel? = nil
     @State private var searchQuery = ""
     @State private var autoScroll = true
+    @State private var expandedMetricId: UUID? = nil  // For performance drill-down
 
     private let accentGreen = Color(red: 0.4, green: 0.8, blue: 0.4)
     private let bgColor = Color(red: 0.08, green: 0.08, blue: 0.1)
@@ -929,49 +1071,230 @@ struct EngineStatusView: View {
 
         let latencyMs = Int(metric.elapsedSeconds * 1000)
         let latencyStr = latencyMs < 1000 ? "\(latencyMs)ms" : String(format: "%.2fs", metric.elapsedSeconds)
+        let isExpanded = expandedMetricId == metric.id
 
-        return HStack(spacing: 0) {
-            Text("#\(index)")
-                .frame(width: 40, alignment: .leading)
-                .foregroundColor(.gray)
+        return VStack(spacing: 0) {
+            // Main row (clickable)
+            HStack(spacing: 0) {
+                // Expand indicator
+                Image(systemName: metric.hasTrace ? (isExpanded ? "chevron.down" : "chevron.right") : "circle.fill")
+                    .font(.system(size: metric.hasTrace ? 9 : 4))
+                    .foregroundColor(metric.hasTrace ? .gray : .gray.opacity(0.3))
+                    .frame(width: 16)
 
-            Text(timeFormatter.string(from: metric.timestamp))
-                .frame(width: 70, alignment: .leading)
-                .foregroundColor(.white)
-
-            Text(latencyStr)
-                .frame(width: 70, alignment: .trailing)
-                .foregroundColor(latencyMs < 500 ? accentGreen : (latencyMs < 2000 ? .orange : .red))
-
-            Text("\(metric.wordCount)")
-                .frame(width: 50, alignment: .trailing)
-                .foregroundColor(.white)
-
-            if let audioDuration = metric.audioDurationSeconds, audioDuration > 0 {
-                let rtf = metric.elapsedSeconds / audioDuration
-                Text(String(format: "%.1f%%", rtf * 100))
-                    .frame(width: 50, alignment: .trailing)
-                    .foregroundColor(rtf < 0.02 ? accentGreen : (rtf < 0.05 ? .white : .orange))
-            } else {
-                Text("-")
-                    .frame(width: 50, alignment: .trailing)
+                Text("#\(index)")
+                    .frame(width: 30, alignment: .leading)
                     .foregroundColor(.gray)
+
+                Text(timeFormatter.string(from: metric.timestamp))
+                    .frame(width: 70, alignment: .leading)
+                    .foregroundColor(.white)
+
+                Text(latencyStr)
+                    .frame(width: 70, alignment: .trailing)
+                    .foregroundColor(latencyMs < 500 ? accentGreen : (latencyMs < 2000 ? .orange : .red))
+
+                Text("\(metric.wordCount)")
+                    .frame(width: 50, alignment: .trailing)
+                    .foregroundColor(.white)
+
+                if let audioDuration = metric.audioDurationSeconds, audioDuration > 0 {
+                    let rtf = metric.elapsedSeconds / audioDuration
+                    Text(String(format: "%.1f%%", rtf * 100))
+                        .frame(width: 50, alignment: .trailing)
+                        .foregroundColor(rtf < 0.02 ? accentGreen : (rtf < 0.05 ? .white : .orange))
+                } else {
+                    Text("-")
+                        .frame(width: 50, alignment: .trailing)
+                        .foregroundColor(.gray)
+                }
+
+                // Transcript preview
+                Text(metric.transcriptPreview ?? "-")
+                    .frame(minWidth: 100, alignment: .leading)
+                    .padding(.leading, 12)
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer()
+            }
+            .font(.system(size: 11, design: .monospaced))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(index % 2 == 0 ? Color.clear : surfaceColor.opacity(0.3))
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if metric.hasTrace {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        expandedMetricId = isExpanded ? nil : metric.id
+                    }
+                }
             }
 
-            // Transcript preview
-            Text(metric.transcriptPreview ?? "-")
-                .frame(minWidth: 100, alignment: .leading)
-                .padding(.leading, 12)
+            // Expanded step breakdown
+            if isExpanded && metric.hasTrace {
+                performanceStepBreakdown(metric: metric)
+            }
+        }
+    }
+
+    /// Step breakdown view for expanded metric row
+    private func performanceStepBreakdown(metric: TranscriptionMetric) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("STEP BREAKDOWN")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(.gray)
+
+                Spacer()
+
+                if let bottleneck = metric.bottleneck {
+                    Text("Bottleneck: \(bottleneck.name) (\(bottleneck.durationMs)ms)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.orange)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(surfaceColor.opacity(0.8))
+
+            // Visual timeline
+            performanceTimeline(steps: metric.steps, totalMs: Int(metric.elapsedSeconds * 1000))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+
+            // Step list
+            ForEach(metric.steps) { step in
+                performanceStepRow(step: step, totalMs: Int(metric.elapsedSeconds * 1000))
+            }
+
+            // Metadata footer
+            if metric.modelId != nil || metric.audioFilename != nil || metric.audioSamples != nil {
+                Divider().background(borderColor)
+                HStack(spacing: 16) {
+                    if let model = metric.modelId {
+                        Text("Model: \(model)")
+                    }
+                    if let filename = metric.audioFilename {
+                        Text("File: \(filename)")
+                    }
+                    if let samples = metric.audioSamples {
+                        Text("Samples: \(samples)")
+                    }
+                }
+                .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.gray)
-                .lineLimit(1)
-                .truncationMode(.tail)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+        }
+        .background(surfaceColor.opacity(0.5))
+        .overlay(
+            Rectangle()
+                .fill(accentGreen.opacity(0.3))
+                .frame(width: 2),
+            alignment: .leading
+        )
+    }
+
+    /// Visual timeline bar for steps
+    private func performanceTimeline(steps: [TranscriptionStep], totalMs: Int) -> some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                // Background
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(borderColor)
+                    .frame(height: 16)
+
+                // Steps as colored segments
+                ForEach(steps) { step in
+                    if step.durationMs > 0 && totalMs > 0 {
+                        let width = CGFloat(step.durationMs) / CGFloat(totalMs) * geometry.size.width
+                        let offset = CGFloat(step.startMs) / CGFloat(totalMs) * geometry.size.width
+
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(colorForStep(step.name))
+                            .frame(width: max(width, 2), height: 14)
+                            .offset(x: offset)
+                            .help("\(step.name): \(step.durationMs)ms")
+                    }
+                }
+            }
+        }
+        .frame(height: 16)
+    }
+
+    /// Single step row in breakdown
+    private func performanceStepRow(step: TranscriptionStep, totalMs: Int) -> some View {
+        let percentage = totalMs > 0 ? Double(step.durationMs) / Double(totalMs) * 100 : 0
+
+        return HStack(spacing: 8) {
+            // Color indicator
+            Circle()
+                .fill(colorForStep(step.name))
+                .frame(width: 8, height: 8)
+
+            // Step name
+            Text(step.name)
+                .frame(width: 100, alignment: .leading)
+                .foregroundColor(.white)
+
+            // Timing
+            Text("@\(step.startMs)ms")
+                .frame(width: 70, alignment: .trailing)
+                .foregroundColor(.gray)
+
+            Text("\(step.durationMs)ms")
+                .frame(width: 60, alignment: .trailing)
+                .foregroundColor(step.durationMs > 1000 ? .orange : (step.durationMs > 100 ? .white : accentGreen))
+
+            // Percentage bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(borderColor)
+                    Rectangle()
+                        .fill(colorForStep(step.name))
+                        .frame(width: geometry.size.width * CGFloat(percentage / 100))
+                }
+            }
+            .frame(width: 60, height: 8)
+            .cornerRadius(2)
+
+            Text(String(format: "%.1f%%", percentage))
+                .frame(width: 50, alignment: .trailing)
+                .foregroundColor(.gray)
+
+            // Metadata
+            if let metadata = step.metadata {
+                Text(metadata)
+                    .foregroundColor(.gray.opacity(0.7))
+                    .lineLimit(1)
+            }
 
             Spacer()
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(.system(size: 10, design: .monospaced))
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(index % 2 == 0 ? Color.clear : surfaceColor.opacity(0.3))
+        .padding(.vertical, 3)
+    }
+
+    /// Color for step type
+    private func colorForStep(_ name: String) -> Color {
+        switch name {
+        case "file_check": return .blue
+        case "model_check": return .purple
+        case "model_load": return .orange
+        case "audio_load": return .cyan
+        case "audio_pad": return .teal
+        case "inference": return accentGreen
+        case "post_process": return .yellow
+        case "start", "complete": return .gray
+        case "error": return .red
+        default: return .gray
+        }
     }
 
     // MARK: - Status Bar

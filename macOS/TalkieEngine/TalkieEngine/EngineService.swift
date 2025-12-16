@@ -146,12 +146,20 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             return
         }
 
+        // Create trace for step-level timing
+        let trace = TranscriptionTrace()
+        trace.begin("file_check")
+
         // Verify file exists
         guard FileManager.default.fileExists(atPath: audioPath) else {
             EngineStatusManager.shared.log(.error, "Transcribe", "File not found: \(audioPath)")
             reply(nil, "Audio file not found")
             return
         }
+
+        // Get file size for metadata
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: audioPath)[.size] as? Int64) ?? 0
+        trace.end("\(fileSize) bytes")
 
         isTranscribing = true
         EngineStatusManager.shared.isTranscribing = true
@@ -165,30 +173,44 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         logger.info("Transcribing \(fileName) with \(family):\(actualModelId)")
         EngineStatusManager.shared.log(.info, "Transcribe", "Starting \(fileName) with \(family):\(actualModelId)")
 
-        let startTime = Date()
+        trace.mark("start", metadata: "\(family):\(actualModelId)")
 
         do {
-            let transcript: String
+            let result: TranscriptionResult
             if family == "parakeet" {
-                transcript = try await transcribeWithParakeet(audioPath: audioPath, modelId: actualModelId)
+                result = try await transcribeWithParakeet(audioPath: audioPath, modelId: actualModelId, trace: trace)
             } else {
-                transcript = try await transcribeWithWhisper(audioPath: audioPath, modelId: actualModelId)
+                result = try await transcribeWithWhisper(audioPath: audioPath, modelId: actualModelId, trace: trace)
             }
 
+            trace.mark("complete")
+
             totalTranscriptions += 1
-            let elapsed = Date().timeIntervalSince(startTime)
-            let elapsedMs = Int(elapsed * 1000)
-            let wordCount = transcript.split(separator: " ").count
-            logger.info("Transcribed #\(self.totalTranscriptions): \(transcript.prefix(50))...")
+            let elapsed = trace.elapsedSeconds
+            let elapsedMs = trace.elapsedMs
+            let wordCount = result.transcript.split(separator: " ").count
+            logger.info("Transcribed #\(self.totalTranscriptions): \(result.transcript.prefix(50))...")
             let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
             EngineStatusManager.shared.log(.info, "Transcribe", "✓ #\(totalTranscriptions) in \(timeStr) (\(wordCount) words)")
             EngineStatusManager.shared.totalTranscriptions = totalTranscriptions
-            EngineStatusManager.shared.recordMetric(elapsed: elapsed, wordCount: wordCount)
-            reply(transcript, nil)
+
+            // Record metric with full trace
+            EngineStatusManager.shared.recordMetric(
+                elapsed: elapsed,
+                audioDuration: result.audioDuration,
+                wordCount: wordCount,
+                transcript: result.transcript,
+                trace: trace,
+                modelId: modelId,
+                audioFilename: fileName,
+                audioSamples: result.sampleCount
+            )
+            reply(result.transcript, nil)
 
         } catch {
-            let elapsed = Date().timeIntervalSince(startTime)
-            let elapsedMs = Int(elapsed * 1000)
+            trace.mark("error", metadata: error.localizedDescription)
+            let elapsed = trace.elapsedSeconds
+            let elapsedMs = trace.elapsedMs
             let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
             logger.error("Transcription failed: \(error.localizedDescription)")
             EngineStatusManager.shared.log(.error, "Transcribe", "✗ Failed after \(timeStr): \(error.localizedDescription)")
@@ -196,11 +218,24 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         }
     }
 
+    /// Result from transcription methods (includes metadata for tracing)
+    private struct TranscriptionResult {
+        let transcript: String
+        let audioDuration: Double?
+        let sampleCount: Int?
+    }
+
     // MARK: - Whisper Transcription
 
-    private func transcribeWithWhisper(audioPath: String, modelId: String) async throws -> String {
+    private func transcribeWithWhisper(audioPath: String, modelId: String, trace: TranscriptionTrace) async throws -> TranscriptionResult {
+        // Check if model needs loading
+        trace.begin("model_check")
+        let needsModelLoad = whisperKit == nil || currentWhisperModelId != modelId
+        trace.end(needsModelLoad ? "needs load" : "already loaded")
+
         // Load model if needed
-        if whisperKit == nil || currentWhisperModelId != modelId {
+        if needsModelLoad {
+            trace.begin("model_load")
             logger.info("Loading Whisper model: \(modelId)")
             EngineStatusManager.shared.log(.info, "Whisper", "Loading model: \(modelId)")
 
@@ -210,6 +245,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 logger.info("Loading from local folder: \(localPath)")
                 EngineStatusManager.shared.log(.debug, "Whisper", "Loading from local cache...")
                 whisperKit = try await WhisperKit(modelFolder: localPath, verbose: false)
+                trace.end("from cache")
             } else {
                 // Model not downloaded - download it
                 logger.info("Model not found locally, downloading...")
@@ -219,6 +255,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                     downloadBase: whisperModelsBaseURL,
                     verbose: false
                 )
+                trace.end("downloaded")
             }
             currentWhisperModelId = modelId
             downloadedWhisperModels.insert(modelId)
@@ -230,26 +267,34 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             throw EngineError.modelNotLoaded
         }
 
-        // Transcribe directly from client's file - no temp file needed
-        let startTime = Date()
+        // Transcribe directly from client's file
+        trace.begin("inference")
         let results = try await whisper.transcribe(audioPath: audioPath)
-        let elapsed = Date().timeIntervalSince(startTime)
+        trace.end("\(results.count) segments")
 
+        trace.begin("post_process")
         let transcript = results.map { $0.text }
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        trace.end()
 
-        logger.info("Whisper transcribed in \(String(format: "%.1f", elapsed))s")
-        return transcript
+        logger.info("Whisper transcribed: \(transcript.prefix(50))...")
+        return TranscriptionResult(transcript: transcript, audioDuration: nil, sampleCount: nil)
     }
 
     // MARK: - Parakeet Transcription
 
-    private func transcribeWithParakeet(audioPath: String, modelId: String) async throws -> String {
+    private func transcribeWithParakeet(audioPath: String, modelId: String, trace: TranscriptionTrace) async throws -> TranscriptionResult {
         let asrVersion: AsrModelVersion = modelId == "v2" ? .v2 : .v3
 
+        // Check if model needs loading
+        trace.begin("model_check")
+        let needsModelLoad = asrManager == nil || currentParakeetModelId != modelId
+        trace.end(needsModelLoad ? "needs load" : "already loaded")
+
         // Load model if needed
-        if asrManager == nil || currentParakeetModelId != modelId {
+        if needsModelLoad {
+            trace.begin("model_load")
             logger.info("Loading Parakeet model: \(modelId)")
             EngineStatusManager.shared.log(.info, "Parakeet", "Loading model: \(modelId)")
 
@@ -267,28 +312,41 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             downloadedParakeetModels.insert(modelId)
             EngineStatusManager.shared.currentModel = "parakeet:\(modelId)"
             EngineStatusManager.shared.log(.info, "Parakeet", "Model \(modelId) loaded and ready")
+            trace.end("initialized")
         }
 
         guard let manager = asrManager else {
             throw EngineError.modelNotLoaded
         }
 
-        // Load audio samples and add end padding to prevent truncation
-        let startTime = Date()
+        // Load and convert audio to 16kHz mono samples
+        trace.begin("audio_load")
         let audioURL = URL(fileURLWithPath: audioPath)
         var samples = try await loadAudioSamples(from: audioURL)
+        let originalSampleCount = samples.count
+        // Calculate audio duration: samples at 16kHz
+        let audioDuration = Double(originalSampleCount) / 16000.0
+        trace.end("\(originalSampleCount) samples (\(String(format: "%.1f", audioDuration))s)")
 
         // Add 500ms of silence at the end (8000 samples at 16kHz)
         // This gives the transducer decoder time to finish without cutting off final words
+        trace.begin("audio_pad")
         let paddingSamples = [Float](repeating: 0.0, count: 8000)
         samples.append(contentsOf: paddingSamples)
+        trace.end("+8000 samples")
 
+        // Run inference
+        trace.begin("inference")
         let result = try await manager.transcribe(samples)
-        let elapsed = Date().timeIntervalSince(startTime)
+        trace.end()
 
+        // Post-process
+        trace.begin("post_process")
         let transcript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        logger.info("Parakeet transcribed in \(String(format: "%.1f", elapsed))s (\(samples.count) samples, +500ms padding)")
-        return transcript
+        trace.end()
+
+        logger.info("Parakeet transcribed: \(transcript.prefix(50))... (\(samples.count) samples)")
+        return TranscriptionResult(transcript: transcript, audioDuration: audioDuration, sampleCount: originalSampleCount)
     }
 
     /// Load audio file and convert to 16kHz mono Float32 samples
