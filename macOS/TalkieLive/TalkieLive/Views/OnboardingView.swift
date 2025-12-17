@@ -68,8 +68,12 @@ final class OnboardingManager: ObservableObject {
     }
 
     func checkMicrophonePermission() {
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        hasMicrophonePermission = (status == .authorized)
+        // Use AVAudioApplication for macOS audio recording permissions
+        AVAudioApplication.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                self.hasMicrophonePermission = granted
+            }
+        }
     }
 
     func checkAccessibilityPermission() {
@@ -78,9 +82,16 @@ final class OnboardingManager: ObservableObject {
 
     func requestMicrophonePermission() async {
         isRequestingPermission = true
-        let granted = await AVCaptureDevice.requestAccess(for: .audio)
-        hasMicrophonePermission = granted
-        isRequestingPermission = false
+        // Use AVAudioApplication.requestRecordPermission for macOS
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
+                DispatchQueue.main.async {
+                    self.hasMicrophonePermission = granted
+                    self.isRequestingPermission = false
+                    continuation.resume()
+                }
+            }
+        }
     }
 
     func openAccessibilitySettings() {
