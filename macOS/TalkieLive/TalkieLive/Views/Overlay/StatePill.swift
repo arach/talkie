@@ -93,8 +93,8 @@ struct StatePill: View {
 
     private var sliverContent: some View {
         HStack(spacing: 4) {
-            // Warning indicator for offline/queue
-            if !isEngineConnected || pendingQueueCount > 0 {
+            // Warning indicator for offline/queue (don't show during active processing)
+            if !isEngineConnected || (pendingQueueCount > 0 && state == .idle && !showSuccess) {
                 Circle()
                     .fill(SemanticColor.warning)
                     .frame(width: 4, height: 4)
@@ -128,7 +128,7 @@ struct StatePill: View {
         switch state {
         case .idle: return TalkieTheme.textMuted
         case .listening: return .red
-        case .transcribing: return SemanticColor.warning
+        case .transcribing: return TalkieTheme.textSecondary  // Neutral color during processing
         case .routing: return SemanticColor.success
         }
     }
@@ -180,8 +180,8 @@ struct StatePill: View {
         if !isEngineConnected { return SemanticColor.warning }
         switch state {
         case .idle: return TalkieTheme.textMuted
-        case .listening: return audioMonitor.isSilent ? SemanticColor.warning : .red
-        case .transcribing: return SemanticColor.warning
+        case .listening: return .red  // Always red when recording
+        case .transcribing: return TalkieTheme.textSecondary  // Neutral color during processing
         case .routing: return SemanticColor.success
         }
     }
@@ -239,14 +239,6 @@ struct StatePill: View {
                             .font(.system(size: 10, weight: .medium))
                     }
                     .foregroundColor(.purple)
-                } else if audioMonitor.isSilent {
-                    HStack(spacing: 4) {
-                        Text("No Audio")
-                            .font(.system(size: 10, weight: .medium))
-                        Image(systemName: "mic.slash")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundColor(SemanticColor.warning)
                 } else {
                     HStack(spacing: 4) {
                         Text(formatTime(recordingDuration))
