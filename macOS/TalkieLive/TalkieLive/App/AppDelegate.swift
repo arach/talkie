@@ -89,10 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let historyItem = NSMenuItem(title: "Show History...", action: #selector(showMainWindow), keyEquivalent: "h")
-        historyItem.keyEquivalentModifierMask = [.option, .command]
-        historyItem.target = self
-        menu.addItem(historyItem)
+        let talkieItem = NSMenuItem(title: "Show Talkie", action: #selector(showTalkie), keyEquivalent: "h")
+        talkieItem.keyEquivalentModifierMask = [.option, .command]
+        talkieItem.target = self
+        menu.addItem(talkieItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -280,17 +280,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func showMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        // Find and show the main window
-        for window in NSApp.windows {
-            if window.title == "Talkie Live" || window.identifier?.rawValue.contains("main") == true {
-                window.makeKeyAndOrderFront(nil)
-                return
+    @objc private func showTalkie() {
+        // Launch Talkie (main management app) via bundle identifier
+        let talkieBundleID = "jdi.talkie.core"
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true  // Bring to front
+
+        NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: "/Applications/Talkie.app"),
+            configuration: configuration
+        ) { app, error in
+            if let error = error {
+                AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
+
+                // Fallback: try opening via bundle ID
+                NSWorkspace.shared.launchApplication(
+                    withBundleIdentifier: talkieBundleID,
+                    options: [.default],
+                    additionalEventParamDescriptor: nil,
+                    launchIdentifier: nil
+                )
             }
         }
-        // If no window found, just activate the app - SwiftUI will create it
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func toggleFloatingPill(_ sender: NSMenuItem) {

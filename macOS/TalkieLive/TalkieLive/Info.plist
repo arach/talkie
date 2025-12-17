@@ -14,6 +14,10 @@
 		</dict>
 	</array>
 
+	<!-- Menu bar only app (no dock icon) -->
+	<key>LSUIElement</key>
+	<true/>
+
 	<!-- Usage Descriptions: Explain why we need each permission -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TalkieLive needs microphone access to continuously transcribe your speech in real-time.</string>

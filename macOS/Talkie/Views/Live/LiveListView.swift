@@ -540,7 +540,7 @@ struct LiveInspectorView: View {
                         Divider().opacity(0.5)
                         contextRow(icon: "text.word.spacing", label: "Words", value: utterance.wordCount.map { "\($0)" } ?? "—")
                         Divider().opacity(0.5)
-                        contextRow(icon: "waveform", label: "Model", value: utterance.whisperModel ?? "—")
+                        contextRow(icon: "waveform", label: "Model", value: utterance.transcriptionModel ?? "—")
                     }
                     .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
                 }
