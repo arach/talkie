@@ -103,6 +103,8 @@ struct TalkieNavigationView: View {
             statusBarView
         }
         .animation(.snappy(duration: 0.2), value: isSidebarCollapsed)
+        .padding(.top, 8)  // Breathing room for traffic lights
+        .padding(.horizontal, 1)  // Subtle edge spacing
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
         .onChange(of: allMemos.count) { _, _ in
