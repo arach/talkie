@@ -1146,6 +1146,34 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    // MARK: - API Key Existence Checks (no password prompt)
+
+    /// Check if API keys exist without fetching them (avoids password prompt)
+    func hasOpenAIKey() -> Bool {
+        keychain.exists(.openaiApiKey)
+    }
+
+    func hasAnthropicKey() -> Bool {
+        keychain.exists(.anthropicApiKey)
+    }
+
+    func hasGroqKey() -> Bool {
+        keychain.exists(.groqApiKey)
+    }
+
+    /// Fetch API key on demand (only when explicitly needed for edit/reveal)
+    func fetchOpenAIKey() -> String? {
+        keychain.retrieve(for: .openaiApiKey)
+    }
+
+    func fetchAnthropicKey() -> String? {
+        keychain.retrieve(for: .anthropicApiKey)
+    }
+
+    func fetchGroqKey() -> String? {
+        keychain.retrieve(for: .groqApiKey)
+    }
+
     var selectedModel: String {
         get { ensureInitialized(); return _selectedModel }
         set { _selectedModel = newValue }

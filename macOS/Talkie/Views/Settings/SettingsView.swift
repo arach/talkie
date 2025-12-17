@@ -26,7 +26,7 @@ struct SettingsView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
-    @State private var selectedSection: SettingsSection = .apiKeys  // Default to API Keys
+    @State private var selectedSection: SettingsSection = .appearance  // Default to Appearance (less aggressive)
 
     // Theme-aware colors for light/dark mode
     private var sidebarBackground: Color { Theme.current.backgroundSecondary }
