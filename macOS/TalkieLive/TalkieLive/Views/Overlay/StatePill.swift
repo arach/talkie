@@ -128,7 +128,7 @@ struct StatePill: View {
         switch state {
         case .idle: return TalkieTheme.textMuted
         case .listening: return .red
-        case .transcribing: return TalkieTheme.textSecondary  // Neutral color during processing
+        case .transcribing: return .white.opacity(0.6)  // Neutral processing - no semantic color
         case .routing: return SemanticColor.success
         }
     }
@@ -181,7 +181,7 @@ struct StatePill: View {
         switch state {
         case .idle: return TalkieTheme.textMuted
         case .listening: return .red  // Always red when recording
-        case .transcribing: return TalkieTheme.textSecondary  // Neutral color during processing
+        case .transcribing: return .white.opacity(0.7)  // Neutral processing - no semantic color
         case .routing: return SemanticColor.success
         }
     }
