@@ -1081,12 +1081,30 @@ struct UtteranceDetailView: View {
                     // Header: Date + actions
                     MinimalHeader(utterance: utterance)
 
+                    // Text/JSON toggle at top right
+                    HStack {
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 8) {
+                            ContentToggle(showJSON: $showJSON)
+
+                            Button(action: copyCurrentContent) {
+                                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(copied ? SemanticColor.success : TalkieTheme.textSecondary)
+                                    .frame(width: 28, height: 28)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(TalkieTheme.surfaceCard)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     // Combined transcript + stats container
                     TranscriptContainer(
                         utterance: utterance,
-                        showJSON: $showJSON,
-                        copied: $copied,
-                        onCopy: copyCurrentContent
+                        showJSON: $showJSON
                     )
 
                     // Info cards row
@@ -1291,12 +1309,7 @@ private struct ToggleSegment: View {
 private struct TranscriptContainer: View {
     let utterance: Utterance
     @Binding var showJSON: Bool
-    @Binding var copied: Bool
-    let onCopy: () -> Void
     @ObservedObject private var settings = LiveSettings.shared
-
-    @State private var isHovered = false
-    @State private var isCopyHovered = false
 
     // Crisp text colors - solid grays instead of opacity
     private static let textPrimary = Color.white
@@ -1310,52 +1323,25 @@ private struct TranscriptContainer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Transcript content with actions overlay (top-right)
-            ZStack(alignment: .topTrailing) {
-                HStack(spacing: 0) {
-                    // Left accent bar
-                    Rectangle()
-                        .fill(showJSON ? SemanticColor.info.opacity(0.5) : TalkieTheme.textMuted)
-                        .frame(width: 3)
+            // Transcript content (no overlay, buttons moved above)
+            HStack(spacing: 0) {
+                // Left accent bar
+                Rectangle()
+                    .fill(showJSON ? SemanticColor.info.opacity(0.5) : TalkieTheme.textMuted)
+                    .frame(width: 3)
 
-                    // Text content
-                    if showJSON {
-                        JSONContentView(utterance: utterance)
-                    } else {
-                        Text(utterance.text)
-                            .font(settings.fontSize.detailFont)
-                            .foregroundColor(Self.textPrimary)
-                            .lineSpacing(6)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(16)
-                            .padding(.trailing, 80) // Room for toggle + copy
-                    }
+                // Text content
+                if showJSON {
+                    JSONContentView(utterance: utterance)
+                } else {
+                    Text(utterance.text)
+                        .font(settings.fontSize.detailFont)
+                        .foregroundColor(Self.textPrimary)
+                        .lineSpacing(6)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
                 }
-
-                // Top-right actions: Toggle + Copy (fixed position)
-                HStack(spacing: 6) {
-                    ContentToggle(showJSON: $showJSON)
-
-                    if isHovered || copied {
-                        Button(action: onCopy) {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(copied ? SemanticColor.success : (isCopyHovered ? .white : TalkieTheme.textSecondary))
-                                .frame(width: 28, height: 28)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(isCopyHovered ? TalkieTheme.border : TalkieTheme.surfaceCard.opacity(0.7))
-                                )
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { isCopyHovered = $0 }
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                        .animation(.easeOut(duration: 0.12), value: isCopyHovered)
-                    }
-                }
-                .padding(10)
             }
 
             // Bottom bar: Stats left, Tokens right
@@ -1381,8 +1367,6 @@ private struct TranscriptContainer: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(TalkieTheme.surfaceCard, lineWidth: 1)
         )
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
     }
 }
 
