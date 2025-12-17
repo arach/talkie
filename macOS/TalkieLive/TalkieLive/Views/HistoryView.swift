@@ -621,7 +621,7 @@ struct LiveNavigationView: View {
                 chevronButton(icon: "chevron.right", help: "Expand Sidebar")
             } else {
                 // Expanded: show app name and collapse button
-                Text("TALKIE LIVE")
+                Text("LIVE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(3)
                     .foregroundColor(TalkieTheme.textTertiary)
@@ -633,9 +633,9 @@ struct LiveNavigationView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 28)
-        .padding(.leading, isSidebarCollapsed ? 0 : 72) // Clear traffic light buttons horizontally
+        .padding(.leading, isSidebarCollapsed ? 0 : 14) // Align with sidebar items
         .padding(.trailing, isSidebarCollapsed ? 0 : 12)
-        .padding(.top, 38) // Clear traffic light buttons vertically
+        .padding(.top, 42) // Extra breathing room for traffic lights
     }
 
     /// Interactive chevron button with hover and press feedback
