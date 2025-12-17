@@ -151,6 +151,7 @@ struct LiveNavigationView: View {
                         historyListView
                             .frame(minWidth: 280, idealWidth: 400)
                         detailColumnView
+                            .frame(minWidth: 300)
                     }
                 }
 
@@ -632,8 +633,9 @@ struct LiveNavigationView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 28)
-        .padding(.horizontal, isSidebarCollapsed ? 0 : 12)
-        .padding(.top, 52) // Clear traffic light buttons (standard macOS spacing)
+        .padding(.leading, isSidebarCollapsed ? 0 : 72) // Clear traffic light buttons horizontally
+        .padding(.trailing, isSidebarCollapsed ? 0 : 12)
+        .padding(.top, 38) // Clear traffic light buttons vertically
     }
 
     /// Interactive chevron button with hover and press feedback
