@@ -814,6 +814,7 @@ struct LiveNavigationView: View {
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
+                .id("history-list")  // Stable ID to preserve selection when data updates
             }
 
             // Footer
