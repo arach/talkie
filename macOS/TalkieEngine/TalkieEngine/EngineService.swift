@@ -456,12 +456,13 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         let audioDuration = Double(originalSampleCount) / 16000.0
         trace.end("\(originalSampleCount) samples (\(String(format: "%.1f", audioDuration))s)")
 
-        // Add 500ms of silence at the end (8000 samples at 16kHz)
-        // This gives the transducer decoder time to finish without cutting off final words
+        // Add 1 second of silence at the end (16000 samples at 16kHz)
+        // TDT decoders need trailing context to fully flush final tokens
+        // 500ms wasn't enough - final words like "home" were being cut off
         trace.begin("audio_pad")
-        let paddingSamples = [Float](repeating: 0.0, count: 8000)
+        let paddingSamples = [Float](repeating: 0.0, count: 16000)
         samples.append(contentsOf: paddingSamples)
-        trace.end("+8000 samples")
+        trace.end("+16000 samples")
 
         // Run inference
         trace.begin("inference")
