@@ -131,7 +131,7 @@ final class LiveDataStore: ObservableObject {
             let fetched = try dbQueue.read { db -> [LiveUtterance] in
                 let rows = try Row.fetchAll(db, sql: """
                     SELECT id, createdAt, text, mode, appBundleID, appName, windowTitle,
-                           durationSeconds, wordCount, whisperModel, audioFilename,
+                           durationSeconds, wordCount, transcriptionModel, audioFilename,
                            transcriptionStatus, promotionStatus, talkieMemoID
                     FROM utterances
                     ORDER BY createdAt DESC
@@ -154,7 +154,7 @@ final class LiveDataStore: ObservableObject {
                         windowTitle: row["windowTitle"],
                         durationSeconds: row["durationSeconds"],
                         wordCount: row["wordCount"],
-                        whisperModel: row["whisperModel"],
+                        transcriptionModel: row["transcriptionModel"],
                         audioFilename: row["audioFilename"],
                         transcriptionStatus: LiveTranscriptionStatus(rawValue: row["transcriptionStatus"] ?? "success") ?? .success,
                         promotionStatus: LivePromotionStatus(rawValue: row["promotionStatus"] ?? "none") ?? .none,

@@ -71,7 +71,7 @@ struct LiveUtterance: Identifiable, Hashable {
     let windowTitle: String?
     let durationSeconds: Double?
     let wordCount: Int?
-    let whisperModel: String?
+    let transcriptionModel: String?
     let audioFilename: String?
     let transcriptionStatus: LiveTranscriptionStatus
     let promotionStatus: LivePromotionStatus
