@@ -53,6 +53,7 @@ final class RecordingOverlayController: ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = true
         panel.hasShadow = true
+        panel.acceptsMouseMovedEvents = true  // Required for hover detection
 
         // Position based on settings - tight to edges
         if let screen = NSScreen.main {
