@@ -12,9 +12,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let queuePickerHotKeyManager = HotKeyManager(signature: "TLQP", hotkeyID: 2)
     private var cancellables = Set<AnyCancellable>()
 
-    // Settings window
-    private var settingsWindow: NSWindow?
-
     // Lazy UI controllers - initialized during boot sequence
     private var overlayController: RecordingOverlayController { RecordingOverlayController.shared }
     private var floatingPill: FloatingPillController { FloatingPillController.shared }
@@ -338,40 +335,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showSettings() {
-        // If settings window already exists, just bring it to front
-        if let window = settingsWindow {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
+        // Open Talkie Core app with Live settings
+        let talkieBundleID = "jdi.talkie.core"
+
+        // First, open Talkie app
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true  // Bring to front
+
+        NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: "/Applications/Talkie.app"),
+            configuration: configuration
+        ) { app, error in
+            if let error = error {
+                AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
+
+                // Fallback: try opening via bundle ID
+                NSWorkspace.shared.launchApplication(
+                    withBundleIdentifier: talkieBundleID,
+                    options: [.default],
+                    additionalEventParamDescriptor: nil,
+                    launchIdentifier: nil
+                )
+            }
+
+            // After opening Talkie, navigate to Settings
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if let url = URL(string: "talkie://settings/live") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
         }
-
-        // Create settings view
-        let settingsView = EmbeddedSettingsView()
-            .frame(minWidth: 800, minHeight: 600)
-
-        // Create hosting controller
-        let hostingController = NSHostingController(rootView: settingsView)
-
-        // Create window
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Talkie Live Settings"
-        window.contentViewController = hostingController
-        window.center()
-        window.setFrameAutosaveName("TalkieLiveSettings")
-        window.isReleasedWhenClosed = false
-
-        // Handle window close
-        window.delegate = self
-
-        // Store and show
-        settingsWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func updateIcon(for state: LiveState) {
@@ -439,16 +432,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppLogger.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
         } catch {
             AppLogger.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
-        }
-    }
-}
-
-// MARK: - NSWindowDelegate
-
-extension AppDelegate: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        if let window = notification.object as? NSWindow, window == settingsWindow {
-            settingsWindow = nil
         }
     }
 }
