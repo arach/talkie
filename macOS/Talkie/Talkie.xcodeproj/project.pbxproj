@@ -55,6 +55,13 @@
 		4F5A6DF3769EF9034B8F2C01 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA115E69E2A9DEA695B5B87 /* KeychainManager.swift */; };
 		4FC4D3FE14963ADA842948B3 /* EphemeralTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC1AA5999188EF8471202B3 /* EphemeralTranscriber.swift */; };
 		4FF3A896C98BC41602BE149A /* QuickActionRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8FFEDFE6C6C841BBF1F94C /* QuickActionRunner.swift */; };
+		536ACF0E2EF45C540023A256 /* HotkeyRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF0B2EF45C540023A256 /* HotkeyRecorder.swift */; };
+		536ACF0F2EF45C540023A256 /* SoundPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF0D2EF45C540023A256 /* SoundPicker.swift */; };
+		536ACF102EF45C540023A256 /* AudioDeviceSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF0A2EF45C540023A256 /* AudioDeviceSelector.swift */; };
+		536ACF112EF45C540023A256 /* OverlayStylePreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF0C2EF45C540023A256 /* OverlayStylePreviews.swift */; };
+		536ACF132EF45C770023A256 /* AudioDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF122EF45C770023A256 /* AudioDeviceManager.swift */; };
+		536ACF192EF45D3E0023A256 /* TalkieComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF172EF45D3E0023A256 /* TalkieComponents.swift */; };
+		536ACF1A2EF45D3E0023A256 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF162EF45D3E0023A256 /* FormControls.swift */; };
 		53E624992EF3DCAA00AC059A /* UtteranceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E624982EF3DCAA00AC059A /* UtteranceListView.swift */; };
 		53E6249B2EF3DCB400AC059A /* LiveSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E6249A2EF3DCB400AC059A /* LiveSettingsView.swift */; };
 		57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */; };
@@ -197,6 +204,13 @@
 		499C191C937A588B1FC14A1B /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
 		5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettings.swift; sourceTree = "<group>"; };
 		51100B8BEE10408FA3219205 /* Data/Models/WorkflowRunModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Data/Models/WorkflowRunModel.swift; sourceTree = "<group>"; };
+		536ACF0A2EF45C540023A256 /* AudioDeviceSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceSelector.swift; sourceTree = "<group>"; };
+		536ACF0B2EF45C540023A256 /* HotkeyRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorder.swift; sourceTree = "<group>"; };
+		536ACF0C2EF45C540023A256 /* OverlayStylePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayStylePreviews.swift; sourceTree = "<group>"; };
+		536ACF0D2EF45C540023A256 /* SoundPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundPicker.swift; sourceTree = "<group>"; };
+		536ACF122EF45C770023A256 /* AudioDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceManager.swift; sourceTree = "<group>"; };
+		536ACF162EF45D3E0023A256 /* FormControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormControls.swift; sourceTree = "<group>"; };
+		536ACF172EF45D3E0023A256 /* TalkieComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieComponents.swift; sourceTree = "<group>"; };
 		53C628E8435C070BDA2131C1 /* MigrationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationRunner.swift; sourceTree = "<group>"; };
 		53E624982EF3DCAA00AC059A /* UtteranceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceListView.swift; sourceTree = "<group>"; };
 		53E6249A2EF3DCB400AC059A /* LiveSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSettingsView.swift; sourceTree = "<group>"; };
@@ -390,6 +404,15 @@
 			name = "Recovered References";
 			sourceTree = "<group>";
 		};
+		536ACF182EF45D3E0023A256 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				536ACF162EF45D3E0023A256 /* FormControls.swift */,
+				536ACF172EF45D3E0023A256 /* TalkieComponents.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
 		53A7622465701BF0425306D5 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -456,6 +479,10 @@
 		6AFEF1FDE55FB73E528FBCD8 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				536ACF0A2EF45C540023A256 /* AudioDeviceSelector.swift */,
+				536ACF0B2EF45C540023A256 /* HotkeyRecorder.swift */,
+				536ACF0C2EF45C540023A256 /* OverlayStylePreviews.swift */,
+				536ACF0D2EF45C540023A256 /* SoundPicker.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -589,6 +616,7 @@
 		BBEF53A431CD4D10F1B0ABF4 = {
 			isa = PBXGroup;
 			children = (
+				536ACF182EF45D3E0023A256 /* Components */,
 				BB66A9AB5F11CD75E0C5CD7A /* Assets.xcassets */,
 				53A7622465701BF0425306D5 /* App */,
 				6A4FC315C695CE32BE69314C /* Interstitial */,
@@ -675,6 +703,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				536ACF122EF45C770023A256 /* AudioDeviceManager.swift */,
 				96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */,
 				CC6A6916FC176D4E84E1D897 /* AppLauncher.swift */,
 				E30DDF9CB041E54430249019 /* AppleSpeechService.swift */,
@@ -800,6 +829,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
+				536ACF0E2EF45C540023A256 /* HotkeyRecorder.swift in Sources */,
+				536ACF0F2EF45C540023A256 /* SoundPicker.swift in Sources */,
+				536ACF102EF45C540023A256 /* AudioDeviceSelector.swift in Sources */,
+				536ACF112EF45C540023A256 /* OverlayStylePreviews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
 				1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */,
 				606E43ED2836A954C361C3D7 /* AnthropicProvider.swift in Sources */,
@@ -835,6 +868,8 @@
 				74F25F70F5FB72E219B3B2EE /* MemoDetailView.swift in Sources */,
 				FA22B90261AE2EB65814510C /* MemoRowView.swift in Sources */,
 				CB12A13CA5ECEE19E50A05A2 /* MemoTableViews.swift in Sources */,
+				536ACF192EF45D3E0023A256 /* TalkieComponents.swift in Sources */,
+				536ACF1A2EF45D3E0023A256 /* FormControls.swift in Sources */,
 				625142A9C00E8CF5C91B3E49 /* MigrationRunner.swift in Sources */,
 				EF40F2DEAEB69FA6A008C94F /* Migrations.swift in Sources */,
 				53E6249B2EF3DCB400AC059A /* LiveSettingsView.swift in Sources */,
@@ -879,6 +914,7 @@
 				169AB59BC4641ED01BF19EDA /* WorkflowDefinition.swift in Sources */,
 				4E8DA6F51463650780FAC5F3 /* WorkflowExecutor.swift in Sources */,
 				B3A26A431CEBB6919CFB877D /* WorkflowSettings.swift in Sources */,
+				536ACF132EF45C770023A256 /* AudioDeviceManager.swift in Sources */,
 				92027ED124E266D63672B399 /* WorkflowViews.swift in Sources */,
 				BB2616B0993300F4C54E9E0B /* talkie.xcdatamodeld in Sources */,
 				275FB88DB29FE0FFBCD2B835 /* HistoryView.swift in Sources */,
