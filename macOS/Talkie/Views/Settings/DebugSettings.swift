@@ -120,6 +120,35 @@ struct DebugInfoView: View {
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
             }
+
+            Divider()
+
+            // Onboarding section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("ONBOARDING")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(.secondary)
+
+                Button(action: {
+                    OnboardingManager.shared.resetOnboarding()
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12))
+                        Text("Show Onboarding Again")
+                            .font(.system(size: 11, design: .monospaced))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Text("Re-run the setup wizard to configure permissions, services, and models.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
         }
         .onAppear {
             checkiCloudStatus()

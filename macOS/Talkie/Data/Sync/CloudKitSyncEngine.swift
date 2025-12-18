@@ -201,7 +201,8 @@ final class CloudKitSyncEngine: ObservableObject {
             ascending: false,
             limit: 10000,  // Fetch all for sync
             offset: 0,
-            searchQuery: nil
+            searchQuery: nil,
+            filters: []  // No filters for sync
         )
 
         // Filter to memos that haven't been synced or modified since last sync

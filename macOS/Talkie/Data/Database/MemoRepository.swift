@@ -22,11 +22,12 @@ protocol MemoRepository: Actor {
         ascending: Bool,
         limit: Int,
         offset: Int,
-        searchQuery: String?
+        searchQuery: String?,
+        filters: Set<MemoFilter>
     ) async throws -> [MemoModel]
 
     /// Count total memos (for pagination UI)
-    func countMemos(searchQuery: String?) async throws -> Int
+    func countMemos(searchQuery: String?, filters: Set<MemoFilter>) async throws -> Int
 
     /// Fetch single memo by ID with relationships
     func fetchMemo(id: UUID) async throws -> MemoWithRelationships?

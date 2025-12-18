@@ -44,6 +44,9 @@ class CloudKitSyncManager: ObservableObject {
     @Published var isSyncing = false
     @Published var lastSyncDate: Date?
     @Published var lastChangeCount: Int = 0
+    @Published var syncHistory: [SyncEvent] = []
+
+    private let maxHistoryCount = 50 // Keep last 50 sync events
 
     // MARK: - Timers and Schedulers
     private var syncTimer: Timer?
@@ -74,7 +77,9 @@ class CloudKitSyncManager: ObservableObject {
         return f
     }()
 
-    private init() {}
+    private init() {
+        loadSyncHistory()
+    }
 
     deinit {
         // Clean up timers
@@ -347,26 +352,38 @@ class CloudKitSyncManager: ObservableObject {
         logger.info("[\(timeFormatter.string(from: startTime))] Sync starting...")
 
         do {
-            let changes = try await fetchChanges()
+            let result = try await fetchChanges()
+            let duration = Date().timeIntervalSince(startTime)
 
             DispatchQueue.main.async {
                 self.lastSyncDate = Date()
-                self.lastChangeCount = changes
+                self.lastChangeCount = result.changeCount
                 self.isSyncing = false
-                SyncStatusManager.shared.setSynced(changes: changes)
+                SyncStatusManager.shared.setSynced(changes: result.changeCount)
+
+                // Add to sync history
+                let event = SyncEvent(
+                    timestamp: startTime,
+                    status: .success,
+                    itemCount: result.changeCount,
+                    duration: duration,
+                    errorMessage: nil,
+                    details: result.details
+                )
+                self.addSyncEvent(event)
             }
 
             NotificationCenter.default.post(
                 name: .talkieSyncCompleted,
                 object: nil,
-                userInfo: ["changes": changes]
+                userInfo: ["changes": result.changeCount]
             )
 
             // Mark memos from other devices as received by Mac
             if let context = self.viewContext {
                 // If we detected changes, give Core Data a moment to import them
                 // NSPersistentCloudKitContainer handles import automatically; we just need to refresh
-                if changes > 0 {
+                if result.changeCount > 0 {
                     try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
                     context.refreshAllObjects()
 
@@ -384,20 +401,31 @@ class CloudKitSyncManager: ObservableObject {
             }
 
             // Log completion with duration
-            let duration = Date().timeIntervalSince(startTime)
             let durationStr = String(format: "%.1fs", duration)
-            if changes > 0 {
-                logger.info("[\(timeFormatter.string(from: Date()))] Sync complete: \(changes) change(s) in \(durationStr)")
+            if result.changeCount > 0 {
+                logger.info("[\(timeFormatter.string(from: Date()))] Sync complete: \(result.changeCount) change(s) in \(durationStr)")
             } else {
                 logger.info("[\(timeFormatter.string(from: Date()))] Sync complete: no changes (\(durationStr))")
             }
 
         } catch {
+            let duration = Date().timeIntervalSince(startTime)
             logger.error("Sync failed: \(error.localizedDescription)")
 
             DispatchQueue.main.async {
                 self.isSyncing = false
                 SyncStatusManager.shared.setError(error.localizedDescription)
+
+                // Add failed sync to history
+                let event = SyncEvent(
+                    timestamp: startTime,
+                    status: .failed,
+                    itemCount: 0,
+                    duration: duration,
+                    errorMessage: error.localizedDescription,
+                    details: []
+                )
+                self.addSyncEvent(event)
             }
         }
     }
@@ -434,7 +462,13 @@ class CloudKitSyncManager: ObservableObject {
         }
     }
 
-    private func fetchChanges() async throws -> Int {
+    // Result of fetchChanges with detailed record information
+    private struct FetchResult {
+        let changeCount: Int
+        let details: [SyncRecordDetail]
+    }
+
+    private func fetchChanges() async throws -> FetchResult {
         let database = container.privateCloudDatabase
 
         // Configure the fetch operation
@@ -493,6 +527,41 @@ class CloudKitSyncManager: ObservableObject {
 
                     let totalChanges = changedRecords.count + deletedRecordIDs.count
 
+                    // Build detailed record information for UI
+                    var details: [SyncRecordDetail] = []
+
+                    // Process changed records
+                    for record in changedRecords {
+                        let typeName = record.recordType.replacingOccurrences(of: "CD_", with: "")
+                        let title = record["CD_title"] as? String ?? "Untitled"
+                        let modDate = record.modificationDate
+
+                        // Determine if this is a new record or modification
+                        // (For simplicity, treat all as modified - we don't have creation date easily)
+                        let changeType: SyncRecordDetail.ChangeType = .modified
+
+                        let detail = SyncRecordDetail(
+                            id: record.recordID.recordName,
+                            recordType: typeName,
+                            title: title,
+                            modificationDate: modDate,
+                            changeType: changeType
+                        )
+                        details.append(detail)
+                    }
+
+                    // Process deleted records
+                    for recordID in deletedRecordIDs {
+                        let detail = SyncRecordDetail(
+                            id: recordID.recordName,
+                            recordType: "Unknown", // We don't have type info for deleted records
+                            title: recordID.recordName,
+                            modificationDate: nil,
+                            changeType: .deleted
+                        )
+                        details.append(detail)
+                    }
+
                     if totalChanges > 0 {
                         // Group changed records by type for useful logging
                         var typeCount: [String: Int] = [:]
@@ -518,7 +587,7 @@ class CloudKitSyncManager: ObservableObject {
                     // The records we fetched here are informational - Core Data's mirroring
                     // will handle the actual database updates.
 
-                    continuation.resume(returning: totalChanges)
+                    continuation.resume(returning: FetchResult(changeCount: totalChanges, details: details))
 
                 case .failure(let error):
                     // Handle token reset if needed
@@ -540,6 +609,42 @@ class CloudKitSyncManager: ObservableObject {
     func resetSyncToken() {
         serverChangeToken = nil
         logger.info("Sync token reset - next sync will fetch all records")
+    }
+
+    // MARK: - Sync History Management
+
+    private func loadSyncHistory() {
+        guard let data = UserDefaults.standard.data(forKey: "CloudKitSyncHistory") else { return }
+        do {
+            let decoder = JSONDecoder()
+            syncHistory = try decoder.decode([SyncEvent].self, from: data)
+        } catch {
+            logger.error("Failed to load sync history: \(error.localizedDescription)")
+            syncHistory = []
+        }
+    }
+
+    private func saveSyncHistory() {
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(syncHistory)
+            UserDefaults.standard.set(data, forKey: "CloudKitSyncHistory")
+        } catch {
+            logger.error("Failed to save sync history: \(error.localizedDescription)")
+        }
+    }
+
+    private func addSyncEvent(_ event: SyncEvent) {
+        // Add to beginning of array (most recent first)
+        syncHistory.insert(event, at: 0)
+
+        // Limit history size
+        if syncHistory.count > maxHistoryCount {
+            syncHistory = Array(syncHistory.prefix(maxHistoryCount))
+        }
+
+        // Persist to UserDefaults
+        saveSyncHistory()
     }
 
     #if DEBUG

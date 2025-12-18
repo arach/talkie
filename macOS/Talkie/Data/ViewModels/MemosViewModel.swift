@@ -9,6 +9,41 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Memo Filters
+
+enum MemoFilter: Hashable, Identifiable {
+    case shortRecordings  // Under 30 seconds
+    case source(MemoModel.Source)
+
+    var id: String {
+        switch self {
+        case .shortRecordings: return "short"
+        case .source(let source): return "source-\(source.displayName)"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .shortRecordings: return "Short"
+        case .source(let source): return source.displayName
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .shortRecordings: return "clock"
+        case .source(let source): return source.icon
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .shortRecordings: return .orange
+        case .source(let source): return source.color
+        }
+    }
+}
+
 // MARK: - Memos ViewModel
 
 @MainActor
@@ -23,6 +58,7 @@ final class MemosViewModel: ObservableObject {
     @Published var sortField: MemoModel.SortField = .timestamp
     @Published var sortAscending = false
     @Published var searchQuery = ""
+    @Published var activeFilters: Set<MemoFilter> = []
 
     // Pagination
     @Published var totalCount = 0
@@ -59,13 +95,17 @@ final class MemosViewModel: ObservableObject {
 
         do {
             // Fetch in parallel: count + first page
-            async let count = repository.countMemos(searchQuery: searchQuery.isEmpty ? nil : searchQuery)
+            async let count = repository.countMemos(
+                searchQuery: searchQuery.isEmpty ? nil : searchQuery,
+                filters: activeFilters
+            )
             async let firstPage = repository.fetchMemos(
                 sortBy: sortField,
                 ascending: sortAscending,
                 limit: pageSize,
                 offset: 0,
-                searchQuery: searchQuery.isEmpty ? nil : searchQuery
+                searchQuery: searchQuery.isEmpty ? nil : searchQuery,
+                filters: activeFilters
             )
 
             totalCount = try await count
@@ -91,7 +131,8 @@ final class MemosViewModel: ObservableObject {
                 ascending: sortAscending,
                 limit: pageSize,
                 offset: currentOffset,
-                searchQuery: searchQuery.isEmpty ? nil : searchQuery
+                searchQuery: searchQuery.isEmpty ? nil : searchQuery,
+                filters: activeFilters
             )
 
             memos.append(contentsOf: nextPage)
@@ -138,6 +179,39 @@ final class MemosViewModel: ObservableObject {
     func search(query: String) async {
         searchQuery = query
         await loadMemos()
+    }
+
+    // MARK: - Filter Management
+
+    /// Toggle a filter on/off
+    func toggleFilter(_ filter: MemoFilter) async {
+        if activeFilters.contains(filter) {
+            activeFilters.remove(filter)
+        } else {
+            activeFilters.insert(filter)
+        }
+        await loadMemos()
+    }
+
+    /// Clear all filters
+    func clearFilters() async {
+        activeFilters.removeAll()
+        await loadMemos()
+    }
+
+    /// Check if a filter is active
+    func isFilterActive(_ filter: MemoFilter) -> Bool {
+        activeFilters.contains(filter)
+    }
+
+    /// Get count of active filters
+    var activeFilterCount: Int {
+        activeFilters.count
+    }
+
+    /// Has any active filters
+    var hasActiveFilters: Bool {
+        !activeFilters.isEmpty
     }
 }
 

@@ -76,39 +76,49 @@ struct AllMemosView2: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack(spacing: Spacing.md) {
-            // Search
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(TalkieTheme.textMuted)
-                    .font(.system(size: 12))
+        VStack(spacing: 0) {
+            // Top row: Search and sort controls
+            HStack(spacing: Spacing.md) {
+                // Search
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(TalkieTheme.textMuted)
+                        .font(.system(size: 12))
 
-                TextField("Search memos...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    TextField("Search memos...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
 
-                if !searchText.isEmpty {
-                    TalkieButtonSync("ClearSearch") {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(TalkieTheme.textMuted)
-                            .font(.system(size: 12))
+                    if !searchText.isEmpty {
+                        TalkieButtonSync("ClearSearch") {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(TalkieTheme.textMuted)
+                                .font(.system(size: 12))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 6)
+                .background(TalkieTheme.surfaceCard)
+                .cornerRadius(CornerRadius.sm)
+
+                Spacer()
+
+                // Sort controls
+                sortControls
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, 6)
-            .background(TalkieTheme.surfaceCard)
-            .cornerRadius(CornerRadius.sm)
+            .padding(Spacing.md)
 
-            Spacer()
-
-            // Sort controls
-            sortControls
+            // Smart filters row
+            if viewModel.hasActiveFilters || showFiltersButton {
+                smartFiltersView
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.bottom, Spacing.md)
+            }
         }
-        .padding(Spacing.md)
         .background(TalkieTheme.surfaceElevated)
         .overlay(
             Rectangle()
@@ -116,6 +126,102 @@ struct AllMemosView2: View {
                 .frame(height: 1),
             alignment: .bottom
         )
+    }
+
+    private var showFiltersButton: Bool {
+        // Always show filters section for discoverability
+        true
+    }
+
+    // MARK: - Smart Filters
+
+    private var smartFiltersView: some View {
+        HStack(spacing: Spacing.sm) {
+            // Filter label
+            Text("Filters:")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(TalkieTheme.textMuted)
+
+            // Short recordings filter
+            filterChip(
+                filter: .shortRecordings,
+                label: "Short",
+                icon: "clock"
+            )
+
+            // Source filters
+            filterChip(
+                filter: .source(.iPhone(deviceName: nil)),
+                label: "iPhone",
+                icon: "iphone"
+            )
+
+            filterChip(
+                filter: .source(.mac(deviceName: nil)),
+                label: "Mac",
+                icon: "desktopcomputer"
+            )
+
+            filterChip(
+                filter: .source(.live),
+                label: "Live",
+                icon: "waveform.circle.fill"
+            )
+
+            // Clear all button (only when filters are active)
+            if viewModel.hasActiveFilters {
+                TalkieButton("ClearAllFilters") {
+                    await viewModel.clearFilters()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: 10))
+                        Text("Clear")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(TalkieTheme.surfaceCard)
+                    .cornerRadius(CornerRadius.sm)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+
+            // Active filter count
+            if viewModel.hasActiveFilters {
+                Text("\(viewModel.displayedCount) filtered")
+                    .font(.system(size: 11))
+                    .foregroundColor(TalkieTheme.textMuted)
+            }
+        }
+    }
+
+    private func filterChip(filter: MemoFilter, label: String, icon: String) -> some View {
+        TalkieButton("Filter.\(filter.id)") {
+            await viewModel.toggleFilter(filter)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(viewModel.isFilterActive(filter) ? .white : filter.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(viewModel.isFilterActive(filter) ? filter.color : filter.color.opacity(0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .strokeBorder(filter.color.opacity(viewModel.isFilterActive(filter) ? 0 : 0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var sortControls: some View {

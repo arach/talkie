@@ -25,13 +25,14 @@ actor GRDBRepository: MemoRepository {
         ascending: Bool,
         limit: Int,
         offset: Int,
-        searchQuery: String? = nil
+        searchQuery: String? = nil,
+        filters: Set<MemoFilter> = []
     ) async throws -> [MemoModel] {
         try await instrumentRepositoryRead("fetchMemos") {
             let startTime = Date()
             let db = try await dbManager.database()
 
-            print("🔍 [GRDB] Executing query: sort=\(sortBy), limit=\(limit), offset=\(offset)")
+            print("🔍 [GRDB] Executing query: sort=\(sortBy), limit=\(limit), offset=\(offset), filters=\(filters.count)")
 
             let result = try await db.read { db in
                 var request = MemoModel.all()
@@ -45,6 +46,9 @@ actor GRDBRepository: MemoRepository {
                         MemoModel.Columns.transcription.like("%\(query)%")
                     )
                 }
+
+                // Apply smart filters
+                request = try applyFilters(request, filters: filters)
 
                 // Apply sorting (uses indexes!)
                 switch sortBy {
@@ -103,7 +107,7 @@ actor GRDBRepository: MemoRepository {
 
     // MARK: - Count
 
-    func countMemos(searchQuery: String? = nil) async throws -> Int {
+    func countMemos(searchQuery: String? = nil, filters: Set<MemoFilter> = []) async throws -> Int {
         try await instrumentRepositoryRead("countMemos") {
             let db = try await dbManager.database()
 
@@ -116,6 +120,9 @@ actor GRDBRepository: MemoRepository {
                         MemoModel.Columns.transcription.like("%\(query)%")
                     )
                 }
+
+                // Apply smart filters
+                request = try applyFilters(request, filters: filters)
 
                 return try request.fetchCount(db)
             }
@@ -257,6 +264,54 @@ actor GRDBRepository: MemoRepository {
         }
 
         return counts
+    }
+
+    // MARK: - Helper: Apply Filters
+
+    nonisolated private func applyFilters(_ request: QueryInterfaceRequest<MemoModel>, filters: Set<MemoFilter>) throws -> QueryInterfaceRequest<MemoModel> {
+        guard !filters.isEmpty else { return request }
+
+        var filteredRequest = request
+
+        for filter in filters {
+            switch filter {
+            case .shortRecordings:
+                // Filter for memos under 30 seconds
+                filteredRequest = filteredRequest.filter(MemoModel.Columns.duration < 30.0)
+
+            case .source(let source):
+                // Filter by origin device ID pattern
+                let pattern: String
+                switch source {
+                case .iPhone:
+                    // No prefix or empty = iPhone (legacy format)
+                    filteredRequest = filteredRequest.filter(
+                        MemoModel.Columns.originDeviceId == nil ||
+                        MemoModel.Columns.originDeviceId == "" ||
+                        (!MemoModel.Columns.originDeviceId.like("mac-%") &&
+                         !MemoModel.Columns.originDeviceId.like("live-%") &&
+                         !MemoModel.Columns.originDeviceId.like("watch-%"))
+                    )
+                case .watch:
+                    pattern = "watch-%"
+                    filteredRequest = filteredRequest.filter(MemoModel.Columns.originDeviceId.like(pattern))
+                case .mac:
+                    pattern = "mac-%"
+                    filteredRequest = filteredRequest.filter(MemoModel.Columns.originDeviceId.like(pattern))
+                case .live:
+                    pattern = "live-%"
+                    filteredRequest = filteredRequest.filter(MemoModel.Columns.originDeviceId.like(pattern))
+                case .unknown:
+                    // This case shouldn't normally be used as a filter, but handle it anyway
+                    filteredRequest = filteredRequest.filter(
+                        MemoModel.Columns.originDeviceId == nil ||
+                        MemoModel.Columns.originDeviceId == ""
+                    )
+                }
+            }
+        }
+
+        return filteredRequest
     }
 }
 

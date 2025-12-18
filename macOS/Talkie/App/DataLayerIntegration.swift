@@ -125,7 +125,8 @@ func performanceTest() async {
         ascending: false,
         limit: 50,
         offset: 0,
-        searchQuery: nil
+        searchQuery: nil,
+        filters: []
     )
     let newTime = Date().timeIntervalSince(newStart)
     print("  NEW: \(Int(newTime * 1000))ms")

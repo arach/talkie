@@ -9,8 +9,8 @@ import SwiftUI
 import CoreData
 
 enum NavigationSection: Hashable {
-    case allMemos
-    case allMemosV2  // New instrumented view
+    case home           // Main Talkie home/dashboard
+    case allMemos  // All Memos view (GRDB-based with pagination and filters)
     case liveDashboard  // Live home/insights view
     case liveRecent     // Live utterance list
     case liveSettings   // Live settings (now visible in sidebar)
@@ -40,8 +40,8 @@ struct TalkieNavigationView: View {
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
-    @State private var selectedSection: NavigationSection? = .allMemos
-    @State private var previousSection: NavigationSection? = .allMemos
+    @State private var selectedSection: NavigationSection? = .home
+    @State private var previousSection: NavigationSection? = .home
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
     @State private var isSectionLoading = false
@@ -216,8 +216,8 @@ struct TalkieNavigationView: View {
             if isSidebarCollapsed {
                 // Collapsed: simple VStack, no scroll, natural sizing
                 VStack(spacing: 0) {
+                    sidebarButton(section: .home, icon: "house.fill", title: "Home")
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
-                    sidebarButton(section: .allMemosV2, icon: "sparkles.square.filled.on.square", title: "All Memos V2", badge: "NEW", badgeColor: .green)
                     sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
                     sidebarButton(section: .aiResults, icon: "chart.line.uptrend.xyaxis", title: "Actions")
                     sidebarButton(section: .pendingActions, icon: "clock.arrow.circlepath", title: "Pending", badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil, badgeColor: .accentColor, showSpinner: pendingActionsManager.hasActiveActions)
@@ -231,21 +231,22 @@ struct TalkieNavigationView: View {
                 // Expanded: ScrollView with sections
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 2) {
+                        // Home
+                        sidebarButton(
+                            section: .home,
+                            icon: "house.fill",
+                            title: "Home"
+                        )
+
                         // Memos section
                         sidebarSectionHeader("Memos")
+                            .padding(.top, 12)
                         sidebarButton(
                             section: .allMemos,
                             icon: "square.stack",
                             title: "All Memos",
                             badge: allMemos.count > 0 ? "\(allMemos.count)" : nil,
                             badgeColor: .secondary
-                        )
-                        sidebarButton(
-                            section: .allMemosV2,
-                            icon: "sparkles.square.filled.on.square",
-                            title: "All Memos V2",
-                            badge: "NEW",
-                            badgeColor: .green
                         )
 
                         // Live section
@@ -410,8 +411,8 @@ struct TalkieNavigationView: View {
     /// Helper to get clean section name for instrumentation
     private func sectionName(_ section: NavigationSection) -> String {
         switch section {
+        case .home: return "Home"
         case .allMemos: return "AllMemos"
-        case .allMemosV2: return "AllMemosV2"
         case .liveDashboard: return "LiveDashboard"
         case .liveRecent: return "LiveRecent"
         case .liveSettings: return "LiveSettings"
@@ -484,6 +485,8 @@ struct TalkieNavigationView: View {
     @ViewBuilder
     private var twoColumnDetailView: some View {
         switch selectedSection {
+        case .home:
+            TalkieHomeView()
         case .models:
             TalkieSection("Models") {
                 ModelsContentView()
@@ -497,10 +500,6 @@ struct TalkieNavigationView: View {
                 ActivityLogFullView()
             }
         case .allMemos:
-            TalkieSection("AllMemos") {
-                MemoTableFullView()
-            }
-        case .allMemosV2:
             // AllMemosView2 already wraps itself in TalkieSection
             AllMemosView2()
         case .liveDashboard:
@@ -530,8 +529,8 @@ struct TalkieNavigationView: View {
         case .systemConsole:
             TalkieSection("SystemConsole") {
                 SystemConsoleView(onClose: {
-                    // Return to previous section, or allMemos if none
-                    selectedSection = previousSection ?? .allMemos
+                    // Return to previous section, or home if none
+                    selectedSection = previousSection ?? .home
                 })
             }
         case .pendingActions:
@@ -562,7 +561,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models, .allowedCommands, .aiResults, .allMemos, .allMemosV2, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .talkieService, .settings:
+        case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .talkieService, .settings:
             return true
         default:
             return false
@@ -624,8 +623,8 @@ struct TalkieNavigationView: View {
 
     private var sectionTitle: String {
         switch selectedSection {
+        case .home: return "HOME"
         case .allMemos: return "ALL MEMOS"
-        case .allMemosV2: return "ALL MEMOS V2"
         case .liveDashboard: return "LIVE DASHBOARD"
         case .liveRecent: return "LIVE RECENT"
         case .liveSettings: return "LIVE SETTINGS"
@@ -646,7 +645,6 @@ struct TalkieNavigationView: View {
     private var sectionSubtitle: String? {
         switch selectedSection {
         case .allMemos: return "\(allMemos.count) total"
-        case .allMemosV2: return "\(allMemos.count) total"
         default: return nil
         }
     }
@@ -849,4 +847,3 @@ private struct SidebarButtonContent: View {
         }
     }
 }
-

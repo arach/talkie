@@ -609,19 +609,6 @@ struct InterstitialEditorView: View {
                     .padding(.bottom, 40) // Space for floating pill
                     .focused($isTextFieldFocused)
                     .frame(maxHeight: .infinity)
-                    .onReceive(NotificationCenter.default.publisher(for: NSPasteboard.generalChangedNotification)) { _ in
-                        // Check if user copied text from the editor (Cmd+C)
-                        if isTextFieldFocused,
-                           let copiedText = NSPasteboard.general.string(forType: .string),
-                           !copiedText.isEmpty,
-                           manager.editedText.contains(copiedText) {
-                            // User copied from the text editor - treat as task complete
-                            NSLog("[Interstitial] User copied text manually - auto-dismissing")
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                manager.dismiss()
-                            }
-                        }
-                    }
 
                 // Floating dictation pill (centered at bottom of text area)
                 // Uses sliver/expand pattern like TalkieLive - no external opacity/scale needed

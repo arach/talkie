@@ -66,6 +66,7 @@ struct TalkieApp: App {
 
     let persistenceController = PersistenceController.shared
     @ObservedObject private var settingsManager = SettingsManager.shared
+    @ObservedObject private var onboardingManager = OnboardingManager.shared
     @FocusedValue(\.sidebarToggle) var sidebarToggle
     @FocusedValue(\.settingsNavigation) var settingsNavigation
     @FocusedValue(\.liveNavigation) var liveNavigation
@@ -78,6 +79,9 @@ struct TalkieApp: App {
                 .tint(settingsManager.accentColor.color)
                 .onOpenURL { url in
                     handleDeepLink(url)
+                }
+                .sheet(isPresented: $onboardingManager.shouldShowOnboarding) {
+                    OnboardingView()
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -225,7 +229,7 @@ struct MigrationGateView: View {
 
                 // Check memo count
                 let repository = GRDBRepository()
-                if let count = try? await repository.countMemos() {
+                if let count = try? await repository.countMemos(searchQuery: nil, filters: []) {
                     print("📊 [App Startup] Found \(count) memos in GRDB")
                 }
 

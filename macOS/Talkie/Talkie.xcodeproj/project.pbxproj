@@ -62,6 +62,16 @@
 		536ACF132EF45C770023A256 /* AudioDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF122EF45C770023A256 /* AudioDeviceManager.swift */; };
 		536ACF192EF45D3E0023A256 /* TalkieComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF172EF45D3E0023A256 /* TalkieComponents.swift */; };
 		536ACF1A2EF45D3E0023A256 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF162EF45D3E0023A256 /* FormControls.swift */; };
+		53A0374F2EF49B1D00273FF0 /* OnboardingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A037482EF49B1D00273FF0 /* OnboardingCoordinator.swift */; };
+		53A037502EF49B1D00273FF0 /* LLMConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A037462EF49B1D00273FF0 /* LLMConfigView.swift */; };
+		53A037512EF49B1D00273FF0 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A0374A2EF49B1D00273FF0 /* OnboardingView.swift */; };
+		53A037522EF49B1D00273FF0 /* OnboardingUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A037492EF49B1D00273FF0 /* OnboardingUI.swift */; };
+		53A037532EF49B1D00273FF0 /* PermissionsSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A0374B2EF49B1D00273FF0 /* PermissionsSetupView.swift */; };
+		53A037542EF49B1D00273FF0 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A0374D2EF49B1D00273FF0 /* WelcomeView.swift */; };
+		53A037552EF49B1D00273FF0 /* ServiceSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A0374C2EF49B1D00273FF0 /* ServiceSetupView.swift */; };
+		53A037562EF49B1D00273FF0 /* ModelInstallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A037472EF49B1D00273FF0 /* ModelInstallView.swift */; };
+		53A037572EF49B1D00273FF0 /* CompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A037452EF49B1D00273FF0 /* CompleteView.swift */; };
+		53A037592EF49CBC00273FF0 /* TalkieHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53A037582EF49CBC00273FF0 /* TalkieHomeView.swift */; };
 		53E624992EF3DCAA00AC059A /* UtteranceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E624982EF3DCAA00AC059A /* UtteranceListView.swift */; };
 		53E6249B2EF3DCB400AC059A /* LiveSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E6249A2EF3DCB400AC059A /* LiveSettingsView.swift */; };
 		53F95CA02EF4655100E47C75 /* ServiceHealthCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F95C9F2EF4655100E47C75 /* ServiceHealthCard.swift */; };
@@ -216,6 +226,16 @@
 		536ACF122EF45C770023A256 /* AudioDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceManager.swift; sourceTree = "<group>"; };
 		536ACF162EF45D3E0023A256 /* FormControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormControls.swift; sourceTree = "<group>"; };
 		536ACF172EF45D3E0023A256 /* TalkieComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieComponents.swift; sourceTree = "<group>"; };
+		53A037452EF49B1D00273FF0 /* CompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompleteView.swift; sourceTree = "<group>"; };
+		53A037462EF49B1D00273FF0 /* LLMConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMConfigView.swift; sourceTree = "<group>"; };
+		53A037472EF49B1D00273FF0 /* ModelInstallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelInstallView.swift; sourceTree = "<group>"; };
+		53A037482EF49B1D00273FF0 /* OnboardingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCoordinator.swift; sourceTree = "<group>"; };
+		53A037492EF49B1D00273FF0 /* OnboardingUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingUI.swift; sourceTree = "<group>"; };
+		53A0374A2EF49B1D00273FF0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		53A0374B2EF49B1D00273FF0 /* PermissionsSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSetupView.swift; sourceTree = "<group>"; };
+		53A0374C2EF49B1D00273FF0 /* ServiceSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceSetupView.swift; sourceTree = "<group>"; };
+		53A0374D2EF49B1D00273FF0 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		53A037582EF49CBC00273FF0 /* TalkieHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieHomeView.swift; sourceTree = "<group>"; };
 		53C628E8435C070BDA2131C1 /* MigrationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationRunner.swift; sourceTree = "<group>"; };
 		53E624982EF3DCAA00AC059A /* UtteranceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceListView.swift; sourceTree = "<group>"; };
 		53E6249A2EF3DCB400AC059A /* LiveSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSettingsView.swift; sourceTree = "<group>"; };
@@ -359,13 +379,6 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
-		1745542337F0D6541E0546B6 /* Design */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Design;
-			sourceTree = "<group>";
-		};
 		273AD98FADA1283878EF8A3F /* Migrations */ = {
 			isa = PBXGroup;
 			children = (
@@ -373,13 +386,6 @@
 				B85E11D8D3E8BED31169CF0F /* Migrations.swift */,
 			);
 			path = Migrations;
-			sourceTree = "<group>";
-		};
-		29B4998B9503B7D69EC0A2EB /* Settings */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Settings;
 			sourceTree = "<group>";
 		};
 		39EEC311C163C20B75AFC695 /* Database */ = {
@@ -425,6 +431,22 @@
 			path = Components;
 			sourceTree = "<group>";
 		};
+		53A0374E2EF49B1D00273FF0 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				53A037452EF49B1D00273FF0 /* CompleteView.swift */,
+				53A037462EF49B1D00273FF0 /* LLMConfigView.swift */,
+				53A037472EF49B1D00273FF0 /* ModelInstallView.swift */,
+				53A037482EF49B1D00273FF0 /* OnboardingCoordinator.swift */,
+				53A037492EF49B1D00273FF0 /* OnboardingUI.swift */,
+				53A0374A2EF49B1D00273FF0 /* OnboardingView.swift */,
+				53A0374B2EF49B1D00273FF0 /* PermissionsSetupView.swift */,
+				53A0374C2EF49B1D00273FF0 /* ServiceSetupView.swift */,
+				53A0374D2EF49B1D00273FF0 /* WelcomeView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		53A7622465701BF0425306D5 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -446,6 +468,8 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				53A037582EF49CBC00273FF0 /* TalkieHomeView.swift */,
+				53A0374E2EF49B1D00273FF0 /* Onboarding */,
 				53F95CA72EF48C3500E47C75 /* SyncHistoryView.swift */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				2F1E80BB0C63636E4A74E2DF /* MemoDetailView.swift */,
@@ -556,7 +580,6 @@
 				E07F3B30E2E020437DEB6461 /* History */,
 				6C5397CAF84C2B3DE5EC51E2 /* Navigation */,
 				6AFEF1FDE55FB73E528FBCD8 /* Components */,
-				29B4998B9503B7D69EC0A2EB /* Settings */,
 				2E1AB932F6DA343CB26DA044 /* HomeView.swift */,
 			);
 			path = Live;
@@ -640,7 +663,6 @@
 				5CC7B1BEDA8719A80E0BFD4C /* Views */,
 				976DB5AE94679723D8726EDE /* Workflow */,
 				EC3EE94DAAE074F1D0B4D2E1 /* Products */,
-				1745542337F0D6541E0546B6 /* Design */,
 				C65B0EA97F7B4C40CAB011FE /* Stores */,
 				39EEC311C163C20B75AFC695 /* Database */,
 				D21261077D6724B7EB60B0AA /* Debug */,
@@ -928,6 +950,7 @@
 				35BB70F14D43FAE83CE9FA61 /* WorkflowAction.swift in Sources */,
 				EAEF464B74FB8BA0B5023DAD /* WorkflowColumnViews.swift in Sources */,
 				53E624992EF3DCAA00AC059A /* UtteranceListView.swift in Sources */,
+				53A037592EF49CBC00273FF0 /* TalkieHomeView.swift in Sources */,
 				EF5110414DF00AB03DD94700 /* WorkflowContentViews.swift in Sources */,
 				169AB59BC4641ED01BF19EDA /* WorkflowDefinition.swift in Sources */,
 				4E8DA6F51463650780FAC5F3 /* WorkflowExecutor.swift in Sources */,
@@ -937,6 +960,15 @@
 				BB2616B0993300F4C54E9E0B /* talkie.xcdatamodeld in Sources */,
 				275FB88DB29FE0FFBCD2B835 /* HistoryView.swift in Sources */,
 				46408B4F680A39C0DFAA77F3 /* TalkieLiveSettings.swift in Sources */,
+				53A0374F2EF49B1D00273FF0 /* OnboardingCoordinator.swift in Sources */,
+				53A037502EF49B1D00273FF0 /* LLMConfigView.swift in Sources */,
+				53A037512EF49B1D00273FF0 /* OnboardingView.swift in Sources */,
+				53A037522EF49B1D00273FF0 /* OnboardingUI.swift in Sources */,
+				53A037532EF49B1D00273FF0 /* PermissionsSetupView.swift in Sources */,
+				53A037542EF49B1D00273FF0 /* WelcomeView.swift in Sources */,
+				53A037552EF49B1D00273FF0 /* ServiceSetupView.swift in Sources */,
+				53A037562EF49B1D00273FF0 /* ModelInstallView.swift in Sources */,
+				53A037572EF49B1D00273FF0 /* CompleteView.swift in Sources */,
 				D4070518C24A34FDDC062D62 /* UtteranceStore.swift in Sources */,
 				7465C2AA79712CD317A66902 /* AudioPlaybackManager.swift in Sources */,
 				B37F2AB8761CAA7570675866 /* LiveSidebarComponents.swift in Sources */,
