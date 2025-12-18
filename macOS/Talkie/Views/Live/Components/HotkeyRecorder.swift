@@ -77,12 +77,12 @@ struct HotkeyRecorderButton: View {
                 }) {
                     Text("Reset")
                         .font(.labelSmall)
-                        .foregroundColor(isResetHovered ? .white : Theme.current.foregroundTertiary)
+                        .foregroundColor(isResetHovered ? .white : Theme.current.foregroundMuted)
                         .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, Spacing.xxs * 2)
                         .background(
                             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                .fill(isResetHovered ? Theme.current.border : Color.clear)
+                                .fill(isResetHovered ? Color.secondary.opacity(Opacity.medium) : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
