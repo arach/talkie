@@ -103,6 +103,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		531A90D52EEE73380084EC25 /* Exceptions for "TalkieWatchWidget" folder in "TalkieWatchWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */;
+		};
 		539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie OS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -116,13 +123,6 @@
 				Info.plist,
 			);
 			target = 53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */;
-		};
-		531A90D52EEE73380084EC25 /* Exceptions for "TalkieWatchWidget" folder in "TalkieWatchWidgetExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
