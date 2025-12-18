@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8330CD16479603CDC3316BCD /* SyncRecordSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3D42475EE8E158AB13A585 /* SyncRecordSerializer.swift */; };
-		F9C5D7FD7A65B2DB60113761 /* CloudSyncActionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D24CCAABB6E872007B2E8A8 /* CloudSyncActionModel.swift */; };
 		00173E73B5BB8FBA6B9C5892 /* TWF_SPEC.md in Resources */ = {isa = PBXBuildFile; fileRef = 12801FF39F6E9D691944A98D /* TWF_SPEC.md */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
@@ -153,8 +151,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		2D3D42475EE8E158AB13A585 /* SyncRecordSerializer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data/Database/SyncRecordSerializer.swift"; sourceTree = "<group>"; };
-		1D24CCAABB6E872007B2E8A8 /* CloudSyncActionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data/Models/CloudSyncActionModel.swift"; sourceTree = "<group>"; };
 		011F506478FE4A2E2071B459 /* TalkieLiveSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TalkieLiveSettings.swift; sourceTree = "<group>"; };
 		01A22C666A510C08B151F5AA /* LiveDatabase.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveDatabase.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
@@ -927,9 +923,7 @@
 				9721943039A98ABE0856B6A9 /* PerformanceInstrumentation.swift in Sources */,
 				CF8BF4D8662480ADA291D446 /* RepositoryInstrumentation.swift in Sources */,
 				7C7EEABBF63FB33593BF9A13 /* TalkieComponents.swift in Sources */,
-			
-				F9C5D7FD7A65B2DB60113761 /* CloudSyncActionModel.swift in Sources */,
-				8330CD16479603CDC3316BCD /* SyncRecordSerializer.swift in Sources */,);
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
