@@ -2582,86 +2582,158 @@ struct ModelManagementRow: View {
     let onDelete: () -> Void
 
     @State private var isHovered = false
+    @State private var showFilePath = false
+    @State private var pathCopied = false
+
+    private var modelFilePath: String {
+        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+
+        // Different paths for different model families
+        if model.family == "whisper" {
+            return supportDir
+                .appendingPathComponent("Talkie/WhisperModels/models/argmaxinc/whisperkit-coreml")
+                .appendingPathComponent(model.modelId)
+                .path
+        } else if model.family == "parakeet" {
+            return supportDir
+                .appendingPathComponent("Talkie/ParakeetModels")
+                .appendingPathComponent(model.modelId)
+                .path
+        }
+        return "Unknown model family"
+    }
 
     var body: some View {
-        HStack(spacing: Spacing.sm) {
-            // Selection indicator
-            Button(action: onSelect) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted)
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.isDownloaded)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: Spacing.sm) {
+                // Selection indicator
+                Button(action: onSelect) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .disabled(!model.isDownloaded)
 
-            // Model info
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(model.displayName)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(model.isDownloaded ? .white : TalkieTheme.textTertiary)
+                // Model info
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(model.displayName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(model.isDownloaded ? .white : TalkieTheme.textTertiary)
 
-                    if model.isLoaded {
-                        Text("LOADED")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(SemanticColor.success)
+                        if model.isLoaded {
+                            Text("LOADED")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(SemanticColor.success)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(SemanticColor.success.opacity(0.2))
+                                .cornerRadius(3)
+                        }
+
+                        Text(model.sizeDescription)
+                            .font(.system(size: 8))
+                            .foregroundColor(TalkieTheme.textMuted)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(SemanticColor.success.opacity(0.2))
+                            .background(TalkieTheme.hover)
                             .cornerRadius(3)
                     }
 
-                    Text(model.sizeDescription)
-                        .font(.system(size: 8))
+                    Text(model.description)
+                        .font(.system(size: 9))
                         .foregroundColor(TalkieTheme.textMuted)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(TalkieTheme.hover)
-                        .cornerRadius(3)
                 }
 
-                Text(model.description)
-                    .font(.system(size: 9))
-                    .foregroundColor(TalkieTheme.textMuted)
+                Spacer()
+
+                // Action buttons
+                if isDownloading {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                        Text("\(Int(downloadProgress * 100))%")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(TalkieTheme.textTertiary)
+                    }
+                    .frame(width: 60)
+                } else if model.isDownloaded {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 10))
+                            .foregroundColor(isHovered ? SemanticColor.error : TalkieTheme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(isHovered ? 1 : 0.5)
+                } else {
+                    Button(action: onDownload) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 10))
+                            Text("Download")
+                                .font(.system(size: 9))
+                        }
+                        .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
-            Spacer()
-
-            // Action buttons
-            if isDownloading {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                    Text("\(Int(downloadProgress * 100))%")
-                        .font(.system(size: 9, design: .monospaced))
+            // File path appears on Command-hover
+            if showFilePath && model.isDownloaded {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 9))
                         .foregroundColor(TalkieTheme.textTertiary)
-                }
-                .frame(width: 60)
-            } else if model.isDownloaded {
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 10))
-                        .foregroundColor(isHovered ? SemanticColor.error : TalkieTheme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .opacity(isHovered ? 1 : 0.5)
-            } else {
-                Button(action: onDownload) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 10))
-                        Text("Download")
-                            .font(.system(size: 9))
+
+                    Button(action: copyPath) {
+                        Text(modelFilePath)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(pathCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
-                    .foregroundColor(.accentColor)
+                    .buttonStyle(.plain)
+                    .help("Click to copy path")
                 }
-                .buttonStyle(.plain)
+                .padding(.leading, 20) // Align with text above
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
             }
         }
         .padding(.vertical, Spacing.sm)
         .padding(.horizontal, Spacing.xs)
         .background(isHovered ? TalkieTheme.divider : Color.clear)
-        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: showFilePath)
+        .onHover { hovering in
+            isHovered = hovering
+            if !hovering {
+                withAnimation { showFilePath = false }
+                pathCopied = false
+            }
+        }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active:
+                // Check for Command modifier while hovering
+                let commandHeld = NSEvent.modifierFlags.contains(.command)
+                if commandHeld != showFilePath {
+                    withAnimation { showFilePath = commandHeld }
+                }
+            case .ended:
+                withAnimation { showFilePath = false }
+                pathCopied = false
+            }
+        }
+    }
+
+    private func copyPath() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(modelFilePath, forType: .string)
+        withAnimation { pathCopied = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation { pathCopied = false }
+        }
     }
 }
 
