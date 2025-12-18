@@ -723,7 +723,7 @@ class CloudKitSyncManager: ObservableObject {
                                     entityType: "memo",
                                     direction: "coredata_to_grdb",
                                     action: "create",
-                                    details: metadata.toJSON()
+                                    details: records.toJSON()
                                 ))
                             }
                         } catch {
