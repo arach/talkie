@@ -671,8 +671,38 @@ class CloudKitSyncManager: ObservableObject {
                                     try await repository.saveMemo(memoModel)
                                     updatedCount += 1
                                     logger.info("✅ [Bridge 1] Updated: \(memoId)")
+
+                                    // Log sync action with full serialized data from both sides
+                                    let records = SerializedSyncRecords(
+                                        coredata: SerializedMemoRecord.fromCoreData(cdMemo),
+                                        grdb: SerializedMemoRecord.fromGRDB(existing.memo),
+                                        reason: nil
+                                    )
+                                    try await repository.saveSyncAction(CloudSyncActionModel(
+                                        entityId: memoId,
+                                        entityType: "memo",
+                                        direction: "coredata_to_grdb",
+                                        action: "update",
+                                        conflictResolution: "timestamp_coredata_wins",
+                                        details: records.toJSON()
+                                    ))
                                 } else {
                                     logger.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(cdMemo.title ?? "Untitled")'")
+
+                                    // Log skip action with full data from both sides
+                                    let records = SerializedSyncRecords(
+                                        coredata: SerializedMemoRecord.fromCoreData(cdMemo),
+                                        grdb: SerializedMemoRecord.fromGRDB(existing.memo),
+                                        reason: "grdb_newer"
+                                    )
+                                    try await repository.saveSyncAction(CloudSyncActionModel(
+                                        entityId: memoId,
+                                        entityType: "memo",
+                                        direction: "coredata_to_grdb",
+                                        action: "skip",
+                                        conflictResolution: "timestamp_grdb_wins",
+                                        details: records.toJSON()
+                                    ))
                                 }
                             } else {
                                 // New memo - create in GRDB
@@ -681,6 +711,20 @@ class CloudKitSyncManager: ObservableObject {
                                 try await repository.saveMemo(memoModel)
                                 createdCount += 1
                                 logger.info("✅ [Bridge 1] Created: \(memoId)")
+
+                                // Log sync action with full Core Data serialized data
+                                let records = SerializedSyncRecords(
+                                    coredata: SerializedMemoRecord.fromCoreData(cdMemo),
+                                    grdb: nil,
+                                    reason: nil
+                                )
+                                try await repository.saveSyncAction(CloudSyncActionModel(
+                                    entityId: memoId,
+                                    entityType: "memo",
+                                    direction: "coredata_to_grdb",
+                                    action: "create",
+                                    details: metadata.toJSON()
+                                ))
                             }
                         } catch {
                             logger.error("❌ [Bridge 1] Failed to sync memo \(memoId): \(error.localizedDescription)")

@@ -384,6 +384,18 @@ class WorkflowExecutor: ObservableObject {
                 )
                 try await repository.saveWorkflowRun(workflowRun)
                 logger.info("✅ [Bridge 2] Saved to GRDB: \(workflow.name)")
+
+                // Log sync action - workflow run created in GRDB
+                let grdbData = """
+                {"workflowName": "\(workflow.name)", "workflowId": "\(workflow.id.uuidString)", "memoId": "\((memo.id ?? UUID()).uuidString)", "runDate": "\(runDate.ISO8601Format())", "output_preview": "\(String(output.prefix(100)))"}
+                """
+                try await repository.saveSyncAction(CloudSyncActionModel(
+                    entityId: runId,
+                    entityType: "workflow_run",
+                    direction: "grdb_to_coredata",
+                    action: "create",
+                    details: "{\"grdb\": \(grdbData)}"
+                ))
             } catch {
                 logger.error("❌ [Bridge 2] Failed to save to GRDB: \(error.localizedDescription)")
             }
@@ -409,6 +421,21 @@ class WorkflowExecutor: ObservableObject {
             do {
                 try context.save()
                 logger.info("✅ [Bridge 2] Saved to Core Data (will sync to CloudKit): \(workflow.name)")
+
+                // Log sync action - workflow run saved to Core Data for CloudKit
+                Task {
+                    let repository = GRDBRepository()
+                    let cdData = """
+                    {"workflowName": "\(workflow.name)", "workflowId": "\(workflow.id.uuidString)", "memoId": "\((memo.id ?? UUID()).uuidString)", "runDate": "\(runDate.ISO8601Format())"}
+                    """
+                    try await repository.saveSyncAction(CloudSyncActionModel(
+                        entityId: runId,
+                        entityType: "workflow_run",
+                        direction: "grdb_to_coredata",
+                        action: "create",
+                        details: "{\"coredata\": \(cdData)}"
+                    ))
+                }
             } catch {
                 logger.error("❌ [Bridge 2] Failed to save to Core Data: \(error.localizedDescription)")
             }

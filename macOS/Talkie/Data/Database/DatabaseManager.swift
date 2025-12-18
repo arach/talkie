@@ -166,6 +166,36 @@ final class DatabaseManager {
             }
         }
 
+        // Migration v2: Cloud sync actions audit table
+        migrator.registerMigration("v2_cloud_sync_actions") { db in
+            // Create cloud_sync_actions table for tracking all sync operations
+            try db.create(table: "cloud_sync_actions") { t in
+                t.column("id", .text).primaryKey()
+                t.column("entityId", .text).notNull()
+                t.column("entityType", .text).notNull()  // "memo" or "workflow_run"
+                t.column("direction", .text).notNull()   // "coredata_to_grdb" or "grdb_to_coredata"
+                t.column("action", .text).notNull()      // "create", "update", "skip"
+                t.column("conflictResolution", .text)    // "timestamp_coredata_wins", etc.
+                t.column("syncedAt", .datetime).notNull()
+                t.column("details", .text)               // Optional JSON metadata
+            }
+
+            // Index for querying sync history by entity
+            try db.create(index: "idx_sync_actions_entity",
+                         on: "cloud_sync_actions",
+                         columns: ["entityId", "entityType"])
+
+            // Index for querying syncs by direction
+            try db.create(index: "idx_sync_actions_direction",
+                         on: "cloud_sync_actions",
+                         columns: ["direction"])
+
+            // Index for recent syncs
+            try db.create(index: "idx_sync_actions_synced_at",
+                         on: "cloud_sync_actions",
+                         columns: ["syncedAt"])
+        }
+
         return migrator
     }
 }

@@ -231,6 +231,46 @@ actor GRDBRepository: MemoRepository {
         }
     }
 
+    // MARK: - Cloud Sync Actions
+
+    func saveSyncAction(_ action: CloudSyncActionModel) async throws {
+        try await instrumentRepositoryWrite("saveSyncAction") {
+            let db = try await dbManager.database()
+
+            try await db.write { db in
+                var mutableAction = action
+                try mutableAction.save(db)
+            }
+        }
+    }
+
+    func fetchRecentSyncActions(limit: Int = 100) async throws -> [CloudSyncActionModel] {
+        try await instrumentRepositoryRead("fetchRecentSyncActions") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try CloudSyncActionModel
+                    .order(CloudSyncActionModel.Columns.syncedAt.desc)
+                    .limit(limit)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    func fetchSyncActions(forEntity entityId: UUID, entityType: String) async throws -> [CloudSyncActionModel] {
+        try await instrumentRepositoryRead("fetchSyncActionsForEntity") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try CloudSyncActionModel
+                    .filter(CloudSyncActionModel.Columns.entityId == entityId.uuidString)
+                    .filter(CloudSyncActionModel.Columns.entityType == entityType)
+                    .order(CloudSyncActionModel.Columns.syncedAt.desc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
     // MARK: - Helper: Fetch Workflow Counts
 
     nonisolated private func fetchWorkflowCounts(for memoIds: [UUID], in db: Database) throws -> [UUID: Int] {
