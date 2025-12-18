@@ -50,31 +50,31 @@ struct SoundEventCard: View {
             action()
             logger.debug("Selected sound event: \(event.rawValue)")
         }) {
-            VStack(spacing: 8) {
+            VStack(spacing: Spacing.xs) {
                 // Icon
                 Image(systemName: event.icon)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.headlineMedium)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(height: 24)
 
                 // Event name
                 Text(event.rawValue)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.labelMedium)
                     .foregroundColor(isSelected ? .primary : .secondary)
 
                 // Current sound
                 Text(sound.displayName)
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .font(.techLabelSmall)
+                    .foregroundColor(.secondary.opacity(Opacity.prominent))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, Spacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentColor.opacity(0.15) : (isHovered ? Color.primary.opacity(0.05) : Color.primary.opacity(0.03)))
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(isSelected ? Color.accentColor.opacity(Opacity.medium) : (isHovered ? Color.primary.opacity(Opacity.subtle) : Color.primary.opacity(Opacity.subtle)))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .stroke(isSelected ? Color.accentColor.opacity(Opacity.half) : Color.clear, lineWidth: 1.5)
                     )
             )
         }
@@ -133,32 +133,33 @@ struct SoundChip: View {
                 // Icon based on state
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.techLabelSmall)
                         .foregroundColor(.accentColor)
                 } else if sound == .none {
                     Image(systemName: "speaker.slash")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .font(.labelSmall)
+                        .foregroundColor(.secondary.opacity(Opacity.prominent))
                 } else {
                     Image(systemName: isPlaying ? "speaker.wave.3.fill" : "speaker.wave.2")
-                        .font(.system(size: 10))
+                        .font(.labelSmall)
                         .foregroundColor(.secondary)
                         .symbolEffect(.variableColor.iterative, isActive: isPlaying)
                 }
 
                 Text(sound.displayName)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .font(.labelSmall)
+                    .fontWeight(isSelected ? .bold : .medium)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Spacing.xs)
+            .padding(.vertical, Spacing.xs)
             .frame(maxWidth: .infinity)
             .frame(height: 28)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.25) : (isHovered ? Color.primary.opacity(0.08) : Color.primary.opacity(0.05)))
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(isSelected ? Color.accentColor.opacity(Opacity.medium + 0.1) : (isHovered ? Color.primary.opacity(Opacity.light) : Color.primary.opacity(Opacity.subtle)))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: isSelected ? 2 : 1)
                     )
             )
@@ -177,18 +178,18 @@ struct PlaySequenceButton: View {
 
     var body: some View {
         Button(action: playSequence) {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.xs) {
                 Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                    .font(.system(size: 10))
+                    .font(.labelSmall)
                 Text(isPlaying ? "Playing..." : "Play Sequence")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.labelMedium)
             }
             .foregroundColor(isPlaying ? .orange : .accentColor)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isPlaying ? Color.orange.opacity(0.15) : (isHovered ? Color.accentColor.opacity(0.15) : Color.accentColor.opacity(0.1)))
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(isPlaying ? Color.orange.opacity(Opacity.medium) : (isHovered ? Color.accentColor.opacity(Opacity.medium) : Color.accentColor.opacity(Opacity.light)))
             )
         }
         .buttonStyle(.plain)

@@ -41,8 +41,8 @@ struct HotkeyRecorderButton: View {
                             logger.debug("Hotkey recording cancelled")
                         }) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(isCancelHovered ? .white : .accentColor.opacity(0.6))
+                                .font(.techLabelSmall)
+                                .foregroundColor(isCancelHovered ? .white : .accentColor.opacity(Opacity.prominent))
                                 .frame(width: 16, height: 16)
                                 .background(
                                     Circle()
@@ -53,15 +53,15 @@ struct HotkeyRecorderButton: View {
                         .onHover { isCancelHovered = $0 }
                     }
                 }
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .font(.bodyMedium)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.accentColor.opacity(isRecording ? 0.2 : (isHovered ? 0.18 : 0.12)))
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .fill(Color.accentColor.opacity(isRecording ? Opacity.medium : (isHovered ? Opacity.medium : Opacity.light)))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .strokeBorder(isRecording ? Color.accentColor : Color.clear, lineWidth: 1.5)
                 )
             }
@@ -76,12 +76,12 @@ struct HotkeyRecorderButton: View {
                     NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
                 }) {
                     Text("Reset")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.labelSmall)
                         .foregroundColor(isResetHovered ? .white : Theme.current.foregroundTertiary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, Spacing.xxs * 2)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .fill(isResetHovered ? Theme.current.border : Color.clear)
                         )
                 }

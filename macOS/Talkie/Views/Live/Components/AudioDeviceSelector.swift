@@ -50,27 +50,27 @@ struct AudioDeviceSelector: View {
                     }
                 }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "mic")
-                        .font(.system(size: 11))
+                        .font(.labelMedium)
                         .foregroundColor(.secondary)
 
                     Text(selectedDeviceName)
-                        .font(.system(size: 12))
+                        .font(.labelMedium)
                         .foregroundColor(.primary)
                         .lineLimit(1)
 
                     Spacer()
 
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 9))
+                        .font(.techLabelSmall)
                         .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.primary.opacity(isHovered ? 0.08 : 0.05))
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .fill(Color.primary.opacity(isHovered ? Opacity.light : Opacity.subtle))
                 )
             }
             .menuStyle(.borderlessButton)
@@ -107,12 +107,12 @@ struct AudioLevelMeter: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.primary.opacity(0.05))
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(Color.primary.opacity(Opacity.subtle))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .strokeBorder(Color.primary.opacity(Opacity.light), lineWidth: 0.5)
         )
         .onAppear {
             logger.debug("AudioLevelMeter appeared")
