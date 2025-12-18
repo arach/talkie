@@ -21,6 +21,14 @@ final class LiveController: ObservableObject {
             let elapsed = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
             TalkieLiveXPCService.shared.updateState(state.rawValue, elapsedTime: elapsed)
 
+            // Update floating pill state (desktop overlay)
+            FloatingPillController.shared.state = state
+            FloatingPillController.shared.elapsedTime = elapsed
+
+            // Update recording overlay state (top overlay)
+            RecordingOverlayController.shared.state = state
+            RecordingOverlayController.shared.elapsedTime = elapsed
+
             // Stop elapsed time timer when returning to idle
             if state == .idle {
                 stopElapsedTimeTimer()
@@ -249,16 +257,28 @@ final class LiveController: ObservableObject {
         resetCancelled()
         traceID = nil
 
-        // Check if Talkie Live is frontmost BEFORE capturing context
-        // This determines if the Live goes into the implicit queue
-        createdInTalkieView = ContextCapture.isTalkieLiveFrontmost()
+        // Capture baseline context FIRST to get the REAL target app
+        // before any potential TalkieLive activation
+        capturedContext = ContextCaptureService.shared.captureBaseline()
+
+        // Check if Talkie Live is frontmost AFTER a tiny delay
+        // This avoids false positives from menu bar clicks
+        // We want to detect if user INTENTIONALLY opened TalkieLive window to queue,
+        // not just clicked the menu bar icon to record
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // Check frontmost app - if it's the target app from baseline, don't queue
+        let currentFrontmost = ContextCapture.getFrontmostApp()
+        let targetApp = capturedContext?.activeAppBundleID
+        let talkieLiveIsNowFrontmost = ContextCapture.isTalkieLiveFrontmost()
+
+        // Only queue if TalkieLive is frontmost AND it was the target app
+        // (user intentionally recording inside Talkie Live window)
+        createdInTalkieView = talkieLiveIsNowFrontmost && (targetApp == "jdi.talkie.live")
 
         // Store the start app for potential return-to-origin after paste
-        startApp = ContextCapture.getFrontmostApp()
+        startApp = currentFrontmost
 
-        // Capture baseline context BEFORE recording starts (user is in their target app)
-        // This is instant (~1ms) - enrichment happens after paste
-        capturedContext = ContextCaptureService.shared.captureBaseline()
         recordingStartTime = Date()
 
         // Log context capture
@@ -299,6 +319,10 @@ final class LiveController: ObservableObject {
 
                 // Broadcast elapsed time update via XPC
                 TalkieLiveXPCService.shared.updateState(self.state.rawValue, elapsedTime: elapsed)
+
+                // Update local overlays
+                FloatingPillController.shared.elapsedTime = elapsed
+                RecordingOverlayController.shared.elapsedTime = elapsed
             }
         }
     }
