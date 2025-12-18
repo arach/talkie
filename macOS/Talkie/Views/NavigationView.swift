@@ -126,7 +126,7 @@ struct TalkieNavigationView: View {
                 }
 
                 // StatusBar only on content area (not under sidebar)
-                StatusBar(memoCount: allMemos.count)
+                StatusBar()
             }
         }
         .animation(.snappy(duration: 0.2), value: isSidebarCollapsed)

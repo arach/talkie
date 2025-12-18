@@ -221,7 +221,8 @@ final class InterstitialManager: ObservableObject {
         }
 
         panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        // Don't activate the main app - just show the panel
+        // NSApp.activate(ignoringOtherApps: true)
 
         self.panel = panel
         self.isVisible = true

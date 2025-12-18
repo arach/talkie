@@ -94,6 +94,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             NSLog("[AppDelegate] Opening interstitial for utterance ID: \(id)")
             logger.info("Opening interstitial for utterance ID: \(id)")
             Task { @MainActor in
+                // Hide all main app windows when showing interstitial
+                for window in NSApp.windows where window.title != "" {
+                    window.orderOut(nil)
+                }
                 InterstitialManager.shared.show(utteranceId: id)
             }
         } else {

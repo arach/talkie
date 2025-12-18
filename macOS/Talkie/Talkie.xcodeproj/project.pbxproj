@@ -64,6 +64,11 @@
 		536ACF1A2EF45D3E0023A256 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536ACF162EF45D3E0023A256 /* FormControls.swift */; };
 		53E624992EF3DCAA00AC059A /* UtteranceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E624982EF3DCAA00AC059A /* UtteranceListView.swift */; };
 		53E6249B2EF3DCB400AC059A /* LiveSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E6249A2EF3DCB400AC059A /* LiveSettingsView.swift */; };
+		53F95CA02EF4655100E47C75 /* ServiceHealthCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F95C9F2EF4655100E47C75 /* ServiceHealthCard.swift */; };
+		53F95CA22EF467A900E47C75 /* OnAirIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F95CA12EF467A900E47C75 /* OnAirIndicator.swift */; };
+		53F95CA42EF4717D00E47C75 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F95CA32EF4717D00E47C75 /* AppEnvironment.swift */; };
+		53F95CA62EF47C6400E47C75 /* SessionLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F95CA52EF47C6400E47C75 /* SessionLayoutManager.swift */; };
+		53F95CA82EF48C3500E47C75 /* SyncHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F95CA72EF48C3500E47C75 /* SyncHistoryView.swift */; };
 		57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */; };
 		59F341C52213699C8F4592A0 /* GroqProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741882426A451E5DC9B3BEEA /* GroqProvider.swift */; };
 		5A8FB727E018EBC503E01329 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6F3171CA8771D255AD77C856 /* DebugKit */; };
@@ -214,6 +219,11 @@
 		53C628E8435C070BDA2131C1 /* MigrationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationRunner.swift; sourceTree = "<group>"; };
 		53E624982EF3DCAA00AC059A /* UtteranceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceListView.swift; sourceTree = "<group>"; };
 		53E6249A2EF3DCB400AC059A /* LiveSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSettingsView.swift; sourceTree = "<group>"; };
+		53F95C9F2EF4655100E47C75 /* ServiceHealthCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealthCard.swift; sourceTree = "<group>"; };
+		53F95CA12EF467A900E47C75 /* OnAirIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnAirIndicator.swift; sourceTree = "<group>"; };
+		53F95CA32EF4717D00E47C75 /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		53F95CA52EF47C6400E47C75 /* SessionLayoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLayoutManager.swift; sourceTree = "<group>"; };
+		53F95CA72EF48C3500E47C75 /* SyncHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncHistoryView.swift; sourceTree = "<group>"; };
 		5696777625C75E91EA7F8DC1 /* TalkieServiceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieServiceMonitor.swift; sourceTree = "<group>"; };
 		5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
 		57C6047C0D7A6847288E7B3C /* cloud-transcribe.twf.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "cloud-transcribe.twf.json"; sourceTree = "<group>"; };
@@ -407,6 +417,8 @@
 		536ACF182EF45D3E0023A256 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				53F95CA12EF467A900E47C75 /* OnAirIndicator.swift */,
+				53F95C9F2EF4655100E47C75 /* ServiceHealthCard.swift */,
 				536ACF162EF45D3E0023A256 /* FormControls.swift */,
 				536ACF172EF45D3E0023A256 /* TalkieComponents.swift */,
 			);
@@ -434,6 +446,7 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				53F95CA72EF48C3500E47C75 /* SyncHistoryView.swift */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				2F1E80BB0C63636E4A74E2DF /* MemoDetailView.swift */,
 				37B249E75E681770AEA53425 /* MemoRowView.swift */,
@@ -703,6 +716,8 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				53F95CA52EF47C6400E47C75 /* SessionLayoutManager.swift */,
+				53F95CA32EF4717D00E47C75 /* AppEnvironment.swift */,
 				536ACF122EF45C770023A256 /* AudioDeviceManager.swift */,
 				96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */,
 				CC6A6916FC176D4E84E1D897 /* AppLauncher.swift */,
@@ -847,8 +862,10 @@
 				F5E211E428DBB72A464C2879 /* CloudProviderViews.swift in Sources */,
 				1EB339080DB651B76F45E652 /* DebugSettings.swift in Sources */,
 				007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */,
+				53F95CA02EF4655100E47C75 /* ServiceHealthCard.swift in Sources */,
 				C71513A0A6EF966DD60FF8C7 /* DesignSystem.swift in Sources */,
 				623A3D11088359C70039DD45 /* DictationPill.swift in Sources */,
+				53F95CA22EF467A900E47C75 /* OnAirIndicator.swift in Sources */,
 				69AB2FED6E3604C64EAD56AE /* DiffReviewView.swift in Sources */,
 				62149343AAFFE45AA56F70D7 /* EngineClient.swift in Sources */,
 				4FC4D3FE14963ADA842948B3 /* EphemeralTranscriber.swift in Sources */,
@@ -901,6 +918,7 @@
 				38EE6C83217E692D86EA400F /* TalkieServiceMonitor.swift in Sources */,
 				B33086CC4E3AD8DD1FC5EE13 /* TalkieServiceMonitorView.swift in Sources */,
 				57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */,
+				53F95CA62EF47C6400E47C75 /* SessionLayoutManager.swift in Sources */,
 				EFDB9037C949557D2EA24D12 /* TalkieWorkflowSchema.swift in Sources */,
 				F77778250A6DF9E362D791AB /* TextDiff.swift in Sources */,
 				673E5DD45505795431156EAB /* TranscriptFileManager.swift in Sources */,
@@ -951,6 +969,8 @@
 				CF427AE398B54DBA8E875E0B /* App/DataLayerIntegration.swift in Sources */,
 				4EF9CEA92538416857DF8BFB /* Data/Models/MemoModel+CloudKit.swift in Sources */,
 				1F18E87C30E163489FF78776 /* Data/Models/TranscriptVersionModel+CloudKit.swift in Sources */,
+				53F95CA82EF48C3500E47C75 /* SyncHistoryView.swift in Sources */,
+				53F95CA42EF4717D00E47C75 /* AppEnvironment.swift in Sources */,
 				EEA27B3AEB37803022761461 /* Data/Models/WorkflowRunModel+CloudKit.swift in Sources */,
 				9721943039A98ABE0856B6A9 /* PerformanceInstrumentation.swift in Sources */,
 				CF8BF4D8662480ADA291D446 /* RepositoryInstrumentation.swift in Sources */,

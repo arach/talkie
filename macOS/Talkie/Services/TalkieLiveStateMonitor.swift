@@ -16,6 +16,8 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     @Published var state: LiveState = .idle
     @Published var elapsedTime: TimeInterval = 0
     @Published var isRecording: Bool = false
+    @Published var processId: Int32? = nil
+    @Published var isRunning: Bool = false
 
     private var xpcConnection: NSXPCConnection?
     private var retryCount = 0
@@ -25,6 +27,8 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
 
     private override init() {
         super.init()
+        // Check initial running state immediately to prevent UI flicker
+        _ = isTalkieLiveRunning()
         // Don't auto-connect - connect lazily when needed
     }
 
@@ -32,18 +36,20 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     func startMonitoring() {
         guard xpcConnection == nil && !isConnecting else { return }
 
-        NSLog("[Live] Checking...")
-
-        // Check if TalkieLive is actually running first
-        if !isTalkieLiveRunning() {
-            NSLog("[Live] Not running (optional)")
-            return
+        // Only check if we haven't determined the state yet (isRunning is still false from init)
+        // After init, we trust the XPC connection state instead of repeatedly calling pgrep
+        if !isRunning {
+            // Check if TalkieLive is actually running first
+            if !isTalkieLiveRunning() {
+                // Not running and that's OK (TalkieLive is optional)
+                return
+            }
         }
 
         connectToXPCService()
     }
 
-    /// Check if TalkieLive process is running
+    /// Check if TalkieLive process is running and update processId
     private func isTalkieLiveRunning() -> Bool {
         let task = Process()
         task.launchPath = "/usr/bin/pgrep"
@@ -55,8 +61,29 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
         do {
             try task.run()
             task.waitUntilExit()
-            return task.terminationStatus == 0
+
+            let isRunning = task.terminationStatus == 0
+
+            if isRunning {
+                // Try to read the PID from output, but don't fail if we can't
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   let pid = Int32(output) {
+                    self.processId = pid
+                } else {
+                    // Couldn't parse PID, but process is still running
+                    self.processId = nil
+                }
+                self.isRunning = true
+            } else {
+                self.processId = nil
+                self.isRunning = false
+            }
+
+            return isRunning
         } catch {
+            self.processId = nil
+            self.isRunning = false
             return false
         }
     }
@@ -80,28 +107,12 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
                 self.xpcConnection = nil
                 self.isConnecting = false
 
-                // Only retry if we haven't exceeded max retries
-                if self.retryCount < self.maxRetries {
-                    self.retryCount += 1
-                    let delay = min(Double(self.retryCount) * 2.0, 10.0) // Exponential backoff, max 10s
+                // Keep isRunning/processId based on actual process state
+                // XPC is just for state updates, not for determining if Live is running
+                _ = self.isTalkieLiveRunning()
 
-                    if self.retryCount == 1 {
-                        NSLog("[Live] Connection lost, retrying... (\(self.retryCount)/\(self.maxRetries))")
-                    }
-
-                    try? await Task.sleep(for: .seconds(delay))
-
-                    // Check if service is still running before retry
-                    if self.isTalkieLiveRunning() {
-                        self.connectToXPCService()
-                    } else {
-                        // TalkieLive stopped - silently stop monitoring (it's optional)
-                        self.retryCount = 0
-                    }
-                } else {
-                    // Max retries reached - silently stop (TalkieLive is optional)
-                    self.retryCount = 0
-                }
+                NSLog("[Live] Connection lost (not retrying - TalkieLive is optional)")
+                self.retryCount = 0
             }
         }
 
@@ -109,13 +120,7 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.isConnecting = false
-                // Interruption is temporary, try immediate reconnect once
-                if self.retryCount == 0 {
-                    try? await Task.sleep(for: .seconds(0.5))
-                    if self.isTalkieLiveRunning() {
-                        self.connectToXPCService()
-                    }
-                }
+                NSLog("[Live] Connection interrupted")
             }
         }
 

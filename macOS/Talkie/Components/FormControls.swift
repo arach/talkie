@@ -20,7 +20,7 @@ struct StyledToggle: View {
     var body: some View {
         HStack(spacing: Spacing.sm) {
             Text(label)
-                .font(.bodyMedium)
+                .font(Theme.current.fontSM)
                 .foregroundColor(Theme.current.foreground)
 
             Spacer()
@@ -65,7 +65,7 @@ struct StyledDropdown<T: Hashable & CustomStringConvertible>: View {
     var body: some View {
         HStack(spacing: Spacing.sm) {
             Text(label)
-                .font(.bodyMedium)
+                .font(Theme.current.fontSM)
                 .foregroundColor(Theme.current.foreground)
 
             Spacer()
@@ -142,7 +142,7 @@ struct StyledCheckbox: View {
             .scaleEffect(isHovered ? 1.1 : 1.0)
 
             Text(label)
-                .font(.bodyMedium)
+                .font(Theme.current.fontSM)
                 .foregroundColor(Theme.current.foreground)
 
             Spacer()

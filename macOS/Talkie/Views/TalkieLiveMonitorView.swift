@@ -302,7 +302,7 @@ struct TalkieLiveMonitorView: View {
                         .foregroundColor(.secondary)
 
                     if monitor.state != .running {
-                        Text("Start TalkieLive to see logs")
+                        Text("Enable Live Mode to see logs")
                             .font(settings.fontXS)
                             .foregroundColor(.secondary.opacity(0.7))
                     }

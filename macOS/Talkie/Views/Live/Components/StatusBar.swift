@@ -28,9 +28,7 @@ struct StatusBar: View {
     // App-wide observables
     @ObservedObject private var events = SystemEventManager.shared
     @ObservedObject private var syncManager = CloudKitSyncManager.shared
-
-    // App-wide data (passed from NavigationView)
-    let memoCount: Int
+    @ObservedObject private var liveSettings = LiveSettings.shared
 
     @State private var recordingDuration: TimeInterval = 0
     @State private var processingDuration: TimeInterval = 0
@@ -43,7 +41,7 @@ struct StatusBar: View {
     @State private var isHovered = false
     @State private var showPID = false
     @State private var pidCopied = false
-    private let pid = ProcessInfo.processInfo.processIdentifier
+    @State private var pathCopied = false
 
     private var errorCount: Int {
         events.events.filter { $0.type == .error }.count
@@ -75,76 +73,143 @@ struct StatusBar: View {
                 .frame(height: 1)
 
             HStack(spacing: Spacing.sm) {
-                // LEFT SIDE - App-wide statuses
-                HStack(spacing: 8) {
-                    // Sync status
-                    SyncStatusIcon()
-
-                    Divider()
-                        .frame(height: 12)
-
-                    // Memo count
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.stack")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(TalkieTheme.textMuted)
-                        Text("\(memoCount) memos")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(TalkieTheme.textMuted)
+                // LEFT SIDE - ON AIR indicator or app statuses
+                Group {
+                    if liveState.state == .listening && liveSettings.showOnAir {
+                        // ON AIR indicator when actively recording (and enabled in settings)
+                        OnAirIndicator()
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    } else {
+                        // App-wide statuses when not recording
+                        SyncStatusIcon()
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
                 }
 
                 Spacer()
 
-                // CENTER - Live dictation pill (always visible)
+                // CENTER - Live dictation pill or offline indicator
                 HStack(spacing: 8) {
-                    StatePill(
-                        state: liveState.state,
-                        isWarmingUp: false,
-                        showSuccess: showSuccess,
-                        recordingDuration: liveState.elapsedTime,
-                        processingDuration: processingDuration,
-                        isEngineConnected: serviceMonitor.state == .running,
-                        pendingQueueCount: 0,
-                        onTap: {
-                            // Toggle recording in TalkieLive via XPC
-                            TalkieLiveStateMonitor.shared.toggleRecording()
-                        },
-                        onQueueTap: nil
-                    )
-
-                    // PID appears next to pill on Control+hover
-                    if showPID {
-                        Button(action: copyPID) {
-                            Text("\(pid)")
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(TalkieTheme.hover)
-                                )
+                    if liveState.isRunning {
+                        StatePill(
+                            state: liveState.state,
+                            isWarmingUp: false,
+                            showSuccess: showSuccess,
+                            recordingDuration: liveState.elapsedTime,
+                            processingDuration: processingDuration,
+                            isEngineConnected: serviceMonitor.state == .running,
+                            pendingQueueCount: 0,
+                            onTap: {
+                                // Toggle recording in TalkieLive via XPC
+                                TalkieLiveStateMonitor.shared.toggleRecording()
+                            },
+                            onQueueTap: nil
+                        )
+                        .contextMenu {
+                            Button("Restart TalkieLive") {
+                                restartTalkieLive()
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .help("Click to copy PID")
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+
+                        // PID and build info appear on Control+hover
+                        if showPID {
+                            HStack(spacing: 6) {
+                                // PID
+                                if let pid = liveState.processId {
+                                    Button(action: { copyPID(pid) }) {
+                                        Text("\(pid)")
+                                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                            .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 4)
+                                                    .fill(TalkieTheme.hover)
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Click to copy TalkieLive PID")
+                                }
+
+                                // Build info
+                                if let buildInfo = getLiveBuildInfo() {
+                                    Button(action: { copyPath(buildInfo.path) }) {
+                                        HStack(spacing: 4) {
+                                            Text(buildInfo.type)
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundColor(buildInfo.type == "DEBUG" ? .red : .blue)
+                                                .padding(.horizontal, 4)
+                                                .padding(.vertical, 2)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 3)
+                                                        .fill((buildInfo.type == "DEBUG" ? Color.red : Color.blue).opacity(0.2))
+                                                )
+
+                                            Text(buildInfo.shortPath)
+                                                .font(.system(size: 9, design: .monospaced))
+                                                .foregroundColor(pathCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                                        }
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(TalkieTheme.hover)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Click to copy full path: \(buildInfo.path)")
+                                }
+                            }
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
+                    } else {
+                        // Live is offline - show clickable icon to start
+                        LiveOfflineIcon(action: launchTalkieLive)
                     }
                 }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
 
                 Spacer()
 
-                // RIGHT SIDE - Live status icons + Console + DEV badge
+                // RIGHT SIDE - Live status icons + Logs + DEV badge
                 HStack(spacing: 6) {
-                    // Live status icons (always visible - show engine/model state)
-                    MicStatusIcon()
-                    EngineStatusIcon()
-                    ModelStatusIcon()
+                    // Live status icons - conditional on service state
+                    if liveState.isRunning {
+                        MicStatusIcon()
+                    }
 
-                    Divider()
-                        .frame(height: 12)
+                    if serviceMonitor.state == .running {
+                        EngineStatusIcon()
+                        ModelStatusIcon()
+                    } else if serviceMonitor.state == .stopped {
+                        // Engine offline indicator
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(SemanticColor.warning)
+                            Text("Engine Offline")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(TalkieTheme.textMuted)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(SemanticColor.warning.opacity(0.1))
+                        .cornerRadius(4)
+                        .help("TalkieEngine is not running. Click to start.")
+                        .onTapGesture {
+                            Task {
+                                await serviceMonitor.launch()
+                            }
+                        }
+                    }
 
-                    // Console button
+                    // Only show divider if we have status icons
+                    if liveState.isRunning || serviceMonitor.state != .unknown {
+                        Divider()
+                            .frame(height: 12)
+                    }
+
+                    // Logs button
                     ConsoleButton(
                         errorCount: errorCount,
                         warningCount: warningCount,
@@ -154,13 +219,7 @@ struct StatusBar: View {
 
                     // DEV badge (debug builds only)
                     #if DEBUG
-                    Text("DEV")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.orange.opacity(0.7))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.15))
-                        .cornerRadius(3)
+                    DevBadgeButton(showConsole: $showConsolePopover)
                     #endif
                 }
             }
@@ -171,12 +230,15 @@ struct StatusBar: View {
         .background(barBackgroundColor)
         .animation(.easeInOut(duration: 0.2), value: isActive)
         .animation(.easeInOut(duration: 0.15), value: showPID)
+        .animation(.easeInOut(duration: 0.2), value: liveState.isRunning)
+        .animation(.easeInOut(duration: 0.2), value: serviceMonitor.state)
         .drawingGroup()
         .onHover { hovering in
             isHovered = hovering
             if !hovering {
                 withAnimation { showPID = false }
                 pidCopied = false
+                pathCopied = false
             }
         }
         .onContinuousHover { phase in
@@ -190,20 +252,64 @@ struct StatusBar: View {
             case .ended:
                 withAnimation { showPID = false }
                 pidCopied = false
+                pathCopied = false
             }
         }
         .onChange(of: liveState.state) { oldState, newState in
             handleStateChange(from: oldState, to: newState)
         }
+        .onAppear {
+            // Start monitoring service states
+            liveState.startMonitoring()
+            serviceMonitor.startMonitoring()
+        }
     }
 
-    private func copyPID() {
+    private func copyPID(_ pid: Int32) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString("\(pid)", forType: .string)
         withAnimation { pidCopied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             withAnimation { pidCopied = false }
         }
+    }
+
+    private func copyPath(_ path: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(path, forType: .string)
+        withAnimation { pathCopied = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation { pathCopied = false }
+        }
+    }
+
+    private func getLiveBuildInfo() -> (type: String, path: String, shortPath: String)? {
+        // Get running TalkieLive app
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "jdi.TalkieLive")
+        guard let app = apps.first, let bundleURL = app.bundleURL else { return nil }
+
+        let path = bundleURL.path
+        let isDerivedData = path.contains("DerivedData")
+        let type = isDerivedData ? "DEBUG" : "PROD"
+
+        // Create short path for display
+        var shortPath: String
+        if isDerivedData {
+            // Show just "DerivedData/.../Debug/TalkieLive.app"
+            let components = path.components(separatedBy: "/")
+            if let ddIndex = components.firstIndex(of: "DerivedData"),
+               ddIndex + 1 < components.count {
+                let projectName = components[ddIndex + 1]
+                shortPath = "DD/\(projectName)/.../Debug"
+            } else {
+                shortPath = "DerivedData/.../Debug"
+            }
+        } else {
+            // Just show "/Applications"
+            shortPath = "/Applications"
+        }
+
+        return (type: type, path: path, shortPath: shortPath)
     }
 
     private func handleStateChange(from oldState: LiveState, to newState: LiveState) {
@@ -270,6 +376,14 @@ struct StatusBar: View {
         durationTimer = nil
         processingDuration = 0
     }
+
+    private func launchTalkieLive() {
+        _ = AppEnvironment.shared.launch(.talkieLive)
+    }
+
+    private func restartTalkieLive() {
+        AppEnvironment.shared.restart(.talkieLive)
+    }
 }
 
 // MARK: - Status Icon Base Component
@@ -320,14 +434,70 @@ struct StatusIcon: View {
     }
 }
 
-// MARK: - Mic Status Icon
+// MARK: - Live Status Icon
+
+struct LiveStatusIcon: View {
+    @ObservedObject private var liveState = TalkieLiveStateMonitor.shared
+    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+
+    private var statusColor: Color {
+        if !liveState.isRunning { return TalkieTheme.textMuted }
+        if audioMonitor.isSilent { return SemanticColor.warning }
+        return SemanticColor.success
+    }
+
+    private var icon: String {
+        liveState.isRunning ? "mic" : "waveform.circle"
+    }
+
+    private var label: String {
+        if !liveState.isRunning { return "Live" }
+        return "Built-in"  // TODO: wire to actual device name
+    }
+
+    private var detail: String {
+        if !liveState.isRunning {
+            return "Live Mode is inactive - Click to open Live settings"
+        }
+        return "Audio input - Click to open Audio settings"
+    }
+
+    var body: some View {
+        StatusIcon(
+            icon: icon,
+            color: statusColor,
+            label: label,
+            detail: detail,
+            action: navigateToSettings
+        )
+    }
+
+    private func navigateToSettings() {
+        if liveState.isRunning {
+            // Navigate to Live Settings → Audio
+            NotificationCenter.default.post(name: .switchToLiveSettingsAudio, object: nil)
+        } else {
+            // Navigate to Live Settings → Overview to see health card
+            NotificationCenter.default.post(name: .switchToLiveSettingsOverview, object: nil)
+        }
+    }
+}
+
+// MARK: - Mic Status Icon (Legacy - kept for reference)
 
 struct MicStatusIcon: View {
     @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+    @ObservedObject private var audioDevices = AudioDeviceManager.shared
+    @ObservedObject private var layoutManager = SessionLayoutManager.shared
+    @State private var isHovered = false
 
-    // TODO: Add AudioDeviceManager if needed
     private var deviceName: String {
-        "Built-in"  // Placeholder - wire to actual device manager
+        if let device = audioDevices.inputDevices.first(where: { $0.id == audioDevices.selectedDeviceID }) {
+            return device.name
+        } else if let defaultDevice = audioDevices.inputDevices.first(where: { $0.isDefault }) {
+            return defaultDevice.name
+        }
+        return "No microphone"
     }
 
     private var statusColor: Color {
@@ -335,14 +505,36 @@ struct MicStatusIcon: View {
         return SemanticColor.success
     }
 
+    private var showLabels: Bool {
+        isHovered
+    }
+
     var body: some View {
-        StatusIcon(
-            icon: "mic",
-            color: statusColor,
-            label: deviceName,
-            detail: "Audio input - Click to open Audio settings",
-            action: navigateToAudioSettings
-        )
+        Button(action: navigateToAudioSettings) {
+            HStack(spacing: 4) {
+                Image(systemName: "mic")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(statusColor.opacity(isHovered ? 1.0 : 0.7))
+
+                if showLabels {
+                    Text(deviceName)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                        .lineLimit(1)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
+                }
+            }
+            .padding(.horizontal, showLabels ? 6 : 4)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .delayedHelp("\(deviceName) - Click to open Audio settings", delay: 0.6)
+        .animation(.easeInOut(duration: 0.15), value: showLabels)
+        .onHover { isHovered = $0 }
     }
 
     private func navigateToAudioSettings() {
@@ -355,6 +547,7 @@ struct MicStatusIcon: View {
 
 struct EngineStatusIcon: View {
     @ObservedObject private var serviceMonitor = TalkieServiceMonitor.shared
+    @ObservedObject private var layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
     @State private var showPID = false
     @State private var pidCopied = false
@@ -405,17 +598,46 @@ struct EngineStatusIcon: View {
         return .blue
     }
 
+    private var showLabels: Bool {
+        isHovered
+    }
+
     var body: some View {
         HStack(spacing: 6) {
-            StatusIcon(
-                icon: "cpu",
-                color: statusColor,
-                label: label,
-                detail: "TalkieEngine - Click for settings, Shift+Click to launch/restart",
-                badge: badge,
-                badgeColor: badgeColor,
-                action: handleClick
-            )
+            Button(action: handleClick) {
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(statusColor.opacity(isHovered ? 1.0 : 0.7))
+
+                    if showLabels {
+                        Text(label)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(TalkieTheme.textTertiary)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
+
+                        if let badge = badge {
+                            Text(badge)
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(badgeColor)
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(badgeColor.opacity(0.2))
+                                .cornerRadius(2)
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
+                    }
+                }
+                .padding(.horizontal, showLabels ? 6 : 4)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isHovered ? TalkieTheme.hover : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .delayedHelp("TalkieEngine - Click for settings, Shift+Click to launch/restart", delay: 0.6)
+            .animation(.easeInOut(duration: 0.15), value: showLabels)
 
             // PID appears on Ctrl+hover
             if showPID, let pid = serviceMonitor.processId {
@@ -494,6 +716,8 @@ struct EngineStatusIcon: View {
 struct ModelStatusIcon: View {
     @ObservedObject private var settings = LiveSettings.shared
     @ObservedObject private var engineClient = EngineClient.shared
+    @ObservedObject private var layoutManager = SessionLayoutManager.shared
+    @State private var isHovered = false
 
     private var modelName: String {
         // Use selected model from LiveSettings
@@ -521,14 +745,35 @@ struct ModelStatusIcon: View {
         engineClient.status?.loadedModelId == settings.selectedModelId
     }
 
+    private var showLabels: Bool {
+        isHovered
+    }
+
     var body: some View {
-        StatusIcon(
-            icon: isModelLoaded ? "waveform" : "waveform.badge.exclamationmark",
-            color: statusColor,
-            label: modelName,
-            detail: "\(settings.selectedModelId) - Click to open Transcription settings",
-            action: navigateToModelSettings
-        )
+        Button(action: navigateToModelSettings) {
+            HStack(spacing: 4) {
+                Image(systemName: isModelLoaded ? "waveform" : "waveform.badge.exclamationmark")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(statusColor.opacity(isHovered ? 1.0 : 0.7))
+
+                if showLabels {
+                    Text(modelName)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
+                }
+            }
+            .padding(.horizontal, showLabels ? 6 : 4)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .delayedHelp("\(settings.selectedModelId) - Click to open Transcription settings", delay: 0.6)
+        .animation(.easeInOut(duration: 0.15), value: showLabels)
+        .onHover { isHovered = $0 }
     }
 
     private func navigateToModelSettings() {
@@ -541,6 +786,8 @@ struct ModelStatusIcon: View {
 
 struct SyncStatusIcon: View {
     @ObservedObject private var syncManager = CloudKitSyncManager.shared
+    @State private var isHovered = false
+    @State private var showingSyncHistory = false
 
     private var statusColor: Color {
         if syncManager.isSyncing { return SemanticColor.info }
@@ -552,43 +799,47 @@ struct SyncStatusIcon: View {
         return "checkmark.icloud"
     }
 
-    private var label: String {
-        if syncManager.isSyncing { return "Syncing" }
-
-        // Show last sync time
-        if let lastSync = syncManager.lastSyncDate {
-            let interval = Date().timeIntervalSince(lastSync)
-            if interval < 60 {
-                return "Just now"
-            } else if interval < 3600 {
-                let mins = Int(interval / 60)
-                return "\(mins)m ago"
-            } else {
-                let hours = Int(interval / 3600)
-                return "\(hours)h ago"
-            }
+    private var hoverText: String {
+        if syncManager.isSyncing {
+            return "Syncing with iCloud..."
         }
 
-        return "Ready"
+        // Show last sync time on hover
+        if let lastSync = syncManager.lastSyncDate {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            let timeAgo = formatter.localizedString(for: lastSync, relativeTo: Date())
+            return "Last synced \(timeAgo)"
+        }
+
+        return "CloudKit sync ready"
     }
 
     var body: some View {
-        StatusIcon(
-            icon: icon,
-            color: statusColor,
-            label: label,
-            detail: "CloudKit sync - Click for iCloud settings",
-            action: navigateToSyncSettings
-        )
+        Button(action: showSyncHistory) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(statusColor.opacity(isHovered ? 1.0 : 0.7))
+                .symbolEffect(.pulse, options: .repeating, isActive: syncManager.isSyncing)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .help(hoverText)
+        .sheet(isPresented: $showingSyncHistory) {
+            SyncHistoryView()
+        }
     }
 
-    private func navigateToSyncSettings() {
-        // TODO: Navigate to Settings → iCloud
-        NotificationCenter.default.post(name: .switchToSettingsiCloud, object: nil)
+    private func showSyncHistory() {
+        showingSyncHistory = true
     }
 }
 
-// MARK: - Console Button
+// MARK: - Logs Button
 
 struct ConsoleButton: View {
     let errorCount: Int
@@ -644,7 +895,7 @@ struct ConsoleButton: View {
             SystemConsoleView()
                 .frame(width: 600, height: 350)
         }
-        .help("Console - \(errorCount) errors, \(warningCount) warnings")
+        .help("Logs - \(errorCount) errors, \(warningCount) warnings")
     }
 }
 
@@ -691,12 +942,92 @@ extension Notification.Name {
     // Live Settings navigation
     static let switchToLiveSettingsAudio = Notification.Name("switchToLiveSettingsAudio")
     static let switchToLiveSettingsTranscription = Notification.Name("switchToLiveSettingsTranscription")
+    static let switchToLiveSettingsOverview = Notification.Name("switchToLiveSettingsOverview")
+}
+
+// MARK: - Live Offline Icon with Hover
+
+struct LiveOfflineIcon: View {
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image("LiveMenuBarIcon")
+                .renderingMode(.template)
+                .foregroundColor(TalkieTheme.textMuted.opacity(isHovered ? 0.8 : 0.4))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .help("Live Mode is inactive. Click to enable.")
+    }
+}
+
+// MARK: - Dev Badge Button
+
+#if DEBUG
+struct DevBadgeButton: View {
+    @Binding var showConsole: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: { showConsole.toggle() }) {
+            Text("DEV")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.orange.opacity(isHovered ? 1.0 : 0.7))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.orange.opacity(isHovered ? 0.25 : 0.15))
+                .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Open logs (Command+Shift+D)")
+    }
+}
+#endif
+
+// MARK: - Delayed Tooltip Modifier
+
+struct DelayedTooltip: ViewModifier {
+    let text: String
+    let delay: TimeInterval
+
+    @State private var isHovered = false
+    @State private var showTooltip = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                isHovered = hovering
+                if hovering {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        if isHovered {
+                            showTooltip = true
+                        }
+                    }
+                } else {
+                    showTooltip = false
+                }
+            }
+            .help(showTooltip ? text : "")
+    }
+}
+
+extension View {
+    func delayedHelp(_ text: String, delay: TimeInterval = 0.5) -> some View {
+        modifier(DelayedTooltip(text: text, delay: delay))
+    }
 }
 
 // MARK: - Preview
 
 #Preview {
-    StatusBar(memoCount: 211)
+    StatusBar()
         .frame(width: 1000)
         .background(Color.black)
 }

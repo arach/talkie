@@ -215,6 +215,9 @@ struct GeneralLiveSettingsView: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: 20) {
+                // Live Recording Health Status
+                LiveRecordingHealthCard()
+
                 // Recording Overlay
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("RECORDING OVERLAY")
@@ -331,6 +334,12 @@ struct GeneralLiveSettingsView: View {
                             isOn: $liveSettings.pillExpandsDuringRecording,
                             help: "Show detailed recording information when active"
                         )
+
+                        StyledToggle(
+                            label: "Show ON AIR indicator",
+                            isOn: $liveSettings.showOnAir,
+                            help: "Display neon ON AIR sign in top-left during recording"
+                        )
                     }
 
                     Text("Position")
@@ -343,53 +352,10 @@ struct GeneralLiveSettingsView: View {
                         selection: $liveSettings.pillPosition
                     )
                 }
-
-                // Sound Feedback
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("SOUND FEEDBACK")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    HStack {
-                        Text("Recording Start")
-                            .font(SettingsManager.shared.fontSM)
-                            .frame(width: 120, alignment: .leading)
-                        Picker("", selection: $liveSettings.startSound) {
-                            ForEach(TalkieSound.allCases, id: \.self) { sound in
-                                Text(sound.displayName).tag(sound)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 150)
-                    }
-
-                    HStack {
-                        Text("Recording End")
-                            .font(SettingsManager.shared.fontSM)
-                            .frame(width: 120, alignment: .leading)
-                        Picker("", selection: $liveSettings.finishSound) {
-                            ForEach(TalkieSound.allCases, id: \.self) { sound in
-                                Text(sound.displayName).tag(sound)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 150)
-                    }
-
-                    HStack {
-                        Text("Text Pasted")
-                            .font(SettingsManager.shared.fontSM)
-                            .frame(width: 120, alignment: .leading)
-                        Picker("", selection: $liveSettings.pastedSound) {
-                            ForEach(TalkieSound.allCases, id: \.self) { sound in
-                                Text(sound.displayName).tag(sound)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 150)
-                    }
-                }
             }
+        }
+        .onAppear {
+            logger.debug("GeneralLiveSettingsView appeared")
         }
     }
 }
@@ -411,7 +377,7 @@ struct ShortcutsLiveSettingsView: View {
         } content: {
             VStack(alignment: .leading, spacing: 24) {
                 // Toggle Hotkey
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("TOGGLE RECORDING")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
@@ -427,7 +393,7 @@ struct ShortcutsLiveSettingsView: View {
                 }
 
                 // Push-to-Talk Hotkey
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("PUSH-TO-TALK")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
@@ -436,23 +402,21 @@ struct ShortcutsLiveSettingsView: View {
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
-                    Toggle("Enable Push-to-Talk", isOn: $liveSettings.pttEnabled)
-                        .font(SettingsManager.shared.fontSM)
-                        .onChange(of: liveSettings.pttEnabled) { _, enabled in
-                            logger.info("Push-to-Talk \(enabled ? "enabled" : "disabled")")
-                        }
+                    StyledToggle(
+                        label: "Enable Push-to-Talk",
+                        isOn: $liveSettings.pttEnabled,
+                        help: "Activate push-to-talk recording mode"
+                    )
 
-                    if liveSettings.pttEnabled {
-                        HotkeyRecorderButton(
-                            hotkey: $liveSettings.pttHotkey,
-                            isRecording: $isRecordingPTT
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
+                    HotkeyRecorderButton(
+                        hotkey: $liveSettings.pttHotkey,
+                        isRecording: $isRecordingPTT
+                    )
+                    .opacity(liveSettings.pttEnabled ? 1.0 : 0.5)
+                    .allowsHitTesting(liveSettings.pttEnabled)
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: liveSettings.pttEnabled)
         .onAppear {
             logger.debug("ShortcutsLiveSettingsView appeared")
         }
@@ -589,17 +553,22 @@ struct TranscriptionLiveSettingsView: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: 20) {
-                Text("TRANSCRIPTION ENGINE")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(.secondary)
+                // Engine Health Status
+                EngineHealthCard()
 
-                Text("Selected model: \(liveSettings.selectedModelId)")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("TRANSCRIPTION ENGINE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
 
-                Text("⚠️ Model selection UI coming soon")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.orange)
+                    Text("Selected model: \(liveSettings.selectedModelId)")
+                        .font(SettingsManager.shared.fontSM)
+                        .foregroundColor(.secondary)
+
+                    Text("⚠️ Model selection UI coming soon")
+                        .font(SettingsManager.shared.fontSM)
+                        .foregroundColor(.orange)
+                }
             }
         }
     }
@@ -623,6 +592,18 @@ struct AutoPasteLiveSettingsView: View {
                     Text("ROUTING MODE")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
+
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .padding(.top, 1)
+                        Text("Controls where transcribed text is sent after recording completes.")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, 4)
 
                     RadioButtonRow(
                         title: RoutingMode.paste.displayName,
@@ -648,8 +629,23 @@ struct AutoPasteLiveSettingsView: View {
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
-                    Toggle("Return to origin app after pasting", isOn: $liveSettings.returnToOriginAfterPaste)
-                        .font(SettingsManager.shared.fontSM)
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .padding(.top, 1)
+                        Text("Contextual options for how Live interacts with your workflow.")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, 4)
+
+                    StyledToggle(
+                        label: "Return to origin app after pasting",
+                        isOn: $liveSettings.returnToOriginAfterPaste,
+                        help: "Automatically switches back to the app you were using when the recording started"
+                    )
                 }
             }
         }

@@ -2612,11 +2612,15 @@ private struct SmartActionsCard: View {
 
     // Map Utterance to LiveUtterance for database operations
     private var liveUtterance: LiveUtterance? {
-        // Find matching LiveUtterance by timestamp and text
-        LiveDatabase.recent(limit: 50).first { live in
-            live.text == utterance.text &&
-            abs(live.createdAt.timeIntervalSince(utterance.timestamp)) < 5
+        // Use direct ID lookup if available
+        guard let liveID = utterance.liveID else {
+            // Fallback to fuzzy match for legacy utterances
+            return LiveDatabase.recent(limit: 50).first { live in
+                live.text == utterance.text &&
+                abs(live.createdAt.timeIntervalSince(utterance.timestamp)) < 5
+            }
         }
+        return LiveDatabase.fetch(id: liveID)
     }
 
     private var promotionStatus: PromotionStatus {
@@ -2760,7 +2764,10 @@ private struct SmartActionsCard: View {
     }
 
     private func executeAction(_ action: QuickActionKind) {
+        NSLog("[HistoryView] executeAction called: \(action.displayName)")
+
         guard let live = liveUtterance else {
+            NSLog("[HistoryView] No liveUtterance found for utterance ID: \(utterance.id), liveID: \(utterance.liveID?.description ?? "nil")")
             // Fallback for legacy utterances without LiveUtterance
             if action == .copyToClipboard {
                 NSPasteboard.general.clearContents()
@@ -2769,6 +2776,8 @@ private struct SmartActionsCard: View {
             }
             return
         }
+
+        NSLog("[HistoryView] Found liveUtterance with ID: \(live.id?.description ?? "nil")")
 
         // Show feedback
         showFeedback(for: action)

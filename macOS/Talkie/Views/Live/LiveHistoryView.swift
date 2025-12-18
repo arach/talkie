@@ -2601,11 +2601,15 @@ private struct SmartActionsCard: View {
 
     // Map Utterance to LiveUtterance for database operations
     private var liveUtterance: LiveUtterance? {
-        // Find matching LiveUtterance by timestamp and text
-        LiveDatabase.recent(limit: 50).first { live in
-            live.text == utterance.text &&
-            abs(live.createdAt.timeIntervalSince(utterance.timestamp)) < 5
+        // Use direct ID lookup if available
+        guard let liveID = utterance.liveID else {
+            // Fallback to fuzzy match for legacy utterances
+            return LiveDatabase.recent(limit: 50).first { live in
+                live.text == utterance.text &&
+                abs(live.createdAt.timeIntervalSince(utterance.timestamp)) < 5
+            }
         }
+        return LiveDatabase.fetch(id: liveID)
     }
 
     private var promotionStatus: PromotionStatus {

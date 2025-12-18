@@ -352,6 +352,7 @@ final class LiveSettings: ObservableObject {
     private let pillPositionKey = "pillPosition"
     private let pillShowOnAllScreensKey = "pillShowOnAllScreens"
     private let pillExpandsDuringRecordingKey = "pillExpandsDuringRecording"
+    private let showOnAirKey = "showOnAir"
     private let startSoundKey = "startSound"
     private let finishSoundKey = "finishSound"
     private let pastedSoundKey = "pastedSound"
@@ -435,6 +436,10 @@ final class LiveSettings: ObservableObject {
     }
 
     @Published var pillExpandsDuringRecording: Bool {
+        didSet { save() }
+    }
+
+    @Published var showOnAir: Bool {
         didSet { save() }
     }
 
@@ -571,6 +576,7 @@ final class LiveSettings: ObservableObject {
         // Load pill settings
         self.pillShowOnAllScreens = UserDefaults.standard.object(forKey: pillShowOnAllScreensKey) as? Bool ?? true
         self.pillExpandsDuringRecording = UserDefaults.standard.object(forKey: pillExpandsDuringRecordingKey) as? Bool ?? true
+        self.showOnAir = UserDefaults.standard.object(forKey: showOnAirKey) as? Bool ?? true
 
         // Load sounds (default to pop for start/finish, tink for pasted)
         if let rawValue = UserDefaults.standard.string(forKey: startSoundKey),
@@ -679,6 +685,7 @@ final class LiveSettings: ObservableObject {
         UserDefaults.standard.set(pillPosition.rawValue, forKey: pillPositionKey)
         UserDefaults.standard.set(pillShowOnAllScreens, forKey: pillShowOnAllScreensKey)
         UserDefaults.standard.set(pillExpandsDuringRecording, forKey: pillExpandsDuringRecordingKey)
+        UserDefaults.standard.set(showOnAir, forKey: showOnAirKey)
         UserDefaults.standard.set(startSound.rawValue, forKey: startSoundKey)
         UserDefaults.standard.set(finishSound.rawValue, forKey: finishSoundKey)
         UserDefaults.standard.set(pastedSound.rawValue, forKey: pastedSoundKey)

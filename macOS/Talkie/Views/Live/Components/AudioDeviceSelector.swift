@@ -16,6 +16,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSetting
 struct AudioDeviceSelector: View {
     @ObservedObject private var audioDevices = AudioDeviceManager.shared
     @ObservedObject private var audioLevel = AudioLevelMonitor.shared
+    @ObservedObject private var liveState = TalkieLiveStateMonitor.shared
     @State private var isHovered = false
 
     private var selectedDeviceName: String {
@@ -76,10 +77,19 @@ struct AudioDeviceSelector: View {
             .menuStyle(.borderlessButton)
             .onHover { isHovered = $0 }
 
-            // Audio Level Meter
-            AudioLevelMeter()
-                .frame(width: 80, height: 32)
+            // Audio Level Meter - only visible when TalkieLive is running
+            if liveState.isRunning {
+                AudioLevelMeter()
+                    .frame(width: 80, height: 32)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            } else {
+                Text("Enable Live Mode to see levels")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .frame(width: 80, height: 32)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: liveState.isRunning)
         .onAppear {
             logger.debug("AudioDeviceSelector appeared, device count: \(audioDevices.inputDevices.count)")
         }
