@@ -346,8 +346,8 @@ struct MicStatusIcon: View {
     }
 
     private func navigateToAudioSettings() {
-        // TODO: Navigate to Settings → Audio
-        NotificationCenter.default.post(name: .switchToSettingsAudio, object: nil)
+        // Navigate to Live Settings → Audio
+        NotificationCenter.default.post(name: .switchToLiveSettingsAudio, object: nil)
     }
 }
 
@@ -484,48 +484,56 @@ struct EngineStatusIcon: View {
     }
 
     private func navigateToEngineSettings() {
-        // TODO: Navigate to Settings → Engine
-        NotificationCenter.default.post(name: .switchToSettingsEngine, object: nil)
+        // Navigate to Settings → Supporting Apps → TalkieEngine
+        NotificationCenter.default.post(name: .switchToSupportingApps, object: nil)
     }
 }
 
 // MARK: - Model Status Icon
 
 struct ModelStatusIcon: View {
-    @ObservedObject private var whisperService = WhisperService.shared
+    @ObservedObject private var settings = LiveSettings.shared
+    @ObservedObject private var engineClient = EngineClient.shared
 
     private var modelName: String {
-        guard let loadedModel = whisperService.loadedModel else {
-            return "No Model"
-        }
-        // Format model name (use rawValue from enum)
-        return loadedModel.rawValue
+        // Use selected model from LiveSettings
+        let modelId = settings.selectedModelId
+
+        // Parse family and model ID
+        let (family, id) = ModelInfo.parseModelId(modelId)
+
+        // Format the model name from the ID
+        return id
             .replacingOccurrences(of: "openai_whisper-", with: "")
             .replacingOccurrences(of: "distil-whisper_distil-", with: "distil-")
     }
 
     private var statusColor: Color {
-        if whisperService.loadedModel != nil { return SemanticColor.success }
-        return SemanticColor.warning
+        // Check if model is actually loaded in engine
+        if let status = engineClient.status, status.loadedModelId == settings.selectedModelId {
+            return SemanticColor.success
+        }
+        // Model selected but not loaded yet
+        return SemanticColor.info
     }
 
-    private var hasModel: Bool {
-        whisperService.loadedModel != nil
+    private var isModelLoaded: Bool {
+        engineClient.status?.loadedModelId == settings.selectedModelId
     }
 
     var body: some View {
         StatusIcon(
-            icon: hasModel ? "waveform" : "waveform.slash",
+            icon: isModelLoaded ? "waveform" : "waveform.badge.exclamationmark",
             color: statusColor,
             label: modelName,
-            detail: (whisperService.loadedModel?.rawValue ?? "No model loaded") + " - Click to open Model settings",
+            detail: "\(settings.selectedModelId) - Click to open Transcription settings",
             action: navigateToModelSettings
         )
     }
 
     private func navigateToModelSettings() {
-        // TODO: Navigate to Settings → Models
-        NotificationCenter.default.post(name: .switchToSettingsModel, object: nil)
+        // Navigate to Live Settings → Transcription
+        NotificationCenter.default.post(name: .switchToLiveSettingsTranscription, object: nil)
     }
 }
 
@@ -675,9 +683,14 @@ struct ShortcutHint: View {
 // MARK: - Notification Names
 
 extension Notification.Name {
-    // Note: switchToLogs, switchToSettingsAudio, switchToSettingsEngine are defined in HistoryViewStubs.swift
+    // Note: switchToLogs is defined in HistoryViewStubs.swift
     static let switchToSettingsModel = Notification.Name("switchToSettingsModel")
     static let switchToSettingsiCloud = Notification.Name("switchToSettingsiCloud")
+    static let switchToSupportingApps = Notification.Name("switchToSupportingApps")
+
+    // Live Settings navigation
+    static let switchToLiveSettingsAudio = Notification.Name("switchToLiveSettingsAudio")
+    static let switchToLiveSettingsTranscription = Notification.Name("switchToLiveSettingsTranscription")
 }
 
 // MARK: - Preview
