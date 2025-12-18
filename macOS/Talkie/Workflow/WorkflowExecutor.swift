@@ -1362,26 +1362,8 @@ class WorkflowExecutor: ObservableObject {
             await SystemEventManager.shared.log(.workflow, "Audio saved", detail: url.lastPathComponent)
         }
 
-        // Upload to CloudKit as Walkie (send audio to iOS!)
-        if config.uploadToWalkie, let fileURL = audioFileURL {
-            let memoId = memo.id?.uuidString ?? UUID().uuidString
-            logger.info("📤 Uploading Walkie for memo: \(memoId)")
-            do {
-                let walkieId = try await WalkieService.shared.uploadWalkie(
-                    audioURL: fileURL,
-                    memoId: memoId,
-                    transcript: textToSpeak
-                )
-                logger.info("📤 Walkie uploaded: \(walkieId)")
-                await SystemEventManager.shared.log(.workflow, "Walkie sent to iOS", detail: "ID: \(walkieId.prefix(8))...")
-            } catch {
-                logger.error("📤 Walkie upload failed: \(error.localizedDescription)")
-                await SystemEventManager.shared.log(.workflow, "Walkie upload failed", detail: error.localizedDescription)
-            }
-        }
-
         logger.info("🔊 Speak step complete")
-        await SystemEventManager.shared.log(.workflow, "Speak complete", detail: "Walkie-Talkie reply delivered")
+        await SystemEventManager.shared.log(.workflow, "Speak complete")
         return textToSpeak
     }
 

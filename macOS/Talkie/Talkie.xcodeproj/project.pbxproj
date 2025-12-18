@@ -70,7 +70,6 @@
 		67A5249D6D764042BF21594F /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 46A4FF7ED5361369A679A309 /* TalkieKit */; };
 		67CD427670A2C17B12FACBDE /* WhisperModelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF85D803DB667E4820E2185 /* WhisperModelViews.swift */; };
 		69AB2FED6E3604C64EAD56AE /* DiffReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE9AA178071DC14852F1114 /* DiffReviewView.swift */; };
-		6E43A0752EB325768C3E9E5E /* WalkieConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7873E71319209F4F26C64705 /* WalkieConversationView.swift */; };
 		6EA7A6FB3B8E66D64B46A4A9 /* OpenAIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */; };
 		74432DA7DFC740C9A9B6E4C0 /* WorkflowRunModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51100B8BEE10408FA3219205 /* WorkflowRunModel.swift */; };
 		7465C2AA79712CD317A66902 /* AudioPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EF9C615F4258AFDE4698FDE /* AudioPlaybackManager.swift */; };
@@ -125,7 +124,6 @@
 		D4070518C24A34FDDC062D62 /* UtteranceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1BB5C9BDD8DDEEB3F9054 /* UtteranceStore.swift */; };
 		D689A347A6FB464B7282220F /* AppLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC6A6916FC176D4E84E1D897 /* AppLauncher.swift */; };
 		D8E2B2EE4DC4D5B9360D39BB /* ModelsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */; };
-		DA7E5F307F15FEA3F6FD6448 /* WalkieService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E35708A082682B2EEEEFB9B /* WalkieService.swift */; };
 		DB6FA5CFAF83919FDC6FE506 /* TalkieLiveMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBC1DB4720A4F23D881C75A /* TalkieLiveMonitor.swift */; };
 		DCB0588B59859EFFD31F946E /* ExpandableModelCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D392E981B2154D58DB42703 /* ExpandableModelCards.swift */; };
 		DF90361B1D0677CA2E23E506 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D0D2AC46F2B1EE67539FDB0B /* MLXLMCommon */; };
@@ -197,7 +195,6 @@
 		43C356B7970D4DDDB1F7802D /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Data/Database/DatabaseManager.swift; sourceTree = "<group>"; };
 		478B8969CCF8329C0038C831 /* LLMModelCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMModelCards.swift; sourceTree = "<group>"; };
 		499C191C937A588B1FC14A1B /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
-		4E35708A082682B2EEEEFB9B /* WalkieService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieService.swift; sourceTree = "<group>"; };
 		5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettings.swift; sourceTree = "<group>"; };
 		51100B8BEE10408FA3219205 /* WorkflowRunModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Data/Models/WorkflowRunModel.swift; sourceTree = "<group>"; };
 		53C628E8435C070BDA2131C1 /* MigrationRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationRunner.swift; sourceTree = "<group>"; };
@@ -223,7 +220,6 @@
 		741882426A451E5DC9B3BEEA /* GroqProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqProvider.swift; sourceTree = "<group>"; };
 		7488894C21F6CB60FD9C3996 /* WorkflowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowViews.swift; sourceTree = "<group>"; };
 		77BE13EB47E743A15155DFFE /* TalkieLiveXPCProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Services/TalkieLiveXPCProtocol.swift; sourceTree = SOURCE_ROOT; };
-		7873E71319209F4F26C64705 /* WalkieConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieConversationView.swift; sourceTree = "<group>"; };
 		7A8FFEDFE6C6C841BBF1F94C /* QuickActionRunner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickActionRunner.swift; sourceTree = "<group>"; };
 		7ADA116B700BED47718C7D9E /* ActivityLogViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityLogViews.swift; sourceTree = "<group>"; };
 		7B1BBB5172DA09CD573B79F0 /* TalkieLiveStateMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Services/TalkieLiveStateMonitor.swift; sourceTree = SOURCE_ROOT; };
@@ -422,7 +418,6 @@
 				E7CF75F0011D8585DD8DB871 /* SystemConsoleView.swift */,
 				A14A87E96F08E223610F4D08 /* TalkieLiveMonitorView.swift */,
 				720EC90439850FC3D809A9BC /* TalkieServiceMonitorView.swift */,
-				7873E71319209F4F26C64705 /* WalkieConversationView.swift */,
 				684E68244668F49BFE901621 /* Activity */,
 				DA139020BF07C1F2E23AAAEE /* AIResults */,
 				93BC57849B0132956BBB7950 /* Live */,
@@ -695,7 +690,6 @@
 				BDBC1DB4720A4F23D881C75A /* TalkieLiveMonitor.swift */,
 				5696777625C75E91EA7F8DC1 /* TalkieServiceMonitor.swift */,
 				5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */,
-				4E35708A082682B2EEEEFB9B /* WalkieService.swift */,
 				CB3C446E2274B6FF1A3F7F55 /* WhisperService.swift */,
 				783857020847BE4C82B25EFE /* LLM */,
 				273AD98FADA1283878EF8A3F /* Migrations */,
