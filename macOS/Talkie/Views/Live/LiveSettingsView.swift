@@ -439,15 +439,23 @@ struct AudioLiveSettingsView: View {
                 subtitle: "Configure microphone input for Live recording."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("⚠️ Audio device selection coming soon")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 24) {
+                // Microphone Selection
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("INPUT DEVICE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
 
-                Text("Current microphone ID: \(liveSettings.selectedMicrophoneID)")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary)
+                    Text("Select which microphone to use for recording. The level meter shows real-time input volume.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    AudioDeviceSelector()
+                }
             }
+        }
+        .onAppear {
+            logger.debug("AudioLiveSettingsView appeared")
         }
     }
 }
