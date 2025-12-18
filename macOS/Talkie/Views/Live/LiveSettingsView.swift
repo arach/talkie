@@ -14,6 +14,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSetting
 enum LiveSettingsSection: String, Hashable {
     case general
     case shortcuts
+    case sounds
     case audio
     case transcription
     case autoPaste
@@ -57,13 +58,20 @@ struct LiveSettingsView: View {
                         }
 
                         // RECORDING
-                        SettingsSidebarSection(title: "RECORDING", isActive: selectedSection == .shortcuts || selectedSection == .audio) {
+                        SettingsSidebarSection(title: "RECORDING", isActive: selectedSection == .shortcuts || selectedSection == .sounds || selectedSection == .audio) {
                             SettingsSidebarItem(
                                 icon: "command",
                                 title: "SHORTCUTS",
                                 isSelected: selectedSection == .shortcuts
                             ) {
                                 selectedSection = .shortcuts
+                            }
+                            SettingsSidebarItem(
+                                icon: "speaker.wave.2",
+                                title: "SOUNDS",
+                                isSelected: selectedSection == .sounds
+                            ) {
+                                selectedSection = .sounds
                             }
                             SettingsSidebarItem(
                                 icon: "mic",
@@ -130,6 +138,8 @@ struct LiveSettingsView: View {
                         GeneralLiveSettingsView()
                     case .shortcuts:
                         ShortcutsLiveSettingsView()
+                    case .sounds:
+                        SoundsLiveSettingsView()
                     case .audio:
                         AudioLiveSettingsView()
                     case .transcription:
@@ -456,6 +466,88 @@ struct AudioLiveSettingsView: View {
         }
         .onAppear {
             logger.debug("AudioLiveSettingsView appeared")
+        }
+    }
+}
+
+// MARK: - Sounds Settings
+
+struct SoundsLiveSettingsView: View {
+    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var selectedEvent: SoundEvent = .start
+
+    private func binding(for event: SoundEvent) -> Binding<TalkieSound> {
+        switch event {
+        case .start: return $liveSettings.startSound
+        case .finish: return $liveSettings.finishSound
+        case .paste: return $liveSettings.pastedSound
+        }
+    }
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "speaker.wave.2",
+                title: "SOUNDS",
+                subtitle: "Configure audio feedback for recording events."
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: 24) {
+                // Event Selector
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("SELECT EVENT")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 12) {
+                        ForEach(SoundEvent.allCases, id: \.rawValue) { event in
+                            SoundEventCard(
+                                event: event,
+                                sound: binding(for: event).wrappedValue,
+                                isSelected: selectedEvent == event
+                            ) {
+                                selectedEvent = event
+                                logger.debug("Selected sound event: \(event.rawValue)")
+                            }
+                        }
+                    }
+
+                    // Play sequence button
+                    HStack {
+                        Spacer()
+                        PlaySequenceButton(sounds: [
+                            liveSettings.startSound,
+                            liveSettings.finishSound,
+                            liveSettings.pastedSound
+                        ])
+                    }
+                }
+
+                // Sound Grid for selected event
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("SOUND FOR \(selectedEvent.rawValue.uppercased())")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Text(selectedEvent.description)
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    SoundGrid(selection: binding(for: selectedEvent))
+                }
+            }
+        }
+        .onAppear {
+            logger.debug("SoundsLiveSettingsView appeared")
+        }
+        .onChange(of: liveSettings.startSound) { _, newValue in
+            logger.info("Start sound changed to: \(newValue.displayName)")
+        }
+        .onChange(of: liveSettings.finishSound) { _, newValue in
+            logger.info("Finish sound changed to: \(newValue.displayName)")
+        }
+        .onChange(of: liveSettings.pastedSound) { _, newValue in
+            logger.info("Pasted sound changed to: \(newValue.displayName)")
         }
     }
 }
