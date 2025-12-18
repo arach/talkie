@@ -56,7 +56,7 @@ private extension Sequence {
 
 // MARK: - Main Navigation View
 
-struct LiveNavigationView: View {
+struct HistoryView: View {
     @ObservedObject private var store = UtteranceStore.shared
     @ObservedObject private var settings = LiveSettings.shared
 
@@ -130,6 +130,56 @@ struct LiveNavigationView: View {
     }
 
     var body: some View {
+        baseViewWithNotifications
+    }
+
+    private var baseViewWithNotifications: some View {
+        baseView
+            .onReceive(NotificationCenter.default.publisher(for: .switchToLogs)) { _ in
+                self.selectedSection = .logs
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .switchToRecent)) { _ in
+                self.selectedSection = .history
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
+                self.selectedSection = .settings
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsAudio)) { _ in
+                self.settingsSection = .audio
+                self.selectedSection = .settings
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsEngine)) { _ in
+                self.settingsSection = .engine
+                self.selectedSection = .settings
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .selectUtterance)) { notification in
+                if let id = notification.userInfo?["id"] as? Int64 {
+                    self.selectedSection = .history
+                    if let utterance = self.store.utterances.first(where: { $0.liveID == id }) {
+                        self.selectedUtteranceIDs = [utterance.id]
+                    }
+                }
+            }
+    }
+
+    private var baseView: some View {
+        contentView
+            .frame(minWidth: 700, minHeight: 500)
+            .observeTheme()
+            .onAppear {
+                LiveSettings.shared.applyAppearance()
+            }
+            .onDrop(of: [UTType.audio, UTType.fileURL], isTargeted: $isDropTargeted) { providers in
+                handleAudioDrop(providers)
+            }
+            .overlay {
+                if isDropTargeted || isTranscribingDrop {
+                    dropZoneOverlay
+                }
+            }
+    }
+
+    private var contentView: some View {
         HStack(spacing: 0) {
             // Full-height sidebar
             sidebarContent
@@ -155,51 +205,7 @@ struct LiveNavigationView: View {
                     }
                 }
 
-                // StatusBar only under content, not sidebar
-                StatusBar()
-            }
-        }
-        .frame(minWidth: 700, minHeight: 500)
-        .observeTheme()
-        .onAppear {
-            LiveSettings.shared.applyAppearance()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToLogs)) { _ in
-            selectedSection = .logs
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToRecent)) { _ in
-            selectedSection = .history
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
-            selectedSection = .settings
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsAudio)) { _ in
-            settingsSection = .audio
-            selectedSection = .settings
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsEngine)) { _ in
-            settingsSection = .engine
-            selectedSection = .settings
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .selectUtterance)) { notification in
-            // Handle deep link to select specific utterance
-            if let id = notification.userInfo?["id"] as? Int64 {
-                // Switch to history view
-                selectedSection = .history
-                // Find and select the utterance by liveID
-                if let utterance = store.utterances.first(where: { $0.liveID == id }) {
-                    selectedUtteranceIDs = [utterance.id]
-                }
-            }
-        }
-        // MARK: - Drop Zone for Audio Files
-        .onDrop(of: [.audio, .fileURL], isTargeted: $isDropTargeted) { providers in
-            handleAudioDrop(providers)
-        }
-        .overlay {
-            // Drop zone visual feedback
-            if isDropTargeted || isTranscribingDrop {
-                dropZoneOverlay
+                // StatusBar is now unified at app level in NavigationView
             }
         }
     }
@@ -1362,12 +1368,13 @@ private struct TranscriptContainer: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(TalkieTheme.surface)
+                .fill(TalkieTheme.surfaceCard)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(TalkieTheme.surfaceCard, lineWidth: 1)
+                .stroke(showJSON ? SemanticColor.info.opacity(0.3) : TalkieTheme.border, lineWidth: 1.5)
         )
+        .shadow(color: showJSON ? SemanticColor.info.opacity(0.05) : .clear, radius: 8, x: 0, y: 2)
     }
 }
 
@@ -1532,9 +1539,9 @@ private struct InfoCard: View {
     @State private var isHovered = false
 
     var body: some View {
-        let baseFill = TalkieTheme.surface
-        let hoverFill = TalkieTheme.hover
-        let borderColor = isHovered ? iconColor.opacity(0.35) : TalkieTheme.surfaceCard
+        let baseFill = TalkieTheme.surfaceCard
+        let hoverFill = iconColor.opacity(0.06)
+        let borderColor = isHovered ? iconColor.opacity(0.4) : TalkieTheme.border
 
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
@@ -1548,7 +1555,7 @@ private struct InfoCard: View {
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 10))
-                        .foregroundColor(iconColor.opacity(isHovered ? 1.0 : 0.8))
+                        .foregroundColor(iconColor)
                 }
 
                 Text(value)
@@ -1565,8 +1572,9 @@ private struct InfoCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(borderColor, lineWidth: 1)
+                .stroke(borderColor, lineWidth: 1.5)
         )
+        .shadow(color: isHovered ? iconColor.opacity(0.08) : .clear, radius: 4, x: 0, y: 2)
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
     }
@@ -1598,9 +1606,9 @@ private struct PerformanceCard: View {
     private let iconColor = SemanticColor.success
 
     var body: some View {
-        let baseFill = TalkieTheme.surface
-        let hoverFill = TalkieTheme.hover
-        let borderColor = isHovered ? iconColor.opacity(0.35) : TalkieTheme.surfaceCard
+        let baseFill = TalkieTheme.surfaceCard
+        let hoverFill = iconColor.opacity(0.06)
+        let borderColor = isHovered ? iconColor.opacity(0.4) : TalkieTheme.border
 
         Button(action: { if hasBreakdown { showPopover.toggle() } }) {
             VStack(alignment: .leading, spacing: 8) {
@@ -1613,7 +1621,7 @@ private struct PerformanceCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 10))
-                        .foregroundColor(iconColor.opacity(isHovered ? 1.0 : 0.8))
+                        .foregroundColor(iconColor)
 
                     Text(displayValue)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -1634,8 +1642,9 @@ private struct PerformanceCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(borderColor, lineWidth: 1)
+                    .stroke(borderColor, lineWidth: 1.5)
             )
+            .shadow(color: isHovered ? iconColor.opacity(0.08) : .clear, radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -1946,13 +1955,15 @@ private struct MinimalAudioCard: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(TalkieTheme.surface)
+                .fill(TalkieTheme.surfaceCard)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(TalkieTheme.surfaceCard, lineWidth: 1)
+                .stroke(isHovering ? Color.accentColor.opacity(0.3) : TalkieTheme.border, lineWidth: 1.5)
         )
+        .shadow(color: isHovering ? Color.accentColor.opacity(0.05) : .clear, radius: 4, x: 0, y: 2)
         .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovering)
     }
 
     private var playButtonBackground: Color {
@@ -2712,11 +2723,11 @@ private struct SmartActionsCard: View {
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(TalkieTheme.divider)
+                .fill(TalkieTheme.surfaceCard)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(TalkieTheme.surface, lineWidth: 1)
+                .stroke(TalkieTheme.border, lineWidth: 1)
         )
     }
 
@@ -2814,10 +2825,14 @@ private struct QuickActionButton: View {
         HStack(spacing: 10) {
             Image(systemName: showFeedback ? "checkmark" : action.icon)
                 .font(.system(size: 14))
-                .foregroundColor(showFeedback ? SemanticColor.success : actionColor.opacity(0.8))
+                .foregroundColor(showFeedback ? SemanticColor.success : actionColor)
                 .frame(width: 32, height: 32)
-                .background(showFeedback ? SemanticColor.success.opacity(0.15) : actionColor.opacity(0.1))
+                .background(showFeedback ? SemanticColor.success.opacity(0.15) : actionColor.opacity(0.12))
                 .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(showFeedback ? SemanticColor.success.opacity(0.3) : actionColor.opacity(0.2), lineWidth: 1)
+                )
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
@@ -2829,6 +2844,12 @@ private struct QuickActionButton: View {
                         Text(shortcut)
                             .font(.system(size: 8, design: .monospaced))
                             .foregroundColor(TalkieTheme.textMuted)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(TalkieTheme.surfaceCard)
+                            )
                     }
                 }
 
@@ -2843,35 +2864,37 @@ private struct QuickActionButton: View {
         .padding(Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(showFeedback ? SemanticColor.success.opacity(0.1) : (isHovered ? actionColor.opacity(0.1) : Color.clear))
+                .fill(showFeedback ? SemanticColor.success.opacity(0.08) : (isHovered ? actionColor.opacity(0.08) : TalkieTheme.surfaceCard))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(showFeedback ? SemanticColor.success.opacity(0.3) : (isHovered ? actionColor.opacity(0.3) : TalkieTheme.divider), lineWidth: 1)
+                .stroke(showFeedback ? SemanticColor.success.opacity(0.4) : (isHovered ? actionColor.opacity(0.5) : TalkieTheme.border), lineWidth: 1.5)
         )
+        .shadow(color: isHovered ? actionColor.opacity(0.1) : .clear, radius: 4, x: 0, y: 2)
     }
 
     private var compactContent: some View {
         HStack(spacing: 6) {
             Image(systemName: showFeedback ? "checkmark" : action.icon)
                 .font(.system(size: 10))
-                .foregroundColor(showFeedback ? SemanticColor.success : actionColor.opacity(0.7))
+                .foregroundColor(showFeedback ? SemanticColor.success : (isHovered ? actionColor : actionColor.opacity(0.7)))
 
             Text(showFeedback ? "Done" : action.displayName)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(showFeedback ? SemanticColor.success : TalkieTheme.textSecondary)
+                .foregroundColor(showFeedback ? SemanticColor.success : (isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary))
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(showFeedback ? SemanticColor.success.opacity(0.1) : (isHovered ? actionColor.opacity(0.08) : TalkieTheme.divider))
+            RoundedRectangle(cornerRadius: 5)
+                .fill(showFeedback ? SemanticColor.success.opacity(0.08) : (isHovered ? actionColor.opacity(0.08) : TalkieTheme.surfaceCard))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(showFeedback ? SemanticColor.success.opacity(0.2) : (isHovered ? actionColor.opacity(0.2) : Color.clear), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(showFeedback ? SemanticColor.success.opacity(0.3) : (isHovered ? actionColor.opacity(0.4) : TalkieTheme.border), lineWidth: 1)
         )
+        .shadow(color: isHovered ? actionColor.opacity(0.08) : .clear, radius: 2, x: 0, y: 1)
     }
 
     private var actionDescription: String {
@@ -2889,5 +2912,5 @@ private struct QuickActionButton: View {
 }
 
 #Preview {
-    LiveNavigationView()
+    HistoryView()
 }

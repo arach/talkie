@@ -77,6 +77,23 @@ struct TalkieServiceMonitorView: View {
 
             Spacer()
 
+            // Quick Open button
+            Button(action: openInFinder) {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 11, weight: .medium))
+                    Text("Quick Open")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Theme.current.surface1.opacity(0.5))
+                .cornerRadius(5)
+            }
+            .buttonStyle(.plain)
+            .help("Open TalkieEngine.app in Finder")
+
             // Control buttons
             controlButtons
         }
@@ -95,33 +112,64 @@ struct TalkieServiceMonitorView: View {
     }
 
     private var controlButtons: some View {
-        HStack(spacing: Spacing.xs) {
+        HStack(spacing: Spacing.sm) {
             if monitor.state == .running {
+                // Restart button
                 Button(action: { monitor.restart() }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(settings.fontSM)
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Restart")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.orange.opacity(0.15))
+                    .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.orange)
                 .help("Restart Talkie Service")
 
+                // Stop button
                 Button(action: { monitor.terminate() }) {
-                    Image(systemName: "stop.fill")
-                        .font(settings.fontSM)
+                    HStack(spacing: 4) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Stop")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.red.opacity(0.15))
+                    .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.red)
                 .help("Stop Talkie Service")
             } else if monitor.state == .stopped {
+                // Start button
                 Button(action: { monitor.launch() }) {
-                    Image(systemName: "play.fill")
-                        .font(settings.fontSM)
+                    HStack(spacing: 4) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Start")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.green.opacity(0.15))
+                    .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.green)
                 .help("Start Talkie Service")
             }
 
+            Divider()
+                .frame(height: 16)
+
+            // Logs toggle
             Button(action: { showLogs.toggle() }) {
                 Image(systemName: showLogs ? "chevron.down" : "chevron.right")
                     .font(settings.fontXS)
@@ -129,6 +177,19 @@ struct TalkieServiceMonitorView: View {
             .buttonStyle(.plain)
             .foregroundColor(.secondary)
             .help(showLogs ? "Hide logs" : "Show logs")
+        }
+    }
+
+    private func openInFinder() {
+        // Open TalkieEngine.app in Finder
+        let appPath = "/Applications/TalkieEngine.app"
+        if FileManager.default.fileExists(atPath: appPath) {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: appPath)
+        } else {
+            // Try to find it in the build products
+            let debugPath = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Developer/Xcode/DerivedData")
+            NSWorkspace.shared.open(debugPath)
         }
     }
 

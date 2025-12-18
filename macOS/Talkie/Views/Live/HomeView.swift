@@ -482,7 +482,7 @@ enum ActivityLevel: Int {
 
     var color: Color {
         switch self {
-        case .none: return Color(light: Color(white: 0.9), dark: Color(white: 0.1))
+        case .none: return Color(white: 0.1)
         case .low: return Color.green.opacity(0.3)
         case .medium: return Color.green.opacity(0.5)
         case .high: return Color.green.opacity(0.7)
@@ -965,7 +965,7 @@ struct QuarterlyActivityGrid: View {
         HStack(alignment: .top, spacing: spacing) {
             // Day labels
             VStack(alignment: .trailing, spacing: spacing) {
-                ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
+                ForEach(Array(["S", "M", "T", "W", "T", "F", "S"].enumerated()), id: \.offset) { _, day in
                     Text(day)
                         .font(.system(size: 8))
                         .foregroundColor(TalkieTheme.textTertiary)
@@ -1696,6 +1696,24 @@ struct RecentActivityRow: View {
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) {
                 isHovered = hovering
+            }
+        }
+        .contextMenu {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(utterance.text, forType: .string)
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                withAnimation {
+                    UtteranceStore.shared.delete(utterance)
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
     }

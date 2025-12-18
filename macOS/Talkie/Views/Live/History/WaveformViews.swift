@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AppKit
-import TalkieKit
 
 // MARK: - Cursor Modifier
 

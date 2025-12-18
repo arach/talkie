@@ -14,10 +14,6 @@ struct TalkieLiveApp: App {
     }
 }
 
-#Preview {
-    LiveNavigationView()
-}
-
 // MARK: - Notification Names
 
 extension Notification.Name {

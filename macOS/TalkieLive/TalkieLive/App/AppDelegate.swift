@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func postBootSetup() async {
         let settings = LiveSettings.shared
 
+        // Start XPC service for inter-app communication with Talkie
+        TalkieLiveXPCService.shared.startService()
+
         // Create core pipeline
         let audio = MicrophoneCapture()
         let transcription = EngineTranscriptionService(modelId: settings.selectedModelId)
@@ -50,6 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             transcription: transcription,
             router: router
         )
+
+        // Set controller reference in XPC service for remote toggle
+        TalkieLiveXPCService.shared.liveController = liveController
 
         // Pre-load model via Engine (no fallback)
         await preloadModel(settings: settings)
@@ -89,10 +95,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let talkieItem = NSMenuItem(title: "Show Talkie", action: #selector(showTalkie), keyEquivalent: "h")
-        talkieItem.keyEquivalentModifierMask = [.option, .command]
-        talkieItem.target = self
-        menu.addItem(talkieItem)
+        let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "l")
+        historyItem.keyEquivalentModifierMask = [.option, .command]
+        historyItem.target = self
+        menu.addItem(historyItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -280,10 +286,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func showTalkie() {
-        // Launch Talkie (main management app) via bundle identifier
+    @objc private func showHistory() {
+        // Open Talkie app and navigate to Live section
         let talkieBundleID = "jdi.talkie.core"
 
+        // First, open Talkie app
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true  // Bring to front
 
@@ -301,6 +308,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     additionalEventParamDescriptor: nil,
                     launchIdentifier: nil
                 )
+            }
+
+            // After opening Talkie, navigate to Live section via URL scheme
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if let url = URL(string: "talkie://live") {
+                    NSWorkspace.shared.open(url)
+                }
             }
         }
     }

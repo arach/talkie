@@ -345,7 +345,9 @@ struct APIKeyRow: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Button(action: onSave) {
+                    TalkieButtonSync("SaveAPIKey", section: "Settings") {
+                        onSave()
+                    } label: {
                         Text("Save")
                             .font(Theme.current.fontXSMedium)
                     }
@@ -388,7 +390,9 @@ struct APIKeyRow: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Button(action: onDelete) {
+                    TalkieButtonSync("DeleteAPIKey", section: "Settings") {
+                        onDelete()
+                    } label: {
                         Image(systemName: "trash")
                             .font(SettingsManager.shared.fontXS)
                     }

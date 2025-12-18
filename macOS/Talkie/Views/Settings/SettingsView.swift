@@ -20,6 +20,8 @@ enum SettingsSection: String, Hashable {
     case helperApps
     case permissions
     case debugInfo
+    case audio  // For TalkieLive HistoryView compatibility
+    case engine  // For TalkieLive HistoryView compatibility
 }
 
 struct SettingsView: View {
@@ -188,6 +190,10 @@ struct SettingsView: View {
                         PermissionsSettingsView()
                     case .debugInfo:
                         DebugInfoView()
+                    case .audio:
+                        Text("Audio settings placeholder")
+                    case .engine:
+                        Text("Engine settings placeholder")
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

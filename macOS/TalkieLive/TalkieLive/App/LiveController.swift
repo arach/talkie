@@ -16,6 +16,15 @@ final class LiveController: ObservableObject {
     @Published private(set) var state: LiveState = .idle {
         didSet {
             logger.info("State: \(oldValue.rawValue) → \(self.state.rawValue)")
+
+            // Broadcast state change via XPC service for real-time IPC
+            let elapsed = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
+            TalkieLiveXPCService.shared.updateState(state.rawValue, elapsedTime: elapsed)
+
+            // Stop elapsed time timer when returning to idle
+            if state == .idle {
+                stopElapsedTimeTimer()
+            }
         }
     }
 
@@ -34,6 +43,9 @@ final class LiveController: ObservableObject {
     // Transcription task - stored so we can cancel it
     private var transcriptionTask: Task<Void, Never>?
     private var pendingAudioFilename: String?  // For saving on cancel
+
+    // Timer for updating elapsed time in database during recording
+    private var elapsedTimeTimer: Timer?
 
     init(
         audio: LiveAudioCapture,
@@ -116,13 +128,35 @@ final class LiveController: ObservableObject {
     /// Cancel recording during listening phase (before transcription starts)
     /// Audio is still preserved in the queue for later access
     func cancelListening() {
-        guard state == .listening else { return }
+        guard state == .listening else {
+            logger.info("cancelListening() ignored - not in listening state (current: \(self.state.rawValue))")
+            return
+        }
         isCancelled = true
+        // Immediately transition to transcribing state to prevent double-cancel
+        // This makes the UI show "processing" and blocks further clicks
+        state = .transcribing
         // stopCapture() will trigger process() which will see isCancelled
         // and save the audio with mode="cancelled"
         audio.stopCapture()
-        // Don't clear state here - let process() handle cleanup after saving audio
         logger.info("Recording cancelled during listening - audio will be preserved")
+
+        // Safety timeout: if process() doesn't get called (e.g., PTT too short, no audio file),
+        // force reset to idle after 2 seconds
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self else { return }
+            if self.state == .transcribing && self.isCancelled {
+                logger.warning("Cancel timeout - forcing reset to idle (audio file may not have been created)")
+                self.recordingStartTime = nil
+                self.capturedContext = nil
+                self.startApp = nil
+                self.pendingAudioFilename = nil
+                self.traceID = nil
+                self.isCancelled = false
+                self.state = .idle
+            }
+        }
     }
 
     /// Push current transcription to queue for later retry
@@ -153,6 +187,7 @@ final class LiveController: ObservableObject {
                 pasteTimestamp: nil
             )
             LiveDatabase.store(utterance)
+            TalkieLiveXPCService.shared.notifyUtteranceAdded()
             AppLogger.shared.log(.database, "Pushed to queue", detail: "Audio saved for retry")
             SoundManager.shared.playPasted()  // Confirmation sound
         }
@@ -243,11 +278,35 @@ final class LiveController: ObservableObject {
         NotificationCenter.default.post(name: .recordingDidStart, object: nil)
 
         state = .listening
+
+        // Start timer to update elapsed time in database every 250ms
+        startElapsedTimeTimer()
+
         audio.startCapture { [weak self] audioPath in
             Task { [weak self] in
                 await self?.process(tempAudioPath: audioPath)
             }
         }
+    }
+
+    /// Start timer to broadcast elapsed time updates via XPC service
+    private func startElapsedTimeTimer() {
+        elapsedTimeTimer?.invalidate()
+        elapsedTimeTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self, let startTime = self.recordingStartTime else { return }
+                let elapsed = Date().timeIntervalSince(startTime)
+
+                // Broadcast elapsed time update via XPC
+                TalkieLiveXPCService.shared.updateState(self.state.rawValue, elapsedTime: elapsed)
+            }
+        }
+    }
+
+    /// Stop elapsed time timer
+    private func stopElapsedTimeTimer() {
+        elapsedTimeTimer?.invalidate()
+        elapsedTimeTimer = nil
     }
 
     private func stop(interstitial: Bool = false) {
@@ -461,6 +520,9 @@ final class LiveController: ObservableObject {
                 if let id = LiveDatabase.store(utterance) {
                     logTiming("Database stored")
 
+                    // Notify Talkie via XPC (non-blocking)
+                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
+
                     // Schedule enrichment
                     if let baseline = capturedContext {
                         ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
@@ -536,6 +598,7 @@ final class LiveController: ObservableObject {
                     pasteTimestamp: nil  // Not pasted yet → queued
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
+                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")
@@ -603,6 +666,7 @@ final class LiveController: ObservableObject {
                     pasteTimestamp: Date()  // Already pasted
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
+                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")
@@ -655,6 +719,7 @@ final class LiveController: ObservableObject {
                 pasteTimestamp: nil
             )
             LiveDatabase.store(utterance)
+            TalkieLiveXPCService.shared.notifyUtteranceAdded()
 
             AppLogger.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
         }

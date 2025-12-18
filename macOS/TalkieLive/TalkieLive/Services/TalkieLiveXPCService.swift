@@ -1,0 +1,228 @@
+//
+//  TalkieLiveXPCService.swift
+//  TalkieLive
+//
+//  XPC service that broadcasts TalkieLive's recording state to Talkie
+//
+
+import Foundation
+import AppKit
+import Combine
+
+@MainActor
+final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
+    static let shared = TalkieLiveXPCService()
+
+    private var listener: NSXPCListener?
+    private var observers: [NSXPCConnection] = []
+
+    // Current state (updated by LiveController)
+    private var currentState: String = "idle"
+    private var currentElapsedTime: TimeInterval = 0
+
+    // Track last logged state to avoid spam
+    private var lastLoggedState: String = "idle"
+
+    // Track if Talkie is connected (useful for UI indicators)
+    @Published private(set) var isTalkieConnected: Bool = false
+    private var lastConnectionChange: Date = Date()
+
+    // Reference to LiveController for toggle recording
+    weak var liveController: LiveController?
+
+    private override init() {
+        super.init()
+    }
+
+    // MARK: - Service Lifecycle
+
+    /// Start XPC service (fail-safe - won't crash if service fails to start)
+    func startService() {
+        listener = NSXPCListener(machServiceName: kTalkieLiveXPCServiceName)
+        listener?.delegate = self
+        listener?.resume()
+        NSLog("[TalkieLiveXPC] ✓ Service started: \(kTalkieLiveXPCServiceName)")
+        NSLog("[TalkieLiveXPC] ℹ️ State notifications are optional - recording will work even if no observers connect")
+    }
+
+    func stopService() {
+        listener?.invalidate()
+        listener = nil
+        observers.removeAll()
+        NSLog("[TalkieLiveXPC] Service stopped")
+    }
+
+    // MARK: - State Updates (Called by LiveController)
+
+    /// Update state and notify observers (async, non-blocking, fail-safe)
+    /// This method is designed to NEVER impact the caller - all XPC operations
+    /// are detached and any failures are logged but don't propagate
+    func updateState(_ state: String, elapsedTime: TimeInterval) {
+        self.currentState = state
+        self.currentElapsedTime = elapsedTime
+
+        // Broadcast to all observers in detached task (non-blocking, fail-safe)
+        Task.detached { [weak self] in
+            await self?.broadcastStateChange(state: state, elapsedTime: elapsedTime)
+        }
+    }
+
+    /// Notify observers that a new utterance was added (async, non-blocking, fail-safe)
+    func notifyUtteranceAdded() {
+        // Broadcast to all observers in detached task (non-blocking, fail-safe)
+        Task.detached { [weak self] in
+            await self?.broadcastUtteranceAdded()
+        }
+    }
+
+    private func broadcastStateChange(state: String, elapsedTime: TimeInterval) async {
+        // Defensive error boundary - NEVER let XPC failures escape
+        do {
+            await MainActor.run {
+                // Clean up dead connections
+                observers.removeAll { $0.remoteObjectProxy == nil }
+
+                // Notify all connected observers
+                for connection in observers {
+                    guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                        NSLog("[TalkieLiveXPC] ⚠️ Error sending state to observer: \(error)")
+                    }) as? TalkieLiveStateObserverProtocol else { continue }
+
+                    // Fire-and-forget notification (won't block even if observer is slow)
+                    observer.stateDidChange(state: state, elapsedTime: elapsedTime)
+                }
+
+                // Only log when state actually changes (not on every elapsed time update)
+                if state != lastLoggedState {
+                    NSLog("[TalkieLiveXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
+                    lastLoggedState = state
+                }
+            }
+        } catch {
+            // This should never happen, but if it does, just log it
+            NSLog("[TalkieLiveXPC] 🚨 Unexpected error in broadcastStateChange: \(error)")
+        }
+    }
+
+    private func broadcastUtteranceAdded() async {
+        // Defensive error boundary - NEVER let XPC failures escape
+        do {
+            await MainActor.run {
+                // Clean up dead connections
+                observers.removeAll { $0.remoteObjectProxy == nil }
+
+                // Notify all connected observers
+                for connection in observers {
+                    guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                        NSLog("[TalkieLiveXPC] ⚠️ Error sending utterance notification to observer: \(error)")
+                    }) as? TalkieLiveStateObserverProtocol else { continue }
+
+                    // Fire-and-forget notification (won't block even if observer is slow)
+                    observer.utteranceWasAdded()
+                }
+
+                NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new utterance")
+            }
+        } catch {
+            // This should never happen, but if it does, just log it
+            NSLog("[TalkieLiveXPC] 🚨 Unexpected error in broadcastUtteranceAdded: \(error)")
+        }
+    }
+
+    // MARK: - TalkieLiveXPCServiceProtocol
+
+    nonisolated func getCurrentState(reply: @escaping (String, TimeInterval) -> Void) {
+        Task { @MainActor in
+            reply(currentState, currentElapsedTime)
+        }
+    }
+
+    nonisolated func registerStateObserver(reply: @escaping (Bool) -> Void) {
+        // The connection is available via the current XPC context
+        // We'll set it up in the listener delegate
+        reply(true)
+    }
+
+    nonisolated func unregisterStateObserver(reply: @escaping (Bool) -> Void) {
+        // Remove the connection from observers
+        reply(true)
+    }
+
+    nonisolated func toggleRecording(reply: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            guard let liveController = self.liveController else {
+                NSLog("[TalkieLiveXPC] ⚠️ Cannot toggle - LiveController not set")
+                reply(false)
+                return
+            }
+
+            // Toggle recording
+            NSLog("[TalkieLiveXPC] Toggle recording requested")
+            await liveController.toggleListening(interstitial: false)
+            NSLog("[TalkieLiveXPC] ✓ Toggle completed")
+            reply(true)
+        }
+    }
+
+    func addObserverConnection(_ connection: NSXPCConnection) {
+        observers.append(connection)
+        updateConnectionStatus()
+        NSLog("[TalkieLiveXPC] ✓ Talkie connected (total observers: \(observers.count))")
+    }
+
+    func removeObserverConnection(_ connection: NSXPCConnection) {
+        observers.removeAll { $0 === connection }
+        updateConnectionStatus()
+        NSLog("[TalkieLiveXPC] ⚠️ Talkie disconnected (remaining observers: \(observers.count))")
+    }
+
+    private func updateConnectionStatus() {
+        let wasConnected = isTalkieConnected
+        isTalkieConnected = !observers.isEmpty
+
+        if wasConnected != isTalkieConnected {
+            lastConnectionChange = Date()
+            if isTalkieConnected {
+                NSLog("[TalkieLiveXPC] 🟢 Talkie is now connected")
+            } else {
+                NSLog("[TalkieLiveXPC] 🔴 Talkie disconnected")
+            }
+        }
+    }
+}
+
+// MARK: - NSXPCListenerDelegate
+
+extension TalkieLiveXPCService: NSXPCListenerDelegate {
+    nonisolated func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
+        // Configure the connection
+        newConnection.exportedInterface = NSXPCInterface(with: TalkieLiveXPCServiceProtocol.self)
+        newConnection.exportedObject = self
+
+        // Set up remote interface for callbacks
+        newConnection.remoteObjectInterface = NSXPCInterface(with: TalkieLiveStateObserverProtocol.self)
+
+        // Handle connection lifecycle
+        newConnection.invalidationHandler = { [weak self, weak newConnection] in
+            Task { @MainActor in
+                guard let self, let conn = newConnection else { return }
+                self.removeObserverConnection(conn)
+                NSLog("[TalkieLiveXPC] Connection invalidated")
+            }
+        }
+
+        newConnection.interruptionHandler = {
+            NSLog("[TalkieLiveXPC] Connection interrupted")
+        }
+
+        // Add to observers
+        Task { @MainActor [weak self, weak newConnection] in
+            guard let self, let conn = newConnection else { return }
+            self.addObserverConnection(conn)
+        }
+
+        newConnection.resume()
+        NSLog("[TalkieLiveXPC] Accepted new connection")
+        return true
+    }
+}

@@ -141,7 +141,9 @@ struct QuickActionsSettingsView: View {
             .help("Edit workflow")
 
             // Pin/unpin button
-            Button(action: { togglePin(workflow) }) {
+            TalkieButtonSync("TogglePin", section: "Settings") {
+                togglePin(workflow)
+            } label: {
                 Image(systemName: workflow.isPinned ? "pin.fill" : "pin")
                     .font(SettingsManager.shared.fontSM)
                     .foregroundColor(workflow.isPinned ? .orange : .secondary)

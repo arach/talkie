@@ -1,4 +1,4 @@
-# Architecture Improvement Proposals
+2# Architecture Improvement Proposals
 
 > Last updated: December 2025
 

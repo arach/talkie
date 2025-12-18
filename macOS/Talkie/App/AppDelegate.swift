@@ -61,8 +61,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NSLog("[AppDelegate] Received URL: \(urlString)")
         logger.info("Received URL: \(urlString)")
 
+        guard url.scheme == "talkie" else {
+            NSLog("[AppDelegate] URL not handled: invalid scheme")
+            return
+        }
+
+        // Handle talkie://live - navigate to Live section
+        if url.host == "live" {
+            NSLog("[AppDelegate] Navigating to Live section")
+            logger.info("Navigating to Live section")
+            NotificationCenter.default.post(name: .navigateToLive, object: nil)
+        }
         // Handle talkie://interstitial/{id}
-        if url.scheme == "talkie", url.host == "interstitial",
+        else if url.host == "interstitial",
            let idString = url.pathComponents.dropFirst().first,
            let id = Int64(idString) {
             NSLog("[AppDelegate] Opening interstitial for utterance ID: \(id)")
