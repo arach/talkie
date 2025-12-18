@@ -3,9 +3,13 @@
 //  Talkie
 //
 //  Live settings view using Talkie's design system
+//  With instrumented components from TalkieLive
 //
 
 import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSettings")
 
 enum LiveSettingsSection: String, Hashable {
     case general
@@ -187,75 +191,6 @@ struct RadioButtonRow<T: Equatable>: View {
     }
 }
 
-// MARK: - Overlay Style Previews
-
-struct ParticlesPreview: View {
-    let calm: Bool
-    @State private var animationPhase: CGFloat = 0
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.black.opacity(0.2))
-
-            ForEach(0..<(calm ? 8 : 12), id: \.self) { index in
-                Circle()
-                    .fill(Color.blue.opacity(calm ? 0.5 : 0.7))
-                    .frame(width: calm ? 3 : 2, height: calm ? 3 : 2)
-                    .offset(
-                        x: CGFloat.random(in: -30...30),
-                        y: sin(animationPhase + CGFloat(index)) * (calm ? 8 : 15)
-                    )
-            }
-        }
-        .onAppear {
-            withAnimation(.linear(duration: calm ? 3 : 1.5).repeatForever(autoreverses: false)) {
-                animationPhase = .pi * 2
-            }
-        }
-    }
-}
-
-struct WaveformPreview: View {
-    let sensitive: Bool
-    @State private var phase: CGFloat = 0
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.black.opacity(0.2))
-
-            HStack(spacing: 2) {
-                ForEach(0..<12, id: \.self) { index in
-                    let amplitude: CGFloat = sensitive ? 0.8 : 0.5
-                    let height = 5 + (sin(phase + CGFloat(index) * 0.5) * amplitude * 15)
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.green.opacity(0.7))
-                        .frame(width: 3, height: max(height, 4))
-                }
-            }
-        }
-        .onAppear {
-            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                phase = .pi * 2
-            }
-        }
-    }
-}
-
-struct PillOnlyPreview: View {
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.black.opacity(0.2))
-
-            Text("No overlay")
-                .font(.system(size: 8))
-                .foregroundColor(.secondary)
-        }
-    }
-}
-
 // MARK: - General Settings
 
 struct GeneralLiveSettingsView: View {
@@ -285,9 +220,10 @@ struct GeneralLiveSettingsView: View {
                         description: OverlayStyle.particles.description,
                         value: OverlayStyle.particles,
                         selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(ParticlesPreview(calm: false))
+                        preview: AnyView(WavyParticlesPreview(calm: false))
                     ) {
                         liveSettings.overlayStyle = .particles
+                        logger.info("Overlay style changed to: particles")
                     }
 
                     RadioButtonRow(
@@ -295,9 +231,10 @@ struct GeneralLiveSettingsView: View {
                         description: OverlayStyle.particlesCalm.description,
                         value: OverlayStyle.particlesCalm,
                         selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(ParticlesPreview(calm: true))
+                        preview: AnyView(WavyParticlesPreview(calm: true))
                     ) {
                         liveSettings.overlayStyle = .particlesCalm
+                        logger.info("Overlay style changed to: particlesCalm")
                     }
 
                     RadioButtonRow(
@@ -305,9 +242,10 @@ struct GeneralLiveSettingsView: View {
                         description: OverlayStyle.waveform.description,
                         value: OverlayStyle.waveform,
                         selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(WaveformPreview(sensitive: false))
+                        preview: AnyView(WaveformBarsPreview(sensitive: false))
                     ) {
                         liveSettings.overlayStyle = .waveform
+                        logger.info("Overlay style changed to: waveform")
                     }
 
                     RadioButtonRow(
@@ -315,9 +253,10 @@ struct GeneralLiveSettingsView: View {
                         description: OverlayStyle.waveformSensitive.description,
                         value: OverlayStyle.waveformSensitive,
                         selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(WaveformPreview(sensitive: true))
+                        preview: AnyView(WaveformBarsPreview(sensitive: true))
                     ) {
                         liveSettings.overlayStyle = .waveformSensitive
+                        logger.info("Overlay style changed to: waveformSensitive")
                     }
 
                     RadioButtonRow(
@@ -328,6 +267,7 @@ struct GeneralLiveSettingsView: View {
                         preview: AnyView(PillOnlyPreview())
                     ) {
                         liveSettings.overlayStyle = .pillOnly
+                        logger.info("Overlay style changed to: pillOnly")
                     }
                 }
 
@@ -424,6 +364,10 @@ struct GeneralLiveSettingsView: View {
 // MARK: - Shortcuts Settings
 
 struct ShortcutsLiveSettingsView: View {
+    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var isRecordingToggle = false
+    @State private var isRecordingPTT = false
+
     var body: some View {
         SettingsPageContainer {
             SettingsPageHeader(
@@ -432,20 +376,52 @@ struct ShortcutsLiveSettingsView: View {
                 subtitle: "Configure keyboard shortcuts for Live recording."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("⚠️ Hotkey configuration coming soon")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 24) {
+                // Toggle Hotkey
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("TOGGLE RECORDING")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
 
-                Text("Current hotkeys:")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(.secondary)
+                    Text("Press once to start recording, press again to stop.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
 
-                Text("• Toggle Recording: ⌥⌘L")
-                    .font(SettingsManager.shared.fontSM)
-                Text("• Push-to-Talk: ⌥⌘;")
-                    .font(SettingsManager.shared.fontSM)
+                    HotkeyRecorderButton(
+                        hotkey: $liveSettings.hotkey,
+                        isRecording: $isRecordingToggle
+                    )
+                }
+
+                // Push-to-Talk Hotkey
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("PUSH-TO-TALK")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Text("Hold down to record, release to stop.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    Toggle("Enable Push-to-Talk", isOn: $liveSettings.pttEnabled)
+                        .font(SettingsManager.shared.fontSM)
+                        .onChange(of: liveSettings.pttEnabled) { _, enabled in
+                            logger.info("Push-to-Talk \(enabled ? "enabled" : "disabled")")
+                        }
+
+                    if liveSettings.pttEnabled {
+                        HotkeyRecorderButton(
+                            hotkey: $liveSettings.pttHotkey,
+                            isRecording: $isRecordingPTT
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
             }
+        }
+        .animation(.easeInOut(duration: 0.2), value: liveSettings.pttEnabled)
+        .onAppear {
+            logger.debug("ShortcutsLiveSettingsView appeared")
         }
     }
 }
