@@ -62,7 +62,7 @@ struct HistoryView: View {
 
     @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []  // Multi-select support
-    @State private var settingsSection: SettingsSection? = nil  // Deep link to specific settings section
+    @State private var settingsSection: LiveSettingsSection? = nil  // Deep link to specific settings section
     @State private var searchText = ""
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
@@ -145,11 +145,11 @@ struct HistoryView: View {
                 self.selectedSection = .settings
             }
             .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsAudio)) { _ in
-                self.settingsSection = .audio
+                self.settingsSection = LiveSettingsSection.audio
                 self.selectedSection = .settings
             }
             .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsEngine)) { _ in
-                self.settingsSection = .engine
+                self.settingsSection = LiveSettingsSection.transcription
                 self.selectedSection = .settings
             }
             .onReceive(NotificationCenter.default.publisher(for: .selectUtterance)) { notification in
@@ -851,7 +851,10 @@ struct HistoryView: View {
     }
 
     private var settingsContentView: some View {
-        EmbeddedSettingsView(initialSection: $settingsSection)
+        // Note: This HistoryView is legacy - use LiveSettingsView in NavigationView instead
+        Text("Settings moved to main Live Settings section")
+            .font(.system(size: 14))
+            .foregroundColor(.secondary)
     }
 
     // MARK: - Console Content

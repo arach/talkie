@@ -456,15 +456,21 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         let audioDuration = Double(originalSampleCount) / 16000.0
         trace.end("\(originalSampleCount) samples (\(String(format: "%.1f", audioDuration))s)")
 
-        // Duplicate the last ~300ms of audio to help the decoder flush final tokens
-        // Using actual audio content (even repeated) works better than silence or noise
-        // because the decoder stays engaged with speech-like features
+        // Fade the last ~300ms of audio to silence to help the decoder flush final tokens
+        // Exponential fade prevents mistranscription while keeping speech-like features
+        // to keep the decoder engaged during final token generation
         trace.begin("audio_pad")
-        let padDuration = 4800  // 300ms at 16kHz
-        let padSource = min(padDuration, samples.count)
-        let tailSegment = Array(samples.suffix(padSource))
-        samples.append(contentsOf: tailSegment)
-        trace.end("+\(tailSegment.count) samples (echo tail)")
+        let fadeDuration = 4800  // 300ms at 16kHz
+        let fadeSource = min(fadeDuration, samples.count)
+        let tailSegment = Array(samples.suffix(fadeSource))
+        // Apply exponential fade to silence
+        let fadedSegment = tailSegment.enumerated().map { index, sample in
+            let progress = Float(index) / Float(tailSegment.count)
+            let fadeMultiplier = exp(-5.0 * progress)  // Exponential decay
+            return sample * fadeMultiplier
+        }
+        samples.append(contentsOf: fadedSegment)
+        trace.end("+\(fadedSegment.count) samples (fade tail)")
 
         // Run inference
         trace.begin("inference")

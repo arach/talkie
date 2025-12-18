@@ -11,7 +11,9 @@ import CoreData
 enum NavigationSection: Hashable {
     case allMemos
     case allMemosV2  // New instrumented view
-    case live
+    case liveDashboard  // Live home/insights view
+    case liveRecent     // Live utterance list
+    case liveSettings   // Live settings (now visible in sidebar)
     case aiResults
     case workflows
     case activityLog
@@ -132,7 +134,7 @@ struct TalkieNavigationView: View {
         .padding(.horizontal, 1)  // Subtle edge spacing
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
-        .focusedValue(\.liveNavigation, LiveNavigationAction(showLive: { selectedSection = .live }))
+        .focusedValue(\.liveNavigation, LiveNavigationAction(showLive: { selectedSection = .liveDashboard }))
         .onChange(of: allMemos.count) { _, _ in
             // Mark any new memos as received when they appear in the list
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
@@ -142,8 +144,16 @@ struct TalkieNavigationView: View {
             selectedSection = .workflows
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToLive)) { _ in
-            // Navigate to Live section when opened from TalkieLive
-            selectedSection = .live
+            // Navigate to Live Dashboard when opened from TalkieLive
+            selectedSection = .liveDashboard
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToSettings)) { _ in
+            // Navigate to Settings section when opened from URL scheme or deep link
+            selectedSection = .settings
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToLiveSettings)) { _ in
+            // Navigate to Live Settings subsection
+            selectedSection = .liveSettings
         }
         .onReceive(eventManager.$events) { _ in
             updateEventCounts()
@@ -208,7 +218,7 @@ struct TalkieNavigationView: View {
                 VStack(spacing: 0) {
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
                     sidebarButton(section: .allMemosV2, icon: "sparkles.square.filled.on.square", title: "All Memos V2", badge: "NEW", badgeColor: .green)
-                    sidebarButton(section: .live, icon: "waveform.badge.mic", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
+                    sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
                     sidebarButton(section: .aiResults, icon: "chart.line.uptrend.xyaxis", title: "Actions")
                     sidebarButton(section: .pendingActions, icon: "clock.arrow.circlepath", title: "Pending", badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil, badgeColor: .accentColor, showSpinner: pendingActionsManager.hasActiveActions)
                     sidebarButton(section: .workflows, icon: "wand.and.stars", title: "Workflows")
@@ -237,12 +247,26 @@ struct TalkieNavigationView: View {
                             badge: "NEW",
                             badgeColor: .green
                         )
+
+                        // Live section
+                        sidebarSectionHeader("Live")
+                            .padding(.top, 12)
                         sidebarButton(
-                            section: .live,
+                            section: .liveDashboard,
+                            icon: "chart.xyaxis.line",
+                            title: "Dashboard"
+                        )
+                        sidebarButton(
+                            section: .liveRecent,
                             icon: "waveform.badge.mic",
-                            title: "Live",
+                            title: "Recent",
                             badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil,
                             badgeColor: .cyan
+                        )
+                        sidebarButton(
+                            section: .liveSettings,
+                            icon: "gearshape",
+                            title: "Settings"
                         )
 
                         // Activity section
@@ -388,7 +412,9 @@ struct TalkieNavigationView: View {
         switch section {
         case .allMemos: return "AllMemos"
         case .allMemosV2: return "AllMemosV2"
-        case .live: return "Live"
+        case .liveDashboard: return "LiveDashboard"
+        case .liveRecent: return "LiveRecent"
+        case .liveSettings: return "LiveSettings"
         case .aiResults: return "AIResults"
         case .workflows: return "Workflows"
         case .activityLog: return "ActivityLog"
@@ -477,10 +503,30 @@ struct TalkieNavigationView: View {
         case .allMemosV2:
             // AllMemosView2 already wraps itself in TalkieSection
             AllMemosView2()
-        case .live:
-            TalkieSection("Live") {
-                HistoryView()
+        case .liveDashboard:
+            // Live home view with insights, activity, and stats
+            TalkieSection("LiveDashboard") {
+                HomeView(
+                    onSelectUtterance: { utterance in
+                        // Navigate to Recent and select this utterance
+                        selectedSection = .liveRecent
+                        // TODO: Pass selected utterance to Recent view
+                    },
+                    onSelectApp: { appName, _ in
+                        // Navigate to Recent filtered by app
+                        selectedSection = .liveRecent
+                        // TODO: Pass app filter to Recent view
+                    }
+                )
             }
+        case .liveRecent:
+            // Simple utterance list without sidebar navigation
+            TalkieSection("LiveRecent") {
+                UtteranceListView()
+            }
+        case .liveSettings:
+            // Live settings view using Talkie design system
+            LiveSettingsView()
         case .systemConsole:
             TalkieSection("SystemConsole") {
                 SystemConsoleView(onClose: {
@@ -516,7 +562,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models, .allowedCommands, .aiResults, .allMemos, .allMemosV2, .live, .systemConsole, .pendingActions, .talkieService, .settings:
+        case .models, .allowedCommands, .aiResults, .allMemos, .allMemosV2, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .talkieService, .settings:
             return true
         default:
             return false
@@ -580,7 +626,9 @@ struct TalkieNavigationView: View {
         switch selectedSection {
         case .allMemos: return "ALL MEMOS"
         case .allMemosV2: return "ALL MEMOS V2"
-        case .live: return "LIVE"
+        case .liveDashboard: return "LIVE DASHBOARD"
+        case .liveRecent: return "LIVE RECENT"
+        case .liveSettings: return "LIVE SETTINGS"
         case .aiResults: return "ACTIVITY LOG"
         case .workflows: return "WORKFLOWS"
         case .activityLog: return "ACTIVITY LOG"

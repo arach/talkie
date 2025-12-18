@@ -10,6 +10,7 @@
 
 import SwiftUI
 import CoreData
+import AVFoundation
 import UserNotifications
 import DebugKit
 
@@ -278,7 +279,10 @@ struct ListViewDebugContent: View {
                 }
             }
 
-            // 4. Danger zone (platform-wide destructive utils)
+            // 4. Audio Testing
+            AudioPaddingTestDebugContent()
+
+            // 5. Danger zone (platform-wide destructive utils)
             DebugSection(title: "RESET") {
                 VStack(spacing: 4) {
                     DebugActionButton(icon: "arrow.counterclockwise", label: "Onboarding", destructive: true) {
@@ -758,6 +762,452 @@ extension NSAttributeDescription {
         case .objectIDAttributeType: return "ObjectID"
         case .compositeAttributeType: return "Composite"
         @unknown default: return "unknown"
+        }
+    }
+}
+
+// MARK: - Audio Padding Test Harness
+
+/// Padding strategies for A/B testing
+enum AudioPaddingStrategy: String, CaseIterable, Identifiable {
+    case exponentialFade3 = "Exp Fade (-3)"
+    case exponentialFade5 = "Exp Fade (-5)"
+    case exponentialFade7 = "Exp Fade (-7)"
+    case exponentialFade10 = "Exp Fade (-10)"
+    case linearFade = "Linear Fade"
+    case duplication = "Duplication"
+    case silenceWithSpikes = "Silence + Spikes"
+    case pureSilence = "Pure Silence"
+
+    var id: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .exponentialFade3:
+            return "Exponential fade with decay rate -3.0"
+        case .exponentialFade5:
+            return "Exponential fade with decay rate -5.0 (current default)"
+        case .exponentialFade7:
+            return "Exponential fade with decay rate -7.0"
+        case .exponentialFade10:
+            return "Exponential fade with decay rate -10.0 (rapid)"
+        case .linearFade:
+            return "Linear fade from 100% to 0% amplitude"
+        case .duplication:
+            return "Duplicate last 300ms (old approach)"
+        case .silenceWithSpikes:
+            return "Silence with periodic impulse spikes every 50ms"
+        case .pureSilence:
+            return "Pure silence (zeros)"
+        }
+    }
+
+    /// Apply this padding strategy to the given samples
+    func apply(to samples: [Float], duration: Int = 4800) -> [Float] {
+        let padSource = min(duration, samples.count)
+        let tailSegment = Array(samples.suffix(padSource))
+
+        switch self {
+        case .exponentialFade3:
+            return applyExponentialFade(tailSegment, rate: -3.0)
+        case .exponentialFade5:
+            return applyExponentialFade(tailSegment, rate: -5.0)
+        case .exponentialFade7:
+            return applyExponentialFade(tailSegment, rate: -7.0)
+        case .exponentialFade10:
+            return applyExponentialFade(tailSegment, rate: -10.0)
+        case .linearFade:
+            return applyLinearFade(tailSegment)
+        case .duplication:
+            return tailSegment // Just duplicate
+        case .silenceWithSpikes:
+            return applySilenceWithSpikes(duration)
+        case .pureSilence:
+            return Array(repeating: 0.0, count: duration)
+        }
+    }
+
+    private func applyExponentialFade(_ samples: [Float], rate: Float) -> [Float] {
+        return samples.enumerated().map { index, sample in
+            let progress = Float(index) / Float(samples.count)
+            let fadeMultiplier = exp(rate * progress)
+            return sample * fadeMultiplier
+        }
+    }
+
+    private func applyLinearFade(_ samples: [Float]) -> [Float] {
+        return samples.enumerated().map { index, sample in
+            let progress = Float(index) / Float(samples.count)
+            let fadeMultiplier = 1.0 - progress
+            return sample * fadeMultiplier
+        }
+    }
+
+    private func applySilenceWithSpikes(_ duration: Int) -> [Float] {
+        var result = Array(repeating: Float(0.0), count: duration)
+        // Add small impulse spikes every 50ms (800 samples at 16kHz)
+        let spikeInterval = 800
+        let spikeAmplitude: Float = 0.01 // Small spike
+        for i in stride(from: 0, to: duration, by: spikeInterval) {
+            if i < duration {
+                result[i] = spikeAmplitude
+            }
+        }
+        return result
+    }
+}
+
+/// Test result for a single padding strategy
+struct PaddingTestResult: Identifiable {
+    let id = UUID()
+    let strategy: AudioPaddingStrategy
+    var transcript: String = ""
+    var isRunning: Bool = false
+    var error: String? = nil
+    var duration: TimeInterval = 0
+}
+
+/// A/B test view for comparing padding strategies
+struct AudioPaddingTestView: View {
+    @State private var selectedAudioPath: String = ""
+    @State private var testResults: [PaddingTestResult] = []
+    @State private var isRunningTests = false
+    @Environment(\.dismiss) private var dismiss
+    private let settings = SettingsManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Audio Padding A/B Test")
+                    .font(.headline)
+
+                Spacer()
+
+                Button("Close") {
+                    dismiss()
+                }
+            }
+            .padding()
+            .background(Theme.current.surfaceBase)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Audio file selection
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("TEST AUDIO FILE")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 8) {
+                            Button("Select Audio File...") {
+                                selectAudioFile()
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("Use JFK Sample") {
+                                selectedAudioPath = "/Users/arach/dev/talkie/build/TalkieEngine/SourcePackages/checkouts/WhisperKit/Tests/WhisperKitTests/Resources/jfk.wav"
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("Use Last Recording") {
+                                selectLastRecording()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+
+                        if !selectedAudioPath.isEmpty {
+                            Text(selectedAudioPath)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .padding()
+                    .background(Theme.current.surface2)
+                    .cornerRadius(8)
+
+                    // Test controls
+                    HStack(spacing: 8) {
+                        Button(action: runAllTests) {
+                            HStack {
+                                if isRunningTests {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                } else {
+                                    Image(systemName: "play.fill")
+                                }
+                                Text(isRunningTests ? "Running..." : "Run All Tests")
+                            }
+                        }
+                        .disabled(selectedAudioPath.isEmpty || isRunningTests)
+                        .buttonStyle(.borderedProminent)
+
+                        Button("Clear Results") {
+                            testResults.removeAll()
+                        }
+                        .disabled(testResults.isEmpty)
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal)
+
+                    // Results
+                    if !testResults.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("TEST RESULTS")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+
+                            ForEach(testResults) { result in
+                                resultCard(result)
+                            }
+                        }
+                    }
+
+                    // Strategy reference
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("PADDING STRATEGIES")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary)
+
+                        ForEach(AudioPaddingStrategy.allCases) { strategy in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(strategy.rawValue)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.accentColor)
+                                    .frame(width: 120, alignment: .leading)
+
+                                Text(strategy.description)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .padding()
+                    .background(Theme.current.surface2)
+                    .cornerRadius(8)
+                }
+                .padding()
+            }
+        }
+        .frame(width: 750, height: 650)
+        .onAppear {
+            // Default to JFK sample
+            selectedAudioPath = "/Users/arach/dev/talkie/build/TalkieEngine/SourcePackages/checkouts/WhisperKit/Tests/WhisperKitTests/Resources/jfk.wav"
+        }
+    }
+
+    private func resultCard(_ result: PaddingTestResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(result.strategy.rawValue)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                if result.isRunning {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                } else if let error = result.error {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                } else {
+                    Text(String(format: "%.2fs", result.duration))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let error = result.error {
+                Text(error)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.red)
+            } else if !result.transcript.isEmpty {
+                Text(result.transcript)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .textSelection(.enabled)
+                    .padding(8)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(4)
+            }
+        }
+        .padding()
+        .background(Theme.current.surface2)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(result.isRunning ? Color.accentColor : Color.clear, lineWidth: 2)
+        )
+    }
+
+    private func selectAudioFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        if panel.runModal() == .OK {
+            if let url = panel.url {
+                selectedAudioPath = url.path
+            }
+        }
+    }
+
+    private func selectLastRecording() {
+        let context = PersistenceController.shared.container.viewContext
+        let request = VoiceMemo.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
+        request.fetchLimit = 1
+
+        do {
+            if let lastMemo = try context.fetch(request).first,
+               let audioPath = lastMemo.fileURL {
+                selectedAudioPath = audioPath
+            }
+        } catch {
+            print("Failed to fetch last recording: \(error)")
+        }
+    }
+
+    private func runAllTests() {
+        guard !selectedAudioPath.isEmpty else { return }
+
+        isRunningTests = true
+        testResults = AudioPaddingStrategy.allCases.map { strategy in
+            PaddingTestResult(strategy: strategy, isRunning: false)
+        }
+
+        Task {
+            for index in testResults.indices {
+                await runTest(at: index)
+            }
+            await MainActor.run {
+                isRunningTests = false
+            }
+        }
+    }
+
+    private func runTest(at index: Int) async {
+        await MainActor.run {
+            testResults[index].isRunning = true
+        }
+
+        let strategy = testResults[index].strategy
+        let startTime = Date()
+
+        do {
+            // Load audio
+            let audioURL = URL(fileURLWithPath: selectedAudioPath)
+            var samples = try await loadAudioSamples(from: audioURL)
+
+            // Apply padding strategy
+            let padding = strategy.apply(to: samples)
+            samples.append(contentsOf: padding)
+
+            // Transcribe using Parakeet
+            let transcript = try await transcribeWithParakeet(samples: samples)
+
+            let duration = Date().timeIntervalSince(startTime)
+
+            await MainActor.run {
+                testResults[index].transcript = transcript
+                testResults[index].duration = duration
+                testResults[index].isRunning = false
+            }
+        } catch {
+            await MainActor.run {
+                testResults[index].error = error.localizedDescription
+                testResults[index].isRunning = false
+            }
+        }
+    }
+
+    private func loadAudioSamples(from url: URL) async throws -> [Float] {
+        let file = try AVAudioFile(forReading: url)
+        let targetFormat = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1)!
+
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw NSError(domain: "AudioPaddingTest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create buffer"])
+        }
+
+        let converter = AVAudioConverter(from: file.processingFormat, to: targetFormat)!
+
+        var conversionError: NSError?
+        let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
+            do {
+                let tempBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: inNumPackets)!
+                try file.read(into: tempBuffer)
+                outStatus.pointee = .haveData
+                return tempBuffer
+            } catch {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+        }
+
+        converter.convert(to: buffer, error: &conversionError, withInputFrom: inputBlock)
+
+        if let error = conversionError {
+            throw error
+        }
+
+        guard let channelData = buffer.floatChannelData?[0] else {
+            throw NSError(domain: "AudioPaddingTest", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to get channel data"])
+        }
+
+        return Array(UnsafeBufferPointer(start: channelData, count: Int(buffer.frameLength)))
+    }
+
+    private func transcribeWithParakeet(samples: [Float]) async throws -> String {
+        // Write samples to temp file
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test-\(UUID().uuidString).wav")
+        try writeSamplesToWav(samples: samples, url: tempURL)
+
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+
+        // Load audio data and transcribe using ParakeetService
+        let audioData = try Data(contentsOf: tempURL)
+        let transcript = try await ParakeetService.shared.transcribe(audioData: audioData)
+        return transcript
+    }
+
+    private func writeSamplesToWav(samples: [Float], url: URL) throws {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))!
+        buffer.frameLength = buffer.frameCapacity
+
+        if let channelData = buffer.floatChannelData?[0] {
+            for (index, sample) in samples.enumerated() {
+                channelData[index] = sample
+            }
+        }
+
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        try file.write(from: buffer)
+    }
+}
+
+/// Debug toolbar button to launch the A/B test view
+struct AudioPaddingTestDebugContent: View {
+    @State private var showTestView = false
+
+    var body: some View {
+        DebugSection(title: "AUDIO TESTING") {
+            DebugActionButton(icon: "waveform.badge.magnifyingglass", label: "Padding A/B Test") {
+                showTestView = true
+            }
+        }
+        .sheet(isPresented: $showTestView) {
+            AudioPaddingTestView()
         }
     }
 }

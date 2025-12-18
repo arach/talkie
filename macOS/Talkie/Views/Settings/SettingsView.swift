@@ -264,4 +264,3 @@ struct SettingsSidebarItem: View {
         }
     }
 }
-

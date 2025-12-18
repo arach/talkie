@@ -66,11 +66,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // Handle talkie://live - navigate to Live section
+        // Handle talkie://live or talkie://live/home - navigate to Live section
         if url.host == "live" {
-            NSLog("[AppDelegate] Navigating to Live section")
-            logger.info("Navigating to Live section")
+            let path = url.pathComponents.dropFirst().first ?? ""
+            NSLog("[AppDelegate] Navigating to Live section: \(path.isEmpty ? "default" : path)")
+            logger.info("Navigating to Live section: \(path.isEmpty ? "default" : path)")
             NotificationCenter.default.post(name: .navigateToLive, object: nil)
+        }
+        // Handle talkie://settings/live - navigate directly to full Live settings
+        else if url.host == "settings" {
+            let path = url.pathComponents.dropFirst().first ?? ""
+            NSLog("[AppDelegate] Navigating to Settings section: \(path)")
+            logger.info("Navigating to Settings section: \(path)")
+
+            if path == "live" {
+                // Navigate directly to full Live settings (bypasses main Settings)
+                NotificationCenter.default.post(name: .navigateToLiveSettings, object: nil)
+            } else {
+                // Just open Settings
+                NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+            }
         }
         // Handle talkie://interstitial/{id}
         else if url.host == "interstitial",

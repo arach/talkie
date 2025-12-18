@@ -715,9 +715,25 @@ final class LiveSettings: ObservableObject {
 
 // MARK: - Stub types (simplified for Talkie integration)
 
+// NOTE: Full RoutingMode definition exists in RoutingMode.swift
+// This stub is kept here for backward compatibility
 enum RoutingMode: String, CaseIterable, Codable {
     case clipboardOnly = "clipboardOnly"  // Copy to clipboard only
     case paste = "paste"                  // Copy to clipboard and paste (⌘V)
+
+    var displayName: String {
+        switch self {
+        case .clipboardOnly: return "Clipboard Only"
+        case .paste: return "Copy & Paste"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .clipboardOnly: return "Copy text to clipboard without pasting"
+        case .paste: return "Copy to clipboard and automatically paste"
+        }
+    }
 }
 
 // NOTE: TalkieSound is defined in SoundManager.swift

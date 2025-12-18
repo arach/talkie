@@ -845,7 +845,10 @@ struct LiveNavigationView: View {
     }
 
     private var settingsContentView: some View {
-        EmbeddedSettingsView(initialSection: $settingsSection)
+        // Note: This LiveHistoryView is legacy - use LiveSettingsView in NavigationView instead
+        Text("Settings moved to main Live Settings section")
+            .font(.system(size: 14))
+            .foregroundColor(.secondary)
     }
 
     // MARK: - Console Content
