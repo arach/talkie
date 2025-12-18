@@ -36,55 +36,67 @@ struct TranscriptRouter: LiveRouter {
     func handle(transcript: String) async {
         let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Filter out empty or Whisper noise tokens
+        // Filter noise
         guard !cleaned.isEmpty,
-              !cleaned.hasPrefix("["),  // [BLANK_AUDIO], [MUSIC], etc.
+              !cleaned.hasPrefix("["),
               cleaned != "(silence)" else {
-            logger.info("Skipping noise/empty transcript: \(transcript)")
+            logger.info("Skipping noise: \(transcript)")
             return
         }
 
-        // Copy to clipboard (storage is handled by LiveController with metadata)
-        copyToClipboard(cleaned)
+        // Validate: Ensure valid UTF-8 and reasonable length
+        guard cleaned.utf8.count < 1_000_000,  // 1MB limit
+              cleaned.canBeConverted(to: .utf8) else {
+            logger.error("Invalid text - cannot copy to clipboard")
+            return
+        }
 
-        // Paste if requested
+        // Copy to clipboard on main queue (NSPasteboard requirement)
+        let success = await MainActor.run {
+            copyToClipboard(cleaned)
+        }
+
+        guard success else {
+            logger.error("Clipboard copy failed")
+            return
+        }
+
+        // Paste if enabled
         if mode == .paste {
-            // Give clipboard time to settle before simulating paste
-            try? await Task.sleep(for: .milliseconds(100))
             simulatePaste()
         }
     }
 
-    private func copyToClipboard(_ text: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        logger.info("Copied to clipboard: \(text.prefix(50))...")
+    private func copyToClipboard(_ text: String) -> Bool {
+        let pb = NSPasteboard.general
+        pb.prepareForNewContents()
+
+        guard pb.setString(text, forType: .string) else {
+            return false
+        }
+
+        logger.info("Copied: \(text.prefix(50))...")
+        return true
     }
 
     private func simulatePaste() {
-        // Simulate ⌘V with explicit key sequence for better reliability
-        let source = CGEventSource(stateID: .combinedSessionState)
+        let src = CGEventSource(stateID: .combinedSessionState)
+        guard let src else { return }
 
-        // Command key down
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
-        cmdDown?.flags = .maskCommand
-        cmdDown?.post(tap: .cghidEventTap)
+        // Post all events as a batch
+        let events: [(UInt16, Bool)] = [
+            (0x37, true),   // ⌘ down
+            (0x09, true),   // V down
+            (0x09, false),  // V up
+            (0x37, false)   // ⌘ up
+        ]
 
-        // V key down (keycode 9)
-        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-        vDown?.flags = .maskCommand
-        vDown?.post(tap: .cghidEventTap)
+        for (key, down) in events {
+            let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down)
+            evt?.flags = down && key == 0x09 ? .maskCommand : []
+            evt?.post(tap: .cghidEventTap)
+        }
 
-        // V key up
-        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        vUp?.flags = .maskCommand
-        vUp?.post(tap: .cghidEventTap)
-
-        // Command key up
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
-        cmdUp?.post(tap: .cghidEventTap)
-
-        logger.info("Simulated paste (⌘V)")
+        logger.info("Pasted")
     }
 }

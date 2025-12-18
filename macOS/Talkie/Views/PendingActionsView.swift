@@ -135,7 +135,9 @@ struct PendingActionsView: View {
                 Divider()
                     .opacity(0.5)
 
-                Button(action: { pendingManager.clearAllRecentActions() }) {
+                TalkieButtonSync("ClearHistory", section: "PendingActions") {
+                    pendingManager.clearAllRecentActions()
+                } label: {
                     HStack {
                         Image(systemName: "trash")
                             .font(settings.fontXS)
@@ -415,7 +417,9 @@ struct RecentActionRow: View {
                         .foregroundColor(.secondary)
 
                     if isFailed && onRetry != nil {
-                        Button(action: { onRetry?() }) {
+                        TalkieButtonSync("RetryAction.\(action.workflowName)", section: "PendingActions") {
+                            onRetry?()
+                        } label: {
                             HStack(spacing: 2) {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.system(size: 9, weight: .semibold))
@@ -437,7 +441,9 @@ struct RecentActionRow: View {
 
             // Error message (expandable)
             if isFailed, let errorMessage = action.status.errorMessage {
-                Button(action: { showError.toggle() }) {
+                TalkieButtonSync("ShowError.\(action.workflowName)", section: "PendingActions") {
+                    showError.toggle()
+                } label: {
                     HStack(spacing: Spacing.xs) {
                         Image(systemName: showError ? "chevron.down" : "chevron.right")
                             .font(.system(size: 8, weight: .semibold))

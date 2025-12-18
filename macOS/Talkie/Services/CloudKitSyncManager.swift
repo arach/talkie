@@ -369,6 +369,9 @@ class CloudKitSyncManager: ObservableObject {
                 if changes > 0 {
                     try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
                     context.refreshAllObjects()
+
+                    // BRIDGE 1: Sync Core Data → GRDB
+                    await self.syncCoreDataToGRDB(context: context)
                 }
 
                 // Process auto-run workflows for unprocessed memos
@@ -622,5 +625,115 @@ class CloudKitSyncManager: ObservableObject {
         } else {
             return "Not synced"
         }
+    }
+
+    // MARK: - Bridge 1: Core Data → GRDB Sync
+
+    /// Sync Core Data changes to GRDB (phone → Mac data flow)
+    /// Called after CloudKit pushes changes to Core Data
+    private func syncCoreDataToGRDB(context: NSManagedObjectContext) async {
+        logger.info("🌉 [Bridge 1] Starting Core Data → GRDB sync")
+        let syncStart = Date()
+
+        let repository = GRDBRepository()
+        var createdCount = 0
+        var updatedCount = 0
+        var errorCount = 0
+
+        await context.perform {
+            // Query all VoiceMemo entities (we'll use lastModified for change detection)
+            let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.lastModified, ascending: false)]
+
+            do {
+                let cdMemos = try context.fetch(fetchRequest)
+                logger.info("🌉 [Bridge 1] Found \(cdMemos.count) memo(s) in Core Data")
+
+                for cdMemo in cdMemos {
+                    guard let memoId = cdMemo.id else {
+                        logger.warning("🌉 [Bridge 1] Skipping memo with nil ID")
+                        continue
+                    }
+
+                    Task {
+                        do {
+                            // Check if exists in GRDB
+                            let existingMemo = try await repository.fetchMemo(id: memoId)
+
+                            if let existing = existingMemo {
+                                // Compare timestamps - Core Data wins (source of truth from phone)
+                                let cdModified = cdMemo.lastModified ?? Date.distantPast
+                                let grdbModified = existing.memo.lastModified
+
+                                if cdModified > grdbModified {
+                                    logger.info("🌉 [Bridge 1] Updating memo in GRDB: '\(cdMemo.title ?? "Untitled")' (CD: \(cdModified) > GRDB: \(grdbModified))")
+                                    let memoModel = self.convertToMemoModel(cdMemo)
+                                    try await repository.saveMemo(memoModel)
+                                    updatedCount += 1
+                                    logger.info("✅ [Bridge 1] Updated: \(memoId)")
+                                } else {
+                                    logger.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(cdMemo.title ?? "Untitled")'")
+                                }
+                            } else {
+                                // New memo - create in GRDB
+                                logger.info("🌉 [Bridge 1] Creating new memo in GRDB: '\(cdMemo.title ?? "Untitled")'")
+                                let memoModel = self.convertToMemoModel(cdMemo)
+                                try await repository.saveMemo(memoModel)
+                                createdCount += 1
+                                logger.info("✅ [Bridge 1] Created: \(memoId)")
+                            }
+                        } catch {
+                            logger.error("❌ [Bridge 1] Failed to sync memo \(memoId): \(error.localizedDescription)")
+                            errorCount += 1
+                        }
+                    }
+                }
+            } catch {
+                logger.error("❌ [Bridge 1] Failed to fetch Core Data memos: \(error.localizedDescription)")
+            }
+        }
+
+        // Wait a moment for all async tasks to complete
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+
+        let duration = Date().timeIntervalSince(syncStart)
+        logger.info("🌉 [Bridge 1] Complete: \(createdCount) created, \(updatedCount) updated, \(errorCount) errors (\(String(format: "%.1fs", duration)))")
+    }
+
+    /// Convert Core Data VoiceMemo to GRDB MemoModel
+    private func convertToMemoModel(_ cdMemo: VoiceMemo) -> MemoModel {
+        let id = cdMemo.id ?? UUID()
+        let createdAt = cdMemo.createdAt ?? Date()
+        let lastModified = cdMemo.lastModified ?? Date()
+
+        // Convert sort order (Core Data uses Int32, GRDB uses Int)
+        let sortOrder = Int(cdMemo.sortOrder)
+
+        logger.info("🔄 [Bridge 1] Converting memo: '\(cdMemo.title ?? "Untitled")' (id: \(id))")
+
+        return MemoModel(
+            id: id,
+            createdAt: createdAt,
+            lastModified: lastModified,
+            title: cdMemo.title,
+            duration: cdMemo.duration,
+            sortOrder: sortOrder,
+            transcription: cdMemo.transcription,
+            notes: cdMemo.notes,
+            summary: cdMemo.summary,
+            tasks: cdMemo.tasks,
+            reminders: cdMemo.reminders,
+            audioFilePath: cdMemo.fileURL, // Core Data stores path as string
+            waveformData: cdMemo.waveformData,
+            isTranscribing: cdMemo.isTranscribing,
+            isProcessingSummary: cdMemo.isProcessingSummary,
+            isProcessingTasks: cdMemo.isProcessingTasks,
+            isProcessingReminders: cdMemo.isProcessingReminders,
+            autoProcessed: cdMemo.autoProcessed,
+            originDeviceId: cdMemo.originDeviceId,
+            macReceivedAt: cdMemo.macReceivedAt,
+            cloudSyncedAt: cdMemo.cloudSyncedAt,
+            pendingWorkflowIds: cdMemo.pendingWorkflowIds
+        )
     }
 }

@@ -80,6 +80,8 @@ public final class TalkieServiceMonitor: ObservableObject {
 
     private init() {
         logger.info("[TalkieService] Monitor initialized (lazy - call startMonitoring() when needed)")
+        // Check initial state immediately to prevent UI flicker
+        refreshState()
         // Don't auto-start - let views call startMonitoring() when they appear
         // This prevents CPU drain when monitoring views aren't visible
     }

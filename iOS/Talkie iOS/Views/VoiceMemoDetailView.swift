@@ -442,12 +442,6 @@ struct VoiceMemoDetailView: View {
                             .padding(.horizontal, Spacing.md)
                         }
 
-                        // Walkie Conversation Thread
-                        if let memoId = memo.id?.uuidString {
-                            WalkieConversationView(memoId: memoId)
-                                .padding(.top, Spacing.sm)
-                        }
-
                         // Delete button
                         Button(action: {
                             showingDeleteConfirmation = true

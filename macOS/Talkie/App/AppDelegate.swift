@@ -61,13 +61,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NSLog("[AppDelegate] Received URL: \(urlString)")
         logger.info("Received URL: \(urlString)")
 
+        guard url.scheme == "talkie" else {
+            NSLog("[AppDelegate] URL not handled: invalid scheme")
+            return
+        }
+
+        // Handle talkie://live or talkie://live/home - navigate to Live section
+        if url.host == "live" {
+            let path = url.pathComponents.dropFirst().first ?? ""
+            NSLog("[AppDelegate] Navigating to Live section: \(path.isEmpty ? "default" : path)")
+            logger.info("Navigating to Live section: \(path.isEmpty ? "default" : path)")
+            NotificationCenter.default.post(name: .navigateToLive, object: nil)
+        }
+        // Handle talkie://settings/live - navigate directly to full Live settings
+        else if url.host == "settings" {
+            let path = url.pathComponents.dropFirst().first ?? ""
+            NSLog("[AppDelegate] Navigating to Settings section: \(path)")
+            logger.info("Navigating to Settings section: \(path)")
+
+            if path == "live" {
+                // Navigate directly to full Live settings (bypasses main Settings)
+                NotificationCenter.default.post(name: .navigateToLiveSettings, object: nil)
+            } else {
+                // Just open Settings
+                NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+            }
+        }
         // Handle talkie://interstitial/{id}
-        if url.scheme == "talkie", url.host == "interstitial",
+        else if url.host == "interstitial",
            let idString = url.pathComponents.dropFirst().first,
            let id = Int64(idString) {
             NSLog("[AppDelegate] Opening interstitial for utterance ID: \(id)")
             logger.info("Opening interstitial for utterance ID: \(id)")
             Task { @MainActor in
+                // Hide all main app windows when showing interstitial
+                for window in NSApp.windows where window.title != "" {
+                    window.orderOut(nil)
+                }
                 InterstitialManager.shared.show(utteranceId: id)
             }
         } else {

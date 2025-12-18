@@ -67,9 +67,17 @@ final class QuickActionRunner {
     }
 
     private func copyToClipboard(_ live: LiveUtterance) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(live.text, forType: .string)
-        logger.info("Copied to clipboard for Live #\(live.id ?? 0)")
+        // Use safe pasteboard pattern (main thread + declareTypes instead of clearContents)
+        let pasteboard = NSPasteboard.general
+        pasteboard.declareTypes([.string], owner: nil)
+
+        guard pasteboard.setString(live.text, forType: .string) else {
+            logger.error("Failed to copy to clipboard for Live #\(live.id ?? 0)")
+            AppLogger.shared.log(.error, "Copy failed", detail: "Pasteboard error")
+            return
+        }
+
+        logger.info("✓ Copied to clipboard for Live #\(live.id ?? 0)")
         AppLogger.shared.log(.ui, "Copied", detail: "\(live.wordCount ?? 0) words")
     }
 

@@ -10,7 +10,10 @@ import CoreData
 
 enum NavigationSection: Hashable {
     case allMemos
-    case live
+    case allMemosV2  // New instrumented view
+    case liveDashboard  // Live home/insights view
+    case liveRecent     // Live utterance list
+    case liveSettings   // Live settings (now visible in sidebar)
     case aiResults
     case workflows
     case activityLog
@@ -27,7 +30,7 @@ struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
     // Use let for singletons - @ObservedObject causes full rerender on every settings change
     private let settings = SettingsManager.shared
-    @ObservedObject private var liveDataStore = LiveDataStore.shared
+    @ObservedObject private var liveDataStore = UtteranceStore.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -41,7 +44,7 @@ struct TalkieNavigationView: View {
     @State private var previousSection: NavigationSection? = .allMemos
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
-    @State private var showConsolePopover = false
+    @State private var isSectionLoading = false
     // Use let for singletons to avoid unnecessary view updates
     private let eventManager = SystemEventManager.shared
     private let pendingActionsManager = PendingActionsManager.shared
@@ -66,45 +69,72 @@ struct TalkieNavigationView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Main content area - HStack for manual sidebar control (avoids NavigationSplitView layout issues)
-            HStack(spacing: 0) {
-                // Sidebar with animated width
-                sidebarView
-                    .frame(width: currentSidebarWidth)
-                    .clipped()
+        mainContent
+    }
 
-                // Divider between sidebar and content
-                Rectangle()
-                    .fill(Theme.current.divider)
-                    .frame(width: 1)
+    private var mainContent: some View {
+        HStack(spacing: 0) {
+            // Sidebar - full height
+            sidebarView
+                .frame(width: currentSidebarWidth)
+                .clipped()
 
+            // Divider between sidebar and content
+            Rectangle()
+                .fill(Theme.current.divider)
+                .frame(width: 1)
+
+            // Content area + StatusBar
+            VStack(spacing: 0) {
                 // Main content area
-                if isTwoColumnSection {
-                    twoColumnDetailView
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // 3-column: content list + detail
-                    HStack(spacing: 0) {
-                        contentColumnView
-                            .frame(width: 300)
-
-                        Rectangle()
-                            .fill(Theme.current.divider)
-                            .frame(width: 1)
-
-                        detailColumnView
+                ZStack {
+                    if isTwoColumnSection {
+                        twoColumnDetailView
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        // 3-column: content list + detail
+                        HStack(spacing: 0) {
+                            contentColumnView
+                                .frame(width: 300)
+
+                            Rectangle()
+                                .fill(Theme.current.divider)
+                                .frame(width: 1)
+
+                            detailColumnView
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
+
+                    // Loading indicator during section transitions
+                    if isSectionLoading {
+                        Rectangle()
+                            .fill(Theme.current.background.opacity(0.5))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .overlay(
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .frame(width: 40, height: 40)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Theme.current.surface1)
+                                            .shadow(radius: 4)
+                                    )
+                            )
+                            .transition(.opacity)
                     }
                 }
-            }
 
-            // Full-width status bar (like VS Code/Cursor)
-            statusBarView
+                // StatusBar only on content area (not under sidebar)
+                StatusBar()
+            }
         }
         .animation(.snappy(duration: 0.2), value: isSidebarCollapsed)
+        .padding(.top, 8)  // Breathing room for traffic lights
+        .padding(.horizontal, 1)  // Subtle edge spacing
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
+        .focusedValue(\.liveNavigation, LiveNavigationAction(showLive: { selectedSection = .liveDashboard }))
         .onChange(of: allMemos.count) { _, _ in
             // Mark any new memos as received when they appear in the list
             PersistenceController.markMemosAsReceivedByMac(context: viewContext)
@@ -112,6 +142,18 @@ struct TalkieNavigationView: View {
         .onReceive(NotificationCenter.default.publisher(for: .browseWorkflows)) { _ in
             // Navigate to Workflows section when "MORE" button is clicked
             selectedSection = .workflows
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToLive)) { _ in
+            // Navigate to Live Dashboard when opened from TalkieLive
+            selectedSection = .liveDashboard
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToSettings)) { _ in
+            // Navigate to Settings section when opened from URL scheme or deep link
+            selectedSection = .settings
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToLiveSettings)) { _ in
+            // Navigate to Live Settings subsection
+            selectedSection = .liveSettings
         }
         .onReceive(eventManager.$events) { _ in
             updateEventCounts()
@@ -160,153 +202,7 @@ struct TalkieNavigationView: View {
         cachedWorkflowCount = recent.filter { $0.type == .workflow }.count
     }
 
-    private var statusBarView: some View {
-        HStack(spacing: 12) {
-            // Left side - iCloud sync status (clickable to sync)
-            Button(action: {
-                CloudKitSyncManager.shared.recordActivity() // Boost to active interval
-                CloudKitSyncManager.shared.syncNow()
-            }) {
-                HStack(spacing: 6) {
-                    syncStatusIcon
-                    syncStatusText
-                }
-            }
-            .buttonStyle(.plain)
-            .help("Click to sync now")
-
-            // Manual sync button
-            Button(action: {
-                CloudKitSyncManager.shared.recordActivity()
-                CloudKitSyncManager.shared.syncNow()
-            }) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Sync now")
-            .disabled(syncManager.state == .syncing)
-
-            Divider()
-                .frame(height: 12)
-
-            // Memo count
-            HStack(spacing: 4) {
-                Image(systemName: "square.stack")
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.secondary)
-                Text("\(allMemos.count) memos")
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            // Console button - opens log popover with error/warning counts
-            Button(action: { showConsolePopover.toggle() }) {
-                HStack(spacing: 6) {
-                    // Error count (red)
-                    if consoleErrorCount > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 9))
-                            Text("\(consoleErrorCount)")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                        .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
-                    }
-
-                    // Workflow count (amber)
-                    if consoleWorkflowCount > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 9))
-                            Text("\(consoleWorkflowCount)")
-                                .font(SettingsManager.shared.fontXS)
-                        }
-                        .foregroundColor(Color(red: 1.0, green: 0.7, blue: 0.3))
-                    }
-
-                    // Terminal icon
-                    Image(systemName: "terminal")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Theme.current.backgroundTertiary.opacity(0.5))
-                .cornerRadius(3)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showConsolePopover, arrowEdge: .bottom) {
-                SystemConsoleView(onPopOut: {
-                    showConsolePopover = false
-                    previousSection = selectedSection  // Remember where we were
-                    selectedSection = .systemConsole
-                })
-                .frame(width: 600, height: 350)
-            }
-
-            // Right side - DEV indicator (only in debug builds)
-            #if DEBUG
-            Text("DEV")
-                .font(Theme.current.fontXSBold)
-                .foregroundColor(.orange.opacity(0.7))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Theme.current.surfaceWarning)
-                .cornerRadius(3)
-            #endif
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(Theme.current.backgroundSecondary)
-    }
-
-    @ViewBuilder
-    private var syncStatusIcon: some View {
-        switch syncManager.state {
-        case .synced:
-            Image(systemName: "checkmark.icloud")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.green)
-        case .syncing:
-            Image(systemName: "arrow.triangle.2.circlepath.icloud")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.blue)
-        case .error:
-            Image(systemName: "exclamationmark.icloud")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.orange)
-        case .idle:
-            Image(systemName: "icloud")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private var syncStatusText: some View {
-        switch syncManager.state {
-        case .synced:
-            Text("Synced \(syncManager.lastSyncAgo)")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.secondary)
-        case .syncing:
-            Text("Syncing...")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.blue)
-        case .error(let message):
-            Text(message)
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.orange)
-        case .idle:
-            Text("iCloud")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.secondary)
-        }
-    }
+    // Old statusBarView removed - now using unified StatusBar component
 
     // MARK: - Sidebar View (matches TalkieLive structure)
 
@@ -321,7 +217,8 @@ struct TalkieNavigationView: View {
                 // Collapsed: simple VStack, no scroll, natural sizing
                 VStack(spacing: 0) {
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
-                    sidebarButton(section: .live, icon: "waveform.badge.mic", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
+                    sidebarButton(section: .allMemosV2, icon: "sparkles.square.filled.on.square", title: "All Memos V2", badge: "NEW", badgeColor: .green)
+                    sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
                     sidebarButton(section: .aiResults, icon: "chart.line.uptrend.xyaxis", title: "Actions")
                     sidebarButton(section: .pendingActions, icon: "clock.arrow.circlepath", title: "Pending", badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil, badgeColor: .accentColor, showSpinner: pendingActionsManager.hasActiveActions)
                     sidebarButton(section: .workflows, icon: "wand.and.stars", title: "Workflows")
@@ -344,11 +241,32 @@ struct TalkieNavigationView: View {
                             badgeColor: .secondary
                         )
                         sidebarButton(
-                            section: .live,
+                            section: .allMemosV2,
+                            icon: "sparkles.square.filled.on.square",
+                            title: "All Memos V2",
+                            badge: "NEW",
+                            badgeColor: .green
+                        )
+
+                        // Live section
+                        sidebarSectionHeader("Live")
+                            .padding(.top, 12)
+                        sidebarButton(
+                            section: .liveDashboard,
+                            icon: "chart.xyaxis.line",
+                            title: "Dashboard"
+                        )
+                        sidebarButton(
+                            section: .liveRecent,
                             icon: "waveform.badge.mic",
-                            title: "Live",
+                            title: "Recent",
                             badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil,
                             badgeColor: .cyan
+                        )
+                        sidebarButton(
+                            section: .liveSettings,
+                            icon: "gearshape",
+                            title: "Settings"
                         )
 
                         // Activity section
@@ -431,7 +349,7 @@ struct TalkieNavigationView: View {
             .padding(.leading, 4)
     }
 
-    /// Custom sidebar button with controlled selection styling
+    /// Custom sidebar button with controlled selection styling and instrumentation
     @ViewBuilder
     private func sidebarButton(
         section: NavigationSection,
@@ -443,62 +361,71 @@ struct TalkieNavigationView: View {
         showStatusDot: Bool = false,
         statusDotColor: SwiftUI.Color = .gray
     ) -> some View {
-        let isSelected = selectedSection == section
+        SidebarButtonContent(
+            section: section,
+            icon: icon,
+            title: title,
+            badge: badge,
+            badgeColor: badgeColor,
+            showSpinner: showSpinner,
+            showStatusDot: showStatusDot,
+            statusDotColor: statusDotColor,
+            isSelected: selectedSection == section,
+            isSidebarCollapsed: isSidebarCollapsed,
+            onTap: {
+                // Sound feedback (subtle click)
+                NSSound(named: "Tink")?.play()
 
-        Button(action: { selectedSection = section }) {
-            HStack(spacing: 8) {
-                ZStack(alignment: .bottomTrailing) {
-                    Image(systemName: icon)
-                        .font(.system(size: isSidebarCollapsed ? 14 : 12))
-                        .foregroundColor(isSelected ? .white : Theme.current.foreground)
-                        .frame(width: isSidebarCollapsed ? 20 : 16)
+                // Haptic feedback (subtle click)
+                NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
 
-                    // Status dot indicator
-                    if showStatusDot {
-                        Circle()
-                            .fill(statusDotColor)
-                            .frame(width: 6, height: 6)
-                            .overlay(
-                                Circle()
-                                    .stroke(isSelected ? Color.accentColor : Theme.current.background, lineWidth: 1.5)
-                            )
-                            .offset(x: 2, y: 2)
-                    }
+                // Track section change
+                if previousSection != section {
+                    previousSection = selectedSection
                 }
 
-                // Text and badge - always present, opacity animated
-                HStack {
-                    Text(title)
-                        .font(.system(size: 12))
-                        .foregroundColor(isSelected ? .white : Theme.current.foreground)
-                    Spacer()
-                    if showSpinner {
-                        ProgressView()
-                            .scaleEffect(0.4)
-                            .frame(width: 10, height: 10)
-                    }
-                    if let badge = badge {
-                        Text(badge)
-                            .font(.system(size: 10))
-                            .foregroundColor(isSelected ? .white.opacity(0.8) : badgeColor)
-                    }
+                // **START TIMER HERE** - Track full navigation time
+                PerformanceMonitor.shared.startAction(
+                    type: "Navigate",
+                    name: sectionName(section),
+                    context: "Sidebar"
+                )
+
+                // Show loading state briefly for visual feedback
+                isSectionLoading = true
+
+                // Navigate (async to allow loading indicator to show)
+                Task { @MainActor in
+                    selectedSection = section
+
+                    // Hide loading after brief delay (100ms) or when view appears
+                    try? await Task.sleep(for: .milliseconds(100))
+                    isSectionLoading = false
                 }
-                .opacity(isSidebarCollapsed ? 0 : 1)
-                .frame(width: isSidebarCollapsed ? 0 : nil)
-                .clipped()
-            }
-            .padding(.horizontal, isSidebarCollapsed ? 0 : 8)
-            .padding(.vertical, isSidebarCollapsed ? 4 : 8)
-            .frame(width: isSidebarCollapsed ? 36 : nil, height: isSidebarCollapsed ? 36 : nil)
-            .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
-            .offset(x: isSidebarCollapsed ? 3 : 0)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor : Color.clear)
-            )
+            },
+            sectionName: sectionName(section)
+        )
+    }
+
+    /// Helper to get clean section name for instrumentation
+    private func sectionName(_ section: NavigationSection) -> String {
+        switch section {
+        case .allMemos: return "AllMemos"
+        case .allMemosV2: return "AllMemosV2"
+        case .liveDashboard: return "LiveDashboard"
+        case .liveRecent: return "LiveRecent"
+        case .liveSettings: return "LiveSettings"
+        case .aiResults: return "AIResults"
+        case .workflows: return "Workflows"
+        case .activityLog: return "ActivityLog"
+        case .systemConsole: return "SystemConsole"
+        case .pendingActions: return "PendingActions"
+        case .talkieService: return "TalkieService"
+        case .models: return "Models"
+        case .allowedCommands: return "AllowedCommands"
+        case .settings: return "Settings"
+        case .smartFolder(let name): return "SmartFolder.\(name)"
         }
-        .buttonStyle(.plain)
-        .help(isSidebarCollapsed ? title : "")
     }
 
     /// Sidebar header with app branding and collapse toggle (matches TalkieLive)
@@ -558,26 +485,67 @@ struct TalkieNavigationView: View {
     private var twoColumnDetailView: some View {
         switch selectedSection {
         case .models:
-            ModelsContentView()
+            TalkieSection("Models") {
+                ModelsContentView()
+            }
         case .allowedCommands:
-            AllowedCommandsView()
+            TalkieSection("AllowedCommands") {
+                AllowedCommandsView()
+            }
         case .aiResults:
-            ActivityLogFullView()
+            TalkieSection("AIResults") {
+                ActivityLogFullView()
+            }
         case .allMemos:
-            MemoTableFullView()
-        case .live:
-            LiveListView()
+            TalkieSection("AllMemos") {
+                MemoTableFullView()
+            }
+        case .allMemosV2:
+            // AllMemosView2 already wraps itself in TalkieSection
+            AllMemosView2()
+        case .liveDashboard:
+            // Live home view with insights, activity, and stats
+            TalkieSection("LiveDashboard") {
+                HomeView(
+                    onSelectUtterance: { utterance in
+                        // Navigate to Recent and select this utterance
+                        selectedSection = .liveRecent
+                        // TODO: Pass selected utterance to Recent view
+                    },
+                    onSelectApp: { appName, _ in
+                        // Navigate to Recent filtered by app
+                        selectedSection = .liveRecent
+                        // TODO: Pass app filter to Recent view
+                    }
+                )
+            }
+        case .liveRecent:
+            // Simple utterance list without sidebar navigation
+            TalkieSection("LiveRecent") {
+                UtteranceListView()
+            }
+        case .liveSettings:
+            // Live settings view using Talkie design system
+            LiveSettingsView()
         case .systemConsole:
-            SystemConsoleView(onClose: {
-                // Return to previous section, or allMemos if none
-                selectedSection = previousSection ?? .allMemos
-            })
+            TalkieSection("SystemConsole") {
+                SystemConsoleView(onClose: {
+                    // Return to previous section, or allMemos if none
+                    selectedSection = previousSection ?? .allMemos
+                })
+            }
         case .pendingActions:
-            PendingActionsView()
+            TalkieSection("PendingActions") {
+                PendingActionsView()
+            }
         case .talkieService:
-            TalkieServiceMonitorView()
+            TalkieSection("TalkieService") {
+                TalkieServiceMonitorView()
+            }
         case .settings:
-            SettingsView()
+            TalkieSection("Settings") {
+                SettingsView()
+            }
         default:
             EmptyView()
         }
@@ -594,7 +562,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .models, .allowedCommands, .aiResults, .allMemos, .live, .systemConsole, .pendingActions, .talkieService, .settings:
+        case .models, .allowedCommands, .aiResults, .allMemos, .allMemosV2, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .talkieService, .settings:
             return true
         default:
             return false
@@ -620,10 +588,12 @@ struct TalkieNavigationView: View {
     private var detailColumnView: some View {
         switch selectedSection {
         case .workflows:
-            WorkflowDetailColumn(
-                editingWorkflow: $editingWorkflow,
-                selectedWorkflowID: $selectedWorkflowID
-            )
+            TalkieSection("Workflows") {
+                WorkflowDetailColumn(
+                    editingWorkflow: $editingWorkflow,
+                    selectedWorkflowID: $selectedWorkflowID
+                )
+            }
         case .aiResults:
             // ActivityLogFullView has its own built-in inspector via HSplitView
             EmptyView()
@@ -655,7 +625,10 @@ struct TalkieNavigationView: View {
     private var sectionTitle: String {
         switch selectedSection {
         case .allMemos: return "ALL MEMOS"
-        case .live: return "LIVE"
+        case .allMemosV2: return "ALL MEMOS V2"
+        case .liveDashboard: return "LIVE DASHBOARD"
+        case .liveRecent: return "LIVE RECENT"
+        case .liveSettings: return "LIVE SETTINGS"
         case .aiResults: return "ACTIVITY LOG"
         case .workflows: return "WORKFLOWS"
         case .activityLog: return "ACTIVITY LOG"
@@ -673,6 +646,7 @@ struct TalkieNavigationView: View {
     private var sectionSubtitle: String? {
         switch selectedSection {
         case .allMemos: return "\(allMemos.count) total"
+        case .allMemosV2: return "\(allMemos.count) total"
         default: return nil
         }
     }
@@ -782,6 +756,97 @@ struct TalkieNavigationView: View {
             }
         }
         .background(SettingsManager.shared.tacticalBackground)
+    }
+}
+
+// MARK: - Sidebar Button Content (with hover state)
+
+private struct SidebarButtonContent: View {
+    let section: NavigationSection
+    let icon: String
+    let title: String
+    let badge: String?
+    let badgeColor: SwiftUI.Color
+    let showSpinner: Bool
+    let showStatusDot: Bool
+    let statusDotColor: SwiftUI.Color
+    let isSelected: Bool
+    let isSidebarCollapsed: Bool
+    let onTap: () -> Void
+    let sectionName: String
+
+    @State private var isHovering = false
+
+    var body: some View {
+        TalkieButtonSync("Navigate.\(sectionName)", section: "Sidebar", action: onTap) {
+            HStack(spacing: 8) {
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: icon)
+                        .font(.system(size: isSidebarCollapsed ? 14 : 12))
+                        .foregroundColor(isSelected ? .white : Theme.current.foreground)
+                        .frame(width: isSidebarCollapsed ? 20 : 16)
+
+                    // Status dot indicator
+                    if showStatusDot {
+                        Circle()
+                            .fill(statusDotColor)
+                            .frame(width: 6, height: 6)
+                            .overlay(
+                                Circle()
+                                    .stroke(isSelected ? Color.accentColor : Theme.current.background, lineWidth: 1.5)
+                            )
+                            .offset(x: 2, y: 2)
+                    }
+                }
+
+                // Text and badge - always present, opacity animated
+                HStack {
+                    Text(title)
+                        .font(.system(size: 12))
+                        .foregroundColor(isSelected ? .white : Theme.current.foreground)
+                    Spacer()
+                    if showSpinner {
+                        ProgressView()
+                            .scaleEffect(0.4)
+                            .frame(width: 10, height: 10)
+                    }
+                    if let badge = badge {
+                        Text(badge)
+                            .font(.system(size: 10))
+                            .foregroundColor(isSelected ? .white.opacity(0.8) : badgeColor)
+                    }
+                }
+                .opacity(isSidebarCollapsed ? 0 : 1)
+                .frame(width: isSidebarCollapsed ? 0 : nil)
+                .clipped()
+            }
+            .padding(.horizontal, isSidebarCollapsed ? 0 : 8)
+            .padding(.vertical, isSidebarCollapsed ? 4 : 8)
+            .frame(width: isSidebarCollapsed ? 36 : nil, height: isSidebarCollapsed ? 36 : nil)
+            .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
+            .offset(x: isSidebarCollapsed ? 3 : 0)
+            .background(
+                ZStack {
+                    // Selected state
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.accentColor)
+                    }
+                    // Hover state (only show when not selected)
+                    if isHovering && !isSelected {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Theme.current.backgroundTertiary.opacity(0.5))
+                    }
+                }
+            )
+            .scaleEffect(isSelected ? 1.0 : 0.98)  // Subtle scale feedback
+            .animation(.spring(response: 0.15, dampingFraction: 0.8), value: isSelected)
+        }
+        .buttonStyle(.plain)
+        .help(isSidebarCollapsed ? title : "")
+        .onHover { hovering in
+            isHovering = hovering
+        }
     }
 }
 

@@ -1853,7 +1853,6 @@ struct SpeakStepConfig: Codable {
     var pitch: Float                    // Voice pitch (0.5 - 2.0, default 1.0)
     var playImmediately: Bool           // Play now vs just generate audio
     var saveToFile: Bool                // Also save as audio file
-    var uploadToWalkie: Bool            // Upload to CloudKit for iOS playback (Walkie-Talkie!)
     var useCache: Bool                  // Use SpeakEasy's caching
 
     init(
@@ -1864,7 +1863,6 @@ struct SpeakStepConfig: Codable {
         pitch: Float = 1.0,
         playImmediately: Bool = true,
         saveToFile: Bool = false,
-        uploadToWalkie: Bool = true,    // Default ON - send response to iOS!
         useCache: Bool = true           // Cache for repeated phrases
     ) {
         self.text = text
@@ -1874,7 +1872,6 @@ struct SpeakStepConfig: Codable {
         self.pitch = pitch
         self.playImmediately = playImmediately
         self.saveToFile = saveToFile
-        self.uploadToWalkie = uploadToWalkie
         self.useCache = useCache
     }
 

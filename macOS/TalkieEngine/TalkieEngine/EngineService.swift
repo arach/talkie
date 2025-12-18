@@ -456,21 +456,31 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         let audioDuration = Double(originalSampleCount) / 16000.0
         trace.end("\(originalSampleCount) samples (\(String(format: "%.1f", audioDuration))s)")
 
-        // Add 500ms of silence at the end (8000 samples at 16kHz)
-        // This gives the transducer decoder time to finish without cutting off final words
+        // Fade the last ~300ms of audio to silence to help the decoder flush final tokens
+        // Exponential fade prevents mistranscription while keeping speech-like features
+        // to keep the decoder engaged during final token generation
         trace.begin("audio_pad")
-        let paddingSamples = [Float](repeating: 0.0, count: 8000)
-        samples.append(contentsOf: paddingSamples)
-        trace.end("+8000 samples")
+        let fadeDuration = 4800  // 300ms at 16kHz
+        let fadeSource = min(fadeDuration, samples.count)
+        let tailSegment = Array(samples.suffix(fadeSource))
+        // Apply exponential fade to silence
+        let fadedSegment = tailSegment.enumerated().map { index, sample in
+            let progress = Float(index) / Float(tailSegment.count)
+            let fadeMultiplier = exp(-5.0 * progress)  // Exponential decay
+            return sample * fadeMultiplier
+        }
+        samples.append(contentsOf: fadedSegment)
+        trace.end("+\(fadedSegment.count) samples (fade tail)")
 
         // Run inference
         trace.begin("inference")
         let result = try await manager.transcribe(samples)
         trace.end()
 
-        // Post-process
+        // Post-process: trim and dedupe trailing repeated words (from echo-tail padding)
         trace.begin("post_process")
-        let transcript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let transcript = dedupeTrailingWords(trimmed)
         trace.end()
 
         AppLogger.shared.info(.transcription, "Parakeet transcribed: \(transcript.prefix(50))... (\(samples.count) samples)")
@@ -512,6 +522,52 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         }
 
         return Array(UnsafeBufferPointer(start: floatData, count: Int(buffer.frameLength)))
+    }
+
+    /// Remove consecutive duplicate words from the end of a transcript
+    /// This handles artifacts from the echo-tail padding approach
+    private func dedupeTrailingWords(_ text: String) -> String {
+        let words = text.split(separator: " ").map(String.init)
+        guard words.count >= 2 else { return text }
+
+        // Check for repeated sequences at the end (1-4 words)
+        for seqLen in 1...min(4, words.count / 2) {
+            let endSeq = Array(words.suffix(seqLen))
+            let beforeSeq = Array(words.suffix(seqLen * 2).prefix(seqLen))
+
+            if endSeq == beforeSeq {
+                // Remove the duplicate sequence
+                let dedupedWords = Array(words.dropLast(seqLen))
+                return dedupedWords.joined(separator: " ")
+            }
+        }
+        return text
+    }
+
+    /// Generate low-level noise for audio padding
+    /// Pink noise with very low amplitude keeps the encoder engaged without adding speech content
+    private func generateLowLevelNoise(count: Int, amplitude: Float) -> [Float] {
+        var noise = [Float](repeating: 0, count: count)
+        var b0: Float = 0, b1: Float = 0, b2: Float = 0, b3: Float = 0, b4: Float = 0, b5: Float = 0, b6: Float = 0
+
+        for i in 0..<count {
+            // Generate white noise
+            let white = Float.random(in: -1...1)
+
+            // Convert to pink noise using Paul Kellet's algorithm
+            b0 = 0.99886 * b0 + white * 0.0555179
+            b1 = 0.99332 * b1 + white * 0.0750759
+            b2 = 0.96900 * b2 + white * 0.1538520
+            b3 = 0.86650 * b3 + white * 0.3104856
+            b4 = 0.55000 * b4 + white * 0.5329522
+            b5 = -0.7616 * b5 - white * 0.0168980
+
+            let pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362
+            b6 = white * 0.115926
+
+            noise[i] = pink * amplitude
+        }
+        return noise
     }
 
     // MARK: - Model Preloading

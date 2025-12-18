@@ -666,3 +666,137 @@ struct Theme: Equatable {
         )
     }
 }
+
+// MARK: - TalkieTheme (for Live UI)
+
+enum TalkieTheme {
+    // System backgrounds
+    static let background = Color(NSColor.windowBackgroundColor)
+    static let secondaryBackground = Color(NSColor.controlBackgroundColor)
+    static let tertiaryBackground = Color(NSColor.underPageBackgroundColor)
+
+    private static func currentPalette() -> ThemeColorPalette {
+        return ThemeColorPalette.midnight()
+    }
+
+    static var surface: Color { currentPalette().surface }
+    static var surfaceElevated: Color { currentPalette().surfaceElevated }
+    static var surfaceCard: Color { currentPalette().surfaceCard }
+    static var textPrimary: Color { currentPalette().textPrimary }
+    static var textSecondary: Color { currentPalette().textSecondary }
+    static var textTertiary: Color { currentPalette().textTertiary }
+    static var textMuted: Color { currentPalette().textMuted }
+    static var border: Color { currentPalette().border }
+    static var divider: Color { currentPalette().divider }
+    static var hover: Color { currentPalette().hover }
+    static var accent: Color { currentPalette().accent }
+    static var selected: Color { accent.opacity(0.2) }
+}
+
+struct ThemeColorPalette {
+    let surface: Color
+    let surfaceElevated: Color
+    let surfaceCard: Color
+    let textPrimary: Color
+    let textSecondary: Color
+    let textTertiary: Color
+    let textMuted: Color
+    let border: Color
+    let divider: Color
+    let hover: Color
+    let accent: Color
+
+    static func midnight() -> ThemeColorPalette {
+        ThemeColorPalette(
+            surface: Color(NSColor(red: 0.02, green: 0.02, blue: 0.03, alpha: 1.0)),
+            surfaceElevated: Color(NSColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1.0)),
+            surfaceCard: Color(NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1.0)),
+            textPrimary: Color.white,
+            textSecondary: Color.white.opacity(0.7),
+            textTertiary: Color.white.opacity(0.5),
+            textMuted: Color.white.opacity(0.3),
+            border: Color.white.opacity(0.1),
+            divider: Color.white.opacity(0.1),
+            hover: Color.white.opacity(0.05),
+            accent: Color.cyan
+        )
+    }
+}
+
+// MARK: - Design (for Live HistoryView)
+
+struct Design {
+    static let fontXS = Font.system(size: 10, weight: .regular)
+    static let fontXSMedium = Font.system(size: 10, weight: .medium)
+    static let fontXSBold = Font.system(size: 10, weight: .semibold)
+
+    static let fontSM = Font.system(size: 11, weight: .regular)
+    static let fontSMMedium = Font.system(size: 11, weight: .medium)
+    static let fontSMBold = Font.system(size: 11, weight: .semibold)
+
+    static let fontBody = Font.system(size: 13, weight: .regular)
+    static let fontBodyMedium = Font.system(size: 13, weight: .medium)
+    static let fontBodyBold = Font.system(size: 13, weight: .semibold)
+
+    static let fontTitle = Font.system(size: 15, weight: .medium)
+    static let fontTitleBold = Font.system(size: 15, weight: .bold)
+
+    static let fontHeadline = Font.system(size: 18, weight: .medium)
+
+    // Use MidnightSurface colors for consistent dark theme
+    static var background: Color { MidnightSurface.content }
+    static var backgroundSecondary: Color { MidnightSurface.sidebar }
+    static var backgroundTertiary: Color { MidnightSurface.elevated }
+
+    static var foreground: Color { Color.primary }
+    static var foregroundSecondary: Color { Color.secondary }
+    static var foregroundMuted: Color { Color.secondary.opacity(0.7) }
+
+    static var divider: Color { Color(NSColor.separatorColor) }
+    static var accent: Color { Color.accentColor }
+}
+
+// MARK: - Reusable Components for HistoryView
+
+struct SidebarSearchField: View {
+    @Binding var text: String
+    let placeholder: String
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: "magnifyingglass")
+                .font(Design.fontXS)
+                .foregroundColor(TalkieTheme.textMuted)
+
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(Design.fontXS)
+                .foregroundColor(TalkieTheme.textPrimary)
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, 5)
+        .background(TalkieTheme.surfaceElevated)
+        .cornerRadius(CornerRadius.xs)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+    }
+}
+
+// MARK: - Theme Observer for HistoryView
+
+struct ThemeObserver: ViewModifier {
+    @ObservedObject private var settings = LiveSettings.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .id("theme-\(settings.visualTheme.rawValue)-\(settings.appearanceMode.rawValue)-\(colorScheme)")
+    }
+}
+
+extension View {
+    /// Apply this modifier to views that need to react to theme changes
+    func observeTheme() -> some View {
+        modifier(ThemeObserver())
+    }
+}

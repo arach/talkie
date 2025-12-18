@@ -354,31 +354,63 @@ class WorkflowExecutor: ObservableObject {
         memo: VoiceMemo,
         context: NSManagedObjectContext
     ) {
+        let runId = UUID()
+        let runDate = Date()
+
+        // Encode step executions as JSON
+        var stepOutputsJSON: String? = nil
+        if let jsonData = try? JSONEncoder().encode(stepExecutions),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            stepOutputsJSON = jsonString
+        }
+
+        // BRIDGE 2a: Save to GRDB first (primary database)
+        logger.info("🌉 [Bridge 2] Saving workflow run to GRDB: \(workflow.name)")
+        Task {
+            do {
+                let repository = GRDBRepository()
+                let workflowRun = WorkflowRunModel(
+                    id: runId,
+                    memoId: memo.id ?? UUID(),
+                    workflowId: workflow.id,
+                    workflowName: workflow.name,
+                    workflowIcon: workflow.icon,
+                    output: output,
+                    status: "completed",
+                    runDate: runDate,
+                    modelId: modelId,
+                    providerName: providerName,
+                    stepOutputsJSON: stepOutputsJSON
+                )
+                try await repository.saveWorkflowRun(workflowRun)
+                logger.info("✅ [Bridge 2] Saved to GRDB: \(workflow.name)")
+            } catch {
+                logger.error("❌ [Bridge 2] Failed to save to GRDB: \(error.localizedDescription)")
+            }
+        }
+
+        // BRIDGE 2b: Save to Core Data (for CloudKit sync to phone)
+        logger.info("🌉 [Bridge 2] Saving workflow run to Core Data for CloudKit: \(workflow.name)")
         context.perform {
             let run = WorkflowRun(context: context)
-            run.id = UUID()
+            run.id = runId  // Use same ID
             run.workflowId = workflow.id
             run.workflowName = workflow.name
             run.workflowIcon = workflow.icon
             run.output = output
             run.providerName = providerName
             run.modelId = modelId
-            run.runDate = Date()
+            run.runDate = runDate
             run.status = "completed"
             run.memo = memo
             run.memoId = memo.id  // Denormalized for CloudKit querying
-
-            // Encode step executions as JSON
-            if let jsonData = try? JSONEncoder().encode(stepExecutions),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                run.stepOutputsJSON = jsonString
-            }
+            run.stepOutputsJSON = stepOutputsJSON
 
             do {
                 try context.save()
-                logger.debug("💾 Saved workflow run: \(workflow.name)")
+                logger.info("✅ [Bridge 2] Saved to Core Data (will sync to CloudKit): \(workflow.name)")
             } catch {
-                logger.debug("❌ Failed to save workflow run: \(error)")
+                logger.error("❌ [Bridge 2] Failed to save to Core Data: \(error.localizedDescription)")
             }
         }
     }
@@ -1362,26 +1394,8 @@ class WorkflowExecutor: ObservableObject {
             await SystemEventManager.shared.log(.workflow, "Audio saved", detail: url.lastPathComponent)
         }
 
-        // Upload to CloudKit as Walkie (send audio to iOS!)
-        if config.uploadToWalkie, let fileURL = audioFileURL {
-            let memoId = memo.id?.uuidString ?? UUID().uuidString
-            logger.info("📤 Uploading Walkie for memo: \(memoId)")
-            do {
-                let walkieId = try await WalkieService.shared.uploadWalkie(
-                    audioURL: fileURL,
-                    memoId: memoId,
-                    transcript: textToSpeak
-                )
-                logger.info("📤 Walkie uploaded: \(walkieId)")
-                await SystemEventManager.shared.log(.workflow, "Walkie sent to iOS", detail: "ID: \(walkieId.prefix(8))...")
-            } catch {
-                logger.error("📤 Walkie upload failed: \(error.localizedDescription)")
-                await SystemEventManager.shared.log(.workflow, "Walkie upload failed", detail: error.localizedDescription)
-            }
-        }
-
         logger.info("🔊 Speak step complete")
-        await SystemEventManager.shared.log(.workflow, "Speak complete", detail: "Walkie-Talkie reply delivered")
+        await SystemEventManager.shared.log(.workflow, "Speak complete")
         return textToSpeak
     }
 

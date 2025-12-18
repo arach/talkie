@@ -80,7 +80,6 @@ struct TWFSpeakConfig: Codable {
     let pitch: Float?               // Voice pitch (0.5 - 2.0)
     let playImmediately: Bool?      // Play now vs just generate audio
     let saveToFile: Bool?           // Also save as audio file
-    let uploadToWalkie: Bool?       // Upload to CloudKit for iOS playback
     let useCache: Bool?             // Use SpeakEasy's caching
 }
 
@@ -447,7 +446,6 @@ struct TWFLoader {
                 pitch: speak?.pitch ?? 1.0,
                 playImmediately: speak?.playImmediately ?? true,
                 saveToFile: speak?.saveToFile ?? false,
-                uploadToWalkie: speak?.uploadToWalkie ?? true,
                 useCache: speak?.useCache ?? true
             ))
 

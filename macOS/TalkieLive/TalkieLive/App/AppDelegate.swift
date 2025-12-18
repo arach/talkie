@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func postBootSetup() async {
         let settings = LiveSettings.shared
 
+        // Start XPC service for inter-app communication with Talkie
+        TalkieLiveXPCService.shared.startService()
+
         // Create core pipeline
         let audio = MicrophoneCapture()
         let transcription = EngineTranscriptionService(modelId: settings.selectedModelId)
@@ -50,6 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             transcription: transcription,
             router: router
         )
+
+        // Set controller reference in XPC service for remote toggle
+        TalkieLiveXPCService.shared.liveController = liveController
 
         // Pre-load model via Engine (no fallback)
         await preloadModel(settings: settings)
@@ -89,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let historyItem = NSMenuItem(title: "Show History...", action: #selector(showMainWindow), keyEquivalent: "h")
+        let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "l")
         historyItem.keyEquivalentModifierMask = [.option, .command]
         historyItem.target = self
         menu.addItem(historyItem)
@@ -102,6 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(pillItem)
 
         menu.addItem(NSMenuItem.separator())
+
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         let onboardingItem = NSMenuItem(title: "Show Onboarding...", action: #selector(showOnboarding), keyEquivalent: "")
         onboardingItem.target = self
@@ -280,17 +290,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func showMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        // Find and show the main window
-        for window in NSApp.windows {
-            if window.title == "Talkie Live" || window.identifier?.rawValue.contains("main") == true {
-                window.makeKeyAndOrderFront(nil)
-                return
+    @objc private func showHistory() {
+        // Open Talkie app and navigate to Live section
+        let talkieBundleID = "jdi.talkie.core"
+
+        // First, open Talkie app
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true  // Bring to front
+
+        NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: "/Applications/Talkie.app"),
+            configuration: configuration
+        ) { app, error in
+            if let error = error {
+                AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
+
+                // Fallback: try opening via bundle ID
+                NSWorkspace.shared.launchApplication(
+                    withBundleIdentifier: talkieBundleID,
+                    options: [.default],
+                    additionalEventParamDescriptor: nil,
+                    launchIdentifier: nil
+                )
+            }
+
+            // After opening Talkie, navigate to Live section via URL scheme
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if let url = URL(string: "talkie://live") {
+                    NSWorkspace.shared.open(url)
+                }
             }
         }
-        // If no window found, just activate the app - SwiftUI will create it
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func toggleFloatingPill(_ sender: NSMenuItem) {
@@ -302,6 +332,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         OnboardingManager.shared.resetOnboarding()
         OnboardingManager.shared.shouldShowOnboarding = true
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func showSettings() {
+        // Open Talkie Core app with Live settings
+        let talkieBundleID = "jdi.talkie.core"
+
+        // First, open Talkie app
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true  // Bring to front
+
+        NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: "/Applications/Talkie.app"),
+            configuration: configuration
+        ) { app, error in
+            if let error = error {
+                AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
+
+                // Fallback: try opening via bundle ID
+                NSWorkspace.shared.launchApplication(
+                    withBundleIdentifier: talkieBundleID,
+                    options: [.default],
+                    additionalEventParamDescriptor: nil,
+                    launchIdentifier: nil
+                )
+            }
+
+            // After opening Talkie, navigate to Settings
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if let url = URL(string: "talkie://settings/live") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
     }
 
     private func updateIcon(for state: LiveState) {

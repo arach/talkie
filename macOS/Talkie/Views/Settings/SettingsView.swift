@@ -20,13 +20,15 @@ enum SettingsSection: String, Hashable {
     case helperApps
     case permissions
     case debugInfo
+    case audio  // For TalkieLive HistoryView compatibility
+    case engine  // For TalkieLive HistoryView compatibility
 }
 
 struct SettingsView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
-    @State private var selectedSection: SettingsSection = .apiKeys  // Default to API Keys
+    @State private var selectedSection: SettingsSection = .appearance  // Default to Appearance (less aggressive)
 
     // Theme-aware colors for light/dark mode
     private var sidebarBackground: Color { Theme.current.backgroundSecondary }
@@ -188,6 +190,10 @@ struct SettingsView: View {
                         PermissionsSettingsView()
                     case .debugInfo:
                         DebugInfoView()
+                    case .audio:
+                        Text("Audio settings placeholder")
+                    case .engine:
+                        Text("Engine settings placeholder")
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -258,4 +264,3 @@ struct SettingsSidebarItem: View {
         }
     }
 }
-

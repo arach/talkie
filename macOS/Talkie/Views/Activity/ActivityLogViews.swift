@@ -221,6 +221,13 @@ struct ActivityLogFullView: View {
             }
             return .ignored
         }
+        .onChange(of: selectedRunId) { _, newValue in
+            // Track row selection/deselection
+            if let runId = newValue, let run = selectedRun {
+                let id = talkieSignposter.makeSignpostID()
+                talkieSignposter.emitEvent("ActionRowClick", id: id, "AIResults.\(run.workflowName ?? "Workflow")")
+            }
+        }
     }
 
     private func formatTimestamp(_ date: Date) -> String {
@@ -370,7 +377,9 @@ struct ActivityInspectorPanel: View {
             // Delete button at bottom, far from close
             HStack {
                 Spacer()
-                Button(action: onDelete) {
+                TalkieButtonSync("DeleteRun.\(workflowName)", section: "AIResults") {
+                    onDelete()
+                } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "trash")
                             .font(SettingsManager.shared.fontXS)

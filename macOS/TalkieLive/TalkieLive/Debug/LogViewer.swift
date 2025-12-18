@@ -87,6 +87,13 @@ final class AppLogger: ObservableObject {
         if entries.count > maxEntries {
             entries = Array(entries.prefix(maxEntries))
         }
+
+        // Notify Performance Monitor about errors/faults during active action
+        if level == .error || level == .fault {
+            // Note: TalkieLive doesn't have PerformanceMonitor, so this is for when
+            // we share AppLogger between Talkie and TalkieLive
+            // For now, this is a no-op in TalkieLive
+        }
     }
 
     func clear() {

@@ -53,6 +53,7 @@ final class RecordingOverlayController: ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = true
         panel.hasShadow = true
+        panel.acceptsMouseMovedEvents = true  // Required for hover detection
 
         // Position based on settings - tight to edges
         if let screen = NSScreen.main {
@@ -365,17 +366,18 @@ struct RecordingOverlayView: View {
             AudioTroubleshooterController.shared.show()
         }) {
             HStack(spacing: 6) {
-                Image(systemName: "waveform.slash")
+                // Softer mic icon - more friendly and less alarming
+                Image(systemName: "mic.badge.questionmark")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(SemanticColor.warning)
+                    .foregroundColor(.cyan.opacity(0.9))  // Softer color, less aggressive
 
-                Text("Can't hear you")
+                Text("Check mic")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(SemanticColor.warning.opacity(0.9))
+                    .foregroundColor(.cyan.opacity(0.8))
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(SemanticColor.warning.opacity(0.6))
+                    .foregroundColor(.cyan.opacity(0.5))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -384,7 +386,7 @@ struct RecordingOverlayView: View {
                     .fill(Color.black.opacity(0.7))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(SemanticColor.warning.opacity(0.4), lineWidth: 1)
+                            .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
                     )
             )
         }

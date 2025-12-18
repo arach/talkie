@@ -38,7 +38,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Header
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("TALKIE LIVE")
+                        Text("LIVE")
                             .font(.system(size: 10, weight: .bold))
                             .tracking(1.5)
                             .foregroundColor(TalkieTheme.textTertiary)

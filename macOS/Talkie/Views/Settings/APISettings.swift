@@ -16,6 +16,7 @@ struct APISettingsView: View {
     @State private var editingProvider: String?
     @State private var editingKeyInput: String = ""
     @State private var revealedKeys: Set<String> = []
+    @State private var fetchedKeys: [String: String] = [:]  // Cache fetched keys
 
     var body: some View {
         SettingsPageContainer {
@@ -32,18 +33,23 @@ struct APISettingsView: View {
                         icon: "brain.head.profile",
                         placeholder: "sk-...",
                         helpURL: "https://platform.openai.com/api-keys",
-                        isConfigured: settingsManager.openaiApiKey != nil,
-                        currentKey: settingsManager.openaiApiKey,
+                        isConfigured: settingsManager.hasOpenAIKey(),
+                        currentKey: fetchedKeys["openai"],
                         isEditing: editingProvider == "openai",
                         isRevealed: revealedKeys.contains("openai"),
                         editingKey: $editingKeyInput,
                         onEdit: {
+                            // Fetch key only when editing
+                            if let key = settingsManager.fetchOpenAIKey() {
+                                fetchedKeys["openai"] = key
+                                editingKeyInput = key
+                            }
                             editingProvider = "openai"
-                            editingKeyInput = settingsManager.openaiApiKey ?? ""
                         },
                         onSave: {
                             settingsManager.openaiApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
                             settingsManager.saveSettings()
+                            fetchedKeys["openai"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
                         },
@@ -54,13 +60,19 @@ struct APISettingsView: View {
                         onReveal: {
                             if revealedKeys.contains("openai") {
                                 revealedKeys.remove("openai")
+                                fetchedKeys["openai"] = nil
                             } else {
+                                // Fetch key only when revealing
+                                if let key = settingsManager.fetchOpenAIKey() {
+                                    fetchedKeys["openai"] = key
+                                }
                                 revealedKeys.insert("openai")
                             }
                         },
                         onDelete: {
                             settingsManager.openaiApiKey = nil
                             settingsManager.saveSettings()
+                            fetchedKeys["openai"] = nil
                         }
                     )
 
@@ -69,18 +81,23 @@ struct APISettingsView: View {
                         icon: "sparkles",
                         placeholder: "sk-ant-...",
                         helpURL: "https://console.anthropic.com/settings/keys",
-                        isConfigured: settingsManager.anthropicApiKey != nil,
-                        currentKey: settingsManager.anthropicApiKey,
+                        isConfigured: settingsManager.hasAnthropicKey(),
+                        currentKey: fetchedKeys["anthropic"],
                         isEditing: editingProvider == "anthropic",
                         isRevealed: revealedKeys.contains("anthropic"),
                         editingKey: $editingKeyInput,
                         onEdit: {
+                            // Fetch key only when editing
+                            if let key = settingsManager.fetchAnthropicKey() {
+                                fetchedKeys["anthropic"] = key
+                                editingKeyInput = key
+                            }
                             editingProvider = "anthropic"
-                            editingKeyInput = settingsManager.anthropicApiKey ?? ""
                         },
                         onSave: {
                             settingsManager.anthropicApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
                             settingsManager.saveSettings()
+                            fetchedKeys["anthropic"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
                         },
@@ -91,13 +108,19 @@ struct APISettingsView: View {
                         onReveal: {
                             if revealedKeys.contains("anthropic") {
                                 revealedKeys.remove("anthropic")
+                                fetchedKeys["anthropic"] = nil
                             } else {
+                                // Fetch key only when revealing
+                                if let key = settingsManager.fetchAnthropicKey() {
+                                    fetchedKeys["anthropic"] = key
+                                }
                                 revealedKeys.insert("anthropic")
                             }
                         },
                         onDelete: {
                             settingsManager.anthropicApiKey = nil
                             settingsManager.saveSettings()
+                            fetchedKeys["anthropic"] = nil
                         }
                     )
 
@@ -143,18 +166,23 @@ struct APISettingsView: View {
                         icon: "bolt.fill",
                         placeholder: "gsk_...",
                         helpURL: "https://console.groq.com/keys",
-                        isConfigured: settingsManager.groqApiKey != nil,
-                        currentKey: settingsManager.groqApiKey,
+                        isConfigured: settingsManager.hasGroqKey(),
+                        currentKey: fetchedKeys["groq"],
                         isEditing: editingProvider == "groq",
                         isRevealed: revealedKeys.contains("groq"),
                         editingKey: $editingKeyInput,
                         onEdit: {
+                            // Fetch key only when editing
+                            if let key = settingsManager.fetchGroqKey() {
+                                fetchedKeys["groq"] = key
+                                editingKeyInput = key
+                            }
                             editingProvider = "groq"
-                            editingKeyInput = settingsManager.groqApiKey ?? ""
                         },
                         onSave: {
                             settingsManager.groqApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
                             settingsManager.saveSettings()
+                            fetchedKeys["groq"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
                         },
@@ -165,13 +193,19 @@ struct APISettingsView: View {
                         onReveal: {
                             if revealedKeys.contains("groq") {
                                 revealedKeys.remove("groq")
+                                fetchedKeys["groq"] = nil
                             } else {
+                                // Fetch key only when revealing
+                                if let key = settingsManager.fetchGroqKey() {
+                                    fetchedKeys["groq"] = key
+                                }
                                 revealedKeys.insert("groq")
                             }
                         },
                         onDelete: {
                             settingsManager.groqApiKey = nil
                             settingsManager.saveSettings()
+                            fetchedKeys["groq"] = nil
                         }
                     )
                 }
@@ -311,7 +345,9 @@ struct APIKeyRow: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Button(action: onSave) {
+                    TalkieButtonSync("SaveAPIKey", section: "Settings") {
+                        onSave()
+                    } label: {
                         Text("Save")
                             .font(Theme.current.fontXSMedium)
                     }
@@ -354,7 +390,9 @@ struct APIKeyRow: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Button(action: onDelete) {
+                    TalkieButtonSync("DeleteAPIKey", section: "Settings") {
+                        onDelete()
+                    } label: {
                         Image(systemName: "trash")
                             .font(SettingsManager.shared.fontXS)
                     }
