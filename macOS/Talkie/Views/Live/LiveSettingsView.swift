@@ -210,115 +210,138 @@ struct GeneralLiveSettingsView: View {
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "waveform",
-                title: "GENERAL",
+                title: "OVERVIEW",
                 subtitle: "Configure Live recording behavior and visual feedback."
             )
         } content: {
             VStack(alignment: .leading, spacing: 20) {
-                // Overlay Style
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("OVERLAY STYLE")
+                // Recording Overlay
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("RECORDING OVERLAY")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
-                    Text("Visual indicator shown while recording.")
+                    Text("Visual feedback displayed while recording.")
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
-                    RadioButtonRow(
-                        title: OverlayStyle.particles.displayName,
-                        description: OverlayStyle.particles.description,
-                        value: OverlayStyle.particles,
-                        selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(WavyParticlesPreview(calm: false))
-                    ) {
-                        liveSettings.overlayStyle = .particles
-                        logger.info("Overlay style changed to: particles")
-                    }
-
-                    RadioButtonRow(
-                        title: OverlayStyle.particlesCalm.displayName,
-                        description: OverlayStyle.particlesCalm.description,
-                        value: OverlayStyle.particlesCalm,
-                        selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(WavyParticlesPreview(calm: true))
-                    ) {
-                        liveSettings.overlayStyle = .particlesCalm
-                        logger.info("Overlay style changed to: particlesCalm")
-                    }
-
-                    RadioButtonRow(
-                        title: OverlayStyle.waveform.displayName,
-                        description: OverlayStyle.waveform.description,
-                        value: OverlayStyle.waveform,
-                        selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(WaveformBarsPreview(sensitive: false))
-                    ) {
-                        liveSettings.overlayStyle = .waveform
-                        logger.info("Overlay style changed to: waveform")
-                    }
-
-                    RadioButtonRow(
-                        title: OverlayStyle.waveformSensitive.displayName,
-                        description: OverlayStyle.waveformSensitive.description,
-                        value: OverlayStyle.waveformSensitive,
-                        selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(WaveformBarsPreview(sensitive: true))
-                    ) {
-                        liveSettings.overlayStyle = .waveformSensitive
-                        logger.info("Overlay style changed to: waveformSensitive")
-                    }
-
-                    RadioButtonRow(
-                        title: OverlayStyle.pillOnly.displayName,
-                        description: OverlayStyle.pillOnly.description,
-                        value: OverlayStyle.pillOnly,
-                        selectedValue: liveSettings.overlayStyle,
-                        preview: AnyView(PillOnlyPreview())
-                    ) {
-                        liveSettings.overlayStyle = .pillOnly
-                        logger.info("Overlay style changed to: pillOnly")
-                    }
-                }
-
-                // Overlay Position (if overlay is shown)
-                if liveSettings.overlayStyle.showsTopOverlay {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("OVERLAY POSITION")
-                            .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
-
-                        Picker("Overlay Position", selection: $liveSettings.overlayPosition) {
-                            ForEach(OverlayPosition.allCases, id: \.self) { position in
-                                Text(position.displayName).tag(position)
+                    // Toggle for overlay on/off
+                    StyledToggle(
+                        label: "Show recording overlay",
+                        isOn: Binding(
+                            get: { liveSettings.overlayStyle != .pillOnly },
+                            set: { enabled in
+                                liveSettings.overlayStyle = enabled ? .particles : .pillOnly
+                                logger.info("Recording overlay \(enabled ? "enabled" : "disabled")")
                             }
+                        ),
+                        help: "Display animated visual feedback at top of screen during recording"
+                    )
+
+                    // Overlay style selection (only if enabled)
+                    if liveSettings.overlayStyle.showsTopOverlay {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Style")
+                                .font(.bodyMedium)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                                .padding(.top, Spacing.xs)
+
+                            RadioButtonRow(
+                                title: OverlayStyle.particles.displayName,
+                                description: OverlayStyle.particles.description,
+                                value: OverlayStyle.particles,
+                                selectedValue: liveSettings.overlayStyle,
+                                preview: AnyView(WavyParticlesPreview(calm: false))
+                            ) {
+                                liveSettings.overlayStyle = .particles
+                                logger.info("Overlay style changed to: particles")
+                            }
+
+                            RadioButtonRow(
+                                title: OverlayStyle.particlesCalm.displayName,
+                                description: OverlayStyle.particlesCalm.description,
+                                value: OverlayStyle.particlesCalm,
+                                selectedValue: liveSettings.overlayStyle,
+                                preview: AnyView(WavyParticlesPreview(calm: true))
+                            ) {
+                                liveSettings.overlayStyle = .particlesCalm
+                                logger.info("Overlay style changed to: particlesCalm")
+                            }
+
+                            RadioButtonRow(
+                                title: OverlayStyle.waveform.displayName,
+                                description: OverlayStyle.waveform.description,
+                                value: OverlayStyle.waveform,
+                                selectedValue: liveSettings.overlayStyle,
+                                preview: AnyView(WaveformBarsPreview(sensitive: false))
+                            ) {
+                                liveSettings.overlayStyle = .waveform
+                                logger.info("Overlay style changed to: waveform")
+                            }
+
+                            RadioButtonRow(
+                                title: OverlayStyle.waveformSensitive.displayName,
+                                description: OverlayStyle.waveformSensitive.description,
+                                value: OverlayStyle.waveformSensitive,
+                                selectedValue: liveSettings.overlayStyle,
+                                preview: AnyView(WaveformBarsPreview(sensitive: true))
+                            ) {
+                                liveSettings.overlayStyle = .waveformSensitive
+                                logger.info("Overlay style changed to: waveformSensitive")
+                            }
+
+                            Text("Position")
+                                .font(.bodyMedium)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                                .padding(.top, Spacing.xs)
+
+                            TabSelector(
+                                options: OverlayPosition.allCases,
+                                selection: $liveSettings.overlayPosition
+                            )
                         }
-                        .pickerStyle(.segmented)
                     }
                 }
 
-                // Pill Position
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("PILL POSITION")
+                // Recording Pill
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("RECORDING PILL")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
-                    Text("Floating widget that shows recording status.")
+                    Text("Floating status widget independent of overlay.")
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
-                    Picker("Pill Position", selection: $liveSettings.pillPosition) {
-                        ForEach(PillPosition.allCases, id: \.self) { position in
-                            Text(position.displayName).tag(position)
-                        }
+                    VStack(spacing: 0) {
+                        StyledToggle(
+                            label: "Always show pill",
+                            isOn: .constant(true),
+                            help: "Keep the pill visible at all times (currently always on)"
+                        )
+
+                        StyledToggle(
+                            label: "Show pill on all screens",
+                            isOn: $liveSettings.pillShowOnAllScreens,
+                            help: "Display the recording pill on every connected display"
+                        )
+
+                        StyledToggle(
+                            label: "Expand pill during recording",
+                            isOn: $liveSettings.pillExpandsDuringRecording,
+                            help: "Show detailed recording information when active"
+                        )
                     }
-                    .pickerStyle(.segmented)
 
-                    Toggle("Show pill on all screens", isOn: $liveSettings.pillShowOnAllScreens)
-                        .font(SettingsManager.shared.fontSM)
+                    Text("Position")
+                        .font(.bodyMedium)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .padding(.top, Spacing.xs)
 
-                    Toggle("Expand pill during recording", isOn: $liveSettings.pillExpandsDuringRecording)
-                        .font(SettingsManager.shared.fontSM)
+                    TabSelector(
+                        options: PillPosition.allCases,
+                        selection: $liveSettings.pillPosition
+                    )
                 }
 
                 // Sound Feedback

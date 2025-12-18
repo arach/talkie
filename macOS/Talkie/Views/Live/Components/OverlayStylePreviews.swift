@@ -24,18 +24,23 @@ struct WavyParticlesPreview: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.black.opacity(0.15))
+            // Darker background with subtle border
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(Color.black.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                )
 
             TimelineView(.animation(minimumInterval: 0.033)) { timeline in
                 Canvas { context, size in
                     let time = timeline.date.timeIntervalSinceReferenceDate
                     let centerY = size.height / 2
 
-                    let calmFactor: CGFloat = calm ? 0.6 : 1.0
-                    let baseSpeed: CGFloat = (calm ? 0.08 : 0.15) * calmFactor
-                    let waveSpeed: CGFloat = (calm ? 1.5 : 2.5) * calmFactor
-                    let amplitude: CGFloat = (calm ? 8 : 12) * calmFactor
+                    // More dramatic difference between calm and energetic
+                    let baseSpeed: CGFloat = calm ? 0.05 : 0.2
+                    let waveSpeed: CGFloat = calm ? 1.0 : 3.5
+                    let amplitude: CGFloat = calm ? 5 : 15
 
                     for i in 0..<particleCount {
                         let seed = Double(i) * 1.618
@@ -49,9 +54,9 @@ struct WavyParticlesPreview: View {
                         let wave = sin(time * Double(waveSpeed) + seed * 4) * Double(amplitude)
                         let y = centerY + CGFloat(wave)
 
-                        // Size and opacity
-                        let particleSize: CGFloat = calm ? 2.5 : 2.0
-                        let opacity = 0.4 + sin(seed * 3) * 0.3
+                        // Size and opacity - white particles
+                        let particleSize: CGFloat = calm ? 3.0 : 2.5
+                        let opacity = 0.5 + sin(seed * 3) * 0.3
 
                         let rect = CGRect(
                             x: x - particleSize / 2,
@@ -62,7 +67,7 @@ struct WavyParticlesPreview: View {
 
                         context.fill(
                             Circle().path(in: rect),
-                            with: .color(Color.blue.opacity(opacity))
+                            with: .color(Color.white.opacity(opacity))
                         )
                     }
                 }
@@ -86,8 +91,13 @@ struct WaveformBarsPreview: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.black.opacity(0.15))
+            // Darker background with subtle border
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(Color.black.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                )
 
             TimelineView(.animation(minimumInterval: 0.033)) { timeline in
                 Canvas { context, size in
@@ -96,8 +106,9 @@ struct WaveformBarsPreview: View {
                     let centerY = size.height / 2
                     let maxHeight = size.height * 0.7
 
-                    let amplitude: CGFloat = sensitive ? 0.9 : 0.6
-                    let speed: CGFloat = sensitive ? 2.5 : 2.0
+                    // More dramatic difference between sensitive and normal
+                    let amplitude: CGFloat = sensitive ? 1.0 : 0.4
+                    let speed: CGFloat = sensitive ? 3.5 : 1.8
 
                     for i in 0..<barCount {
                         let x = CGFloat(i) * (barWidth + 2)
@@ -113,10 +124,11 @@ struct WaveformBarsPreview: View {
                             height: CGFloat(barHeight)
                         )
 
+                        // Gray waveform bars
                         let opacity = 0.6 + wave * 0.3
                         context.fill(
                             RoundedRectangle(cornerRadius: 1).path(in: rect),
-                            with: .color(Color.green.opacity(opacity))
+                            with: .color(Color.gray.opacity(opacity))
                         )
                     }
                 }
@@ -133,15 +145,19 @@ struct WaveformBarsPreview: View {
 struct PillOnlyPreview: View {
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.black.opacity(0.15))
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(Color.black.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                )
 
             VStack(spacing: 2) {
                 Image(systemName: "minus")
-                    .font(.system(size: 10))
+                    .font(.labelMedium)
                     .foregroundColor(.secondary)
                 Text("No overlay")
-                    .font(.system(size: 7))
+                    .font(.labelSmall)
                     .foregroundColor(.secondary)
             }
         }

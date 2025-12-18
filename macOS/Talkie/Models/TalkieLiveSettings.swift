@@ -57,7 +57,7 @@ enum OverlayStyle: String, CaseIterable, Codable {
 }
 
 /// Position for the recording indicator (particles/waveform overlay)
-enum IndicatorPosition: String, CaseIterable, Codable {
+enum IndicatorPosition: String, CaseIterable, Codable, CustomStringConvertible {
     case topCenter = "topCenter"
     case topLeft = "topLeft"
     case topRight = "topRight"
@@ -71,6 +71,10 @@ enum IndicatorPosition: String, CaseIterable, Codable {
     }
 
     var description: String {
+        displayName
+    }
+
+    var longDescription: String {
         switch self {
         case .topCenter: return "Centered at top of screen"
         case .topLeft: return "Upper left corner"
@@ -80,7 +84,7 @@ enum IndicatorPosition: String, CaseIterable, Codable {
 }
 
 /// Position for the floating pill widget
-enum PillPosition: String, CaseIterable, Codable {
+enum PillPosition: String, CaseIterable, Codable, CustomStringConvertible {
     case bottomCenter = "bottomCenter"
     case bottomLeft = "bottomLeft"
     case bottomRight = "bottomRight"
@@ -96,6 +100,10 @@ enum PillPosition: String, CaseIterable, Codable {
     }
 
     var description: String {
+        displayName
+    }
+
+    var longDescription: String {
         switch self {
         case .bottomCenter: return "Centered at bottom edge"
         case .bottomLeft: return "Lower left corner"
