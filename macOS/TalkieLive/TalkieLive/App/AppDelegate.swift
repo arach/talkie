@@ -119,6 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        // Show bundle identifier (helpful for dev builds)
+        if let bundleID = Bundle.main.bundleIdentifier {
+            let bundleItem = NSMenuItem(title: bundleID, action: nil, keyEquivalent: "")
+            bundleItem.isEnabled = false
+            menu.addItem(bundleItem)
+            menu.addItem(NSMenuItem.separator())
+        }
+
         let quitItem = NSMenuItem(title: "Quit Talkie Live", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
 

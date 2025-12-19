@@ -784,9 +784,11 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
             // Give the reply a moment to send, then exit
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                AppLogger.shared.info(.transcription, "TalkieEngine exiting gracefully")
-                EngineStatusManager.shared.log(.info, "Engine", "Goodbye!")
-                NSApp.terminate(nil)
+                autoreleasepool {
+                    AppLogger.shared.info(.transcription, "TalkieEngine exiting gracefully")
+                    EngineStatusManager.shared.log(.info, "Engine", "Goodbye!")
+                    NSApp.terminate(nil)
+                }
             }
         }
     }

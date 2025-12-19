@@ -1374,7 +1374,7 @@ struct StatusBar: View {
         // Try to open TalkieEngine app
         let engineBundleIds = [
             "jdi.talkie.engine",       // Production
-            "jdi.talkie.engine.debug"  // Debug
+            "jdi.talkie.engine.dev"    // Debug
         ]
 
         for bundleId in engineBundleIds {

@@ -359,8 +359,8 @@ struct ListViewDebugContent: View {
     }
 
     private func resetOnboarding() {
-        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
-        SystemEventManager.shared.logSync(.system, "Onboarding reset")
+        OnboardingManager.shared.resetOnboarding()
+        SystemEventManager.shared.logSync(.system, "Onboarding reset - will show on next launch")
     }
 
     private func clearUserDefaults() {

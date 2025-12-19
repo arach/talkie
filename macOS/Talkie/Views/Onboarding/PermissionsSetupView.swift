@@ -17,15 +17,22 @@ struct PermissionsSetupView: View {
         OnboardingColors.forScheme(colorScheme)
     }
 
-    private var allPermissionsGranted: Bool {
-        manager.hasMicrophonePermission && manager.hasAccessibilityPermission
+    // Required permissions depend on Live mode
+    private var requiredPermissionsGranted: Bool {
+        if manager.enableLiveMode {
+            // Live mode: require mic + accessibility
+            return manager.hasMicrophonePermission && manager.hasAccessibilityPermission
+        } else {
+            // Core mode: require mic only
+            return manager.hasMicrophonePermission
+        }
     }
 
     var body: some View {
         OnboardingStepLayout(
             colors: colors,
-            title: "PERMISSIONS",
-            subtitle: "Required for core features",
+            title: "GRANT PERMISSIONS",
+            subtitle: "Let's enable the features you need",
             illustration: {
                 ZStack {
                     // Subtle pulse ring
@@ -53,14 +60,33 @@ struct PermissionsSetupView: View {
             },
             content: {
                 VStack(spacing: Spacing.md) {
-                    // Microphone permission row
+                    // Live mode toggle (checkbox at top)
+                    HStack {
+                        Toggle(isOn: $manager.enableLiveMode) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Enable Live Mode")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(colors.textPrimary)
+                                Text("Advanced features: auto-paste, screen recording")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(colors.textTertiary)
+                            }
+                        }
+                        .toggleStyle(.switch)
+                    }
+                    .padding(Spacing.sm)
+                    .background(colors.surfaceCard)
+                    .cornerRadius(8)
+
+                    // Microphone permission row (always shown)
                     PermissionRow(
                         colors: colors,
                         icon: "mic.fill",
-                        title: "Microphone",
-                        description: "Required for recording",
+                        title: "Microphone Access",
+                        description: "Capture audio for transcriptions",
                         isGranted: manager.hasMicrophonePermission,
-                        actionTitle: "Grant",
+                        actionTitle: "Grant Access",
+                        isRequired: true,
                         action: {
                             Task {
                                 await manager.requestMicrophonePermission()
@@ -68,57 +94,59 @@ struct PermissionsSetupView: View {
                         }
                     )
 
-                    // Accessibility permission row
-                    PermissionRow(
-                        colors: colors,
-                        icon: "hand.raised.fill",
-                        title: "Accessibility",
-                        description: "For global hotkeys",
-                        isGranted: manager.hasAccessibilityPermission,
-                        actionTitle: "Open Settings",
-                        action: {
-                            manager.openAccessibilitySettings()
-                        }
-                    )
-
-                    // Screen Recording permission row (optional)
-                    PermissionRow(
-                        colors: colors,
-                        icon: "rectangle.dashed.badge.record",
-                        title: "Screen Recording",
-                        description: "For context capture (optional)",
-                        isGranted: manager.hasScreenRecordingPermission,
-                        actionTitle: "Grant",
-                        isOptional: true,
-                        action: {
-                            manager.requestScreenRecordingPermission()
-                        }
-                    )
-
-                    if !allPermissionsGranted {
-                        Text("Talkie needs these permissions to work properly. Screen Recording is optional but enables better context capture.")
-                            .font(.system(size: 11))
-                            .foregroundColor(colors.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.top, Spacing.xs)
+                    // Accessibility permission row (shown only if Live mode enabled)
+                    if manager.enableLiveMode {
+                        PermissionRow(
+                            colors: colors,
+                            icon: "command",
+                            title: "Accessibility Access",
+                            description: "Paste in place to accelerate your actions",
+                            isGranted: manager.hasAccessibilityPermission,
+                            actionTitle: "Open Settings",
+                            isRequired: true,
+                            action: {
+                                manager.openAccessibilitySettings()
+                            }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
+
+                    // Screen Recording permission row (shown only if Live mode enabled)
+                    if manager.enableLiveMode {
+                        PermissionRow(
+                            colors: colors,
+                            icon: "display",
+                            title: "Screen Recording",
+                            description: "Record screen to capture context",
+                            isGranted: manager.hasScreenRecordingPermission,
+                            actionTitle: "Grant Access",
+                            isRequired: false,
+                            action: {
+                                manager.requestScreenRecordingPermission()
+                            }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    // Helper text
+                    Text("All processing happens on your Mac - your data never leaves your device")
+                        .font(.system(size: 11))
+                        .foregroundColor(colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, Spacing.xs)
                 }
                 .frame(width: 380)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: manager.enableLiveMode)
             },
             cta: {
-                if allPermissionsGranted {
+                HStack {
+                    Spacer()
                     OnboardingCTAButton(
                         colors: colors,
                         title: "CONTINUE",
+                        icon: "arrow.right",
+                        isEnabled: requiredPermissionsGranted,
                         action: onNext
-                    )
-                } else {
-                    OnboardingCTAButton(
-                        colors: colors,
-                        title: "GRANT REQUIRED PERMISSIONS",
-                        icon: "",
-                        isEnabled: false,
-                        action: {}
                     )
                 }
             }
@@ -140,15 +168,22 @@ private struct PermissionRow: View {
     let description: String
     let isGranted: Bool
     let actionTitle: String
-    var isOptional: Bool = false
+    var isRequired: Bool = true
     let action: () -> Void
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(isGranted ? .green : (isOptional ? .orange : colors.textTertiary))
-                .frame(width: 24)
+            // Icon with color coding
+            ZStack {
+                Circle()
+                    .fill(isGranted ? Color.green : (isRequired ? Color.red : Color.purple))
+                    .opacity(0.15)
+                    .frame(width: 32, height: 32)
+
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(isGranted ? .green : (isRequired ? Color.red : Color.purple))
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -156,18 +191,17 @@ private struct PermissionRow: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(colors.textPrimary)
 
-                    if isOptional {
-                        Text("OPTIONAL")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .tracking(0.5)
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(Color.orange.opacity(0.15))
-                            )
-                    }
+                    // Badge
+                    Text(isRequired ? "REQUIRED" : "OPTIONAL")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundColor(isRequired ? .red : Color.purple)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill((isRequired ? Color.red : Color.purple).opacity(0.15))
+                        )
                 }
 
                 Text(description)
@@ -188,7 +222,7 @@ private struct PermissionRow: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(isOptional ? Color.orange : colors.accent)
+                        .background(isRequired ? colors.accent : Color.purple)
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)

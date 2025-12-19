@@ -228,7 +228,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                     // Exit current instance after brief delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        exit(0)
+                        autoreleasepool {
+                            exit(0)
+                        }
                     }
                 } catch {
                     AppLogger.shared.error(.system, "Failed to relaunch: \(error)")

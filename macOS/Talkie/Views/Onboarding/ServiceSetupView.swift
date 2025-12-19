@@ -67,25 +67,29 @@ struct ServiceSetupView: View {
                 .frame(width: 320)
             },
             cta: {
-                if allServicesRunning {
-                    OnboardingCTAButton(
-                        colors: colors,
-                        title: "CONTINUE",
-                        action: onNext
-                    )
-                } else {
-                    OnboardingCTAButton(
-                        colors: colors,
-                        title: manager.isLaunchingServices ? "LAUNCHING..." : "LAUNCH SERVICES",
-                        icon: manager.isLaunchingServices ? "" : "play.fill",
-                        isEnabled: !manager.isLaunchingServices,
-                        isLoading: manager.isLaunchingServices,
-                        action: {
-                            Task {
-                                await manager.launchServices()
-                            }
+                VStack(spacing: Spacing.xs) {
+                    // Continue button - always bottom right
+                    HStack {
+                        Spacer()
+                        OnboardingCTAButton(
+                            colors: colors,
+                            title: "CONTINUE",
+                            icon: "arrow.right",
+                            isEnabled: !manager.isLaunchingServices,
+                            action: onNext
+                        )
+                    }
+
+                    // Subtle skip option if services aren't running
+                    if !allServicesRunning && !manager.isLaunchingServices {
+                        Button(action: onNext) {
+                            Text("Skip (start services later)")
+                                .font(.system(size: 10))
+                                .foregroundColor(colors.textTertiary)
+                                .underline()
                         }
-                    )
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         )

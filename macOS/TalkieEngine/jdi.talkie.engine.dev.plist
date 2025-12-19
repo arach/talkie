@@ -6,7 +6,7 @@
     <string>jdi.talkie.engine.dev</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/arach/Library/Developer/Xcode/DerivedData/TalkieEngine-cmecdpfodydvvictztemgqrzuwij/Build/Products/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
+        <string>/Users/arach/dev/talkie/build/TalkieEngine/Build/Products/Release/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
         <string>--daemon</string>
     </array>
     <key>MachServices</key>

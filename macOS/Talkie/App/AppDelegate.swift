@@ -9,12 +9,27 @@ import AppKit
 import CloudKit
 import UserNotifications
 import os
+import DebugKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppDelegate")
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
+    // CLI command handler
+    private let cliHandler = CLICommandHandler()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Register debug commands
+        registerDebugCommands()
+
+        // Check for debug commands (headless execution)
+        Task { @MainActor in
+            if await cliHandler.handleCommandLineArguments() {
+                // Debug command executed, app will exit
+                return
+            }
+        }
+
         // Configure window appearance to match theme before SwiftUI renders
         // This prevents the "flicker" of default colors before theme loads
         configureWindowAppearance()
@@ -46,6 +61,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             andEventID: AEEventID(kAEGetURL)
         )
         logger.info("URL handler registered")
+    }
+
+    // MARK: - Debug Commands
+
+    private func registerDebugCommands() {
+        cliHandler.register(
+            "onboarding-storyboard",
+            description: "Generate storyboard of onboarding screens with layout grid overlay"
+        ) { args in
+            let outputPath = args.first
+            await OnboardingStoryboardGenerator.shared.generateAndExit(outputPath: outputPath)
+        }
     }
 
     // MARK: - URL Handling

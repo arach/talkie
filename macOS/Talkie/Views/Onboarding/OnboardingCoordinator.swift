@@ -15,10 +15,61 @@ import ApplicationServices
 enum OnboardingStep: Int, CaseIterable {
     case welcome = 0
     case permissions = 1
-    case serviceSetup = 2
-    case modelInstall = 3
-    case llmConfig = 4
-    case complete = 5
+    case modelInstall = 2
+    case llmConfig = 3
+    case liveModePitch = 4
+    case statusCheck = 5
+    case complete = 6
+    // Note: Services are transparent implementation details, not user-facing setup
+}
+
+enum PermissionType {
+    case microphone
+    case accessibility
+    case screenRecording
+}
+
+// MARK: - Status Check Types
+
+enum StatusCheck: String, CaseIterable, Hashable {
+    case modelSelection = "Model Selection"
+    case modelDownload = "AI Model Download"
+    case engineConnection = "Engine Connection"
+    case engineReady = "Engine Ready"
+    case liveService = "Live Service"
+
+    func isRequired(enableLiveMode: Bool) -> Bool {
+        // Live service only required if Live mode enabled
+        if self == .liveService {
+            return enableLiveMode
+        }
+        return true
+    }
+}
+
+enum CheckStatus: Equatable {
+    case pending
+    case inProgress(String)
+    case complete
+    case error(String)
+
+    var icon: String {
+        switch self {
+        case .pending: return "circle"
+        case .inProgress: return "spinner"
+        case .complete: return "checkmark.circle.fill"
+        case .error: return "xmark.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .pending: return .gray
+        case .inProgress: return .blue
+        case .complete: return .green
+        case .error: return .red
+        }
+    }
 }
 
 // MARK: - Onboarding Manager
@@ -49,18 +100,43 @@ final class OnboardingManager: ObservableObject {
     @Published var downloadStatus: String = ""
     @Published var selectedModelType: String = "parakeet"  // "parakeet" or "whisper"
 
+    // Status check state
+    @Published var checkStatuses: [StatusCheck: CheckStatus] = [:]
+    @Published var allChecksComplete = false
+
     // LLM configuration state
-    @Published var llmProvider: String? = nil  // "openai" or "anthropic"
+    @Published var llmProvider: String? = nil  // "openai", "anthropic", or "local"
     @Published var hasConfiguredLLM = false
+    @Published var selectedProvider: String = "local"
+    @Published var openAIKey: String = ""
+    @Published var anthropicKey: String = ""
+
+    // Live mode configuration (default OFF - can be enabled in onboarding or Settings later)
+    @Published var enableLiveMode: Bool = false
+
+    // First recording celebration
+    @Published var hasCompletedFirstRecording: Bool = false
 
     // Error handling
     @Published var errorMessage: String?
 
     private var accessibilityCheckTimer: Timer?
 
+    // Computed property: permissions to show based on Live mode
+    var permissionsToShow: [PermissionType] {
+        enableLiveMode ? [.microphone, .accessibility, .screenRecording] : [.microphone]
+    }
+
     private init() {
         self.shouldShowOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
         checkInitialPermissions()
+    }
+
+    deinit {
+        // Code review todo #9: Clean up timer to prevent memory leaks
+        Task { @MainActor in
+            stopAccessibilityPolling()
+        }
     }
 
     // MARK: - Onboarding Lifecycle
@@ -81,6 +157,7 @@ final class OnboardingManager: ObservableObject {
         hasCompletedOnboarding = false
         currentStep = .welcome
         resetState()
+        shouldShowOnboarding = true // Immediately show onboarding
     }
 
     private func resetState() {
@@ -182,15 +259,17 @@ final class OnboardingManager: ObservableObject {
     func checkServices() async {
         isCheckingServices = true
 
-        // Check if TalkieLive is running
+        // Check if TalkieLive is running (production or dev)
+        let liveBundleIds = ["jdi.talkie.live", "jdi.talkie.live.dev"]
         let liveRunning = NSWorkspace.shared.runningApplications.contains {
-            $0.bundleIdentifier == "jdi.talkie.live"
+            liveBundleIds.contains($0.bundleIdentifier ?? "")
         }
         isTalkieLiveRunning = liveRunning
 
-        // Check if TalkieEngine is running
+        // Check if TalkieEngine is running (production or dev)
+        let engineBundleIds = ["jdi.talkie.engine", "jdi.talkie.engine.dev"]
         let engineRunning = NSWorkspace.shared.runningApplications.contains {
-            $0.bundleIdentifier == "jdi.talkie.engine"
+            engineBundleIds.contains($0.bundleIdentifier ?? "")
         }
         isTalkieEngineRunning = engineRunning
 
@@ -259,6 +338,91 @@ final class OnboardingManager: ObservableObject {
         isModelDownloaded = true
         downloadStatus = "Model ready!"
         isDownloadingModel = false
+    }
+
+    // MARK: - Status Checks
+
+    var visibleChecks: [StatusCheck] {
+        StatusCheck.allCases.filter { $0.isRequired(enableLiveMode: enableLiveMode) }
+    }
+
+    func performStatusChecks() async {
+        allChecksComplete = false
+
+        // 1. Model Selection (instant)
+        await updateCheck(.modelSelection, status: .complete)
+
+        // 2. Model Download (monitor ongoing or check if already installed)
+        if isModelDownloaded {
+            await updateCheck(.modelDownload, status: .inProgress("Already installed"))
+            try? await Task.sleep(for: .milliseconds(500))
+            await updateCheck(.modelDownload, status: .complete)
+        } else {
+            // Monitor ongoing download
+            while isDownloadingModel {
+                let percentage = Int(downloadProgress * 100)
+                await updateCheck(.modelDownload, status: .inProgress("\(percentage)%"))
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+
+            // Check if download completed
+            if isModelDownloaded {
+                await updateCheck(.modelDownload, status: .complete)
+            } else {
+                await updateCheck(.modelDownload, status: .error("Download failed"))
+                return
+            }
+        }
+
+        // 3. Engine Connection
+        await updateCheck(.engineConnection, status: .inProgress("Connecting..."))
+        await checkServices()
+
+        if isTalkieEngineRunning {
+            await updateCheck(.engineConnection, status: .complete)
+        } else {
+            // Try to launch engine
+            await launchServices()
+            if isTalkieEngineRunning {
+                await updateCheck(.engineConnection, status: .complete)
+            } else {
+                await updateCheck(.engineConnection, status: .error("Could not connect"))
+                return
+            }
+        }
+
+        // 4. Engine Ready
+        await updateCheck(.engineReady, status: .inProgress("Warming up..."))
+        try? await Task.sleep(for: .seconds(2))
+        await updateCheck(.engineReady, status: .complete)
+
+        // 5. Live Service (conditional)
+        if enableLiveMode {
+            await updateCheck(.liveService, status: .inProgress("Starting..."))
+            if isTalkieLiveRunning {
+                await updateCheck(.liveService, status: .complete)
+            } else {
+                // Try to launch Live
+                await launchServices()
+                if isTalkieLiveRunning {
+                    await updateCheck(.liveService, status: .complete)
+                } else {
+                    await updateCheck(.liveService, status: .error("Could not start"))
+                    return
+                }
+            }
+        }
+
+        // All checks passed
+        allChecksComplete = true
+
+        // Note: No auto-advance - let user click Continue to proceed to completion
+    }
+
+    private func updateCheck(_ check: StatusCheck, status: CheckStatus) async {
+        await MainActor.run {
+            checkStatuses[check] = status
+        }
     }
 
     // MARK: - LLM Configuration

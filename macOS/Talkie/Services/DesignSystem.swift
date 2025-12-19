@@ -27,6 +27,22 @@ enum Spacing {
     static let xxl: CGFloat = 40
 }
 
+// MARK: - Onboarding Layout Constants
+/// Standardized layout measurements for onboarding flow.
+/// Used in all onboarding screens for consistent positioning.
+enum OnboardingLayout {
+    /// 48pt - Header zone height (top icon/status area)
+    static let headerHeight: CGFloat = 48
+    /// 48pt - Footer zone height (action button area)
+    static let footerHeight: CGFloat = 48
+    /// 48pt - Standard button height in footer
+    static let buttonHeight: CGFloat = 48
+    /// 24pt - Top padding for content after header
+    static let contentTopPadding: CGFloat = 24
+    /// 24pt - Horizontal padding for all content
+    static let horizontalPadding: CGFloat = 24
+}
+
 // MARK: - Corner Radius
 /// Consistent corner radius scale for UI elements.
 enum CornerRadius {

@@ -167,51 +167,61 @@ struct OnboardingStepLayout<Illustration: View, Content: View, CTA: View>: View 
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // Illustration - fixed position from top
-            illustration()
-                .frame(maxWidth: .infinity)
-                .padding(.top, 30)
-
-            // Title - fixed position from top
-            VStack(spacing: Spacing.xs) {
-                Text(title)
-                    .font(.system(size: 24, weight: .black))
-                    .tracking(1)
-                    .foregroundColor(colors.textPrimary)
-                    .multilineTextAlignment(.center)
-
-                if let subtitle = subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-
-                if let caption = caption {
-                    Text(caption)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(colors.textTertiary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 2)
-                }
+        VStack(spacing: 0) {
+            // HEADER ZONE (48px) - Icon only (scaled down to fit)
+            HStack {
+                Spacer()
+                illustration()
+                    .scaleEffect(0.5) // Scale down large illustrations to fit header
+                Spacer()
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 130)
+            .frame(height: OnboardingLayout.headerHeight)
 
-            // Content - fixed position from top
-            content()
+            // CONTENT ZONE (flexible)
+            ScrollView {
+                VStack(alignment: .center, spacing: Spacing.lg) {
+                    // Title
+                    VStack(spacing: Spacing.xs) {
+                        Text(title)
+                            .font(.system(size: 24, weight: .black))
+                            .tracking(1)
+                            .foregroundColor(colors.textPrimary)
+                            .multilineTextAlignment(.center)
+
+                        if let subtitle = subtitle {
+                            Text(subtitle)
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundColor(colors.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        if let caption = caption {
+                            Text(caption)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 2)
+                        }
+                    }
+
+                    // Content
+                    content()
+                        .frame(maxWidth: .infinity)
+                }
+                .padding(.top, OnboardingLayout.contentTopPadding)
+                .padding(.horizontal, OnboardingLayout.horizontalPadding)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 210)
+            }
+            .frame(maxHeight: .infinity)
 
-            // CTA - fixed position from bottom
-            VStack {
+            // FOOTER ZONE (48px) - Button
+            HStack {
                 Spacer()
                 cta()
-                    .padding(.bottom, 20)
             }
+            .frame(height: OnboardingLayout.buttonHeight)
+            .padding(.horizontal, OnboardingLayout.horizontalPadding)
         }
-        .padding(.horizontal, Spacing.xl)
     }
 }
 

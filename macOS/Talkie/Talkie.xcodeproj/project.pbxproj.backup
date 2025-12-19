@@ -55,7 +55,6 @@
 		4F5A6DF3769EF9034B8F2C01 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA115E69E2A9DEA695B5B87 /* KeychainManager.swift */; };
 		4FC4D3FE14963ADA842948B3 /* EphemeralTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC1AA5999188EF8471202B3 /* EphemeralTranscriber.swift */; };
 		4FF3A896C98BC41602BE149A /* QuickActionRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8FFEDFE6C6C841BBF1F94C /* QuickActionRunner.swift */; };
-		5301F58C2EF5DEFA00CE4904 /* WFKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5301F58B2EF5DEFA00CE4904 /* WFKit */; };
 		53096E8D2EF4E69600B7C7B4 /* AudioDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53096E8C2EF4E69600B7C7B4 /* AudioDeviceManager.swift */; };
 		53096E932EF4E6EE00B7C7B4 /* PillDemoAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53096E902EF4E6EE00B7C7B4 /* PillDemoAnimation.swift */; };
 		53096E942EF4E6EE00B7C7B4 /* StatusCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53096E912EF4E6EE00B7C7B4 /* StatusCheckView.swift */; };
@@ -139,6 +138,7 @@
 		B3A26A431CEBB6919CFB877D /* WorkflowSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE0F9BE138BF58E1192F3E9 /* WorkflowSettings.swift */; };
 		B51587461BFB51452F58FC6A /* TWF_GENERATION_PROMPT.md in Resources */ = {isa = PBXBuildFile; fileRef = 394615BAE0B9C87F889FE23A /* TWF_GENERATION_PROMPT.md */; };
 		B933B1501D0392BA1596D386 /* AudioStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFA8989D6FD9EF1C229E5202 /* AudioStorage.swift */; };
+		B93B60C64B35A0BB5C82BB98 /* WFKit in Frameworks */ = {isa = PBXBuildFile; productRef = F5624562F960D8515AA5C876 /* WFKit */; };
 		BB2616B0993300F4C54E9E0B /* talkie.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 4F1A26DD0EB35BB47991023F /* talkie.xcdatamodeld */; };
 		C7060C3D527647B9999028CF /* Data/Database/GRDBRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A19E9A60A994592B1AA4C5A /* Data/Database/GRDBRepository.swift */; };
 		C71513A0A6EF966DD60FF8C7 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C368F29870833A22EA1F5E0 /* DesignSystem.swift */; };
@@ -220,6 +220,7 @@
 		40FC79F0471865923C8D1734 /* InterstitialManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterstitialManager.swift; sourceTree = "<group>"; };
 		416914016150F1C04A3CB040 /* JSONExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONExportService.swift; sourceTree = "<group>"; };
 		42D075A51DACCCAA5F00B0AC /* WorkflowExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutor.swift; sourceTree = "<group>"; };
+		43687D8D58CDF24241B52B29 /* DebugKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DebugKit; path = ../../../DebugKit; sourceTree = SOURCE_ROOT; };
 		43C356B7970D4DDDB1F7802D /* Data/Database/DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Data/Database/DatabaseManager.swift; sourceTree = "<group>"; };
 		478B8969CCF8329C0038C831 /* LLMModelCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMModelCards.swift; sourceTree = "<group>"; };
 		499C191C937A588B1FC14A1B /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
@@ -357,9 +358,9 @@
 				5A8FB727E018EBC503E01329 /* DebugKit in Frameworks */,
 				D0EC6C1DC965D20E26780A84 /* FluidAudio in Frameworks */,
 				2829621A6E4A01B27CF56E78 /* GRDB in Frameworks */,
+				B93B60C64B35A0BB5C82BB98 /* WFKit in Frameworks */,
 				CE3E9EFEDFC1391AF65FAAE6 /* MLX in Frameworks */,
 				14939466210DE1AC6840F725 /* MLXLLM in Frameworks */,
-				5301F58C2EF5DEFA00CE4904 /* WFKit in Frameworks */,
 				53096E9A2EF5C94F00B7C7B4 /* DebugKit in Frameworks */,
 				DF90361B1D0677CA2E23E506 /* MLXLMCommon in Frameworks */,
 			);
@@ -385,6 +386,7 @@
 		13D195D5F236957648E32FD9 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
+				43687D8D58CDF24241B52B29 /* DebugKit */,
 				3294407802CB65E7C753DCA5 /* TalkieKit */,
 				EDF6CBE76775757D53F5AF8E /* WFKit */,
 			);
@@ -808,11 +810,11 @@
 				6F3171CA8771D255AD77C856 /* DebugKit */,
 				E488AD1F887CCD0880A88457 /* FluidAudio */,
 				9CB6A32843C8E78377EA7EE1 /* GRDB */,
+				F5624562F960D8515AA5C876 /* WFKit */,
 				888B917F1D14A6981B3952DF /* MLX */,
 				A513D039239E420AEF986661 /* MLXLLM */,
 				D0D2AC46F2B1EE67539FDB0B /* MLXLMCommon */,
 				53096E992EF5C94F00B7C7B4 /* DebugKit */,
-				5301F58B2EF5DEFA00CE4904 /* WFKit */,
 			);
 			productName = Talkie;
 			productReference = 92173E2C177853E5ADD8A345 /* Talkie.app */;
@@ -843,8 +845,8 @@
 				1A8749A28BBB7162D19B3B41 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				D66F1C7CF2D97B28C1F5CC88 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				4E3C4ECEA0C3CC5BEF8F10AB /* XCLocalSwiftPackageReference "../TalkieKit" */,
+				05193DEAEA1A4AFDF888739F /* XCLocalSwiftPackageReference "../../WFKit" */,
 				53096E982EF5C94F00B7C7B4 /* XCLocalSwiftPackageReference "../../Packages/DebugKit" */,
-				5301F58A2EF5DEFA00CE4904 /* XCLocalSwiftPackageReference "../../Packages/WFKit" */,
 			);
 			productRefGroup = EC3EE94DAAE074F1D0B4D2E1 /* Products */;
 			projectDirPath = "";
@@ -1239,13 +1241,13 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		05193DEAEA1A4AFDF888739F /* XCLocalSwiftPackageReference "../../WFKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../WFKit;
+		};
 		4E3C4ECEA0C3CC5BEF8F10AB /* XCLocalSwiftPackageReference "../TalkieKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../TalkieKit;
-		};
-		5301F58A2EF5DEFA00CE4904 /* XCLocalSwiftPackageReference "../../Packages/WFKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../Packages/WFKit;
 		};
 		53096E982EF5C94F00B7C7B4 /* XCLocalSwiftPackageReference "../../Packages/DebugKit" */ = {
 			isa = XCLocalSwiftPackageReference;
@@ -1293,10 +1295,6 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = TalkieKit;
 		};
-		5301F58B2EF5DEFA00CE4904 /* WFKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = WFKit;
-		};
 		53096E992EF5C94F00B7C7B4 /* DebugKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = DebugKit;
@@ -1329,6 +1327,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4C77F332EB0FCCF18342C18A /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		F5624562F960D8515AA5C876 /* WFKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WFKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 

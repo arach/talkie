@@ -111,12 +111,20 @@ public final class EngineClient: ObservableObject {
     public func connect() {
         guard connection == nil else { return }
 
+        // Check if this is a dev build by bundle ID or explicit dev flag
+        let isDevBuild = Bundle.main.bundleIdentifier?.contains(".dev") == true ||
+                         UserDefaults.standard.bool(forKey: "TalkieUseDevEngine")
+
         #if DEBUG
         // Honor system: try debug (Xcode) first, fall back to dev (daemon)
         connectWithFallback(modes: [.debug, .dev])
         #else
-        // Production: only try production
-        connectToMode(.production)
+        // Release: use dev mode if bundle ID contains ".dev" or dev flag is set
+        if isDevBuild {
+            connectWithFallback(modes: [.dev, .production])
+        } else {
+            connectToMode(.production)
+        }
         #endif
     }
 
@@ -320,9 +328,12 @@ public final class EngineClient: ObservableObject {
 
     /// Launch TalkieEngine app if it's not running
     private func launchEngineIfNeeded() async {
-        // Check if engine is already running
+        // Check if engine is already running (production or dev)
+        let engineBundleIds = ["jdi.talkie.engine", "jdi.talkie.engine.dev"]
         let runningApps = NSWorkspace.shared.runningApplications
-        let engineRunning = runningApps.contains { $0.bundleIdentifier == "jdi.talkie.engine" }
+        let engineRunning = runningApps.contains { app in
+            engineBundleIds.contains(app.bundleIdentifier ?? "")
+        }
 
         if engineRunning {
             logger.info("[Connect] TalkieEngine already running")
