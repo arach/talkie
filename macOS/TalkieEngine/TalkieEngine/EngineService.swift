@@ -68,22 +68,27 @@ final class AppLogger {
         let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) ← \(filename):\(line)"
 
         // Log to console (visible in Xcode debugger and Console.app)
-        NSLog("%@", logLine)
+        // NSLog creates autoreleased objects, so wrap it in autoreleasepool if we're not on the main run loop yet
+        autoreleasepool {
+            NSLog("%@", logLine)
+        }
 
         // Write to log file asynchronously
         guard let logFileURL = logFileURL else { return }
         logQueue.async {
-            if let data = logLine.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: logFileURL.path) {
-                    // Append to existing file
-                    if let fileHandle = try? FileHandle(forWritingTo: logFileURL) {
-                        fileHandle.seekToEndOfFile()
-                        fileHandle.write(data)
-                        try? fileHandle.close()
+            autoreleasepool {
+                if let data = logLine.data(using: .utf8) {
+                    if FileManager.default.fileExists(atPath: logFileURL.path) {
+                        // Append to existing file
+                        if let fileHandle = try? FileHandle(forWritingTo: logFileURL) {
+                            fileHandle.seekToEndOfFile()
+                            fileHandle.write(data)
+                            try? fileHandle.close()
+                        }
+                    } else {
+                        // Create new file
+                        try? data.write(to: logFileURL)
                     }
-                } else {
-                    // Create new file
-                    try? data.write(to: logFileURL)
                 }
             }
         }
@@ -500,14 +505,16 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         var conversionError: NSError?
         let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
-            do {
-                let tempBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: inNumPackets)!
-                try file.read(into: tempBuffer)
-                outStatus.pointee = .haveData
-                return tempBuffer
-            } catch {
-                outStatus.pointee = .endOfStream
-                return nil
+            autoreleasepool {
+                do {
+                    let tempBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: inNumPackets)!
+                    try file.read(into: tempBuffer)
+                    outStatus.pointee = .haveData
+                    return tempBuffer
+                } catch {
+                    outStatus.pointee = .endOfStream
+                    return nil
+                }
             }
         }
 

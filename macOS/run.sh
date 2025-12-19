@@ -17,6 +17,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WORKSPACE="$SCRIPT_DIR/../TalkieSuite.xcworkspace"
 BUILD_BASE="$SCRIPT_DIR/../build"
 
 # Colors
@@ -36,15 +37,7 @@ EXEC_ONLY=false
 
 AVAILABLE_APPS="live engine core"
 
-# Get app config
-get_project() {
-    case $1 in
-        live)   echo "TalkieLive/TalkieLive.xcodeproj" ;;
-        engine) echo "TalkieEngine/TalkieEngine.xcodeproj" ;;
-        core)   echo "Talkie/Talkie.xcodeproj" ;;
-    esac
-}
-
+# Get scheme for app
 get_scheme() {
     case $1 in
         live)   echo "TalkieLive" ;;
@@ -53,14 +46,7 @@ get_scheme() {
     esac
 }
 
-get_name() {
-    case $1 in
-        live)   echo "TalkieLive" ;;
-        engine) echo "TalkieEngine" ;;
-        core)   echo "Talkie" ;;
-    esac
-}
-
+# Get app type (service or regular app)
 get_type() {
     case $1 in
         engine) echo "service" ;;
@@ -205,23 +191,21 @@ install_engine() {
     fi
 }
 
-# Build an app
+# Build an app using the workspace
 build_app() {
     local app=$1
-    local project=$(get_project "$app")
     local scheme=$(get_scheme "$app")
-    local name=$(get_name "$app")
     local type=$(get_type "$app")
-    local build_dir="$BUILD_BASE/$name"
-    local app_path="$build_dir/Build/Products/Debug/$name.app"
+    local build_dir="$BUILD_BASE/$scheme"
+    local app_path="$build_dir/Build/Products/Debug/$scheme.app"
 
-    echo -e "${CYAN}━━━ $name ━━━${NC}"
+    echo -e "${CYAN}━━━ $scheme ━━━${NC}"
 
     # Stop if running
     if [ "$type" = "service" ]; then
         stop_engine
     else
-        quit_app "$name"
+        quit_app "$scheme"
     fi
 
     # Check if exec-only mode
@@ -240,15 +224,12 @@ build_app() {
             echo -e "${GREEN}done${NC}"
         fi
 
-        # Build
+        # Build using workspace
         echo "  Building..."
         local build_result=0
 
-        # Always use proper code signing (not ad-hoc)
-        local SIGN_ARGS="CODE_SIGN_IDENTITY=\"Apple Development\" DEVELOPMENT_TEAM=\"2U83JFPW66\""
-
         if $VERBOSE; then
-            xcodebuild -project "$SCRIPT_DIR/$project" \
+            xcodebuild -workspace "$WORKSPACE" \
                 -scheme "$scheme" \
                 -configuration Debug \
                 -derivedDataPath "$build_dir" \
@@ -256,7 +237,7 @@ build_app() {
                 DEVELOPMENT_TEAM="2U83JFPW66" \
                 build 2>&1 || build_result=$?
         else
-            xcodebuild -project "$SCRIPT_DIR/$project" \
+            xcodebuild -workspace "$WORKSPACE" \
                 -scheme "$scheme" \
                 -configuration Debug \
                 -derivedDataPath "$build_dir" \
@@ -284,9 +265,9 @@ build_app() {
             echo -e "${GREEN}done${NC}"
         fi
 
-        # Debug mode: attach Xcode
+        # Debug mode: show PID and attach debugger
         if $DEBUG_MODE; then
-            attach_xcode_debugger "$name" "$app_path"
+            attach_xcode_debugger "$scheme" "$app_path"
         fi
     fi
 
@@ -302,10 +283,10 @@ attach_xcode_debugger() {
     echo ""
     echo -e "${YELLOW}━━━ DEBUG MODE ━━━${NC}"
 
-    # Wait for app to launch (longer for GUI apps)
+    # Wait for app to launch
     sleep 2
 
-    # Get PID - try multiple patterns
+    # Get PID
     local pid=$(pgrep -x "$app_name" | head -1)
     if [ -z "$pid" ]; then
         pid=$(pgrep -f "$app_name.app/Contents/MacOS/$app_name" | head -1)
@@ -317,50 +298,14 @@ attach_xcode_debugger() {
     if [ -z "$pid" ]; then
         echo -e "  ${RED}⚠️  Could not find $app_name process${NC}"
         echo -e "  ${YELLOW}Searching for: $app_name${NC}"
-        echo -e "  ${YELLOW}Running processes:${NC}"
-        ps aux | grep -i "$app_name" | grep -v grep | head -5
         return 1
     fi
 
-    echo -e "  📱 App Path: ${CYAN}$app_path${NC}"
+    echo -e "  📱 App: ${CYAN}$app_name${NC}"
     echo -e "  🔢 PID: ${CYAN}$pid${NC}"
     echo ""
-
-    # Try to attach Xcode debugger using accessibility
-    echo -n "  🔗 Attempting to attach Xcode debugger... "
-
-    osascript <<EOF 2>/dev/null
-tell application "Xcode"
-    activate
-    delay 0.5
-end tell
-
-tell application "System Events"
-    tell process "Xcode"
-        -- Open Debug menu
-        click menu item "Attach to Process by PID or Name…" of menu "Debug" of menu bar 1
-        delay 0.3
-
-        -- Type PID in the dialog
-        keystroke "$pid"
-        delay 0.2
-
-        -- Press Enter to attach
-        keystroke return
-    end tell
-end tell
-EOF
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓${NC}"
-    else
-        echo -e "${YELLOW}⚠️${NC}"
-        echo -e "  ${YELLOW}Xcode attach failed - you may need to enable accessibility${NC}"
-        echo -e "  ${YELLOW}Go to: System Settings > Privacy & Security > Accessibility${NC}"
-        echo ""
-        echo -e "  Manual attach: ${CYAN}Xcode → Debug → Attach to Process by PID or Name → $pid${NC}"
-    fi
-
+    echo -e "  To attach debugger in Xcode:"
+    echo -e "  ${CYAN}Debug → Attach to Process by PID or Name → $pid${NC}"
     echo ""
 }
 

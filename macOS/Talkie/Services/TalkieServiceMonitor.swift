@@ -13,8 +13,11 @@ import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TalkieServiceMonitor")
 
-/// Bundle identifier for TalkieEngine
-private let kTalkieEngineBundleId = "jdi.talkie.engine"
+/// Bundle identifiers for TalkieEngine (production and development)
+private let kTalkieEngineBundleIds = [
+    "jdi.talkie.engine",      // Production
+    "jdi.talkie.engine.dev"   // Development (Xcode builds)
+]
 
 /// Process state for TalkieEngine
 public enum TalkieServiceState: String {
@@ -123,8 +126,11 @@ public final class TalkieServiceMonitor: ObservableObject {
 
     /// Refresh process state by checking for TalkieEngine process
     public func refreshState() {
-        // Use NSRunningApplication to find TalkieEngine (works in sandbox)
-        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: kTalkieEngineBundleId)
+        // Check for TalkieEngine using NSRunningApplication (try all known bundle IDs)
+        var apps: [NSRunningApplication] = []
+        for bundleId in kTalkieEngineBundleIds {
+            apps.append(contentsOf: NSRunningApplication.runningApplications(withBundleIdentifier: bundleId))
+        }
 
         if let app = apps.first {
             let wasRunning = state == .running
@@ -364,7 +370,12 @@ public final class TalkieServiceMonitor: ObservableObject {
            let bracketEnd = trimmed.firstIndex(of: "]") {
             let bracketContent = String(trimmed[bracketStart...bracketEnd])
             if let colonIndex = bracketContent.firstIndex(of: ":") {
-                category = String(bracketContent[bracketContent.index(after: colonIndex)..<bracketContent.index(before: bracketContent.endIndex)])
+                let afterColon = bracketContent.index(after: colonIndex)
+                let beforeEnd = bracketContent.index(before: bracketContent.endIndex)
+                // Only extract if we have content after the colon
+                if afterColon < beforeEnd {
+                    category = String(bracketContent[afterColon..<beforeEnd])
+                }
             }
         }
 
