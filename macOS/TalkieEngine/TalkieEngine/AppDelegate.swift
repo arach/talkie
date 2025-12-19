@@ -209,37 +209,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         EngineStatusManager.shared.log(.info, "System", "Reloading engine...")
 
         // For dev/debug modes: kill current process and relaunch from stable path
-        Task { @MainActor in
-            // Find stable build path (where run.sh installs the engine)
-            let buildPath = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("dev/talkie/build/Debug/TalkieEngine.app")
+        // Find stable build path (where run.sh installs the engine)
+        let buildPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("dev/talkie/build/Debug/TalkieEngine.app")
 
-            if FileManager.default.fileExists(atPath: buildPath.path) {
-                AppLogger.shared.info(.system, "Relaunching from: \(buildPath.path)")
+        if FileManager.default.fileExists(atPath: buildPath.path) {
+            AppLogger.shared.info(.system, "Relaunching from: \(buildPath.path)")
 
-                // Launch new instance
-                let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                task.arguments = [buildPath.path]
+            // Launch new instance
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = [buildPath.path]
 
-                do {
-                    try task.run()
-                    AppLogger.shared.info(.system, "New instance launched, exiting current")
+            do {
+                try task.run()
+                AppLogger.shared.info(.system, "New instance launched, exiting current")
 
-                    // Exit current instance after brief delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        autoreleasepool {
-                            exit(0)
-                        }
-                    }
-                } catch {
-                    AppLogger.shared.error(.system, "Failed to relaunch: \(error)")
-                    EngineStatusManager.shared.log(.error, "Reload", "Failed: \(error.localizedDescription)")
+                // Exit current instance after brief delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    exit(0)
                 }
-            } else {
-                AppLogger.shared.error(.system, "Stable build not found at: \(buildPath.path)")
-                EngineStatusManager.shared.log(.error, "Reload", "Build path not found - run ./run.sh engine first")
+            } catch {
+                AppLogger.shared.error(.system, "Failed to relaunch: \(error)")
+                EngineStatusManager.shared.log(.error, "Reload", "Failed: \(error.localizedDescription)")
             }
+        } else {
+            AppLogger.shared.error(.system, "Stable build not found at: \(buildPath.path)")
+            EngineStatusManager.shared.log(.error, "Reload", "Build path not found - run ./run.sh engine first")
         }
     }
 
