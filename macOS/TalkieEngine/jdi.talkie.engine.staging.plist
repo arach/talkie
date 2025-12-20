@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>jdi.talkie.engine.staging</string>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Update this path to your staging build location -->
+        <string>/Users/arach/Applications/Staging/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
+        <string>--daemon</string>
+    </array>
+    <key>MachServices</key>
+    <dict>
+        <key>jdi.talkie.engine.xpc.staging</key>
+        <true/>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/jdi.talkie.engine.staging.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jdi.talkie.engine.staging.stderr.log</string>
+</dict>
+</plist>

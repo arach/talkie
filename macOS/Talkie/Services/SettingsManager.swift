@@ -37,6 +37,27 @@ enum AppearanceMode: String, CaseIterable {
     }
 }
 
+// MARK: - Sync Settings
+extension SettingsManager {
+    /// Whether to run CloudKit sync automatically on app launch
+    var syncOnLaunch: Bool {
+        get { UserDefaults.standard.bool(forKey: "syncOnLaunch") }
+        set { UserDefaults.standard.set(newValue, forKey: "syncOnLaunch") }
+    }
+
+    /// Minimum interval between automatic syncs (seconds)
+    var minimumSyncInterval: TimeInterval {
+        get { UserDefaults.standard.double(forKey: "minimumSyncInterval").orDefault(300) } // 5 minutes
+        set { UserDefaults.standard.set(newValue, forKey: "minimumSyncInterval") }
+    }
+}
+
+private extension Double {
+    func orDefault(_ defaultValue: Double) -> Double {
+        self == 0 ? defaultValue : self
+    }
+}
+
 // MARK: - Accent Color Options
 enum AccentColorOption: String, CaseIterable {
     case system = "system"

@@ -44,17 +44,44 @@ final class CloudKitSyncEngine: ObservableObject {
 
     /// Start periodic background sync (every 5 minutes)
     func startPeriodicSync() {
-        // Initial sync
+        // Check if sync on launch is enabled
+        guard SettingsManager.shared.syncOnLaunch else {
+            print("⏭️ Skipping sync on launch (disabled in settings)")
+            // Still set up timer for future syncs
+            setupSyncTimer()
+            return
+        }
+
+        // Check minimum sync interval
         Task {
+            if let lastSync = await CloudKitSyncManager.shared.getLastSyncTimestamp() {
+                let timeSince = Date().timeIntervalSince(lastSync)
+                let minInterval = SettingsManager.shared.minimumSyncInterval
+
+                if timeSince < minInterval {
+                    let remaining = Int(minInterval - timeSince)
+                    print("⏭️ Skipping sync - last synced \(Int(timeSince))s ago (min: \(Int(minInterval))s, next in \(remaining)s)")
+                    setupSyncTimer()
+                    return
+                }
+            }
+
+            // Enough time passed or never synced - run sync
             await performFullSync()
         }
 
-        // Periodic sync
+        // Setup periodic timer
+        setupSyncTimer()
+    }
+
+    private func setupSyncTimer() {
+        syncTimer?.invalidate()
         syncTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.performFullSync()
             }
         }
+        print("Periodic CloudKit sync timer started (interval: 300s)")
     }
 
     /// Stop periodic sync

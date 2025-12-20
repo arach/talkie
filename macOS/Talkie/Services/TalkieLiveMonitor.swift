@@ -9,14 +9,14 @@
 import Foundation
 import AppKit
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TalkieLiveMonitor")
 
-/// Bundle identifiers for TalkieLive (production and development)
-private let kTalkieLiveBundleIds = [
-    "jdi.talkie.live",      // Production
-    "jdi.talkie.live.dev"   // Development (Xcode builds)
-]
+/// Bundle identifier for TalkieLive (environment-aware)
+private var kTalkieLiveBundleId: String {
+    TalkieEnvironment.current.liveBundleId
+}
 
 /// Process state for TalkieLive
 public enum TalkieLiveState: String {
@@ -123,11 +123,8 @@ public final class TalkieLiveMonitor: ObservableObject {
 
     /// Refresh process state by checking for TalkieLive process
     public func refreshState() {
-        // Check for TalkieLive using NSRunningApplication (try all known bundle IDs)
-        var apps: [NSRunningApplication] = []
-        for bundleId in kTalkieLiveBundleIds {
-            apps.append(contentsOf: NSRunningApplication.runningApplications(withBundleIdentifier: bundleId))
-        }
+        // Check for TalkieLive using NSRunningApplication (environment-specific)
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: kTalkieLiveBundleId)
 
         if let app = apps.first {
             let wasRunning = state == .running
@@ -250,23 +247,19 @@ public final class TalkieLiveMonitor: ObservableObject {
 
         state = .terminating
 
-        // Terminate all running instances (production and dev)
-        for bundleId in kTalkieLiveBundleIds {
-            let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-            for app in apps {
-                logger.info("[TalkieLive] Terminating PID \(app.processIdentifier)")
-                app.terminate()
-            }
+        // Terminate running instance for current environment
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: kTalkieLiveBundleId)
+        for app in apps {
+            logger.info("[TalkieLive] Terminating PID \(app.processIdentifier)")
+            app.terminate()
         }
 
         // Force kill after 3 seconds if still running
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            for bundleId in kTalkieLiveBundleIds {
-                let stillRunning = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-                for app in stillRunning {
-                    logger.warning("[TalkieLive] Force killing PID \(app.processIdentifier)")
-                    app.forceTerminate()
-                }
+            let stillRunning = NSRunningApplication.runningApplications(withBundleIdentifier: kTalkieLiveBundleId)
+            for app in stillRunning {
+                logger.warning("[TalkieLive] Force killing PID \(app.processIdentifier)")
+                app.forceTerminate()
             }
             self?.refreshState()
         }

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import GRDB
 
 // MARK: - Sync Event Models
 
@@ -78,6 +79,58 @@ struct SyncEvent: Identifiable, Codable {
             case .failed: return "xmark.circle.fill"
             case .partial: return "exclamationmark.circle.fill"
             }
+        }
+    }
+}
+
+// MARK: - GRDB Persistence
+
+extension SyncEvent: FetchableRecord, PersistableRecord {
+    static let databaseTableName = "sync_history"
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let timestamp = Column(CodingKeys.timestamp)
+        static let status = Column(CodingKeys.status)
+        static let itemCount = Column(CodingKeys.itemCount)
+        static let duration = Column(CodingKeys.duration)
+        static let errorMessage = Column(CodingKeys.errorMessage)
+        static let detailsJSON = Column("detailsJSON")
+    }
+
+    // Custom encoding for details array
+    func encode(to container: inout PersistenceContainer) throws {
+        container[Columns.id] = id
+        container[Columns.timestamp] = timestamp
+        container[Columns.status] = status.rawValue
+        container[Columns.itemCount] = itemCount
+        container[Columns.duration] = duration
+        container[Columns.errorMessage] = errorMessage
+
+        // Serialize details array to JSON
+        if !details.isEmpty {
+            let encoder = JSONEncoder()
+            let jsonData = try encoder.encode(details)
+            container[Columns.detailsJSON] = String(data: jsonData, encoding: .utf8)
+        }
+    }
+
+    // Custom decoding for details array
+    init(row: Row) throws {
+        id = row[Columns.id]
+        timestamp = row[Columns.timestamp]
+        status = SyncStatus(rawValue: row[Columns.status]) ?? .partial
+        itemCount = row[Columns.itemCount]
+        duration = row[Columns.duration]
+        errorMessage = row[Columns.errorMessage]
+
+        // Deserialize details array from JSON
+        if let jsonString: String = row[Columns.detailsJSON],
+           let jsonData = jsonString.data(using: .utf8) {
+            let decoder = JSONDecoder()
+            details = (try? decoder.decode([SyncRecordDetail].self, from: jsonData)) ?? []
+        } else {
+            details = []
         }
     }
 }

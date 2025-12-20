@@ -181,24 +181,26 @@ struct StatusBar: View {
                     if serviceMonitor.state == .running {
                         EngineStatusIcon()
                         ModelStatusIcon()
-                    } else if serviceMonitor.state == .stopped {
-                        // Engine offline indicator
+                    } else {
+                        // Show engine state for non-running states
                         HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
+                            Image(systemName: serviceMonitor.state == .stopped ? "exclamationmark.triangle.fill" : "exclamationmark.circle")
                                 .font(.system(size: 9))
-                                .foregroundColor(SemanticColor.warning)
-                            Text("Engine Offline")
+                                .foregroundColor(serviceMonitor.state == .stopped ? SemanticColor.warning : TalkieTheme.textMuted)
+                            Text(serviceMonitor.state == .stopped ? "Engine Offline" : "Engine \(serviceMonitor.state.rawValue)")
                                 .font(.system(size: 9, weight: .medium))
                                 .foregroundColor(TalkieTheme.textMuted)
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
-                        .background(SemanticColor.warning.opacity(0.1))
+                        .background((serviceMonitor.state == .stopped ? SemanticColor.warning : Color.gray).opacity(0.1))
                         .cornerRadius(4)
-                        .help("TalkieEngine is not running. Click to start.")
+                        .help("TalkieEngine: \(serviceMonitor.state.rawValue). Click to launch.")
                         .onTapGesture {
                             Task {
-                                await serviceMonitor.launch()
+                                if serviceMonitor.state != .running {
+                                    await serviceMonitor.launch()
+                                }
                             }
                         }
                     }
@@ -579,7 +581,7 @@ struct EngineStatusIcon: View {
         // Check EngineClient connection mode
         if let mode = EngineClient.shared.connectedMode {
             switch mode {
-            case .debug: return "DEBUG"
+            case .staging: return "STAGING"
             case .dev: return "DEV"
             case .production: return nil  // No badge for production
             }
@@ -590,8 +592,8 @@ struct EngineStatusIcon: View {
     private var badgeColor: Color {
         if let mode = EngineClient.shared.connectedMode {
             switch mode {
-            case .debug: return .red
-            case .dev: return .orange
+            case .staging: return .orange
+            case .dev: return .red
             case .production: return .blue
             }
         }

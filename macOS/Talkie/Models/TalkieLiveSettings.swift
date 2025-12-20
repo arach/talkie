@@ -730,47 +730,7 @@ final class LiveSettings: ObservableObject {
 
 // MARK: - Stub types (simplified for Talkie integration)
 
-// NOTE: Full RoutingMode definition exists in RoutingMode.swift
-// This stub is kept here for backward compatibility
-enum RoutingMode: String, CaseIterable, Codable {
-    case clipboardOnly = "clipboardOnly"  // Copy to clipboard only
-    case paste = "paste"                  // Copy to clipboard and paste (⌘V)
-
-    var displayName: String {
-        switch self {
-        case .clipboardOnly: return "Clipboard Only"
-        case .paste: return "Copy & Paste"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .clipboardOnly: return "Copy text to clipboard without pasting"
-        case .paste: return "Copy to clipboard and automatically paste"
-        }
-    }
-}
-
+// NOTE: RoutingMode is defined in RoutingMode.swift
 // NOTE: TalkieSound is defined in SoundManager.swift
-
 // NOTE: ContextCaptureDetail is defined in ContextCaptureService.swift
-
-// Stub for ModelInfo from EngineClient
-struct ModelInfo: Codable, Sendable, Identifiable {
-    let id: String
-    let family: String
-    let modelId: String
-    let displayName: String
-    let sizeDescription: String
-    let description: String
-    let isDownloaded: Bool
-    let isLoaded: Bool
-
-    static func parseModelId(_ fullId: String) -> (family: String, modelId: String) {
-        let parts = fullId.split(separator: ":", maxSplits: 1)
-        if parts.count == 2 {
-            return (String(parts[0]), String(parts[1]))
-        }
-        return ("whisper", fullId)
-    }
-}
+// NOTE: ModelInfo is defined in EngineClient.swift

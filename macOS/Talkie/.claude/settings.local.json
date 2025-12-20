@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(du -sh:*)",
+      "Bash(find:*)",
+      "Bash(otool -L:*)",
+      "Bash(size:*)",
+      "Bash(nm:*)",
+      "Bash(xargs ls:*)",
+      "Bash(plutil:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(gh release list:*)",
+      "Bash(gunzip:*)",
+      "Bash(cpio:*)",
+      "Bash(build/Build/Products/Release/Talkie.app/Contents/MacOS/Talkie:*)",
+      "Bash(swift build:*)",
+      "Bash(ls:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.swift.org)",
+      "WebFetch(domain:vercel.com)",
+      "Bash(xcodegen generate:*)"
+    ]
+  }
+}

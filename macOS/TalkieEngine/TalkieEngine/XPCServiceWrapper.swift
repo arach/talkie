@@ -44,8 +44,10 @@ final class XPCServiceWrapper: NSObject, TalkieEngineProtocol {
     }
 
     func ping(reply: @escaping (Bool) -> Void) {
+        NSLog("[XPCServiceWrapper] 🏓 PING received, sending PONG")
         AppLogger.shared.info(.xpc, "ping called")
         reply(true)
+        NSLog("[XPCServiceWrapper] ✓ PONG sent")
     }
 
     // MARK: - Download Management

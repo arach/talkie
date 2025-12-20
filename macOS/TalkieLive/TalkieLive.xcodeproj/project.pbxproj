@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 53GRDB0022EE70000004EEAF4 /* GRDB */; };
 		E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */; };
+	F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +49,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */,
+				F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */,
 				53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -108,6 +110,7 @@
 			name = TalkieLive;
 			packageProductDependencies = (
 				A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */,
+				D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */,
 			);
 			productName = TalkieLive;
 			productReference = 539FB5B92EE6785C004EEAF4 /* TalkieLive.app */;
@@ -188,6 +191,7 @@
 			packageReferences = (
 				53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../DebugKit" */,
+				C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "../TalkieKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 539FB5BA2EE6785C004EEAF4 /* Products */;
@@ -399,8 +403,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieLive/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Live";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie Live needs microphone access to capture your voice for transcription.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieLive needs microphone access to continuously transcribe your speech in real-time.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -432,8 +438,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieLive/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Live";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie Live needs microphone access to capture your voice for transcription.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieLive needs microphone access to continuously transcribe your speech in real-time.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -516,6 +524,131 @@
 			};
 			name = Release;
 		};
+		53ADD0FF2EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Staging;
+		};
+		53ADD1002EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = TalkieLive/TalkieLive.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieLive/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Live";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieLive needs microphone access to continuously transcribe your speech in real-time.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.staging;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Staging;
+		};
+		53ADD1012EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TalkieLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TalkieLive";
+			};
+			name = Staging;
+		};
+		53ADD1022EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = TalkieLive;
+			};
+			name = Staging;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -524,6 +657,7 @@
 			buildConfigurations = (
 				539FB5DE2EE6785D004EEAF4 /* Debug */,
 				539FB5DF2EE6785D004EEAF4 /* Release */,
+				53ADD0FF2EF62A20000F74FF /* Staging */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -533,6 +667,7 @@
 			buildConfigurations = (
 				539FB5E12EE6785D004EEAF4 /* Debug */,
 				539FB5E22EE6785D004EEAF4 /* Release */,
+				53ADD1002EF62A20000F74FF /* Staging */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -542,6 +677,7 @@
 			buildConfigurations = (
 				539FB5E42EE6785D004EEAF4 /* Debug */,
 				539FB5E52EE6785D004EEAF4 /* Release */,
+				53ADD1012EF62A20000F74FF /* Staging */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -551,6 +687,7 @@
 			buildConfigurations = (
 				539FB5E72EE6785D004EEAF4 /* Debug */,
 				539FB5E82EE6785D004EEAF4 /* Release */,
+				53ADD1022EF62A20000F74FF /* Staging */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -561,6 +698,10 @@
 		B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../DebugKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../../DebugKit;
+		};
+		C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "../TalkieKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../TalkieKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -584,6 +725,10 @@
 		A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = DebugKit;
+		};
+		D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TalkieKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

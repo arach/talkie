@@ -5,14 +5,18 @@ set -e
 # Builds all components with proper signing and notarization
 #
 # Usage:
-#   ./build.sh              # Build full installer (all 3 apps separate)
-#   ./build.sh unified      # Build unified bundle (single Talkie.app with embedded helpers)
-#   ./build.sh core         # Build Talkie-Core installer (Engine + Core)
-#   ./build.sh live         # Build Talkie-Live installer (Engine + Live)
-#   ./build.sh all          # Build all installers
+#   ./build.sh                           # Build full installer (all 3 apps separate)
+#   ./build.sh --version 1.6.2           # Build with specific version
+#   ./build.sh unified --version 1.6.2   # Build unified bundle with version
+#   ./build.sh core                      # Build Talkie-Core installer (Engine + Core)
+#   ./build.sh live                      # Build Talkie-Live installer (Engine + Live)
+#   ./build.sh all                       # Build all installers
+#
+# Options:
+#   --version VERSION       # Set version (required)
 #
 # Environment variables:
-#   VERSION=1.3.0           # Set version (default: 1.5.0)
+#   VERSION=1.6.2           # Alternative way to set version
 #   SKIP_NOTARIZE=1         # Skip notarization (for testing)
 #   SKIP_CLEAN=1            # Skip clean build (incremental, much faster)
 
@@ -23,11 +27,33 @@ STAGING_DIR="$SCRIPT_DIR/staging"
 PACKAGES_DIR="$SCRIPT_DIR/packages"
 RESOURCES_DIR="$SCRIPT_DIR/resources"
 
-# Version
-VERSION="${VERSION:-1.5.4}"
+# Parse arguments
+TARGET="full"
+VERSION="${VERSION:-}"
 
-# Target: full (default), core, live, or all
-TARGET="${1:-full}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
+        full|unified|core|live|all)
+            TARGET="$1"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Require version
+if [ -z "$VERSION" ]; then
+    echo "❌ VERSION not specified"
+    echo "   Usage: ./build.sh --version 1.6.2 [target]"
+    echo "   Or:    VERSION=1.6.2 ./build.sh [target]"
+    exit 1
+fi
 
 # Signing identities
 DEVELOPER_ID_APP="Developer ID Application: Arach Tchoupani (2U83JFPW66)"

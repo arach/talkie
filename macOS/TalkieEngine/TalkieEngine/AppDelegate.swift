@@ -126,8 +126,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Use a gear/engine icon with mode-specific color
             let mode = EngineStatusManager.shared.launchMode
             let iconColor: NSColor = switch mode {
-            case .debug: .orange
             case .dev: NSColor(red: 0.4, green: 0.8, blue: 0.4, alpha: 1.0)
+            case .staging: NSColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0)  // Orange for staging
             case .production: .gray
             }
 
@@ -152,8 +152,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenuItem.target = self
         menu.addItem(statusMenuItem)
 
-        // Add reload option for debug and dev modes
-        if mode == .debug || mode == .dev {
+        // Add reload option for dev mode
+        if mode == .dev {
             menu.addItem(NSMenuItem.separator())
 
             let reloadItem = NSMenuItem(title: "Reload Engine", action: #selector(reloadEngine), keyEquivalent: "r")

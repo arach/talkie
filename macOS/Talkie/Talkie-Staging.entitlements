@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- UNSANDBOXED: Power user app needs full capabilities -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<!-- CloudKit for data sync (shared with production) -->
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.com.jdi.talkie</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>2U83JFPW66.com.jdi.talkie</string>
+
+	<!-- Allow sending Apple Events for workflows and automation -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+
+	<!-- Allow network access for API calls and services -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

@@ -108,6 +108,7 @@ final class OnboardingManager: ObservableObject {
     @Published var llmProvider: String? = nil  // "openai", "anthropic", or "local"
     @Published var hasConfiguredLLM = false
     @Published var selectedProvider: String = "local"
+    @Published var selectedLocalModel: String? = nil  // Persists selected local AI model
     @Published var openAIKey: String = ""
     @Published var anthropicKey: String = ""
 
@@ -133,9 +134,11 @@ final class OnboardingManager: ObservableObject {
     }
 
     deinit {
-        // Code review todo #9: Clean up timer to prevent memory leaks
+        // Clean up all timers to prevent memory leaks
         Task { @MainActor in
             stopAccessibilityPolling()
+            stopMicrophonePolling()
+            stopScreenRecordingPolling()
         }
     }
 
@@ -173,6 +176,7 @@ final class OnboardingManager: ObservableObject {
         selectedModelType = "parakeet"
         llmProvider = nil
         hasConfiguredLLM = false
+        selectedLocalModel = nil
         errorMessage = nil
     }
 
@@ -185,24 +189,67 @@ final class OnboardingManager: ObservableObject {
     }
 
     func checkMicrophonePermission() {
-        AVAudioApplication.requestRecordPermission { granted in
-            DispatchQueue.main.async {
-                self.hasMicrophonePermission = granted
-            }
+        // Check current authorization status without requesting
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            hasMicrophonePermission = true
+        case .notDetermined, .denied, .restricted:
+            hasMicrophonePermission = false
+        @unknown default:
+            hasMicrophonePermission = false
         }
     }
 
     func requestMicrophonePermission() async {
         isRequestingPermission = true
-        await withCheckedContinuation { continuation in
-            AVAudioApplication.requestRecordPermission { granted in
-                DispatchQueue.main.async {
-                    self.hasMicrophonePermission = granted
-                    self.isRequestingPermission = false
-                    continuation.resume()
+
+        // Check current status first
+        let currentStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+
+        if currentStatus == .denied || currentStatus == .restricted {
+            // Permission was denied - need to open System Settings
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+            startMicrophonePolling()
+            isRequestingPermission = false
+        } else {
+            // Permission not determined yet - request it
+            await withCheckedContinuation { continuation in
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    DispatchQueue.main.async {
+                        self.hasMicrophonePermission = granted
+                        self.isRequestingPermission = false
+
+                        // If denied, start polling in case user opens Settings manually
+                        if !granted {
+                            self.startMicrophonePolling()
+                        }
+
+                        continuation.resume()
+                    }
                 }
             }
         }
+    }
+
+    private var microphoneCheckTimer: Timer?
+
+    private func startMicrophonePolling() {
+        microphoneCheckTimer?.invalidate()
+        microphoneCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.checkMicrophonePermission()
+                if self?.hasMicrophonePermission == true {
+                    self?.stopMicrophonePolling()
+                }
+            }
+        }
+    }
+
+    private func stopMicrophonePolling() {
+        microphoneCheckTimer?.invalidate()
+        microphoneCheckTimer = nil
     }
 
     func checkAccessibilityPermission() {
@@ -220,7 +267,21 @@ final class OnboardingManager: ObservableObject {
         // Screen recording permission check
         // On macOS 10.15+, we check if we can capture screen content
         if #available(macOS 10.15, *) {
-            hasScreenRecordingPermission = CGPreflightScreenCaptureAccess()
+            // CGPreflightScreenCaptureAccess() is unreliable - it often returns false
+            // even when permission is granted. Instead, try to actually capture.
+            let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]
+
+            // If we can see window info, we have permission
+            // Screen Recording permission affects ability to see window titles/owners
+            if let windows = windowList, !windows.isEmpty {
+                // Check if we can see detailed window info (requires screen recording permission)
+                let hasDetailedInfo = windows.contains { window in
+                    window[kCGWindowOwnerName as String] != nil
+                }
+                hasScreenRecordingPermission = hasDetailedInfo
+            } else {
+                hasScreenRecordingPermission = false
+            }
         } else {
             hasScreenRecordingPermission = true
         }
@@ -229,12 +290,44 @@ final class OnboardingManager: ObservableObject {
     func requestScreenRecordingPermission() {
         if #available(macOS 10.15, *) {
             // This will trigger the system permission dialog
-            CGRequestScreenCaptureAccess()
-            // Wait a moment then check again
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                self.checkScreenRecordingPermission()
+            let didShowPrompt = CGRequestScreenCaptureAccess()
+
+            if didShowPrompt {
+                // Prompt was shown - start polling for permission grant
+                startScreenRecordingPolling()
+            } else {
+                // Permission already granted or prompt couldn't be shown
+                // Check immediately
+                checkScreenRecordingPermission()
+
+                // If still not granted, open System Settings
+                if !hasScreenRecordingPermission {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                        NSWorkspace.shared.open(url)
+                    }
+                    startScreenRecordingPolling()
+                }
             }
         }
+    }
+
+    private var screenRecordingCheckTimer: Timer?
+
+    private func startScreenRecordingPolling() {
+        screenRecordingCheckTimer?.invalidate()
+        screenRecordingCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.checkScreenRecordingPermission()
+                if self?.hasScreenRecordingPermission == true {
+                    self?.stopScreenRecordingPolling()
+                }
+            }
+        }
+    }
+
+    private func stopScreenRecordingPolling() {
+        screenRecordingCheckTimer?.invalidate()
+        screenRecordingCheckTimer = nil
     }
 
     private func startAccessibilityPolling() {
@@ -348,6 +441,15 @@ final class OnboardingManager: ObservableObject {
 
     func performStatusChecks() async {
         allChecksComplete = false
+
+        // 0. Pre-flight: Verify microphone permission (required for all modes)
+        // This ensures permission is granted before launching services that might trigger dialogs
+        checkMicrophonePermission()
+        if !hasMicrophonePermission {
+            // If permission somehow not granted, show clear error
+            await updateCheck(.modelSelection, status: .error("Microphone permission required"))
+            return
+        }
 
         // 1. Model Selection (instant)
         await updateCheck(.modelSelection, status: .complete)

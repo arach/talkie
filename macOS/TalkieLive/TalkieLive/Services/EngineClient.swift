@@ -8,6 +8,7 @@
 import Foundation
 import AppKit
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
 
@@ -41,32 +42,41 @@ private func devLog(_ message: String, level: LogLevel = .info, file: String = #
     #endif
 }
 
-/// Engine service modes for XPC connection
+/// Engine service modes for XPC connection (aligned with TalkieEnvironment)
 public enum EngineServiceMode: String, CaseIterable, Identifiable {
     case production = "jdi.talkie.engine.xpc"
+    case staging = "jdi.talkie.engine.xpc.staging"
     case dev = "jdi.talkie.engine.xpc.dev"
-    case debug = "jdi.talkie.engine.xpc.dev.debug"
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
         case .production: return "Production"
-        case .dev: return "Dev (Daemon)"
-        case .debug: return "Debug (Xcode)"
+        case .staging: return "Staging"
+        case .dev: return "Dev"
         }
     }
 
     public var shortName: String {
         switch self {
         case .production: return "PROD"
+        case .staging: return "STAGE"
         case .dev: return "DEV"
-        case .debug: return "DBG"
         }
     }
 
-    /// Whether this is debug mode (orange indicator)
-    public var isDebugMode: Bool { self == .debug }
+    /// Initialize from TalkieEnvironment
+    public init(from environment: TalkieEnvironment) {
+        switch environment {
+        case .production:
+            self = .production
+        case .staging:
+            self = .staging
+        case .dev:
+            self = .dev
+        }
+    }
 }
 
 /// XPC protocol for TalkieEngine (must match TalkieEngine's protocol)
@@ -297,21 +307,14 @@ public final class EngineClient: ObservableObject {
             return
         }
 
-        // Check if this is a dev build by bundle ID or explicit dev flag
-        let isDevBuild = Bundle.main.bundleIdentifier?.contains(".dev") == true ||
-                         UserDefaults.standard.bool(forKey: "TalkieLiveUseDevEngine")
+        // Determine mode from current environment
+        let environment = TalkieEnvironment.current
+        let primaryMode = EngineServiceMode(from: environment)
 
-        #if DEBUG
-        // Honor system: try debug (Xcode) first, fall back to dev (daemon)
-        connectWithFallback(modes: [.debug, .dev])
-        #else
-        // Release: use dev mode if bundle ID contains ".dev" or dev flag is set
-        if isDevBuild {
-            connectWithFallback(modes: [.dev, .production])
-        } else {
-            connectToMode(.production)
-        }
-        #endif
+        // Connect directly to environment-specific engine
+        connectToMode(primaryMode)
+
+        logger.info("[Engine] Connecting to \(environment.displayName) engine (\(primaryMode.rawValue))")
     }
 
     /// Try connecting to modes in order until one succeeds
@@ -458,16 +461,6 @@ public final class EngineClient: ObservableObject {
         if wasConnected {
             let sessionDuration = connectedAt.map { formatDuration(since: $0) } ?? "unknown"
             logger.info("[Engine] Disconnected from \(wasMode?.shortName ?? "?") after \(sessionDuration)")
-
-            // If we were on debug, try falling back to dev
-            #if DEBUG
-            if wasMode == .debug {
-                logger.info("[Engine] Debug disconnected, falling back to dev daemon...")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    self?.connectToMode(.dev)
-                }
-            }
-            #endif
         }
 
         connectedAt = nil

@@ -6,7 +6,7 @@
     <string>jdi.talkie.engine.dev</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/arach/dev/talkie/build/TalkieEngine/Build/Products/Release/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
+        <string>/Users/arach/Library/Developer/Xcode/DerivedData/TalkieEngine-ehzficuijkrlribwzymnhyricrnu/Build/Products/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
         <string>--daemon</string>
     </array>
     <key>MachServices</key>
@@ -20,5 +20,9 @@
     <true/>
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/jdi.talkie.engine.dev.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jdi.talkie.engine.dev.stderr.log</string>
 </dict>
 </plist>

@@ -10,14 +10,14 @@
 import Foundation
 import AppKit
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TalkieServiceMonitor")
 
-/// Bundle identifiers for TalkieEngine (production and development)
-private let kTalkieEngineBundleIds = [
-    "jdi.talkie.engine",      // Production
-    "jdi.talkie.engine.dev"   // Development (Xcode builds)
-]
+/// Bundle identifier for TalkieEngine (environment-aware)
+private var kTalkieEngineBundleId: String {
+    TalkieEnvironment.current.engineBundleId
+}
 
 /// Process state for TalkieEngine
 public enum TalkieServiceState: String {
@@ -126,11 +126,8 @@ public final class TalkieServiceMonitor: ObservableObject {
 
     /// Refresh process state by checking for TalkieEngine process
     public func refreshState() {
-        // Check for TalkieEngine using NSRunningApplication (try all known bundle IDs)
-        var apps: [NSRunningApplication] = []
-        for bundleId in kTalkieEngineBundleIds {
-            apps.append(contentsOf: NSRunningApplication.runningApplications(withBundleIdentifier: bundleId))
-        }
+        // Check for TalkieEngine using NSRunningApplication (environment-specific)
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: kTalkieEngineBundleId)
 
         if let app = apps.first {
             let wasRunning = state == .running

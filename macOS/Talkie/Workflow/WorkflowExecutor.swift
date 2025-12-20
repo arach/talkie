@@ -20,6 +20,15 @@ struct WorkflowContext {
     var date: Date
     var outputs: [String: String] = [:]
 
+    // MARK: - Backend Support (WFKit)
+    /// Reference to the voice memo being processed (needed for LocalSwiftBackend)
+    /// Stored as unowned to avoid retain cycles - memo must outlive context
+    unowned var memo: VoiceMemo
+
+    /// Core Data context for persistence operations
+    /// Stored as unowned to avoid retain cycles
+    unowned var coreDataContext: NSManagedObjectContext
+
     /// Filename-safe date formatter (2025-11-26)
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -187,10 +196,16 @@ class WorkflowExecutor: ObservableObject {
             ProcessInfo.processInfo.endActivity(activity)
         }
 
+        // Track workflow timing
+        let workflowStartTime = Date()
+        let runId = UUID()
+
         var workflowContext = WorkflowContext(
             transcript: transcript,  // May be empty for transcription-first workflows
             title: memo.title ?? "Untitled",
-            date: memo.createdAt ?? Date()
+            date: memo.createdAt ?? Date(),
+            memo: memo,
+            coreDataContext: context
         )
 
         // Add workflow name to context for use in templates
@@ -269,6 +284,7 @@ class WorkflowExecutor: ObservableObject {
             }
 
             logger.info("🔄 Executing step \(index + 1)...")
+            let stepStartTime = Date()
             let output: String
             do {
                 output = try await executeStep(step, context: &workflowContext, memo: memo, coreDataContext: context)
@@ -300,14 +316,17 @@ class WorkflowExecutor: ObservableObject {
             }
             workflowContext.outputs[step.outputKey] = output
             logger.info("💾 Saved output to key '\(step.outputKey)'")
-            // Record step execution
+            // Record step execution with timing
+            let stepCompletedTime = Date()
             stepExecutions.append(StepExecution(
                 stepNumber: index + 1,
                 stepType: step.type.rawValue,
                 stepIcon: step.type.icon,
                 input: stepInput,
                 output: output,
-                outputKey: step.outputKey
+                outputKey: step.outputKey,
+                startedAt: stepStartTime,
+                completedAt: stepCompletedTime
             ))
 
             await SystemEventManager.shared.log(.workflow, "Step \(index + 1) completed", detail: workflow.name)
@@ -319,16 +338,23 @@ class WorkflowExecutor: ObservableObject {
         PendingActionsManager.shared.completeAction(id: pendingActionId)
 
         await SystemEventManager.shared.log(.workflow, "Completed: \(workflow.name)", detail: "\(workflow.steps.count) steps")
-        // Save workflow run to Core Data
+
+        // Track workflow completion time
+        let workflowCompletedTime = Date()
+
+        // Save workflow run with full event sourcing
         let finalOutput = workflowContext.outputs.values.joined(separator: "\n\n---\n\n")
         saveWorkflowRun(
+            runId: runId,
             workflow: workflow,
             output: finalOutput,
             stepExecutions: stepExecutions,
             providerName: usedProvider,
             modelId: usedModel,
             memo: memo,
-            context: context
+            context: context,
+            startedAt: workflowStartTime,
+            completedAt: workflowCompletedTime
         )
 
         return workflowContext.outputs
@@ -342,20 +368,27 @@ class WorkflowExecutor: ObservableObject {
         let input: String
         let output: String
         let outputKey: String
+        let startedAt: Date
+        let completedAt: Date
+        var durationMs: Int {
+            Int(completedAt.timeIntervalSince(startedAt) * 1000)
+        }
     }
 
     // MARK: - Save Workflow Run
     private func saveWorkflowRun(
+        runId: UUID,
         workflow: WorkflowDefinition,
         output: String,
         stepExecutions: [StepExecution],
         providerName: String?,
         modelId: String?,
         memo: VoiceMemo,
-        context: NSManagedObjectContext
+        context: NSManagedObjectContext,
+        startedAt: Date,
+        completedAt: Date
     ) {
-        let runId = UUID()
-        let runDate = Date()
+        let runDate = completedAt
 
         // Encode step executions as JSON
         var stepOutputsJSON: String? = nil
@@ -364,26 +397,119 @@ class WorkflowExecutor: ObservableObject {
             stepOutputsJSON = jsonString
         }
 
-        // BRIDGE 2a: Save to GRDB first (primary database)
-        logger.info("🌉 [Bridge 2] Saving workflow run to GRDB: \(workflow.name)")
+        // BRIDGE 2a: Save to GRDB with full event sourcing
+        logger.info("🌉 [Bridge 2] Saving workflow run with event sourcing to GRDB: \(workflow.name)")
         Task {
             do {
                 let repository = GRDBRepository()
+
+                // Calculate duration
+                let durationMs = Int(completedAt.timeIntervalSince(startedAt) * 1000)
+
+                // Encode outputs as JSON
+                let finalOutputsJSON: String?
+                if let jsonData = try? JSONEncoder().encode(["final": output]),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    finalOutputsJSON = jsonString
+                } else {
+                    finalOutputsJSON = nil
+                }
+
+                // 1. Create workflow run
                 let workflowRun = WorkflowRunModel(
                     id: runId,
                     memoId: memo.id ?? UUID(),
                     workflowId: workflow.id,
                     workflowName: workflow.name,
                     workflowIcon: workflow.icon,
-                    output: output,
-                    status: "completed",
+                    status: .completed,
+                    createdAt: startedAt,
+                    updatedAt: completedAt,
+                    startedAt: startedAt,
+                    completedAt: completedAt,
                     runDate: runDate,
+                    inputTranscript: memo.currentTranscript,
+                    inputTitle: memo.title,
+                    inputDate: memo.createdAt,
+                    output: output,
+                    finalOutputs: finalOutputsJSON,
+                    durationMs: durationMs,
+                    stepCount: stepExecutions.count,
+                    triggerSource: .manual,
                     modelId: modelId,
                     providerName: providerName,
-                    stepOutputsJSON: stepOutputsJSON
+                    stepOutputsJSON: stepOutputsJSON,
+                    backendId: "local-swift",
+                    workflowVersion: 1
                 )
                 try await repository.saveWorkflowRun(workflowRun)
-                logger.info("✅ [Bridge 2] Saved to GRDB: \(workflow.name)")
+                logger.info("✅ [Event Sourcing] Saved workflow run")
+
+                // 2. Create workflow steps
+                var eventSequence = 0
+                for stepExecution in stepExecutions {
+                    let stepModel = WorkflowStepModel(
+                        id: UUID(),
+                        runId: runId,
+                        stepNumber: stepExecution.stepNumber,
+                        stepType: stepExecution.stepType,
+                        stepConfig: "{}",
+                        outputKey: stepExecution.outputKey,
+                        status: .completed,
+                        createdAt: stepExecution.startedAt,
+                        startedAt: stepExecution.startedAt,
+                        completedAt: stepExecution.completedAt,
+                        inputSnapshot: String(stepExecution.input.prefix(1000)),
+                        outputValue: String(stepExecution.output.prefix(1000)),
+                        durationMs: stepExecution.durationMs,
+                        retryCount: 0,
+                        backendId: "local-swift"
+                    )
+                    try await repository.saveWorkflowStep(stepModel)
+                }
+                logger.info("✅ [Event Sourcing] Saved \(stepExecutions.count) workflow steps")
+
+                // 3. Create workflow events
+                // Run created event
+                let runCreatedEvent = WorkflowEventModel.runCreated(
+                    runId: runId,
+                    workflowName: workflow.name,
+                    triggerSource: "manual"
+                )
+                try await repository.saveWorkflowEvent(runCreatedEvent)
+                eventSequence += 1
+
+                // Run started event
+                var runStartedEvent = WorkflowEventModel.runStarted(runId: runId)
+                runStartedEvent.createdAt = startedAt
+                try await repository.saveWorkflowEvent(runStartedEvent)
+                eventSequence += 1
+
+                // Step completed events
+                for stepExecution in stepExecutions {
+                    let stepCompletedEvent = WorkflowEventModel.stepCompleted(
+                        runId: runId,
+                        stepId: UUID(),
+                        stepNumber: stepExecution.stepNumber,
+                        stepType: stepExecution.stepType,
+                        outputKey: stepExecution.outputKey,
+                        outputLength: stepExecution.output.count,
+                        duration: stepExecution.completedAt.timeIntervalSince(stepExecution.startedAt)
+                    )
+                    try await repository.saveWorkflowEvent(stepCompletedEvent)
+                    eventSequence += 1
+                }
+
+                // Run completed event
+                let runCompletedEvent = WorkflowEventModel.runCompleted(
+                    runId: runId,
+                    outputCount: stepExecutions.count,
+                    duration: completedAt.timeIntervalSince(startedAt)
+                )
+                try await repository.saveWorkflowEvent(runCompletedEvent)
+
+                logger.info("✅ [Event Sourcing] Saved \(eventSequence + 1) workflow events")
+                logger.info("✅ [Bridge 2] Complete workflow run saved to GRDB with full event sourcing")
             } catch {
                 logger.error("❌ [Bridge 2] Failed to save to GRDB: \(error.localizedDescription)")
             }

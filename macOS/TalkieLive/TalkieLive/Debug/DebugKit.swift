@@ -10,6 +10,7 @@
 import SwiftUI
 import os.log
 import DebugKit
+import TalkieKit
 
 // MARK: - Particle Preset
 
@@ -3083,7 +3084,7 @@ struct DebugToolbarOverlay<Content: View>: View {
         AppLogger.shared.log(.system, "Test utterance created", detail: "ID: \(utteranceId)")
 
         // Open the interstitial URL
-        let urlString = "talkie://interstitial/\(utteranceId)"
+        let urlString = "\(TalkieEnvironment.current.talkieURLScheme)://interstitial/\(utteranceId)"
         guard let url = URL(string: urlString) else {
             NSLog("[DEBUG] Invalid URL: \(urlString)")
             return

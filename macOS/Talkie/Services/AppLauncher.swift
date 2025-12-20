@@ -10,6 +10,7 @@ import Foundation
 import AppKit
 import ServiceManagement
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppLauncher")
 
@@ -19,9 +20,9 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppLauncher
 final class AppLauncher: ObservableObject {
     static let shared = AppLauncher()
 
-    // Bundle identifiers for helper apps
-    static let engineBundleId = "jdi.talkie.engine"
-    static let liveBundleId = "jdi.talkie.live"
+    // Bundle identifiers for helper apps (environment-aware)
+    static var engineBundleId: String { TalkieEnvironment.current.engineBundleId }
+    static var liveBundleId: String { TalkieEnvironment.current.liveBundleId }
 
     // Published state for UI
     @Published private(set) var engineStatus: HelperStatus = .unknown
@@ -197,7 +198,7 @@ final class AppLauncher: ObservableObject {
 
     // MARK: - Launch/Terminate
 
-    /// Launch TalkieEngine based on current service mode
+    /// Launch TalkieEngine based on current environment
     func launchEngine() {
         // Guard: don't launch if already running
         if isAppRunning(bundleId: Self.engineBundleId) {
@@ -206,25 +207,20 @@ final class AppLauncher: ObservableObject {
             return
         }
 
-        let mode = EngineClient.shared.connectedMode ?? .dev
+        let environment = TalkieEnvironment.current
 
-        switch mode {
-        case .production:
-            // Launch production app from /Applications
+        switch environment {
+        case .production, .staging:
+            // Launch app from expected location
             launchHelper(bundleId: Self.engineBundleId)
 
         case .dev:
-            // Start launchd daemon
+            // For dev, try launching via launchd daemon first
             logger.info("Starting dev engine via launchctl...")
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-            task.arguments = ["start", "jdi.talkie.engine.dev"]
+            task.arguments = ["start", Self.engineBundleId]
             try? task.run()
-
-        case .debug:
-            // Debug mode requires Xcode
-            logger.warning("Debug engine must be launched from Xcode")
-            // Could show alert to user here
         }
 
         // Refresh status after a delay

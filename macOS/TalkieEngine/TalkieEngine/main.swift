@@ -171,29 +171,39 @@ var listenerDelegate: EngineListenerDelegate!
 autoreleasepool {
     AppLogger.shared.info(.system, "TalkieEngine starting (PID: \(ProcessInfo.processInfo.processIdentifier), mode: \(isDaemonMode ? "daemon" : "debug"))...")
 
-    // Determine XPC service name based on launch mode
-    // Debug and Dev can run side-by-side on different XPC services
+    // Determine XPC service name based on bundle ID and launch mode
+    // Multiple environments can run side-by-side on different XPC services
     let activeServiceName: String
     let activeMode: EngineServiceMode
 
-    #if DEBUG
-    if isDaemonMode {
-        // Daemon mode: use dev XPC (always running in background)
+    // Check bundle identifier to determine environment (matches TalkieEnvironment)
+    let bundleId = Bundle.main.bundleIdentifier ?? "jdi.talkie.engine"
+    let isStaging = bundleId.contains(".staging")
+    let isDev = bundleId.contains(".dev")
+
+    // Use same mode detection as TalkieEnvironment for consistency
+    NSLog("[TalkieEngine] Bundle ID: \(bundleId)")
+    NSLog("[TalkieEngine] isDev: \(isDev), isStaging: \(isStaging)")
+
+    if isDev {
+        // Dev build (Debug configuration with .dev bundle suffix)
         activeServiceName = EngineServiceMode.dev.rawValue
         activeMode = .dev
-        AppLogger.shared.info(.system, "Running as DEV daemon → \(activeServiceName)")
+        NSLog("[TalkieEngine] ✅ Running as DEV → XPC service: \(activeServiceName)")
+        AppLogger.shared.info(.system, "Running as DEV → \(activeServiceName)")
+    } else if isStaging {
+        // Staging build
+        activeServiceName = EngineServiceMode.staging.rawValue
+        activeMode = .staging
+        NSLog("[TalkieEngine] ✅ Running as STAGING → XPC service: \(activeServiceName)")
+        AppLogger.shared.info(.system, "Running as STAGING → \(activeServiceName)")
     } else {
-        // Xcode mode: use debug XPC (active development)
-        activeServiceName = EngineServiceMode.debug.rawValue
-        activeMode = .debug
-        AppLogger.shared.info(.system, "Running as DEBUG from Xcode → \(activeServiceName)")
+        // Production build
+        activeServiceName = EngineServiceMode.production.rawValue
+        activeMode = .production
+        NSLog("[TalkieEngine] ✅ Running as PRODUCTION → XPC service: \(activeServiceName)")
+        AppLogger.shared.info(.system, "Running as PRODUCTION → \(activeServiceName)")
     }
-    #else
-    // Production build - always use production XPC
-    activeServiceName = EngineServiceMode.production.rawValue
-    activeMode = .production
-    AppLogger.shared.info(.system, "Running as PROD → \(activeServiceName)")
-    #endif
 
     // No ensureSingleInstance() - debug and dev can coexist!
 
@@ -212,11 +222,13 @@ autoreleasepool {
     listenerDelegate = EngineListenerDelegate(wrapper: serviceWrapper)
 
     // Create listener for the Mach service
+    NSLog("[TalkieEngine] 🔌 Creating XPC listener for: \(activeServiceName)")
     AppLogger.shared.info(.system, "TalkieEngine: Setting up XPC listener for \(activeServiceName)")
     xpcListener = NSXPCListener(machServiceName: activeServiceName)
     xpcListener.delegate = listenerDelegate
     xpcListener.resume()
 
+    NSLog("[TalkieEngine] ✅ XPC listener resumed and ready to accept connections")
     AppLogger.shared.info(.system, "TalkieEngine: XPC listener resumed, starting app...")
 
     // Configure status manager with launch mode info

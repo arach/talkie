@@ -4,6 +4,12 @@ options:
   deploymentTarget:
     macOS: "14.0"
   developmentLanguage: en
+  createIntermediateGroups: true
+
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
 
 settings:
   base:
@@ -11,12 +17,30 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     ENABLE_HARDENED_RUNTIME: YES
+    ARCHS: arm64  # Apple Silicon only
+  configs:
+    Debug:
+      PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.core.dev
+      URL_SCHEME: talkie-dev
+    Staging:
+      PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.core.staging
+      URL_SCHEME: talkie-staging
+      CODE_SIGN_ENTITLEMENTS: Talkie-Staging.entitlements
+      ENABLE_HARDENED_RUNTIME: NO
+      # Keep debug symbols for debugging - staging is a dev build
+    Release:
+      PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.core
+      URL_SCHEME: talkie
+      # Optimize for size
+      DEAD_CODE_STRIPPING: YES
+      COPY_PHASE_STRIP: YES
+      SWIFT_OPTIMIZATION_LEVEL: -Osize
 
 packages:
   TalkieKit:
     path: ../TalkieKit
   DebugKit:
-    path: ../../../DebugKit
+    path: ../../Packages/DebugKit
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
     version: 0.7.11
@@ -24,7 +48,7 @@ packages:
     url: https://github.com/groue/GRDB.swift.git
     version: 7.8.0
   WFKit:
-    path: ../../WFKit
+    path: ../../Packages/WFKit
   mlx-swift:
     url: https://github.com/ml-explore/mlx-swift.git
     version: 0.29.1
@@ -37,21 +61,42 @@ targets:
     type: application
     platform: macOS
     sources:
-      - App
-      - Models
-      - Views
-      - Services
-      - Workflow
-      - Resources
+      - path: App
+        type: group
+      - path: Components
+        type: group
+      - path: Data
+        type: group
+        excludes:
+          - "*.md"
+      - path: Database
+        type: group
+      - path: Debug
+        type: group
+        excludes:
+          - "*.md"
+      - path: Interstitial
+        type: group
+      - path: Models
+        type: group
+      - path: Resources
+        type: folder
+      - path: Services
+        type: group
+      - path: Stores
+        type: group
+      - path: Views
+        type: group
+      - path: Workflow
+        type: group
       - Assets.xcassets
-      - Interstitial
     info:
       path: Talkie-Info.plist
       properties:
         CFBundleURLTypes:
           - CFBundleURLName: Talkie URL
             CFBundleURLSchemes:
-              - talkie
+              - $(URL_SCHEME)
     dependencies:
       - package: TalkieKit
       - package: DebugKit
@@ -66,7 +111,6 @@ targets:
         product: MLXLMCommon
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.core
         MARKETING_VERSION: "1.6.1"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
@@ -86,3 +130,11 @@ schemes:
       config: Debug
     archive:
       config: Release
+  Talkie-Staging:
+    build:
+      targets:
+        Talkie: all
+    run:
+      config: Staging
+    archive:
+      config: Staging

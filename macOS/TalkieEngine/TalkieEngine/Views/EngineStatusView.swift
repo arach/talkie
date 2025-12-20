@@ -40,8 +40,8 @@ extension EngineServiceMode {
     /// Color for UI display (SwiftUI Color)
     var color: Color {
         switch self {
-        case .debug: return .orange
         case .dev: return Color(red: 0.4, green: 0.8, blue: 0.4)  // Green
+        case .staging: return Color(red: 1.0, green: 0.6, blue: 0.2)  // Orange for staging
         case .production: return .gray
         }
     }
@@ -606,7 +606,7 @@ struct EngineStatusView: View {
         output += "Uptime: \(statusManager.formattedUptime)\n"
         output += "Started: \(statusManager.uptime > 0 ? Date(timeIntervalSinceNow: -statusManager.uptime).formatted(.dateTime) : "N/A")\n"
         output += "Current Model: \(statusManager.currentModel ?? "None")\n"
-        output += "Debug Build: \(statusManager.launchMode == .debug ? "Yes" : "No")\n\n"
+        output += "Build Mode: \(statusManager.launchMode.displayName)\n\n"
 
         // Performance Stats
         output += "--- PERFORMANCE ---\n"

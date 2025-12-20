@@ -32,6 +32,7 @@ struct OnboardingView: View {
             VStack(spacing: 0) {
                 // Top bar - fixed height for consistent layout
                 HStack {
+                    #if DEBUG
                     // Debug hint (subtle but clickable)
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
@@ -61,6 +62,7 @@ struct OnboardingView: View {
                         }
                     }
                     .help("Toggle debug navigation (⌘D)")
+                    #endif
 
                     Spacer()
 
@@ -159,6 +161,7 @@ struct OnboardingView: View {
         }
         .background(WindowAccessor())
         .onAppear {
+            #if DEBUG
             // Set up keyboard shortcut listener
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d" {
@@ -170,15 +173,19 @@ struct OnboardingView: View {
                 }
                 return event
             }
+            #endif
         }
         .onDisappear {
+            #if DEBUG
             // Clean up keyboard monitor
             if let monitor = keyMonitor {
                 NSEvent.removeMonitor(monitor)
                 keyMonitor = nil
             }
+            #endif
         }
         .frame(width: 680, height: 560)
+        #if DEBUG
         .overlay(alignment: .bottom) {
             // Debug shelf - overlays the bottom of the window
             if showDebugToolbar {
@@ -196,11 +203,13 @@ struct OnboardingView: View {
                 .transition(.move(edge: .bottom))
             }
         }
+        #endif
     }
 }
 
 // MARK: - Debug Shelf
 
+#if DEBUG
 private struct DebugShelf: View {
     let colors: OnboardingColors
     @Binding var currentStep: OnboardingStep
@@ -521,6 +530,7 @@ private struct DebugStepButton: View {
         .buttonStyle(.plain)
     }
 }
+#endif
 
 #Preview("Light") {
     OnboardingView()

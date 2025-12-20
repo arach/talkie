@@ -31,6 +31,13 @@ struct StatusCheckView: View {
         return "Verifying setup..."
     }
 
+    private var hasInProgressCheck: Bool {
+        manager.checkStatuses.contains { check in
+            if case .inProgress = check.value { return true }
+            return false
+        }
+    }
+
     var body: some View {
         OnboardingStepLayout(
             colors: colors,
@@ -123,6 +130,14 @@ struct StatusCheckView: View {
                                 .strokeBorder(colors.border, lineWidth: 1)
                         )
                 )
+
+                // Helper note about permissions
+                if !manager.allChecksComplete && hasInProgressCheck {
+                    Text("Note: Helper apps may request microphone permission")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(colors.textTertiary.opacity(0.7))
+                        .padding(.top, Spacing.xs)
+                }
             },
             cta: {
                 if manager.allChecksComplete {

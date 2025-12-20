@@ -205,9 +205,11 @@ final class CoreDataMigration {
             workflowId: workflowId,
             workflowName: workflowName,
             workflowIcon: workflowIcon,
-            output: output,
-            status: status,
+            status: WorkflowRunModel.Status(rawValue: status) ?? .completed,
+            createdAt: runDate,
+            updatedAt: runDate,
             runDate: runDate,
+            output: output,
             modelId: modelId,
             providerName: providerName,
             stepOutputsJSON: stepOutputsJSON

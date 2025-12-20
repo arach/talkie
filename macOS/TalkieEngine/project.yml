@@ -1,9 +1,45 @@
 name: TalkieEngine
 options:
-  bundleIdPrefix: live.talkie
+  bundleIdPrefix: jdi
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "16.0"
+
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
+
+schemes:
+  TalkieEngine:
+    build:
+      targets:
+        TalkieEngine: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  TalkieEngine-Staging:
+    build:
+      targets:
+        TalkieEngine: all
+    run:
+      config: Staging
+    archive:
+      config: Staging
+
+settings:
+  base:
+    ARCHS: arm64  # Apple Silicon only - MLX requires it anyway
+    DEVELOPMENT_TEAM: 2U83JFPW66
+    CODE_SIGN_STYLE: Automatic
+  configs:
+    Debug:
+      PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.engine.dev
+    Staging:
+      PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.engine.staging
+    Release:
+      PRODUCT_BUNDLE_IDENTIFIER: jdi.talkie.engine
 
 packages:
   WhisperKit:
@@ -21,13 +57,10 @@ targets:
       - path: TalkieEngine
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: live.talkie.engine
         INFOPLIST_FILE: TalkieEngine/Info.plist
         CODE_SIGN_ENTITLEMENTS: TalkieEngine/TalkieEngine.entitlements
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         SWIFT_VERSION: "5.9"
-        CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
         PRODUCT_NAME: TalkieEngine
         ENABLE_HARDENED_RUNTIME: YES
     dependencies:

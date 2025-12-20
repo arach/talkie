@@ -12,11 +12,22 @@ struct LLMConfigView: View {
     let onNext: () -> Void
     @ObservedObject private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedModel: LocalAIModel? = nil
     @State private var isPulsing = false
 
     private var colors: OnboardingColors {
         OnboardingColors.forScheme(colorScheme)
+    }
+
+    // Use computed property to sync with manager's state
+    private var selectedModel: LocalAIModel? {
+        get {
+            guard let rawValue = manager.selectedLocalModel else { return nil }
+            return LocalAIModel(rawValue: rawValue)
+        }
+    }
+
+    private func selectModel(_ model: LocalAIModel) {
+        manager.selectedLocalModel = model.rawValue
     }
 
     var body: some View {
@@ -57,7 +68,7 @@ struct LLMConfigView: View {
                                 isSelected: selectedModel == model,
                                 onSelect: {
                                     withAnimation {
-                                        selectedModel = model
+                                        selectModel(model)
                                     }
                                 }
                             )
@@ -107,7 +118,8 @@ struct LLMConfigView: View {
 
     private func handleContinue() {
         // Save selected local model if any
-        if let model = selectedModel {
+        if let rawValue = manager.selectedLocalModel,
+           let model = LocalAIModel(rawValue: rawValue) {
             manager.llmProvider = "local:\(model.rawValue)"
             manager.hasConfiguredLLM = true
         } else {

@@ -1,0 +1,738 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 53GRDB0022EE70000004EEAF4 /* GRDB */; };
+		E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */; };
+				D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */,
+	F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		539FB5CD2EE6785D004EEAF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539FB5B12EE6785C004EEAF4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 539FB5B82EE6785C004EEAF4;
+			remoteInfo = TalkieLive;
+		};
+		539FB5D72EE6785D004EEAF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539FB5B12EE6785C004EEAF4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 539FB5B82EE6785C004EEAF4;
+			remoteInfo = TalkieLive;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		539FB5B92EE6785C004EEAF4 /* TalkieLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		539FB5CC2EE6785D004EEAF4 /* TalkieLiveTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieLiveTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		539FB5D62EE6785D004EEAF4 /* TalkieLiveUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieLiveUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		539FB5BB2EE6785C004EEAF4 /* TalkieLive */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TalkieLive;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		539FB5B62EE6785C004EEAF4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */,
+				F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */,
+				53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5C92EE6785D004EEAF4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5D32EE6785D004EEAF4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		539FB5B02EE6785C004EEAF4 = {
+			isa = PBXGroup;
+			children = (
+				539FB5BB2EE6785C004EEAF4 /* TalkieLive */,
+				539FB5BA2EE6785C004EEAF4 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		539FB5BA2EE6785C004EEAF4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				539FB5B92EE6785C004EEAF4 /* TalkieLive.app */,
+				539FB5CC2EE6785D004EEAF4 /* TalkieLiveTests.xctest */,
+				539FB5D62EE6785D004EEAF4 /* TalkieLiveUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		539FB5B82EE6785C004EEAF4 /* TalkieLive */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539FB5E02EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieLive" */;
+			buildPhases = (
+				539FB5B52EE6785C004EEAF4 /* Sources */,
+				539FB5B62EE6785C004EEAF4 /* Frameworks */,
+				539FB5B72EE6785C004EEAF4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				539FB5BB2EE6785C004EEAF4 /* TalkieLive */,
+			);
+			name = TalkieLive;
+			packageProductDependencies = (
+				A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */,
+				D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */,
+			);
+			productName = TalkieLive;
+			productReference = 539FB5B92EE6785C004EEAF4 /* TalkieLive.app */;
+			productType = "com.apple.product-type.application";
+		};
+		539FB5CB2EE6785D004EEAF4 /* TalkieLiveTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539FB5E32EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieLiveTests" */;
+			buildPhases = (
+				539FB5C82EE6785D004EEAF4 /* Sources */,
+				539FB5C92EE6785D004EEAF4 /* Frameworks */,
+				539FB5CA2EE6785D004EEAF4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				539FB5CE2EE6785D004EEAF4 /* PBXTargetDependency */,
+			);
+			name = TalkieLiveTests;
+			packageProductDependencies = (
+			);
+			productName = TalkieLiveTests;
+			productReference = 539FB5CC2EE6785D004EEAF4 /* TalkieLiveTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		539FB5D52EE6785D004EEAF4 /* TalkieLiveUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539FB5E62EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieLiveUITests" */;
+			buildPhases = (
+				539FB5D22EE6785D004EEAF4 /* Sources */,
+				539FB5D32EE6785D004EEAF4 /* Frameworks */,
+				539FB5D42EE6785D004EEAF4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				539FB5D82EE6785D004EEAF4 /* PBXTargetDependency */,
+			);
+			name = TalkieLiveUITests;
+			packageProductDependencies = (
+			);
+			productName = TalkieLiveUITests;
+			productReference = 539FB5D62EE6785D004EEAF4 /* TalkieLiveUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		539FB5B12EE6785C004EEAF4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					539FB5B82EE6785C004EEAF4 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					539FB5CB2EE6785D004EEAF4 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 539FB5B82EE6785C004EEAF4;
+					};
+					539FB5D52EE6785D004EEAF4 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 539FB5B82EE6785C004EEAF4;
+					};
+				};
+			};
+			buildConfigurationList = 539FB5B42EE6785C004EEAF4 /* Build configuration list for PBXProject "TalkieLive" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 539FB5B02EE6785C004EEAF4;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../DebugKit" */,
+				C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "../TalkieKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 539FB5BA2EE6785C004EEAF4 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				539FB5B82EE6785C004EEAF4 /* TalkieLive */,
+				539FB5CB2EE6785D004EEAF4 /* TalkieLiveTests */,
+				539FB5D52EE6785D004EEAF4 /* TalkieLiveUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		539FB5B72EE6785C004EEAF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5CA2EE6785D004EEAF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5D42EE6785D004EEAF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		539FB5B52EE6785C004EEAF4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5C82EE6785D004EEAF4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5D22EE6785D004EEAF4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		539FB5CE2EE6785D004EEAF4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 539FB5B82EE6785C004EEAF4 /* TalkieLive */;
+			targetProxy = 539FB5CD2EE6785D004EEAF4 /* PBXContainerItemProxy */;
+		};
+		539FB5D82EE6785D004EEAF4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 539FB5B82EE6785C004EEAF4 /* TalkieLive */;
+			targetProxy = 539FB5D72EE6785D004EEAF4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		539FB5DE2EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		539FB5DF2EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		539FB5E12EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = TalkieLive/TalkieLive.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieLive/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Live";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieLive needs microphone access to continuously transcribe your speech in real-time.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.dev;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		539FB5E22EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = TalkieLive/TalkieLive.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieLive/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Live";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieLive needs microphone access to continuously transcribe your speech in real-time.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		539FB5E42EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TalkieLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TalkieLive";
+			};
+			name = Debug;
+		};
+		539FB5E52EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TalkieLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TalkieLive";
+			};
+			name = Release;
+		};
+		539FB5E72EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = TalkieLive;
+			};
+			name = Debug;
+		};
+		539FB5E82EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = TalkieLive;
+			};
+			name = Release;
+		};
+		53ADD0FF2EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Staging;
+		};
+		53ADD1002EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = TalkieLive/TalkieLive.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieLive/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Live";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieLive needs microphone access to continuously transcribe your speech in real-time.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.staging;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Staging;
+		};
+		53ADD1012EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TalkieLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TalkieLive";
+			};
+			name = Staging;
+		};
+		53ADD1022EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2U83JFPW66;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.6.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.live.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = TalkieLive;
+			};
+			name = Staging;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		539FB5B42EE6785C004EEAF4 /* Build configuration list for PBXProject "TalkieLive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5DE2EE6785D004EEAF4 /* Debug */,
+				539FB5DF2EE6785D004EEAF4 /* Release */,
+				53ADD0FF2EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539FB5E02EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieLive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5E12EE6785D004EEAF4 /* Debug */,
+				539FB5E22EE6785D004EEAF4 /* Release */,
+				53ADD1002EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539FB5E32EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieLiveTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5E42EE6785D004EEAF4 /* Debug */,
+				539FB5E52EE6785D004EEAF4 /* Release */,
+				53ADD1012EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539FB5E62EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieLiveUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5E72EE6785D004EEAF4 /* Debug */,
+				539FB5E82EE6785D004EEAF4 /* Release */,
+				53ADD1022EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../DebugKit" */ = {
+				C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "../TalkieKit" */,
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../DebugKit;
+		};
+		C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "../TalkieKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../TalkieKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		53GRDB0022EE70000004EEAF4 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+		A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DebugKit;
+		};
+		D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TalkieKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 539FB5B12EE6785C004EEAF4 /* Project object */;
+}

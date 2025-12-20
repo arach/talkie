@@ -23,7 +23,7 @@
 			<string>Talkie URL</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>talkie</string>
+				<string>$(URL_SCHEME)</string>
 			</array>
 		</dict>
 	</array>

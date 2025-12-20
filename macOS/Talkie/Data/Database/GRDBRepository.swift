@@ -238,6 +238,54 @@ actor GRDBRepository: MemoRepository {
         }
     }
 
+    func saveWorkflowStep(_ step: WorkflowStepModel) async throws {
+        try await instrumentRepositoryWrite("saveWorkflowStep") {
+            let db = try await dbManager.database()
+
+            try await db.write { db in
+                var mutableStep = step
+                try mutableStep.save(db)
+            }
+        }
+    }
+
+    func saveWorkflowEvent(_ event: WorkflowEventModel) async throws {
+        try await instrumentRepositoryWrite("saveWorkflowEvent") {
+            let db = try await dbManager.database()
+
+            try await db.write { db in
+                var mutableEvent = event
+                try mutableEvent.save(db)
+            }
+        }
+    }
+
+    func fetchWorkflowSteps(for runId: UUID) async throws -> [WorkflowStepModel] {
+        try await instrumentRepositoryRead("fetchWorkflowSteps") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try WorkflowStepModel
+                    .filter(WorkflowStepModel.Columns.runId == runId.uuidString)
+                    .order(WorkflowStepModel.Columns.stepNumber.asc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    func fetchWorkflowEvents(for runId: UUID) async throws -> [WorkflowEventModel] {
+        try await instrumentRepositoryRead("fetchWorkflowEvents") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try WorkflowEventModel
+                    .filter(WorkflowEventModel.Columns.runId == runId.uuidString)
+                    .order(WorkflowEventModel.Columns.sequence.asc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
     // MARK: - Helper: Fetch Workflow Counts
 
     nonisolated private func fetchWorkflowCounts(for memoIds: [UUID], in db: Database) throws -> [UUID: Int] {

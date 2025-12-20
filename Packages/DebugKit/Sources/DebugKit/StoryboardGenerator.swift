@@ -8,6 +8,29 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Scenario Configuration
+
+/// Represents a specific path/state through the flow
+public struct Scenario<StepType: RawRepresentable & CaseIterable & Hashable>
+    where StepType.RawValue == Int {
+
+    public let name: String
+    public let stepConfigurations: [StepType: () -> Void]
+
+    public init(
+        name: String,
+        stepConfigurations: [StepType: () -> Void] = [:]
+    ) {
+        self.name = name
+        self.stepConfigurations = stepConfigurations
+    }
+
+    /// Apply configuration for a specific step
+    public func configure(step: StepType) {
+        stepConfigurations[step]?()
+    }
+}
+
 // MARK: - Storyboard Generator
 
 @MainActor
@@ -21,6 +44,7 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
         public let showLayoutGrid: Bool
         public let layoutZones: [LayoutZone]
         public let gridSpacing: CGFloat
+        public let scenarios: [Scenario<StepType>]
 
         public init(
             screenSize: CGSize = CGSize(width: 680, height: 560),
@@ -28,7 +52,8 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
             arrowSpacing: CGFloat = 20,
             showLayoutGrid: Bool = true,
             layoutZones: [LayoutZone] = [],
-            gridSpacing: CGFloat = 8
+            gridSpacing: CGFloat = 8,
+            scenarios: [Scenario<StepType>] = []
         ) {
             self.screenSize = screenSize
             self.arrowWidth = arrowWidth
@@ -36,6 +61,7 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
             self.showLayoutGrid = showLayoutGrid
             self.layoutZones = layoutZones
             self.gridSpacing = gridSpacing
+            self.scenarios = scenarios.isEmpty ? [Scenario(name: "default")] : scenarios
         }
 
         public static var `default`: Configuration {
@@ -56,44 +82,64 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
 
     /// Generate storyboard and save to file
     public func generate(outputPath: String? = nil) async {
-        print("🎬 Generating storyboard...")
+        print("🎬 Generating storyboards for \(config.scenarios.count) scenario(s)...")
 
         // Create hidden window for rendering
         let window = createRenderWindow()
 
-        var screenshots: [NSImage] = []
+        // Generate a storyboard for each scenario
+        for (scenarioIndex, scenario) in config.scenarios.enumerated() {
+            print("\n📋 Scenario \(scenarioIndex + 1)/\(config.scenarios.count): \(scenario.name)")
+            var screenshots: [NSImage] = []
 
-        // Capture each step
-        for step in StepType.allCases {
-            print("  📸 Capturing step \(step.rawValue + 1)/\(StepType.allCases.count)...")
+            // Capture each step
+            for step in StepType.allCases {
+                print("  📸 Capturing step \(step.rawValue + 1)/\(StepType.allCases.count)...")
 
-            // Create view for this step
-            let view = createStepView(for: step)
-            window.contentView = NSHostingView(rootView: view)
-            window.makeKeyAndOrderFront(nil)
+                // Apply scenario configuration for this step
+                scenario.configure(step: step)
 
-            // Wait for rendering
-            try? await Task.sleep(for: .milliseconds(500))
+                // Create view for this step
+                let view = createStepView(for: step)
+                window.contentView = NSHostingView(rootView: view)
+                window.makeKeyAndOrderFront(nil)
 
-            // Capture screenshot
-            if let screenshot = captureWindow(window) {
-                screenshots.append(screenshot)
+                // Wait for rendering
+                try? await Task.sleep(for: .milliseconds(500))
+
+                // Capture screenshot
+                if let screenshot = captureWindow(window) {
+                    screenshots.append(screenshot)
+                }
             }
+
+            // Give a small delay between scenarios
+            if scenarioIndex < config.scenarios.count - 1 {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+
+            // Composite screenshots
+            print("  🎨 Compositing \(screenshots.count) screenshots...")
+            guard let composite = createComposite(screenshots: screenshots) else {
+                print("❌ Failed to create composite")
+                continue
+            }
+
+            // Save to file with scenario name
+            let scenarioPath = outputPath.map { path in
+                // Insert scenario name before extension
+                let url = URL(fileURLWithPath: path)
+                let ext = url.pathExtension
+                let nameWithoutExt = url.deletingPathExtension().lastPathComponent
+                let dir = url.deletingLastPathComponent()
+                let newName = "\(nameWithoutExt)-\(scenario.name).\(ext)"
+                return dir.appendingPathComponent(newName).path
+            }
+            let finalPath = saveStoryboard(composite, to: scenarioPath, scenarioName: scenario.name)
+            print("✅ Storyboard saved to: \(finalPath)")
         }
 
         window.close()
-
-        // Composite screenshots
-        print("  🎨 Compositing \(screenshots.count) screenshots...")
-        guard let composite = createComposite(screenshots: screenshots) else {
-            print("❌ Failed to create composite")
-            exit(1)
-        }
-
-        // Save to file
-        let finalPath = saveStoryboard(composite, to: outputPath)
-        print("✅ Storyboard saved to: \(finalPath)")
-
         exit(0)
     }
 
@@ -209,28 +255,36 @@ public class StoryboardGenerator<StepType: RawRepresentable & CaseIterable & Has
     }
 
     private func drawArrow(at rect: NSRect) {
-        let path = NSBezierPath()
         let midY = rect.midY
+        let arrowHeadWidth: CGFloat = 20
+        let arrowHeadHeight: CGFloat = 16
 
-        // Arrow shaft
-        path.move(to: NSPoint(x: rect.minX, y: midY))
-        path.line(to: NSPoint(x: rect.maxX - 15, y: midY))
+        // Arrow shaft (thicker)
+        let shaftPath = NSBezierPath()
+        shaftPath.move(to: NSPoint(x: rect.minX, y: midY))
+        shaftPath.line(to: NSPoint(x: rect.maxX - arrowHeadWidth, y: midY))
+        NSColor.white.withAlphaComponent(0.6).setStroke()
+        shaftPath.lineWidth = 5
+        shaftPath.stroke()
 
-        // Arrow head
-        path.move(to: NSPoint(x: rect.maxX - 15, y: midY - 10))
-        path.line(to: NSPoint(x: rect.maxX, y: midY))
-        path.line(to: NSPoint(x: rect.maxX - 15, y: midY + 10))
-
-        NSColor.white.withAlphaComponent(0.5).setStroke()
-        path.lineWidth = 3
-        path.stroke()
+        // Filled triangle arrowhead
+        let arrowHeadPath = NSBezierPath()
+        arrowHeadPath.move(to: NSPoint(x: rect.maxX - arrowHeadWidth, y: midY - arrowHeadHeight / 2))
+        arrowHeadPath.line(to: NSPoint(x: rect.maxX, y: midY))
+        arrowHeadPath.line(to: NSPoint(x: rect.maxX - arrowHeadWidth, y: midY + arrowHeadHeight / 2))
+        arrowHeadPath.close()
+        NSColor.white.withAlphaComponent(0.6).setFill()
+        arrowHeadPath.fill()
     }
 
-    private func saveStoryboard(_ image: NSImage, to customPath: String?) -> String {
+    private func saveStoryboard(_ image: NSImage, to customPath: String?, scenarioName: String) -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HHmmss"
         let timestamp = dateFormatter.string(from: Date())
-        let filename = "storyboard-\(timestamp).png"
+
+        // Sanitize scenario name for filename
+        let safeName = scenarioName.replacingOccurrences(of: " ", with: "-").lowercased()
+        let filename = "storyboard-\(safeName)-\(timestamp).png"
 
         let fileURL: URL
         if let customPath = customPath {

@@ -10,6 +10,7 @@ import CloudKit
 import UserNotifications
 import os
 import DebugKit
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppDelegate")
 
@@ -19,16 +20,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private let cliHandler = CLICommandHandler()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Register debug commands
-        registerDebugCommands()
+        NSLog("[AppDelegate] 🎬 applicationDidFinishLaunching called")
 
-        // Check for debug commands (headless execution)
-        Task { @MainActor in
-            if await cliHandler.handleCommandLineArguments() {
-                // Debug command executed, app will exit
-                return
+        // CRITICAL: Check for debug mode SYNCHRONOUSLY before initialization
+        // Debug commands need isolated execution without CloudKit/helpers running
+        let arguments = ProcessInfo.processInfo.arguments
+        let isDebugMode = arguments.contains(where: { $0.starts(with: "--debug=") })
+
+        NSLog("[AppDelegate] isDebugMode = \(isDebugMode)")
+
+        if isDebugMode {
+            NSLog("[AppDelegate] ⚙️ Debug mode - skipping initialization")
+            logger.debug("⚙️ Debug mode detected - running headless, skipping initialization")
+            // Register debug commands and handle them
+            registerDebugCommands()
+            Task { @MainActor in
+                _ = await cliHandler.handleCommandLineArguments()
             }
+            return  // Exit early - don't initialize app services
         }
+
+        NSLog("[AppDelegate] ✓ Normal initialization mode")
+
+        // Normal app initialization (only runs when NOT in debug mode)
+        registerDebugCommands()
 
         // Configure window appearance to match theme before SwiftUI renders
         // This prevents the "flicker" of default colors before theme loads
@@ -49,7 +64,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Ensure helper apps (TalkieLive, TalkieEngine) are running
         // This registers them as login items and launches them if needed
         Task { @MainActor in
+            NSLog("[AppDelegate] 🚀 Starting helper apps...")
             AppLauncher.shared.ensureHelpersRunning()
+
+            // Give TalkieEngine a moment to fully register its XPC service
+            NSLog("[AppDelegate] ⏱️ Waiting 500ms for TalkieEngine XPC registration...")
+            try? await Task.sleep(for: .milliseconds(500))
+
+            // Connect to TalkieEngine XPC service
+            NSLog("[AppDelegate] 🔌 Calling EngineClient.shared.connect()...")
+            EngineClient.shared.connect()
+            NSLog("[AppDelegate] ✓ EngineClient.connect() returned")
         }
 
         // Register URL handler for Apple Events
@@ -88,8 +113,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NSLog("[AppDelegate] Received URL: \(urlString)")
         logger.info("Received URL: \(urlString)")
 
-        guard url.scheme == "talkie" else {
-            NSLog("[AppDelegate] URL not handled: invalid scheme")
+        // Accept environment-specific URL schemes (talkie, talkie-staging, talkie-dev)
+        guard url.scheme == TalkieEnvironment.current.talkieURLScheme else {
+            NSLog("[AppDelegate] URL not handled: invalid scheme (expected \(TalkieEnvironment.current.talkieURLScheme), got \(url.scheme ?? "nil"))")
             return
         }
 

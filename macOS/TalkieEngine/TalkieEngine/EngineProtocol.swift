@@ -7,17 +7,17 @@
 
 import Foundation
 
-/// Mach service names for XPC connection
+/// Mach service names for XPC connection (matches TalkieEnvironment)
 public enum EngineServiceMode: String, CaseIterable {
     case production = "jdi.talkie.engine.xpc"
+    case staging = "jdi.talkie.engine.xpc.staging"
     case dev = "jdi.talkie.engine.xpc.dev"
-    case debug = "jdi.talkie.engine.xpc.dev.debug"
 
     public var displayName: String {
         switch self {
         case .production: return "Production"
-        case .dev: return "Dev (Daemon)"
-        case .debug: return "Debug (Xcode)"
+        case .staging: return "Staging"
+        case .dev: return "Dev"
         }
     }
 
@@ -25,14 +25,18 @@ public enum EngineServiceMode: String, CaseIterable {
     public var badge: String {
         switch self {
         case .production: return "PROD"
+        case .staging: return "STAGING"
         case .dev: return "DEV"
-        case .debug: return "DBG"
         }
     }
 
-    /// Whether this mode uses orange color (debugging) vs green (stable)
-    public var isDebugMode: Bool {
-        self == .debug
+    /// Short name for logging
+    public var shortName: String {
+        switch self {
+        case .production: return "prod"
+        case .staging: return "staging"
+        case .dev: return "dev"
+        }
     }
 }
 

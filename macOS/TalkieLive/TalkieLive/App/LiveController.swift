@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import os.log
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "LiveController")
 
@@ -782,7 +783,7 @@ final class LiveController: ObservableObject {
 
     /// Launch Talkie Core's interstitial editor with the given utterance ID
     private func launchInterstitialEditor(utteranceId: Int64) {
-        let urlString = "talkie://interstitial/\(utteranceId)"
+        let urlString = "\(TalkieEnvironment.current.talkieURLScheme)://interstitial/\(utteranceId)"
         guard let url = URL(string: urlString) else {
             NSLog("[LiveController] ERROR: Failed to create interstitial URL for utterance \(utteranceId)")
             logger.error("Failed to create interstitial URL for utterance \(utteranceId)")

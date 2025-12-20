@@ -543,6 +543,7 @@ struct SoundsLiveSettingsView: View {
 
 struct TranscriptionLiveSettingsView: View {
     @ObservedObject private var liveSettings = LiveSettings.shared
+    @ObservedObject private var engineClient = EngineClient.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -557,18 +558,118 @@ struct TranscriptionLiveSettingsView: View {
                 EngineHealthCard()
 
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("TRANSCRIPTION ENGINE")
+                    Text("TRANSCRIPTION MODELS")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
-                    Text("Selected model: \(liveSettings.selectedModelId)")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary)
+                    Text("Select a model to use for Live transcription. Models are downloaded and managed by the engine.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
 
-                    Text("⚠️ Model selection UI coming soon")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.orange)
+                    // Model grid
+                    if engineClient.availableModels.isEmpty {
+                        HStack {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Loading available models...")
+                                .font(SettingsManager.shared.fontSM)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 20)
+                    } else {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12)
+                            ],
+                            spacing: 12
+                        ) {
+                            ForEach(engineClient.availableModels) { model in
+                                TranscriptionModelCard(
+                                    model: model,
+                                    isSelected: liveSettings.selectedModelId == model.id,
+                                    downloadProgress: engineClient.downloadProgress,
+                                    onSelect: {
+                                        selectModel(model)
+                                    },
+                                    onDownload: {
+                                        downloadModel(model)
+                                    },
+                                    onDelete: {
+                                        deleteModel(model)
+                                    },
+                                    onCancel: {
+                                        cancelDownload()
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
                 }
+            }
+        }
+        .onAppear {
+            logger.debug("TranscriptionLiveSettingsView appeared")
+            // Fetch available models when view appears
+            Task {
+                await engineClient.fetchAvailableModels()
+            }
+        }
+    }
+
+    private func selectModel(_ model: ModelInfo) {
+        guard model.isDownloaded else { return }
+
+        logger.info("Selecting transcription model: \(model.id)")
+        liveSettings.selectedModelId = model.id
+
+        // Preload the model for fast transcription
+        Task {
+            do {
+                try await engineClient.preloadModel(model.id)
+                logger.info("✓ Model preloaded: \(model.id)")
+            } catch {
+                logger.error("Failed to preload model: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func downloadModel(_ model: ModelInfo) {
+        logger.info("Downloading transcription model: \(model.id)")
+
+        Task {
+            do {
+                try await engineClient.downloadModel(model.id)
+                logger.info("✓ Model downloaded: \(model.id)")
+
+                // Start monitoring progress
+                startMonitoringDownload()
+            } catch {
+                logger.error("Download failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func deleteModel(_ model: ModelInfo) {
+        logger.warning("Delete model not yet implemented: \(model.id)")
+        // TODO: Add delete functionality to engine
+    }
+
+    private func cancelDownload() {
+        logger.info("Canceling model download")
+
+        Task {
+            await engineClient.cancelDownload()
+        }
+    }
+
+    private func startMonitoringDownload() {
+        // Monitor download progress every second
+        Task {
+            while engineClient.isDownloading {
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                engineClient.refreshDownloadProgress()
             }
         }
     }

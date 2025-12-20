@@ -35,14 +35,14 @@ struct TalkieHomeView: View {
                     // Quick Stats
                     quickStatsSection
 
-                    // Service Health Status
-                    serviceHealthSection
-
                     // Recent Activity
                     recentActivitySection
 
                     // Quick Actions
                     quickActionsSection
+
+                    // Capabilities Status (moved lower, less prominent)
+                    capabilitiesSection
 
                     Spacer(minLength: Spacing.xxl)
                 }
@@ -110,46 +110,46 @@ struct TalkieHomeView: View {
         }
     }
 
-    // MARK: - Service Health Section
+    // MARK: - Capabilities Status Section
 
-    private var serviceHealthSection: some View {
+    private var capabilitiesSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            sectionHeader("Service Health")
+            sectionHeader("Capabilities")
 
             HStack(spacing: Spacing.md) {
-                // Live Mode Status
+                // Live Dictation Capability
                 ServiceHealthCard(
-                    icon: "waveform.circle.fill",
-                    title: "Live Mode",
+                    icon: "mic.circle.fill",
+                    title: "Live Dictation",
                     isHealthy: liveState.isRunning,
-                    statusText: liveState.isRunning ? "Active" : "Inactive",
+                    statusText: liveState.isRunning ? "Enabled" : "Disabled",
                     detailText: liveState.isRunning
-                        ? "Ready to record voice memos"
-                        : "Enable Live Mode to access recording features",
+                        ? "Press hotkey to dictate anywhere"
+                        : "TalkieLive enables instant voice recording",
                     action: liveState.isRunning ? nil : { launchTalkieLive() },
                     actionLabel: "Enable"
                 )
 
-                // Engine Status
+                // AI Transcription Capability
                 ServiceHealthCard(
-                    icon: "cpu",
-                    title: "AI Engine",
+                    icon: "text.bubble.fill",
+                    title: "AI Transcription",
                     isHealthy: serviceMonitor.state == .running,
                     statusText: serviceMonitor.state == .running ? "Ready" : "Offline",
                     detailText: serviceMonitor.state == .running
-                        ? "AI transcription available"
-                        : "TalkieEngine is not running",
+                        ? "Speech-to-text powered by local AI"
+                        : "TalkieEngine provides AI transcription",
                     action: serviceMonitor.state == .running ? nil : { serviceMonitor.launch() },
                     actionLabel: "Start"
                 )
 
-                // Cloud Sync Status
+                // iCloud Sync Capability
                 ServiceHealthCard(
                     icon: "icloud.fill",
                     title: "Cloud Sync",
                     isHealthy: syncManager.lastSyncDate != nil,
                     statusText: syncStatusText,
-                    detailText: syncDetailText
+                    detailText: syncDetailText ?? "Sync memos across all your devices"
                 )
             }
         }

@@ -53,42 +53,27 @@ public struct LayoutGridOverlay: View {
 
 // MARK: - Layout Zone
 
+public enum ZoneStyle {
+    case border          // Show border with label
+    case subtle          // Subtle shading without strong border
+}
+
 public struct LayoutZone: Identifiable {
     public let id = UUID()
     public let label: String
     public let frame: LayoutFrame
     public let color: Color
+    public let style: ZoneStyle
 
-    public init(label: String, frame: LayoutFrame, color: Color = .blue) {
+    public init(label: String, frame: LayoutFrame, color: Color = .blue, style: ZoneStyle = .border) {
         self.label = label
         self.frame = frame
         self.color = color
+        self.style = style
     }
 
-    // Common zones
-    public static func header(height: CGFloat) -> LayoutZone {
-        LayoutZone(
-            label: "HEADER",
-            frame: .top(height: height),
-            color: .blue
-        )
-    }
-
-    public static func content(topOffset: CGFloat, bottomOffset: CGFloat) -> LayoutZone {
-        LayoutZone(
-            label: "CONTENT",
-            frame: .middle(topOffset: topOffset, bottomOffset: bottomOffset),
-            color: .green
-        )
-    }
-
-    public static func footer(height: CGFloat) -> LayoutZone {
-        LayoutZone(
-            label: "FOOTER",
-            frame: .bottom(height: height),
-            color: .orange
-        )
-    }
+    // Note: Specific zone definitions should be created in the project using this framework
+    // These are just convenience helpers for common patterns
 }
 
 // MARK: - Layout Frame
@@ -113,7 +98,10 @@ public enum LayoutFrame {
                 height: parentSize.height - topOffset - bottomOffset
             )
         case .custom(let x, let y, let width, let height):
-            return CGRect(x: x, y: y, width: width, height: height)
+            // If width/height is 0, use full parent width/height minus offsets
+            let finalWidth = width > 0 ? width : parentSize.width
+            let finalHeight = height > 0 ? height : parentSize.height - y
+            return CGRect(x: x, y: y, width: finalWidth, height: finalHeight)
         }
     }
 }
@@ -131,22 +119,35 @@ private struct ZoneOverlay: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Zone outline
-            Rectangle()
-                .strokeBorder(zone.color.opacity(opacity), lineWidth: 2)
-                .frame(width: rect.width, height: rect.height)
+            switch zone.style {
+            case .border:
+                // Strong border with label
+                Rectangle()
+                    .strokeBorder(zone.color.opacity(opacity), lineWidth: 2)
+                    .frame(width: rect.width, height: rect.height)
 
-            // Zone label
-            Text(zone.label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(
-                    Capsule()
-                        .fill(zone.color.opacity(opacity * 2))
-                )
-                .padding(4)
+                Text(zone.label)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(zone.color.opacity(opacity * 2))
+                    )
+                    .padding(4)
+
+            case .subtle:
+                // Subtle shading without strong border
+                Rectangle()
+                    .fill(zone.color.opacity(opacity * 0.15))
+                    .frame(width: rect.width, height: rect.height)
+
+                Text(zone.label)
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .foregroundColor(zone.color.opacity(opacity * 0.8))
+                    .padding(4)
+            }
         }
         .position(x: rect.midX, y: rect.midY)
     }

@@ -12,17 +12,26 @@
 				<string>talkielive</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>TalkieLive URL</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>talkielive-dev</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>TalkieLive URL</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>talkielive-staging</string>
+			</array>
+		</dict>
 	</array>
-
-	<!-- Menu bar only app (no dock icon) -->
-	<key>LSUIElement</key>
-	<true/>
-
-	<!-- Usage Descriptions: Explain why we need each permission -->
-	<key>NSMicrophoneUsageDescription</key>
-	<string>TalkieLive needs microphone access to continuously transcribe your speech in real-time.</string>
-
-	<key>NSAppleEventsUsageDescription</key>
-	<string>TalkieLive needs to send keystrokes to automatically paste transcriptions into your active app.</string>
 </dict>
 </plist>

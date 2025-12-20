@@ -614,37 +614,74 @@ class CloudKitSyncManager: ObservableObject {
     // MARK: - Sync History Management
 
     private func loadSyncHistory() {
-        guard let data = UserDefaults.standard.data(forKey: "CloudKitSyncHistory") else { return }
-        do {
-            let decoder = JSONDecoder()
-            syncHistory = try decoder.decode([SyncEvent].self, from: data)
-        } catch {
-            logger.error("Failed to load sync history: \(error.localizedDescription)")
-            syncHistory = []
-        }
-    }
-
-    private func saveSyncHistory() {
-        do {
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(syncHistory)
-            UserDefaults.standard.set(data, forKey: "CloudKitSyncHistory")
-        } catch {
-            logger.error("Failed to save sync history: \(error.localizedDescription)")
+        Task {
+            do {
+                let db = try await DatabaseManager.shared.database()
+                let events = try await db.read { db in
+                    try SyncEvent
+                        .order(SyncEvent.Columns.timestamp.desc)
+                        .limit(maxHistoryCount)
+                        .fetchAll(db)
+                }
+                await MainActor.run {
+                    self.syncHistory = events
+                }
+            } catch {
+                logger.error("Failed to load sync history from database: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.syncHistory = []
+                }
+            }
         }
     }
 
     private func addSyncEvent(_ event: SyncEvent) {
-        // Add to beginning of array (most recent first)
+        // Add to beginning of in-memory array (most recent first)
         syncHistory.insert(event, at: 0)
 
-        // Limit history size
+        // Limit in-memory history size
         if syncHistory.count > maxHistoryCount {
             syncHistory = Array(syncHistory.prefix(maxHistoryCount))
         }
 
-        // Persist to UserDefaults
-        saveSyncHistory()
+        // Persist to database
+        Task {
+            do {
+                let db = try await DatabaseManager.shared.database()
+                try await db.write { db in
+                    try event.insert(db)
+
+                    // Clean up old events (keep last 50 in database too)
+                    let oldEventIDs = try SyncEvent
+                        .order(SyncEvent.Columns.timestamp.desc)
+                        .select(SyncEvent.Columns.id)
+                        .limit(maxHistoryCount, offset: maxHistoryCount)
+                        .fetchAll(db) as [String]
+
+                    if !oldEventIDs.isEmpty {
+                        try SyncEvent.deleteAll(db, ids: oldEventIDs)
+                    }
+                }
+            } catch {
+                logger.error("Failed to save sync event to database: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Get the most recent sync timestamp for throttling
+    func getLastSyncTimestamp() async -> Date? {
+        do {
+            let db = try await DatabaseManager.shared.database()
+            return try await db.read { db in
+                try SyncEvent
+                    .order(SyncEvent.Columns.timestamp.desc)
+                    .limit(1)
+                    .fetchOne(db)?.timestamp
+            }
+        } catch {
+            logger.error("Failed to get last sync timestamp: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     #if DEBUG
