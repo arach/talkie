@@ -131,16 +131,17 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
 
     // MARK: - TalkieLiveXPCServiceProtocol
 
-    nonisolated func getCurrentState(reply: @escaping (String, TimeInterval) -> Void) {
+    nonisolated func getCurrentState(reply: @escaping (String, TimeInterval, Int32) -> Void) {
         Task { @MainActor in
-            reply(currentState, currentElapsedTime)
+            let pid = ProcessInfo.processInfo.processIdentifier
+            reply(currentState, currentElapsedTime, pid)
         }
     }
 
-    nonisolated func registerStateObserver(reply: @escaping (Bool) -> Void) {
-        // The connection is available via the current XPC context
-        // We'll set it up in the listener delegate
-        reply(true)
+    nonisolated func registerStateObserver(reply: @escaping (Bool, Int32) -> Void) {
+        // Return success and our process ID
+        let pid = ProcessInfo.processInfo.processIdentifier
+        reply(true, pid)
     }
 
     nonisolated func unregisterStateObserver(reply: @escaping (Bool) -> Void) {

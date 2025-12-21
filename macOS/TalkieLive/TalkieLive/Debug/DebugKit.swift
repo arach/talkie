@@ -827,6 +827,7 @@ struct StatusBar: View {
                         processingDuration: processingDuration,
                         isEngineConnected: engineClient.isConnected,
                         pendingQueueCount: LiveDatabase.countNeedsRetry(),
+                        micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
                         onTap: toggleRecording,
                         onQueueTap: { FailedQueueController.shared.show() }
                     )

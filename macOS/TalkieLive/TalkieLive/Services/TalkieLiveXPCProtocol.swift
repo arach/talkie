@@ -7,17 +7,20 @@
 //
 
 import Foundation
+import TalkieKit
 
-/// XPC service name - TalkieLive registers as this
-public let kTalkieLiveXPCServiceName = "live.talkie.xpc.liveState"
+/// XPC service name - TalkieLive registers as this (environment-aware)
+public var kTalkieLiveXPCServiceName: String {
+    TalkieEnvironment.current.liveXPCService
+}
 
 /// Protocol for TalkieLive's XPC service
 @objc protocol TalkieLiveXPCServiceProtocol {
-    /// Get current recording state
-    func getCurrentState(reply: @escaping (String, TimeInterval) -> Void)
+    /// Get current recording state and process ID
+    func getCurrentState(reply: @escaping (String, TimeInterval, Int32) -> Void)
 
-    /// Register for state change notifications
-    func registerStateObserver(reply: @escaping (Bool) -> Void)
+    /// Register for state change notifications (returns success and PID)
+    func registerStateObserver(reply: @escaping (Bool, Int32) -> Void)
 
     /// Unregister from state change notifications
     func unregisterStateObserver(reply: @escaping (Bool) -> Void)

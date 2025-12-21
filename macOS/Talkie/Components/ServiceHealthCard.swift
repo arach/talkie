@@ -138,11 +138,7 @@ struct EngineHealthCard: View {
     @ObservedObject private var liveSettings = LiveSettings.shared
 
     private var modelName: String {
-        let modelId = liveSettings.selectedModelId
-        let (_, id) = ModelInfo.parseModelId(modelId)
-        return id
-            .replacingOccurrences(of: "openai_whisper-", with: "")
-            .replacingOccurrences(of: "distil-whisper_distil-", with: "distil-")
+        ModelInfo.formatModelName(liveSettings.selectedModelId)
     }
 
     var body: some View {

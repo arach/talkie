@@ -53,6 +53,11 @@ final class AudioDeviceManager: ObservableObject {
         return defaultDeviceID
     }
 
+    /// Get the name of the currently selected device
+    var selectedDeviceName: String? {
+        inputDevices.first(where: { $0.id == selectedDeviceID })?.name
+    }
+
     /// Set the selected device as the system input (for AVAudioEngine to use)
     func selectDevice(_ deviceID: AudioDeviceID) {
         // Save to settings

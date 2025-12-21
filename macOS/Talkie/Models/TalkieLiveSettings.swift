@@ -385,8 +385,10 @@ final class LiveSettings: ObservableObject {
     }
 
     /// Selected model ID with family prefix (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
-    @Published var selectedModelId: String {
-        didSet { save() }
+    /// NOTE: This now delegates to SettingsManager for centralized model management
+    var selectedModelId: String {
+        get { SettingsManager.shared.liveTranscriptionModelId }
+        set { SettingsManager.shared.liveTranscriptionModelId = newValue }
     }
 
     /// Legacy property for backwards compatibility - maps to selectedModelId
@@ -527,16 +529,7 @@ final class LiveSettings: ObservableObject {
         // Load PTT enabled state (default: false)
         self.pttEnabled = UserDefaults.standard.bool(forKey: pttEnabledKey)
 
-        // Load selected model ID (with migration from legacy whisperModel)
-        if let modelId = UserDefaults.standard.string(forKey: selectedModelIdKey) {
-            self.selectedModelId = modelId
-        } else if let legacyModel = UserDefaults.standard.string(forKey: whisperModelKey) {
-            // Migrate from legacy whisperModel setting
-            self.selectedModelId = "whisper:\(legacyModel)"
-        } else {
-            // Default to whisper small
-            self.selectedModelId = "whisper:openai_whisper-small"
-        }
+        // Note: selectedModelId is now managed by SettingsManager, no need to load here
 
         // Load routing mode
         let routingRaw = UserDefaults.standard.string(forKey: routingModeKey) ?? "paste"
@@ -676,7 +669,7 @@ final class LiveSettings: ObservableObject {
             UserDefaults.standard.set(data, forKey: pttHotkeyKey)
         }
         UserDefaults.standard.set(pttEnabled, forKey: pttEnabledKey)
-        UserDefaults.standard.set(selectedModelId, forKey: selectedModelIdKey)
+        // Note: selectedModelId is now managed by SettingsManager, no need to save here
         UserDefaults.standard.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: routingModeKey)
         UserDefaults.standard.set(Int(selectedMicrophoneID), forKey: selectedMicrophoneIDKey)
         UserDefaults.standard.set(utteranceTTLHours, forKey: utteranceTTLKey)

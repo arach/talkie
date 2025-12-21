@@ -18,12 +18,20 @@ struct TalkieHomeView: View {
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
-    @ObservedObject private var syncManager = CloudKitSyncManager.shared
-    @ObservedObject private var liveState = TalkieLiveStateMonitor.shared
-    @ObservedObject private var serviceMonitor = TalkieServiceMonitor.shared
-    @ObservedObject private var eventManager = SystemEventManager.shared
+    // Singleton references (not @ObservedObject to avoid excessive redraws)
+    private let syncManager = CloudKitSyncManager.shared
+    private let liveState = TalkieLiveStateMonitor.shared
+    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let eventManager = SystemEventManager.shared
 
+    // Cached state - only updates when specific properties change
     @State private var recentMemos: [VoiceMemo] = []
+    @State private var isLiveRunning: Bool = false
+    @State private var serviceState: TalkieServiceState = .unknown
+    @State private var isSyncing: Bool = false
+    @State private var lastSyncDate: Date?
+    @State private var lastChangeCount: Int = 0
+    @State private var workflowEventCount: Int = 0
 
     var body: some View {
         TalkieSection("Home") {
@@ -54,6 +62,32 @@ struct TalkieHomeView: View {
             loadRecentMemos()
             liveState.startMonitoring()
             serviceMonitor.startMonitoring()
+
+            // Initialize cached state
+            isLiveRunning = liveState.isRunning
+            serviceState = serviceMonitor.state
+            isSyncing = syncManager.isSyncing
+            lastSyncDate = syncManager.lastSyncDate
+            lastChangeCount = syncManager.lastChangeCount
+            workflowEventCount = eventManager.events.filter { $0.type == .workflow }.count
+        }
+        .onReceive(liveState.$isRunning) { newValue in
+            isLiveRunning = newValue
+        }
+        .onReceive(serviceMonitor.$state) { newValue in
+            serviceState = newValue
+        }
+        .onReceive(syncManager.$isSyncing) { newValue in
+            isSyncing = newValue
+        }
+        .onReceive(syncManager.$lastSyncDate) { newValue in
+            lastSyncDate = newValue
+        }
+        .onReceive(syncManager.$lastChangeCount) { newValue in
+            lastChangeCount = newValue
+        }
+        .onReceive(eventManager.$events) { events in
+            workflowEventCount = events.filter { $0.type == .workflow }.count
         }
     }
 
@@ -121,12 +155,12 @@ struct TalkieHomeView: View {
                 ServiceHealthCard(
                     icon: "mic.circle.fill",
                     title: "Live Dictation",
-                    isHealthy: liveState.isRunning,
-                    statusText: liveState.isRunning ? "Enabled" : "Disabled",
-                    detailText: liveState.isRunning
+                    isHealthy: isLiveRunning,
+                    statusText: isLiveRunning ? "Enabled" : "Disabled",
+                    detailText: isLiveRunning
                         ? "Press hotkey to dictate anywhere"
                         : "TalkieLive enables instant voice recording",
-                    action: liveState.isRunning ? nil : { launchTalkieLive() },
+                    action: isLiveRunning ? nil : { launchTalkieLive() },
                     actionLabel: "Enable"
                 )
 
@@ -134,12 +168,12 @@ struct TalkieHomeView: View {
                 ServiceHealthCard(
                     icon: "text.bubble.fill",
                     title: "AI Transcription",
-                    isHealthy: serviceMonitor.state == .running,
-                    statusText: serviceMonitor.state == .running ? "Ready" : "Offline",
-                    detailText: serviceMonitor.state == .running
+                    isHealthy: serviceState == .running,
+                    statusText: serviceState == .running ? "Ready" : "Offline",
+                    detailText: serviceState == .running
                         ? "Speech-to-text powered by local AI"
                         : "TalkieEngine provides AI transcription",
-                    action: serviceMonitor.state == .running ? nil : { serviceMonitor.launch() },
+                    action: serviceState == .running ? nil : { serviceMonitor.launch() },
                     actionLabel: "Start"
                 )
 
@@ -147,7 +181,7 @@ struct TalkieHomeView: View {
                 ServiceHealthCard(
                     icon: "icloud.fill",
                     title: "Cloud Sync",
-                    isHealthy: syncManager.lastSyncDate != nil,
+                    isHealthy: lastSyncDate != nil,
                     statusText: syncStatusText,
                     detailText: syncDetailText ?? "Sync memos across all your devices"
                 )
@@ -264,14 +298,14 @@ struct TalkieHomeView: View {
     }
 
     private var totalWorkflowRuns: Int {
-        // Count workflow events from SystemEventManager
-        eventManager.events.filter { $0.type == .workflow }.count
+        // Use cached count from @State
+        workflowEventCount
     }
 
     private var syncStatusText: String {
-        if syncManager.isSyncing {
+        if isSyncing {
             return "Syncing..."
-        } else if let lastSync = syncManager.lastSyncDate {
+        } else if let lastSync = lastSyncDate {
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .abbreviated
             return formatter.localizedString(for: lastSync, relativeTo: Date())
@@ -281,10 +315,9 @@ struct TalkieHomeView: View {
     }
 
     private var syncDetailText: String? {
-        if let lastSync = syncManager.lastSyncDate {
-            let changeCount = syncManager.lastChangeCount
-            if changeCount > 0 {
-                return "\(changeCount) changes synced"
+        if lastSyncDate != nil {
+            if lastChangeCount > 0 {
+                return "\(lastChangeCount) changes synced"
             }
         }
         return nil

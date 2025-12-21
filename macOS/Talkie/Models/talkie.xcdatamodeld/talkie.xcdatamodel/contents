@@ -6,6 +6,7 @@
         <attribute name="groqApiKey" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="lastModified" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="liveTranscriptionModelId" optional="YES" attributeType="String" defaultValueString="whisper:openai_whisper-small"/>
         <attribute name="openaiApiKey" optional="YES" attributeType="String"/>
         <attribute name="selectedModel" optional="YES" attributeType="String" defaultValueString="gemini-1.5-flash-latest"/>
     </entity>

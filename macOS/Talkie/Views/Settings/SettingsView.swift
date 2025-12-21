@@ -14,12 +14,15 @@ enum SettingsSection: String, Hashable {
     case quickOpen
     case autoRun
     case apiKeys
+    case transcriptionModels  // Transcription (STT) model selection
+    case llmModels           // AI/LLM model selection
     case allowedCommands
     case outputSettings
     case localFiles
     case helperApps
     case permissions
     case debugInfo
+    case devControl          // Dev control panel (DEBUG only)
     case audio  // For TalkieLive HistoryView compatibility
     case engine  // For TalkieLive HistoryView compatibility
 }
@@ -97,6 +100,24 @@ struct SettingsView: View {
                             }
                         }
 
+                        // MODELS
+                        SettingsSidebarSection(title: "MODELS", isActive: selectedSection == .transcriptionModels || selectedSection == .llmModels) {
+                            SettingsSidebarItem(
+                                icon: "waveform",
+                                title: "TRANSCRIPTION",
+                                isSelected: selectedSection == .transcriptionModels
+                            ) {
+                                selectedSection = .transcriptionModels
+                            }
+                            SettingsSidebarItem(
+                                icon: "brain",
+                                title: "AI & LLM",
+                                isSelected: selectedSection == .llmModels
+                            ) {
+                                selectedSection = .llmModels
+                            }
+                        }
+
                         // SHELL & OUTPUT
                         SettingsSidebarSection(title: "SHELL & OUTPUT", isActive: selectedSection == .allowedCommands || selectedSection == .outputSettings) {
                             SettingsSidebarItem(
@@ -127,7 +148,7 @@ struct SettingsView: View {
                         }
 
                         // SYSTEM
-                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helperApps || selectedSection == .permissions || selectedSection == .debugInfo) {
+                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helperApps || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
                             SettingsSidebarItem(
                                 icon: "app.connected.to.app.below.fill",
                                 title: "HELPER APPS",
@@ -149,6 +170,16 @@ struct SettingsView: View {
                             ) {
                                 selectedSection = .debugInfo
                             }
+
+                            #if DEBUG
+                            SettingsSidebarItem(
+                                icon: "hammer.fill",
+                                title: "DEV CONTROL",
+                                isSelected: selectedSection == .devControl
+                            ) {
+                                selectedSection = .devControl
+                            }
+                            #endif
                         }
                     }
                     .padding(.horizontal, 10)
@@ -166,42 +197,53 @@ struct SettingsView: View {
             // MARK: - Content Area
             VStack(spacing: 0) {
                 // Content based on selection
-                Group {
-                    switch selectedSection {
-                    case .appearance:
-                        AppearanceSettingsView()
-                    case .quickActions:
-                        QuickActionsSettingsView()
-                    case .quickOpen:
-                        QuickOpenSettingsView()
-                    case .autoRun:
-                        AutoRunSettingsView()
-                    case .apiKeys:
-                        APISettingsView(settingsManager: settingsManager)
-                    case .allowedCommands:
-                        AllowedCommandsView()
-                    case .outputSettings:
-                        OutputSettingsView()
-                    case .localFiles:
-                        LocalFilesSettingsView()
-                    case .helperApps:
-                        HelperAppsSettingsView()
-                    case .permissions:
-                        PermissionsSettingsView()
-                    case .debugInfo:
-                        DebugInfoView()
-                    case .audio:
-                        Text("Audio settings placeholder")
-                    case .engine:
-                        Text("Engine settings placeholder")
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                contentView
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(contentBackground)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 800, minHeight: 600)
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        switch selectedSection {
+        case .appearance:
+            AppearanceSettingsView()
+        case .quickActions:
+            QuickActionsSettingsView()
+        case .quickOpen:
+            QuickOpenSettingsView()
+        case .autoRun:
+            AutoRunSettingsView()
+        case .apiKeys:
+            APISettingsView(settingsManager: settingsManager)
+        case .transcriptionModels:
+            TranscriptionModelsSettingsView()
+        case .llmModels:
+            ModelLibraryView()
+        case .allowedCommands:
+            AllowedCommandsView()
+        case .outputSettings:
+            OutputSettingsView()
+        case .localFiles:
+            LocalFilesSettingsView()
+        case .helperApps:
+            HelperAppsSettingsView()
+        case .permissions:
+            PermissionsSettingsView()
+        case .debugInfo:
+            DebugInfoView()
+        case .devControl:
+            #if DEBUG
+            DevControlPanelView()
+            #else
+            Text("Dev Control Panel is only available in DEBUG builds")
+            #endif
+        case .audio:
+            Text("Audio settings placeholder")
+        case .engine:
+            Text("Engine settings placeholder")
+        }
     }
 }
 

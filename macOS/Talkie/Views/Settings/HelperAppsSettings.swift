@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 struct HelperAppsSettingsView: View {
     @ObservedObject private var appLauncher = AppLauncher.shared
+    @ObservedObject private var engineMonitor = TalkieServiceMonitor.shared
+    @ObservedObject private var liveMonitor = TalkieLiveStateMonitor.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -21,10 +24,12 @@ struct HelperAppsSettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // TalkieEngine
                 HelperAppRow(
-                    name: "TalkieEngine",
+                    name: "Transcription Engine",
                     description: "Transcription and AI processing service",
                     bundleId: AppLauncher.engineBundleId,
                     status: appLauncher.engineStatus,
+                    processId: engineMonitor.processId,
+                    environment: EngineClient.shared.connectedMode?.environment,
                     onLaunch: { appLauncher.launchEngine() },
                     onTerminate: { appLauncher.terminateEngine() },
                     onRegister: { appLauncher.registerEngine() },
@@ -35,10 +40,12 @@ struct HelperAppsSettingsView: View {
 
                 // TalkieLive
                 HelperAppRow(
-                    name: "TalkieLive",
+                    name: "Live",
                     description: "Voice capture and quick paste feature",
                     bundleId: AppLauncher.liveBundleId,
                     status: appLauncher.liveStatus,
+                    processId: liveMonitor.processId,
+                    environment: liveMonitor.connectedMode,
                     onLaunch: { appLauncher.launchLive() },
                     onTerminate: { appLauncher.terminateLive() },
                     onRegister: { appLauncher.registerLive() },
@@ -113,6 +120,8 @@ private struct HelperAppRow: View {
     let description: String
     let bundleId: String
     let status: AppLauncher.HelperStatus
+    let processId: pid_t?
+    let environment: TalkieEnvironment?
     let onLaunch: () -> Void
     let onTerminate: () -> Void
     let onRegister: () -> Void
@@ -142,7 +151,7 @@ private struct HelperAppRow: View {
                 .cornerRadius(8)
 
             // Name and description
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.primary)
@@ -150,6 +159,31 @@ private struct HelperAppRow: View {
                 Text(description)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
+
+                // Technical info (PID, Environment)
+                if status == .running {
+                    HStack(spacing: 8) {
+                        if let pid = processId {
+                            HStack(spacing: 3) {
+                                Image(systemName: "number")
+                                    .font(.system(size: 8))
+                                Text(verbatim: "PID \(String(format: "%d", pid))")
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            }
+                            .foregroundColor(.secondary.opacity(0.7))
+                        }
+
+                        if let env = environment, env != .production {
+                            HStack(spacing: 3) {
+                                Image(systemName: "server.rack")
+                                    .font(.system(size: 8))
+                                Text(env.displayName)
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            }
+                            .foregroundColor(env == .dev ? .purple.opacity(0.8) : .orange.opacity(0.8))
+                        }
+                    }
+                }
             }
 
             Spacer()

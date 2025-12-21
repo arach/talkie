@@ -200,7 +200,7 @@ struct TalkieServiceMonitorView: View {
             // PID
             statItem(
                 label: "PID",
-                value: monitor.processId.map { "\($0)" } ?? "—"
+                value: monitor.processId.map { String(format: "%d", $0) } ?? "—"
             )
 
             Divider()

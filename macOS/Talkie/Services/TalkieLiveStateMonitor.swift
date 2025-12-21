@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import TalkieKit
 
 @MainActor
 final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateObserverProtocol {
@@ -19,148 +20,83 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     @Published var processId: Int32? = nil
     @Published var isRunning: Bool = false
 
-    private var xpcConnection: NSXPCConnection?
-    private var retryCount = 0
-    private var maxRetries = 3
+    // XPC service manager with environment-aware connection
+    private let xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>
+    private var cancellables = Set<AnyCancellable>()
+
+    /// Connected TalkieLive environment (from XPC connection)
+    var connectedMode: TalkieEnvironment? {
+        xpcManager.connectedMode
+    }
+
     private var hasLoggedUnavailable = false
-    private var isConnecting = false
 
     private override init() {
+        // Initialize XPC manager with environment-aware service names
+        self.xpcManager = XPCServiceManager<TalkieLiveXPCServiceProtocol>(
+            serviceNameProvider: { env in env.liveXPCService },
+            interfaceProvider: {
+                NSXPCInterface(with: TalkieLiveXPCServiceProtocol.self)
+            },
+            exportedInterface: NSXPCInterface(with: TalkieLiveStateObserverProtocol.self),
+            exportedObject: nil  // Will be set to self after super.init
+        )
+
         super.init()
-        // Check initial running state immediately to prevent UI flicker
-        _ = isTalkieLiveRunning()
+
+        // Now we can set self as the exported object for receiving callbacks
+        xpcManager.setExportedObject(self)
+
+        // Observe XPC connection state and update isRunning
+        xpcManager.$connectionInfo
+            .map(\.isConnected)
+            .assign(to: &$isRunning)
+
         // Don't auto-connect - connect lazily when needed
     }
 
     /// Call this when you actually need to monitor TalkieLive state
     func startMonitoring() {
-        guard xpcConnection == nil && !isConnecting else { return }
+        guard !xpcManager.isConnected else { return }
 
-        // Only check if we haven't determined the state yet (isRunning is still false from init)
-        // After init, we trust the XPC connection state instead of repeatedly calling pgrep
-        if !isRunning {
-            // Check if TalkieLive is actually running first
-            if !isTalkieLiveRunning() {
-                // Not running and that's OK (TalkieLive is optional)
-                return
+        Task {
+            await xpcManager.connect()
+
+            // After connection, register as observer and get current state
+            // Both methods will set our processId via XPC reply
+            if xpcManager.isConnected {
+                registerAsObserver()
+                getCurrentState()
+                NSLog("[Live] ✅ Connected to \(xpcManager.connectedMode?.displayName ?? "unknown")")
             }
-        }
-
-        connectToXPCService()
-    }
-
-    /// Check if TalkieLive process is running and update processId
-    private func isTalkieLiveRunning() -> Bool {
-        let task = Process()
-        task.launchPath = "/usr/bin/pgrep"
-        task.arguments = ["-x", "TalkieLive"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-
-            let isRunning = task.terminationStatus == 0
-
-            if isRunning {
-                // Try to read the PID from output, but don't fail if we can't
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   let pid = Int32(output) {
-                    self.processId = pid
-                } else {
-                    // Couldn't parse PID, but process is still running
-                    self.processId = nil
-                }
-                self.isRunning = true
-            } else {
-                self.processId = nil
-                self.isRunning = false
-            }
-
-            return isRunning
-        } catch {
-            self.processId = nil
-            self.isRunning = false
-            return false
         }
     }
 
-    // MARK: - XPC Connection
-
-    private func connectToXPCService() {
-        guard !isConnecting else { return }
-        isConnecting = true
-
-        let connection = NSXPCConnection(machServiceName: kTalkieLiveXPCServiceName)
-        connection.remoteObjectInterface = NSXPCInterface(with: TalkieLiveXPCServiceProtocol.self)
-
-        // Set up interface for receiving callbacks
-        connection.exportedInterface = NSXPCInterface(with: TalkieLiveStateObserverProtocol.self)
-        connection.exportedObject = self
-
-        connection.invalidationHandler = { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                self.xpcConnection = nil
-                self.isConnecting = false
-
-                // Keep isRunning/processId based on actual process state
-                // XPC is just for state updates, not for determining if Live is running
-                _ = self.isTalkieLiveRunning()
-
-                NSLog("[Live] Connection lost (not retrying - TalkieLive is optional)")
-                self.retryCount = 0
-            }
-        }
-
-        connection.interruptionHandler = { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                self.isConnecting = false
-                NSLog("[Live] Connection interrupted")
-            }
-        }
-
-        connection.resume()
-        self.xpcConnection = connection
-        isConnecting = false
-
-        // Register as observer
-        registerAsObserver()
-
-        // Get current state immediately
-        getCurrentState()
-
-        NSLog("[Live] ✅ Connected")
-        hasLoggedUnavailable = false
-        retryCount = 0
-    }
+    // MARK: - XPC Communication
 
     private func registerAsObserver() {
-        guard let service = xpcConnection?.remoteObjectProxyWithErrorHandler({ error in
-            // Only log first error
-            if self.retryCount == 0 {
-                NSLog("[Live] Error: \(error.localizedDescription)")
-            }
-        }) as? TalkieLiveXPCServiceProtocol else { return }
+        guard let service = xpcManager.remoteObjectProxy(errorHandler: { error in
+            NSLog("[Live] Error registering observer: \(error.localizedDescription)")
+        }) else { return }
 
-        service.registerStateObserver { success in
-            if success {
-                NSLog("[Live] Observer registered")
+        service.registerStateObserver { [weak self] success, pid in
+            Task { @MainActor [weak self] in
+                if success {
+                    self?.processId = pid
+                    NSLog("[Live] Observer registered (PID: \(pid))")
+                }
             }
         }
     }
 
     private func getCurrentState() {
-        guard let service = xpcConnection?.remoteObjectProxyWithErrorHandler({ _ in
+        guard let service = xpcManager.remoteObjectProxy(errorHandler: { _ in
             // Silently fail - error already logged in registerAsObserver
-        }) as? TalkieLiveXPCServiceProtocol else { return }
+        }) else { return }
 
-        service.getCurrentState { [weak self] stateString, elapsed in
+        service.getCurrentState { [weak self] stateString, elapsed, pid in
             Task { @MainActor [weak self] in
+                self?.processId = pid
                 self?.updateState(stateString, elapsed)
             }
         }
@@ -169,7 +105,7 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     /// Toggle recording in TalkieLive (start if idle, stop if listening)
     func toggleRecording() {
         // Ensure connection exists
-        if xpcConnection == nil {
+        if !xpcManager.isConnected {
             startMonitoring()
             // Wait a moment for connection to establish
             Task {
@@ -183,9 +119,9 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     }
 
     private func performToggle() {
-        guard let service = xpcConnection?.remoteObjectProxyWithErrorHandler({ error in
+        guard let service = xpcManager.remoteObjectProxy(errorHandler: { error in
             NSLog("[Live] Error toggling recording: \(error.localizedDescription)")
-        }) as? TalkieLiveXPCServiceProtocol else {
+        }) else {
             NSLog("[Live] Cannot toggle - service not available")
             return
         }
@@ -230,7 +166,7 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     // MARK: - Cleanup
 
     deinit {
-        xpcConnection?.invalidate()
+        xpcManager.disconnect()
     }
 
     // MARK: - Helper Methods

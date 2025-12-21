@@ -68,68 +68,85 @@ struct TalkieNavigationView: View {
         isSidebarCollapsed ? sidebarCollapsedWidth : sidebarExpandedWidth
     }
 
+    // Responsive layout state - hide StatusBar on short windows
+    @State private var windowHeight: CGFloat = 0
+    private var shouldShowStatusBar: Bool {
+        windowHeight >= 550  // Hide StatusBar below 550px height
+    }
+
     var body: some View {
         mainContent
     }
 
     private var mainContent: some View {
-        HStack(spacing: 0) {
-            // Sidebar - full height
-            sidebarView
-                .frame(width: currentSidebarWidth)
-                .clipped()
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                // Sidebar - full height
+                sidebarView
+                    .frame(width: currentSidebarWidth)
+                    .clipped()
 
-            // Divider between sidebar and content
-            Rectangle()
-                .fill(Theme.current.divider)
-                .frame(width: 1)
+                // Divider between sidebar and content
+                Rectangle()
+                    .fill(Theme.current.divider)
+                    .frame(width: 1)
 
-            // Content area + StatusBar
-            VStack(spacing: 0) {
-                // Main content area
-                ZStack {
-                    if isTwoColumnSection {
-                        twoColumnDetailView
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        // 3-column: content list + detail
-                        HStack(spacing: 0) {
-                            contentColumnView
-                                .frame(width: 300)
-
-                            Rectangle()
-                                .fill(Theme.current.divider)
-                                .frame(width: 1)
-
-                            detailColumnView
+                // Content area + StatusBar
+                VStack(spacing: 0) {
+                    // Main content area
+                    ZStack {
+                        if isTwoColumnSection {
+                            twoColumnDetailView
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            // 3-column: content list + detail
+                            HStack(spacing: 0) {
+                                contentColumnView
+                                    .frame(width: 300)
+
+                                Rectangle()
+                                    .fill(Theme.current.divider)
+                                    .frame(width: 1)
+
+                                detailColumnView
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                        }
+
+                        // Loading indicator during section transitions
+                        if isSectionLoading {
+                            Rectangle()
+                                .fill(Theme.current.background.opacity(0.5))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .overlay(
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .frame(width: 40, height: 40)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Theme.current.surface1)
+                                                .shadow(radius: 4)
+                                        )
+                                )
+                                .transition(.opacity)
                         }
                     }
 
-                    // Loading indicator during section transitions
-                    if isSectionLoading {
-                        Rectangle()
-                            .fill(Theme.current.background.opacity(0.5))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .overlay(
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .frame(width: 40, height: 40)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Theme.current.surface1)
-                                            .shadow(radius: 4)
-                                    )
-                            )
-                            .transition(.opacity)
+                    // StatusBar only on content area (not under sidebar) - hide on short windows
+                    if shouldShowStatusBar {
+                        StatusBar()
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-
-                // StatusBar only on content area (not under sidebar)
-                StatusBar()
+            }
+            .animation(.snappy(duration: 0.2), value: isSidebarCollapsed)
+            .onAppear {
+                windowHeight = geometry.size.height
+            }
+            .onChange(of: geometry.size.height) { _, newHeight in
+                windowHeight = newHeight
             }
         }
-        .animation(.snappy(duration: 0.2), value: isSidebarCollapsed)
         .padding(.top, 8)  // Breathing room for traffic lights
         .padding(.horizontal, 1)  // Subtle edge spacing
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))

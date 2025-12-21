@@ -13,6 +13,7 @@ import CoreData
 import AVFoundation
 import UserNotifications
 import DebugKit
+import TalkieKit
 
 #if DEBUG
 
@@ -238,6 +239,9 @@ struct ListViewDebugContent: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            // Engine processes monitor
+            EngineProcessesDebugContent()
+
             // 1. Page-specific convenience actions
             DebugSection(title: "SYNC") {
                 VStack(spacing: 4) {
@@ -409,6 +413,253 @@ struct ListViewDebugContent: View {
 
 /// Alias for backwards compatibility
 typealias MainDebugContent = ListViewDebugContent
+
+// MARK: - Engine Processes Monitor
+
+struct RunningProcess: Identifiable {
+    let id: Int32
+    let name: String
+    let path: String
+    let pid: Int32
+}
+
+struct EngineProcessesDebugContent: View {
+    @State private var processes: [RunningProcess] = []
+    @State private var isRestarting = false
+
+    private var currentEnv: TalkieEnvironment {
+        TalkieEnvironment.current
+    }
+
+    var body: some View {
+        DebugSection(title: "RUNNING PROCESSES") {
+            VStack(spacing: 4) {
+                // Environment badge
+                HStack {
+                    Text("Environment:")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    Text(currentEnv.badge)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(envColor)
+                        .cornerRadius(3)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 6)
+                .padding(.bottom, 4)
+
+                HStack {
+                    Text("Found \(processes.count) process(es)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Button(action: refreshProcesses) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+
+                if processes.isEmpty {
+                    Text("No TalkieEngine or TalkieLive processes running")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 8)
+                } else {
+                    ForEach(processes) { process in
+                        processRow(process)
+                    }
+                }
+
+                // Clean Slate button
+                Divider()
+                    .padding(.vertical, 4)
+
+                Button(action: cleanSlate) {
+                    HStack(spacing: 6) {
+                        if isRestarting {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        Text(isRestarting ? "Restarting..." : "Clean Slate")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(envColor)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .disabled(isRestarting)
+                .help("Kill all helpers and restart \(currentEnv.displayName) environment")
+            }
+        }
+        .onAppear {
+            refreshProcesses()
+        }
+    }
+
+    private var envColor: Color {
+        switch currentEnv {
+        case .production: return .green   // Green = live/stable
+        case .staging: return .orange     // Orange = testing/caution
+        case .dev: return .purple        // Purple = development
+        }
+    }
+
+    private func processRow(_ process: RunningProcess) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: process.name.contains("TalkieEngine") ? "cpu" : "waveform.circle")
+                .font(.system(size: 10))
+                .foregroundColor(process.name.contains("TalkieEngine") ? .blue : .green)
+                .frame(width: 14)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(process.name)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+
+                Text(verbatim: "PID: \(String(format: "%d", process.pid))")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Button(action: {
+                killProcess(process)
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(.plain)
+            .help("Kill process \(process.pid)")
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(Theme.current.surface2)
+        .cornerRadius(4)
+    }
+
+    private func refreshProcesses() {
+        Task {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/ps")
+            task.arguments = ["-ax", "-o", "pid,comm"]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8) {
+                    let lines = output.components(separatedBy: "\n")
+                    var foundProcesses: [RunningProcess] = []
+
+                    for line in lines {
+                        let trimmed = line.trimmingCharacters(in: .whitespaces)
+                        guard !trimmed.isEmpty else { continue }
+
+                        let components = trimmed.components(separatedBy: .whitespaces)
+                        guard components.count >= 2 else { continue }
+
+                        guard let pid = Int32(components[0]) else { continue }
+                        let comm = components[1]
+
+                        // Check if it's TalkieEngine or TalkieLive
+                        if comm.contains("TalkieEngine") || comm.contains("TalkieLive") {
+                            foundProcesses.append(RunningProcess(
+                                id: pid,
+                                name: comm,
+                                path: comm,
+                                pid: pid
+                            ))
+                        }
+                    }
+
+                    await MainActor.run {
+                        self.processes = foundProcesses.sorted { $0.name < $1.name }
+                    }
+                }
+            } catch {
+                // Silent fail - process enumeration is non-critical
+            }
+        }
+    }
+
+    private func killProcess(_ process: RunningProcess) {
+        Task {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/kill")
+            task.arguments = ["-9", "\(process.pid)"]
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                SystemEventManager.shared.logSync(.system, "Killed process", detail: "\(process.name) (PID: \(process.pid))")
+
+                // Refresh after a short delay
+                try? await Task.sleep(for: .milliseconds(500))
+                refreshProcesses()
+            } catch {
+                SystemEventManager.shared.logSync(.error, "Failed to kill process", detail: "\(process.pid): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func cleanSlate() {
+        isRestarting = true
+
+        Task { @MainActor in
+            // 1. Kill ALL TalkieEngine and TalkieLive processes (any environment)
+            SystemEventManager.shared.logSync(.system, "Clean Slate", detail: "Killing all helper processes")
+            for process in processes {
+                killProcess(process)
+            }
+
+            // 2. Wait for processes to die
+            try? await Task.sleep(for: .seconds(1))
+
+            // 3. Refresh to confirm they're dead
+            refreshProcesses()
+
+            // 4. Restart only the current environment's helpers
+            SystemEventManager.shared.logSync(.system, "Clean Slate", detail: "Restarting \(currentEnv.displayName) helpers")
+
+            // Launch Engine for current environment
+            AppLauncher.shared.launchEngine()
+
+            // Launch Live for current environment
+            AppLauncher.shared.launchLive()
+
+            // 5. Wait a bit then refresh to show new processes
+            try? await Task.sleep(for: .seconds(2))
+            refreshProcesses()
+
+            isRestarting = false
+            SystemEventManager.shared.logSync(.system, "Clean Slate Complete", detail: "\(currentEnv.displayName) helpers restarted")
+        }
+    }
+}
 
 /// Debug content for the memo detail view
 /// Follows iOS pattern: view-specific actions → convenience → platform-wide utils

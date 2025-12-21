@@ -13,6 +13,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 // MARK: - State Pill
 
@@ -29,6 +30,12 @@ struct StatePill: View {
 
     // Control expansion
     var forceExpanded: Bool = false
+
+    // Optional environment and device info
+    var talkieEnvironment: TalkieEnvironment? = nil  // Main app environment
+    var liveEnvironment: TalkieEnvironment? = nil    // Only if differs from Talkie
+    var engineEnvironment: TalkieEnvironment? = nil  // Only if differs from Talkie
+    var micDeviceName: String? = nil
 
     // Optional callbacks
     var onTap: (() -> Void)? = nil
@@ -155,11 +162,110 @@ struct StatePill: View {
 
             // Content varies by state
             stateContent
+
+            // Environment and mic info on the right
+            if talkieEnvironment != nil || liveEnvironment != nil || engineEnvironment != nil || micDeviceName != nil {
+                Divider()
+                    .frame(height: 12)
+                    .opacity(0.3)
+
+                metadataContent
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(pillBackground)
         .contentShape(Rectangle())
+    }
+
+    // MARK: - Metadata Content (Environment + Mic)
+
+    @ViewBuilder
+    private var metadataContent: some View {
+        HStack(spacing: 4) {
+            // Mic device (only show in idle state)
+            if let micName = micDeviceName, state == .idle {
+                HStack(spacing: 3) {
+                    Image(systemName: "mic")
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                    Text(shortMicName(micName))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+                .help(micName)
+            }
+
+            // Talkie environment badge (main app)
+            if let env = talkieEnvironment, env != .production {
+                environmentBadge(env, icon: "house.fill", label: "Talkie")
+            }
+
+            // Live environment badge (only if differs from Talkie)
+            if let env = liveEnvironment, env != .production {
+                environmentBadge(env, icon: "waveform.circle", label: "Live")
+            }
+
+            // Engine environment badge (only if differs from Talkie)
+            if let env = engineEnvironment, env != .production {
+                environmentBadge(env, icon: "engine.combustion", label: "Engine")
+            }
+        }
+    }
+
+    private func environmentBadge(_ env: TalkieEnvironment, icon: String, label: String) -> some View {
+        let badgeColor: Color = {
+            switch env {
+            case .staging: return .orange
+            case .dev: return .red
+            case .production: return .blue
+            }
+        }()
+
+        let badgeText = {
+            switch env {
+            case .staging: return "S"
+            case .dev: return "D"
+            case .production: return "P"
+            }
+        }()
+
+        let helpText = {
+            if label == "Talkie" {
+                return "\(label): \(env.displayName)"
+            } else {
+                return "Connected to \(label) (\(env.displayName))"
+            }
+        }()
+
+        return HStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(size: 7, weight: .medium))
+                .foregroundColor(badgeColor.opacity(0.7))
+
+            Text(badgeText)
+                .font(.system(size: 7, weight: .bold))
+                .foregroundColor(badgeColor)
+        }
+        .padding(.horizontal, 3)
+        .padding(.vertical, 1)
+        .background(badgeColor.opacity(0.2))
+        .cornerRadius(2)
+        .help(helpText)
+    }
+
+    private func shortMicName(_ name: String) -> String {
+        // Shorten common mic names
+        let shortened = name
+            .replacingOccurrences(of: "Built-in Microphone", with: "Built-in")
+            .replacingOccurrences(of: "MacBook Pro Microphone", with: "MacBook")
+            .replacingOccurrences(of: "AirPods Pro", with: "AirPods")
+
+        // Truncate if still too long
+        if shortened.count > 12 {
+            return String(shortened.prefix(12)) + "…"
+        }
+        return shortened
     }
 
     // MARK: - State Dot

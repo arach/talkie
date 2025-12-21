@@ -19,7 +19,8 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.swift.org)",
       "WebFetch(domain:vercel.com)",
-      "Bash(xcodegen generate:*)"
+      "Bash(xcodegen generate:*)",
+      "Bash(sqlite3:*)"
     ]
   }
 }

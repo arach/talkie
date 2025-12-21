@@ -39,6 +39,12 @@ struct MemoTableFullView: View {
     @State private var selectedMemo: VoiceMemo?
     @State private var showInspector: Bool = true  // Show zero state by default for visual balance
 
+    // Responsive layout state
+    @State private var windowWidth: CGFloat = 0
+    private var isCompactMode: Bool {
+        windowWidth < 900
+    }
+
     // Sorting state
     @State private var sortField: MemoSortField = .timestamp
     @State private var sortAscending: Bool = false
@@ -94,10 +100,47 @@ struct MemoTableFullView: View {
         }
     }
 
+    // MARK: - Compact Inspector Overlay
+
+    /// iOS-style modal inspector for compact mode (< 900px)
+    private var compactInspectorOverlay: some View {
+        ZStack {
+            // Backdrop - tap to dismiss
+            if selectedMemo != nil && showInspector {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showInspector = false
+                        }
+                    }
+            }
+
+            // Inspector sheet - slide in from right
+            if selectedMemo != nil && showInspector, let memo = selectedMemo {
+                HStack(spacing: 0) {
+                    Spacer()
+
+                    MemoInspectorPanel(
+                        memo: memo,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showInspector = false
+                            }
+                        }
+                    )
+                    .frame(width: min(inspectorWidth, windowWidth * 0.9))
+                    .transition(.move(edge: .trailing))
+                }
+            }
+        }
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
-            // Main table content (flexible width)
-            VStack(spacing: 0) {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                // Main table content (flexible width)
+                VStack(spacing: 0) {
                 // Header
                 HStack(spacing: 4) {
                     Text("All Memos")
@@ -118,8 +161,8 @@ struct MemoTableFullView: View {
 
                     Spacer()
 
-                    // Inspector toggle button - always visible when inspector shown or memo selected
-                    if selectedMemo != nil || showInspector {
+                    // Inspector toggle button - only in wide mode
+                    if !isCompactMode && (selectedMemo != nil || showInspector) {
                         Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
                             Image(systemName: "sidebar.right")
                                 .font(SettingsManager.shared.fontXS)
@@ -174,8 +217,13 @@ struct MemoTableFullView: View {
                                     isSelected: selectedMemo?.id == memo.id,
                                     onSelect: {
                                         selectedMemo = memo
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            showInspector = true
+
+                                        // In compact mode, always auto-open inspector (iOS-style)
+                                        // In wide mode, open if not already showing
+                                        if isCompactMode || !showInspector {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                showInspector = true
+                                            }
                                         }
                                     },
                                     timestampWidth: timestampWidth,
@@ -219,56 +267,73 @@ struct MemoTableFullView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.current.background)
 
-            // Inspector Panel - inline, not overlaid
+            // Inspector Panel - inline in wide mode only
             // Shows either: memo details (when selected) or empty state (for balance)
-            if showInspector || selectedMemo != nil {
-                // Divider between table and inspector
-                Rectangle()
-                    .fill(Theme.current.divider)
-                    .frame(width: 1)
+            if !isCompactMode {
+                if showInspector || selectedMemo != nil {
+                    // Divider between table and inspector
+                    Rectangle()
+                        .fill(Theme.current.divider)
+                        .frame(width: 1)
 
-                if let memo = selectedMemo {
-                    // Full inspector with memo details
-                    HStack(spacing: 0) {
-                        InspectorResizeHandle(width: $inspectorWidth)
-                        MemoInspectorPanel(
-                            memo: memo,
-                            onClose: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedMemo = nil
+                    if let memo = selectedMemo {
+                        // Full inspector with memo details
+                        HStack(spacing: 0) {
+                            InspectorResizeHandle(width: $inspectorWidth)
+                            MemoInspectorPanel(
+                                memo: memo,
+                                onClose: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        selectedMemo = nil
+                                    }
                                 }
-                            }
-                        )
-                        .frame(width: inspectorWidth)
+                            )
+                            .frame(width: inspectorWidth)
+                        }
+                    } else {
+                        // Zero state - narrower, provides visual balance
+                        MemoInspectorEmptyState(onClose: nil)
+                            .frame(width: zeroStateWidth)
                     }
-                } else {
-                    // Zero state - narrower, provides visual balance
-                    MemoInspectorEmptyState(onClose: nil)
-                        .frame(width: zeroStateWidth)
                 }
             }
         }
-        .onKeyPress(.escape) {
-            if showInspector {
+        .overlay(isCompactMode ? compactInspectorOverlay : nil)
+        .onAppear {
+            windowWidth = geometry.size.width
+        }
+        .onChange(of: geometry.size.width) { _, newWidth in
+            windowWidth = newWidth
+
+            // Auto-close inspector when transitioning to compact mode
+            if isCompactMode && showInspector {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     showInspector = false
                 }
-                return .handled
             }
-            return .ignored
         }
-        .onAppear {
-            updateSortedMemos()
-        }
-        .onChange(of: Array(allMemos)) { _, _ in
-            // Invalidate when any memo changes (add, delete, or property update)
-            updateSortedMemos()
-        }
-        .onChange(of: sortField) { _, _ in
-            updateSortedMemos()
-        }
-        .onChange(of: sortAscending) { _, _ in
-            updateSortedMemos()
+            .onKeyPress(.escape) {
+                if showInspector {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showInspector = false
+                    }
+                    return .handled
+                }
+                return .ignored
+            }
+            .onAppear {
+                updateSortedMemos()
+            }
+            .onChange(of: Array(allMemos)) { _, _ in
+                // Invalidate when any memo changes (add, delete, or property update)
+                updateSortedMemos()
+            }
+            .onChange(of: sortField) { _, _ in
+                updateSortedMemos()
+            }
+            .onChange(of: sortAscending) { _, _ in
+                updateSortedMemos()
+            }
         }
     }
 

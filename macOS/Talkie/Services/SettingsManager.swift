@@ -1120,6 +1120,9 @@ class SettingsManager: ObservableObject {
     @Published private var _groqApiKey: String?
     @Published private var _selectedModel: String = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
 
+    // Transcription model settings (consolidated from LiveSettings)
+    @Published private var _liveTranscriptionModelId: String = "whisper:openai_whisper-small"
+
     private let keychain = KeychainManager.shared
 
     // Public accessors that ensure initialization
@@ -1198,6 +1201,12 @@ class SettingsManager: ObservableObject {
     var selectedModel: String {
         get { ensureInitialized(); return _selectedModel }
         set { _selectedModel = newValue }
+    }
+
+    // Transcription model for Live Mode (real-time transcription)
+    var liveTranscriptionModelId: String {
+        get { ensureInitialized(); return _liveTranscriptionModelId }
+        set { _liveTranscriptionModelId = newValue; saveSettings() }
     }
 
     private var context: NSManagedObjectContext {
@@ -1341,6 +1350,7 @@ class SettingsManager: ObservableObject {
             let results = try context.fetch(fetchRequest)
             if let settings = results.first {
                 let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+                let liveModelId = settings.liveTranscriptionModelId ?? "whisper:openai_whisper-small"
 
                 // Check if we need to migrate API keys from Core Data to Keychain
                 let hasCoreDataKeys = (settings.geminiApiKey != nil && !settings.geminiApiKey!.isEmpty) ||
@@ -1372,6 +1382,7 @@ class SettingsManager: ObservableObject {
                         self._anthropicApiKey = anthropic
                         self._groqApiKey = groq
                         self._selectedModel = model
+                        self._liveTranscriptionModelId = liveModelId
                     }
                 } else {
                     // Use Keychain values directly
@@ -1381,6 +1392,7 @@ class SettingsManager: ObservableObject {
                         self._anthropicApiKey = anthropicFromKeychain
                         self._groqApiKey = groqFromKeychain
                         self._selectedModel = model
+                        self._liveTranscriptionModelId = liveModelId
                     }
                 }
             } else {
@@ -1394,6 +1406,17 @@ class SettingsManager: ObservableObject {
                     self._anthropicApiKey = anthropicFromKeychain
                     self._groqApiKey = groqFromKeychain
                 }
+            }
+
+            // Migrate transcription model from LiveSettings if needed
+            // This runs once to migrate from the old UserDefaults key
+            if let legacyModelId = UserDefaults.standard.string(forKey: "selectedModelId") {
+                logger.info("Migrating transcription model from LiveSettings: \(legacyModelId)")
+                DispatchQueue.main.async {
+                    self._liveTranscriptionModelId = legacyModelId
+                }
+                // Clear old key (AppStorage auto-saves)
+                UserDefaults.standard.removeObject(forKey: "selectedModelId")
             }
         } catch {
             logger.error("Failed to load settings: \(error.localizedDescription)")
@@ -1450,6 +1473,7 @@ class SettingsManager: ObservableObject {
             // Only save non-sensitive data to Core Data
             // API keys are stored securely in Keychain
             settings.selectedModel = selectedModel
+            settings.liveTranscriptionModelId = liveTranscriptionModelId
             settings.lastModified = Date()
 
             try context.save()
@@ -1467,6 +1491,7 @@ class SettingsManager: ObservableObject {
         settings.id = UUID()
         // API keys are stored in Keychain, not Core Data
         settings.selectedModel = defaultModel
+        settings.liveTranscriptionModelId = "whisper:openai_whisper-small"
         settings.lastModified = Date()
 
         do {
@@ -1474,6 +1499,7 @@ class SettingsManager: ObservableObject {
             // Use async to avoid "publishing changes during view updates" warning
             DispatchQueue.main.async {
                 self._selectedModel = defaultModel
+                self._liveTranscriptionModelId = "whisper:openai_whisper-small"
             }
             logger.debug("Created default settings")
         } catch {

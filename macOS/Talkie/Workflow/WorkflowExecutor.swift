@@ -312,6 +312,24 @@ class WorkflowExecutor: ObservableObject {
 
                 // Mark pending action as failed
                 PendingActionsManager.shared.failAction(id: pendingActionId, error: error.localizedDescription)
+
+                // Save failed workflow run with event sourcing
+                let failedAt = Date()
+                saveWorkflowRun(
+                    runId: runId,
+                    workflow: workflow,
+                    output: "",
+                    stepExecutions: stepExecutions,
+                    providerName: usedProvider,
+                    modelId: usedModel,
+                    memo: memo,
+                    context: context,
+                    startedAt: workflowStartTime,
+                    completedAt: failedAt,
+                    status: .failed,
+                    error: error
+                )
+
                 throw error
             }
             workflowContext.outputs[step.outputKey] = output
@@ -386,7 +404,9 @@ class WorkflowExecutor: ObservableObject {
         memo: VoiceMemo,
         context: NSManagedObjectContext,
         startedAt: Date,
-        completedAt: Date
+        completedAt: Date,
+        status: WorkflowRunModel.Status = .completed,
+        error: Error? = nil
     ) {
         let runDate = completedAt
 
@@ -422,7 +442,7 @@ class WorkflowExecutor: ObservableObject {
                     workflowId: workflow.id,
                     workflowName: workflow.name,
                     workflowIcon: workflow.icon,
-                    status: .completed,
+                    status: status,
                     createdAt: startedAt,
                     updatedAt: completedAt,
                     startedAt: startedAt,
@@ -433,6 +453,8 @@ class WorkflowExecutor: ObservableObject {
                     inputDate: memo.createdAt,
                     output: output,
                     finalOutputs: finalOutputsJSON,
+                    errorMessage: error?.localizedDescription,
+                    errorStack: error.map { String(describing: $0) },
                     durationMs: durationMs,
                     stepCount: stepExecutions.count,
                     triggerSource: .manual,
@@ -500,13 +522,22 @@ class WorkflowExecutor: ObservableObject {
                     eventSequence += 1
                 }
 
-                // Run completed event
-                let runCompletedEvent = WorkflowEventModel.runCompleted(
-                    runId: runId,
-                    outputCount: stepExecutions.count,
-                    duration: completedAt.timeIntervalSince(startedAt)
-                )
-                try await repository.saveWorkflowEvent(runCompletedEvent)
+                // Run completed or failed event
+                if status == .completed {
+                    let runCompletedEvent = WorkflowEventModel.runCompleted(
+                        runId: runId,
+                        outputCount: stepExecutions.count,
+                        duration: completedAt.timeIntervalSince(startedAt)
+                    )
+                    try await repository.saveWorkflowEvent(runCompletedEvent)
+                } else if status == .failed, let error = error {
+                    let runFailedEvent = WorkflowEventModel.runFailed(
+                        runId: runId,
+                        error: error,
+                        failedStepNumber: stepExecutions.last?.stepNumber
+                    )
+                    try await repository.saveWorkflowEvent(runFailedEvent)
+                }
 
                 logger.info("✅ [Event Sourcing] Saved \(eventSequence + 1) workflow events")
                 logger.info("✅ [Bridge 2] Complete workflow run saved to GRDB with full event sourcing")

@@ -151,12 +151,12 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
         self != .production
     }
 
-    /// Color for environment indicator
+    /// Color for environment indicator (matches engine badge colors)
     public var indicatorColor: String {
         switch self {
         case .production: return "blue"
-        case .staging: return "green"
-        case .dev: return "orange"
+        case .staging: return "orange"
+        case .dev: return "red"
         }
     }
 }

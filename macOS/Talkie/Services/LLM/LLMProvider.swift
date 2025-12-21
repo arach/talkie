@@ -30,13 +30,24 @@ struct LLMConfig: Codable {
 
     /// Shared config instance loaded from bundle
     static let shared: LLMConfig = {
-        guard let url = Bundle.main.url(forResource: "LLMConfig", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let config = try? JSONDecoder().decode(LLMConfig.self, from: data) else {
-            logger.debug("⚠️ Failed to load LLMConfig.json, using empty config")
-            return LLMConfig(providers: [:], preferredProviderOrder: [])
+        // Try with subdirectory first (Resources/Resources/LLMConfig.json)
+        if let url = Bundle.main.url(forResource: "LLMConfig", withExtension: "json", subdirectory: "Resources"),
+           let data = try? Data(contentsOf: url),
+           let config = try? JSONDecoder().decode(LLMConfig.self, from: data) {
+            logger.debug("✓ Loaded LLMConfig.json from Resources subdirectory")
+            return config
         }
-        return config
+
+        // Fallback to root Resources directory
+        if let url = Bundle.main.url(forResource: "LLMConfig", withExtension: "json"),
+           let data = try? Data(contentsOf: url),
+           let config = try? JSONDecoder().decode(LLMConfig.self, from: data) {
+            logger.debug("✓ Loaded LLMConfig.json from root Resources")
+            return config
+        }
+
+        logger.warning("⚠️ Failed to load LLMConfig.json from bundle, using empty config")
+        return LLMConfig(providers: [:], preferredProviderOrder: [])
     }()
 
     /// Get config for a specific provider

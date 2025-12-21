@@ -67,11 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             NSLog("[AppDelegate] 🚀 Starting helper apps...")
             AppLauncher.shared.ensureHelpersRunning()
 
-            // Give TalkieEngine a moment to fully register its XPC service
-            NSLog("[AppDelegate] ⏱️ Waiting 500ms for TalkieEngine XPC registration...")
-            try? await Task.sleep(for: .milliseconds(500))
-
-            // Connect to TalkieEngine XPC service
+            // Connect to TalkieEngine XPC service (has built-in retry logic)
             NSLog("[AppDelegate] 🔌 Calling EngineClient.shared.connect()...")
             EngineClient.shared.connect()
             NSLog("[AppDelegate] ✓ EngineClient.connect() returned")

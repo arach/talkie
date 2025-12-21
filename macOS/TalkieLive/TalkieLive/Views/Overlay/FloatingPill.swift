@@ -370,6 +370,8 @@ final class FloatingPillController: ObservableObject {
 struct FloatingPillView: View {
     @EnvironmentObject var controller: FloatingPillController
     @State private var isHovered = false
+    @State private var showPID = false
+    @State private var pidCopied = false
 
     // Expansion threshold - only expand when very close (proximity > 0.7) or hovered
     private let expandThreshold: CGFloat = 0.7
@@ -379,24 +381,77 @@ struct FloatingPillView: View {
     }
 
     var body: some View {
-        StatePill(
-            state: controller.state,
-            isWarmingUp: false,
-            showSuccess: false,
-            recordingDuration: controller.elapsedTime,
-            processingDuration: controller.processingTime,
-            isEngineConnected: controller.isEngineConnected,
-            pendingQueueCount: controller.pendingQueueCount,
-            forceExpanded: isExpanded,
-            onTap: { controller.handleTap() },
-            onQueueTap: { FailedQueueController.shared.show() }
-        )
-        // Frame must accommodate expanded state for proper hit testing
-        .frame(width: 160, height: 30)
+        HStack(spacing: 6) {
+            StatePill(
+                state: controller.state,
+                isWarmingUp: false,
+                showSuccess: false,
+                recordingDuration: controller.elapsedTime,
+                processingDuration: controller.processingTime,
+                isEngineConnected: controller.isEngineConnected,
+                pendingQueueCount: controller.pendingQueueCount,
+                micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
+                forceExpanded: isExpanded,
+                onTap: { controller.handleTap() },
+                onQueueTap: { FailedQueueController.shared.show() }
+            )
+
+            // PID appears on Command+hover
+            if showPID {
+                Button(action: { copyPID() }) {
+                    Text("\(ProcessInfo.processInfo.processIdentifier)")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(pidCopied ? SemanticColor.success : TalkieTheme.textTertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Click to copy PID")
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        // Frame must accommodate expanded state + PID for proper hit testing
+        .frame(width: showPID ? 210 : 160, height: 30)
+        .animation(.easeInOut(duration: 0.15), value: showPID)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
+            if !hovering {
+                withAnimation { showPID = false }
+                pidCopied = false
+            }
+        }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active:
+                // Check for Command modifier while hovering
+                let commandHeld = NSEvent.modifierFlags.contains(.command)
+                if commandHeld != showPID {
+                    withAnimation { showPID = commandHeld }
+                }
+            case .ended:
+                withAnimation { showPID = false }
+                pidCopied = false
+            }
+        }
+    }
+
+    private func copyPID() {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("\(pid)", forType: .string)
+        withAnimation { pidCopied = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation { pidCopied = false }
         }
     }
 }
