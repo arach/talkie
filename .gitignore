@@ -13,6 +13,9 @@ DerivedData
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.bak
+*.bak[0-9]
+*.bak[0-9][0-9]
 
 # Swift Package Manager
 .build/
