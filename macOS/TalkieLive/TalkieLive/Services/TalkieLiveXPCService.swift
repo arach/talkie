@@ -76,56 +76,38 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
     }
 
     private func broadcastStateChange(state: String, elapsedTime: TimeInterval) async {
-        // Defensive error boundary - NEVER let XPC failures escape
-        do {
-            await MainActor.run {
-                // Clean up dead connections
-                observers.removeAll { $0.remoteObjectProxy == nil }
+        await MainActor.run {
+            // Notify all connected observers
+            for connection in observers {
+                guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                    NSLog("[TalkieLiveXPC] ⚠️ Error sending state to observer: \(error)")
+                }) as? TalkieLiveStateObserverProtocol else { continue }
 
-                // Notify all connected observers
-                for connection in observers {
-                    guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                        NSLog("[TalkieLiveXPC] ⚠️ Error sending state to observer: \(error)")
-                    }) as? TalkieLiveStateObserverProtocol else { continue }
-
-                    // Fire-and-forget notification (won't block even if observer is slow)
-                    observer.stateDidChange(state: state, elapsedTime: elapsedTime)
-                }
-
-                // Only log when state actually changes (not on every elapsed time update)
-                if state != lastLoggedState {
-                    NSLog("[TalkieLiveXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
-                    lastLoggedState = state
-                }
+                // Fire-and-forget notification (won't block even if observer is slow)
+                observer.stateDidChange(state: state, elapsedTime: elapsedTime)
             }
-        } catch {
-            // This should never happen, but if it does, just log it
-            NSLog("[TalkieLiveXPC] 🚨 Unexpected error in broadcastStateChange: \(error)")
+
+            // Only log when state actually changes (not on every elapsed time update)
+            if state != lastLoggedState {
+                NSLog("[TalkieLiveXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
+                lastLoggedState = state
+            }
         }
     }
 
     private func broadcastUtteranceAdded() async {
-        // Defensive error boundary - NEVER let XPC failures escape
-        do {
-            await MainActor.run {
-                // Clean up dead connections
-                observers.removeAll { $0.remoteObjectProxy == nil }
+        await MainActor.run {
+            // Notify all connected observers
+            for connection in observers {
+                guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                    NSLog("[TalkieLiveXPC] ⚠️ Error sending utterance notification to observer: \(error)")
+                }) as? TalkieLiveStateObserverProtocol else { continue }
 
-                // Notify all connected observers
-                for connection in observers {
-                    guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                        NSLog("[TalkieLiveXPC] ⚠️ Error sending utterance notification to observer: \(error)")
-                    }) as? TalkieLiveStateObserverProtocol else { continue }
-
-                    // Fire-and-forget notification (won't block even if observer is slow)
-                    observer.utteranceWasAdded()
-                }
-
-                NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new utterance")
+                // Fire-and-forget notification (won't block even if observer is slow)
+                observer.utteranceWasAdded()
             }
-        } catch {
-            // This should never happen, but if it does, just log it
-            NSLog("[TalkieLiveXPC] 🚨 Unexpected error in broadcastUtteranceAdded: \(error)")
+
+            NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new utterance")
         }
     }
 

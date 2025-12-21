@@ -1,5 +1,6 @@
 import Cocoa
 import SwiftUI
+import TalkieKit
 import Carbon.HIToolbox
 import Combine
 
@@ -163,15 +164,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Floating Pill
 
     private func setupFloatingPill() {
-        // Wire up floating pill - tap to toggle recording
-        // Shift-click triggers interstitial mode (route to Talkie Core for editing)
-        floatingPill.onTapWithShift = { [weak self] shiftHeld in
-            self?.toggleListening(interstitial: shiftHeld)
-        }
+        // Wire up floating pill - handle taps based on current state
+        floatingPill.onTap = { [weak self] state, modifiers in
+            guard let self = self else { return }
 
-        // Wire up push-to-queue - escape hatch when stuck in transcribing
-        floatingPill.onPushToQueue = { [weak self] in
-            self?.liveController.pushToQueue()
+            let shiftHeld = modifiers.contains(.shift)
+            let commandHeld = modifiers.contains(.command)
+
+            switch state {
+            case .idle:
+                // Idle state: Check if there are queued items to show
+                let queuedCount = LiveDatabase.countQueued()
+                if queuedCount > 0 {
+                    // Show failed queue picker
+                    FailedQueueController.shared.show()
+                } else {
+                    // Normal tap: start recording (with optional interstitial mode)
+                    self.toggleListening(interstitial: shiftHeld)
+                }
+
+            case .listening:
+                // Listening state: stop recording (with optional interstitial mode)
+                self.toggleListening(interstitial: shiftHeld)
+
+            case .transcribing, .routing:
+                // Processing states: offer escape options
+                if commandHeld {
+                    // ⌘+tap: Force reset (emergency exit - abandons everything)
+                    self.liveController.forceReset()
+                } else {
+                    // Regular tap: Push to queue (graceful save for later retry)
+                    self.liveController.pushToQueue()
+                }
+            }
         }
     }
 
@@ -300,9 +325,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showHistory() {
         // Open Talkie app and navigate to Live section
-        let talkieBundleID = "jdi.talkie.core"
-
-        // First, open Talkie app
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true  // Bring to front
 
@@ -312,14 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { app, error in
             if let error = error {
                 AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
-
-                // Fallback: try opening via bundle ID
-                NSWorkspace.shared.launchApplication(
-                    withBundleIdentifier: talkieBundleID,
-                    options: [.default],
-                    additionalEventParamDescriptor: nil,
-                    launchIdentifier: nil
-                )
+                return
             }
 
             // After opening Talkie, navigate to Live section via URL scheme
@@ -344,9 +359,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showSettings() {
         // Open Talkie Core app with Live settings
-        let talkieBundleID = "jdi.talkie.core"
-
-        // First, open Talkie app
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true  // Bring to front
 
@@ -356,14 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { app, error in
             if let error = error {
                 AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
-
-                // Fallback: try opening via bundle ID
-                NSWorkspace.shared.launchApplication(
-                    withBundleIdentifier: talkieBundleID,
-                    options: [.default],
-                    additionalEventParamDescriptor: nil,
-                    launchIdentifier: nil
-                )
+                return
             }
 
             // After opening Talkie, navigate to Settings

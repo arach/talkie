@@ -159,7 +159,7 @@ extension LiveDatabase {
     static func store(_ utterance: LiveUtterance) -> Int64? {
         do {
             return try shared.write { db -> Int64? in
-                var mutable = utterance
+                let mutable = utterance
                 try mutable.insert(db)
                 // Use lastInsertedRowID as fallback if didInsert didn't populate id
                 let insertedId = mutable.id ?? db.lastInsertedRowID

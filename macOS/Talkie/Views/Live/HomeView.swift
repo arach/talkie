@@ -1248,7 +1248,11 @@ struct ActivityCell: View {
             .frame(width: size, height: size)
             .overlay(
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(isHovered && !isFutureDate ? TalkieTheme.textSecondary : Color.clear, lineWidth: 1)
+                    .stroke(
+                        isFutureDate ? Color.clear :
+                        isHovered ? TalkieTheme.textSecondary : TalkieTheme.border.opacity(0.3),
+                        lineWidth: isHovered ? 1 : 0.5
+                    )
             )
             .onHover { hovering in
                 if !isFutureDate {

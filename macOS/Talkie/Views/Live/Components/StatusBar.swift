@@ -116,8 +116,7 @@ struct StatusBar: View {
                             onTap: {
                                 // Toggle recording in TalkieLive via XPC
                                 TalkieLiveStateMonitor.shared.toggleRecording()
-                            },
-                            onQueueTap: nil
+                            }
                         )
                         .contextMenu {
                             Button("Restart TalkieLive") {
@@ -125,8 +124,8 @@ struct StatusBar: View {
                             }
                         }
 
-                        // Live environment badge (on hover, shows which TalkieLive we're connected to)
-                        if isHovered, let liveEnv = liveState.connectedMode, liveEnv != .production {
+                        // Live environment badge (on Ctrl+hover, shows which TalkieLive we're connected to)
+                        if showPID, let liveEnv = liveState.connectedMode, liveEnv != .production {
                             liveEnvironmentBadge(liveEnv)
                                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
@@ -259,9 +258,9 @@ struct StatusBar: View {
     private func liveEnvironmentBadge(_ env: TalkieEnvironment) -> some View {
         let badgeColor: Color = {
             switch env {
+            case .production: return .green
             case .staging: return .orange
-            case .dev: return .red
-            case .production: return .blue
+            case .dev: return .purple
             }
         }()
 
@@ -565,6 +564,7 @@ struct EngineStatusIcon: View {
     @ObservedObject private var layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
     @State private var showPID = false
+    @State private var showEnvBadge = false
     @State private var pidCopied = false
 
     private var statusColor: Color {
@@ -610,31 +610,23 @@ struct EngineStatusIcon: View {
     }
 
     private var badgeText: String? {
-        guard let mode = badgeMode else { return nil }
+        // Only show on Ctrl+hover
+        guard showEnvBadge, let mode = badgeMode else { return nil }
 
-        if isHovered {
-            // Expanded mode
-            switch mode {
-            case .staging: return "STAGING"
-            case .dev: return "DEV"
-            case .production: return nil
-            }
-        } else {
-            // Compact mode
-            switch mode {
-            case .staging: return "S"
-            case .dev: return "D"
-            case .production: return nil
-            }
+        // Always show full text when visible (since it only shows on Ctrl+hover)
+        switch mode {
+        case .staging: return "STAGING"
+        case .dev: return "DEV"
+        case .production: return nil
         }
     }
 
     private var badgeColor: Color {
-        guard let mode = badgeMode else { return .blue }
+        guard let mode = badgeMode else { return .green }
         switch mode {
+        case .production: return .green
         case .staging: return .orange
-        case .dev: return .red
-        case .production: return .blue
+        case .dev: return .purple
         }
     }
 
@@ -657,16 +649,16 @@ struct EngineStatusIcon: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .leading)))
                     }
 
-                    // Badge always visible (compact when not hovered)
+                    // Badge visible on Ctrl+hover
                     if let badge = badgeText {
                         Text(badge)
-                            .font(.system(size: 7, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .foregroundColor(badgeColor)
-                            .padding(.horizontal, isHovered ? 3 : 2)
-                            .padding(.vertical, 1)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
                             .background(badgeColor.opacity(0.2))
-                            .cornerRadius(2)
-                            .animation(.easeInOut(duration: 0.15), value: isHovered)
+                            .cornerRadius(3)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
                 }
                 .padding(.horizontal, showLabels ? 6 : 4)
@@ -677,7 +669,7 @@ struct EngineStatusIcon: View {
                 )
             }
             .buttonStyle(.plain)
-            .delayedHelp("TalkieEngine - Click for settings, Shift+Click to launch/restart", delay: 0.6)
+            .delayedHelp("TalkieEngine - Click for status dashboard, Shift+Click to launch/restart", delay: 0.6)
             .animation(.easeInOut(duration: 0.15), value: showLabels)
 
             // PID appears on Ctrl+hover
@@ -701,7 +693,10 @@ struct EngineStatusIcon: View {
         .onHover { hovering in
             isHovered = hovering
             if !hovering {
-                withAnimation { showPID = false }
+                withAnimation {
+                    showPID = false
+                    showEnvBadge = false
+                }
                 pidCopied = false
             }
         }
@@ -711,10 +706,16 @@ struct EngineStatusIcon: View {
                 // Check for Control modifier while hovering
                 let controlHeld = NSEvent.modifierFlags.contains(.control)
                 if controlHeld != showPID {
-                    withAnimation { showPID = controlHeld }
+                    withAnimation {
+                        showPID = controlHeld
+                        showEnvBadge = controlHeld
+                    }
                 }
             case .ended:
-                withAnimation { showPID = false }
+                withAnimation {
+                    showPID = false
+                    showEnvBadge = false
+                }
                 pidCopied = false
             }
         }
@@ -747,8 +748,10 @@ struct EngineStatusIcon: View {
     }
 
     private func navigateToEngineSettings() {
-        // Navigate to Settings → Supporting Apps → TalkieEngine
-        NotificationCenter.default.post(name: .switchToSupportingApps, object: nil)
+        // Open TalkieEngine's native dashboard via URL scheme
+        if let url = URL(string: "talkieengine://dashboard") {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
 
@@ -907,45 +910,29 @@ struct ConsoleButton: View {
     private var statusColor: Color {
         if errorCount > 0 { return SemanticColor.error }
         if warningCount > 0 { return SemanticColor.warning }
-        return SemanticColor.success
+        return TalkieTheme.textMuted
+    }
+
+    private var icon: String {
+        if errorCount > 0 { return "exclamationmark.circle" }
+        if warningCount > 0 { return "exclamationmark.triangle" }
+        return "terminal"
     }
 
     var body: some View {
         Button(action: { showPopover.toggle() }) {
-            HStack(spacing: 6) {
-                // Error count (red)
-                if errorCount > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 9))
-                        Text("\(errorCount)")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .foregroundColor(SemanticColor.error)
-                }
-
-                // Workflow count (amber)
-                if warningCount > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 9))
-                        Text("\(warningCount)")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .foregroundColor(Color(red: 1.0, green: 0.7, blue: 0.3))
-                }
-
-                // Terminal icon
-                Image(systemName: "terminal")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(TalkieTheme.textMuted)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(TalkieTheme.surfaceCard.opacity(0.5))
-            .cornerRadius(3)
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(statusColor.opacity(isHovered ? 1.0 : 0.7))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isHovered ? TalkieTheme.hover : Color.clear)
+                )
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             SystemConsoleView()
                 .frame(width: 600, height: 350)
@@ -1031,9 +1018,9 @@ struct LiveEnvironmentBadge: View {
     private var badgeColor: Color {
         // Use same color scheme as engine badge for consistency
         switch environment {
+        case .production: return .green
         case .staging: return .orange
-        case .dev: return .red
-        case .production: return .blue
+        case .dev: return .purple
         }
     }
 

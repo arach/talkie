@@ -66,7 +66,7 @@ struct DevControlPanelView: View {
                     title: "TalkieLive Instances",
                     processes: discovery.liveProcesses,
                     serviceName: "TalkieLive",
-                    connectedPID: liveMonitor.processId
+                    connectedPID: liveMonitor.processId ?? discoveredLivePID
                 )
 
                 Divider()
@@ -84,6 +84,8 @@ struct DevControlPanelView: View {
         .onAppear {
             discovery.scan()
             startAutoRefresh()
+            // Start monitoring to get live connection status and PID
+            liveMonitor.startMonitoring()
         }
         .onDisappear {
             stopAutoRefresh()
@@ -91,6 +93,22 @@ struct DevControlPanelView: View {
     }
 
     // MARK: - Connection Status
+
+    /// Get the PID of the discovered Live process (fallback if liveMonitor.processId is nil)
+    private var discoveredLivePID: Int32? {
+        // If there's only one Live process, use it
+        guard !discovery.liveProcesses.isEmpty else { return nil }
+
+        // Try to match by environment first
+        if let env = liveMonitor.connectedMode {
+            if let matching = discovery.liveProcesses.first(where: { $0.environment == env }) {
+                return matching.pid
+            }
+        }
+
+        // Otherwise, just use the first one
+        return discovery.liveProcesses.first?.pid
+    }
 
     private var connectionStatusSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -112,7 +130,7 @@ struct DevControlPanelView: View {
                     title: "Live",
                     isConnected: liveMonitor.isRunning,
                     environment: liveMonitor.connectedMode,
-                    pid: liveMonitor.processId
+                    pid: liveMonitor.processId ?? discoveredLivePID
                 )
             }
         }
@@ -247,16 +265,58 @@ struct DevControlPanelView: View {
 
             Spacer()
 
-            // Kill button
-            Button(action: {
-                killProcess(process)
-            }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.red)
+            // Action buttons - different for daemon vs direct launch
+            HStack(spacing: 6) {
+                if process.isDaemon {
+                    // Daemon: show stop/restart buttons
+                    Button(action: {
+                        stopDaemon(process)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 10))
+                            Text("Stop")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop daemon via launchctl")
+
+                    Button(action: {
+                        restartDaemon(process)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10))
+                            Text("Restart")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Restart daemon via launchctl")
+                } else {
+                    // Direct launch: show kill button
+                    Button(action: {
+                        killProcess(process)
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Terminate PID \(process.pid)")
+                }
             }
-            .buttonStyle(.plain)
-            .help("Terminate PID \(process.pid)")
         }
         .padding(8)
         .background(isConnected ? Color.green.opacity(0.05) : Color.secondary.opacity(0.03))
@@ -369,9 +429,9 @@ struct DevControlPanelView: View {
 
     private func envColor(_ env: TalkieEnvironment) -> Color {
         switch env {
-        case .dev: return .red
+        case .production: return .green
         case .staging: return .orange
-        case .production: return .blue
+        case .dev: return .purple
         }
     }
 
@@ -458,6 +518,38 @@ struct DevControlPanelView: View {
             }
         } else {
             addLog("Failed to terminate PID \(process.pid)", level: .error)
+        }
+    }
+
+    private func stopDaemon(_ process: DiscoveredProcess) {
+        let success = discovery.stopDaemon(for: process)
+
+        if success {
+            addLog("Stopped \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
+        } else {
+            addLog("Failed to stop \(process.name) daemon", level: .error)
+        }
+    }
+
+    private func restartDaemon(_ process: DiscoveredProcess) {
+        // Stop first
+        let stopSuccess = discovery.stopDaemon(for: process)
+
+        if stopSuccess {
+            addLog("Stopped \(process.name) daemon", level: .info)
+
+            // Wait a moment before starting
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                let startSuccess = discovery.startDaemon(for: process)
+
+                if startSuccess {
+                    addLog("Restarted \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
+                } else {
+                    addLog("Failed to restart \(process.name) daemon", level: .error)
+                }
+            }
+        } else {
+            addLog("Failed to stop \(process.name) daemon for restart", level: .error)
         }
     }
 

@@ -216,4 +216,82 @@ public class ProcessDiscovery: ObservableObject {
 
         return killed
     }
+
+    /// Start/restart a daemon process using launchctl
+    public func startDaemon(for process: DiscoveredProcess) -> Bool {
+        guard process.isDaemon, let env = process.environment else { return false }
+
+        // Get the launchd label for this service
+        let label: String
+        switch process.name {
+        case "TalkieEngine":
+            label = env.engineLaunchdLabel
+        case "TalkieLive":
+            label = env.liveLaunchdLabel
+        default:
+            return false
+        }
+
+        // Use launchctl to start the service
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        task.arguments = ["start", label]
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            // Wait a moment for the service to start
+            Thread.sleep(forTimeInterval: 0.5)
+
+            // Rescan to update state
+            Task { @MainActor in
+                scan()
+            }
+
+            return task.terminationStatus == 0
+        } catch {
+            NSLog("[ProcessDiscovery] Failed to start daemon \(label): \(error)")
+            return false
+        }
+    }
+
+    /// Stop a daemon process using launchctl
+    public func stopDaemon(for process: DiscoveredProcess) -> Bool {
+        guard process.isDaemon, let env = process.environment else { return false }
+
+        // Get the launchd label for this service
+        let label: String
+        switch process.name {
+        case "TalkieEngine":
+            label = env.engineLaunchdLabel
+        case "TalkieLive":
+            label = env.liveLaunchdLabel
+        default:
+            return false
+        }
+
+        // Use launchctl to stop the service
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        task.arguments = ["stop", label]
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            // Wait a moment for the service to stop
+            Thread.sleep(forTimeInterval: 0.5)
+
+            // Rescan to update state
+            Task { @MainActor in
+                scan()
+            }
+
+            return task.terminationStatus == 0
+        } catch {
+            NSLog("[ProcessDiscovery] Failed to stop daemon \(label): \(error)")
+            return false
+        }
+    }
 }

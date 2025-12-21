@@ -828,8 +828,7 @@ struct StatusBar: View {
                         isEngineConnected: engineClient.isConnected,
                         pendingQueueCount: LiveDatabase.countNeedsRetry(),
                         micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
-                        onTap: toggleRecording,
-                        onQueueTap: { FailedQueueController.shared.show() }
+                        onTap: toggleRecording
                     )
 
                     // PID appears next to pill on Control+hover

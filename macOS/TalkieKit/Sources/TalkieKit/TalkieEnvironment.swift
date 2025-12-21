@@ -101,6 +101,18 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
         }
     }
 
+    // MARK: - Launchd Labels
+
+    /// Launchd label for TalkieEngine (same as bundle ID)
+    public var engineLaunchdLabel: String {
+        engineBundleId
+    }
+
+    /// Launchd label for TalkieLive (same as bundle ID)
+    public var liveLaunchdLabel: String {
+        liveBundleId
+    }
+
     // MARK: - URL Schemes
 
     /// Talkie URL scheme (e.g., "talkie", "talkie-staging", "talkie-dev")

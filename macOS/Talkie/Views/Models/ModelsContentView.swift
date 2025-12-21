@@ -14,6 +14,8 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 extension NSNotification.Name {
     static let navigateToSettings = NSNotification.Name("navigateToSettings")
     static let navigateToLiveSettings = NSNotification.Name("navigateToLiveSettings")
+    static let navigateToEngineMonitor = NSNotification.Name("navigateToEngineMonitor")
+    static let navigateToLiveMonitor = NSNotification.Name("navigateToLiveMonitor")
 }
 
 struct ModelsContentView: View {

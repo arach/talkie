@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 import AppKit
 import Combine
 import os
@@ -334,34 +335,16 @@ final class FloatingPillController: ObservableObject {
         }
     }
 
-    // Control callback - takes Bool indicating if Shift was held (for interstitial mode)
-    var onTapWithShift: ((Bool) -> Void)?
+    // Simple callback - just report the tap with current state and modifiers
+    // Controller decides what action to take based on state
+    var onTap: ((LiveState, NSEvent.ModifierFlags) -> Void)?
 
     func handleTap() {
-        // Check if Shift is held for interstitial mode
-        let shiftHeld = NSEvent.modifierFlags.contains(.shift)
-        NSLog("[FloatingPill] handleTap: state=%@, shiftHeld=%d", state.rawValue, shiftHeld ? 1 : 0)
+        let modifiers = NSEvent.modifierFlags
+        NSLog("[FloatingPill] handleTap: state=%@, modifiers=%d", state.rawValue, modifiers.rawValue)
 
-        // If transcribing/routing and stuck, allow pushing to queue for later retry
-        if state == .transcribing || state == .routing {
-            NSLog("[FloatingPill] → pushing to queue")
-            onPushToQueue?()  // Save audio to queue and reset state
-        }
-        // If there are queued items and we're idle, show the failed queue picker
-        else if pendingQueueCount > 0 && state == .idle {
-            NSLog("[FloatingPill] → showing failed queue")
-            showFailedQueue()
-        } else {
-            NSLog("[FloatingPill] → calling onTapWithShift(%d)", shiftHeld ? 1 : 0)
-            onTapWithShift?(shiftHeld)
-        }
-    }
-
-    // Push-to-queue callback (for escaping stuck transcription)
-    var onPushToQueue: (() -> Void)?
-
-    func showFailedQueue() {
-        FailedQueueController.shared.show()
+        // Just report the tap - controller decides what to do
+        onTap?(state, modifiers)
     }
 }
 
@@ -392,8 +375,7 @@ struct FloatingPillView: View {
                 pendingQueueCount: controller.pendingQueueCount,
                 micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
                 forceExpanded: isExpanded,
-                onTap: { controller.handleTap() },
-                onQueueTap: { FailedQueueController.shared.show() }
+                onTap: { controller.handleTap() }
             )
 
             // PID appears on Command+hover

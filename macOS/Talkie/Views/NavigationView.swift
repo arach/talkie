@@ -19,7 +19,8 @@ enum NavigationSection: Hashable {
     case activityLog
     case systemConsole
     case pendingActions
-    case talkieService
+    case talkieService  // Accessible via engine icon click, not in sidebar
+    case talkieLiveMonitor  // Accessible via live icon click, not in sidebar
     case models
     case allowedCommands
     case settings
@@ -48,9 +49,6 @@ struct TalkieNavigationView: View {
     // Use let for singletons to avoid unnecessary view updates
     private let eventManager = SystemEventManager.shared
     private let pendingActionsManager = PendingActionsManager.shared
-    // Only track the state we need, not full @ObservedObject (avoids redraws on CPU/memory updates)
-    private let talkieServiceMonitor = TalkieServiceMonitor.shared
-    @State private var serviceIsRunning: Bool = false
 
     // Cached console event counts (updated via publisher, not computed on every render)
     @State private var cachedErrorCount: Int = 0
@@ -130,6 +128,17 @@ struct TalkieNavigationView: View {
                                 )
                                 .transition(.opacity)
                         }
+
+                        // Logs button - bottom right corner
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                logsButton
+                                    .padding(.trailing, 16)
+                                    .padding(.bottom, shouldShowStatusBar ? 40 : 16)
+                            }
+                        }
                     }
 
                     // StatusBar only on content area (not under sidebar) - hide on short windows
@@ -175,15 +184,8 @@ struct TalkieNavigationView: View {
         .onReceive(eventManager.$events) { _ in
             updateEventCounts()
         }
-        .onReceive(talkieServiceMonitor.$state) { newState in
-            serviceIsRunning = (newState == .running)
-        }
         .onAppear {
             updateEventCounts()
-            // Do a one-time state check without starting full monitoring
-            // (monitoring is now lazy - only starts when monitor view is shown)
-            talkieServiceMonitor.refreshState()
-            serviceIsRunning = (talkieServiceMonitor.state == .running)
             // Start Live data monitoring
             liveDataStore.startMonitoring()
         }
@@ -219,6 +221,40 @@ struct TalkieNavigationView: View {
         cachedWorkflowCount = recent.filter { $0.type == .workflow }.count
     }
 
+    // MARK: - Logs Button
+
+    private var logsButton: some View {
+        Button(action: {
+            selectedSection = .systemConsole
+        }) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(Theme.current.foreground)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(Theme.current.surface1)
+                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    )
+
+                // Error count badge
+                if consoleErrorCount > 0 {
+                    Text("\(consoleErrorCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange)
+                        .clipShape(Capsule())
+                        .offset(x: 8, y: -8)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help("View logs (\(consoleErrorCount) errors)")
+    }
+
     // Old statusBarView removed - now using unified StatusBar component
 
     // MARK: - Sidebar View (matches TalkieLive structure)
@@ -240,8 +276,7 @@ struct TalkieNavigationView: View {
                     sidebarButton(section: .pendingActions, icon: "clock.arrow.circlepath", title: "Pending", badge: pendingActionsManager.hasActiveActions ? "\(pendingActionsManager.activeCount)" : nil, badgeColor: .accentColor, showSpinner: pendingActionsManager.hasActiveActions)
                     sidebarButton(section: .workflows, icon: "wand.and.stars", title: "Workflows")
                     sidebarButton(section: .models, icon: "brain", title: "Models")
-                    sidebarButton(section: .talkieService, icon: "gearshape.2", title: "Service", badge: nil, badgeColor: serviceIsRunning ? .green : .red, showStatusDot: true, statusDotColor: serviceIsRunning ? .green : .red)
-                    sidebarButton(section: .systemConsole, icon: "terminal", title: "Console", badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil, badgeColor: .orange)
+                    sidebarButton(section: .systemConsole, icon: "terminal", title: "Logs", badge: cachedErrorCount > 0 ? "\(cachedErrorCount)" : nil, badgeColor: .orange)
                 }
                 .frame(maxWidth: .infinity)
             } else {
@@ -318,17 +353,10 @@ struct TalkieNavigationView: View {
                             title: "Models"
                         )
                         sidebarButton(
-                            section: .talkieService,
-                            icon: "gearshape.2",
-                            title: "Talkie Service",
-                            showStatusDot: true,
-                            statusDotColor: serviceIsRunning ? .green : .red
-                        )
-                        sidebarButton(
                             section: .systemConsole,
                             icon: "terminal",
-                            title: "Console",
-                            badge: consoleErrorCount > 0 ? "\(consoleErrorCount)" : nil,
+                            title: "Logs",
+                            badge: cachedErrorCount > 0 ? "\(cachedErrorCount)" : nil,
                             badgeColor: .orange
                         )
                     }
@@ -436,9 +464,10 @@ struct TalkieNavigationView: View {
         case .aiResults: return "AIResults"
         case .workflows: return "Workflows"
         case .activityLog: return "ActivityLog"
-        case .systemConsole: return "SystemConsole"
+        case .systemConsole: return "Logs"
         case .pendingActions: return "PendingActions"
-        case .talkieService: return "TalkieService"
+        case .talkieService: return "EngineMonitor"
+        case .talkieLiveMonitor: return "LiveMonitor"
         case .models: return "Models"
         case .allowedCommands: return "AllowedCommands"
         case .settings: return "Settings"
@@ -554,10 +583,6 @@ struct TalkieNavigationView: View {
             TalkieSection("PendingActions") {
                 PendingActionsView()
             }
-        case .talkieService:
-            TalkieSection("TalkieService") {
-                TalkieServiceMonitorView()
-            }
         case .settings:
             TalkieSection("Settings") {
                 SettingsView()
@@ -578,7 +603,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .talkieService, .settings:
+        case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .settings:
             return true
         default:
             return false
@@ -648,9 +673,10 @@ struct TalkieNavigationView: View {
         case .aiResults: return "ACTIVITY LOG"
         case .workflows: return "WORKFLOWS"
         case .activityLog: return "ACTIVITY LOG"
-        case .systemConsole: return "CONSOLE"
+        case .systemConsole: return "LOGS"
         case .pendingActions: return "PENDING ACTIONS"
-        case .talkieService: return "TALKIE SERVICE"
+        case .talkieService: return "ENGINE MONITOR"
+        case .talkieLiveMonitor: return "LIVE MONITOR"
         case .models: return "MODELS"
         case .allowedCommands: return "ALLOWED COMMANDS"
         case .settings: return "SETTINGS"

@@ -5,37 +5,13 @@ import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "LiveController")
 
-enum LiveState: String {
-    case idle
-    case listening
-    case transcribing
-    case routing
-}
-
 @MainActor
 final class LiveController: ObservableObject {
-    @Published private(set) var state: LiveState = .idle {
-        didSet {
-            logger.info("State: \(oldValue.rawValue) → \(self.state.rawValue)")
+    // State machine - centralized state management with validation
+    private let stateMachine = LiveStateMachine()
 
-            // Broadcast state change via XPC service for real-time IPC
-            let elapsed = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
-            TalkieLiveXPCService.shared.updateState(state.rawValue, elapsedTime: elapsed)
-
-            // Update floating pill state (desktop overlay)
-            FloatingPillController.shared.state = state
-            FloatingPillController.shared.elapsedTime = elapsed
-
-            // Update recording overlay state (top overlay)
-            RecordingOverlayController.shared.state = state
-            RecordingOverlayController.shared.elapsedTime = elapsed
-
-            // Stop elapsed time timer when returning to idle
-            if state == .idle {
-                stopElapsedTimeTimer()
-            }
-        }
-    }
+    // Published computed property for external observation
+    @Published private(set) var state: LiveState = .idle
 
     private var audio: LiveAudioCapture
     private let transcription: any TranscriptionService
@@ -65,6 +41,41 @@ final class LiveController: ObservableObject {
         self.transcription = transcription
         self.router = router
 
+        // Configure state machine callbacks
+        stateMachine.onStateChange = { [weak self] oldState, newState in
+            guard let self = self else { return }
+
+            // Log state transition prominently
+            logger.info("State: \(oldState.rawValue) → \(newState.rawValue)")
+            AppLogger.shared.log(.system, "State transition", detail: "\(oldState.rawValue) → \(newState.rawValue)")
+
+            // Sync published state
+            self.state = newState
+
+            // Broadcast state change via XPC service for real-time IPC
+            let elapsed = self.recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
+            TalkieLiveXPCService.shared.updateState(newState.rawValue, elapsedTime: elapsed)
+
+            // Update floating pill state (desktop overlay)
+            FloatingPillController.shared.state = newState
+            FloatingPillController.shared.elapsedTime = elapsed
+
+            // Update recording overlay state (top overlay)
+            RecordingOverlayController.shared.state = newState
+            RecordingOverlayController.shared.elapsedTime = elapsed
+
+            // Stop elapsed time timer when returning to idle
+            if newState == .idle {
+                self.stopElapsedTimeTimer()
+            }
+        }
+
+        stateMachine.onInvalidTransition = { currentState, event in
+            let eventStr = String(describing: event)
+            logger.warning("⚠️ Invalid transition: \(currentState.rawValue) + \(eventStr)")
+            AppLogger.shared.log(.error, "Invalid state transition", detail: "\(currentState.rawValue) + \(eventStr)")
+        }
+
         // Wire up capture error handler
         self.audio.onCaptureError = { [weak self] errorMsg in
             Task { @MainActor [weak self] in
@@ -91,7 +102,9 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
-        state = .idle
+
+        // Transition to idle via error event
+        stateMachine.transition(.error(errorMsg))
     }
 
     /// Toggle mode: press to start, press to stop
@@ -142,9 +155,11 @@ final class LiveController: ObservableObject {
             return
         }
         isCancelled = true
-        // Immediately transition to transcribing state to prevent double-cancel
+
+        // Transition to transcribing state to prevent double-cancel
         // This makes the UI show "processing" and blocks further clicks
-        state = .transcribing
+        stateMachine.transition(.cancel)
+
         // stopCapture() will trigger process() which will see isCancelled
         // and save the audio with mode="cancelled"
         audio.stopCapture()
@@ -163,7 +178,7 @@ final class LiveController: ObservableObject {
                 self.pendingAudioFilename = nil
                 self.traceID = nil
                 self.isCancelled = false
-                self.state = .idle
+                self.stateMachine.transition(.forceReset)
             }
         }
     }
@@ -206,7 +221,9 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
-        state = .idle
+
+        // Cancel back to idle
+        stateMachine.transition(.cancel)
         logger.info("Pushed to queue (was \(previousState.rawValue))")
 
         // Refresh the queue count
@@ -243,8 +260,8 @@ final class LiveController: ObservableObject {
         routeToInterstitial = false
         createdInTalkieView = false
 
-        // Reset to idle
-        state = .idle
+        // Force reset to idle (emergency exit - works from any state)
+        stateMachine.transition(.forceReset)
         logger.info("Force reset complete - now idle")
     }
 
@@ -298,7 +315,8 @@ final class LiveController: ObservableObject {
         // Notify for onboarding celebration (immediate feedback when user presses hotkey)
         NotificationCenter.default.post(name: .recordingDidStart, object: nil)
 
-        state = .listening
+        // Transition to listening state
+        stateMachine.transition(.startRecording)
 
         // Start timer to update elapsed time in database every 250ms
         startElapsedTimeTimer()
@@ -342,8 +360,11 @@ final class LiveController: ObservableObject {
             NSLog("[LiveController] Stopping with interstitial routing (Shift-click)")
             logger.info("Stopping with interstitial routing (Shift-click)")
         }
+
+        // Transition to transcribing state immediately (before audio callback fires)
+        stateMachine.transition(.stopRecording)
+
         audio.stopCapture()
-        // Don't set state to idle - let process() handle state transitions
     }
 
     private func process(tempAudioPath: String) async {
@@ -364,7 +385,7 @@ final class LiveController: ObservableObject {
         let tempURL = URL(fileURLWithPath: tempAudioPath)
         guard let audioFilename = AudioStorage.copyToStorage(tempURL) else {
             AppLogger.shared.log(.error, "Audio save failed", detail: "Could not copy temp file to storage")
-            state = .idle
+            stateMachine.transition(.error("Audio save failed"))
             return
         }
         logTiming("Audio copied to storage")
@@ -429,8 +450,7 @@ final class LiveController: ObservableObject {
         let durationStr = String(format: "%.1fs", durationSeconds)
         AppLogger.shared.log(.audio, "Recording finished", detail: "\(durationStr) • \(fileSizeStr)")
 
-        state = .transcribing
-        logTiming("State → transcribing")
+        // We're already in transcribing state (stop() transitioned us)
         let engineStart = Date()
 
         // Log transcription start with model info and overhead
@@ -491,11 +511,14 @@ final class LiveController: ObservableObject {
                 pendingAudioFilename = nil
                 traceID = nil
                 isCancelled = false
-                state = .idle
+
+                // Complete the flow (user cancelled)
+                stateMachine.transition(.complete)
                 return
             }
 
-            state = .routing
+            // Transition to routing state
+            stateMachine.transition(.beginRouting)
             logTiming("State → routing")
 
             // Track milestone
@@ -564,12 +587,14 @@ final class LiveController: ObservableObject {
 
                 // Reset flag and finish
                 routeToInterstitial = false
-                state = .idle
                 recordingStartTime = nil
                 capturedContext = nil
                 startApp = nil
                 pendingAudioFilename = nil
                 traceID = nil
+
+                // Complete the flow (interstitial routing done)
+                stateMachine.transition(.complete)
 
                 // Refresh stores
                 UtteranceStore.shared.refresh()
@@ -747,14 +772,24 @@ final class LiveController: ObservableObject {
             TalkieLiveXPCService.shared.notifyUtteranceAdded()
 
             AppLogger.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
+
+            // Transition to idle with error
+            recordingStartTime = nil
+            capturedContext = nil
+            createdInTalkieView = false
+            pendingAudioFilename = nil
+            traceID = nil
+            stateMachine.transition(.error(error.localizedDescription))
+            return
         }
 
+        // Success path - complete the flow
         recordingStartTime = nil
         capturedContext = nil
         createdInTalkieView = false
         pendingAudioFilename = nil
         traceID = nil
-        state = .idle
+        stateMachine.transition(.complete)
     }
 
     // MARK: - Metadata Helpers

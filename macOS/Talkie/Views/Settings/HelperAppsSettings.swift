@@ -110,6 +110,10 @@ struct HelperAppsSettingsView: View {
             .background(Color.secondary.opacity(0.05))
             .cornerRadius(8)
         }
+        .onAppear {
+            // Start monitoring to get PID and connection status
+            liveMonitor.startMonitoring()
+        }
     }
 }
 

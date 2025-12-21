@@ -7,17 +7,8 @@
 
 import Foundation
 import SwiftUI
+import TalkieKit
 import Carbon.HIToolbox
-
-// MARK: - Recording States
-
-/// Recording state for interactive dictation
-enum LiveState: String, Codable {
-    case idle         // Not recording
-    case listening    // Currently recording
-    case transcribing // Sending audio to engine
-    case routing      // Pasting or routing transcript
-}
 
 // MARK: - Appearance Options
 

@@ -1,6 +1,6 @@
 //
 //  StatePill.swift
-//  TalkieLive
+//  TalkieKit
 //
 //  Shared state pill component - unified presentation for recording states
 //  Used in StatusBar (embedded) and FloatingPill (floating overlay)
@@ -18,7 +18,7 @@ import SwiftUI
 
 /// Unified state pill showing: Ready → Recording → Processing → Success
 /// Supports sliver (collapsed) and expanded modes with hover-to-expand.
-struct StatePill: View {
+public struct StatePill: View {
     let state: LiveState
     let isWarmingUp: Bool
     let showSuccess: Bool
@@ -31,14 +31,37 @@ struct StatePill: View {
     // Control expansion
     var forceExpanded: Bool = false
 
-    // Optional callbacks
+    // Optional callback
     var onTap: (() -> Void)? = nil
-    var onQueueTap: (() -> Void)? = nil
 
     @State private var isHovered = false
     @State private var pulsePhase: CGFloat = 0
     @State private var isShiftHeld = false
     @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+
+    public init(
+        state: LiveState,
+        isWarmingUp: Bool,
+        showSuccess: Bool,
+        recordingDuration: TimeInterval,
+        processingDuration: TimeInterval,
+        isEngineConnected: Bool,
+        pendingQueueCount: Int,
+        micDeviceName: String?,
+        forceExpanded: Bool = false,
+        onTap: (() -> Void)? = nil
+    ) {
+        self.state = state
+        self.isWarmingUp = isWarmingUp
+        self.showSuccess = showSuccess
+        self.recordingDuration = recordingDuration
+        self.processingDuration = processingDuration
+        self.isEngineConnected = isEngineConnected
+        self.pendingQueueCount = pendingQueueCount
+        self.micDeviceName = micDeviceName
+        self.forceExpanded = forceExpanded
+        self.onTap = onTap
+    }
 
     private var isExpanded: Bool {
         forceExpanded || isHovered
@@ -53,7 +76,7 @@ struct StatePill: View {
         isWarmingUp || state != .idle || showSuccess
     }
 
-    var body: some View {
+    public var body: some View {
         Button(action: { onTap?() }) {
             ZStack {
                 if isExpanded {
@@ -210,34 +233,8 @@ struct StatePill: View {
         } else {
             switch state {
             case .idle:
-                if pendingQueueCount > 0 {
-                    Button(action: { onQueueTap?() }) {
-                        HStack(spacing: 4) {
-                            // Show mic name if available
-                            if let micName = micDeviceName {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "mic")
-                                        .font(.system(size: 8))
-                                    Text(shortMicName(micName))
-                                        .font(.system(size: 9, weight: .medium))
-                                }
-                                .foregroundColor(TalkieTheme.textTertiary)
-                            } else {
-                                Text("Ready")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(TalkieTheme.textSecondary)
-                            }
-                            Text("\(pendingQueueCount)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(SemanticColor.warning))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    // Show mic name in idle state
+                HStack(spacing: 4) {
+                    // Show mic name if available
                     if let micName = micDeviceName {
                         HStack(spacing: 3) {
                             Image(systemName: "mic")
@@ -251,6 +248,16 @@ struct StatePill: View {
                         Text("Ready")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(TalkieTheme.textSecondary)
+                    }
+
+                    // Show queue count badge if there are pending items
+                    if pendingQueueCount > 0 {
+                        Text("\(pendingQueueCount)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(SemanticColor.warning))
                     }
                 }
             case .listening:
@@ -388,28 +395,4 @@ struct StatePill: View {
         modifierTimer?.invalidate()
         modifierTimer = nil
     }
-}
-
-// MARK: - Preview
-
-#Preview("States") {
-    VStack(spacing: 20) {
-        Text("Sliver (default)").font(.caption).foregroundColor(.gray)
-        HStack(spacing: 20) {
-            StatePill(state: .idle, isWarmingUp: false, showSuccess: false, recordingDuration: 0, processingDuration: 0, isEngineConnected: true, pendingQueueCount: 0, micDeviceName: "BlackHole 2ch")
-            StatePill(state: .listening, isWarmingUp: false, showSuccess: false, recordingDuration: 12.5, processingDuration: 0, isEngineConnected: true, pendingQueueCount: 0, micDeviceName: "BlackHole 2ch")
-            StatePill(state: .transcribing, isWarmingUp: false, showSuccess: false, recordingDuration: 0, processingDuration: 1.2, isEngineConnected: true, pendingQueueCount: 0, micDeviceName: nil)
-        }
-
-        Text("Expanded (hover)").font(.caption).foregroundColor(.gray)
-        VStack(spacing: 10) {
-            StatePill(state: .idle, isWarmingUp: false, showSuccess: false, recordingDuration: 0, processingDuration: 0, isEngineConnected: true, pendingQueueCount: 0, micDeviceName: "BlackHole 2ch", forceExpanded: true)
-            StatePill(state: .listening, isWarmingUp: false, showSuccess: false, recordingDuration: 12.5, processingDuration: 0, isEngineConnected: true, pendingQueueCount: 0, micDeviceName: "BlackHole 2ch", forceExpanded: true)
-            StatePill(state: .transcribing, isWarmingUp: false, showSuccess: false, recordingDuration: 0, processingDuration: 1.2, isEngineConnected: true, pendingQueueCount: 0, micDeviceName: nil, forceExpanded: true)
-            StatePill(state: .idle, isWarmingUp: false, showSuccess: true, recordingDuration: 0, processingDuration: 0, isEngineConnected: true, pendingQueueCount: 0, micDeviceName: nil, forceExpanded: true)
-            StatePill(state: .idle, isWarmingUp: false, showSuccess: false, recordingDuration: 0, processingDuration: 0, isEngineConnected: false, pendingQueueCount: 3, micDeviceName: "MacBook Air Microphone", forceExpanded: true)
-        }
-    }
-    .padding()
-    .background(Color.black)
 }

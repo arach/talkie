@@ -1,9 +1,8 @@
 //
 //  AudioLevelMonitor.swift
-//  Talkie
+//  TalkieKit
 //
 //  Real-time audio level monitoring for UI visualization
-//  Adapted from TalkieLive
 //
 
 import Foundation
@@ -11,11 +10,11 @@ import Combine
 import AppKit
 
 @MainActor
-final class AudioLevelMonitor: ObservableObject {
-    static let shared = AudioLevelMonitor()
+public final class AudioLevelMonitor: ObservableObject {
+    public static let shared = AudioLevelMonitor()
 
-    @Published var level: Float = 0
-    @Published var isSilent: Bool = false
+    @Published public var level: Float = 0
+    @Published public var isSilent: Bool = false
 
     // Silent detection settings
     private let silenceThreshold: Float = 0.02
@@ -27,7 +26,7 @@ final class AudioLevelMonitor: ObservableObject {
     private init() {}
 
     /// Call on each level update during recording
-    func updateLevel(_ newLevel: Float, isRecording: Bool) {
+    public func updateLevel(_ newLevel: Float, isRecording: Bool) {
         level = newLevel
 
         if isRecording {
@@ -53,7 +52,7 @@ final class AudioLevelMonitor: ObservableObject {
     }
 
     /// Reset silence tracking when recording starts/stops
-    func resetSilenceTracking() {
+    public func resetSilenceTracking() {
         silentSampleCount = 0
         totalSampleCount = 0
         isSilent = false

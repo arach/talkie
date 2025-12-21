@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 import AppKit
 
 // MARK: - Overlay Window Controller

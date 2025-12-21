@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSettings")

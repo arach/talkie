@@ -81,6 +81,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         AppLogger.shared.info(.system, "Received URL: \(url.absoluteString)")
         EngineStatusManager.shared.log(.info, "URL", "Received: \(url.absoluteString)")
 
+        // Handle talkieengine://dashboard (or legacy "status")
+        if url.host == "dashboard" || url.host == "status" {
+            showStatusWindow()
+            return
+        }
+
         // Handle talkieengine://trace/{refId}
         if url.host == "trace" {
             let refId = url.lastPathComponent
