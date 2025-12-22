@@ -47,13 +47,13 @@ struct TranscriptionModelsSettingsView: View {
                             .fill(settingsManager.midnightAccentCloud)
                             .frame(width: 3, height: 14)
 
-                        Text("AI TRANSCRIPTION")
+                        Text("ENGINE SERVICE")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .foregroundColor(settingsManager.midnightTextSecondary)
 
                         Spacer()
 
-                        Text(engineClient.connectionState == .connected ? "CONNECTED" : "DISCONNECTED")
+                        Text("SERVICE STATUS")
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
                             .foregroundColor(settingsManager.midnightTextTertiary)
                     }
@@ -136,14 +136,14 @@ struct TranscriptionModelsSettingsView: View {
 
             Spacer()
 
-            // Connection status
+            // Connection status - shows if service is running
             Group {
                 if engineClient.connectionState == .connected {
                     HStack(spacing: 5) {
                         Circle()
                             .fill(settingsManager.midnightStatusReady)
                             .frame(width: 6, height: 6)
-                        Text("READY")
+                        Text("RUNNING")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundColor(settingsManager.midnightStatusReady)
                     }
@@ -157,7 +157,7 @@ struct TranscriptionModelsSettingsView: View {
                         Circle()
                             .fill(.orange)
                             .frame(width: 6, height: 6)
-                        Text("DISCONNECTED")
+                        Text("STOPPED")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundColor(.orange)
                     }
@@ -431,20 +431,25 @@ struct ExpandableTranscriptionModelCard: View {
     private var statusBadge: some View {
         Group {
             if isSelected {
+                // Model is loaded in memory and active
                 statusBadgeContent(
                     color: settings.midnightStatusActive,
-                    text: "LOADED"
+                    text: "ACTIVE"
                 )
             } else if model.isDownloaded {
+                // Model is downloaded but not loaded
                 statusBadgeContent(
                     color: settings.midnightStatusReady,
-                    text: "READY"
+                    text: "DOWNLOADED"
                 )
             } else {
-                Color.clear
+                // Not downloaded - show subtle indicator
+                Text("—")
+                    .font(.system(size: 11))
+                    .foregroundColor(settings.midnightTextTertiary)
             }
         }
-        .frame(width: 80, alignment: .trailing)
+        .frame(width: 100, alignment: .trailing)
     }
 
     private func statusBadgeContent(color: Color, text: String) -> some View {

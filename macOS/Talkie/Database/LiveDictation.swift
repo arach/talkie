@@ -164,7 +164,7 @@ struct LiveDictation: Identifiable, Hashable {
     var createdInTalkieView: Bool   // Was this recorded inside Talkie Live UI?
     var pasteTimestamp: Date?       // When was this pasted? (nil = still queued)
 
-    static let databaseTableName = "utterances"
+    static let databaseTableName = "dictations"
 
     enum Columns: String, ColumnExpression {
         case id, createdAt, text, mode, appBundleID, appName, windowTitle

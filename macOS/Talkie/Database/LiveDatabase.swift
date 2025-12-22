@@ -94,13 +94,14 @@ enum LiveDatabase {
 
             // v2: Rename whisperModel → transcriptionModel (now supports Parakeet, etc.)
             // Only run if the old column exists (for existing databases)
+            // Note: Checks "utterances" for backwards compat before v4 migration
             migrator.registerMigration("v2_rename_whisperModel") { db in
-                // Check if old column exists
-                let hasOldColumn = try db.tableExists("utterances") &&
-                    (try db.columns(in: "utterances").contains { $0.name == "whisperModel" })
+                // Check if old column exists (check both old and new table names for compat)
+                let tableName = try db.tableExists("dictations") ? "dictations" : "utterances"
+                let hasOldColumn = try db.columns(in: tableName).contains { $0.name == "whisperModel" }
 
                 if hasOldColumn {
-                    try db.execute(sql: "ALTER TABLE utterances RENAME COLUMN whisperModel TO transcriptionModel")
+                    try db.execute(sql: "ALTER TABLE \(tableName) RENAME COLUMN whisperModel TO transcriptionModel")
                 }
             }
 
@@ -139,23 +140,48 @@ enum LiveDatabase {
                 logger.info("[LiveDatabase] Created performance indexes")
             }
 
-            // v4: Add live_state table for real-time state synchronization between apps
-            migrator.registerMigration("v4_live_state") { db in
-                try db.create(table: "live_state") { t in
-                    t.column("id", .integer).primaryKey()
-                    t.column("state", .text).notNull() // idle, listening, transcribing, routing
-                    t.column("updatedAt", .double).notNull()
-                    t.column("elapsedTime", .double).defaults(to: 0)
-                    t.column("transcript", .text).defaults(to: "")
+            // v4: Rename table utterances → dictations (terminology clarification)
+            migrator.registerMigration("v4_rename_to_dictations") { db in
+                // Check if table needs to be renamed (skip if already done)
+                if try db.tableExists("utterances") && !db.tableExists("dictations") {
+                    // Rename the table
+                    try db.execute(sql: "ALTER TABLE utterances RENAME TO dictations")
+
+                    // Rename all indexes to match new table name
+                    try db.execute(sql: "DROP INDEX IF EXISTS idx_utterances_createdAt")
+                    try db.execute(sql: "DROP INDEX IF EXISTS idx_utterances_queue")
+                    try db.execute(sql: "DROP INDEX IF EXISTS idx_utterances_retry")
+                    try db.execute(sql: "DROP INDEX IF EXISTS idx_utterances_appBundleID")
+
+                    try db.create(index: "idx_dictations_createdAt", on: "dictations", columns: ["createdAt"])
+                    try db.create(index: "idx_dictations_queue", on: "dictations", columns: ["createdInTalkieView", "promotionStatus", "pasteTimestamp"])
+                    try db.create(index: "idx_dictations_retry", on: "dictations", columns: ["transcriptionStatus", "audioFilename"])
+                    try db.create(index: "idx_dictations_appBundleID", on: "dictations", columns: ["appBundleID"])
+
+                    logger.info("[LiveDatabase] Renamed table: utterances → dictations")
                 }
+            }
 
-                // Insert initial idle state
-                try db.execute(
-                    sql: "INSERT INTO live_state (id, state, updatedAt) VALUES (1, 'idle', ?)",
-                    arguments: [Date().timeIntervalSince1970]
-                )
+            // v5: Add live_state table for real-time state synchronization between apps
+            migrator.registerMigration("v5_live_state") { db in
+                // Skip if table already exists (may have been created by v4_live_state before rename)
+                if try !db.tableExists("live_state") {
+                    try db.create(table: "live_state") { t in
+                        t.column("id", .integer).primaryKey()
+                        t.column("state", .text).notNull() // idle, listening, transcribing, routing
+                        t.column("updatedAt", .double).notNull()
+                        t.column("elapsedTime", .double).defaults(to: 0)
+                        t.column("transcript", .text).defaults(to: "")
+                    }
 
-                logger.info("[LiveDatabase] Created live_state table for real-time sync")
+                    // Insert initial idle state
+                    try db.execute(
+                        sql: "INSERT INTO live_state (id, state, updatedAt) VALUES (1, 'idle', ?)",
+                        arguments: [Date().timeIntervalSince1970]
+                    )
+
+                    logger.info("[LiveDatabase] Created live_state table for real-time sync")
+                }
             }
 
             try migrator.migrate(dbQueue)

@@ -353,10 +353,6 @@ final class LiveSettings {
     private let startSoundKey = "startSound"
     private let finishSoundKey = "finishSound"
     private let pastedSoundKey = "pastedSound"
-    private let appearanceModeKey = "appearanceMode"
-    private let visualThemeKey = "visualTheme"
-    private let fontSizeKey = "fontSize"
-    private let accentColorKey = "accentColor"
     private let primaryContextSourceKey = "primaryContextSource"
     private let contextCaptureDetailKey = "contextCaptureDetail"
     private let returnToOriginAfterPasteKey = "returnToOriginAfterPaste"
@@ -454,29 +450,61 @@ final class LiveSettings {
         didSet { save() }
     }
 
+    // MARK: - Appearance (delegated to global SettingsManager)
+
+    /// Appearance mode - delegates to global settings
     var appearanceMode: AppearanceMode {
-        didSet {
-            save()
-            applyAppearance()
+        get { SettingsManager.shared.appearanceMode }
+        set { SettingsManager.shared.appearanceMode = newValue }
+    }
+
+    /// Visual theme - maps to global ThemePreset
+    var visualTheme: VisualTheme {
+        get {
+            guard let theme = SettingsManager.shared.currentTheme else { return .live }
+            switch theme {
+            case .talkiePro: return .midnight
+            case .terminal: return .terminal
+            case .minimal: return .minimal
+            case .warm: return .warm
+            case .classic: return .live
+            }
+        }
+        set {
+            let preset: ThemePreset
+            switch newValue {
+            case .live: preset = .classic
+            case .midnight: preset = .talkiePro
+            case .terminal: preset = .terminal
+            case .warm: preset = .warm
+            case .minimal: preset = .minimal
+            }
+            SettingsManager.shared.applyTheme(preset)
         }
     }
 
-    var visualTheme: VisualTheme {
-        didSet {
-            save()
-            // Optionally update accent color to match theme default
-            if accentColor == .system {
-                // Trigger UI update without changing setting
+    /// Font size - delegates to global settings
+    var fontSize: FontSize {
+        get {
+            switch SettingsManager.shared.uiFontSize {
+            case .small: return .small
+            case .medium: return .medium
+            case .large: return .large
+            }
+        }
+        set {
+            switch newValue {
+            case .small: SettingsManager.shared.uiFontSize = .small
+            case .medium: SettingsManager.shared.uiFontSize = .medium
+            case .large: SettingsManager.shared.uiFontSize = .large
             }
         }
     }
 
-    var fontSize: FontSize {
-        didSet { save() }
-    }
-
+    /// Accent color - delegates to global settings
     var accentColor: AccentColorOption {
-        didSet { save() }
+        get { SettingsManager.shared.accentColor }
+        set { SettingsManager.shared.accentColor = newValue }
     }
 
     /// Which context (start or end app) is primary for utterances
@@ -590,48 +618,8 @@ final class LiveSettings {
             self.pastedSound = .tink
         }
 
-        // Load appearance mode (with migration from legacy theme key)
-        if let rawValue = UserDefaults.standard.string(forKey: appearanceModeKey),
-           let mode = AppearanceMode(rawValue: rawValue) {
-            self.appearanceMode = mode
-        } else if let legacyTheme = UserDefaults.standard.string(forKey: legacyThemeKey) {
-            // Migrate from legacy theme setting
-            switch legacyTheme {
-            case "system": self.appearanceMode = .system
-            case "light": self.appearanceMode = .light
-            case "dark", "midnight": self.appearanceMode = .dark
-            default: self.appearanceMode = .system
-            }
-        } else {
-            self.appearanceMode = .system
-        }
-
-        // Load visual theme
-        if let rawValue = UserDefaults.standard.string(forKey: visualThemeKey),
-           let theme = VisualTheme(rawValue: rawValue) {
-            self.visualTheme = theme
-        } else if let legacyTheme = UserDefaults.standard.string(forKey: legacyThemeKey) {
-            // Migrate: midnight -> midnight theme, others -> live
-            self.visualTheme = legacyTheme == "midnight" ? .midnight : .live
-        } else {
-            self.visualTheme = .live
-        }
-
-        // Load font size
-        if let rawValue = UserDefaults.standard.string(forKey: fontSizeKey),
-           let size = FontSize(rawValue: rawValue) {
-            self.fontSize = size
-        } else {
-            self.fontSize = .medium
-        }
-
-        // Load accent color
-        if let rawValue = UserDefaults.standard.string(forKey: accentColorKey),
-           let color = AccentColorOption(rawValue: rawValue) {
-            self.accentColor = color
-        } else {
-            self.accentColor = .system
-        }
+        // Note: Appearance settings (appearanceMode, visualTheme, fontSize, accentColor)
+        // are now computed properties delegating to SettingsManager, no loading needed
 
         // Load primary context source (default: start app)
         if let rawValue = UserDefaults.standard.string(forKey: primaryContextSourceKey),
@@ -679,10 +667,8 @@ final class LiveSettings {
         UserDefaults.standard.set(startSound.rawValue, forKey: startSoundKey)
         UserDefaults.standard.set(finishSound.rawValue, forKey: finishSoundKey)
         UserDefaults.standard.set(pastedSound.rawValue, forKey: pastedSoundKey)
-        UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceModeKey)
-        UserDefaults.standard.set(visualTheme.rawValue, forKey: visualThemeKey)
-        UserDefaults.standard.set(fontSize.rawValue, forKey: fontSizeKey)
-        UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
+        // Note: appearance settings (appearanceMode, visualTheme, fontSize, accentColor)
+        // are now delegated to SettingsManager and saved there
         UserDefaults.standard.set(primaryContextSource.rawValue, forKey: primaryContextSourceKey)
         UserDefaults.standard.set(contextCaptureDetail.rawValue, forKey: contextCaptureDetailKey)
         UserDefaults.standard.set(returnToOriginAfterPaste, forKey: returnToOriginAfterPasteKey)
@@ -690,31 +676,19 @@ final class LiveSettings {
 
     // MARK: - Appearance Application
 
+    /// Apply appearance mode - delegates to SettingsManager
     func applyAppearance() {
-        switch appearanceMode {
-        case .system:
-            NSApp.appearance = nil
-        case .light:
-            NSApp.appearance = NSAppearance(named: .aqua)
-        case .dark:
-            NSApp.appearance = NSAppearance(named: .darkAqua)
-        }
+        SettingsManager.shared.applyAppearanceMode()
     }
 
-    /// Apply a visual theme preset (updates theme + accent color)
+    /// Apply a visual theme preset - delegates to SettingsManager
     func applyVisualTheme(_ theme: VisualTheme) {
-        self.visualTheme = theme
-        self.accentColor = theme.accentColor
-        // Optionally also set appearance to suggested mode
-        // self.appearanceMode = theme.suggestedAppearance
+        self.visualTheme = theme  // Uses the computed property which delegates to SettingsManager
     }
 
-    /// Effective accent color considering theme defaults
+    /// Effective accent color - delegates to SettingsManager
     var effectiveAccentColor: Color {
-        if accentColor == .system {
-            return visualTheme.accentColor.color ?? .blue
-        }
-        return accentColor.color ?? .blue
+        SettingsManager.shared.resolvedAccentColor
     }
 }
 

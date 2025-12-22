@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Home View
 
 struct HomeView: View {
-    @State private var store = DictationStore.shared
+    private let store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
 

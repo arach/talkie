@@ -13,7 +13,6 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSetting
 
 enum LiveSettingsSection: String, Hashable {
     case general
-    case appearance
     case shortcuts
     case sounds
     case audio
@@ -55,17 +54,6 @@ struct LiveSettingsView: View {
                                 isSelected: selectedSection == .general
                             ) {
                                 selectedSection = .general
-                            }
-                        }
-
-                        // INTERFACE
-                        SettingsSidebarSection(title: "INTERFACE", isActive: selectedSection == .appearance) {
-                            SettingsSidebarItem(
-                                icon: "paintbrush",
-                                title: "APPEARANCE",
-                                isSelected: selectedSection == .appearance
-                            ) {
-                                selectedSection = .appearance
                             }
                         }
 
@@ -148,8 +136,6 @@ struct LiveSettingsView: View {
                     switch selectedSection {
                     case .general:
                         GeneralLiveSettingsView()
-                    case .appearance:
-                        AppearanceLiveSettingsView()
                     case .shortcuts:
                         ShortcutsLiveSettingsView()
                     case .sounds:
@@ -706,172 +692,6 @@ struct TranscriptionLiveSettingsView: View {
                 engineClient.refreshDownloadProgress()
             }
         }
-    }
-}
-
-// MARK: - Appearance Settings
-
-struct AppearanceLiveSettingsView: View {
-    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
-
-    var body: some View {
-        @Bindable var live = liveSettings
-
-
-        SettingsPageContainer {
-            SettingsPageHeader(
-                icon: "paintbrush",
-                title: "APPEARANCE",
-                subtitle: "Customize the look and feel of TalkieLive."
-            )
-        } content: {
-            VStack(alignment: .leading, spacing: 24) {
-                // Visual Theme
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("VISUAL THEME")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    Text("Choose a color scheme and aesthetic.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
-
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(VisualTheme.allCases, id: \.rawValue) { theme in
-                            ThemePreviewCard(
-                                theme: theme,
-                                isSelected: live.visualTheme == theme
-                            ) {
-                                live.applyVisualTheme(theme)
-                            }
-                        }
-                    }
-                }
-
-                // Appearance Mode
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("APPEARANCE MODE")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    Text("Light, dark, or follow system settings.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
-
-                    TabSelector(
-                        options: AppearanceMode.allCases,
-                        selection: $live.appearanceMode
-                    )
-                }
-
-                // Font Size
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("FONT SIZE")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    Text("Adjust text size for readability.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
-
-                    TabSelector(
-                        options: FontSize.allCases,
-                        selection: $live.fontSize
-                    )
-                }
-
-                // Accent Color
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("ACCENT COLOR")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    Text("Choose your preferred accent color.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
-
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
-                        ForEach(AccentColorOption.allCases, id: \.rawValue) { color in
-                            AccentColorButton(
-                                color: color,
-                                isSelected: live.accentColor == color
-                            ) {
-                                live.accentColor = color
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Theme Preview Card
-
-private struct ThemePreviewCard: View {
-    let theme: VisualTheme
-    let isSelected: Bool
-    let onSelect: () -> Void
-
-    var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Preview colors
-                HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(theme.previewColors.bg)
-                        .frame(height: 40)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(theme.previewColors.accent)
-                        .frame(width: 40, height: 40)
-                }
-
-                // Theme name
-                Text(theme.displayName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.primary)
-
-                // Description
-                Text(theme.description)
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-            .padding(10)
-            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.secondary.opacity(0.05))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
-            )
-            .cornerRadius(8)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Accent Color Button
-
-private struct AccentColorButton: View {
-    let color: AccentColorOption
-    let isSelected: Bool
-    let onSelect: () -> Void
-
-    var body: some View {
-        Button(action: onSelect) {
-            ZStack {
-                Circle()
-                    .fill(color.color ?? .gray)
-                    .frame(width: 32, height: 32)
-
-                if isSelected {
-                    Circle()
-                        .stroke(Color.primary, lineWidth: 2)
-                        .frame(width: 38, height: 38)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .help(color.displayName)
     }
 }
 
