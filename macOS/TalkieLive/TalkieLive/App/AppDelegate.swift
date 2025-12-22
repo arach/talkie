@@ -203,17 +203,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             let shiftHeld = modifiers.contains(.shift)
             let commandHeld = modifiers.contains(.command)
+            let optionHeld = modifiers.contains(.option)
 
             switch state {
             case .idle:
-                // Idle state: Check if there are queued items to show
-                let queuedCount = LiveDatabase.countQueued()
-                NSLog("[AppDelegate] Idle tap: queuedCount=%d", queuedCount)
+                // Option+tap: Show failed queue picker if there are queued items
+                if optionHeld {
+                    let queuedCount = LiveDatabase.countQueued()
+                    NSLog("[AppDelegate] Option+tap: queuedCount=%d", queuedCount)
 
-                if queuedCount > 0 {
-                    // Show failed queue picker
-                    NSLog("[AppDelegate] Showing failed queue picker")
-                    FailedQueueController.shared.show()
+                    if queuedCount > 0 {
+                        NSLog("[AppDelegate] Showing failed queue picker")
+                        FailedQueueController.shared.show()
+                    } else {
+                        NSLog("[AppDelegate] No queued items to show")
+                        NSSound.beep()
+                    }
                 } else {
                     // Normal tap: start recording (with optional interstitial mode)
                     NSLog("[AppDelegate] Starting recording (interstitial=%d)", shiftHeld)

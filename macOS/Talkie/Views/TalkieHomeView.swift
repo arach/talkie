@@ -89,6 +89,10 @@ struct TalkieHomeView: View {
         .onChange(of: eventManager.events.count) { _, _ in
             workflowEventCount = eventManager.events.filter { $0.type == .workflow }.count
         }
+        .onChange(of: allMemos.count) { _, _ in
+            // Reload recent memos when count changes (e.g., new memo added)
+            loadRecentMemos()
+        }
     }
 
     // MARK: - Header

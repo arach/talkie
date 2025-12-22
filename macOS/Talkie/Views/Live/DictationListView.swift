@@ -65,7 +65,7 @@ struct DictationListView: View {
                             Divider()
 
                             Button {
-                                // TODO: Promote to Talkie Core memo
+                                promoteToMemo(utterance)
                             } label: {
                                 Label("Promote to Memo", systemImage: "arrow.up.doc")
                             }
@@ -164,6 +164,102 @@ struct DictationListView: View {
                 .foregroundColor(TalkieTheme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func promoteToMemo(_ utterance: Utterance) {
+        let context = PersistenceController.shared.container.viewContext
+
+        // Create new VoiceMemo with deep copy of utterance metadata
+        let memo = VoiceMemo(context: context)
+        memo.id = UUID()
+
+        // Basic content
+        memo.title = String(utterance.text.prefix(100)) // Use first 100 chars as title
+        memo.transcription = utterance.text
+        memo.createdAt = utterance.timestamp
+        memo.lastModified = Date()
+        memo.duration = utterance.durationSeconds ?? 0
+        memo.sortOrder = Int32(-utterance.timestamp.timeIntervalSince1970)
+
+        // Origin tracking
+        memo.originDeviceId = "live" // Mark as coming from Live dictation
+
+        // Context metadata - store in notes field
+        var contextNotes: [String] = []
+        if let appName = utterance.metadata.activeAppName {
+            contextNotes.append("📱 App: \(appName)")
+        }
+        if let windowTitle = utterance.metadata.activeWindowTitle {
+            contextNotes.append("🪟 Window: \(windowTitle)")
+        }
+        if let browserURL = utterance.metadata.browserURL {
+            contextNotes.append("🌐 URL: \(browserURL)")
+        } else if let documentURL = utterance.metadata.documentURL {
+            contextNotes.append("📄 Document: \(documentURL)")
+        }
+        if let terminalDir = utterance.metadata.terminalWorkingDir {
+            contextNotes.append("💻 Working Dir: \(terminalDir)")
+        }
+
+        // Performance metrics
+        if let totalMs = utterance.metadata.perfEndToEndMs {
+            contextNotes.append("⏱ Latency: \(totalMs)ms")
+        }
+
+        // Transcription metadata
+        if let model = utterance.metadata.transcriptionModel {
+            contextNotes.append("🤖 Model: \(model)")
+        }
+
+        if !contextNotes.isEmpty {
+            memo.notes = """
+            Promoted from Live Dictation
+
+            \(contextNotes.joined(separator: "\n"))
+
+            ---
+            Original timestamp: \(utterance.timestamp.formatted())
+            """
+        }
+
+        // Copy audio file if it exists
+        if let audioFilename = utterance.metadata.audioFilename,
+           let sourceURL = utterance.metadata.audioURL,
+           FileManager.default.fileExists(atPath: sourceURL.path) {
+
+            // Create destination path in Talkie's storage
+            let destDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Talkie/Audio", isDirectory: true)
+
+            // Create directory if needed
+            try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+
+            let destURL = destDir.appendingPathComponent(audioFilename)
+
+            // Copy audio file
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                memo.fileURL = destURL.path
+                print("[DictationListView] Copied audio file to Talkie storage")
+            } catch {
+                print("[DictationListView] Failed to copy audio: \(error.localizedDescription)")
+                // Continue without audio
+            }
+        }
+
+        // Save to CoreData
+        do {
+            try context.save()
+            print("[DictationListView] Promoted utterance to memo with metadata: \(memo.title ?? "")")
+
+            // Show success feedback
+            NSSound.beep()
+
+            // Optional: Delete from Live database after successful promotion
+            // store.delete(utterance)
+        } catch {
+            print("[DictationListView] Failed to save memo: \(error.localizedDescription)")
+        }
     }
 
     private func retranscribe(_ utterance: Utterance, with modelId: String) {
