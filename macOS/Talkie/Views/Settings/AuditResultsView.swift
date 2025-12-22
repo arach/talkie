@@ -155,20 +155,20 @@ struct AuditResultsView: View {
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 8) {
-                InfoRow(label: "Location", value: location)
-                InfoRow(label: "Total Files", value: "\(totalFiles)")
-                InfoRow(label: "Referenced in DB", value: "\(referencedFiles)")
-                InfoRow(
+                AuditInfoRow(label: "Location", value: location)
+                AuditInfoRow(label: "Total Files", value: "\(totalFiles)")
+                AuditInfoRow(label: "Referenced in DB", value: "\(referencedFiles)")
+                AuditInfoRow(
                     label: "Orphaned Files",
                     value: "\(orphanedFiles.count)",
                     valueColor: orphanedFiles.isEmpty ? .green : .orange
                 )
-                InfoRow(
+                AuditInfoRow(
                     label: "Missing Files",
                     value: "\(missingFiles.count)",
                     valueColor: missingFiles.isEmpty ? .green : .red
                 )
-                InfoRow(
+                AuditInfoRow(
                     label: "Storage Size",
                     value: ByteCountFormatter.string(fromByteCount: storageSize, countStyle: .file)
                 )
@@ -224,7 +224,7 @@ struct AuditResultsView: View {
     }
 }
 
-struct InfoRow: View {
+private struct AuditInfoRow: View {
     let label: String
     let value: String
     var valueColor: Color = .primary
