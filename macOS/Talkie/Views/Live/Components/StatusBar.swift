@@ -212,12 +212,8 @@ struct StatusBar: View {
         }
         .onChange(of: viewModel.recordingState) { oldState, newState in
             handleStateChange(from: oldState, to: newState)
-            viewModel.refresh()
         }
         .onAppear {
-            // Refresh ViewModel
-            viewModel.refresh()
-
             // Start monitoring service states
             liveState.startMonitoring()
             serviceMonitor.startMonitoring()

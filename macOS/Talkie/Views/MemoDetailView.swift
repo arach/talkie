@@ -34,7 +34,7 @@ struct MemoDetailView: View {
     @FocusState private var titleFieldFocused: Bool
 
     @Environment(\.managedObjectContext) private var viewContext
-    private let workflowManager = WorkflowManager.shared
+    @State private var workflowManager = WorkflowManager.shared
     @State private var processingWorkflowIDs: Set<UUID> = []
     @State private var showingWorkflowPicker = false
     @State private var cachedQuickActionItems: [QuickActionItem] = []
@@ -339,7 +339,7 @@ struct MemoDetailView: View {
                                         }
 
                                         // Time ago
-                                        Text(formatTimeAgo(run.runDate))
+                                        RelativeTimeLabel(date: run.runDate, formatter: formatTimeAgo)
                                             .font(settings.fontXS)
                                             .foregroundColor(.secondary)
 

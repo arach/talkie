@@ -275,4 +275,3 @@ struct CompactCloudProviderRow: View {
         EmptyView()  // Deprecated - use ExpandableCloudProviderCard instead
     }
 }
-

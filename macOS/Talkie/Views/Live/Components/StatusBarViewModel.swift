@@ -12,6 +12,8 @@ import TalkieKit
 @MainActor
 @Observable
 final class StatusBarViewModel {
+    private static let syncStatusRefreshInterval: TimeInterval = 60
+
     // MARK: - Aggregated UI State
 
     var recordingState: LiveState = .idle
@@ -40,6 +42,7 @@ final class StatusBarViewModel {
     @ObservationIgnored private let eventManager: SystemEventManager
     @ObservationIgnored private let audioDevices: AudioDeviceManager
     @ObservationIgnored private let liveSettings: LiveSettings
+    @ObservationIgnored private var syncStatusTimer: Timer?
 
     // MARK: - Initialization
 
@@ -59,6 +62,12 @@ final class StatusBarViewModel {
         self.liveSettings = liveSettings
 
         refresh()
+        observe()
+        startSyncStatusTimer()
+    }
+
+    deinit {
+        syncStatusTimer?.invalidate()
     }
 
     // MARK: - Refresh Aggregated State
@@ -88,6 +97,35 @@ final class StatusBarViewModel {
 
         // Settings
         showOnAir = liveSettings.showOnAir
+    }
+
+    private func observe() {
+        withObservationTracking {
+            _ = liveMonitor.state
+            _ = liveMonitor.processId
+            _ = engineClient.connectionState
+            _ = engineClient.status
+            _ = syncManager.isSyncing
+            _ = syncManager.lastSyncDate
+            _ = eventManager.events
+            _ = audioDevices.inputDevices
+            _ = liveSettings.selectedMicrophoneID
+            _ = liveSettings.showOnAir
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.refresh()
+                self?.observe()
+            }
+        }
+    }
+
+    private func startSyncStatusTimer() {
+        syncStatusTimer?.invalidate()
+        syncStatusTimer = Timer.scheduledTimer(withTimeInterval: Self.syncStatusRefreshInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refresh()
+            }
+        }
     }
 
     // MARK: - Private Helpers

@@ -10,6 +10,7 @@
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
 		00EA0C1AD74762B2D0083D75 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BD343AFFEE244146750E16 /* FormControls.swift */; };
+		A1C2E3F4B5D67890ABCDEF13 /* RelativeTimeLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C2E3F4B5D67890ABCDEF12 /* RelativeTimeLabel.swift */; };
 		022B5455B66CBA3712681DC2 /* TranscriptVersionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DB12E53E73DFD4E74AA50B /* TranscriptVersionModel.swift */; };
 		05C5DC292512408333D7A527 /* WaveformDemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD32DC13A0F46372BF9807B /* WaveformDemoView.swift */; };
 		087D32BC3B7DA607FF40CA82 /* QuickActionsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */; };
@@ -286,6 +287,7 @@
 		7ADA116B700BED47718C7D9E /* ActivityLogViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityLogViews.swift; sourceTree = "<group>"; };
 		7B607157563EC5119F350C73 /* TalkieSound.swift.disabled */ = {isa = PBXFileReference; path = TalkieSound.swift.disabled; sourceTree = "<group>"; };
 		7B87026AAEF2A2B1A5E49227 /* TalkieComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieComponents.swift; sourceTree = "<group>"; };
+		A1C2E3F4B5D67890ABCDEF12 /* RelativeTimeLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelativeTimeLabel.swift; sourceTree = "<group>"; };
 		7BC24D654BAC9F767187582F /* LocalSwiftBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSwiftBackend.swift; sourceTree = "<group>"; };
 		7E79F058BAA2B67146EE791D /* OutputSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputSettings.swift; sourceTree = "<group>"; };
 		7EB3DC2359B9E712BF820F99 /* QuickOpenService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenService.swift; sourceTree = "<group>"; };
@@ -681,6 +683,7 @@
 			children = (
 				85BD343AFFEE244146750E16 /* FormControls.swift */,
 				0548E348F68DC718F12DC401 /* OnAirIndicator.swift */,
+				A1C2E3F4B5D67890ABCDEF12 /* RelativeTimeLabel.swift */,
 				BAE4EAB04189037E2A5BE4FC /* ServiceHealthCard.swift */,
 				7B87026AAEF2A2B1A5E49227 /* TalkieComponents.swift */,
 			);
@@ -966,6 +969,7 @@
 				F2EBBAEC7AD974A5D2B45683 /* ExecutionBackend.swift in Sources */,
 				DCB0588B59859EFFD31F946E /* ExpandableModelCards.swift in Sources */,
 				00EA0C1AD74762B2D0083D75 /* FormControls.swift in Sources */,
+				A1C2E3F4B5D67890ABCDEF13 /* RelativeTimeLabel.swift in Sources */,
 				892838B3E7D1A51FF2212546 /* GRDBRepository.swift in Sources */,
 				3A295348C9E5B3171890C593 /* GeminiService.swift in Sources */,
 				59F341C52213699C8F4592A0 /* GroqProvider.swift in Sources */,

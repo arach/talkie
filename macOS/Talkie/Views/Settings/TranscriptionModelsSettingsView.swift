@@ -12,55 +12,86 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TranscriptionModelsSettings")
 
 struct TranscriptionModelsSettingsView: View {
-    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
+    @Environment(SettingsManager.self) private var settingsManager
     @Environment(EngineClient.self) private var engineClient
     @Environment(LiveSettings.self) private var liveSettings
 
     @State private var showingDeleteConfirmation: (Bool, ModelInfo?) = (false, nil)
+    @State private var expandedModel: String? = nil
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
-                // Header
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Transcription Models")
-                        .font(Theme.current.fontTitle)
-                        .fontWeight(.semibold)
-                        .foregroundColor(Theme.current.foreground)
+            VStack(alignment: .leading, spacing: 20) {
+                // Header with breadcrumb
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("LIVE / SETTINGS / TRANSCRIPTION")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(settingsManager.midnightTextTertiary)
 
-                    Text("Manage speech-to-text models. Download models to use them in Live Mode or workflows.")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                    Text("TRANSCRIPTION")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(settingsManager.midnightTextPrimary)
+
+                    Text("Configure the speech-to-text engine. Models are downloaded and managed by the engine.")
+                        .font(.system(size: 12))
+                        .foregroundColor(settingsManager.midnightTextSecondary)
+                        .lineLimit(2)
                 }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
 
-                // Live Mode model picker
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("LIVE MODE")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .textCase(.uppercase)
+                // Engine Status Section
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(settingsManager.midnightAccentCloud)
+                            .frame(width: 3, height: 14)
 
-                    liveModePicker
+                        Text("AI TRANSCRIPTION")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(settingsManager.midnightTextSecondary)
+
+                        Spacer()
+
+                        Text(engineClient.connectionState == .connected ? "CONNECTED" : "DISCONNECTED")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(settingsManager.midnightTextTertiary)
+                    }
+
+                    engineStatusCard
                 }
+                .padding(.horizontal, 24)
 
                 Divider()
+                    .padding(.horizontal, 24)
 
-                // Available models grid
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("AVAILABLE MODELS")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .textCase(.uppercase)
+                // Transcription Models Section
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(settingsManager.midnightAccentSTT)
+                            .frame(width: 3, height: 14)
 
-                    modelGrid
+                        Text("TRANSCRIPTION MODELS")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(settingsManager.midnightTextSecondary)
+
+                        Spacer()
+
+                        Text("SELECT & DOWNLOAD")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(settingsManager.midnightTextTertiary)
+                    }
+
+                    modelsSection
                 }
+                .padding(.horizontal, 24)
+
+                Spacer(minLength: 40)
             }
-            .padding(Spacing.lg)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.current.background)
+        .background(settingsManager.midnightBase)
         .onAppear {
-            // Refresh model status when view appears
             engineClient.refreshStatus()
         }
         .alert(isPresented: Binding(
@@ -80,63 +111,90 @@ struct TranscriptionModelsSettingsView: View {
         }
     }
 
-    // MARK: - Live Mode Picker
+    // MARK: - Engine Status Card
 
-    @ViewBuilder
-    private var liveModePicker: some View {
-        @Bindable var settings = settingsManager
-        let downloadedModels = engineClient.availableModels.filter { $0.isDownloaded }
+    private var engineStatusCard: some View {
+        HStack(spacing: 12) {
+            // Status icon
+            RoundedRectangle(cornerRadius: 6)
+                .fill(settingsManager.midnightSurfaceElevated)
+                .frame(width: 32, height: 32)
+                .overlay(
+                    Image(systemName: "cpu")
+                        .font(.system(size: 14))
+                        .foregroundColor(settingsManager.midnightTextSecondary)
+                )
 
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            if downloadedModels.isEmpty {
-                Text("No models downloaded. Download a model below to use in Live Mode.")
-                    .font(Theme.current.fontSM)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-                    .padding(.vertical, Spacing.sm)
-            } else {
-                Picker("Live Mode Model", selection: $settings.liveTranscriptionModelId) {
-                    ForEach(downloadedModels) { model in
-                        Text(model.displayName).tag(model.id)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("TalkieEngine".uppercased())
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(settingsManager.midnightTextPrimary)
+                Text(engineClient.status?.loadedModelId ?? "No model loaded")
+                    .font(.system(size: 10))
+                    .foregroundColor(settingsManager.midnightTextTertiary)
+            }
+
+            Spacer()
+
+            // Connection status
+            Group {
+                if engineClient.connectionState == .connected {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(settingsManager.midnightStatusReady)
+                            .frame(width: 6, height: 6)
+                        Text("READY")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(settingsManager.midnightStatusReady)
                     }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(maxWidth: 300, alignment: .leading)
-                .onChange(of: settings.liveTranscriptionModelId) { oldValue, newValue in
-                    guard oldValue != newValue else { return }
-                    logger.info("Live transcription model changed: \(oldValue) -> \(newValue)")
-
-                    // Preload the new model in the engine
-                    Task {
-                        do {
-                            try await engineClient.preloadModel(newValue)
-                            logger.info("Successfully preloaded model: \(newValue)")
-                        } catch {
-                            logger.error("Failed to preload model \(newValue): \(error.localizedDescription)")
-                        }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(settingsManager.midnightStatusReady.opacity(0.12))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(settingsManager.midnightStatusReady.opacity(0.25), lineWidth: 1))
+                } else {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(.orange)
+                            .frame(width: 6, height: 6)
+                        Text("DISCONNECTED")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.orange)
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.orange.opacity(0.25), lineWidth: 1))
                 }
             }
         }
+        .padding(16)
+        .background(settingsManager.midnightSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(settingsManager.midnightBorder, lineWidth: 1)
+        )
+        .cornerRadius(8)
     }
 
-    // MARK: - Model Grid
+    // MARK: - Models Section
 
-    private var modelGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ],
-            spacing: 12
-        ) {
+    private var modelsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(engineClient.availableModels) { model in
-                TranscriptionModelCard(
+                ExpandableTranscriptionModelCard(
                     model: model,
-                    isSelected: false,  // Selection happens via Live Mode picker above
-                    downloadProgress: engineClient.downloadProgress,
+                    isExpanded: expandedModel == model.id,
+                    isSelected: settingsManager.liveTranscriptionModelId == model.id,
+                    downloadProgress: engineClient.downloadProgress?.progress,
+                    onToggle: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            expandedModel = expandedModel == model.id ? nil : model.id
+                        }
+                    },
                     onSelect: {
-                        // No-op: Selection handled by Live Mode picker
+                        selectModel(model)
                     },
                     onDownload: {
                         downloadModel(model)
@@ -156,18 +214,277 @@ struct TranscriptionModelsSettingsView: View {
 
     // MARK: - Actions
 
+    private func selectModel(_ model: ModelInfo) {
+        settingsManager.liveTranscriptionModelId = model.id
+
+        // Preload the model in the engine
+        Task {
+            do {
+                try await engineClient.preloadModel(model.id)
+                logger.info("Successfully preloaded model: \(model.id)")
+            } catch {
+                logger.error("Failed to preload model \(model.id): \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func downloadModel(_ model: ModelInfo) {
-        logger.info("Downloading model: \(model.id) - Functionality to be implemented")
-        // TODO: Implement model download via EngineClient
+        logger.info("Downloading model: \(model.id)")
+        // Download via EngineClient
+        Task {
+            do {
+                try await engineClient.downloadModel(model.id)
+                logger.info("Successfully downloaded model: \(model.id)")
+            } catch {
+                logger.error("Failed to download model \(model.id): \(error.localizedDescription)")
+            }
+        }
     }
 
     private func deleteModel(_ model: ModelInfo) {
-        logger.info("Deleting model: \(model.id) - Functionality to be implemented")
+        logger.info("Deleting model: \(model.id)")
         // TODO: Implement model deletion via EngineClient
+        // The EngineClient doesn't currently have a deleteModel method
     }
 }
 
+// MARK: - Expandable Transcription Model Card
+
+struct ExpandableTranscriptionModelCard: View {
+    let model: ModelInfo
+    let isExpanded: Bool
+    let isSelected: Bool
+    let downloadProgress: Double?
+    let onToggle: () -> Void
+    let onSelect: () -> Void
+    let onDownload: () -> Void
+    let onDelete: () -> Void
+    let onCancel: () -> Void
+
+    private let settings = SettingsManager.shared
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row (always visible)
+            Button(action: onToggle) {
+                modelHeaderRow
+            }
+            .buttonStyle(.expandableRow)
+
+            // Expanded content
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 12) {
+                    Divider()
+                        .background(settings.midnightBorder)
+                        .padding(.horizontal, 16)
+
+                    // Model details
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(model.description.isEmpty ? "High-quality speech recognition" : model.description)
+                            .font(.system(size: 11))
+                            .foregroundColor(settings.midnightTextSecondary)
+
+                        // Actions
+                        HStack(spacing: 8) {
+                            if model.isDownloaded {
+                                if !isSelected {
+                                    Button(action: onSelect) {
+                                        Text("Select")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(settings.resolvedAccentColor)
+                                            .cornerRadius(4)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                Button(action: onDelete) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "trash")
+                                            .font(.system(size: 10))
+                                        Text("Delete")
+                                            .font(.system(size: 11, weight: .medium))
+                                    }
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.red.opacity(0.1))
+                                    .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                            } else if let progress = downloadProgress, progress > 0 {
+                                HStack(spacing: 8) {
+                                    ProgressView(value: progress, total: 1.0)
+                                        .frame(width: 100)
+                                    Text("\(Int(progress * 100))%")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(settings.midnightTextSecondary)
+                                    Button(action: onCancel) {
+                                        Text("Cancel")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            } else {
+                                Button(action: onDownload) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                            .font(.system(size: 10))
+                                        Text("Download")
+                                            .font(.system(size: 11, weight: .medium))
+                                    }
+                                    .foregroundColor(settings.resolvedAccentColor)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(settings.resolvedAccentColor.opacity(0.1))
+                                    .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovered ? settings.midnightSurfaceHover : settings.midnightSurface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    isExpanded || isSelected ? settings.midnightBorderActive : (isHovered ? settings.midnightBorderActive : settings.midnightBorder),
+                    lineWidth: 1
+                )
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private var modelHeaderRow: some View {
+        HStack(spacing: 12) {
+            // Model icon
+            RoundedRectangle(cornerRadius: 6)
+                .fill(settings.midnightSurfaceElevated)
+                .frame(width: 32, height: 32)
+                .overlay(
+                    Image(systemName: "waveform")
+                        .font(.system(size: 14))
+                        .foregroundColor(settings.midnightTextSecondary)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.displayName.uppercased())
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(settings.midnightTextPrimary)
+                Text(model.family.capitalized)
+                    .font(.system(size: 10))
+                    .foregroundColor(settings.midnightTextTertiary)
+            }
+            .frame(minWidth: 100, alignment: .leading)
+
+            // Description
+            Text(modelDescription)
+                .font(.system(size: 11))
+                .foregroundColor(settings.midnightTextSecondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer()
+
+            modelSizeView
+
+            statusBadge
+
+            // Expand chevron
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(settings.midnightTextTertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var modelSizeView: some View {
+        HStack(spacing: 12) {
+            VStack(spacing: 1) {
+                Text("SIZE")
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .foregroundColor(settings.midnightTextTertiary)
+                Text(model.sizeDescription)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(settings.midnightTextPrimary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        Group {
+            if isSelected {
+                statusBadgeContent(
+                    color: settings.midnightStatusActive,
+                    text: "LOADED"
+                )
+            } else if model.isDownloaded {
+                statusBadgeContent(
+                    color: settings.midnightStatusReady,
+                    text: "READY"
+                )
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: 80, alignment: .trailing)
+    }
+
+    private func statusBadgeContent(color: Color, text: String) -> some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(color)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.12))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 1))
+    }
+
+    private var modelDescription: String {
+        switch model.id {
+        case let id where id.contains("tiny"):
+            return "Fastest, basic quality"
+        case let id where id.contains("base"):
+            return "Fast, good quality"
+        case let id where id.contains("small"):
+            return "Balanced speed/quality"
+        case let id where id.contains("medium"):
+            return "High quality, slower"
+        case let id where id.contains("large"):
+            return "Best quality, slowest"
+        case let id where id.contains("distil"):
+            return "Best quality, slower"
+        case let id where id.contains("parakeet"):
+            return "25 languages, fast"
+        default:
+            return "High-quality speech recognition"
+        }
+    }
+}
 #Preview {
     TranscriptionModelsSettingsView()
-        .frame(width: 700, height: 600)
+        .frame(width: 900, height: 700)
 }

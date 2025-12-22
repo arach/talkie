@@ -22,7 +22,6 @@ struct LocalFilesSettingsView: View {
     var body: some View {
         @Bindable var settings = settingsManager
 
-        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "folder.badge.person.crop",

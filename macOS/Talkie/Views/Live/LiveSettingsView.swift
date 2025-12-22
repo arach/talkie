@@ -223,7 +223,7 @@ struct GeneralLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        return
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "waveform",
@@ -271,44 +271,48 @@ struct GeneralLiveSettingsView: View {
                                 description: OverlayStyle.particles.description,
                                 value: OverlayStyle.particles,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WavyParticlesPreview(calm: false))
-                            ) {
-                                live.overlayStyle = .particles
-                                logger.info("Overlay style changed to: particles")
-                            }
+                                preview: AnyView(WavyParticlesPreview(calm: false)),
+                                onSelect: {
+                                    live.overlayStyle = .particles
+                                    logger.info("Overlay style changed to: particles")
+                                }
+                            )
 
                             RadioButtonRow(
                                 title: OverlayStyle.particlesCalm.displayName,
                                 description: OverlayStyle.particlesCalm.description,
                                 value: OverlayStyle.particlesCalm,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WavyParticlesPreview(calm: true))
-                            ) {
-                                live.overlayStyle = .particlesCalm
-                                logger.info("Overlay style changed to: particlesCalm")
-                            }
+                                preview: AnyView(WavyParticlesPreview(calm: true)),
+                                onSelect: {
+                                    live.overlayStyle = .particlesCalm
+                                    logger.info("Overlay style changed to: particlesCalm")
+                                }
+                            )
 
                             RadioButtonRow(
                                 title: OverlayStyle.waveform.displayName,
                                 description: OverlayStyle.waveform.description,
                                 value: OverlayStyle.waveform,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WaveformBarsPreview(sensitive: false))
-                            ) {
-                                live.overlayStyle = .waveform
-                                logger.info("Overlay style changed to: waveform")
-                            }
+                                preview: AnyView(WaveformBarsPreview(sensitive: false)),
+                                onSelect: {
+                                    live.overlayStyle = .waveform
+                                    logger.info("Overlay style changed to: waveform")
+                                }
+                            )
 
                             RadioButtonRow(
                                 title: OverlayStyle.waveformSensitive.displayName,
                                 description: OverlayStyle.waveformSensitive.description,
                                 value: OverlayStyle.waveformSensitive,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WaveformBarsPreview(sensitive: true))
-                            ) {
-                                live.overlayStyle = .waveformSensitive
-                                logger.info("Overlay style changed to: waveformSensitive")
-                            }
+                                preview: AnyView(WaveformBarsPreview(sensitive: true)),
+                                onSelect: {
+                                    live.overlayStyle = .waveformSensitive
+                                    logger.info("Overlay style changed to: waveformSensitive")
+                                }
+                            )
 
                             Text("Position")
                                 .font(.bodyMedium)
@@ -387,7 +391,7 @@ struct ShortcutsLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        return
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "command",
@@ -486,7 +490,7 @@ struct SoundsLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        return
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "speaker.wave.2",
@@ -575,7 +579,7 @@ struct TranscriptionLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        return
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "text.bubble",
@@ -713,7 +717,7 @@ struct AppearanceLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        return
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "paintbrush",
@@ -879,7 +883,7 @@ struct AutoPasteLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        return
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "arrow.right.doc.on.clipboard",
@@ -997,7 +1001,7 @@ struct StorageLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        return
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "clock",

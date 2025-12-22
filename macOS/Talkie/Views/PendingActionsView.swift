@@ -403,7 +403,7 @@ struct RecentActionRow: View {
                         .lineLimit(1)
 
                     // Time ago
-                    Text(timeAgo(action.completedAt))
+                    RelativeTimeLabel(date: action.completedAt, formatter: timeAgo)
                         .font(settings.fontXS)
                         .foregroundColor(.secondary.opacity(0.6))
                 }

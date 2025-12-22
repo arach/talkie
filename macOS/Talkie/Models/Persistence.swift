@@ -140,7 +140,7 @@ class SyncStatusManager {
     var lastSyncDate: Date?
     var iCloudAvailable: Bool = false
     var pendingChanges: Int = 0
-    @ObservationIgnored private var lastRefresh: Date = Date() // Used to trigger UI updates for relative time strings
+    private var lastRefresh: Date = Date() // Used to trigger UI updates for relative time strings
 
     @ObservationIgnored private var displayTimer: Timer?
 
@@ -177,6 +177,7 @@ class SyncStatusManager {
     }
 
     var lastSyncAgo: String {
+        _ = lastRefresh
         guard let lastSync = lastSyncDate else {
             return "—"
         }

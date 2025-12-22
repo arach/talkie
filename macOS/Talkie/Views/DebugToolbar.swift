@@ -1265,7 +1265,7 @@ struct AudioPaddingTestView: View {
                 if result.isRunning {
                     ProgressView()
                         .scaleEffect(0.6)
-                } else if let error = result.error {
+                } else if result.error != nil {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.red)
                 } else {

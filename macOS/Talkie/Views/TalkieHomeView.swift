@@ -18,11 +18,11 @@ struct TalkieHomeView: View {
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
-    // Singleton references (not @ObservedObject to avoid excessive redraws)
-    private let syncManager = CloudKitSyncManager.shared
-    private let liveState = TalkieLiveStateMonitor.shared
-    private let serviceMonitor = TalkieServiceMonitor.shared
-    private let eventManager = SystemEventManager.shared
+    // Singleton references (use @State to enable observation without broad rerenders)
+    @State private var syncManager = CloudKitSyncManager.shared
+    @State private var liveState = TalkieLiveStateMonitor.shared
+    @State private var serviceMonitor = TalkieServiceMonitor.shared
+    @State private var eventManager = SystemEventManager.shared
 
     // Cached state - only updates when specific properties change
     @State private var recentMemos: [VoiceMemo] = []
@@ -284,7 +284,7 @@ struct TalkieHomeView: View {
     // MARK: - Computed Properties
 
     private var totalRecordingTime: String {
-        let total = allMemos.reduce(0.0) { $0 + ($1.duration ?? 0) }
+        let total = allMemos.reduce(0.0) { $0 + $1.duration }
         return formatDuration(total)
     }
 
@@ -432,9 +432,17 @@ struct RecentMemoRow: View {
             Spacer()
 
             // Time ago
-            Text(timeAgo)
-                .font(Theme.current.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
+            TimelineView(.periodic(from: .now, by: 60)) { _ in
+            if let createdAt = memo.createdAt {
+                RelativeTimeLabel(date: createdAt, formatter: formatTimeAgo)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            } else {
+                Text("")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            }
 
             // Chevron on hover
             if isHovered {
@@ -468,9 +476,8 @@ struct RecentMemoRow: View {
         }
     }
 
-    private var timeAgo: String {
-        guard let createdAt = memo.createdAt else { return "" }
-        let seconds = Int(-createdAt.timeIntervalSinceNow)
+    private func formatTimeAgo(_ date: Date) -> String {
+        let seconds = Int(-date.timeIntervalSinceNow)
 
         if seconds < 60 {
             return "just now"

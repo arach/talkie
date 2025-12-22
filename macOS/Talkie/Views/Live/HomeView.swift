@@ -1678,7 +1678,7 @@ struct RecentActivityRow: View {
                 Spacer()
 
                 // 4. Time ago (like count in Top Apps)
-                Text(timeAgo(from: utterance.timestamp))
+                RelativeTimeLabel(date: utterance.timestamp, formatter: timeAgo)
                     .font(.system(size: settings.fontSize.sm, weight: .medium, design: .rounded))
                     .foregroundColor(TalkieTheme.textTertiary)
 

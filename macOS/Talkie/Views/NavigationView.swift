@@ -46,9 +46,9 @@ struct TalkieNavigationView: View {
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
     @State private var isSectionLoading = false
-    // Use let for singletons to avoid unnecessary view updates
-    private let eventManager = SystemEventManager.shared
-    private let pendingActionsManager = PendingActionsManager.shared
+    // Use @State for singletons to enable observation where needed
+    @State private var eventManager = SystemEventManager.shared
+    @State private var pendingActionsManager = PendingActionsManager.shared
 
     // Cached console event counts (updated via publisher, not computed on every render)
     @State private var cachedErrorCount: Int = 0

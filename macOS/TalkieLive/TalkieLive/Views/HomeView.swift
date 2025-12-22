@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Home View
 
 struct HomeView: View {
-    @ObservedObject private var store = DictationStore.shared
+    @State private var store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
 
@@ -544,23 +544,38 @@ struct StreakCard: View {
             Spacer()
 
             // Content - centered
-            HStack(spacing: 6) {
-                if streak > 0 {
+            if streak == 0 {
+                VStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.purple.opacity(0.7))
+
+                    Text("Start today")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(TalkieTheme.textPrimary)
+
+                    Text("Build your streak")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                HStack(spacing: 6) {
                     Image(systemName: flameIcon)
                         .font(.system(size: 20, weight: .medium))
                         .foregroundColor(streakColor)
+
+                    Text("\(streak)")
+                        .font(.system(size: 32, weight: .bold, design: .monospaced))
+                        .foregroundColor(streakColor)
                 }
-
-                Text("\(streak)")
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
-                    .foregroundColor(streak > 0 ? streakColor : TalkieTheme.textPrimary)
-            }
-            .frame(maxWidth: .infinity)
-
-            Text(streak == 1 ? "day" : "days")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(TalkieTheme.textTertiary)
                 .frame(maxWidth: .infinity)
+
+                Text(streak == 1 ? "day" : "days")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(TalkieTheme.textTertiary)
+                    .frame(maxWidth: .infinity)
+            }
 
             Spacer()
         }
@@ -616,23 +631,40 @@ struct TodayCard: View {
             Spacer()
 
             // Content - centered
-            HStack(spacing: 6) {
-                if let icon = activityIcon {
-                    Image(systemName: icon)
+            if count == 0 {
+                VStack(spacing: 4) {
+                    Image(systemName: "sun.horizon.fill")
                         .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.orange.opacity(0.7))
+
+                    Text("Fresh start")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(TalkieTheme.textPrimary)
+
+                    Text("Make it count")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                HStack(spacing: 6) {
+                    if let icon = activityIcon {
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(countColor)
+                    }
+
+                    Text("\(count)")
+                        .font(.system(size: 32, weight: .bold, design: .monospaced))
                         .foregroundColor(countColor)
                 }
-
-                Text("\(count)")
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
-                    .foregroundColor(countColor)
-            }
-            .frame(maxWidth: .infinity)
-
-            Text(count == 1 ? "dictation" : "dictations")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(TalkieTheme.textTertiary)
                 .frame(maxWidth: .infinity)
+
+                Text(count == 1 ? "dictation" : "dictations")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(TalkieTheme.textTertiary)
+                    .frame(maxWidth: .infinity)
+            }
 
             Spacer()
         }
@@ -736,6 +768,7 @@ struct CumulativeStatsCard: View {
 
 struct InsightCard: View {
     let insight: Insight?
+    @ObservedObject private var settings = LiveSettings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -768,20 +801,34 @@ struct InsightCard: View {
 
                     Spacer()
                 } else {
-                    // Empty state
-                    Image(systemName: "hand.wave")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(.green)
-                        .frame(width: 28)
+                    // Empty state - more helpful
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "hand.wave.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.green)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ready to go!")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(TalkieTheme.textPrimary)
+                            Text("Ready to go!")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(TalkieTheme.textPrimary)
+                        }
 
                         Text("Hold your hotkey to start recording.")
                             .font(.system(size: 11))
                             .foregroundColor(TalkieTheme.textSecondary)
+
+                        // Show the actual hotkey
+                        HStack(spacing: 4) {
+                            Text("Press")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textTertiary)
+
+                            HotkeyBadge(hotkey: settings.hotkey.displayString)
+
+                            Text("to dictate")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                        }
                     }
 
                     Spacer()
@@ -801,6 +848,42 @@ struct InsightCard: View {
                         .stroke(TalkieTheme.border, lineWidth: 1)
                 )
         )
+    }
+}
+
+// MARK: - Hotkey Badge
+
+struct HotkeyBadge: View {
+    let hotkey: String
+
+    private var displayText: String {
+        // Convert shortcut notation to display format
+        // e.g., "⌘⇧Space" → "⌘ ⇧ Space"
+        let symbols = ["⌘", "⌃", "⌥", "⇧"]
+        var result = hotkey
+
+        // Add spaces between modifier symbols
+        for symbol in symbols {
+            result = result.replacingOccurrences(of: symbol, with: "\(symbol) ")
+        }
+
+        return result.trimmingCharacters(in: .whitespaces)
+    }
+
+    var body: some View {
+        Text(displayText)
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .foregroundColor(TalkieTheme.textPrimary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(TalkieTheme.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(TalkieTheme.border, lineWidth: 1)
+                    )
+            )
     }
 }
 
@@ -1600,15 +1683,47 @@ struct RecentActivityCard: View {
             if utterances.isEmpty {
                 HStack {
                     Spacer()
-                    VStack(spacing: 8) {
-                        Image(systemName: "waveform.badge.plus")
-                            .font(.system(size: 24))
-                            .foregroundColor(TalkieTheme.textMuted)
-                        Text("No recordings yet")
-                            .font(.system(size: 12))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                    VStack(spacing: 10) {
+                        // Icon with subtle animation effect
+                        ZStack {
+                            Circle()
+                                .fill(Color.green.opacity(0.1))
+                                .frame(width: 48, height: 48)
+
+                            Image(systemName: "waveform")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.green)
+                        }
+
+                        VStack(spacing: 4) {
+                            Text("No recordings yet")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(TalkieTheme.textPrimary)
+
+                            Text("Your dictations will appear here")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                        }
+
+                        // Quick tip
+                        HStack(spacing: 4) {
+                            Image(systemName: "lightbulb.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(.yellow.opacity(0.8))
+
+                            Text("Try saying \"Hello world\" to test")
+                                .font(.system(size: 9))
+                                .foregroundColor(TalkieTheme.textSecondary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.yellow.opacity(0.05))
+                        )
+                        .padding(.top, 4)
                     }
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 20)
                     Spacer()
                 }
             } else {

@@ -291,11 +291,12 @@ struct ContextCapture {
 }
 
 @MainActor
-final class DictationStore: ObservableObject {
+@Observable
+final class DictationStore {
     static let shared = DictationStore()
 
     /// Published utterances - now backed by SQLite database
-    @Published private(set) var utterances: [Utterance] = []
+    private(set) var utterances: [Utterance] = []
 
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48

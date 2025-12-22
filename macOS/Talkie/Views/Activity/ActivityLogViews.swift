@@ -223,7 +223,7 @@ struct ActivityLogFullView: View {
         }
         .onChange(of: selectedRunId) { _, newValue in
             // Track row selection/deselection
-            if let runId = newValue, let run = selectedRun {
+            if newValue != nil, let run = selectedRun {
                 let id = talkieSignposter.makeSignpostID()
                 talkieSignposter.emitEvent("ActionRowClick", id: id, "AIResults.\(run.workflowName ?? "Workflow")")
             }
