@@ -35,7 +35,7 @@ struct OutputSettingsView: View {
             // Directory picker
                 VStack(alignment: .leading, spacing: 12) {
                     Text("DEFAULT OUTPUT FOLDER")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 8) {
@@ -86,7 +86,7 @@ struct OutputSettingsView: View {
                 // Quick actions
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK ACTIONS")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 12) {
@@ -182,7 +182,7 @@ struct OutputSettingsView: View {
                     // Add new alias
                     VStack(alignment: .leading, spacing: 8) {
                         Text("ADD NEW ALIAS")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 8) {
