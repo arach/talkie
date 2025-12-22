@@ -252,11 +252,14 @@ struct DictationListView: View {
             try context.save()
             print("[DictationListView] Promoted utterance to memo with metadata: \(memo.title ?? "")")
 
+            // Mark as promoted in Live database (updates promotionStatus and talkieMemoID)
+            if let liveID = utterance.liveID, let memoID = memo.id?.uuidString {
+                LiveDatabase.markAsMemo(id: liveID, talkieMemoID: memoID)
+                print("[DictationListView] Marked Live #\(liveID) as promoted to memo \(memoID)")
+            }
+
             // Show success feedback
             NSSound.beep()
-
-            // Optional: Delete from Live database after successful promotion
-            // store.delete(utterance)
         } catch {
             print("[DictationListView] Failed to save memo: \(error.localizedDescription)")
         }
