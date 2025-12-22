@@ -2,17 +2,18 @@
 //  DictationListView.swift
 //  Talkie
 //
-//  Simplified utterance list without sidebar navigation
+//  Live dictations list - harmonized with AllMemos view
 //
 
 import SwiftUI
 
-/// Simple list view for all Live utterances (no sidebar, for embedding in main navigation)
+/// List view for all Live dictations (harmonized with AllMemos design)
 struct DictationListView: View {
     @State private var store = DictationStore.shared
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []
     @State private var searchText = ""
     @State private var retranscribingIDs: Set<Utterance.ID> = []
+    @State private var lastClickedID: Utterance.ID?
 
     private var filteredUtterances: [Utterance] {
         guard !searchText.isEmpty else {
@@ -22,111 +23,254 @@ struct DictationListView: View {
     }
 
     private var selectedUtterance: Utterance? {
-        guard let firstID = selectedUtteranceIDs.first else { return nil }
+        guard selectedUtteranceIDs.count == 1, let firstID = selectedUtteranceIDs.first else { return nil }
         return filteredUtterances.first { $0.id == firstID }
     }
 
     var body: some View {
         HSplitView {
-            // Left: List of utterances
+            // Left: List of dictations
             listColumn
-                .frame(minWidth: 300, idealWidth: 400)
+                .frame(minWidth: 400, idealWidth: 500)
 
             // Right: Detail view
             detailColumn
-                .frame(minWidth: 300)
+                .frame(minWidth: 350)
         }
+    }
+
+    // MARK: - Selection Handling
+
+    private func handleSelection(utterance: Utterance, event: NSEvent?) {
+        let id = utterance.id
+
+        if let event = event {
+            if event.modifierFlags.contains(.command) {
+                // Cmd+click: Toggle selection
+                if selectedUtteranceIDs.contains(id) {
+                    selectedUtteranceIDs.remove(id)
+                } else {
+                    selectedUtteranceIDs.insert(id)
+                }
+            } else if event.modifierFlags.contains(.shift), let lastID = lastClickedID {
+                // Shift+click: Range selection
+                if let lastIndex = filteredUtterances.firstIndex(where: { $0.id == lastID }),
+                   let currentIndex = filteredUtterances.firstIndex(where: { $0.id == id }) {
+                    let range = min(lastIndex, currentIndex)...max(lastIndex, currentIndex)
+                    for i in range {
+                        selectedUtteranceIDs.insert(filteredUtterances[i].id)
+                    }
+                }
+            } else {
+                // Regular click: Single selection
+                selectedUtteranceIDs = [id]
+            }
+        } else {
+            // No event (keyboard nav): Single selection
+            selectedUtteranceIDs = [id]
+        }
+
+        lastClickedID = id
     }
 
     private var listColumn: some View {
         VStack(spacing: 0) {
-            // Search
-            SidebarSearchField(text: $searchText, placeholder: "Search transcripts...")
+            // Header with search
+            headerView
 
-            Rectangle()
-                .fill(TalkieTheme.divider)
-                .frame(height: 0.5)
-
-            // Utterance list
+            // Dictation list
             if filteredUtterances.isEmpty {
                 emptyState
             } else {
-                List(filteredUtterances, selection: $selectedUtteranceIDs) { utterance in
-                    UtteranceRowView(utterance: utterance)
-                        .tag(utterance.id)
-                        .contextMenu {
-                            Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(utterance.text, forType: .string)
-                            } label: {
-                                Label("Copy", systemImage: "doc.on.doc")
-                            }
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filteredUtterances) { utterance in
+                            DictationRowEnhanced(
+                                utterance: utterance,
+                                isSelected: selectedUtteranceIDs.contains(utterance.id),
+                                isMultiSelected: selectedUtteranceIDs.count > 1,
+                                onSelect: { event in
+                                    handleSelection(utterance: utterance, event: event)
+                                }
+                            )
+                            .id(utterance.id)
+                            .contextMenu {
+                                Button {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(utterance.text, forType: .string)
+                                } label: {
+                                    Label("Copy", systemImage: "doc.on.doc")
+                                }
 
-                            Divider()
+                                Divider()
 
-                            Button {
-                                promoteToMemo(utterance)
-                            } label: {
-                                Label("Promote to Memo", systemImage: "arrow.up.doc")
-                            }
+                                Button {
+                                    promoteToMemo(utterance)
+                                } label: {
+                                    Label("Promote to Memo", systemImage: "arrow.up.doc")
+                                }
 
-                            if utterance.metadata.audioFilename != nil {
-                                Menu {
-                                    Button("whisper-small (Fast)") {
-                                        retranscribe(utterance, with: "whisper:openai_whisper-small")
+                                if utterance.metadata.audioFilename != nil {
+                                    Menu {
+                                        Button("whisper-small (Fast)") {
+                                            retranscribe(utterance, with: "whisper:openai_whisper-small")
+                                        }
+                                        Button("whisper-medium") {
+                                            retranscribe(utterance, with: "whisper:openai_whisper-medium")
+                                        }
+                                        Button("whisper-large-v3 (Best)") {
+                                            retranscribe(utterance, with: "whisper:openai_whisper-large-v3")
+                                        }
+                                    } label: {
+                                        Label("Retranscribe", systemImage: "waveform.badge.magnifyingglass")
                                     }
-                                    Button("whisper-medium") {
-                                        retranscribe(utterance, with: "whisper:openai_whisper-medium")
-                                    }
-                                    Button("whisper-large-v3 (Best)") {
-                                        retranscribe(utterance, with: "whisper:openai_whisper-large-v3")
+                                }
+
+                                Button {
+                                    let text = utterance.text
+                                    let picker = NSSharingServicePicker(items: [text])
+                                    if let window = NSApp.keyWindow, let contentView = window.contentView {
+                                        picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
                                     }
                                 } label: {
-                                    Label("Retranscribe", systemImage: "waveform.badge.magnifyingglass")
+                                    Label("Share...", systemImage: "square.and.arrow.up")
                                 }
-                            }
 
-                            Button {
-                                let text = utterance.text
-                                let picker = NSSharingServicePicker(items: [text])
-                                if let window = NSApp.keyWindow, let contentView = window.contentView {
-                                    picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+                                Divider()
+
+                                Button(role: .destructive) {
+                                    withAnimation {
+                                        selectedUtteranceIDs.remove(utterance.id)
+                                        store.delete(utterance)
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
-                            } label: {
-                                Label("Share...", systemImage: "square.and.arrow.up")
-                            }
-
-                            Divider()
-
-                            Button(role: .destructive) {
-                                withAnimation {
-                                    selectedUtteranceIDs.remove(utterance.id)
-                                    store.delete(utterance)
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
                             }
                         }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                withAnimation {
-                                    selectedUtteranceIDs.remove(utterance.id)
-                                    store.delete(utterance)
-                                }
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
+                    }
                 }
-                .listStyle(.plain)
             }
+
+            // Footer
+            footerView
         }
         .background(TalkieTheme.surface)
     }
 
+    // MARK: - Header
+
+    private var headerView: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                // Search
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(TalkieTheme.textMuted)
+                        .font(.system(size: 12))
+
+                    TextField("Search dictations...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(TalkieTheme.textMuted)
+                                .font(.system(size: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(TalkieTheme.surfaceCard)
+                .cornerRadius(6)
+
+                Spacer()
+
+                // Count
+                Text("\(filteredUtterances.count) dictations")
+                    .font(.system(size: 11))
+                    .foregroundColor(TalkieTheme.textMuted)
+            }
+            .padding(12)
+
+            Rectangle()
+                .fill(TalkieTheme.border)
+                .frame(height: 1)
+        }
+        .background(TalkieTheme.surfaceElevated)
+    }
+
+    // MARK: - Footer
+
+    private var footerView: some View {
+        HStack {
+            if selectedUtteranceIDs.count > 1 {
+                Text("\(selectedUtteranceIDs.count) selected")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.accentColor)
+
+                Spacer()
+
+                Button {
+                    selectedUtteranceIDs.removeAll()
+                } label: {
+                    Label("Clear", systemImage: "xmark.circle")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(TalkieTheme.textMuted)
+            } else {
+                Text("\(filteredUtterances.count) dictations")
+                    .font(.system(size: 11))
+                    .foregroundColor(TalkieTheme.textMuted)
+                Spacer()
+            }
+        }
+        .padding(8)
+        .background(TalkieTheme.surfaceElevated)
+        .overlay(
+            Rectangle()
+                .fill(TalkieTheme.border)
+                .frame(height: 1),
+            alignment: .top
+        )
+    }
+
     private var detailColumn: some View {
         Group {
-            if let utterance = selectedUtterance {
+            if selectedUtteranceIDs.count > 1 {
+                // Multi-select state
+                VStack(spacing: 12) {
+                    Image(systemName: "square.stack.3d.up")
+                        .font(.system(size: 48))
+                        .foregroundColor(.accentColor.opacity(0.6))
+
+                    Text("\(selectedUtteranceIDs.count) DICTATIONS SELECTED")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(TalkieTheme.textSecondary)
+
+                    Text("Cmd+click to toggle, Shift+click for range")
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textMuted)
+
+                    HStack(spacing: 12) {
+                        Button {
+                            selectedUtteranceIDs.removeAll()
+                        } label: {
+                            Label("Clear Selection", systemImage: "xmark")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(.top, 8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let utterance = selectedUtterance {
                 UtteranceDetailView(utterance: utterance)
             } else {
                 emptyDetailState
@@ -298,5 +442,165 @@ struct DictationListView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Enhanced Dictation Row (Harmonized with MemoRowEnhanced)
+
+struct DictationRowEnhanced: View {
+    let utterance: Utterance
+    let isSelected: Bool
+    let isMultiSelected: Bool
+    let onSelect: (NSEvent?) -> Void
+
+    @State private var isHovering = false
+
+    /// First ~60 chars of transcript as "title"
+    private var displayTitle: String {
+        let text = utterance.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.count <= 60 {
+            return text
+        }
+        let truncated = String(text.prefix(60))
+        if let lastSpace = truncated.lastIndex(of: " ") {
+            return String(truncated[..<lastSpace]) + "..."
+        }
+        return truncated + "..."
+    }
+
+    /// Rest of transcript as preview
+    private var previewText: String? {
+        let text = utterance.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count > 60 else { return nil }
+        let remaining = String(text.dropFirst(60)).trimmingCharacters(in: .whitespacesAndNewlines)
+        if remaining.count <= 80 {
+            return remaining
+        }
+        let truncated = String(remaining.prefix(80))
+        if let lastSpace = truncated.lastIndex(of: " ") {
+            return String(truncated[..<lastSpace]) + "..."
+        }
+        return truncated + "..."
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Leading: App icon or Live icon
+            leadingIcon
+
+            // Main content
+            VStack(alignment: .leading, spacing: 4) {
+                // Title row
+                HStack {
+                    Text(displayTitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(TalkieTheme.textPrimary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    // Relative time
+                    Text(RelativeTimeFormatter.format(utterance.timestamp))
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textMuted)
+                }
+
+                // Preview + metadata
+                HStack(spacing: 8) {
+                    if let preview = previewText {
+                        Text(preview)
+                            .font(.system(size: 11))
+                            .foregroundColor(TalkieTheme.textMuted)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer()
+                    }
+
+                    // Duration badge
+                    if let duration = utterance.durationSeconds {
+                        durationBadge(duration)
+                    }
+                }
+            }
+
+            // Selection checkbox (visible on hover or when in multi-select mode)
+            if isMultiSelected || isHovering {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16))
+                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted.opacity(0.5))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .background(rowBackground)
+        .overlay(
+            Rectangle()
+                .fill(TalkieTheme.border.opacity(0.5))
+                .frame(height: 1),
+            alignment: .bottom
+        )
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .onTapGesture {
+            onSelect(NSApp.currentEvent)
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var leadingIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(iconColor.opacity(0.12))
+                .frame(width: 32, height: 32)
+
+            if let bundleID = utterance.metadata.activeAppBundleID {
+                AppIconView(bundleIdentifier: bundleID, size: 18)
+            } else {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(iconColor)
+            }
+        }
+    }
+
+    private var iconColor: Color {
+        // Use cyan for Live dictations (matches MemoModel.Source.live.color)
+        .cyan
+    }
+
+    private func durationBadge(_ duration: Double) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "waveform")
+                .font(.system(size: 9))
+            Text(formatDuration(duration))
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+        }
+        .foregroundColor(TalkieTheme.textMuted)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(TalkieTheme.surfaceCard)
+        .cornerRadius(4)
+    }
+
+    private var rowBackground: some View {
+        Group {
+            if isSelected {
+                Color.accentColor.opacity(0.12)
+            } else if isHovering {
+                TalkieTheme.surfaceCard.opacity(0.5)
+            } else {
+                Color.clear
+            }
+        }
+    }
+
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
