@@ -7,6 +7,8 @@
 
 import SwiftUI
 import CoreData
+import Combine
+import AppKit
 
 // MARK: - Unified Activity Item
 
@@ -101,9 +103,17 @@ struct UnifiedDashboard: View {
         }
         .onChange(of: dictationStore.utterances.count) { _, _ in
             loadData()
+            pendingRetryCount = LiveDatabase.countNeedsRetry()
         }
         .onChange(of: allMemos.count) { _, _ in
             loadData()
+        }
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            // Refresh pending count periodically in case cleared elsewhere
+            let newCount = LiveDatabase.countNeedsRetry()
+            if newCount != pendingRetryCount {
+                pendingRetryCount = newCount
+            }
         }
     }
 
@@ -406,13 +416,13 @@ struct UnifiedDashboard: View {
 
             // Pending transcriptions - show only when there are items
             if pendingRetryCount > 0 {
-                Button(action: clearPendingTranscriptions) {
+                Button(action: handlePendingTap) {
                     HStack(spacing: 4) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 10))
                         Text("\(pendingRetryCount) pending")
                             .font(.system(size: 11, weight: .medium))
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "arrow.clockwise")
                             .font(.system(size: 10))
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -422,7 +432,7 @@ struct UnifiedDashboard: View {
                     .background(Capsule().fill(Color.orange))
                 }
                 .buttonStyle(.plain)
-                .help("Click to dismiss pending transcriptions")
+                .help("Click to retry, Option+click to dismiss")
             }
 
             Spacer()
@@ -431,6 +441,21 @@ struct UnifiedDashboard: View {
     }
 
     // MARK: - Actions
+
+    private func handlePendingTap() {
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.option) {
+            // Option+click: Clear/dismiss pending items
+            clearPendingTranscriptions()
+        } else {
+            // Regular click: Trigger retry via notification to TalkieLive
+            // Since we can't directly call TalkieLive's TranscriptionRetryManager,
+            // we'll just refresh and let the engine auto-retry on reconnect
+            NotificationCenter.default.post(name: .init("RetryPendingTranscriptions"), object: nil)
+            // For now, just refresh the count
+            pendingRetryCount = LiveDatabase.countNeedsRetry()
+        }
+    }
 
     private func clearPendingTranscriptions() {
         // Mark all pending items as dismissed
