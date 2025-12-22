@@ -391,7 +391,9 @@ final class DictationStore {
                 logger.info("Deleted utterance by timestamp: \(utterance.text.prefix(30))...")
             }
         }
-        refresh()
+
+        // Immediately remove from local array (don't wait for incremental refresh)
+        utterances.removeAll { $0.id == utterance.id }
     }
 
     /// Clear all utterances

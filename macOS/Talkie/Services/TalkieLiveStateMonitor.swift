@@ -64,6 +64,9 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
     func startMonitoring() {
         guard !xpcManager.isConnected else { return }
 
+        // First try to get PID from running app (fallback if XPC not available)
+        refreshProcessId()
+
         Task {
             await xpcManager.connect()
 
@@ -175,6 +178,25 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
     }
 
     // MARK: - Helper Methods
+
+    /// Refresh process ID by checking for running TalkieLive app
+    /// This provides a fallback when XPC isn't available yet
+    func refreshProcessId() {
+        // Try to find running TalkieLive app for current environment
+        let bundleId = TalkieEnvironment.current.liveBundleId
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+
+        if let app = apps.first {
+            processId = app.processIdentifier
+            isRunning = true
+            NSLog("[Live] Found running process - PID: \(app.processIdentifier)")
+        } else {
+            // Keep existing XPC-provided PID if we had one
+            if processId == nil {
+                isRunning = false
+            }
+        }
+    }
 
     /// Check if TalkieLive is actively recording
     var isActivelyRecording: Bool {
