@@ -34,7 +34,7 @@ struct MemoDetailView: View {
     @FocusState private var titleFieldFocused: Bool
 
     @Environment(\.managedObjectContext) private var viewContext
-    @State private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
     @State private var processingWorkflowIDs: Set<UUID> = []
     @State private var showingWorkflowPicker = false
     @State private var cachedQuickActionItems: [QuickActionItem] = []
@@ -199,7 +199,10 @@ struct MemoDetailView: View {
                         currentTime: $currentTime,
                         duration: duration > 0 ? duration : memo.duration,
                         onTogglePlayback: togglePlayback,
-                        onSeek: seekTo
+                        onSeek: seekTo,
+                        onVolumeChange: { newVolume in
+                            audioPlayer?.volume = newVolume
+                        }
                     )
                 }
 
@@ -362,12 +365,13 @@ struct MemoDetailView: View {
 
             do {
                 audioPlayer = try AVAudioPlayer(data: audioData)
+                audioPlayer?.volume = SettingsManager.shared.playbackVolume
                 audioPlayer?.prepareToPlay()
                 duration = audioPlayer?.duration ?? 0
                 audioPlayer?.play()
                 startPlaybackTimer()
                 isPlaying = true
-                logger.debug("✅ Playing synced audio: \(audioData.count) bytes, duration: \(duration)s")
+                logger.debug("✅ Playing synced audio: \(audioData.count) bytes, duration: \(duration)s, volume: \(SettingsManager.shared.playbackVolume)")
             } catch {
                 logger.debug("❌ Failed to play audio: \(error)")
             }
@@ -1248,6 +1252,7 @@ private struct MemoDetailPlaybackSection: View {
     let duration: TimeInterval
     let onTogglePlayback: () -> Void
     let onSeek: (Double) -> Void
+    var onVolumeChange: ((Float) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -1260,7 +1265,8 @@ private struct MemoDetailPlaybackSection: View {
                 currentTime: currentTime,
                 duration: duration,
                 onTogglePlayback: onTogglePlayback,
-                onSeek: onSeek
+                onSeek: onSeek,
+                onVolumeChange: onVolumeChange
             )
         }
     }

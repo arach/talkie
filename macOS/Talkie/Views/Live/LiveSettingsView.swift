@@ -8,6 +8,7 @@
 
 import SwiftUI
 import os
+import QuartzCore  // For CATransaction render timing
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSettings")
 
@@ -158,6 +159,25 @@ struct LiveSettingsView: View {
             .background(contentBackground)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            // Use GeometryReader to detect actual layout completion
+            GeometryReader { _ in
+                Color.clear
+                    .onAppear {
+                        // This fires after the geometry is calculated
+                        // Use CATransaction to wait for the render to complete
+                        CATransaction.setCompletionBlock {
+                            Task { @MainActor in
+                                PerformanceMonitor.shared.markActionAsRendered(actionName: "LiveSettings")
+                                PerformanceMonitor.shared.completeAction()
+                                logger.info("🎨 LiveSettings fully rendered")
+                            }
+                        }
+                        CATransaction.begin()
+                        CATransaction.commit()
+                    }
+            }
+        )
     }
 }
 
@@ -209,7 +229,6 @@ struct GeneralLiveSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "waveform",
@@ -221,144 +240,139 @@ struct GeneralLiveSettingsView: View {
                 // Live Recording Health Status
                 LiveRecordingHealthCard()
 
-                // Recording Overlay
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("RECORDING OVERLAY")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                // Main layout: Screen LEFT, Settings RIGHT
+                HStack(alignment: .top, spacing: 24) {
+                    // LEFT: Mock screen preview
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("PREVIEW")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(.secondary)
 
-                    Text("Visual feedback displayed while recording.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        Text("Hover to simulate recording")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.7))
 
-                    // Toggle for overlay on/off
-                    StyledToggle(
-                        label: "Show recording overlay",
-                        isOn: Binding(
-                            get: { live.overlayStyle != .pillOnly },
-                            set: { enabled in
-                                live.overlayStyle = enabled ? .particles : .pillOnly
-                                logger.info("Recording overlay \(enabled ? "enabled" : "disabled")")
+                        LivePreviewScreen(
+                            overlayStyle: $live.overlayStyle,
+                            hudPosition: $live.overlayPosition,
+                            pillPosition: $live.pillPosition,
+                            showOnAir: $live.showOnAir
+                        )
+                    }
+
+                    // RIGHT: Settings (HUD top, ON AIR middle, Pill bottom)
+                    VStack(alignment: .leading, spacing: 0) {
+                        // HUD Section (top-aligned)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("HUD")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(.secondary)
+
+                            StyledToggle(
+                                label: "Show HUD overlay",
+                                isOn: Binding(
+                                    get: { live.overlayStyle.showsTopOverlay },
+                                    set: { show in
+                                        if show {
+                                            live.overlayStyle = .particles
+                                        } else {
+                                            live.overlayStyle = .pillOnly
+                                        }
+                                    }
+                                ),
+                                help: "Animated feedback at top of screen"
+                            )
+
+                            if live.overlayStyle.showsTopOverlay {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    LiveStyleSelector(selection: $live.overlayStyle)
+
+                                    // Speed toggle (applies to both particles and waveform)
+                                    HStack(spacing: 8) {
+                                        Text("Speed")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(TalkieTheme.textTertiary)
+
+                                        Picker("", selection: Binding(
+                                            get: {
+                                                // particlesCalm = slow, particles = fast
+                                                // waveform = slow, waveformSensitive = fast
+                                                if live.overlayStyle == .particlesCalm || live.overlayStyle == .waveform {
+                                                    return "slow"
+                                                }
+                                                return "fast"
+                                            },
+                                            set: { speed in
+                                                if live.overlayStyle == .particles || live.overlayStyle == .particlesCalm {
+                                                    live.overlayStyle = speed == "slow" ? .particlesCalm : .particles
+                                                } else if live.overlayStyle == .waveform || live.overlayStyle == .waveformSensitive {
+                                                    live.overlayStyle = speed == "slow" ? .waveform : .waveformSensitive
+                                                }
+                                            }
+                                        )) {
+                                            Text("Slow").tag("slow")
+                                            Text("Fast").tag("fast")
+                                        }
+                                        .pickerStyle(.segmented)
+                                        .frame(width: 100)
+                                    }
+                                }
+                                .padding(.leading, 4)
                             }
-                        ),
-                        help: "Display animated visual feedback at top of screen during recording"
-                    )
+                        }
 
-                    // Overlay style selection (only if enabled)
-                    if live.overlayStyle.showsTopOverlay {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Style")
-                                .font(.bodyMedium)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                                .padding(.top, Spacing.xs)
+                        Spacer().frame(height: 16)
 
-                            RadioButtonRow(
-                                title: OverlayStyle.particles.displayName,
-                                description: OverlayStyle.particles.description,
-                                value: OverlayStyle.particles,
-                                selectedValue: live.overlayStyle,
-                                onSelect: {
-                                    live.overlayStyle = .particles
-                                    logger.info("Overlay style changed to: particles")
-                                },
-                                preview: AnyView(WavyParticlesPreview(calm: false))
+                        // ON AIR (small middle section)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                Text("ON AIR")
+                                    .font(.system(size: 8, weight: .black))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(live.showOnAir ? Color.red : Color.gray.opacity(0.5))
+                                    )
+
+                                Toggle("", isOn: $live.showOnAir)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                                    .controlSize(.mini)
+                            }
+
+                            Text("Neon sign in top-left during recording")
+                                .font(.system(size: 9))
+                                .foregroundColor(TalkieTheme.textMuted)
+                        }
+
+                        Spacer()
+
+                        // Pill Section (bottom-aligned)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("PILL")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(.secondary)
+
+                            StyledToggle(
+                                label: "Expand during recording",
+                                isOn: $live.pillExpandsDuringRecording,
+                                help: "Show timer and audio level"
                             )
 
-                            RadioButtonRow(
-                                title: OverlayStyle.particlesCalm.displayName,
-                                description: OverlayStyle.particlesCalm.description,
-                                value: OverlayStyle.particlesCalm,
-                                selectedValue: live.overlayStyle,
-                                onSelect: {
-                                    live.overlayStyle = .particlesCalm
-                                    logger.info("Overlay style changed to: particlesCalm")
-                                },
-                                preview: AnyView(WavyParticlesPreview(calm: true))
-                            )
-
-                            RadioButtonRow(
-                                title: OverlayStyle.waveform.displayName,
-                                description: OverlayStyle.waveform.description,
-                                value: OverlayStyle.waveform,
-                                selectedValue: live.overlayStyle,
-                                onSelect: {
-                                    live.overlayStyle = .waveform
-                                    logger.info("Overlay style changed to: waveform")
-                                },
-                                preview: AnyView(WaveformBarsPreview(sensitive: false))
-                            )
-
-                            RadioButtonRow(
-                                title: OverlayStyle.waveformSensitive.displayName,
-                                description: OverlayStyle.waveformSensitive.description,
-                                value: OverlayStyle.waveformSensitive,
-                                selectedValue: live.overlayStyle,
-                                onSelect: {
-                                    live.overlayStyle = .waveformSensitive
-                                    logger.info("Overlay style changed to: waveformSensitive")
-                                },
-                                preview: AnyView(WaveformBarsPreview(sensitive: true))
-                            )
-
-                            Text("Position")
-                                .font(.bodyMedium)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                                .padding(.top, Spacing.xs)
-
-                            TabSelector(
-                                options: OverlayPosition.allCases,
-                                selection: $live.overlayPosition
+                            StyledToggle(
+                                label: "Show on all screens",
+                                isOn: $live.pillShowOnAllScreens,
+                                help: "Display on every connected display"
                             )
                         }
                     }
+                    .frame(width: 220)
                 }
 
-                // Recording Pill
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("RECORDING PILL")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    Text("Floating status widget independent of overlay.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
-
-                    VStack(spacing: 0) {
-                        StyledToggle(
-                            label: "Always show pill",
-                            isOn: .constant(true),
-                            help: "Keep the pill visible at all times (currently always on)"
-                        )
-
-                        StyledToggle(
-                            label: "Show pill on all screens",
-                            isOn: $live.pillShowOnAllScreens,
-                            help: "Display the recording pill on every connected display"
-                        )
-
-                        StyledToggle(
-                            label: "Expand pill during recording",
-                            isOn: $live.pillExpandsDuringRecording,
-                            help: "Show detailed recording information when active"
-                        )
-
-                        StyledToggle(
-                            label: "Show ON AIR indicator",
-                            isOn: $live.showOnAir,
-                            help: "Display neon ON AIR sign in top-left during recording"
-                        )
-                    }
-
-                    Text("Position")
-                        .font(.bodyMedium)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .padding(.top, Spacing.xs)
-
-                    TabSelector(
-                        options: PillPosition.allCases,
-                        selection: $live.pillPosition
-                    )
-                }
+                // Settings summary
+                LiveSettingsSummary()
             }
         }
         .onAppear {
@@ -599,16 +613,16 @@ struct TranscriptionLiveSettingsView: View {
                     } else {
                         LazyVGrid(
                             columns: [
-                                GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12)
+                                GridItem(.flexible(), spacing: 8),
+                                GridItem(.flexible(), spacing: 8)
                             ],
-                            spacing: 12
+                            spacing: 8
                         ) {
                             ForEach(engineClient.availableModels) { model in
-                                TranscriptionModelCard(
-                                    model: model,
-                                    isSelected: live.selectedModelId == model.id,
+                                STTModelCard(
+                                    modelInfo: model,
                                     downloadProgress: engineClient.downloadProgress,
+                                    isSelected: live.selectedModelId == model.id,
                                     onSelect: {
                                         selectModel(model, live: live)
                                     },
@@ -858,7 +872,7 @@ struct StorageLiveSettingsView: View {
 // MARK: - Permissions Settings
 
 struct PermissionsLiveSettingsView: View {
-    @State private var permissionsManager = PermissionsManager.shared
+    private let permissionsManager = PermissionsManager.shared
 
     var body: some View {
         SettingsPageContainer {

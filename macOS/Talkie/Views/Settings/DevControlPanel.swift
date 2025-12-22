@@ -10,9 +10,9 @@ import SwiftUI
 import TalkieKit
 
 struct DevControlPanelView: View {
-    @State private var discovery = ProcessDiscovery.shared
+    private let discovery = ProcessDiscovery.shared
     @Environment(EngineClient.self) private var engineClient
-    @State private var liveMonitor = TalkieLiveStateMonitor.shared
+    private let liveMonitor = TalkieLiveStateMonitor.shared
 
     @State private var autoRefresh = true
     @State private var refreshTimer: Timer?
@@ -590,7 +590,7 @@ struct DevControlPanelView: View {
         }
         .sheet(isPresented: $showingAuditResults) {
             if let results = auditor.auditResults {
-                AuditResultsView(results: results)
+                AuditResultsView(results: results, auditor: auditor)
             }
         }
     }
@@ -681,24 +681,13 @@ struct DevControlPanelView: View {
     }
 
     private func restartDaemon(_ process: DiscoveredProcess) {
-        // Stop first
-        let stopSuccess = discovery.stopDaemon(for: process)
+        // Use launchctl kickstart -k for atomic restart
+        let success = discovery.restartDaemon(for: process)
 
-        if stopSuccess {
-            addLog("Stopped \(process.name) daemon", level: .info)
-
-            // Wait a moment before starting
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                let startSuccess = discovery.startDaemon(for: process)
-
-                if startSuccess {
-                    addLog("Restarted \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
-                } else {
-                    addLog("Failed to restart \(process.name) daemon", level: .error)
-                }
-            }
+        if success {
+            addLog("Restarted \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
         } else {
-            addLog("Failed to stop \(process.name) daemon for restart", level: .error)
+            addLog("Failed to restart \(process.name) daemon", level: .error)
         }
     }
 

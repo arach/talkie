@@ -18,11 +18,11 @@ struct TalkieHomeView: View {
     )
     private var allMemos: FetchedResults<VoiceMemo>
 
-    // Singleton references (use @State to enable observation without broad rerenders)
-    @State private var syncManager = CloudKitSyncManager.shared
-    @State private var liveState = TalkieLiveStateMonitor.shared
-    @State private var serviceMonitor = TalkieServiceMonitor.shared
-    @State private var eventManager = SystemEventManager.shared
+    // Singleton references - use let for @Observable singletons (not @State which breaks observation)
+    private let syncManager = CloudKitSyncManager.shared
+    private let liveState = TalkieLiveStateMonitor.shared
+    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let eventManager = SystemEventManager.shared
 
     // Cached state - only updates when specific properties change
     @State private var recentMemos: [VoiceMemo] = []

@@ -171,7 +171,7 @@ class PermissionsManager {
 // MARK: - Permissions Settings View
 
 struct PermissionsSettingsView: View {
-    @State private var permissionsManager = PermissionsManager.shared
+    private let permissionsManager = PermissionsManager.shared
 
     var body: some View {
         SettingsPageContainer {

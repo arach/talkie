@@ -9,9 +9,9 @@ import SwiftUI
 import TalkieKit
 
 struct HelperAppsSettingsView: View {
-    @State private var appLauncher = AppLauncher.shared
-    @State private var engineMonitor = TalkieServiceMonitor.shared
-    @State private var liveMonitor = TalkieLiveStateMonitor.shared
+    private let appLauncher = AppLauncher.shared
+    private let engineMonitor = TalkieServiceMonitor.shared
+    private let liveMonitor = TalkieLiveStateMonitor.shared
 
     var body: some View {
         SettingsPageContainer {

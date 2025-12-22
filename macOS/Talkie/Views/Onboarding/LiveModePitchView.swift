@@ -10,7 +10,7 @@ import SwiftUI
 
 struct LiveModePitchView: View {
     let onNext: () -> Void
-    @State private var manager = OnboardingManager.shared
+    private let manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var animationPhase: Int = 0
 

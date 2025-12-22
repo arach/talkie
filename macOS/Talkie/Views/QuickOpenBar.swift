@@ -19,7 +19,7 @@ struct QuickOpenBar: View {
     var showCopyButton: Bool = true
     var compactMode: Bool = false
 
-    @State private var quickOpenService = QuickOpenService.shared
+    private let quickOpenService = QuickOpenService.shared
     @State private var activeTarget: String? = nil  // Currently activated target ID
     @State private var feedbackMessage: String? = nil
     @State private var copiedState = false
@@ -203,7 +203,7 @@ struct QuickOpenKeyboardShortcuts: ViewModifier {
     let content: String
     let isEnabled: Bool
 
-    @State private var quickOpenService = QuickOpenService.shared
+    private let quickOpenService = QuickOpenService.shared
 
     func body(content view: Content) -> some View {
         view

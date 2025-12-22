@@ -1151,7 +1151,7 @@ struct WorkflowInlineEditor: View {
     let onDuplicate: () -> Void
     let onRun: () -> Void
 
-    @State private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
     private let settings = SettingsManager.shared
     @State private var showingStepTypePicker = false
     @State private var isEditing = false
@@ -2533,7 +2533,7 @@ struct iOSPushStepReadView: View {
 
 struct IntentExtractStepReadView: View {
     let config: IntentExtractStepConfig
-    @State private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
 
     private func workflowName(for id: UUID?) -> String? {
         guard let id = id else { return nil }
@@ -5348,7 +5348,7 @@ struct IntentDefinitionRow: View {
     let onDelete: () -> Void
 
     @State private var newSynonym = ""
-    @State private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
 
     /// Available workflows for mapping (excludes Hey Talkie to prevent recursion)
     private var availableWorkflows: [WorkflowDefinition] {

@@ -131,7 +131,7 @@ struct DraggableOverlay: ViewModifier {
     let overlayType: OverlayType
     let defaultPosition: CGPoint
 
-    @State private var layoutManager = SessionLayoutManager.shared
+    private let layoutManager = SessionLayoutManager.shared
     @State private var isDragging = false
     @State private var dragOffset: CGSize = .zero
 
@@ -197,7 +197,7 @@ extension View {
 // MARK: - Global Keyboard Shortcuts
 
 struct SessionLayoutKeyboardShortcuts: View {
-    @State private var layoutManager = SessionLayoutManager.shared
+    private let layoutManager = SessionLayoutManager.shared
 
     var body: some View {
         EmptyView()

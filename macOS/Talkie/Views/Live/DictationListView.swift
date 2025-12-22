@@ -9,7 +9,8 @@ import SwiftUI
 
 /// List view for all Live dictations (harmonized with AllMemos design)
 struct DictationListView: View {
-    @State private var store = DictationStore.shared
+    // Use let for singletons - we subscribe to remote data, we don't own it
+    private let store = DictationStore.shared
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []
     @State private var searchText = ""
     @State private var retranscribingIDs: Set<Utterance.ID> = []
@@ -36,6 +37,9 @@ struct DictationListView: View {
             // Right: Detail view
             detailColumn
                 .frame(minWidth: 350)
+        }
+        .onAppear {
+            store.refresh()  // Fresh data on view appear
         }
     }
 
@@ -277,6 +281,12 @@ struct DictationListView: View {
             }
         }
         .background(TalkieTheme.surface)
+        .overlay(
+            Rectangle()
+                .fill(TalkieTheme.borderSubtle)
+                .frame(width: 1),
+            alignment: .leading
+        )
     }
 
     private var emptyState: some View {
@@ -499,8 +509,8 @@ struct DictationRowEnhanced: View {
 
                     Spacer()
 
-                    // Relative time
-                    Text(RelativeTimeFormatter.format(utterance.timestamp))
+                    // Relative time (minutes only, then actual time after 1h)
+                    Text(formatTimeAgo(utterance.timestamp))
                         .font(.system(size: 11))
                         .foregroundColor(TalkieTheme.textMuted)
                 }
@@ -524,12 +534,6 @@ struct DictationRowEnhanced: View {
                 }
             }
 
-            // Selection checkbox (visible on hover or when in multi-select mode)
-            if isMultiSelected || isHovering {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
-                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted.opacity(0.5))
-            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -553,15 +557,15 @@ struct DictationRowEnhanced: View {
 
     private var leadingIcon: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(iconColor.opacity(0.12))
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
 
             if let bundleID = utterance.metadata.activeAppBundleID {
-                AppIconView(bundleIdentifier: bundleID, size: 18)
+                AppIconView(bundleIdentifier: bundleID, size: 28)
             } else {
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 14))
+                    .font(.system(size: 20))
                     .foregroundColor(iconColor)
             }
         }
@@ -602,5 +606,31 @@ struct DictationRowEnhanced: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    /// Relative time: minutes only, then actual time after 1 hour
+    private func formatTimeAgo(_ date: Date) -> String {
+        let seconds = Int(-date.timeIntervalSinceNow)
+
+        if seconds < 60 {
+            return "now"
+        } else if seconds < 3600 {
+            // Less than 1 hour: show minutes only
+            return "\(seconds / 60)m"
+        } else {
+            // 1 hour or more: show actual time
+            let formatter = DateFormatter()
+            let calendar = Calendar.current
+
+            if calendar.isDateInToday(date) {
+                formatter.dateFormat = "h:mm a"  // "2:30 PM"
+            } else if calendar.isDateInYesterday(date) {
+                return "Yesterday"
+            } else {
+                formatter.dateFormat = "MMM d"  // "Dec 22"
+            }
+
+            return formatter.string(from: date)
+        }
     }
 }

@@ -61,12 +61,12 @@ struct StatusIcon: View {
 // MARK: - Live Status Icon
 
 struct LiveStatusIcon: View {
-    @State private var liveState = TalkieLiveStateMonitor.shared
-    @State private var audioMonitor = AudioLevelMonitor.shared
+    private let liveState = TalkieLiveStateMonitor.shared
 
     private var statusColor: Color {
         if !liveState.isRunning { return TalkieTheme.textMuted }
-        if audioMonitor.isSilent { return SemanticColor.warning }
+        // Note: Silence detection happens in TalkieLive, not here
+        // We just show green when running, muted when not
         return SemanticColor.success
     }
 
@@ -110,7 +110,7 @@ struct LiveStatusIcon: View {
 // MARK: - Simple Engine Icon
 
 struct SimpleEngineIcon: View {
-    @State private var serviceMonitor = TalkieServiceMonitor.shared
+    private let serviceMonitor = TalkieServiceMonitor.shared
     @State private var isHovered = false
 
     private var statusColor: Color {
@@ -148,8 +148,8 @@ struct SimpleEngineIcon: View {
 // MARK: - Engine Status Icon
 
 struct EngineStatusIcon: View {
-    @State private var serviceMonitor = TalkieServiceMonitor.shared
-    @State private var layoutManager = SessionLayoutManager.shared
+    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
     @State private var showPID = false
     @State private var showEnvBadge = false
@@ -348,7 +348,7 @@ struct EngineStatusIcon: View {
 struct ModelStatusIcon: View {
     @Environment(LiveSettings.self) private var settings
     @Environment(EngineClient.self) private var engineClient
-    @State private var layoutManager = SessionLayoutManager.shared
+    private let layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
 
     private var modelName: String {

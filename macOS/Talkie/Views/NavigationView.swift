@@ -29,9 +29,9 @@ enum NavigationSection: Hashable {
 
 struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    // Use let for singletons - @ObservedObject causes full rerender on every settings change
+    // Use let for singletons - we subscribe to remote data, we don't own it
     private let settings = SettingsManager.shared
-    @State private var liveDataStore = DictationStore.shared
+    private let liveDataStore = DictationStore.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -46,9 +46,9 @@ struct TalkieNavigationView: View {
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
     @State private var isSectionLoading = false
-    // Use @State for singletons to enable observation where needed
-    @State private var eventManager = SystemEventManager.shared
-    @State private var pendingActionsManager = PendingActionsManager.shared
+    // Use let for @Observable singletons (not @State which breaks observation)
+    private let eventManager = SystemEventManager.shared
+    private let pendingActionsManager = PendingActionsManager.shared
 
     // Cached console event counts (updated via publisher, not computed on every render)
     @State private var cachedErrorCount: Int = 0
@@ -501,8 +501,8 @@ struct TalkieNavigationView: View {
                 ActivityLogFullView()
             }
         case .allMemos:
-            // AllMemosView2 already wraps itself in TalkieSection
-            AllMemosView2()
+            // AllMemos already wraps itself in TalkieSection
+            AllMemos()
         case .liveDashboard:
             // Live home view with insights, activity, and stats
             TalkieSection("LiveDashboard") {

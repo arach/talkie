@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Quick Actions Settings View
 
 struct QuickActionsSettingsView: View {
-    @State private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
     @State private var selectedWorkflow: WorkflowDefinition?
     @State private var showingWorkflowEditor = false
 

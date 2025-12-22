@@ -15,9 +15,8 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSetting
 // MARK: - Audio Device Selector with Level Meter
 
 struct AudioDeviceSelector: View {
-    @State private var audioDevices = AudioDeviceManager.shared
-    @State private var audioLevel = AudioLevelMonitor.shared
-    @State private var liveState = TalkieLiveStateMonitor.shared
+    private let audioDevices = AudioDeviceManager.shared
+    private let liveState = TalkieLiveStateMonitor.shared
     @State private var isHovered = false
 
     private var selectedDeviceName: String {
@@ -61,8 +60,7 @@ struct AudioDeviceSelector: View {
                         .font(.labelMedium)
                         .foregroundColor(.primary)
                         .lineLimit(1)
-
-                    Spacer()
+                        .truncationMode(.tail)
 
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.techLabelSmall)
@@ -76,6 +74,7 @@ struct AudioDeviceSelector: View {
                 )
             }
             .menuStyle(.borderlessButton)
+            .fixedSize()
             .onHover { isHovered = $0 }
 
             // Audio Level Meter - only visible when TalkieLive is running
@@ -100,7 +99,7 @@ struct AudioDeviceSelector: View {
 // MARK: - Audio Level Meter
 
 struct AudioLevelMeter: View {
-    @State private var audioLevel = AudioLevelMonitor.shared
+    private let liveState = TalkieLiveStateMonitor.shared
 
     private let barCount = 8
     private let barSpacing: CGFloat = 2
@@ -110,7 +109,7 @@ struct AudioLevelMeter: View {
             HStack(spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { index in
                     AudioLevelBar(
-                        level: audioLevel.level,
+                        level: liveState.audioLevel,
                         index: index,
                         totalBars: barCount
                     )

@@ -18,19 +18,19 @@ import TalkieKit
 // MARK: - Main Status Bar
 
 struct StatusBar: View {
-    // Direct service access - no ViewModel middleman
-    @State private var liveState = TalkieLiveStateMonitor.shared
-    @State private var serviceMonitor = TalkieServiceMonitor.shared
-    @State private var events = SystemEventManager.shared
-    @State private var liveSettings = LiveSettings.shared
-    @State private var audioDevices = AudioDeviceManager.shared
+    // Direct service access - use let for @Observable singletons
+    private let liveState = TalkieLiveStateMonitor.shared
+    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let events = SystemEventManager.shared
+    private let liveSettings = LiveSettings.shared
+    private let audioDevices = AudioDeviceManager.shared
 
     // UI state
     @State private var showConsolePopover = false
     @State private var showSuccess = false
     @State private var successTimer: Timer?
 
-    // Hover/PID state (simplified from 11 variables to 4)
+    // Hover/PID state
     @State private var isHovered = false
     @State private var showPID = false
     @State private var pidCopied = false
@@ -68,9 +68,9 @@ struct StatusBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top border
+            // Top border (light touch)
             Rectangle()
-                .fill(TalkieTheme.border)
+                .fill(TalkieTheme.borderSubtle)
                 .frame(height: 1)
 
             HStack(spacing: Spacing.sm) {
@@ -90,7 +90,7 @@ struct StatusBar: View {
                 // CENTER - Live dictation pill or offline indicator
                 HStack(spacing: 8) {
                     if liveState.isRunning {
-                        StatePill(
+                        LivePill(
                             state: liveState.state,
                             isWarmingUp: false,
                             showSuccess: showSuccess,
@@ -99,6 +99,7 @@ struct StatusBar: View {
                             isEngineConnected: serviceMonitor.state == .running,
                             pendingQueueCount: 0,
                             micDeviceName: microphoneName,
+                            audioLevel: 0,  // StatusBar doesn't have audio capture - just shows pill
                             onTap: {
                                 TalkieLiveStateMonitor.shared.toggleRecording()
                             }
