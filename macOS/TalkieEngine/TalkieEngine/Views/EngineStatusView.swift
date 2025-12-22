@@ -7,6 +7,12 @@
 
 import SwiftUI
 import AppKit
+import os.signpost
+
+// MARK: - Signpost for Instruments
+
+/// Shared signpost log for Instruments profiling
+let transcriptionSignpostLog = OSLog(subsystem: "jdi.talkie.engine", category: .pointsOfInterest)
 
 // MARK: - Engine Log Entry
 
@@ -74,35 +80,84 @@ struct TranscriptionStep: Identifiable {
 }
 
 /// Collects timing for all steps in a transcription job
+/// Automatically emits os_signpost intervals for Instruments profiling
+/// Uses mach_absolute_time for minimal overhead, monotonic timing (same as signpost internally)
 final class TranscriptionTrace {
     let jobId = UUID()
-    let startTime: Date = Date()
+    private let startTicks: UInt64 = mach_absolute_time()
+    private static let timebaseInfo: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
     var externalRefId: String?  // Client-provided reference ID for correlation with TalkieLive
     private var steps: [TranscriptionStep] = []
-    private var stepStart: Date?
+    private var stepStartTicks: UInt64 = 0
     private var currentStepName: String?
 
-    /// Begin timing a step
+    // Signpost tracking for Instruments
+    private let signpostLog = transcriptionSignpostLog
+    private var currentSignpostID: OSSignpostID?
+
+    /// Convert mach ticks to milliseconds
+    private func ticksToMs(_ ticks: UInt64) -> Int {
+        let nanos = ticks * UInt64(Self.timebaseInfo.numer) / UInt64(Self.timebaseInfo.denom)
+        return Int(nanos / 1_000_000)
+    }
+
+    /// Begin timing a step - also emits os_signpost for Instruments
     func begin(_ name: String) {
-        // End any previous step first
-        if let prevName = currentStepName, let prevStart = stepStart {
-            endStep(prevName, start: prevStart)
+        // End any previous step first (auto-close if caller forgot to call end())
+        if let prevName = currentStepName, stepStartTicks > 0 {
+            let now = mach_absolute_time()
+            let durationMs = ticksToMs(now - stepStartTicks)
+
+            // End previous signpost
+            if let signpostID = currentSignpostID {
+                os_signpost(.end, log: signpostLog, name: "Transcription Step", signpostID: signpostID, "%{public}s", prevName)
+            }
+
+            endStep(prevName, startTicks: stepStartTicks, durationMs: durationMs)
         }
+
         currentStepName = name
-        stepStart = Date()
+        stepStartTicks = mach_absolute_time()
+
+        // Emit signpost begin for Instruments
+        let signpostID = OSSignpostID(log: signpostLog)
+        currentSignpostID = signpostID
+        os_signpost(.begin, log: signpostLog, name: "Transcription Step", signpostID: signpostID, "%{public}s", name)
     }
 
-    /// End the current step with optional metadata
-    func end(_ metadata: String? = nil) {
-        guard let name = currentStepName, let start = stepStart else { return }
-        endStep(name, start: start, metadata: metadata)
+    /// End the current step with optional metadata - also emits os_signpost for Instruments
+    /// Returns the step duration in milliseconds (useful for logging)
+    @discardableResult
+    func end(_ metadata: String? = nil) -> Int {
+        guard let name = currentStepName, stepStartTicks > 0 else { return 0 }
+
+        let now = mach_absolute_time()
+        let durationMs = ticksToMs(now - stepStartTicks)
+
+        // End signpost for Instruments
+        if let signpostID = currentSignpostID {
+            if let meta = metadata {
+                os_signpost(.end, log: signpostLog, name: "Transcription Step", signpostID: signpostID, "%{public}s: %{public}s", name, meta)
+            } else {
+                os_signpost(.end, log: signpostLog, name: "Transcription Step", signpostID: signpostID, "%{public}s", name)
+            }
+            currentSignpostID = nil
+        }
+
+        endStep(name, startTicks: stepStartTicks, durationMs: durationMs, metadata: metadata)
         currentStepName = nil
-        stepStart = nil
+        stepStartTicks = 0
+
+        return durationMs
     }
 
-    private func endStep(_ name: String, start: Date, metadata: String? = nil) {
-        let startMs = Int(start.timeIntervalSince(startTime) * 1000)
-        let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+    private func endStep(_ name: String, startTicks: UInt64, durationMs: Int, metadata: String? = nil) {
+        let startMs = ticksToMs(startTicks - self.startTicks)
         steps.append(TranscriptionStep(
             name: name,
             startMs: startMs,
@@ -111,15 +166,22 @@ final class TranscriptionTrace {
         ))
     }
 
-    /// Mark a point in time (zero-duration step)
+    /// Mark a point in time (zero-duration step) - emits os_signpost event
     func mark(_ name: String, metadata: String? = nil) {
-        let startMs = Int(Date().timeIntervalSince(startTime) * 1000)
+        let startMs = ticksToMs(mach_absolute_time() - startTicks)
         steps.append(TranscriptionStep(
             name: name,
             startMs: startMs,
             durationMs: 0,
             metadata: metadata
         ))
+
+        // Emit signpost event for Instruments
+        if let meta = metadata {
+            os_signpost(.event, log: signpostLog, name: "Transcription Mark", "%{public}s: %{public}s", name, meta)
+        } else {
+            os_signpost(.event, log: signpostLog, name: "Transcription Mark", "%{public}s", name)
+        }
     }
 
     /// Get all recorded steps (sorted by start time)
@@ -129,12 +191,12 @@ final class TranscriptionTrace {
 
     /// Total elapsed time since start
     var elapsedMs: Int {
-        Int(Date().timeIntervalSince(startTime) * 1000)
+        ticksToMs(mach_absolute_time() - startTicks)
     }
 
     /// Total elapsed seconds
     var elapsedSeconds: Double {
-        Date().timeIntervalSince(startTime)
+        Double(elapsedMs) / 1000.0
     }
 }
 
@@ -646,10 +708,19 @@ struct EngineStatusView: View {
 
                 // Include trace steps if available
                 if !metric.steps.isEmpty {
+                    let stepsTotal = metric.steps.reduce(0) { $0 + $1.durationMs }
+                    let totalMs = Int(metric.elapsedSeconds * 1000)
+                    let unattributed = totalMs - stepsTotal
+
                     output += "   Steps: "
                     output += metric.steps.map { step in
                         "\(step.name)=\(step.durationMs)ms"
                     }.joined(separator: ", ")
+
+                    // Show unattributed time if significant (>50ms)
+                    if unattributed > 50 {
+                        output += " [gap=\(unattributed)ms]"
+                    }
                     output += "\n"
                 }
             }
@@ -668,9 +739,9 @@ struct EngineStatusView: View {
         }
 
         // Copy to clipboard
-//        let pasteboard = NSPasteboard.general
-//        pasteboard.clearContents()
-//        pasteboard.setString(output, forType: .string)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(output, forType: .string)
 
         // Log success
         AppLogger.shared.info(.system, "Diagnostics copied to clipboard (\(output.count) bytes)")
