@@ -239,9 +239,6 @@ struct ListViewDebugContent: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // Engine processes monitor
-            EngineProcessesDebugContent()
-
             // 1. Page-specific convenience actions
             DebugSection(title: "SYNC") {
                 VStack(spacing: 4) {

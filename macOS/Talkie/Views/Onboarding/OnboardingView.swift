@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    private let manager = OnboardingManager.shared
+    @Bindable private var manager = OnboardingManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @State private var showDebugToolbar = false

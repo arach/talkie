@@ -41,6 +41,12 @@ class DebugCommandHandler {
         case "onboarding-storyboard":
             await generateOnboardingStoryboard(args: args)
 
+        case "settings-storyboard":
+            await generateSettingsStoryboard(args: args)
+
+        case "settings-screenshots":
+            await captureSettingsScreenshots(args: args)
+
         case "help":
             printHelp()
             exit(0)
@@ -60,6 +66,28 @@ class DebugCommandHandler {
         await OnboardingStoryboardGenerator.shared.generateAndExit(outputPath: outputPath)
     }
 
+    private func generateSettingsStoryboard(args: [String]) async {
+        let outputPath = args.first
+        await SettingsStoryboardGenerator.shared.generateAndExit(outputPath: outputPath)
+    }
+
+    private func captureSettingsScreenshots(args: [String]) async {
+        let outputDir: URL
+        if let path = args.first {
+            outputDir = URL(fileURLWithPath: path)
+        } else {
+            let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+            outputDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("settings-screenshots-\(timestamp)")
+        }
+
+        print("📸 Capturing settings pages to: \(outputDir.path)")
+        let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
+        print("✅ Captured \(results.count) pages")
+        exit(0)
+    }
+
     // MARK: - Help
 
     private func printHelp() {
@@ -73,16 +101,23 @@ class DebugCommandHandler {
 
           onboarding-storyboard [output-path]
               Generate a storyboard image of all onboarding screens
-              Args:
-                output-path (optional) - Path to save PNG file
-                                        Default: ~/Desktop/onboarding-storyboard-<timestamp>.png
+              Default: ~/Desktop/onboarding-storyboard-<timestamp>.png
 
-              Examples:
-                --debug=onboarding-storyboard
-                --debug=onboarding-storyboard ~/Documents/onboarding.png
+          settings-storyboard [output-path]
+              Generate a storyboard image of all settings pages
+              Default: ~/Desktop/settings-storyboard-<timestamp>.png
+
+          settings-screenshots [output-dir]
+              Capture individual screenshots of each settings page
+              Default: ~/Desktop/settings-screenshots-<timestamp>/
 
           help
               Show this help message
+
+        Examples:
+          --debug=settings-storyboard
+          --debug=settings-screenshots ~/Documents/UI-Review/v1-baseline
+          --debug=onboarding-storyboard ~/Documents/onboarding.png
 
         """)
     }

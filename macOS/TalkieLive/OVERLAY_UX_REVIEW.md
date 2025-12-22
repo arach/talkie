@@ -2,13 +2,13 @@
 
 **Date**: 2025-12-21
 **Reviewed By**: Claude (Sonnet 4.5)
-**Scope**: Complete overlay system including FloatingPill, RecordingOverlay, StatePill, and state management
+**Scope**: Complete overlay system including FloatingPill, RecordingOverlay, LivePill, and state management
 
 ---
 
 ## Executive Summary
 
-The TalkieLive overlay system demonstrates **strong architectural patterns** with a **shared component library** (StatePill) and clear separation of concerns. However, there are **critical UX and reliability issues** that impact the core recording flow.
+The TalkieLive overlay system demonstrates **strong architectural patterns** with a **shared component library** (LivePill) and clear separation of concerns. However, there are **critical UX and reliability issues** that impact the core recording flow.
 
 ### Critical Issues Found
 1. **🔴 P0**: Pill tap sometimes doesn't trigger recording (callback chain breaks)
@@ -86,9 +86,9 @@ func updateState(_ state: LiveState) {
 
 ---
 
-### 2. StatePill (Shared Component)
+### 2. LivePill (Shared Component)
 
-**File**: `TalkieKit/Sources/TalkieKit/UI/StatePill.swift`
+**File**: `TalkieKit/Sources/TalkieKit/UI/LivePill.swift`
 
 #### Design ✅ Excellent
 - **Unified component** used in StatusBar AND FloatingPill
@@ -478,7 +478,7 @@ NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
 ## Testing Recommendations
 
 ### Unit Tests Needed
-- [ ] StatePill state transitions
+- [ ] LivePill state transitions
 - [ ] FloatingPillController callback preservation
 - [ ] RecordingOverlay state sync
 - [ ] LiveController error recovery
@@ -515,7 +515,7 @@ Once these are addressed, the overlay system will be production-ready and deligh
 ### Core Files
 - `TalkieLive/Views/Overlay/FloatingPill.swift` (449 lines)
 - `TalkieLive/Views/Overlay/RecordingOverlay.swift` (847 lines)
-- `TalkieKit/Sources/TalkieKit/UI/StatePill.swift` (399 lines)
+- `TalkieKit/Sources/TalkieKit/UI/LivePill.swift` (399 lines)
 - `TalkieLive/App/LiveController.swift` (state management)
 - `TalkieLive/App/AppDelegate.swift` (wiring)
 

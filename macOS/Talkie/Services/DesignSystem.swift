@@ -703,6 +703,7 @@ enum TalkieTheme {
     static var textTertiary: Color { currentPalette().textTertiary }
     static var textMuted: Color { currentPalette().textMuted }
     static var border: Color { currentPalette().border }
+    static var borderSubtle: Color { currentPalette().borderSubtle }
     static var divider: Color { currentPalette().divider }
     static var hover: Color { currentPalette().hover }
     static var accent: Color { currentPalette().accent }
@@ -718,6 +719,7 @@ struct ThemeColorPalette {
     let textTertiary: Color
     let textMuted: Color
     let border: Color
+    let borderSubtle: Color
     let divider: Color
     let hover: Color
     let accent: Color
@@ -732,6 +734,7 @@ struct ThemeColorPalette {
             textTertiary: Color.white.opacity(0.5),
             textMuted: Color.white.opacity(0.3),
             border: Color.white.opacity(0.1),
+            borderSubtle: Color.white.opacity(0.06),
             divider: Color.white.opacity(0.1),
             hover: Color.white.opacity(0.05),
             accent: Color.cyan

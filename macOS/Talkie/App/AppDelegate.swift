@@ -94,6 +94,188 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             let outputPath = args.first
             await OnboardingStoryboardGenerator.shared.generateAndExit(outputPath: outputPath)
         }
+
+        cliHandler.register(
+            "settings-storyboard",
+            description: "Generate storyboard of all settings pages"
+        ) { args in
+            let outputPath = args.first
+            await SettingsStoryboardGenerator.shared.generateAndExit(outputPath: outputPath)
+        }
+
+        cliHandler.register(
+            "settings-screenshots",
+            description: "Capture individual screenshots of each settings page to a directory"
+        ) { args in
+            let outputDir: URL
+            if let path = args.first {
+                outputDir = URL(fileURLWithPath: path)
+            } else {
+                let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+                outputDir = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop")
+                    .appendingPathComponent("settings-screenshots-\(timestamp)")
+            }
+
+            print("📸 Capturing settings pages to: \(outputDir.path)")
+            let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
+            print("✅ Captured \(results.count) pages")
+            exit(0)
+        }
+
+        cliHandler.register(
+            "settings-grid",
+            description: "Capture all settings pages as a grid composite (use --overlay for layout guides)"
+        ) { args in
+            let withOverlay = args.contains("--overlay")
+            let outputPath: URL
+            if let path = args.first(where: { !$0.starts(with: "--") }) {
+                outputPath = URL(fileURLWithPath: path)
+            } else {
+                let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+                let suffix = withOverlay ? "-overlay" : ""
+                outputPath = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop")
+                    .appendingPathComponent("settings-grid\(suffix)-\(timestamp).png")
+            }
+
+            print("📸 Generating settings grid\(withOverlay ? " with overlay" : "")...")
+            await SettingsStoryboardGenerator.shared.captureGrid(columns: 4, withOverlay: withOverlay, to: outputPath)
+            exit(0)
+        }
+
+        cliHandler.register(
+            "settings-analyze",
+            description: "Generate styling analysis report for all settings pages"
+        ) { args in
+            let outputPath: URL
+            if let path = args.first {
+                outputPath = URL(fileURLWithPath: path)
+            } else {
+                let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+                outputPath = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop")
+                    .appendingPathComponent("settings-analysis-\(timestamp).md")
+            }
+
+            print("🔍 Analyzing settings page styling...")
+            await SettingsStoryboardGenerator.shared.generateAnalysisReport(to: outputPath)
+            exit(0)
+        }
+
+        cliHandler.register(
+            "settings-full",
+            description: "Generate complete package: grid, analysis report, and individual screenshots"
+        ) { args in
+            let outputDir: URL
+            if let path = args.first {
+                outputDir = URL(fileURLWithPath: path)
+            } else {
+                let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+                outputDir = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop")
+                    .appendingPathComponent("settings-audit-\(timestamp)")
+            }
+
+            try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+
+            print("📦 Generating full settings audit package...")
+
+            // 1. Grid (clean)
+            print("\n1️⃣ Grid view...")
+            await SettingsStoryboardGenerator.shared.captureGrid(
+                columns: 4,
+                withOverlay: false,
+                to: outputDir.appendingPathComponent("grid.png")
+            )
+
+            // 2. Grid with overlay
+            print("\n2️⃣ Grid with layout overlay...")
+            await SettingsStoryboardGenerator.shared.captureGrid(
+                columns: 4,
+                withOverlay: true,
+                to: outputDir.appendingPathComponent("grid-overlay.png")
+            )
+
+            // 3. Individual screenshots
+            print("\n3️⃣ Individual screenshots...")
+            _ = await SettingsStoryboardGenerator.shared.captureAllPages(
+                to: outputDir.appendingPathComponent("pages")
+            )
+
+            // 4. Analysis report
+            print("\n4️⃣ Styling analysis...")
+            await SettingsStoryboardGenerator.shared.generateAnalysisReport(
+                to: outputDir.appendingPathComponent("analysis.md")
+            )
+
+            print("\n✅ Full audit package saved to: \(outputDir.path)")
+            exit(0)
+        }
+
+        // MARK: - Design Auditor Commands
+
+        cliHandler.register(
+            "audit",
+            description: "Run full design audit on all screens (outputs HTML + Markdown reports)"
+        ) { args in
+            let outputDir: URL
+            if let path = args.first {
+                outputDir = URL(fileURLWithPath: path)
+            } else {
+                let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+                outputDir = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop")
+                    .appendingPathComponent("talkie-audit-\(timestamp)")
+            }
+
+            try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+
+            print("🔍 Running full design audit...")
+            let report = await DesignAuditor.shared.auditAll()
+
+            print("\n📊 Results:")
+            print("   Grade: \(report.grade) (\(report.overallScore)%)")
+            print("   Screens: \(report.screens.count)")
+            print("   Issues: \(report.totalIssues)")
+
+            print("\n📝 Generating reports...")
+            await DesignAuditor.shared.generateHTMLReport(from: report, to: outputDir.appendingPathComponent("audit-report.html"))
+            await DesignAuditor.shared.generateMarkdownReport(from: report, to: outputDir.appendingPathComponent("audit-report.md"))
+
+            print("\n✅ Audit complete! Reports saved to: \(outputDir.path)")
+
+            // Open HTML report
+            NSWorkspace.shared.open(outputDir.appendingPathComponent("audit-report.html"))
+
+            exit(0)
+        }
+
+        cliHandler.register(
+            "audit-section",
+            description: "Audit a specific section (settings, live, memos, onboarding, navigation)"
+        ) { args in
+            guard let sectionName = args.first,
+                  let section = ScreenSection(rawValue: sectionName.capitalized) else {
+                print("❌ Usage: --debug=audit-section <section>")
+                print("   Sections: settings, live, memos, onboarding, navigation")
+                exit(1)
+            }
+
+            print("🔍 Auditing \(section.rawValue) section...")
+            let report = await DesignAuditor.shared.audit(section: section)
+
+            print("\n📊 Results:")
+            print("   Grade: \(report.grade) (\(report.overallScore)%)")
+            print("   Screens: \(report.screens.count)")
+            print("   Issues: \(report.totalIssues)")
+
+            for screen in report.screens {
+                print("   - \(screen.screen.title): \(screen.grade) (\(screen.overallScore)%)")
+            }
+
+            exit(0)
+        }
     }
 
     // MARK: - URL Handling

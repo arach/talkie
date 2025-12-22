@@ -817,9 +817,9 @@ struct StatusBar: View {
                 .frame(height: 1)
 
             ZStack {
-                // Center - StatePill with optional PID display
+                // Center - LivePill with optional PID display
                 HStack(spacing: 8) {
-                    StatePill(
+                    LivePill(
                         state: controller.state,
                         isWarmingUp: whisperService.isWarmingUp,
                         showSuccess: showSuccess,
@@ -828,6 +828,7 @@ struct StatusBar: View {
                         isEngineConnected: engineClient.isConnected,
                         pendingQueueCount: LiveDatabase.countNeedsRetry(),
                         micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
+                        audioLevel: AudioLevelMonitor.shared.level,
                         onTap: toggleRecording
                     )
 
@@ -2889,6 +2890,159 @@ struct DebugToolbarOverlay<Content: View>: View {
                     }
                 }
 
+                // LivePill State Preview
+                DebugSection(title: "LIVE PILL STATES") {
+                    VStack(spacing: 6) {
+                        // Idle
+                        livePillPreviewRow("Idle") {
+                            LivePill(
+                                state: .idle,
+                                isWarmingUp: false,
+                                showSuccess: false,
+                                recordingDuration: 0,
+                                processingDuration: 0,
+                                isEngineConnected: true,
+                                pendingQueueCount: 0,
+                                micDeviceName: "MacBook Pro Microphone",
+                                audioLevel: 0,
+                                forceExpanded: true
+                            )
+                        }
+
+                        // Idle with queue
+                        livePillPreviewRow("Idle + Queue") {
+                            LivePill(
+                                state: .idle,
+                                isWarmingUp: false,
+                                showSuccess: false,
+                                recordingDuration: 0,
+                                processingDuration: 0,
+                                isEngineConnected: true,
+                                pendingQueueCount: 3,
+                                micDeviceName: nil,
+                                audioLevel: 0,
+                                forceExpanded: true
+                            )
+                        }
+
+                        // Listening
+                        livePillPreviewRow("Listening") {
+                            LivePill(
+                                state: .listening,
+                                isWarmingUp: false,
+                                showSuccess: false,
+                                recordingDuration: 4.2,
+                                processingDuration: 0,
+                                isEngineConnected: true,
+                                pendingQueueCount: 0,
+                                micDeviceName: nil,
+                                audioLevel: 0.6,
+                                forceExpanded: true
+                            )
+                        }
+
+                        // Transcribing
+                        livePillPreviewRow("Transcribing") {
+                            LivePill(
+                                state: .transcribing,
+                                isWarmingUp: false,
+                                showSuccess: false,
+                                recordingDuration: 0,
+                                processingDuration: 1.5,
+                                isEngineConnected: true,
+                                pendingQueueCount: 0,
+                                micDeviceName: nil,
+                                audioLevel: 0,
+                                forceExpanded: true
+                            )
+                        }
+
+                        // Routing
+                        livePillPreviewRow("Routing") {
+                            LivePill(
+                                state: .routing,
+                                isWarmingUp: false,
+                                showSuccess: false,
+                                recordingDuration: 0,
+                                processingDuration: 0,
+                                isEngineConnected: true,
+                                pendingQueueCount: 0,
+                                micDeviceName: nil,
+                                audioLevel: 0,
+                                forceExpanded: true
+                            )
+                        }
+
+                        // Success
+                        livePillPreviewRow("Success") {
+                            LivePill(
+                                state: .idle,
+                                isWarmingUp: false,
+                                showSuccess: true,
+                                recordingDuration: 0,
+                                processingDuration: 0,
+                                isEngineConnected: true,
+                                pendingQueueCount: 0,
+                                micDeviceName: nil,
+                                audioLevel: 0,
+                                forceExpanded: true
+                            )
+                        }
+
+                        // Warming Up
+                        livePillPreviewRow("Warming Up") {
+                            LivePill(
+                                state: .idle,
+                                isWarmingUp: true,
+                                showSuccess: false,
+                                recordingDuration: 0,
+                                processingDuration: 0,
+                                isEngineConnected: true,
+                                pendingQueueCount: 0,
+                                micDeviceName: nil,
+                                audioLevel: 0,
+                                forceExpanded: true
+                            )
+                        }
+
+                        // Offline
+                        livePillPreviewRow("Offline") {
+                            LivePill(
+                                state: .idle,
+                                isWarmingUp: false,
+                                showSuccess: false,
+                                recordingDuration: 0,
+                                processingDuration: 0,
+                                isEngineConnected: false,
+                                pendingQueueCount: 0,
+                                micDeviceName: nil,
+                                audioLevel: 0,
+                                forceExpanded: true
+                            )
+                        }
+                    }
+                }
+
+                // Nano Waveform Preview
+                DebugSection(title: "NANO WAVEFORM") {
+                    VStack(spacing: 6) {
+                        ForEach(NanoWaveformStyle.allCases) { style in
+                            HStack(spacing: 8) {
+                                NanoWaveform(color: SemanticColor.warning, style: style)
+                                    .frame(width: 14)
+                                Text(style.displayName)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .background(Color(white: 0.08))
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+
                 // System Actions
                 DebugSection(title: "SYSTEM") {
                     VStack(spacing: 4) {
@@ -2993,6 +3147,23 @@ struct DebugToolbarOverlay<Content: View>: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
+    }
+
+    private func livePillPreviewRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 70, alignment: .leading)
+
+            content()
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(Color(white: 0.08))
+        .cornerRadius(4)
     }
 
     private func copyDebugInfo() {

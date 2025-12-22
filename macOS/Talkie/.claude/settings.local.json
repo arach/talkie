@@ -29,7 +29,9 @@
       "Bash(grep:*)",
       "Bash(cat:*)",
       "Bash(git commit:*)",
-      "Bash(log show:*)"
+      "Bash(log show:*)",
+      "Bash(uuidgen:*)",
+      "Bash(git push:*)"
     ]
   }
 }

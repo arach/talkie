@@ -38,7 +38,8 @@ func initializeDataLayer() async throws {
 }
 
 // MARK: - Migration Check View
-
+// Example code - actual implementation in TalkieApp.swift
+/*
 /// Show this view on app launch if migration is needed
 struct MigrationCheckView: View {
     @Environment(\.managedObjectContext) private var coreDataContext
@@ -60,23 +61,26 @@ struct MigrationCheckView: View {
         }
     }
 }
+*/
 
 // MARK: - Main App View (After Migration)
-
+// Example code - actual implementation in TalkieApp.swift
+/*
 struct MainAppView: View {
     var body: some View {
-        // Your existing app structure, but use AllMemosView2 instead of old view
+        // Your existing app structure, use AllMemos view
         NavigationView {
             // Sidebar
             List {
                 NavigationLink("All Memos") {
-                    AllMemosView2()  // ← NEW! Uses GRDB
+                    AllMemos()  // Uses GRDB
                 }
                 // ... other navigation items
             }
         }
     }
 }
+*/
 
 // MARK: - Example: TalkieApp.swift Integration
 

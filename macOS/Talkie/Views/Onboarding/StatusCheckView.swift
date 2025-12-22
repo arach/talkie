@@ -10,7 +10,7 @@ import SwiftUI
 
 struct StatusCheckView: View {
     let onNext: () -> Void
-    private let manager = OnboardingManager.shared
+    @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
     private var colors: OnboardingColors {

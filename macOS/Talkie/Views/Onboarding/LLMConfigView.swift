@@ -10,7 +10,7 @@ import SwiftUI
 
 struct LLMConfigView: View {
     let onNext: () -> Void
-    private let manager = OnboardingManager.shared
+    @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var isPulsing = false
 

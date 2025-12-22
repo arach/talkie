@@ -9,22 +9,36 @@ import SwiftUI
 import CloudKit
 
 enum SettingsSection: String, Hashable {
+    // APPEARANCE
     case appearance
+
+    // MEMOS (Quick Actions, Quick Open, Auto-Run)
     case quickActions
     case quickOpen
     case autoRun
-    case apiKeys
-    case transcriptionModels  // Transcription (STT) model selection
+
+    // DICTATION
+    case dictationCapture
+    case dictationOutput
+
+    // AI MODELS
+    case aiProviders         // API Keys & Providers
+    case transcriptionModels // Transcription (STT) model selection
     case llmModels           // AI/LLM model selection
-    case allowedCommands
-    case outputSettings
-    case localFiles
-    case helperApps
+
+    // STORAGE
+    case database            // Retention, cleanup
+    case files               // Local paths, exports
+    case cloud               // Sync (future)
+
+    // SYSTEM
     case permissions
     case debugInfo
     case devControl          // Dev control panel (DEBUG only)
-    case audio  // For TalkieLive HistoryView compatibility
-    case engine  // For TalkieLive HistoryView compatibility
+
+    // Legacy/compatibility
+    case audio               // For TalkieLive HistoryView compatibility
+    case engine              // For TalkieLive HistoryView compatibility
 }
 
 struct SettingsView: View {
@@ -64,8 +78,8 @@ struct SettingsView: View {
                             }
                         }
 
-                        // WORKFLOWS
-                        SettingsSidebarSection(title: "WORKFLOWS", isActive: selectedSection == .quickActions || selectedSection == .quickOpen || selectedSection == .autoRun) {
+                        // MEMOS
+                        SettingsSidebarSection(title: "MEMOS", isActive: selectedSection == .quickActions || selectedSection == .quickOpen || selectedSection == .autoRun) {
                             SettingsSidebarItem(
                                 icon: "bolt",
                                 title: "QUICK ACTIONS",
@@ -89,19 +103,33 @@ struct SettingsView: View {
                             }
                         }
 
-                        // API & PROVIDERS
-                        SettingsSidebarSection(title: "API & PROVIDERS", isActive: selectedSection == .apiKeys) {
+                        // DICTATION
+                        SettingsSidebarSection(title: "DICTATION", isActive: selectedSection == .dictationCapture || selectedSection == .dictationOutput) {
                             SettingsSidebarItem(
-                                icon: "key",
-                                title: "API KEYS",
-                                isSelected: selectedSection == .apiKeys
+                                icon: "mic.fill",
+                                title: "CAPTURE",
+                                isSelected: selectedSection == .dictationCapture
                             ) {
-                                selectedSection = .apiKeys
+                                selectedSection = .dictationCapture
+                            }
+                            SettingsSidebarItem(
+                                icon: "arrow.right.doc.on.clipboard",
+                                title: "OUTPUT",
+                                isSelected: selectedSection == .dictationOutput
+                            ) {
+                                selectedSection = .dictationOutput
                             }
                         }
 
-                        // MODELS
-                        SettingsSidebarSection(title: "MODELS", isActive: selectedSection == .transcriptionModels || selectedSection == .llmModels) {
+                        // AI MODELS
+                        SettingsSidebarSection(title: "AI MODELS", isActive: selectedSection == .aiProviders || selectedSection == .transcriptionModels || selectedSection == .llmModels) {
+                            SettingsSidebarItem(
+                                icon: "key",
+                                title: "PROVIDERS & KEYS",
+                                isSelected: selectedSection == .aiProviders
+                            ) {
+                                selectedSection = .aiProviders
+                            }
                             SettingsSidebarItem(
                                 icon: "waveform",
                                 title: "TRANSCRIPTION",
@@ -111,51 +139,40 @@ struct SettingsView: View {
                             }
                             SettingsSidebarItem(
                                 icon: "brain",
-                                title: "AI & LLM",
+                                title: "LLM",
                                 isSelected: selectedSection == .llmModels
                             ) {
                                 selectedSection = .llmModels
                             }
                         }
 
-                        // SHELL & OUTPUT
-                        SettingsSidebarSection(title: "SHELL & OUTPUT", isActive: selectedSection == .allowedCommands || selectedSection == .outputSettings) {
+                        // STORAGE
+                        SettingsSidebarSection(title: "STORAGE", isActive: selectedSection == .database || selectedSection == .files || selectedSection == .cloud) {
                             SettingsSidebarItem(
-                                icon: "terminal",
-                                title: "ALLOWED COMMANDS",
-                                isSelected: selectedSection == .allowedCommands
+                                icon: "cylinder",
+                                title: "DATABASE",
+                                isSelected: selectedSection == .database
                             ) {
-                                selectedSection = .allowedCommands
+                                selectedSection = .database
                             }
-                            SettingsSidebarItem(
-                                icon: "arrow.right.doc.on.clipboard",
-                                title: "OUTPUT & ALIASES",
-                                isSelected: selectedSection == .outputSettings
-                            ) {
-                                selectedSection = .outputSettings
-                            }
-                        }
-
-                        // DATA & FILES
-                        SettingsSidebarSection(title: "DATA & FILES", isActive: selectedSection == .localFiles) {
                             SettingsSidebarItem(
                                 icon: "folder",
-                                title: "LOCAL FILES",
-                                isSelected: selectedSection == .localFiles
+                                title: "FILES",
+                                isSelected: selectedSection == .files
                             ) {
-                                selectedSection = .localFiles
+                                selectedSection = .files
+                            }
+                            SettingsSidebarItem(
+                                icon: "cloud",
+                                title: "CLOUD",
+                                isSelected: selectedSection == .cloud
+                            ) {
+                                selectedSection = .cloud
                             }
                         }
 
                         // SYSTEM
-                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helperApps || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
-                            SettingsSidebarItem(
-                                icon: "app.connected.to.app.below.fill",
-                                title: "HELPER APPS",
-                                isSelected: selectedSection == .helperApps
-                            ) {
-                                selectedSection = .helperApps
-                            }
+                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
                             SettingsSidebarItem(
                                 icon: "lock.shield",
                                 title: "PERMISSIONS",
@@ -207,28 +224,41 @@ struct SettingsView: View {
     @ViewBuilder
     private var contentView: some View {
         switch selectedSection {
+        // APPEARANCE
         case .appearance:
             AppearanceSettingsView()
+
+        // DICTATION
+        case .dictationCapture:
+            DictationCaptureSettingsView()
+        case .dictationOutput:
+            DictationOutputSettingsView()
+
+        // ACTIONS
         case .quickActions:
             QuickActionsSettingsView()
         case .quickOpen:
             QuickOpenSettingsView()
         case .autoRun:
             AutoRunSettingsView()
-        case .apiKeys:
+
+        // AI MODELS
+        case .aiProviders:
             APISettingsView()
         case .transcriptionModels:
             TranscriptionModelsSettingsView()
         case .llmModels:
             ModelLibraryView()
-        case .allowedCommands:
-            AllowedCommandsView()
-        case .outputSettings:
-            OutputSettingsView()
-        case .localFiles:
+
+        // STORAGE
+        case .database:
+            DatabaseSettingsView()
+        case .files:
             LocalFilesSettingsView()
-        case .helperApps:
-            HelperAppsSettingsView()
+        case .cloud:
+            CloudSettingsView()
+
+        // SYSTEM
         case .permissions:
             PermissionsSettingsView()
         case .debugInfo:
@@ -239,6 +269,8 @@ struct SettingsView: View {
             #else
             Text("Dev Control Panel is only available in DEBUG builds")
             #endif
+
+        // Legacy/compatibility
         case .audio:
             Text("Audio settings placeholder")
         case .engine:

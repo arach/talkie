@@ -93,10 +93,10 @@ struct TranscriptionModelsSettingsView: View {
 
     private func modelFamilySection(title: String, subtitle: String, models: [ModelInfo]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Section header
+            // Section header with family-specific colors
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(title == "WHISPER" ? settingsManager.midnightAccentSTT : settingsManager.midnightAccentCloud)
+                    .fill(title == "WHISPER" ? Color.orange : Color.cyan)
                     .frame(width: 3, height: 14)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -112,17 +112,16 @@ struct TranscriptionModelsSettingsView: View {
             }
             .padding(.horizontal, 24)
 
-            // Model cards grid - 3 columns for compact layout
+            // Model cards grid - 2 columns matching Models sidebar style
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ], spacing: 12) {
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ], spacing: 8) {
                 ForEach(models) { model in
-                    TranscriptionModelCard(
-                        model: model,
-                        isSelected: settingsManager.liveTranscriptionModelId == model.id,
+                    STTModelCard(
+                        modelInfo: model,
                         downloadProgress: engineClient.downloadProgress,
+                        isSelected: settingsManager.liveTranscriptionModelId == model.id,
                         onSelect: { selectModel(model) },
                         onDownload: { downloadModel(model) },
                         onDelete: { showingDeleteConfirmation = (true, model) },

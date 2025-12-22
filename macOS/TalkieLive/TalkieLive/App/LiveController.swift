@@ -395,7 +395,7 @@ final class LiveController: ObservableObject {
     /// Start timer to broadcast elapsed time updates via XPC service
     private func startElapsedTimeTimer() {
         elapsedTimeTimer?.invalidate()
-        elapsedTimeTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        elapsedTimeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self, let startTime = self.recordingStartTime else { return }
                 let elapsed = Date().timeIntervalSince(startTime)

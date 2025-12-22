@@ -336,29 +336,9 @@ struct HotkeyConfig: Codable, Equatable {
 final class LiveSettings {
     static let shared = LiveSettings()
 
-    // MARK: - Keys
-    private let hotkeyKey = "hotkey"
-    private let pttHotkeyKey = "pttHotkey"
-    private let pttEnabledKey = "pttEnabled"
-    private let selectedModelIdKey = "selectedModelId"
-    private let whisperModelKey = "whisperModel"  // Legacy, for migration
-    private let routingModeKey = "routingMode"
-    private let utteranceTTLKey = "utteranceTTLHours"
-    private let overlayStyleKey = "overlayStyle"
-    private let overlayPositionKey = "overlayPosition"
-    private let pillPositionKey = "pillPosition"
-    private let pillShowOnAllScreensKey = "pillShowOnAllScreens"
-    private let pillExpandsDuringRecordingKey = "pillExpandsDuringRecording"
-    private let showOnAirKey = "showOnAir"
-    private let startSoundKey = "startSound"
-    private let finishSoundKey = "finishSound"
-    private let pastedSoundKey = "pastedSound"
-    private let primaryContextSourceKey = "primaryContextSource"
-    private let contextCaptureDetailKey = "contextCaptureDetail"
-    private let returnToOriginAfterPasteKey = "returnToOriginAfterPaste"
-    private let selectedMicrophoneIDKey = "selectedMicrophoneID"
-    // Legacy key for migration
-    private let legacyThemeKey = "theme"
+    // MARK: - Shared Settings Storage
+    // Uses TalkieSharedSettings from TalkieKit for cross-app sync with TalkieLive
+    private var storage: UserDefaults { TalkieSharedSettings }
 
     // MARK: - Published Settings
 
@@ -535,8 +515,11 @@ final class LiveSettings {
     // MARK: - Init
 
     private init() {
-        // Load toggle hotkey
-        if let data = UserDefaults.standard.data(forKey: hotkeyKey),
+        // Use TalkieSharedSettings directly (can't use storage computed property before self is initialized)
+        let store = TalkieSharedSettings
+
+        // Load toggle hotkey (with migration from legacy UserDefaults.standard)
+        if let data = migrateDataToSharedDefaults(key: LiveSettingsKey.hotkey),
            let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
             self.hotkey = config
         } else {
@@ -544,7 +527,7 @@ final class LiveSettings {
         }
 
         // Load push-to-talk hotkey
-        if let data = UserDefaults.standard.data(forKey: pttHotkeyKey),
+        if let data = migrateDataToSharedDefaults(key: LiveSettingsKey.pttHotkey),
            let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
             self.pttHotkey = config
         } else {
@@ -552,93 +535,45 @@ final class LiveSettings {
         }
 
         // Load PTT enabled state (default: false)
-        self.pttEnabled = UserDefaults.standard.bool(forKey: pttEnabledKey)
+        self.pttEnabled = migrateToSharedDefaults(key: LiveSettingsKey.pttEnabled, defaultValue: false)
 
         // Note: selectedModelId is now managed by SettingsManager, no need to load here
 
         // Load routing mode
-        let routingRaw = UserDefaults.standard.string(forKey: routingModeKey) ?? "paste"
+        let routingRaw: String = migrateToSharedDefaults(key: LiveSettingsKey.routingMode, defaultValue: "paste")
         self.routingMode = routingRaw == "clipboardOnly" ? .clipboardOnly : .paste
 
         // Load selected microphone (0 = system default)
-        self.selectedMicrophoneID = UInt32(UserDefaults.standard.integer(forKey: selectedMicrophoneIDKey))
+        self.selectedMicrophoneID = UInt32(migrateToSharedDefaults(key: LiveSettingsKey.selectedMicrophoneID, defaultValue: 0))
 
         // Load TTL (default 48 hours)
-        let ttl = UserDefaults.standard.integer(forKey: utteranceTTLKey)
+        let ttl: Int = migrateToSharedDefaults(key: LiveSettingsKey.utteranceTTLHours, defaultValue: 48)
         self.utteranceTTLHours = ttl > 0 ? ttl : 48
 
-        // Load overlay style
-        if let rawValue = UserDefaults.standard.string(forKey: overlayStyleKey),
-           let style = OverlayStyle(rawValue: rawValue) {
-            self.overlayStyle = style
-        } else {
-            self.overlayStyle = .particles
-        }
-
-        // Load overlay position
-        if let rawValue = UserDefaults.standard.string(forKey: overlayPositionKey),
-           let position = OverlayPosition(rawValue: rawValue) {
-            self.overlayPosition = position
-        } else {
-            self.overlayPosition = .topCenter
-        }
-
-        // Load pill position
-        if let rawValue = UserDefaults.standard.string(forKey: pillPositionKey),
-           let position = PillPosition(rawValue: rawValue) {
-            self.pillPosition = position
-        } else {
-            self.pillPosition = .bottomCenter
-        }
+        // Load overlay settings (direct access - migrateToSharedDefaults has type casting issues with enums)
+        self.overlayStyle = store.string(forKey: LiveSettingsKey.overlayStyle).flatMap(OverlayStyle.init) ?? .particles
+        self.overlayPosition = store.string(forKey: LiveSettingsKey.overlayPosition).flatMap(IndicatorPosition.init) ?? .topCenter
+        self.pillPosition = store.string(forKey: LiveSettingsKey.pillPosition).flatMap(PillPosition.init) ?? .bottomCenter
 
         // Load pill settings
-        self.pillShowOnAllScreens = UserDefaults.standard.object(forKey: pillShowOnAllScreensKey) as? Bool ?? true
-        self.pillExpandsDuringRecording = UserDefaults.standard.object(forKey: pillExpandsDuringRecordingKey) as? Bool ?? true
-        self.showOnAir = UserDefaults.standard.object(forKey: showOnAirKey) as? Bool ?? true
+        self.pillShowOnAllScreens = migrateToSharedDefaults(key: LiveSettingsKey.pillShowOnAllScreens, defaultValue: true)
+        self.pillExpandsDuringRecording = migrateToSharedDefaults(key: LiveSettingsKey.pillExpandsDuringRecording, defaultValue: true)
+        self.showOnAir = migrateToSharedDefaults(key: LiveSettingsKey.showOnAir, defaultValue: true)
 
-        // Load sounds (default to pop for start/finish, tink for pasted)
-        if let rawValue = UserDefaults.standard.string(forKey: startSoundKey),
-           let sound = TalkieSound(rawValue: rawValue) {
-            self.startSound = sound
-        } else {
-            self.startSound = .pop
-        }
-
-        if let rawValue = UserDefaults.standard.string(forKey: finishSoundKey),
-           let sound = TalkieSound(rawValue: rawValue) {
-            self.finishSound = sound
-        } else {
-            self.finishSound = .pop
-        }
-
-        if let rawValue = UserDefaults.standard.string(forKey: pastedSoundKey),
-           let sound = TalkieSound(rawValue: rawValue) {
-            self.pastedSound = sound
-        } else {
-            self.pastedSound = .tink
-        }
+        // Load sounds
+        self.startSound = store.string(forKey: LiveSettingsKey.startSound).flatMap(TalkieSound.init) ?? .pop
+        self.finishSound = store.string(forKey: LiveSettingsKey.finishSound).flatMap(TalkieSound.init) ?? .pop
+        self.pastedSound = store.string(forKey: LiveSettingsKey.pastedSound).flatMap(TalkieSound.init) ?? .tink
 
         // Note: Appearance settings (appearanceMode, visualTheme, fontSize, accentColor)
         // are now computed properties delegating to SettingsManager, no loading needed
 
-        // Load primary context source (default: start app)
-        if let rawValue = UserDefaults.standard.string(forKey: primaryContextSourceKey),
-           let source = PrimaryContextSource(rawValue: rawValue) {
-            self.primaryContextSource = source
-        } else {
-            self.primaryContextSource = .startApp
-        }
-
-        // Load context capture detail (default: rich)
-        if let rawValue = UserDefaults.standard.string(forKey: contextCaptureDetailKey),
-           let detail = ContextCaptureDetail(rawValue: rawValue) {
-            self.contextCaptureDetail = detail
-        } else {
-            self.contextCaptureDetail = .rich
-        }
+        // Load context settings
+        self.primaryContextSource = store.string(forKey: LiveSettingsKey.primaryContextSource).flatMap(PrimaryContextSource.init) ?? .startApp
+        self.contextCaptureDetail = store.string(forKey: LiveSettingsKey.contextCaptureDetail).flatMap(ContextCaptureDetail.init) ?? .rich
 
         // Load return to origin setting (default: false)
-        self.returnToOriginAfterPaste = UserDefaults.standard.bool(forKey: returnToOriginAfterPasteKey)
+        self.returnToOriginAfterPaste = migrateToSharedDefaults(key: LiveSettingsKey.returnToOriginAfterPaste, defaultValue: false)
 
         // Apply TTL to store
         DictationStore.shared.ttlHours = utteranceTTLHours
@@ -647,31 +582,32 @@ final class LiveSettings {
     // MARK: - Persistence
 
     private func save() {
+        // Save to shared storage for cross-app sync with TalkieLive
         if let data = try? JSONEncoder().encode(hotkey) {
-            UserDefaults.standard.set(data, forKey: hotkeyKey)
+            storage.set(data, forKey: LiveSettingsKey.hotkey)
         }
         if let data = try? JSONEncoder().encode(pttHotkey) {
-            UserDefaults.standard.set(data, forKey: pttHotkeyKey)
+            storage.set(data, forKey: LiveSettingsKey.pttHotkey)
         }
-        UserDefaults.standard.set(pttEnabled, forKey: pttEnabledKey)
+        storage.set(pttEnabled, forKey: LiveSettingsKey.pttEnabled)
         // Note: selectedModelId is now managed by SettingsManager, no need to save here
-        UserDefaults.standard.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: routingModeKey)
-        UserDefaults.standard.set(Int(selectedMicrophoneID), forKey: selectedMicrophoneIDKey)
-        UserDefaults.standard.set(utteranceTTLHours, forKey: utteranceTTLKey)
-        UserDefaults.standard.set(overlayStyle.rawValue, forKey: overlayStyleKey)
-        UserDefaults.standard.set(overlayPosition.rawValue, forKey: overlayPositionKey)
-        UserDefaults.standard.set(pillPosition.rawValue, forKey: pillPositionKey)
-        UserDefaults.standard.set(pillShowOnAllScreens, forKey: pillShowOnAllScreensKey)
-        UserDefaults.standard.set(pillExpandsDuringRecording, forKey: pillExpandsDuringRecordingKey)
-        UserDefaults.standard.set(showOnAir, forKey: showOnAirKey)
-        UserDefaults.standard.set(startSound.rawValue, forKey: startSoundKey)
-        UserDefaults.standard.set(finishSound.rawValue, forKey: finishSoundKey)
-        UserDefaults.standard.set(pastedSound.rawValue, forKey: pastedSoundKey)
+        storage.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: LiveSettingsKey.routingMode)
+        storage.set(Int(selectedMicrophoneID), forKey: LiveSettingsKey.selectedMicrophoneID)
+        storage.set(utteranceTTLHours, forKey: LiveSettingsKey.utteranceTTLHours)
+        storage.set(overlayStyle.rawValue, forKey: LiveSettingsKey.overlayStyle)
+        storage.set(overlayPosition.rawValue, forKey: LiveSettingsKey.overlayPosition)
+        storage.set(pillPosition.rawValue, forKey: LiveSettingsKey.pillPosition)
+        storage.set(pillShowOnAllScreens, forKey: LiveSettingsKey.pillShowOnAllScreens)
+        storage.set(pillExpandsDuringRecording, forKey: LiveSettingsKey.pillExpandsDuringRecording)
+        storage.set(showOnAir, forKey: LiveSettingsKey.showOnAir)
+        storage.set(startSound.rawValue, forKey: LiveSettingsKey.startSound)
+        storage.set(finishSound.rawValue, forKey: LiveSettingsKey.finishSound)
+        storage.set(pastedSound.rawValue, forKey: LiveSettingsKey.pastedSound)
         // Note: appearance settings (appearanceMode, visualTheme, fontSize, accentColor)
         // are now delegated to SettingsManager and saved there
-        UserDefaults.standard.set(primaryContextSource.rawValue, forKey: primaryContextSourceKey)
-        UserDefaults.standard.set(contextCaptureDetail.rawValue, forKey: contextCaptureDetailKey)
-        UserDefaults.standard.set(returnToOriginAfterPaste, forKey: returnToOriginAfterPasteKey)
+        storage.set(primaryContextSource.rawValue, forKey: LiveSettingsKey.primaryContextSource)
+        storage.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
+        storage.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)
     }
 
     // MARK: - Appearance Application

@@ -1,0 +1,1335 @@
+//
+//  DesignAuditor.swift
+//  Talkie macOS
+//
+//  Comprehensive design system audit tool for analyzing UI consistency
+//  across all screens in the app. Checks fonts, colors, spacing, and opacity
+//  against the established design tokens.
+//
+
+import SwiftUI
+import AppKit
+
+// MARK: - Screen Registry
+
+/// All auditable screens in the app, organized by section
+enum AppScreen: String, CaseIterable, Identifiable {
+    // Settings
+    case settingsAppearance = "settings-appearance"
+    case settingsDictationCapture = "settings-dictation-capture"
+    case settingsDictationOutput = "settings-dictation-output"
+    case settingsQuickActions = "settings-quick-actions"
+    case settingsQuickOpen = "settings-quick-open"
+    case settingsAutoRun = "settings-auto-run"
+    case settingsAIProviders = "settings-ai-providers"
+    case settingsTranscription = "settings-transcription"
+    case settingsLLM = "settings-llm"
+    case settingsDatabase = "settings-database"
+    case settingsFiles = "settings-files"
+    case settingsPermissions = "settings-permissions"
+    case settingsDebug = "settings-debug"
+
+    // Live
+    case liveMain = "live-main"
+    case liveSettings = "live-settings"
+    case liveHistory = "live-history"
+
+    // Memos
+    case memosAllMemos = "memos-all"
+    case memoDetail = "memo-detail"
+    case memoEditor = "memo-editor"
+
+    // Onboarding
+    case onboardingWelcome = "onboarding-welcome"
+    case onboardingPermissions = "onboarding-permissions"
+    case onboardingComplete = "onboarding-complete"
+
+    // Navigation
+    case navigationSidebar = "navigation-sidebar"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .settingsAppearance: return "Appearance"
+        case .settingsDictationCapture: return "Dictation Capture"
+        case .settingsDictationOutput: return "Dictation Output"
+        case .settingsQuickActions: return "Quick Actions"
+        case .settingsQuickOpen: return "Quick Open"
+        case .settingsAutoRun: return "Auto-Run"
+        case .settingsAIProviders: return "AI Providers"
+        case .settingsTranscription: return "Transcription Models"
+        case .settingsLLM: return "LLM Models"
+        case .settingsDatabase: return "Database"
+        case .settingsFiles: return "Files"
+        case .settingsPermissions: return "Permissions"
+        case .settingsDebug: return "Debug Info"
+        case .liveMain: return "Live Main"
+        case .liveSettings: return "Live Settings"
+        case .liveHistory: return "Live History"
+        case .memosAllMemos: return "All Memos"
+        case .memoDetail: return "Memo Detail"
+        case .memoEditor: return "Memo Editor"
+        case .onboardingWelcome: return "Onboarding Welcome"
+        case .onboardingPermissions: return "Onboarding Permissions"
+        case .onboardingComplete: return "Onboarding Complete"
+        case .navigationSidebar: return "Navigation Sidebar"
+        }
+    }
+
+    var section: ScreenSection {
+        switch self {
+        case .settingsAppearance, .settingsDictationCapture, .settingsDictationOutput,
+             .settingsQuickActions, .settingsQuickOpen, .settingsAutoRun,
+             .settingsAIProviders, .settingsTranscription, .settingsLLM,
+             .settingsDatabase, .settingsFiles, .settingsPermissions, .settingsDebug:
+            return .settings
+        case .liveMain, .liveSettings, .liveHistory:
+            return .live
+        case .memosAllMemos, .memoDetail, .memoEditor:
+            return .memos
+        case .onboardingWelcome, .onboardingPermissions, .onboardingComplete:
+            return .onboarding
+        case .navigationSidebar:
+            return .navigation
+        }
+    }
+
+    var sourceFiles: [String] {
+        switch self {
+        case .settingsAppearance: return ["Views/Settings/AppearanceSettings.swift"]
+        case .settingsDictationCapture, .settingsDictationOutput: return ["Views/Settings/DictationSettings.swift"]
+        case .settingsQuickActions: return ["Views/Settings/QuickActionsSettings.swift"]
+        case .settingsQuickOpen: return ["Views/Settings/QuickOpenSettings.swift"]
+        case .settingsAutoRun: return ["Views/Settings/AutoRunSettings.swift"]
+        case .settingsAIProviders: return ["Views/Settings/APISettings.swift"]
+        case .settingsTranscription: return ["Views/Settings/TranscriptionModelsSettingsView.swift"]
+        case .settingsLLM: return ["Views/Settings/ModelLibrarySettings.swift"]
+        case .settingsDatabase: return ["Views/Settings/StorageSettings.swift"]
+        case .settingsFiles: return ["Views/Settings/LocalFilesSettings.swift"]
+        case .settingsPermissions: return ["Views/Settings/PermissionsSettings.swift"]
+        case .settingsDebug: return ["Views/Settings/DebugSettings.swift"]
+        case .liveMain: return ["Views/Live/DictationListView.swift"]
+        case .liveSettings: return ["Views/Live/LiveSettingsView.swift", "Views/Live/Components/LivePreviewScreen.swift"]
+        case .liveHistory: return ["Views/Live/History/HistoryView.swift"]
+        case .memosAllMemos: return ["Views/MemosList/AllMemosView.swift"]
+        case .memoDetail: return ["Views/MemoDetail/MemoDetailView.swift", "Views/MemoDetail/MemoDetailComponents.swift"]
+        case .memoEditor: return ["Views/MemoDetail/MemoEditorView.swift"]
+        case .onboardingWelcome, .onboardingPermissions, .onboardingComplete: return ["Views/Onboarding/OnboardingView.swift"]
+        case .navigationSidebar: return ["Views/NavigationView.swift"]
+        }
+    }
+}
+
+enum ScreenSection: String, CaseIterable {
+    case settings = "Settings"
+    case live = "Live"
+    case memos = "Memos"
+    case onboarding = "Onboarding"
+    case navigation = "Navigation"
+
+    var screens: [AppScreen] {
+        AppScreen.allCases.filter { $0.section == self }
+    }
+}
+
+// MARK: - Design Tokens (Expected Values)
+
+struct DesignTokens {
+    // Font sizes from Theme.current
+    static let validFontPatterns = [
+        "Theme.current.fontXS",
+        "Theme.current.fontXSMedium",
+        "Theme.current.fontXSBold",
+        "Theme.current.fontSM",
+        "Theme.current.fontSMBold",
+        "Theme.current.fontMD",
+        "Theme.current.fontLG",
+        "Theme.current.fontHeadline",
+        "Theme.current.fontTitle"
+    ]
+
+    // Spacing values from Spacing enum
+    static let validSpacing: [String: CGFloat] = [
+        "Spacing.xxs": 2,
+        "Spacing.xs": 6,
+        "Spacing.sm": 10,
+        "Spacing.md": 14,
+        "Spacing.lg": 20,
+        "Spacing.xl": 28,
+        "Spacing.xxl": 40
+    ]
+
+    // Opacity values from Opacity enum
+    static let validOpacity: [String: Double] = [
+        "Opacity.subtle": 0.03,
+        "Opacity.light": 0.08,
+        "Opacity.medium": 0.15,
+        "Opacity.strong": 0.25,
+        "Opacity.half": 0.5,
+        "Opacity.prominent": 0.7
+    ]
+
+    // Color patterns that are on-brand
+    static let validColorPatterns = [
+        "Theme.current.",
+        ".accentColor",
+        "Color.accentColor",
+        "SemanticColor."
+    ]
+}
+
+// MARK: - Responsive Sizes
+
+enum ResponsiveSize: String, CaseIterable {
+    case compact = "compact"      // 800x500
+    case standard = "standard"    // 1000x700
+    case expanded = "expanded"    // 1400x900
+
+    var size: CGSize {
+        switch self {
+        case .compact: return CGSize(width: 800, height: 500)
+        case .standard: return CGSize(width: 1000, height: 700)
+        case .expanded: return CGSize(width: 1400, height: 900)
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .compact: return "Compact (800x500)"
+        case .standard: return "Standard (1000x700)"
+        case .expanded: return "Expanded (1400x900)"
+        }
+    }
+}
+
+// MARK: - Audit Results
+
+struct ScreenAuditResult {
+    let screen: AppScreen
+    let timestamp: Date
+    var fontUsage: [PatternUsage] = []
+    var colorUsage: [PatternUsage] = []
+    var spacingUsage: [PatternUsage] = []
+    var opacityUsage: [PatternUsage] = []
+
+    var fontScore: Int {
+        let total = fontUsage.reduce(0) { $0 + $1.count }
+        let compliant = fontUsage.filter { $0.isCompliant }.reduce(0) { $0 + $1.count }
+        return total > 0 ? Int(Double(compliant) / Double(total) * 100) : 100
+    }
+
+    var colorScore: Int {
+        let total = colorUsage.reduce(0) { $0 + $1.count }
+        let compliant = colorUsage.filter { $0.isCompliant }.reduce(0) { $0 + $1.count }
+        return total > 0 ? Int(Double(compliant) / Double(total) * 100) : 100
+    }
+
+    var spacingScore: Int {
+        let total = spacingUsage.reduce(0) { $0 + $1.count }
+        let compliant = spacingUsage.filter { $0.isCompliant }.reduce(0) { $0 + $1.count }
+        return total > 0 ? Int(Double(compliant) / Double(total) * 100) : 100
+    }
+
+    var opacityScore: Int {
+        let total = opacityUsage.reduce(0) { $0 + $1.count }
+        let compliant = opacityUsage.filter { $0.isCompliant }.reduce(0) { $0 + $1.count }
+        return total > 0 ? Int(Double(compliant) / Double(total) * 100) : 100
+    }
+
+    var overallScore: Int {
+        (fontScore + colorScore + spacingScore + opacityScore) / 4
+    }
+
+    var grade: String {
+        switch overallScore {
+        case 90...100: return "A"
+        case 80..<90: return "B"
+        case 70..<80: return "C"
+        case 60..<70: return "D"
+        default: return "F"
+        }
+    }
+}
+
+struct PatternUsage: Identifiable {
+    let id = UUID()
+    let pattern: String
+    let count: Int
+    let isCompliant: Bool
+    let suggestion: String?
+
+    init(pattern: String, count: Int, isCompliant: Bool, suggestion: String? = nil) {
+        self.pattern = pattern
+        self.count = count
+        self.isCompliant = isCompliant
+        self.suggestion = suggestion
+    }
+}
+
+struct FullAuditReport {
+    let timestamp: Date
+    let screens: [ScreenAuditResult]
+
+    var overallScore: Int {
+        guard !screens.isEmpty else { return 0 }
+        return screens.reduce(0) { $0 + $1.overallScore } / screens.count
+    }
+
+    var grade: String {
+        switch overallScore {
+        case 90...100: return "A"
+        case 80..<90: return "B"
+        case 70..<80: return "C"
+        case 60..<70: return "D"
+        default: return "F"
+        }
+    }
+
+    var totalIssues: Int {
+        screens.reduce(0) { total, screen in
+            total + screen.fontUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+                  + screen.colorUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+                  + screen.spacingUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+                  + screen.opacityUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+        }
+    }
+}
+
+// MARK: - Design Auditor
+
+@MainActor
+class DesignAuditor {
+    static let shared = DesignAuditor()
+
+    private let basePath = "/Users/arach/dev/talkie/macOS/Talkie"
+
+    private init() {}
+
+    // MARK: - Public API
+
+    /// Audit a single screen
+    func audit(screen: AppScreen) -> ScreenAuditResult {
+        var result = ScreenAuditResult(screen: screen, timestamp: Date())
+
+        for sourceFile in screen.sourceFiles {
+            let filePath = "\(basePath)/\(sourceFile)"
+            guard let content = try? String(contentsOfFile: filePath, encoding: .utf8) else {
+                print("  Could not read: \(sourceFile)")
+                continue
+            }
+
+            // Analyze fonts
+            let fonts = extractFontPatterns(from: content)
+            for (pattern, count) in fonts {
+                let isCompliant = DesignTokens.validFontPatterns.contains(where: { pattern.contains($0) })
+                let suggestion = isCompliant ? nil : suggestFontReplacement(for: pattern)
+                result.fontUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+            }
+
+            // Analyze colors
+            let colors = extractColorPatterns(from: content)
+            for (pattern, count) in colors {
+                let isCompliant = DesignTokens.validColorPatterns.contains(where: { pattern.contains($0) })
+                let suggestion = isCompliant ? nil : suggestColorReplacement(for: pattern)
+                result.colorUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+            }
+
+            // Analyze spacing
+            let spacing = extractSpacingPatterns(from: content)
+            for (pattern, count) in spacing {
+                let isCompliant = pattern.contains("Spacing.")
+                let suggestion = isCompliant ? nil : suggestSpacingReplacement(for: pattern)
+                result.spacingUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+            }
+
+            // Analyze opacity
+            let opacity = extractOpacityPatterns(from: content)
+            for (pattern, count) in opacity {
+                let isCompliant = pattern.contains("Opacity.")
+                let suggestion = isCompliant ? nil : suggestOpacityReplacement(for: pattern)
+                result.opacityUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+            }
+        }
+
+        return result
+    }
+
+    /// Audit all screens
+    func auditAll() -> FullAuditReport {
+        print("🔍 Starting full design audit...")
+        var results: [ScreenAuditResult] = []
+
+        for screen in AppScreen.allCases {
+            print("  Auditing \(screen.title)...")
+            let result = audit(screen: screen)
+            results.append(result)
+        }
+
+        print("✅ Audit complete!")
+        return FullAuditReport(timestamp: Date(), screens: results)
+    }
+
+    /// Audit a specific section
+    func audit(section: ScreenSection) -> FullAuditReport {
+        print("🔍 Auditing \(section.rawValue) section...")
+        var results: [ScreenAuditResult] = []
+
+        for screen in section.screens {
+            print("  Auditing \(screen.title)...")
+            let result = audit(screen: screen)
+            results.append(result)
+        }
+
+        return FullAuditReport(timestamp: Date(), screens: results)
+    }
+
+    // MARK: - Report Generation
+
+    /// Generate HTML report
+    func generateHTMLReport(from report: FullAuditReport, to outputPath: URL) {
+        let html = buildHTMLReport(report)
+        try? html.write(to: outputPath, atomically: true, encoding: .utf8)
+        print("✅ HTML report saved to: \(outputPath.path)")
+    }
+
+    /// Generate Markdown report
+    func generateMarkdownReport(from report: FullAuditReport, to outputPath: URL) {
+        let markdown = buildMarkdownReport(report)
+        try? markdown.write(to: outputPath, atomically: true, encoding: .utf8)
+        print("✅ Markdown report saved to: \(outputPath.path)")
+    }
+
+    // MARK: - Pattern Extraction
+
+    private func extractFontPatterns(from content: String) -> [String: Int] {
+        var results: [String: Int] = [:]
+
+        let patterns = [
+            #"\.font\(Theme\.current\.[a-zA-Z]+\)"#,
+            #"\.font\(SettingsManager\.shared\.[a-zA-Z]+\)"#,
+            #"\.font\(\.system\(size:\s*\d+[^)]*\)\)"#
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matches = regex.matches(in: content, options: [], range: NSRange(content.startIndex..., in: content))
+                for match in matches {
+                    if let range = Range(match.range, in: content) {
+                        let found = String(content[range])
+                        results[found, default: 0] += 1
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    private func extractColorPatterns(from content: String) -> [String: Int] {
+        var results: [String: Int] = [:]
+
+        let patterns = [
+            #"Theme\.current\.[a-zA-Z]+"#,
+            #"\.foregroundColor\(\.[a-zA-Z]+\)"#,
+            #"\.background\(Color\.[a-zA-Z]+[^)]*\)"#,
+            #"Color\.[a-zA-Z]+\.opacity\([0-9.]+\)"#,
+            #"\.accentColor"#,
+            #"SemanticColor\.[a-zA-Z]+"#
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matches = regex.matches(in: content, options: [], range: NSRange(content.startIndex..., in: content))
+                for match in matches {
+                    if let range = Range(match.range, in: content) {
+                        let found = String(content[range])
+                        results[found, default: 0] += 1
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    private func extractSpacingPatterns(from content: String) -> [String: Int] {
+        var results: [String: Int] = [:]
+
+        let patterns = [
+            #"Spacing\.[a-zA-Z]+"#,
+            #"\.padding\(\d+\)"#,
+            #"\.padding\(\.[a-zA-Z]+,\s*\d+\)"#,
+            #"spacing:\s*\d+"#
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matches = regex.matches(in: content, options: [], range: NSRange(content.startIndex..., in: content))
+                for match in matches {
+                    if let range = Range(match.range, in: content) {
+                        let found = String(content[range])
+                        results[found, default: 0] += 1
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    private func extractOpacityPatterns(from content: String) -> [String: Int] {
+        var results: [String: Int] = [:]
+
+        let patterns = [
+            #"Opacity\.[a-zA-Z]+"#,
+            #"\.opacity\([0-9.]+\)"#
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matches = regex.matches(in: content, options: [], range: NSRange(content.startIndex..., in: content))
+                for match in matches {
+                    if let range = Range(match.range, in: content) {
+                        let found = String(content[range])
+                        results[found, default: 0] += 1
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    // MARK: - Suggestions
+
+    private func suggestFontReplacement(for pattern: String) -> String {
+        if pattern.contains("size: 8") || pattern.contains("size: 9") || pattern.contains("size: 10") {
+            return "Theme.current.fontXS or fontXSBold"
+        } else if pattern.contains("size: 11") || pattern.contains("size: 12") {
+            return "Theme.current.fontSM or fontSMBold"
+        } else if pattern.contains("size: 13") || pattern.contains("size: 14") {
+            return "Theme.current.fontMD"
+        } else if pattern.contains("size: 16") || pattern.contains("size: 18") {
+            return "Theme.current.fontLG or fontHeadline"
+        } else if pattern.contains("SettingsManager.shared.font") {
+            return "Replace SettingsManager.shared with Theme.current"
+        }
+        return "Use Theme.current font tokens"
+    }
+
+    private func suggestColorReplacement(for pattern: String) -> String {
+        if pattern.contains(".secondary") {
+            return "Theme.current.foregroundSecondary or foregroundMuted"
+        } else if pattern.contains(".primary") {
+            return "Theme.current.foreground"
+        } else if pattern.contains(".green") {
+            return "SemanticColor.success"
+        } else if pattern.contains(".red") {
+            return "SemanticColor.error"
+        } else if pattern.contains(".orange") || pattern.contains(".yellow") {
+            return "SemanticColor.warning"
+        } else if pattern.contains(".blue") {
+            return "Theme.current.accent or .accentColor"
+        }
+        return "Use Theme.current color tokens"
+    }
+
+    private func suggestSpacingReplacement(for pattern: String) -> String {
+        // Extract number from pattern
+        if let match = pattern.range(of: #"\d+"#, options: .regularExpression) {
+            let numStr = String(pattern[match])
+            if let num = Int(numStr) {
+                switch num {
+                case 0...3: return "Spacing.xxs (2pt)"
+                case 4...7: return "Spacing.xs (6pt)"
+                case 8...12: return "Spacing.sm (10pt)"
+                case 13...17: return "Spacing.md (14pt)"
+                case 18...24: return "Spacing.lg (20pt)"
+                case 25...34: return "Spacing.xl (28pt)"
+                default: return "Spacing.xxl (40pt)"
+                }
+            }
+        }
+        return "Use Spacing enum"
+    }
+
+    private func suggestOpacityReplacement(for pattern: String) -> String {
+        if let match = pattern.range(of: #"0\.\d+"#, options: .regularExpression) {
+            let numStr = String(pattern[match])
+            if let num = Double(numStr) {
+                switch num {
+                case 0...0.05: return "Opacity.subtle (0.03)"
+                case 0.06...0.12: return "Opacity.light (0.08)"
+                case 0.13...0.20: return "Opacity.medium (0.15)"
+                case 0.21...0.35: return "Opacity.strong (0.25)"
+                case 0.36...0.60: return "Opacity.half (0.5)"
+                default: return "Opacity.prominent (0.7)"
+                }
+            }
+        }
+        return "Use Opacity enum"
+    }
+
+    // MARK: - HTML Report Builder (Dossier Style)
+
+    private func buildHTMLReport(_ report: FullAuditReport, screenshotDir: String = "screenshots") -> String {
+        let gradeColor: String = {
+            switch report.grade {
+            case "A": return "#22c55e"
+            case "B": return "#84cc16"
+            case "C": return "#eab308"
+            case "D": return "#f97316"
+            default: return "#ef4444"
+            }
+        }()
+
+        var html = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Talkie Design Audit Report</title>
+            <style>
+                :root {
+                    --bg: #0a0a0a;
+                    --surface: #141414;
+                    --surface2: #1f1f1f;
+                    --border: #2a2a2a;
+                    --text: #ffffff;
+                    --text-secondary: #a0a0a0;
+                    --accent: #00d4ff;
+                    --success: #22c55e;
+                    --warning: #eab308;
+                    --error: #ef4444;
+                }
+
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif;
+                    background: var(--bg);
+                    color: var(--text);
+                    line-height: 1.6;
+                    padding: 40px;
+                }
+
+                .container { max-width: 1400px; margin: 0 auto; }
+
+                header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 40px;
+                    padding-bottom: 20px;
+                    border-bottom: 1px solid var(--border);
+                }
+
+                h1 { font-size: 28px; font-weight: 600; }
+                h2 { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+                h3 { font-size: 16px; font-weight: 500; margin-bottom: 12px; color: var(--text-secondary); }
+
+                .grade-badge {
+                    font-size: 48px;
+                    font-weight: 700;
+                    color: \(gradeColor);
+                    text-shadow: 0 0 20px \(gradeColor)40;
+                }
+
+                .stats {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 20px;
+                    margin-bottom: 40px;
+                }
+
+                .stat-card {
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 20px;
+                }
+
+                .stat-value {
+                    font-size: 32px;
+                    font-weight: 600;
+                    margin-bottom: 4px;
+                }
+
+                .stat-label {
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+
+                .section-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 40px;
+                }
+
+                .screen-card {
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 20px;
+                    transition: border-color 0.2s;
+                }
+
+                .screen-card:hover {
+                    border-color: var(--accent);
+                }
+
+                .screen-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 16px;
+                }
+
+                .screen-title {
+                    font-weight: 600;
+                }
+
+                .screen-grade {
+                    font-size: 14px;
+                    font-weight: 600;
+                    padding: 4px 10px;
+                    border-radius: 6px;
+                }
+
+                .score-bar {
+                    height: 6px;
+                    background: var(--surface2);
+                    border-radius: 3px;
+                    margin-bottom: 8px;
+                    overflow: hidden;
+                }
+
+                .score-fill {
+                    height: 100%;
+                    border-radius: 3px;
+                    transition: width 0.3s ease;
+                }
+
+                .score-labels {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 11px;
+                    color: var(--text-secondary);
+                }
+
+                .issues-list {
+                    margin-top: 12px;
+                    font-size: 12px;
+                }
+
+                .issue {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 6px 0;
+                    border-top: 1px solid var(--border);
+                }
+
+                .issue:first-child { border-top: none; }
+
+                .issue-icon { font-size: 10px; }
+                .compliant { color: var(--success); }
+                .non-compliant { color: var(--warning); }
+
+                .timestamp {
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                }
+
+                .section-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 20px;
+                }
+
+                .section-badge {
+                    font-size: 11px;
+                    padding: 4px 8px;
+                    background: var(--accent);
+                    color: var(--bg);
+                    border-radius: 4px;
+                    font-weight: 600;
+                }
+
+                /* Thumbnail grid for overview */
+                .thumbnail-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                    gap: 16px;
+                    margin-bottom: 40px;
+                }
+
+                .thumbnail-card {
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    overflow: hidden;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .thumbnail-card:hover {
+                    border-color: var(--accent);
+                    transform: translateY(-2px);
+                }
+
+                .thumbnail-img {
+                    width: 100%;
+                    aspect-ratio: 16/10;
+                    object-fit: cover;
+                    background: var(--surface2);
+                }
+
+                .thumbnail-info {
+                    padding: 12px;
+                }
+
+                .thumbnail-title {
+                    font-size: 13px;
+                    font-weight: 600;
+                    margin-bottom: 4px;
+                }
+
+                .thumbnail-grade {
+                    display: inline-block;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                }
+
+                /* Dossier detail view */
+                .dossier {
+                    display: none;
+                    background: var(--bg);
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    z-index: 100;
+                    overflow-y: auto;
+                    padding: 40px;
+                }
+
+                .dossier.active { display: block; }
+
+                .dossier-close {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    color: var(--text);
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 20px;
+                    z-index: 101;
+                }
+
+                .dossier-close:hover { border-color: var(--accent); }
+
+                .dossier-content {
+                    max-width: 1600px;
+                    margin: 0 auto;
+                }
+
+                .dossier-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 24px;
+                }
+
+                .dossier-title {
+                    font-size: 28px;
+                    font-weight: 700;
+                }
+
+                .dossier-main {
+                    display: grid;
+                    grid-template-columns: 60% 1fr;
+                    gap: 24px;
+                    margin-bottom: 32px;
+                }
+
+                .dossier-screenshot {
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    overflow: hidden;
+                }
+
+                .dossier-screenshot img {
+                    width: 100%;
+                    display: block;
+                }
+
+                .dossier-sidebar {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 16px;
+                }
+
+                .token-section {
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 16px;
+                }
+
+                .token-section h4 {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    color: var(--text-secondary);
+                    margin-bottom: 12px;
+                }
+
+                .token-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+
+                .token-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 12px;
+                }
+
+                .token-name { color: var(--text-secondary); }
+                .token-value { font-family: monospace; }
+                .token-count {
+                    background: var(--surface2);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                }
+
+                .color-swatch {
+                    display: flex;
+                    gap: 4px;
+                    flex-wrap: wrap;
+                }
+
+                .swatch {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 4px;
+                    border: 1px solid var(--border);
+                }
+
+                /* Issues section at bottom */
+                .dossier-issues {
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    padding: 24px;
+                }
+
+                .dossier-issues h3 {
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-bottom: 16px;
+                    color: var(--error);
+                }
+
+                .issue-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                    gap: 12px;
+                }
+
+                .issue-item {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 12px;
+                    padding: 12px;
+                    background: var(--surface2);
+                    border-radius: 8px;
+                }
+
+                .issue-count {
+                    background: var(--error);
+                    color: var(--bg);
+                    font-size: 11px;
+                    font-weight: 700;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    min-width: 32px;
+                    text-align: center;
+                }
+
+                .issue-details {
+                    flex: 1;
+                }
+
+                .issue-pattern {
+                    font-family: monospace;
+                    font-size: 12px;
+                    margin-bottom: 4px;
+                    color: var(--warning);
+                }
+
+                .issue-suggestion {
+                    font-size: 11px;
+                    color: var(--text-secondary);
+                }
+
+                .issue-suggestion::before {
+                    content: "→ ";
+                    color: var(--success);
+                }
+
+                /* Score meters */
+                .score-meters {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 12px;
+                    margin-bottom: 16px;
+                }
+
+                .score-meter {
+                    text-align: center;
+                }
+
+                .score-meter-value {
+                    font-size: 24px;
+                    font-weight: 700;
+                }
+
+                .score-meter-label {
+                    font-size: 10px;
+                    color: var(--text-secondary);
+                    text-transform: uppercase;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <header>
+                    <div>
+                        <h1>Talkie Design Audit</h1>
+                        <p class="timestamp">Generated: \(report.timestamp.formatted())</p>
+                    </div>
+                    <div class="grade-badge">\(report.grade)</div>
+                </header>
+
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value">\(report.overallScore)%</div>
+                        <div class="stat-label">Overall Compliance</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">\(report.screens.count)</div>
+                        <div class="stat-label">Screens Audited</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">\(report.totalIssues)</div>
+                        <div class="stat-label">Total Issues</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">\(ScreenSection.allCases.count)</div>
+                        <div class="stat-label">Sections</div>
+                    </div>
+                </div>
+        """
+
+        // Add sections with thumbnail grid
+        for section in ScreenSection.allCases {
+            let sectionScreens = report.screens.filter { $0.screen.section == section }
+            guard !sectionScreens.isEmpty else { continue }
+
+            html += """
+                <div class="section-header">
+                    <h2>\(section.rawValue)</h2>
+                    <span class="section-badge">\(sectionScreens.count) screens</span>
+                </div>
+                <div class="thumbnail-grid">
+            """
+
+            for screen in sectionScreens {
+                let scoreColor = screen.overallScore >= 80 ? "var(--success)" : screen.overallScore >= 60 ? "var(--warning)" : "var(--error)"
+                let screenshotPath = "\(screenshotDir)/\(screen.screen.rawValue).png"
+
+                html += """
+                    <div class="thumbnail-card" onclick="showDossier('\(screen.screen.rawValue)')">
+                        <img class="thumbnail-img" src="\(screenshotPath)" alt="\(screen.screen.title)" onerror="this.style.display='none'">
+                        <div class="thumbnail-info">
+                            <div class="thumbnail-title">\(screen.screen.title)</div>
+                            <span class="thumbnail-grade" style="background: \(scoreColor)20; color: \(scoreColor);">\(screen.grade) · \(screen.overallScore)%</span>
+                        </div>
+                    </div>
+                """
+            }
+
+            html += "</div>"
+        }
+
+        // Add dossier detail views for each screen
+        for screen in report.screens {
+            let scoreColor = screen.overallScore >= 80 ? "var(--success)" : screen.overallScore >= 60 ? "var(--warning)" : "var(--error)"
+            let screenshotPath = "\(screenshotDir)/\(screen.screen.rawValue).png"
+
+            // Get all issues sorted by count
+            let allIssues = (screen.fontUsage + screen.colorUsage + screen.spacingUsage + screen.opacityUsage)
+                .filter { !$0.isCompliant }
+                .sorted { $0.count > $1.count }
+
+            // Get compliant patterns for tokens display
+            let compliantFonts = screen.fontUsage.filter { $0.isCompliant }
+            let compliantColors = screen.colorUsage.filter { $0.isCompliant }
+            let compliantSpacing = screen.spacingUsage.filter { $0.isCompliant }
+
+            html += """
+                <div class="dossier" id="dossier-\(screen.screen.rawValue)">
+                    <button class="dossier-close" onclick="closeDossier()">&times;</button>
+                    <div class="dossier-content">
+                        <div class="dossier-header">
+                            <div>
+                                <div class="dossier-title">\(screen.screen.title)</div>
+                                <p style="color: var(--text-secondary); font-size: 13px;">\(screen.screen.section.rawValue) · \(screen.screen.sourceFiles.first ?? "")</p>
+                            </div>
+                            <div class="grade-badge" style="font-size: 36px; color: \(scoreColor);">\(screen.grade)</div>
+                        </div>
+
+                        <div class="score-meters">
+                            <div class="score-meter">
+                                <div class="score-meter-value" style="color: \(screen.fontScore >= 70 ? "var(--success)" : "var(--error)");">\(screen.fontScore)%</div>
+                                <div class="score-meter-label">Fonts</div>
+                            </div>
+                            <div class="score-meter">
+                                <div class="score-meter-value" style="color: \(screen.colorScore >= 70 ? "var(--success)" : "var(--error)");">\(screen.colorScore)%</div>
+                                <div class="score-meter-label">Colors</div>
+                            </div>
+                            <div class="score-meter">
+                                <div class="score-meter-value" style="color: \(screen.spacingScore >= 70 ? "var(--success)" : "var(--error)");">\(screen.spacingScore)%</div>
+                                <div class="score-meter-label">Spacing</div>
+                            </div>
+                            <div class="score-meter">
+                                <div class="score-meter-value" style="color: \(screen.opacityScore >= 70 ? "var(--success)" : "var(--error)");">\(screen.opacityScore)%</div>
+                                <div class="score-meter-label">Opacity</div>
+                            </div>
+                        </div>
+
+                        <div class="dossier-main">
+                            <div class="dossier-screenshot">
+                                <img src="\(screenshotPath)" alt="\(screen.screen.title)" onerror="this.parentElement.innerHTML='<div style=\\'padding:60px;text-align:center;color:var(--text-secondary)\\'>Screenshot not available</div>'">
+                            </div>
+
+                            <div class="dossier-sidebar">
+                                <div class="token-section">
+                                    <h4>Fonts Used</h4>
+                                    <div class="token-list">
+            """
+
+            for font in compliantFonts.prefix(5) {
+                html += """
+                                        <div class="token-item">
+                                            <span class="token-name">\(font.pattern)</span>
+                                            <span class="token-count">×\(font.count)</span>
+                                        </div>
+                """
+            }
+
+            if compliantFonts.isEmpty {
+                html += "<div class=\"token-item\"><span class=\"token-name\" style=\"color:var(--warning)\">No compliant fonts</span></div>"
+            }
+
+            html += """
+                                    </div>
+                                </div>
+
+                                <div class="token-section">
+                                    <h4>Colors Used</h4>
+                                    <div class="token-list">
+            """
+
+            for color in compliantColors.prefix(5) {
+                html += """
+                                        <div class="token-item">
+                                            <span class="token-name">\(color.pattern)</span>
+                                            <span class="token-count">×\(color.count)</span>
+                                        </div>
+                """
+            }
+
+            if compliantColors.isEmpty {
+                html += "<div class=\"token-item\"><span class=\"token-name\" style=\"color:var(--warning)\">No compliant colors</span></div>"
+            }
+
+            html += """
+                                    </div>
+                                </div>
+
+                                <div class="token-section">
+                                    <h4>Spacing Used</h4>
+                                    <div class="token-list">
+            """
+
+            for spacing in compliantSpacing.prefix(5) {
+                html += """
+                                        <div class="token-item">
+                                            <span class="token-name">\(spacing.pattern)</span>
+                                            <span class="token-count">×\(spacing.count)</span>
+                                        </div>
+                """
+            }
+
+            if compliantSpacing.isEmpty {
+                html += "<div class=\"token-item\"><span class=\"token-name\" style=\"color:var(--warning)\">No compliant spacing</span></div>"
+            }
+
+            html += """
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dossier-issues">
+                            <h3>🚨 Issues Found (\(allIssues.reduce(0) { $0 + $1.count }) total occurrences)</h3>
+                            <div class="issue-grid">
+            """
+
+            for issue in allIssues {
+                html += """
+                                <div class="issue-item">
+                                    <span class="issue-count">×\(issue.count)</span>
+                                    <div class="issue-details">
+                                        <div class="issue-pattern">\(issue.pattern)</div>
+                                        <div class="issue-suggestion">\(issue.suggestion ?? "Use design tokens")</div>
+                                    </div>
+                                </div>
+                """
+            }
+
+            if allIssues.isEmpty {
+                html += "<div style=\"padding: 20px; text-align: center; color: var(--success);\">✓ No issues found - this screen is compliant!</div>"
+            }
+
+            html += """
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """
+        }
+
+        // Add JavaScript for dossier navigation
+        html += """
+            </div>
+
+            <script>
+                function showDossier(screenId) {
+                    document.getElementById('dossier-' + screenId).classList.add('active');
+                    document.body.style.overflow = 'hidden';
+                }
+
+                function closeDossier() {
+                    document.querySelectorAll('.dossier').forEach(d => d.classList.remove('active'));
+                    document.body.style.overflow = '';
+                }
+
+                // Close on escape key
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') closeDossier();
+                });
+
+                // Close on click outside
+                document.querySelectorAll('.dossier').forEach(d => {
+                    d.addEventListener('click', function(e) {
+                        if (e.target === this) closeDossier();
+                    });
+                });
+            </script>
+        </body>
+        </html>
+        """
+
+        return html
+    }
+
+    // MARK: - Markdown Report Builder
+
+    private func buildMarkdownReport(_ report: FullAuditReport) -> String {
+        var md = """
+        # Talkie Design Audit Report
+
+        **Generated:** \(report.timestamp.formatted())
+        **Overall Grade:** \(report.grade) (\(report.overallScore)%)
+        **Total Issues:** \(report.totalIssues)
+
+        ---
+
+        ## Summary by Section
+
+        | Section | Screens | Avg Score | Issues |
+        |---------|---------|-----------|--------|
+
+        """
+
+        for section in ScreenSection.allCases {
+            let sectionScreens = report.screens.filter { $0.screen.section == section }
+            guard !sectionScreens.isEmpty else { continue }
+
+            let avgScore = sectionScreens.reduce(0) { $0 + $1.overallScore } / sectionScreens.count
+            let issues = sectionScreens.reduce(0) { total, screen in
+                total + screen.fontUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+                      + screen.colorUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+            }
+
+            md += "| \(section.rawValue) | \(sectionScreens.count) | \(avgScore)% | \(issues) |\n"
+        }
+
+        md += "\n---\n\n## Detailed Results\n\n"
+
+        for screen in report.screens {
+            md += """
+            ### \(screen.screen.title)
+            **Section:** \(screen.screen.section.rawValue) | **Grade:** \(screen.grade) | **Score:** \(screen.overallScore)%
+
+            | Category | Score | Compliant | Non-Compliant |
+            |----------|-------|-----------|---------------|
+            | Fonts | \(screen.fontScore)% | \(screen.fontUsage.filter { $0.isCompliant }.count) | \(screen.fontUsage.filter { !$0.isCompliant }.count) |
+            | Colors | \(screen.colorScore)% | \(screen.colorUsage.filter { $0.isCompliant }.count) | \(screen.colorUsage.filter { !$0.isCompliant }.count) |
+            | Spacing | \(screen.spacingScore)% | \(screen.spacingUsage.filter { $0.isCompliant }.count) | \(screen.spacingUsage.filter { !$0.isCompliant }.count) |
+            | Opacity | \(screen.opacityScore)% | \(screen.opacityUsage.filter { $0.isCompliant }.count) | \(screen.opacityUsage.filter { !$0.isCompliant }.count) |
+
+            """
+
+            let issues = (screen.fontUsage + screen.colorUsage + screen.spacingUsage + screen.opacityUsage)
+                .filter { !$0.isCompliant }
+                .sorted { $0.count > $1.count }
+
+            if !issues.isEmpty {
+                md += "**Top Issues:**\n"
+                for issue in issues.prefix(5) {
+                    md += "- `\(issue.pattern)` ×\(issue.count)"
+                    if let suggestion = issue.suggestion {
+                        md += " → \(suggestion)"
+                    }
+                    md += "\n"
+                }
+            }
+
+            md += "\n---\n\n"
+        }
+
+        return md
+    }
+}

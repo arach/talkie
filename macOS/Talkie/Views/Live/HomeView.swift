@@ -13,6 +13,7 @@ struct HomeView: View {
     private let store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
+    @State private var memosViewModel = MemosViewModel()
 
     #if DEBUG
     @State private var debugActivityLevel: ActivityViewLevel? = nil
@@ -21,6 +22,7 @@ struct HomeView: View {
     // Navigation callbacks
     var onSelectUtterance: ((Utterance) -> Void)?
     var onSelectApp: ((String, String?) -> Void)?  // (appName, bundleID)
+    var onSelectMemo: ((MemoModel) -> Void)?
 
     private var activityLevel: ActivityViewLevel {
         #if DEBUG
@@ -30,6 +32,11 @@ struct HomeView: View {
         #endif
     }
 
+    // Computed properties for adaptive display
+    private var hasMemos: Bool { !memosViewModel.memos.isEmpty }
+    private var hasDictations: Bool { !store.utterances.isEmpty }
+    private var hasActivity: Bool { hasMemos || hasDictations }
+
     var body: some View {
         GeometryReader { geometry in
             let containerWidth = max(geometry.size.width, 320)
@@ -38,11 +45,6 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Header
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("LIVE")
-                            .font(.system(size: 10, weight: .bold))
-                            .tracking(1.5)
-                            .foregroundColor(TalkieTheme.textTertiary)
-
                         Text("Home")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(TalkieTheme.textPrimary)
@@ -50,69 +52,93 @@ struct HomeView: View {
                     .padding(.horizontal, GridLayout.padding)
                     .padding(.top, 20)
 
-                    // Row 1: Insight (2 slots) | Streak (1 slot) | Today (1 slot)
-                    HStack(spacing: GridLayout.gutter) {
-                        InsightCard(insight: stats.insight)
-                            .frame(width: GridLayout.width(slots: 2, in: containerWidth))
+                    if hasActivity {
+                        // Row 1: Insight (2 slots) | Streak (1 slot) | Today (1 slot)
+                        HStack(spacing: GridLayout.gutter) {
+                            InsightCard(insight: stats.insight)
+                                .frame(width: GridLayout.width(slots: 2, in: containerWidth))
 
-                        StreakCard(streak: stats.streak)
-                            .frame(width: GridLayout.width(slots: 1, in: containerWidth))
+                            StreakCard(streak: stats.streak)
+                                .frame(width: GridLayout.width(slots: 1, in: containerWidth))
 
-                        TodayCard(count: stats.todayCount)
-                            .frame(width: GridLayout.width(slots: 1, in: containerWidth))
-                    }
-                    .padding(.horizontal, GridLayout.padding)
+                            TodayCard(count: stats.todayCount)
+                                .frame(width: GridLayout.width(slots: 1, in: containerWidth))
+                        }
+                        .padding(.horizontal, GridLayout.padding)
 
-                    // Row 2: Recent (2 slots) | Top Apps (2 slots)
-                    HStack(alignment: .top, spacing: GridLayout.gutter) {
-                        RecentActivityCard(
-                            utterances: Array(store.utterances.prefix(5)),
-                            onSelectUtterance: onSelectUtterance
-                        )
-                        .frame(width: GridLayout.width(slots: 2, in: containerWidth))
-
-                        TopAppsCard(apps: stats.topApps, onSelectApp: onSelectApp)
-                            .frame(width: GridLayout.width(slots: 2, in: containerWidth))
-                    }
-                    .padding(.horizontal, GridLayout.padding)
-
-                    // Row 3: Activity (2-3 slots) | Stats (1 slot)
-                    HStack(alignment: .top, spacing: GridLayout.gutter) {
-                        AdaptiveActivityCard(
-                            data: activityData,
-                            stats: stats,
-                            level: activityLevel,
-                            debugBinding: {
-                                #if DEBUG
-                                return Binding(
-                                    get: { debugActivityLevel ?? activityLevel },
-                                    set: { debugActivityLevel = $0 }
+                        // Row 2: Adaptive - Memos and/or Dictations
+                        HStack(alignment: .top, spacing: GridLayout.gutter) {
+                            if hasMemos {
+                                RecentMemosCard(
+                                    memos: Array(memosViewModel.memos.prefix(5)),
+                                    onSelectMemo: onSelectMemo
                                 )
-                                #else
-                                return nil
-                                #endif
-                            }(),
-                            onResetDebug: {
-                                #if DEBUG
-                                debugActivityLevel = nil
-                                #endif
+                                .frame(width: GridLayout.width(slots: hasDictations ? 2 : 4, in: containerWidth))
                             }
-                        )
-                        .frame(width: GridLayout.width(slots: activityLevel.columns, in: containerWidth))
 
-                        // Stats column (always show - slot 3 for quarterly, slot 4 for yearly)
-                        CumulativeStatsCard(stats: stats)
-                            .frame(width: GridLayout.width(slots: 1, in: containerWidth))
+                            if hasDictations {
+                                RecentActivityCard(
+                                    utterances: Array(store.utterances.prefix(5)),
+                                    onSelectUtterance: onSelectUtterance
+                                )
+                                .frame(width: GridLayout.width(slots: hasMemos ? 2 : 4, in: containerWidth))
+                            }
+                        }
+                        .padding(.horizontal, GridLayout.padding)
+
+                        // Row 3: Top Apps (if has dictations)
+                        if hasDictations && !stats.topApps.isEmpty {
+                            HStack(alignment: .top, spacing: GridLayout.gutter) {
+                                TopAppsCard(apps: stats.topApps, onSelectApp: onSelectApp)
+                                    .frame(width: GridLayout.width(slots: 2, in: containerWidth))
+
+                                CumulativeStatsCard(stats: stats)
+                                    .frame(width: GridLayout.width(slots: 2, in: containerWidth))
+                            }
+                            .padding(.horizontal, GridLayout.padding)
+                        }
+
+                        // Row 4: Activity Grid (if enough history)
+                        if stats.daysWithActivity > 7 {
+                            HStack(alignment: .top, spacing: GridLayout.gutter) {
+                                AdaptiveActivityCard(
+                                    data: activityData,
+                                    stats: stats,
+                                    level: activityLevel,
+                                    debugBinding: {
+                                        #if DEBUG
+                                        return Binding(
+                                            get: { debugActivityLevel ?? activityLevel },
+                                            set: { debugActivityLevel = $0 }
+                                        )
+                                        #else
+                                        return nil
+                                        #endif
+                                    }(),
+                                    onResetDebug: {
+                                        #if DEBUG
+                                        debugActivityLevel = nil
+                                        #endif
+                                    }
+                                )
+                                .frame(width: GridLayout.width(slots: 4, in: containerWidth))
+                            }
+                            .padding(.horizontal, GridLayout.padding)
+                        }
+                    } else {
+                        // Empty state - new user
+                        WelcomeCard()
+                            .padding(.horizontal, GridLayout.padding)
                     }
-                    .padding(.horizontal, GridLayout.padding)
 
                     Spacer(minLength: 40)
                 }
             }
         }
         .background(TalkieTheme.surface)
-        .onAppear {
+        .task {
             loadActivityData()
+            await memosViewModel.loadMemos()
         }
         .onChange(of: store.utterances.count) { _, _ in
             loadActivityData()
@@ -1733,6 +1759,197 @@ struct RecentActivityRow: View {
         } else {
             return "\(seconds / 86400)d"
         }
+    }
+}
+
+// MARK: - Recent Memos Card
+
+struct RecentMemosCard: View {
+    let memos: [MemoModel]
+    var onSelectMemo: ((MemoModel) -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("RECENT MEMOS")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(TalkieTheme.textTertiary)
+
+                Spacer()
+
+                Text("\(memos.count) latest")
+                    .font(.system(size: 10))
+                    .foregroundColor(TalkieTheme.textMuted)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(memos, id: \.id) { memo in
+                    LiveRecentMemoRow(memo: memo, onSelect: onSelectMemo)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(TalkieTheme.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
+                )
+        )
+    }
+}
+
+struct LiveRecentMemoRow: View {
+    let memo: MemoModel
+    var onSelect: ((MemoModel) -> Void)?
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: {
+            onSelect?(memo)
+        }) {
+            HStack(spacing: 8) {
+                // Icon
+                Image(systemName: "doc.text")
+                    .font(.system(size: 14))
+                    .foregroundColor(TalkieTheme.textSecondary)
+                    .frame(width: 20, height: 20)
+
+                // Title
+                Text((memo.title ?? "").isEmpty ? "Untitled" : (memo.title ?? "Untitled"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                // Time ago
+                Text(timeAgo(from: memo.createdAt))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundColor(TalkieTheme.textTertiary)
+
+                if isHovered {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+            }
+            .frame(height: 32)
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isHovered ? TalkieTheme.hover : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private func timeAgo(from date: Date) -> String {
+        let seconds = Int(-date.timeIntervalSinceNow)
+        if seconds < 60 {
+            return "just now"
+        } else if seconds < 3600 {
+            return "\(seconds / 60)m"
+        } else if seconds < 86400 {
+            return "\(seconds / 3600)h"
+        } else {
+            return "\(seconds / 86400)d"
+        }
+    }
+}
+
+// MARK: - Welcome Card (Empty State)
+
+struct WelcomeCard: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            // Welcome message
+            VStack(spacing: 8) {
+                Image(systemName: "hand.wave.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.green)
+
+                Text("Welcome to Talkie")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(TalkieTheme.textPrimary)
+
+                Text("Your voice-powered productivity companion")
+                    .font(.system(size: 13))
+                    .foregroundColor(TalkieTheme.textSecondary)
+            }
+
+            // Quick actions
+            HStack(spacing: 16) {
+                WelcomeAction(
+                    icon: "mic.fill",
+                    title: "Dictate",
+                    description: "Press your hotkey to start",
+                    color: .green
+                )
+
+                WelcomeAction(
+                    icon: "doc.text.fill",
+                    title: "Create Memo",
+                    description: "Save longer recordings",
+                    color: .blue
+                )
+
+                WelcomeAction(
+                    icon: "bolt.fill",
+                    title: "Quick Actions",
+                    description: "Process text with AI",
+                    color: .orange
+                )
+            }
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(TalkieTheme.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(TalkieTheme.border, lineWidth: 1)
+                )
+        )
+    }
+}
+
+struct WelcomeAction: View {
+    let icon: String
+    let title: String
+    let description: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(color)
+
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(TalkieTheme.textPrimary)
+
+            Text(description)
+                .font(.system(size: 10))
+                .foregroundColor(TalkieTheme.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(color.opacity(0.1))
+        )
     }
 }
 

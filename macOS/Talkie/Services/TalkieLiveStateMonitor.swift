@@ -21,6 +21,7 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
     var isRecording: Bool = false
     var processId: Int32? = nil
     var isRunning: Bool = false
+    var audioLevel: Float = 0
 
     // XPC service manager with environment-aware connection
     private let xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>
@@ -146,16 +147,23 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
     // MARK: - TalkieLiveStateObserverProtocol
 
     nonisolated func stateDidChange(state stateString: String, elapsedTime elapsed: TimeInterval) {
-        Task { @MainActor [weak self] in
+        // Use DispatchQueue for lower latency than Task scheduling
+        DispatchQueue.main.async { [weak self] in
             self?.updateState(stateString, elapsed)
         }
     }
 
     nonisolated func utteranceWasAdded() {
-        Task { @MainActor in
+        DispatchQueue.main.async {
             // Notify DictationStore to refresh
             DictationStore.shared.refresh()
             NSLog("[Live] 🔄 Utterance notification received, refreshed store")
+        }
+    }
+
+    nonisolated func audioLevelDidChange(level: Float) {
+        DispatchQueue.main.async { [weak self] in
+            self?.audioLevel = level
         }
     }
 

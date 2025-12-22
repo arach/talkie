@@ -24,11 +24,38 @@ final class AudioPlaybackManager: NSObject {
     private(set) var progress: Double = 0
     private(set) var currentAudioID: String?
 
+    /// Current playback volume (0.0 to 1.0), synced with SettingsManager
+    var volume: Float {
+        get { SettingsManager.shared.playbackVolume }
+        set {
+            SettingsManager.shared.playbackVolume = newValue
+            player?.volume = newValue
+        }
+    }
+
     private var player: AVAudioPlayer?
     private var progressTimer: Timer?
 
     private override init() {
         super.init()
+        setupVolumeObserver()
+    }
+
+    private func setupVolumeObserver() {
+        // Singleton never deallocates, so observer lives forever
+        _ = NotificationCenter.default.addObserver(
+            forName: .playbackVolumeDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.applyVolume()
+            }
+        }
+    }
+
+    private func applyVolume() {
+        player?.volume = SettingsManager.shared.playbackVolume
     }
 
     // MARK: - Public API
@@ -50,6 +77,7 @@ final class AudioPlaybackManager: NSObject {
         do {
             player = try AVAudioPlayer(contentsOf: url)
             player?.delegate = self
+            player?.volume = SettingsManager.shared.playbackVolume
             player?.prepareToPlay()
 
             duration = player?.duration ?? 0
@@ -61,7 +89,7 @@ final class AudioPlaybackManager: NSObject {
             isPlaying = true
             startProgressTimer()
 
-            logger.info("Playing audio: \(url.lastPathComponent)")
+            logger.info("Playing audio: \(url.lastPathComponent) at volume \(SettingsManager.shared.playbackVolume)")
         } catch {
             logger.error("Failed to play audio: \(error.localizedDescription)")
             reset()

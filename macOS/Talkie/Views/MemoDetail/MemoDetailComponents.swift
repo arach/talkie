@@ -1031,12 +1031,27 @@ struct AudioPlayerCard: View {
     let duration: TimeInterval
     let onTogglePlayback: () -> Void
     let onSeek: (Double) -> Void
+    var onVolumeChange: ((Float) -> Void)? = nil
 
     @State private var isPlayButtonHovered = false
+    @State private var showVolumeSlider = false
+    @State private var volume: Float = SettingsManager.shared.playbackVolume
 
     private var progress: Double {
         guard duration > 0 else { return 0 }
         return currentTime / duration
+    }
+
+    private var volumeIcon: String {
+        if volume == 0 {
+            return "speaker.slash.fill"
+        } else if volume < 0.33 {
+            return "speaker.wave.1.fill"
+        } else if volume < 0.66 {
+            return "speaker.wave.2.fill"
+        } else {
+            return "speaker.wave.3.fill"
+        }
     }
 
     var body: some View {
@@ -1074,10 +1089,44 @@ struct AudioPlayerCard: View {
                         .foregroundColor(.secondary.opacity(0.6))
                 }
             }
+
+            // Volume control
+            HStack(spacing: 4) {
+                if showVolumeSlider {
+                    Slider(value: $volume, in: 0...1) { editing in
+                        if !editing {
+                            SettingsManager.shared.playbackVolume = volume
+                            onVolumeChange?(volume)
+                        }
+                    }
+                    .frame(width: 60)
+                    .controlSize(.mini)
+                    .onChange(of: volume) { _, newValue in
+                        // Live update while dragging
+                        AudioPlaybackManager.shared.volume = newValue
+                    }
+                }
+
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        showVolumeSlider.toggle()
+                    }
+                }) {
+                    Image(systemName: volumeIcon)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .help("Adjust volume")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .onAppear {
+            volume = SettingsManager.shared.playbackVolume
+        }
     }
 
     private var playButtonBackground: Color {

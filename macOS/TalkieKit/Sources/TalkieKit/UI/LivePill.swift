@@ -1,8 +1,8 @@
 //
-//  StatePill.swift
+//  LivePill.swift
 //  TalkieKit
 //
-//  Shared state pill component - unified presentation for recording states
+//  Shared live pill component - unified presentation for recording states
 //  Used in StatusBar (embedded) and FloatingPill (floating overlay)
 //
 //  Two modes:
@@ -13,12 +13,65 @@
 //
 
 import SwiftUI
+import AppKit
 
-// MARK: - State Pill
+// MARK: - Visual State (Single Source of Truth)
 
-/// Unified state pill showing: Ready → Recording → Processing → Success
+/// Derived visual state that consolidates all display logic
+private enum VisualState: Equatable {
+    case warmingUp
+    case success
+    case offline
+    case idle(hasPending: Bool)
+    case listening(interstitialHint: Bool)
+    case transcribing
+    case routing
+
+    var dotColor: Color {
+        switch self {
+        case .warmingUp: return SemanticColor.info
+        case .success: return SemanticColor.success
+        case .offline: return SemanticColor.warning
+        case .idle: return TalkieTheme.textMuted
+        case .listening: return .red
+        case .transcribing: return SemanticColor.warning
+        case .routing: return SemanticColor.success
+        }
+    }
+
+    var sliverColor: Color {
+        dotColor  // Same as dot color for consistency
+    }
+
+    var borderColor: Color {
+        switch self {
+        case .listening: return Color.red.opacity(0.3)
+        case .success: return SemanticColor.success.opacity(0.3)
+        default: return Color.white.opacity(0.1)
+        }
+    }
+
+    var sliverWidth: CGFloat {
+        switch self {
+        case .idle: return 20
+        case .success: return 28
+        case .listening: return 28
+        case .transcribing, .routing: return 24
+        case .warmingUp, .offline: return 24
+        }
+    }
+
+    var isPulsing: Bool {
+        if case .listening = self { return true }
+        return false
+    }
+}
+
+// MARK: - Live Pill
+
+/// Unified live pill showing: Ready → Recording → Processing → Success
 /// Supports sliver (collapsed) and expanded modes with hover-to-expand.
-public struct StatePill: View {
+public struct LivePill: View {
     let state: LiveState
     let isWarmingUp: Bool
     let showSuccess: Bool
@@ -27,6 +80,7 @@ public struct StatePill: View {
     let isEngineConnected: Bool
     let pendingQueueCount: Int
     let micDeviceName: String?
+    let audioLevel: Float  // 0.0-1.0, passed from parent (no singleton dependency)
 
     // Control expansion
     var forceExpanded: Bool = false
@@ -34,10 +88,14 @@ public struct StatePill: View {
     // Optional callback
     var onTap: (() -> Void)? = nil
 
+    // MARK: - State
+
     @State private var isHovered = false
-    @State private var pulsePhase: CGFloat = 0
     @State private var isShiftHeld = false
-    @State private var audioMonitor = AudioLevelMonitor.shared
+    @State private var isCommandHeld = false
+    @State private var flagsMonitor: Any?
+
+    // MARK: - Init
 
     public init(
         state: LiveState,
@@ -48,6 +106,7 @@ public struct StatePill: View {
         isEngineConnected: Bool,
         pendingQueueCount: Int,
         micDeviceName: String?,
+        audioLevel: Float = 0,
         forceExpanded: Bool = false,
         onTap: (() -> Void)? = nil
     ) {
@@ -59,57 +118,62 @@ public struct StatePill: View {
         self.isEngineConnected = isEngineConnected
         self.pendingQueueCount = pendingQueueCount
         self.micDeviceName = micDeviceName
+        self.audioLevel = audioLevel
         self.forceExpanded = forceExpanded
         self.onTap = onTap
     }
+
+    // MARK: - Derived State
 
     private var isExpanded: Bool {
         forceExpanded || isHovered
     }
 
-    /// Show interstitial hint when recording + hovering + Shift held
-    private var showInterstitialHint: Bool {
-        state == .listening && isHovered && isShiftHeld
+    // IMPROVEMENT #4: Single derived visual state
+    private var visualState: VisualState {
+        if isWarmingUp { return .warmingUp }
+        if showSuccess { return .success }
+        if !isEngineConnected { return .offline }
+        switch state {
+        case .idle: return .idle(hasPending: pendingQueueCount > 0)
+        case .listening: return .listening(interstitialHint: isHovered && isShiftHeld)
+        case .transcribing: return .transcribing
+        case .routing: return .routing
+        }
     }
 
-    private var isActive: Bool {
-        isWarmingUp || state != .idle || showSuccess
-    }
+    // MARK: - Body
 
     public var body: some View {
         Button(action: { onTap?() }) {
             ZStack {
                 if isExpanded {
                     expandedContent
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        .transition(.asymmetric(
+                            insertion: .opacity.animation(.easeOut(duration: 0.06)),
+                            removal: .opacity.animation(.easeIn(duration: 0.04))
+                        ))
                 } else {
                     sliverContent
-                        .transition(.opacity.combined(with: .scale(scale: 1.1)))
+                        .transition(.asymmetric(
+                            insertion: .opacity.animation(.easeOut(duration: 0.06)),
+                            removal: .opacity.animation(.easeIn(duration: 0.04))
+                        ))
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: isExpanded)
+            .animation(.snappy(duration: 0.08), value: isExpanded)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
             if hovering {
-                // Start monitoring modifier keys
                 startModifierMonitor()
             } else {
                 stopModifierMonitor()
-                isShiftHeld = false
             }
         }
-        .onAppear {
-            if state == .listening {
-                startPulseAnimation()
-            }
-        }
-        .onChange(of: state) { _, newState in
-            pulsePhase = 0
-            if newState == .listening {
-                startPulseAnimation()
-            }
+        .onDisappear {
+            stopModifierMonitor()
         }
     }
 
@@ -117,22 +181,22 @@ public struct StatePill: View {
 
     private var sliverContent: some View {
         HStack(spacing: 4) {
-            // Warning indicator for offline/queue (don't show during active processing)
-            if !isEngineConnected || (pendingQueueCount > 0 && state == .idle && !showSuccess) {
+            // Warning indicator for offline/queue
+            if case .offline = visualState {
+                Circle()
+                    .fill(SemanticColor.warning)
+                    .frame(width: 4, height: 4)
+            } else if case .idle(let hasPending) = visualState, hasPending {
                 Circle()
                     .fill(SemanticColor.warning)
                     .frame(width: 4, height: 4)
             }
 
-            // Main sliver bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(sliverColor.opacity(sliverOpacity))
-                .frame(width: sliverWidth, height: state == .listening ? 3 : 2)
-                .scaleEffect(x: state == .listening ? 1.0 + pulsePhase * 0.3 : 1.0, y: 1.0)
-                .shadow(color: state == .listening ? sliverColor.opacity(0.4) : .clear, radius: 3)
+            // Main sliver bar with optional pulse
+            sliverBar
 
             // Queue badge
-            if pendingQueueCount > 0 && state == .idle && !showSuccess {
+            if case .idle(let hasPending) = visualState, hasPending {
                 Text("\(pendingQueueCount)")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white)
@@ -145,80 +209,91 @@ public struct StatePill: View {
         .padding(.horizontal, 6)
     }
 
-    private var sliverColor: Color {
-        if isWarmingUp { return SemanticColor.info }
-        if showSuccess { return SemanticColor.success }
-        if !isEngineConnected { return SemanticColor.warning }
-        switch state {
-        case .idle: return TalkieTheme.textMuted
-        case .listening: return .red
-        case .transcribing: return .white.opacity(0.6)  // Neutral processing - no semantic color
-        case .routing: return SemanticColor.success
-        }
-    }
+    // IMPROVEMENT #5: TimelineView for smooth, predictable pulse
+    @ViewBuilder
+    private var sliverBar: some View {
+        if visualState.isPulsing {
+            TimelineView(.animation(minimumInterval: 1.0/30.0)) { timeline in
+                let phase = pulsePhase(for: timeline.date)
+                let glow = glowIntensity(for: timeline.date)
 
-    private var sliverOpacity: Double {
-        state == .listening ? 0.9 : 0.6
-    }
-
-    private var sliverWidth: CGFloat {
-        switch state {
-        case .idle: return showSuccess ? 28 : 20
-        case .listening: return 28
-        case .transcribing: return 24
-        case .routing: return 24
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(visualState.sliverColor.opacity(0.8 + phase * 0.2))
+                    .frame(width: visualState.sliverWidth * (1.0 + phase * 0.25), height: 3)
+                    .shadow(color: visualState.sliverColor.opacity(0.3 + glow * 0.4), radius: 2 + glow * 2)
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(visualState.sliverColor.opacity(0.6))
+                .frame(width: visualState.sliverWidth, height: 2)
         }
     }
 
     // MARK: - Expanded Content
 
     private var expandedContent: some View {
-        HStack(spacing: 6) {
-            // State indicator dot
+        HStack(spacing: 4) {
             stateDot
-
-            // Content varies by state
             stateContent
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, 8)
+        .padding(.trailing, 10)
         .padding(.vertical, 5)
         .background(pillBackground)
         .contentShape(Rectangle())
     }
 
-    // MARK: - State Dot
-
+    // IMPROVEMENT #5: TimelineView for smooth dot pulse
     @ViewBuilder
     private var stateDot: some View {
-        Circle()
-            .fill(dotColor)
-            .frame(width: 6, height: 6)
-            .scaleEffect(state == .listening ? 1.0 + pulsePhase * 0.5 : 1.0)
-            .opacity(state == .listening ? 0.7 + pulsePhase * 0.3 : 1.0)
-            .shadow(color: state == .listening ? dotColor.opacity(0.5) : .clear, radius: 3)
+        if visualState.isPulsing {
+            TimelineView(.animation(minimumInterval: 1.0/30.0)) { timeline in
+                let phase = pulsePhase(for: timeline.date)
+                let glow = glowIntensity(for: timeline.date)
+
+                Circle()
+                    .fill(visualState.dotColor)
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(1.0 + phase * 0.35)
+                    .opacity(0.75 + phase * 0.25)
+                    .shadow(color: visualState.dotColor.opacity(0.4 + glow * 0.4), radius: 2 + glow * 3)
+            }
+        } else {
+            Circle()
+                .fill(visualState.dotColor)
+                .frame(width: 6, height: 6)
+        }
     }
 
-    private var dotColor: Color {
-        if isWarmingUp { return SemanticColor.info }
-        if showSuccess { return SemanticColor.success }
-        if !isEngineConnected { return SemanticColor.warning }
-        switch state {
-        case .idle: return TalkieTheme.textMuted
-        case .listening: return .red  // Always red when recording
-        case .transcribing: return .white.opacity(0.7)  // Neutral processing - no semantic color
-        case .routing: return SemanticColor.success
-        }
+    /// Compute pulse phase from time (0.0 to 1.0, smooth breathing)
+    private func pulsePhase(for date: Date) -> CGFloat {
+        let t = date.timeIntervalSinceReferenceDate
+        // Clean sine wave at ~0.7 Hz (comfortable breathing rhythm)
+        // Using smoothstep-like easing: slower at peaks, faster through middle
+        let raw = sin(t * 1.4 * .pi)
+        let normalized = (raw + 1.0) / 2.0  // Map -1...1 to 0...1
+        // Ease: spend more time at extremes (inhale pause, exhale pause)
+        return CGFloat(normalized * normalized * (3.0 - 2.0 * normalized))
+    }
+
+    /// Glow intensity (slightly offset from main pulse)
+    private func glowIntensity(for date: Date) -> CGFloat {
+        let t = date.timeIntervalSinceReferenceDate
+        let raw = sin(t * 1.4 * .pi + 0.4)
+        return CGFloat((raw + 1.0) / 2.0)
     }
 
     // MARK: - State Content
 
     @ViewBuilder
     private var stateContent: some View {
-        if isWarmingUp {
+        switch visualState {
+        case .warmingUp:
             Text("Warming up")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(SemanticColor.info)
-        } else if showSuccess {
+
+        case .success:
             HStack(spacing: 4) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 9, weight: .semibold))
@@ -226,93 +301,103 @@ public struct StatePill: View {
                     .font(.system(size: 10, weight: .medium))
             }
             .foregroundColor(SemanticColor.success)
-        } else if !isEngineConnected {
+
+        case .offline:
             Text("Offline")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(SemanticColor.warning)
-        } else {
-            switch state {
-            case .idle:
-                HStack(spacing: 4) {
-                    // Show mic name if available
-                    if let micName = micDeviceName {
-                        HStack(spacing: 3) {
-                            Image(systemName: "mic")
-                                .font(.system(size: 8, weight: .medium))
-                            Text(shortMicName(micName))
-                                .font(.system(size: 9, weight: .medium))
-                        }
-                        .foregroundColor(TalkieTheme.textTertiary)
-                        .help(micName)
-                    } else {
-                        Text("Ready")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(TalkieTheme.textSecondary)
-                    }
 
-                    // Show queue count badge if there are pending items
-                    if pendingQueueCount > 0 {
-                        Text("\(pendingQueueCount)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(SemanticColor.warning))
+        case .idle(let hasPending):
+            HStack(spacing: 4) {
+                // Show mic name only when Command is held
+                if isCommandHeld, let micName = micDeviceName {
+                    HStack(spacing: 3) {
+                        Image(systemName: "mic")
+                            .font(.system(size: 8, weight: .medium))
+                        Text(shortMicName(micName))
+                            .font(.system(size: 9, weight: .medium))
                     }
-                }
-            case .listening:
-                if showInterstitialHint {
-                    // Shift held during hover - show interstitial mode hint
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10))
-                        Text("→ Edit")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(.purple)
+                    .foregroundColor(TalkieTheme.textTertiary)
+                    .help(micName)
                 } else {
-                    HStack(spacing: 4) {
-                        Text(formatTime(recordingDuration))
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(TalkieTheme.textPrimary)
-                        audioLevelIndicator
-                    }
-                }
-            case .transcribing:
-                HStack(spacing: 4) {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 12, height: 12)
-                    Text(formatTime(processingDuration))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    Text("REC")
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(TalkieTheme.textSecondary)
                 }
-            case .routing:
+
+                if hasPending {
+                    Text("\(pendingQueueCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(SemanticColor.warning))
+                }
+            }
+
+        case .listening(let interstitialHint):
+            if interstitialHint {
                 HStack(spacing: 4) {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 9, weight: .medium))
-                    Text("Routing")
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10))
+                    Text("→ Edit")
                         .font(.system(size: 10, weight: .medium))
                 }
-                .foregroundColor(SemanticColor.success)
+                .foregroundColor(.purple)
+            } else {
+                HStack(spacing: 4) {
+                    // IMPROVEMENT #3: Fixed-width timer
+                    Text(formatTime(recordingDuration))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .frame(minWidth: 28, alignment: .trailing)
+                        .foregroundColor(TalkieTheme.textPrimary)
+                    audioLevelIndicator
+                }
             }
+
+        case .transcribing:
+            HStack(spacing: 4) {
+                NanoWaveform(color: SemanticColor.warning)
+                Text("Transcribing")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(SemanticColor.warning)
+                if processingDuration > 0 {
+                    Text("·")
+                        .foregroundColor(TalkieTheme.textTertiary)
+                    Text(formatTime(processingDuration))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+            }
+
+        case .routing:
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 9, weight: .medium))
+                Text("Routing")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(SemanticColor.success)
         }
     }
 
     // MARK: - Audio Level Indicator
 
     private var audioLevelIndicator: some View {
-        let level = CGFloat(audioMonitor.level)
-        let barHeight = max(2, 10 * level)
+        // Use passed-in level (parent handles throttling)
+        let sensitiveLevel = sqrt(CGFloat(audioLevel))  // Boost quiet sounds
+        let maxHeight: CGFloat = 14
+        let barHeight = max(2, maxHeight * sensitiveLevel)
+
         return ZStack(alignment: .bottom) {
             RoundedRectangle(cornerRadius: 1)
                 .fill(TalkieTheme.textTertiary.opacity(0.3))
-                .frame(width: 3, height: 10)
+                .frame(width: 3, height: maxHeight)
             RoundedRectangle(cornerRadius: 1)
-                .fill(Color.red.opacity(0.6 + Double(level) * 0.4))
+                .fill(Color.red.opacity(0.6 + Double(sensitiveLevel) * 0.4))
                 .frame(width: 3, height: barHeight)
+                .animation(.easeOut(duration: 0.25), value: audioLevel)  // Smooth transition at 2Hz
         }
-        .animation(.easeOut(duration: 0.08), value: level)
     }
 
     // MARK: - Background
@@ -322,7 +407,7 @@ public struct StatePill: View {
             .fill(.ultraThinMaterial)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(borderColor, lineWidth: 0.5)
+                    .stroke(visualState.borderColor, lineWidth: 0.5)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
@@ -337,62 +422,149 @@ public struct StatePill: View {
             )
     }
 
-    private var borderColor: Color {
-        if state == .listening { return Color.red.opacity(0.3) }
-        if showSuccess { return SemanticColor.success.opacity(0.3) }
-        return Color.white.opacity(0.1)
-    }
-
     // MARK: - Helpers
 
+    // IMPROVEMENT #3: Fixed-width time formatting
     private func formatTime(_ interval: TimeInterval) -> String {
-        let seconds = Int(interval)
+        let seconds = Int(floor(interval))
         if seconds < 60 {
-            return "\(seconds)s"
+            // Right-align single digits for consistent width
+            return String(format: "%2ds", seconds)
         }
         let mins = seconds / 60
         let secs = seconds % 60
         return String(format: "%d:%02d", mins, secs)
     }
 
-    /// Shorten microphone name for display (e.g., "BlackHole 2ch" → "BlackHole")
     private func shortMicName(_ fullName: String) -> String {
-        // Remove common suffixes
         let shortened = fullName
             .replacingOccurrences(of: " 2ch", with: "")
             .replacingOccurrences(of: " (USB)", with: "")
             .replacingOccurrences(of: " Microphone", with: "")
 
-        // Limit length
         if shortened.count > 12 {
             return String(shortened.prefix(12)) + "…"
         }
         return shortened
     }
 
-    private func startPulseAnimation() {
-        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-            pulsePhase = 1.0
-        }
-    }
-
     // MARK: - Modifier Key Monitoring
-
-    @State private var modifierTimer: Timer?
+    // IMPROVEMENT #1: Event-based instead of timer polling
 
     private func startModifierMonitor() {
-        // Poll modifier flags at 20Hz while hovering
-        modifierTimer?.invalidate()
-        modifierTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-            let shift = NSEvent.modifierFlags.contains(.shift)
-            if shift != isShiftHeld {
-                isShiftHeld = shift
-            }
+        stopModifierMonitor()  // Clean up any existing monitor
+
+        // Event-based: only fires when modifiers actually change
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [self] event in
+            let newShift = event.modifierFlags.contains(.shift)
+            let newCommand = event.modifierFlags.contains(.command)
+
+            // Only update if changed (prevents unnecessary SwiftUI updates)
+            if newShift != isShiftHeld { isShiftHeld = newShift }
+            if newCommand != isCommandHeld { isCommandHeld = newCommand }
+
+            return event
         }
+
+        // Also check current state immediately
+        let currentFlags = NSEvent.modifierFlags
+        isShiftHeld = currentFlags.contains(.shift)
+        isCommandHeld = currentFlags.contains(.command)
     }
 
     private func stopModifierMonitor() {
-        modifierTimer?.invalidate()
-        modifierTimer = nil
+        if let monitor = flagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            flagsMonitor = nil
+        }
+        isShiftHeld = false
+        isCommandHeld = false
+    }
+}
+
+// MARK: - Nano Waveform
+
+/// Waveform animation style
+public enum NanoWaveformStyle: String, CaseIterable, Identifiable {
+    case wave      // Smooth sine wave
+    case bounce    // Bouncy energy
+    case pulse     // Center-out pulse
+    case cascade   // Waterfall effect
+    case heartbeat // Quick double-beat
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .wave: return "Wave"
+        case .bounce: return "Bounce"
+        case .pulse: return "Pulse"
+        case .cascade: return "Cascade"
+        case .heartbeat: return "Heartbeat"
+        }
+    }
+}
+
+/// Tiny 5-bar waveform animation - fast and delightful
+public struct NanoWaveform: View {
+    let color: Color
+    var style: NanoWaveformStyle = .wave
+
+    public init(color: Color, style: NanoWaveformStyle = .wave) {
+        self.color = color
+        self.style = style
+    }
+
+    public var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0/60.0)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+
+            HStack(spacing: 1) {
+                ForEach(0..<5, id: \.self) { i in
+                    let height = barHeight(index: i, time: t)
+
+                    RoundedRectangle(cornerRadius: 0.5)
+                        .fill(color)
+                        .frame(width: 1.5, height: CGFloat(height))
+                }
+            }
+            .frame(height: 8, alignment: .center)
+        }
+    }
+
+    private func barHeight(index: Int, time: Double) -> Double {
+        switch style {
+        case .wave:
+            // Smooth traveling sine wave
+            let phase = time * 8.0 + Double(index) * 0.6
+            return 2.0 + sin(phase) * 4.0
+
+        case .bounce:
+            // Bouncy with abs() for energy
+            let phase = time * 10.0 + Double(index) * 0.5
+            return 2.0 + abs(sin(phase)) * 5.0
+
+        case .pulse:
+            // Center-out ripple
+            let center = 2.0
+            let dist = abs(Double(index) - center)
+            let phase = time * 6.0 - dist * 0.8
+            return 2.0 + max(0, sin(phase)) * 5.0
+
+        case .cascade:
+            // Waterfall from left to right
+            let phase = time * 7.0 - Double(index) * 0.4
+            let wave = (sin(phase) + 1.0) / 2.0  // 0-1
+            return 2.0 + wave * 5.0
+
+        case .heartbeat:
+            // Quick double-beat pattern
+            let cycle = time.truncatingRemainder(dividingBy: 0.8)
+            let beat1 = cycle < 0.1 ? (1.0 - cycle / 0.1) : 0
+            let beat2 = (cycle > 0.15 && cycle < 0.25) ? (1.0 - (cycle - 0.15) / 0.1) : 0
+            let intensity = max(beat1, beat2)
+            let centerDist = abs(Double(index) - 2.0) / 2.0
+            return 2.0 + intensity * (1.0 - centerDist * 0.5) * 5.0
+        }
     }
 }

@@ -1107,6 +1107,21 @@ class SettingsManager {
         TimeInterval(syncIntervalMinutes * 60)
     }
 
+    // MARK: - Audio Playback
+
+    private let playbackVolumeKey = "playbackVolume"
+
+    /// Audio playback volume (0.0 to 1.0, default 1.0)
+    var playbackVolume: Float = 1.0 {
+        didSet {
+            let volume = playbackVolume
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(volume, forKey: self.playbackVolumeKey)
+            }
+            NotificationCenter.default.post(name: .playbackVolumeDidChange, object: nil)
+        }
+    }
+
     /// JSON export schedule (default: daily shallow, weekly deep)
     var jsonExportSchedule: JSONExportSchedule {
         didSet {
@@ -1324,6 +1339,14 @@ class SettingsManager {
             self.jsonExportSchedule = .dailyShallowWeeklyDeep
         }
 
+        // Initialize playback volume
+        // Default: 1.0 (full volume)
+        if let savedVolume = UserDefaults.standard.object(forKey: playbackVolumeKey) as? Float {
+            self.playbackVolume = savedVolume
+        } else {
+            self.playbackVolume = 1.0
+        }
+
         // Apply appearance mode on launch
         applyAppearanceMode()
 
@@ -1524,6 +1547,7 @@ class SettingsManager {
 extension Notification.Name {
     static let syncIntervalDidChange = Notification.Name("syncIntervalDidChange")
     static let jsonExportScheduleDidChange = Notification.Name("jsonExportScheduleDidChange")
+    static let playbackVolumeDidChange = Notification.Name("playbackVolumeDidChange")
 }
 
 // MARK: - JSON Export Schedule

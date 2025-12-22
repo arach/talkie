@@ -23,6 +23,7 @@ final class FloatingPillController: ObservableObject {
     private var homePositions: [NSWindow: NSPoint] = [:]  // Store original positions
     private var mouseMonitor: Any?
     private var magneticTimer: Timer?
+    private var timerUpdateTimer: Timer?  // Separate 1Hz timer for elapsed time display
     private var recordingStartTime: Date?
     private var processingStartTime: Date?
     private var settingsCancellables = Set<AnyCancellable>()
@@ -40,6 +41,7 @@ final class FloatingPillController: ObservableObject {
     @Published var proximity: CGFloat = 0  // 0 = far, 1 = very close (for view to react)
     @Published var elapsedTime: TimeInterval = 0
     @Published var processingTime: TimeInterval = 0
+    @Published var audioLevel: Float = 0  // Throttled to 2Hz for UI (just sign of life)
 
     // Engine & queue status
     @Published var isEngineConnected: Bool = false
@@ -48,6 +50,7 @@ final class FloatingPillController: ObservableObject {
 
     // Track last published proximity to avoid redundant updates
     private var lastPublishedProximity: CGFloat = 0
+    private var lastAudioLevelUpdate: Date = .distantPast
 
     private init() {
         // Listen for screen configuration changes
@@ -101,6 +104,14 @@ final class FloatingPillController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] count in
                 self?.pendingQueueCount = count
+            }
+            .store(in: &settingsCancellables)
+
+        // Observe audio level (throttled to 2Hz - just a sign of life indicator)
+        AudioLevelMonitor.shared.$level
+            .throttle(for: .milliseconds(500), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] level in
+                self?.audioLevel = level
             }
             .store(in: &settingsCancellables)
     }
@@ -218,20 +229,43 @@ final class FloatingPillController: ObservableObject {
     private func startMagneticTracking() {
         stopMagneticTracking()
 
-        // Poll at 15fps for proximity detection - plenty smooth for hover effects
-        // Timer updates at higher rate (30fps) only when actively recording to show elapsed time
-        let frameRate: Double = (state == .listening || state == .transcribing) ? 30.0 : 15.0
-        magneticTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / frameRate, repeats: true) { [weak self] _ in
+        // Magnetic position updates at 15fps - smooth hover effects without excessive CPU
+        magneticTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateMagneticPositions()
+            }
+        }
+
+        // Separate 1Hz timer for elapsed time display - prevents flicker from frequent updates
+        // Only run during active states (listening or transcribing)
+        if state == .listening || state == .transcribing {
+            startTimerUpdates()
+        }
+    }
+
+    private func startTimerUpdates() {
+        stopTimerUpdates()
+
+        // Update immediately on start
+        updateElapsedTime()
+
+        // Then update every second (1Hz) - smooth, no flicker
+        timerUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
                 self?.updateElapsedTime()
             }
         }
     }
 
+    private func stopTimerUpdates() {
+        timerUpdateTimer?.invalidate()
+        timerUpdateTimer = nil
+    }
+
     private func stopMagneticTracking() {
         magneticTimer?.invalidate()
         magneticTimer = nil
+        stopTimerUpdates()
 
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
@@ -339,11 +373,15 @@ final class FloatingPillController: ObservableObject {
             processingTime = 0
         }
 
-        // Restart timer if we transition to/from active recording (changes frame rate)
+        // Start/stop timer updates based on state transitions
         let wasActive = previousState == .listening || previousState == .transcribing
         let isActive = state == .listening || state == .transcribing
-        if wasActive != isActive && isVisible {
-            startMagneticTracking()  // Restarts with appropriate frame rate
+        if isActive && !wasActive {
+            // Transition to active state - start timer updates
+            startTimerUpdates()
+        } else if !isActive && wasActive {
+            // Transition to inactive state - stop timer updates
+            stopTimerUpdates()
         }
     }
 
@@ -388,7 +426,7 @@ struct FloatingPillView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            StatePill(
+            LivePill(
                 state: controller.state,
                 isWarmingUp: false,
                 showSuccess: false,
@@ -397,6 +435,7 @@ struct FloatingPillView: View {
                 isEngineConnected: controller.isEngineConnected,
                 pendingQueueCount: controller.pendingQueueCount,
                 micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
+                audioLevel: controller.audioLevel,
                 forceExpanded: isExpanded,
                 onTap: {
                     // Visual feedback - quick scale down/up
