@@ -404,6 +404,24 @@ final class FloatingPillController: ObservableObject {
         callback(state, modifiers)
         NSLog("[FloatingPill] onTap callback completed")
     }
+
+    /// Handle tap on the queue badge - retry or clear pending transcriptions
+    func handleQueueTap() {
+        let modifiers = NSEvent.modifierFlags
+        NSLog("[FloatingPill] handleQueueTap: pendingCount=%d, modifiers=%d", pendingQueueCount, modifiers.rawValue)
+
+        if modifiers.contains(.option) {
+            // Option+click: Clear/dismiss pending items
+            TranscriptionRetryManager.shared.clearPending()
+            NSLog("[FloatingPill] Cleared pending transcriptions")
+        } else {
+            // Regular click: Retry pending transcriptions
+            Task {
+                await TranscriptionRetryManager.shared.retryFailedTranscriptions()
+            }
+            NSLog("[FloatingPill] Triggered retry of pending transcriptions")
+        }
+    }
 }
 
 // MARK: - Floating Pill View (expands when cursor approaches)
@@ -442,6 +460,11 @@ struct FloatingPillView: View {
                     provideTapFeedback()
                     // Trigger actual handler
                     controller.handleTap()
+                },
+                onQueueTap: {
+                    // Tap on queue badge - retry or clear (Option+click)
+                    provideTapFeedback()
+                    controller.handleQueueTap()
                 }
             )
             .scaleEffect(tapFeedbackScale)

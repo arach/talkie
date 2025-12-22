@@ -159,6 +159,17 @@ final class TranscriptionRetryManager: ObservableObject {
         AppLogger.shared.log(.system, "Retry batch complete", detail: "Remaining: \(self.pendingCount), isRetrying flag cleared")
     }
 
+    /// Clear all pending/failed transcriptions (mark as dismissed)
+    /// Use this when user wants to dismiss stuck items without retrying
+    func clearPending() {
+        let pending = LiveDatabase.fetchNeedsRetry()
+        for utterance in pending {
+            LiveDatabase.markTranscriptionFailed(id: utterance.id, error: "Dismissed by user")
+        }
+        pendingCount = 0
+        AppLogger.shared.log(.system, "Cleared pending retries", detail: "Dismissed \(pending.count) items")
+    }
+
     /// Manually trigger retry for a single utterance
     func retrySingle(_ utterance: LiveDictation) async -> Bool {
         guard let audioURL = utterance.audioURL, utterance.hasAudio else {

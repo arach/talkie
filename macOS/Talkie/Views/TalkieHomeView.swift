@@ -23,9 +23,11 @@ struct TalkieHomeView: View {
     private let liveState = TalkieLiveStateMonitor.shared
     private let serviceMonitor = TalkieServiceMonitor.shared
     private let eventManager = SystemEventManager.shared
+    private let dictationStore = DictationStore.shared
 
     // Cached state - only updates when specific properties change
     @State private var recentMemos: [VoiceMemo] = []
+    @State private var recentDictations: [Utterance] = []
     @State private var isLiveRunning: Bool = false
     @State private var serviceState: TalkieServiceState = .unknown
     @State private var isSyncing: Bool = false

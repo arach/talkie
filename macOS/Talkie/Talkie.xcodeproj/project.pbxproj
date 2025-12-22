@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02A99E5DBE9D497A8B40800A /* UnifiedDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */; };
+		554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684217B1E2147AEA420E54B /* BuildInfo.swift */; };
 		5F04619116E34992AC571692 /* STTModelCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EBDA091AD54DD09BC8578B /* STTModelCard.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
@@ -204,6 +206,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedDashboard.swift; sourceTree = "<group>"; };
+		0684217B1E2147AEA420E54B /* BuildInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.swift; sourceTree = "<group>"; };
 		30EBDA091AD54DD09BC8578B /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
@@ -514,6 +518,7 @@
 		53A7622465701BF0425306D5 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				0684217B1E2147AEA420E54B /* BuildInfo.swift */,
 				C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */,
 				41CBA070F3919E79B1D5E26F /* DataLayerIntegration.swift */,
 				D47F699EAAD626CBC739B841 /* TalkieApp.swift */,
@@ -531,6 +536,7 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */,
 				53D9EC812EF9D96F00DC8EC9 /* Shared */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				00C4A81C9F724B75B40F8ED3 /* MemoDetail */,
@@ -980,6 +986,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				02A99E5DBE9D497A8B40800A /* UnifiedDashboard.swift in Sources */,
+				554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */,
 				5F04619116E34992AC571692 /* STTModelCard.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,

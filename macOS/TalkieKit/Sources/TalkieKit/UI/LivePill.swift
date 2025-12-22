@@ -85,8 +85,9 @@ public struct LivePill: View {
     // Control expansion
     var forceExpanded: Bool = false
 
-    // Optional callback
+    // Optional callbacks
     var onTap: (() -> Void)? = nil
+    var onQueueTap: (() -> Void)? = nil  // Tapping the queue badge specifically
 
     // MARK: - State
 
@@ -108,7 +109,8 @@ public struct LivePill: View {
         micDeviceName: String?,
         audioLevel: Float = 0,
         forceExpanded: Bool = false,
-        onTap: (() -> Void)? = nil
+        onTap: (() -> Void)? = nil,
+        onQueueTap: (() -> Void)? = nil
     ) {
         self.state = state
         self.isWarmingUp = isWarmingUp
@@ -121,6 +123,7 @@ public struct LivePill: View {
         self.audioLevel = audioLevel
         self.forceExpanded = forceExpanded
         self.onTap = onTap
+        self.onQueueTap = onQueueTap
     }
 
     // MARK: - Derived State
@@ -195,14 +198,18 @@ public struct LivePill: View {
             // Main sliver bar with optional pulse
             sliverBar
 
-            // Queue badge
+            // Queue badge - clickable to retry/clear
             if case .idle(let hasPending) = visualState, hasPending {
-                Text("\(pendingQueueCount)")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(SemanticColor.warning))
+                Button(action: { onQueueTap?() }) {
+                    Text("\(pendingQueueCount)")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(SemanticColor.warning))
+                }
+                .buttonStyle(.plain)
+                .help("Click to retry failed transcriptions")
             }
         }
         .frame(height: 18)
@@ -326,12 +333,16 @@ public struct LivePill: View {
                 }
 
                 if hasPending {
-                    Text("\(pendingQueueCount)")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(SemanticColor.warning))
+                    Button(action: { onQueueTap?() }) {
+                        Text("\(pendingQueueCount)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(SemanticColor.warning))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click to retry failed transcriptions")
                 }
             }
 

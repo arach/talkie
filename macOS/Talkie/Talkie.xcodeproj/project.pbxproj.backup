@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684217B1E2147AEA420E54B /* BuildInfo.swift */; };
+		5F04619116E34992AC571692 /* STTModelCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EBDA091AD54DD09BC8578B /* STTModelCard.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
 		00EA0C1AD74762B2D0083D75 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BD343AFFEE244146750E16 /* FormControls.swift */; };
@@ -203,6 +205,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0684217B1E2147AEA420E54B /* BuildInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.swift; sourceTree = "<group>"; };
+		30EBDA091AD54DD09BC8578B /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
 		0548E348F68DC718F12DC401 /* OnAirIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnAirIndicator.swift; sourceTree = "<group>"; };
@@ -425,6 +429,7 @@
 		07EC6608E6DA26A94F36034F /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				30EBDA091AD54DD09BC8578B /* STTModelCard.swift */,
 				9019DB15700738177DC54D19 /* CloudProviderViews.swift */,
 				1D392E981B2154D58DB42703 /* ExpandableModelCards.swift */,
 				C00DBA02942A8A7926AC9AC6 /* LegacyModelCards.swift */,
@@ -511,6 +516,7 @@
 		53A7622465701BF0425306D5 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				0684217B1E2147AEA420E54B /* BuildInfo.swift */,
 				C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */,
 				41CBA070F3919E79B1D5E26F /* DataLayerIntegration.swift */,
 				D47F699EAAD626CBC739B841 /* TalkieApp.swift */,
@@ -977,6 +983,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */,
+				5F04619116E34992AC571692 /* STTModelCard.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
 				1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */,
