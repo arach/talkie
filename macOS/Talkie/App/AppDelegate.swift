@@ -394,16 +394,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
                 return true
             }
-            // Handle /d/capture/audit - run full audit with proper screenshots
+            // Handle /d/capture/audit - run code audit only (no window navigation)
+            // Use /d/capture/full for screenshots + audit
             if components.count >= 2 && components[1] == "audit" {
-                NSLog("[AppDelegate] 🔍 Triggering full audit with capture...")
-                Task { @MainActor in
-                    do {
-                        // Open Settings first
-                        NSLog("[AppDelegate] Opening Settings window...")
-                        NotificationCenter.default.post(name: .navigateToSettings, object: nil)
-                        try await Task.sleep(for: .milliseconds(500))
+                NSLog("[AppDelegate] 🔍 Triggering code audit (no screenshots)...")
 
+                // Run entirely on background queue
+                DispatchQueue.global(qos: .userInitiated).async {
+                    autoreleasepool {
                         // Setup directories
                         let baseDir = FileManager.default.homeDirectoryForCurrentUser
                             .appendingPathComponent("Desktop")
@@ -414,36 +412,79 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                         let auditFolders = existing.filter { $0.hasPrefix("run-") }
                         let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
                         let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
-                        try FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+                        try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-                        let screenshotDir = runDir.appendingPathComponent("screenshots")
-                        try FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
-
-                        NSLog("[AppDelegate] 📸 Step 1: Capturing screenshots...")
-                        let captureResults = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotDir)
-                        NSLog("[AppDelegate] ✅ Captured \(captureResults.count) screenshots")
-
-                        // Allow autorelease pool to drain - prevents crash in objc_release
-                        NSLog("[AppDelegate] ⏳ Letting memory settle...")
-                        try await Task.sleep(for: .seconds(1))
-
-                        NSLog("[AppDelegate] 🔍 Step 2: Running code audit...")
-                        let report = await DesignAuditor.shared.auditAll()
+                        NSLog("[AppDelegate] 🔍 Running code audit...")
+                        let report = DesignAuditor.shared.auditAll()
                         NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                        NSLog("[AppDelegate] 📝 Step 3: Generating HTML report...")
-                        await DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
+                        NSLog("[AppDelegate] 📝 Generating reports...")
+                        DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
+                        DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
 
-                        NSLog("[AppDelegate] 📝 Step 4: Generating Markdown report...")
-                        await DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+                        // Back to main for UI operations
+                        DispatchQueue.main.async {
+                            Task { @MainActor in
+                                await Self.generateAuditIndex(at: baseDir)
+                                NSLog("[AppDelegate] ✅ All done!")
+                                NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
+                            }
+                        }
+                    }
+                }
+                return true
+            }
 
-                        NSLog("[AppDelegate] 📝 Step 5: Updating index...")
-                        await Self.generateAuditIndex(at: baseDir)
+            // Handle /d/capture/full - screenshots + audit combined
+            if components.count >= 2 && components[1] == "full" {
+                NSLog("[AppDelegate] 🔍 Triggering full audit with screenshots...")
 
-                        NSLog("[AppDelegate] ✅ All done! Opening index...")
-                        NSWorkspace.shared.open(baseDir.appendingPathComponent("index.html"))
-                    } catch {
-                        NSLog("[AppDelegate] ❌ Audit failed: \(error)")
+                // Setup directories synchronously first
+                let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop")
+                    .appendingPathComponent("talkie-audit")
+                try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+
+                let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+                let auditFolders = existing.filter { $0.hasPrefix("run-") }
+                let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+                let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+                let screenshotsDir = runDir.appendingPathComponent("screenshots")
+                try? FileManager.default.createDirectory(at: screenshotsDir, withIntermediateDirectories: true)
+
+                // Screenshot capture phase
+                Task { @MainActor in
+                    // Open Settings first
+                    NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+                    try? await Task.sleep(for: .milliseconds(500))
+
+                    // Capture screenshots
+                    NSLog("[AppDelegate] 📸 Capturing settings screenshots...")
+                    let screenshots = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotsDir)
+                    NSLog("[AppDelegate] ✅ Captured \(screenshots.count) screenshots")
+
+                    // Let UI settle before audit
+                    try? await Task.sleep(for: .milliseconds(500))
+
+                    // Run audit on background queue
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        autoreleasepool {
+                            NSLog("[AppDelegate] 🔍 Running code audit...")
+                            let report = DesignAuditor.shared.auditAll()
+                            NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+
+                            NSLog("[AppDelegate] 📝 Generating reports...")
+                            DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
+                            DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+
+                            DispatchQueue.main.async {
+                                Task { @MainActor in
+                                    await Self.generateAuditIndex(at: baseDir)
+                                    NSLog("[AppDelegate] ✅ All done!")
+                                    NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
+                                }
+                            }
+                        }
                     }
                 }
                 return true

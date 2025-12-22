@@ -113,7 +113,7 @@ struct QuickActionsSettingsView: View {
         HStack(spacing: 12) {
             // Icon
             Image(systemName: workflow.icon)
-                .font(SettingsManager.shared.fontTitle)
+                .font(Theme.current.fontTitle)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 24, height: 24)
                 .background(workflow.color.color.opacity(0.15))

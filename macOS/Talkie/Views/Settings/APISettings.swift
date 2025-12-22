@@ -307,7 +307,7 @@ struct APIKeyRow: View {
             // Header row
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(SettingsManager.shared.fontTitle)
+                    .font(Theme.current.fontTitle)
                     .foregroundColor(isConfigured ? settings.resolvedAccentColor : .secondary)
                     .frame(width: 20)
 

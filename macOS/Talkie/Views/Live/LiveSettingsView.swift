@@ -200,10 +200,10 @@ struct RadioButtonRow<T: Equatable>: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(SettingsManager.shared.fontSM)
+                        .font(Theme.current.fontSM)
                         .foregroundColor(.primary)
                     Text(description)
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary)
                 }
 
@@ -407,7 +407,7 @@ struct ShortcutsLiveSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Press once to start recording, press again to stop.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     HotkeyRecorderButton(
@@ -423,7 +423,7 @@ struct ShortcutsLiveSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Hold down to record, release to stop.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     StyledToggle(
@@ -468,7 +468,7 @@ struct AudioLiveSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Select which microphone to use for recording. The level meter shows real-time input volume.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     AudioDeviceSelector()
@@ -542,7 +542,7 @@ struct SoundsLiveSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text(selectedEvent.description)
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     SoundGrid(selection: {
@@ -597,7 +597,7 @@ struct TranscriptionLiveSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Select a model to use for Live transcription. Models are downloaded and managed by the engine.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     // Model grid
@@ -606,7 +606,7 @@ struct TranscriptionLiveSettingsView: View {
                             ProgressView()
                                 .controlSize(.small)
                             Text("Loading available models...")
-                                .font(SettingsManager.shared.fontSM)
+                                .font(Theme.current.fontSM)
                                 .foregroundColor(.secondary)
                         }
                         .padding(.vertical, 20)
@@ -737,7 +737,7 @@ struct AutoPasteLiveSettingsView: View {
                             .foregroundColor(.secondary.opacity(0.8))
                             .padding(.top, 1)
                         Text("Controls where transcribed text is sent after recording completes.")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -773,7 +773,7 @@ struct AutoPasteLiveSettingsView: View {
                             .foregroundColor(.secondary.opacity(0.8))
                             .padding(.top, 1)
                         Text("Contextual options for how Live interacts with your workflow.")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -798,7 +798,7 @@ struct AutoPasteLiveSettingsView: View {
                             .foregroundColor(.secondary.opacity(0.8))
                             .padding(.top, 1)
                         Text("Which app context should be considered primary for recordings.")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -850,7 +850,7 @@ struct StorageLiveSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Recordings older than this will be automatically deleted.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     HStack {
@@ -860,7 +860,7 @@ struct StorageLiveSettingsView: View {
                             step: 24
                         ) {
                             Text("\(live.utteranceTTLHours) hours (\(live.utteranceTTLHours / 24) days)")
-                                .font(SettingsManager.shared.fontSM)
+                                .font(Theme.current.fontSM)
                         }
                     }
                 }

@@ -20,8 +20,21 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
     var elapsedTime: TimeInterval = 0
     var isRecording: Bool = false
     var processId: Int32? = nil
-    var isRunning: Bool = false
     var audioLevel: Float = 0
+
+    // MARK: - Connection State (separated to avoid conflicts)
+
+    /// True if XPC connection to TalkieLive is active
+    private(set) var isXPCConnected: Bool = false
+
+    /// True if TalkieLive process is running (detected via bundle ID)
+    private(set) var isProcessDetected: Bool = false
+
+    /// True if TalkieLive is available (either XPC connected OR process detected)
+    /// This is the primary property views should observe
+    var isRunning: Bool {
+        isXPCConnected || isProcessDetected
+    }
 
     // XPC service manager with environment-aware connection
     private let xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>
@@ -50,11 +63,14 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
         // Now we can set self as the exported object for receiving callbacks
         xpcManager.setExportedObject(self)
 
-        // Observe XPC connection state and update isRunning
+        // Observe XPC connection state separately from process detection
         xpcManager.$connectionInfo
             .map(\.isConnected)
             .sink { [weak self] isConnected in
-                self?.isRunning = isConnected
+                self?.isXPCConnected = isConnected
+                if isConnected {
+                    NSLog("[Live] XPC connected")
+                }
             }
             .store(in: &cancellables)
 
@@ -196,13 +212,14 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
 
         if let app = apps.first {
             processId = app.processIdentifier
-            isRunning = true
-            NSLog("[Live] Found running process - PID: \(app.processIdentifier)")
+            isProcessDetected = true
+            NSLog("[Live] Found running process - PID: \(app.processIdentifier) (bundle: \(bundleId))")
         } else {
-            // Keep existing XPC-provided PID if we had one
-            if processId == nil {
-                isRunning = false
+            // Only clear if we don't have XPC connection (which provides its own PID)
+            if !isXPCConnected {
+                isProcessDetected = false
             }
+            NSLog("[Live] No process found for bundle: \(bundleId)")
         }
     }
 

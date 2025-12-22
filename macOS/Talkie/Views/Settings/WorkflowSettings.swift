@@ -19,7 +19,7 @@ struct WorkflowsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "wand.and.stars")
-                            .font(SettingsManager.shared.fontTitle)
+                            .font(Theme.current.fontTitle)
                         Text("WORKFLOWS")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                     }
@@ -41,7 +41,7 @@ struct WorkflowsView: View {
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SettingsManager.shared.surfaceInput)
+        .background(Theme.current.surfaceInput)
     }
 }
 
@@ -54,7 +54,7 @@ struct ActivityLogView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "list.bullet.clipboard")
-                            .font(SettingsManager.shared.fontTitle)
+                            .font(Theme.current.fontTitle)
                         Text("ACTIVITY LOG")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                     }
@@ -76,7 +76,7 @@ struct ActivityLogView: View {
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SettingsManager.shared.surfaceInput)
+        .background(Theme.current.surfaceInput)
     }
 }
 
