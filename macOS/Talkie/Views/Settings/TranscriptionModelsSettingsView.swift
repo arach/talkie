@@ -12,9 +12,9 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TranscriptionModelsSettings")
 
 struct TranscriptionModelsSettingsView: View {
-    @State private var settingsManager = SettingsManager.shared
-    @State private var engineClient = EngineClient.shared
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
+    @Environment(EngineClient.self) private var engineClient
+    @Environment(LiveSettings.self) private var liveSettings
 
     @State private var showingDeleteConfirmation: (Bool, ModelInfo?) = (false, nil)
 
@@ -82,17 +82,19 @@ struct TranscriptionModelsSettingsView: View {
 
     // MARK: - Live Mode Picker
 
+    @ViewBuilder
     private var liveModePicker: some View {
+        @Bindable var settings = settingsManager
         let downloadedModels = engineClient.availableModels.filter { $0.isDownloaded }
 
-        return VStack(alignment: .leading, spacing: Spacing.xs) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             if downloadedModels.isEmpty {
                 Text("No models downloaded. Download a model below to use in Live Mode.")
                     .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .padding(.vertical, Spacing.sm)
             } else {
-                Picker("Live Mode Model", selection: $settingsManager.liveTranscriptionModelId) {
+                Picker("Live Mode Model", selection: $settings.liveTranscriptionModelId) {
                     ForEach(downloadedModels) { model in
                         Text(model.displayName).tag(model.id)
                     }
@@ -100,7 +102,7 @@ struct TranscriptionModelsSettingsView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(maxWidth: 300, alignment: .leading)
-                .onChange(of: settingsManager.liveTranscriptionModelId) { oldValue, newValue in
+                .onChange(of: settings.liveTranscriptionModelId) { oldValue, newValue in
                     guard oldValue != newValue else { return }
                     logger.info("Live transcription model changed: \(oldValue) -> \(newValue)")
 

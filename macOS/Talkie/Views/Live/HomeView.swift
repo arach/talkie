@@ -1638,7 +1638,7 @@ struct RecentActivityCard: View {
 struct RecentActivityRow: View {
     let utterance: Utterance
     var onSelect: ((Utterance) -> Void)?
-    @State private var settings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var settings
 
     @State private var isHovered = false
 

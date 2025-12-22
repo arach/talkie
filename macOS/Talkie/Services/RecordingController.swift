@@ -9,6 +9,7 @@
 import SwiftUI
 import TalkieKit
 import AVFoundation
+import Observation
 
 // MARK: - Recording Controller
 

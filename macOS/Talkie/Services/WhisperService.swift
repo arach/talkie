@@ -7,6 +7,7 @@
 
 import Foundation
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "WhisperService")
 
@@ -100,7 +101,7 @@ class WhisperService {
 
         // TODO: Request download from TalkieEngine via XPC
         // For now, simulate
-        try await Task.sleep(nanoseconds: 500_000_000)
+        try await Task.sleep(for: .milliseconds(500))
         downloadedModels.insert(model)
         downloadProgress = 1.0
 

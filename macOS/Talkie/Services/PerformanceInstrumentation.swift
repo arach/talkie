@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import OSLog
+import Observation
 
 // MARK: - Signpost Configuration
 

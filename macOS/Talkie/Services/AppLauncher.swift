@@ -11,6 +11,7 @@ import AppKit
 import ServiceManagement
 import os
 import TalkieKit
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppLauncher")
 

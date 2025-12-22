@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - Model Library View
 struct ModelLibraryView: View {
-    @State var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager
 
     let models: [(model: AIModel, installed: Bool)] = [
         (.geminiFlash, true),

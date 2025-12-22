@@ -10,6 +10,7 @@
 import Foundation
 import Speech
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppleSpeechService")
 

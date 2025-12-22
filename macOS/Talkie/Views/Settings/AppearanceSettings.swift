@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - Appearance Settings View
 struct AppearanceSettingsView: View {
-    @State private var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
 
     /// Check if this theme is the current active theme
     private func isThemeActive(_ preset: ThemePreset) -> Bool {
@@ -20,6 +20,9 @@ struct AppearanceSettingsView: View {
     }
 
     var body: some View {
+        @Bindable var settings = settingsManager
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "paintbrush",
@@ -333,7 +336,7 @@ struct AppearanceSettingsView: View {
                                     }
 
                                     // ALL CAPS toggle
-                                    Toggle(isOn: $settingsManager.uiAllCaps) {
+                                    Toggle(isOn: $settings.uiAllCaps) {
                                         HStack(spacing: 4) {
                                             Text("ALL CAPS")
                                                 .font(SettingsManager.shared.fontXS)
@@ -446,7 +449,7 @@ struct AppearanceSettingsView: View {
                                 }
 
                                 // ALL CAPS toggle
-                                Toggle(isOn: $settingsManager.uiAllCaps) {
+                                Toggle(isOn: $settings.uiAllCaps) {
                                     HStack(spacing: 4) {
                                         Text("ALL CAPS")
                                             .font(SettingsManager.shared.fontXS)

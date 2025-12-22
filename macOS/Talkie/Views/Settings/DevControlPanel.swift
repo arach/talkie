@@ -11,7 +11,7 @@ import TalkieKit
 
 struct DevControlPanelView: View {
     @State private var discovery = ProcessDiscovery.shared
-    @State private var engineClient = EngineClient.shared
+    @Environment(EngineClient.self) private var engineClient
     @State private var liveMonitor = TalkieLiveStateMonitor.shared
 
     @State private var autoRefresh = true

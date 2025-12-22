@@ -9,6 +9,7 @@ import Foundation
 import AVFoundation
 import Combine
 import os.log
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioPlayback")
 

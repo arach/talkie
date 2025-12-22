@@ -9,6 +9,7 @@ import Foundation
 import FluidAudio
 import AVFoundation
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "ParakeetService")
 
@@ -157,7 +158,7 @@ class ParakeetService {
                 throw ParakeetError.alreadyTranscribing
             }
             logger.debug("Waiting for previous transcription to complete...")
-            try await Task.sleep(nanoseconds: 500_000_000)
+            try await Task.sleep(for: .milliseconds(500))
         }
 
         isTranscribing = true

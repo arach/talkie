@@ -18,18 +18,12 @@ import TalkieKit
 // MARK: - Main Status Bar (Unified App-Wide)
 
 struct StatusBar: View {
-    // Live state monitoring (watches TalkieLive's recording state from database)
+    // Unified ViewModel for aggregated state
+    @State private var viewModel = StatusBarViewModel()
+
+    // Keep direct service access for actions
     @State private var liveState = TalkieLiveStateMonitor.shared
-
-    // Service monitoring
-    @State private var whisperService = WhisperService.shared
-    @State private var engineClient = EngineClient.shared
     @State private var serviceMonitor = TalkieServiceMonitor.shared
-
-    // App-wide observables
-    @State private var events = SystemEventManager.shared
-    @State private var syncManager = CloudKitSyncManager.shared
-    @State private var liveSettings = LiveSettings.shared
 
     @State private var recordingDuration: TimeInterval = 0
     @State private var processingDuration: TimeInterval = 0
@@ -44,38 +38,12 @@ struct StatusBar: View {
     @State private var pidCopied = false
     @State private var controlPressed = false
 
-    private var errorCount: Int {
-        events.events.filter { $0.type == .error }.count
-    }
-
-    private var warningCount: Int {
-        // Warnings: workflow-related events
-        events.events.filter { $0.type == .workflow }.count
-    }
-
-    private var infoCount: Int {
-        // Info: system, record, transcribe, sync
-        events.events.filter { $0.type == .system || $0.type == .transcribe || $0.type == .sync || $0.type == .record }.count
-    }
-
     private var barBackgroundColor: Color {
         TalkieTheme.surfaceElevated
     }
 
     private var isActive: Bool {
-        liveState.state != .idle || showSuccess
-    }
-
-    // Mic device monitoring
-    @State private var audioDevices = AudioDeviceManager.shared
-
-    private var currentMicName: String? {
-        if let device = audioDevices.inputDevices.first(where: { $0.id == audioDevices.selectedDeviceID }) {
-            return device.name
-        } else if let defaultDevice = audioDevices.inputDevices.first(where: { $0.isDefault }) {
-            return defaultDevice.name
-        }
-        return nil
+        viewModel.recordingState != .idle || showSuccess
     }
 
 
@@ -89,7 +57,7 @@ struct StatusBar: View {
             HStack(spacing: Spacing.sm) {
                 // LEFT SIDE - ON AIR indicator or app statuses
                 Group {
-                    if liveState.state == .listening && liveSettings.showOnAir {
+                    if viewModel.recordingState == .listening && viewModel.showOnAir {
                         // ON AIR indicator when actively recording (and enabled in settings)
                         OnAirIndicator()
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -106,14 +74,14 @@ struct StatusBar: View {
                 HStack(spacing: 8) {
                     if liveState.isRunning {
                         StatePill(
-                            state: liveState.state,
+                            state: viewModel.recordingState,
                             isWarmingUp: false,
                             showSuccess: showSuccess,
                             recordingDuration: liveState.elapsedTime,
                             processingDuration: processingDuration,
-                            isEngineConnected: serviceMonitor.state == .running && engineClient.connectionState == .connected,
+                            isEngineConnected: serviceMonitor.state == .running && viewModel.engineConnected,
                             pendingQueueCount: 0,
-                            micDeviceName: currentMicName,
+                            micDeviceName: viewModel.microphoneName,
                             onTap: {
                                 // Toggle recording in TalkieLive via XPC
                                 TalkieLiveStateMonitor.shared.toggleRecording()
@@ -140,7 +108,7 @@ struct StatusBar: View {
                         }
 
                         // PID appears on Control+hover
-                        if showPID, let pid = liveState.processId {
+                        if showPID, let pid = viewModel.processId {
                             Button(action: { copyPID(pid) }) {
                                 Text(verbatim: "PID \(String(format: "%d", pid))")
                                     .font(.system(size: 9, weight: .medium, design: .monospaced))
@@ -196,9 +164,9 @@ struct StatusBar: View {
 
                     // Console button
                     ConsoleButton(
-                        errorCount: errorCount,
-                        warningCount: warningCount,
-                        infoCount: infoCount,
+                        errorCount: viewModel.errorCount,
+                        warningCount: viewModel.warningCount,
+                        infoCount: viewModel.infoCount,
                         showPopover: $showConsolePopover
                     )
 
@@ -242,10 +210,14 @@ struct StatusBar: View {
                 pidCopied = false
             }
         }
-        .onChange(of: liveState.state) { oldState, newState in
+        .onChange(of: viewModel.recordingState) { oldState, newState in
             handleStateChange(from: oldState, to: newState)
+            viewModel.refresh()
         }
         .onAppear {
+            // Refresh ViewModel
+            viewModel.refresh()
+
             // Start monitoring service states
             liveState.startMonitoring()
             serviceMonitor.startMonitoring()
@@ -602,8 +574,8 @@ struct EngineStatusIcon: View {
         }
     }
 
-    @State private var settings = LiveSettings.shared
-    @State private var engineClient = EngineClient.shared
+    @Environment(LiveSettings.self) private var settings
+    @Environment(EngineClient.self) private var engineClient
 
     private var label: String {
         // Show loaded model name when running, otherwise show engine state
@@ -783,8 +755,8 @@ struct EngineStatusIcon: View {
 // MARK: - Model Status Icon
 
 struct ModelStatusIcon: View {
-    @State private var settings = LiveSettings.shared
-    @State private var engineClient = EngineClient.shared
+    @Environment(LiveSettings.self) private var settings
+    @Environment(EngineClient.self) private var engineClient
     @State private var layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
 
@@ -868,7 +840,7 @@ struct ModelStatusIcon: View {
 // MARK: - Sync Status Icon (NEW - Talkie-specific)
 
 struct SyncStatusIcon: View {
-    @State private var syncManager = CloudKitSyncManager.shared
+    @Environment(CloudKitSyncManager.self) private var syncManager
     @State private var isHovered = false
     @State private var showingSyncHistory = false
 

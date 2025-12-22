@@ -414,7 +414,7 @@ class SystemEventManager {
 // MARK: - Console View
 
 struct SystemLogsView: View {
-    @State private var eventManager = SystemEventManager.shared
+    @Environment(SystemEventManager.self) private var eventManager
     @State private var autoScroll = true
     @State private var filterSource: SystemEventSource? = nil
     @State private var filterType: SystemEventType? = nil

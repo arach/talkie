@@ -17,7 +17,7 @@ struct WorkflowListItem: View {
     let onSelect: () -> Void
     let onEdit: () -> Void
 
-    @State private var settings = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settings
     @State private var isHovered = false
 
     private var workflowColor: Color {

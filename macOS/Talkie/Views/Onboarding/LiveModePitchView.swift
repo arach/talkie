@@ -105,31 +105,31 @@ struct LiveModePitchView: View {
             while true {
                 // Phase 0: Idle sliver, cursor approaching
                 withAnimation(.easeIn(duration: 0.4)) { animationPhase = 0 }
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(for: .seconds(2))
 
                 // Phase 1: Cursor arrives, pill expands to "REC"
                 withAnimation(.easeOut(duration: 0.4)) { animationPhase = 1 }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(for: .seconds(1.5))
 
                 // Phase 2: Click - recording starts, cursor still there
                 withAnimation(.easeOut(duration: 0.15)) { animationPhase = 2 }
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                try? await Task.sleep(for: .seconds(1.2))
 
                 // Phase 3: Cursor moves away, pill becomes red sliver with pulsing
                 withAnimation(.easeInOut(duration: 0.5)) { animationPhase = 3 }
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                try? await Task.sleep(for: .seconds(4))
 
                 // Phase 4: Keys appear, processing
                 withAnimation(.easeOut(duration: 0.3)) { animationPhase = 4 }
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(for: .seconds(2))
 
                 // Phase 5: Success (checkmark)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { animationPhase = 5 }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(for: .seconds(1.5))
 
                 // Phase 6: Cursor leaves, back to idle
                 withAnimation(.easeIn(duration: 0.4)) { animationPhase = 6 }
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(for: .seconds(1))
             }
         }
     }

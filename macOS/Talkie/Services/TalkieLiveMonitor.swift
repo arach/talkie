@@ -10,6 +10,7 @@ import Foundation
 import AppKit
 import os
 import TalkieKit
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TalkieLiveMonitor")
 

@@ -37,7 +37,7 @@ public struct StatePill: View {
     @State private var isHovered = false
     @State private var pulsePhase: CGFloat = 0
     @State private var isShiftHeld = false
-    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+    @State private var audioMonitor = AudioLevelMonitor.shared
 
     public init(
         state: LiveState,

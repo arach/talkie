@@ -14,6 +14,7 @@ import Foundation
 import CloudKit
 import CoreData
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "CloudKitSync")
 
@@ -385,7 +386,7 @@ class CloudKitSyncManager {
                 // If we detected changes, give Core Data a moment to import them
                 // NSPersistentCloudKitContainer handles import automatically; we just need to refresh
                 if result.changeCount > 0 {
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                    try? await Task.sleep(for: .milliseconds(500)) // 500ms
                     context.refreshAllObjects()
 
                     // BRIDGE 1: Sync Core Data → GRDB
@@ -837,7 +838,7 @@ class CloudKitSyncManager {
         }
 
         // Wait a moment for all async tasks to complete
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        try? await Task.sleep(for: .seconds(1)) // 1 second
 
         let duration = Date().timeIntervalSince(syncStart)
         logger.info("🌉 [Bridge 1] Complete: \(createdCount) created, \(updatedCount) updated, \(errorCount) errors (\(String(format: "%.1fs", duration)))")

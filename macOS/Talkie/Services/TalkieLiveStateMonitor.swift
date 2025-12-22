@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import TalkieKit
+import Observation
 
 @MainActor
 @Observable

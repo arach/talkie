@@ -10,6 +10,7 @@ import MLXLMCommon
 import MLX
 import MLXLLM
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLM")
 #if arch(arm64)

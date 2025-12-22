@@ -28,7 +28,7 @@ enum SettingsSection: String, Hashable {
 }
 
 struct SettingsView: View {
-    @State var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
     @State private var selectedSection: SettingsSection = .appearance  // Default to Appearance (less aggressive)
@@ -216,7 +216,7 @@ struct SettingsView: View {
         case .autoRun:
             AutoRunSettingsView()
         case .apiKeys:
-            APISettingsView(settingsManager: settingsManager)
+            APISettingsView()
         case .transcriptionModels:
             TranscriptionModelsSettingsView()
         case .llmModels:

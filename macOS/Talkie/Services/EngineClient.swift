@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import os
 import TalkieKit
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Engine")
 
@@ -340,7 +341,7 @@ public final class EngineClient {
             case .error:
                 return false
             default:
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                try? await Task.sleep(for: .milliseconds(100)) // 0.1 seconds
             }
         }
 

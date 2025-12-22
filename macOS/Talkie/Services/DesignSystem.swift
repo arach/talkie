@@ -801,7 +801,7 @@ struct SidebarSearchField: View {
 // MARK: - Theme Observer for HistoryView
 
 struct ThemeObserver: ViewModifier {
-    @State private var settings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var settings
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {

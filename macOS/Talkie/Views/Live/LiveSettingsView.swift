@@ -24,7 +24,7 @@ enum LiveSettingsSection: String, Hashable {
 }
 
 struct LiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
     @State private var selectedSection: LiveSettingsSection = .general
 
     // Theme-aware colors for light/dark mode
@@ -218,9 +218,12 @@ struct RadioButtonRow<T: Equatable>: View {
 // MARK: - General Settings
 
 struct GeneralLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
 
     var body: some View {
+        @Bindable var live = liveSettings
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "waveform",
@@ -246,9 +249,9 @@ struct GeneralLiveSettingsView: View {
                     StyledToggle(
                         label: "Show recording overlay",
                         isOn: Binding(
-                            get: { liveSettings.overlayStyle != .pillOnly },
+                            get: { live.overlayStyle != .pillOnly },
                             set: { enabled in
-                                liveSettings.overlayStyle = enabled ? .particles : .pillOnly
+                                live.overlayStyle = enabled ? .particles : .pillOnly
                                 logger.info("Recording overlay \(enabled ? "enabled" : "disabled")")
                             }
                         ),
@@ -256,7 +259,7 @@ struct GeneralLiveSettingsView: View {
                     )
 
                     // Overlay style selection (only if enabled)
-                    if liveSettings.overlayStyle.showsTopOverlay {
+                    if live.overlayStyle.showsTopOverlay {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Style")
                                 .font(.bodyMedium)
@@ -267,10 +270,10 @@ struct GeneralLiveSettingsView: View {
                                 title: OverlayStyle.particles.displayName,
                                 description: OverlayStyle.particles.description,
                                 value: OverlayStyle.particles,
-                                selectedValue: liveSettings.overlayStyle,
+                                selectedValue: live.overlayStyle,
                                 preview: AnyView(WavyParticlesPreview(calm: false))
                             ) {
-                                liveSettings.overlayStyle = .particles
+                                live.overlayStyle = .particles
                                 logger.info("Overlay style changed to: particles")
                             }
 
@@ -278,10 +281,10 @@ struct GeneralLiveSettingsView: View {
                                 title: OverlayStyle.particlesCalm.displayName,
                                 description: OverlayStyle.particlesCalm.description,
                                 value: OverlayStyle.particlesCalm,
-                                selectedValue: liveSettings.overlayStyle,
+                                selectedValue: live.overlayStyle,
                                 preview: AnyView(WavyParticlesPreview(calm: true))
                             ) {
-                                liveSettings.overlayStyle = .particlesCalm
+                                live.overlayStyle = .particlesCalm
                                 logger.info("Overlay style changed to: particlesCalm")
                             }
 
@@ -289,10 +292,10 @@ struct GeneralLiveSettingsView: View {
                                 title: OverlayStyle.waveform.displayName,
                                 description: OverlayStyle.waveform.description,
                                 value: OverlayStyle.waveform,
-                                selectedValue: liveSettings.overlayStyle,
+                                selectedValue: live.overlayStyle,
                                 preview: AnyView(WaveformBarsPreview(sensitive: false))
                             ) {
-                                liveSettings.overlayStyle = .waveform
+                                live.overlayStyle = .waveform
                                 logger.info("Overlay style changed to: waveform")
                             }
 
@@ -300,10 +303,10 @@ struct GeneralLiveSettingsView: View {
                                 title: OverlayStyle.waveformSensitive.displayName,
                                 description: OverlayStyle.waveformSensitive.description,
                                 value: OverlayStyle.waveformSensitive,
-                                selectedValue: liveSettings.overlayStyle,
+                                selectedValue: live.overlayStyle,
                                 preview: AnyView(WaveformBarsPreview(sensitive: true))
                             ) {
-                                liveSettings.overlayStyle = .waveformSensitive
+                                live.overlayStyle = .waveformSensitive
                                 logger.info("Overlay style changed to: waveformSensitive")
                             }
 
@@ -314,7 +317,7 @@ struct GeneralLiveSettingsView: View {
 
                             TabSelector(
                                 options: OverlayPosition.allCases,
-                                selection: $liveSettings.overlayPosition
+                                selection: $live.overlayPosition
                             )
                         }
                     }
@@ -339,19 +342,19 @@ struct GeneralLiveSettingsView: View {
 
                         StyledToggle(
                             label: "Show pill on all screens",
-                            isOn: $liveSettings.pillShowOnAllScreens,
+                            isOn: $live.pillShowOnAllScreens,
                             help: "Display the recording pill on every connected display"
                         )
 
                         StyledToggle(
                             label: "Expand pill during recording",
-                            isOn: $liveSettings.pillExpandsDuringRecording,
+                            isOn: $live.pillExpandsDuringRecording,
                             help: "Show detailed recording information when active"
                         )
 
                         StyledToggle(
                             label: "Show ON AIR indicator",
-                            isOn: $liveSettings.showOnAir,
+                            isOn: $live.showOnAir,
                             help: "Display neon ON AIR sign in top-left during recording"
                         )
                     }
@@ -363,7 +366,7 @@ struct GeneralLiveSettingsView: View {
 
                     TabSelector(
                         options: PillPosition.allCases,
-                        selection: $liveSettings.pillPosition
+                        selection: $live.pillPosition
                     )
                 }
             }
@@ -377,11 +380,14 @@ struct GeneralLiveSettingsView: View {
 // MARK: - Shortcuts Settings
 
 struct ShortcutsLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
     @State private var isRecordingToggle = false
     @State private var isRecordingPTT = false
 
     var body: some View {
+        @Bindable var live = liveSettings
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "command",
@@ -401,7 +407,7 @@ struct ShortcutsLiveSettingsView: View {
                         .foregroundColor(.secondary.opacity(0.8))
 
                     HotkeyRecorderButton(
-                        hotkey: $liveSettings.hotkey,
+                        hotkey: $live.hotkey,
                         isRecording: $isRecordingToggle
                     )
                 }
@@ -418,16 +424,16 @@ struct ShortcutsLiveSettingsView: View {
 
                     StyledToggle(
                         label: "Enable Push-to-Talk",
-                        isOn: $liveSettings.pttEnabled,
+                        isOn: $live.pttEnabled,
                         help: "Activate push-to-talk recording mode"
                     )
 
                     HotkeyRecorderButton(
-                        hotkey: $liveSettings.pttHotkey,
+                        hotkey: $live.pttHotkey,
                         isRecording: $isRecordingPTT
                     )
-                    .opacity(liveSettings.pttEnabled ? 1.0 : 0.5)
-                    .allowsHitTesting(liveSettings.pttEnabled)
+                    .opacity(live.pttEnabled ? 1.0 : 0.5)
+                    .allowsHitTesting(live.pttEnabled)
                 }
             }
         }
@@ -440,7 +446,7 @@ struct ShortcutsLiveSettingsView: View {
 // MARK: - Audio Settings
 
 struct AudioLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
 
     var body: some View {
         SettingsPageContainer {
@@ -474,18 +480,13 @@ struct AudioLiveSettingsView: View {
 // MARK: - Sounds Settings
 
 struct SoundsLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
     @State private var selectedEvent: SoundEvent = .start
 
-    private func binding(for event: SoundEvent) -> Binding<TalkieSound> {
-        switch event {
-        case .start: return $liveSettings.startSound
-        case .finish: return $liveSettings.finishSound
-        case .paste: return $liveSettings.pastedSound
-        }
-    }
-
     var body: some View {
+        @Bindable var live = liveSettings
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "speaker.wave.2",
@@ -504,7 +505,13 @@ struct SoundsLiveSettingsView: View {
                         ForEach(SoundEvent.allCases, id: \.rawValue) { event in
                             SoundEventCard(
                                 event: event,
-                                sound: binding(for: event).wrappedValue,
+                                sound: {
+                                    switch event {
+                                    case .start: return live.startSound
+                                    case .finish: return live.finishSound
+                                    case .paste: return live.pastedSound
+                                    }
+                                }(),
                                 isSelected: selectedEvent == event
                             ) {
                                 selectedEvent = event
@@ -517,9 +524,9 @@ struct SoundsLiveSettingsView: View {
                     HStack {
                         Spacer()
                         PlaySequenceButton(sounds: [
-                            liveSettings.startSound,
-                            liveSettings.finishSound,
-                            liveSettings.pastedSound
+                            live.startSound,
+                            live.finishSound,
+                            live.pastedSound
                         ])
                     }
                 }
@@ -534,20 +541,26 @@ struct SoundsLiveSettingsView: View {
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
-                    SoundGrid(selection: binding(for: selectedEvent))
+                    SoundGrid(selection: {
+                        switch selectedEvent {
+                        case .start: return $live.startSound
+                        case .finish: return $live.finishSound
+                        case .paste: return $live.pastedSound
+                        }
+                    }())
                 }
             }
         }
         .onAppear {
             logger.debug("SoundsLiveSettingsView appeared")
         }
-        .onChange(of: liveSettings.startSound) { _, newValue in
+        .onChange(of: live.startSound) { _, newValue in
             logger.info("Start sound changed to: \(newValue.displayName)")
         }
-        .onChange(of: liveSettings.finishSound) { _, newValue in
+        .onChange(of: live.finishSound) { _, newValue in
             logger.info("Finish sound changed to: \(newValue.displayName)")
         }
-        .onChange(of: liveSettings.pastedSound) { _, newValue in
+        .onChange(of: live.pastedSound) { _, newValue in
             logger.info("Pasted sound changed to: \(newValue.displayName)")
         }
     }
@@ -556,10 +569,13 @@ struct SoundsLiveSettingsView: View {
 // MARK: - Transcription Settings
 
 struct TranscriptionLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
-    @State private var engineClient = EngineClient.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
+    @Environment(EngineClient.self) private var engineClient
 
     var body: some View {
+        @Bindable var live = liveSettings
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "text.bubble",
@@ -601,10 +617,10 @@ struct TranscriptionLiveSettingsView: View {
                             ForEach(engineClient.availableModels) { model in
                                 TranscriptionModelCard(
                                     model: model,
-                                    isSelected: liveSettings.selectedModelId == model.id,
+                                    isSelected: live.selectedModelId == model.id,
                                     downloadProgress: engineClient.downloadProgress,
                                     onSelect: {
-                                        selectModel(model)
+                                        selectModel(model, live: live)
                                     },
                                     onDownload: {
                                         downloadModel(model)
@@ -632,11 +648,11 @@ struct TranscriptionLiveSettingsView: View {
         }
     }
 
-    private func selectModel(_ model: ModelInfo) {
+    private func selectModel(_ model: ModelInfo, live: LiveSettings) {
         guard model.isDownloaded else { return }
 
         logger.info("Selecting transcription model: \(model.id)")
-        liveSettings.selectedModelId = model.id
+        live.selectedModelId = model.id
 
         // Preload the model for fast transcription
         Task {
@@ -682,7 +698,7 @@ struct TranscriptionLiveSettingsView: View {
         // Monitor download progress every second
         Task {
             while engineClient.isDownloading {
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                try? await Task.sleep(for: .seconds(1)) // 1 second
                 engineClient.refreshDownloadProgress()
             }
         }
@@ -692,9 +708,12 @@ struct TranscriptionLiveSettingsView: View {
 // MARK: - Appearance Settings
 
 struct AppearanceLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
 
     var body: some View {
+        @Bindable var live = liveSettings
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "paintbrush",
@@ -717,9 +736,9 @@ struct AppearanceLiveSettingsView: View {
                         ForEach(VisualTheme.allCases, id: \.rawValue) { theme in
                             ThemePreviewCard(
                                 theme: theme,
-                                isSelected: liveSettings.visualTheme == theme
+                                isSelected: live.visualTheme == theme
                             ) {
-                                liveSettings.applyVisualTheme(theme)
+                                live.applyVisualTheme(theme)
                             }
                         }
                     }
@@ -737,7 +756,7 @@ struct AppearanceLiveSettingsView: View {
 
                     TabSelector(
                         options: AppearanceMode.allCases,
-                        selection: $liveSettings.appearanceMode
+                        selection: $live.appearanceMode
                     )
                 }
 
@@ -753,7 +772,7 @@ struct AppearanceLiveSettingsView: View {
 
                     TabSelector(
                         options: FontSize.allCases,
-                        selection: $liveSettings.fontSize
+                        selection: $live.fontSize
                     )
                 }
 
@@ -771,9 +790,9 @@ struct AppearanceLiveSettingsView: View {
                         ForEach(AccentColorOption.allCases, id: \.rawValue) { color in
                             AccentColorButton(
                                 color: color,
-                                isSelected: liveSettings.accentColor == color
+                                isSelected: live.accentColor == color
                             ) {
-                                liveSettings.accentColor = color
+                                live.accentColor = color
                             }
                         }
                     }
@@ -855,9 +874,12 @@ private struct AccentColorButton: View {
 // MARK: - Auto-Paste Settings
 
 struct AutoPasteLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
 
     var body: some View {
+        @Bindable var live = liveSettings
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "arrow.right.doc.on.clipboard",
@@ -887,18 +909,18 @@ struct AutoPasteLiveSettingsView: View {
                         title: RoutingMode.paste.displayName,
                         description: RoutingMode.paste.description,
                         value: RoutingMode.paste,
-                        selectedValue: liveSettings.routingMode
+                        selectedValue: live.routingMode
                     ) {
-                        liveSettings.routingMode = .paste
+                        live.routingMode = .paste
                     }
 
                     RadioButtonRow(
                         title: RoutingMode.clipboardOnly.displayName,
                         description: RoutingMode.clipboardOnly.description,
                         value: RoutingMode.clipboardOnly,
-                        selectedValue: liveSettings.routingMode
+                        selectedValue: live.routingMode
                     ) {
-                        liveSettings.routingMode = .clipboardOnly
+                        live.routingMode = .clipboardOnly
                     }
                 }
 
@@ -921,7 +943,7 @@ struct AutoPasteLiveSettingsView: View {
 
                     StyledToggle(
                         label: "Return to origin app after pasting",
-                        isOn: $liveSettings.returnToOriginAfterPaste,
+                        isOn: $live.returnToOriginAfterPaste,
                         help: "Automatically switches back to the app you were using when the recording started"
                     )
                 }
@@ -948,18 +970,18 @@ struct AutoPasteLiveSettingsView: View {
                         title: PrimaryContextSource.startApp.displayName,
                         description: PrimaryContextSource.startApp.description,
                         value: .startApp,
-                        selectedValue: liveSettings.primaryContextSource
+                        selectedValue: live.primaryContextSource
                     ) {
-                        liveSettings.primaryContextSource = .startApp
+                        live.primaryContextSource = .startApp
                     }
 
                     RadioButtonRow(
                         title: PrimaryContextSource.endApp.displayName,
                         description: PrimaryContextSource.endApp.description,
                         value: .endApp,
-                        selectedValue: liveSettings.primaryContextSource
+                        selectedValue: live.primaryContextSource
                     ) {
-                        liveSettings.primaryContextSource = .endApp
+                        live.primaryContextSource = .endApp
                     }
                 }
             }
@@ -970,9 +992,12 @@ struct AutoPasteLiveSettingsView: View {
 // MARK: - Storage Settings
 
 struct StorageLiveSettingsView: View {
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
 
     var body: some View {
+        @Bindable var live = liveSettings
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "clock",
@@ -992,11 +1017,11 @@ struct StorageLiveSettingsView: View {
 
                     HStack {
                         Stepper(
-                            value: $liveSettings.utteranceTTLHours,
+                            value: $live.utteranceTTLHours,
                             in: 1...720,
                             step: 24
                         ) {
-                            Text("\(liveSettings.utteranceTTLHours) hours (\(liveSettings.utteranceTTLHours / 24) days)")
+                            Text("\(live.utteranceTTLHours) hours (\(live.utteranceTTLHours / 24) days)")
                                 .font(SettingsManager.shared.fontSM)
                         }
                     }

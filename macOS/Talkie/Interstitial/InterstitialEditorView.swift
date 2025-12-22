@@ -10,7 +10,7 @@ import SwiftUI
 
 struct InterstitialEditorView: View {
     @State var manager: InterstitialManager
-    @State private var settings = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settings
     @FocusState private var isTextFieldFocused: Bool
     @FocusState private var isInstructionFocused: Bool
     @State private var customInstruction: String = ""
@@ -665,7 +665,7 @@ struct InterstitialEditorView: View {
             // Start timer
             dictationTimerRef = Task {
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    try? await Task.sleep(for: .milliseconds(100))
                     dictationDuration += 0.1
                 }
             }
@@ -698,7 +698,7 @@ struct InterstitialEditorView: View {
 
                 // Show success briefly
                 dictationPillState = .success
-                try? await Task.sleep(nanoseconds: 800_000_000)
+                try? await Task.sleep(for: .milliseconds(800))
                 dictationPillState = .idle
 
             } catch {

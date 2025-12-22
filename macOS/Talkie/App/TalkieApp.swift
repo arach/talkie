@@ -65,8 +65,8 @@ struct TalkieApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     let persistenceController = PersistenceController.shared
-    @State private var settingsManager = SettingsManager.shared
-    @State private var onboardingManager = OnboardingManager.shared
+    // Remove @State from global singletons - they're already observable
+    // Reference singletons directly via .shared instead
     @FocusedValue(\.sidebarToggle) var sidebarToggle
     @FocusedValue(\.settingsNavigation) var settingsNavigation
     @FocusedValue(\.liveNavigation) var liveNavigation
@@ -75,12 +75,20 @@ struct TalkieApp: App {
         WindowGroup {
             MigrationGateView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .environment(SettingsManager.shared)
+                .environment(EngineClient.shared)
+                .environment(LiveSettings.shared)
+                .environment(CloudKitSyncManager.shared)
+                .environment(SystemEventManager.shared)
                 .frame(minWidth: 900, minHeight: 600)
-                .tint(settingsManager.accentColor.color)
+                .tint(SettingsManager.shared.accentColor.color)
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
-                .sheet(isPresented: $onboardingManager.shouldShowOnboarding) {
+                .sheet(isPresented: Binding(
+                    get: { OnboardingManager.shared.shouldShowOnboarding },
+                    set: { OnboardingManager.shared.shouldShowOnboarding = $0 }
+                )) {
                     OnboardingView()
                 }
         }

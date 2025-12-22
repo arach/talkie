@@ -15,7 +15,7 @@ struct DiffReviewView: View {
 
     // Access manager for prompt info
     @State var manager = InterstitialManager.shared
-    @State private var settings = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settings
     @State private var showPromptDetails = false
 
     // MARK: - Theme colors

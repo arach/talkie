@@ -20,7 +20,7 @@ extension NSNotification.Name {
 
 struct ModelsContentView: View {
     @State private var registry = LLMProviderRegistry.shared
-    @State private var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var whisperService = WhisperService.shared
     @State private var parakeetService = ParakeetService.shared
     @State private var selectedProviderId: String = "gemini"
@@ -146,7 +146,11 @@ struct ModelsContentView: View {
 
     @State private var configuringProvider: String?
 
+    @ViewBuilder
     private var cloudProvidersSection: some View {
+        @Bindable var settings = settingsManager
+
+
         LazyVGrid(columns: [
             GridItem(.flexible(), spacing: 8),
             GridItem(.flexible(), spacing: 8),
@@ -230,7 +234,7 @@ struct ModelsContentView: View {
                     "Free tier available"
                 ],
                 isConfiguring: configuringProvider == "gemini",
-                apiKeyBinding: $settingsManager.geminiApiKey,
+                apiKeyBinding: $settings.geminiApiKey,
                 onConfigure: {
                     withAnimation {
                         configuringProvider = configuringProvider == "gemini" ? nil : "gemini"

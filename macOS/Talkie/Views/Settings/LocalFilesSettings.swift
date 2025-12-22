@@ -13,13 +13,16 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Local Files Settings View
 
 struct LocalFilesSettingsView: View {
-    @State private var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var showingTranscriptsFolderPicker = false
     @State private var showingAudioFolderPicker = false
     @State private var statusMessage: String?
     @State private var stats: (transcripts: Int, audioFiles: Int, totalSize: Int64) = (0, 0, 0)
 
     var body: some View {
+        @Bindable var settings = settingsManager
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "folder.badge.person.crop",
@@ -54,7 +57,7 @@ struct LocalFilesSettingsView: View {
 
                 // MARK: - Transcripts Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settingsManager.saveTranscriptsLocally) {
+                    Toggle(isOn: $settings.saveTranscriptsLocally) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: "doc.text")
@@ -88,7 +91,7 @@ struct LocalFilesSettingsView: View {
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 8) {
-                                TextField("~/Documents/Talkie/Transcripts", text: $settingsManager.transcriptsFolderPath)
+                                TextField("~/Documents/Talkie/Transcripts", text: $settings.transcriptsFolderPath)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(size: 11, design: .monospaced))
 
@@ -116,7 +119,7 @@ struct LocalFilesSettingsView: View {
 
                 // MARK: - Audio Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settingsManager.saveAudioLocally) {
+                    Toggle(isOn: $settings.saveAudioLocally) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: "waveform")
@@ -146,7 +149,7 @@ struct LocalFilesSettingsView: View {
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 8) {
-                                TextField("~/Documents/Talkie/Audio", text: $settingsManager.audioFolderPath)
+                                TextField("~/Documents/Talkie/Audio", text: $settings.audioFolderPath)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(size: 11, design: .monospaced))
 

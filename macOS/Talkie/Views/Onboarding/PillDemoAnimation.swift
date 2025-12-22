@@ -211,7 +211,7 @@ struct PillDemoAnimation: View {
                 startDotsAnimation()
                 // Hide keys after 1.2s (longer to enjoy)
                 Task {
-                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    try? await Task.sleep(for: .seconds(1.2))
                     await MainActor.run {
                         withAnimation(.easeIn(duration: 0.3)) {
                             showKeys = false
@@ -236,7 +236,7 @@ struct PillDemoAnimation: View {
     private func startRecordingAnimation() {
         Task {
             while phase == 2 || phase == 3 {
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                try? await Task.sleep(for: .milliseconds(100))
                 await MainActor.run {
                     recordingTime += 0.1
                 }
@@ -247,7 +247,7 @@ struct PillDemoAnimation: View {
     private func startWaveformAnimation() {
         Task {
             while phase == 2 || phase == 3 {
-                try? await Task.sleep(nanoseconds: 50_000_000)
+                try? await Task.sleep(for: .milliseconds(50))
                 await MainActor.run {
                     var newLevels = waveformLevels
                     for i in 0..<(newLevels.count - 1) {
@@ -265,7 +265,7 @@ struct PillDemoAnimation: View {
         dotsCount = 1
         Task {
             while phase == 4 {
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                try? await Task.sleep(for: .milliseconds(300))
                 await MainActor.run {
                     dotsCount = (dotsCount % 3) + 1
                 }

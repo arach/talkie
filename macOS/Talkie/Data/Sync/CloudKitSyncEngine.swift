@@ -8,6 +8,7 @@
 
 import Foundation
 import CloudKit
+import Observation
 
 // MARK: - CloudKit Sync Engine
 

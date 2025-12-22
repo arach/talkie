@@ -14,6 +14,7 @@
 import SwiftUI
 import Combine
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "SessionLayout")
 

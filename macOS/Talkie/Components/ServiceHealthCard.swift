@@ -135,7 +135,7 @@ struct LiveRecordingHealthCard: View {
 
 struct EngineHealthCard: View {
     @State private var serviceMonitor = TalkieServiceMonitor.shared
-    @State private var liveSettings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var liveSettings
 
     private var modelName: String {
         ModelInfo.formatModelName(liveSettings.selectedModelId)

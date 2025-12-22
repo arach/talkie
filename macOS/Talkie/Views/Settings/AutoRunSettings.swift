@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Auto-Run Settings View
 
 struct AutoRunSettingsView: View {
-    @State private var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var workflowManager = WorkflowManager.shared
     @State private var selectedWorkflowId: UUID?
 
@@ -29,6 +29,9 @@ struct AutoRunSettingsView: View {
     }
 
     var body: some View {
+        @Bindable var settings = settingsManager
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "bolt.circle",
@@ -38,7 +41,7 @@ struct AutoRunSettingsView: View {
         } content: {
             // Master toggle
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settingsManager.autoRunWorkflowsEnabled) {
+                    Toggle(isOn: $settings.autoRunWorkflowsEnabled) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Enable Auto-Run Workflows")
                                 .font(Theme.current.fontSMBold)

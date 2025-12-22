@@ -58,7 +58,7 @@ private extension Sequence {
 
 struct HistoryView: View {
     @State private var store = DictationStore.shared
-    @State private var settings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var settings
 
     @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []  // Multi-select support
@@ -1004,7 +1004,7 @@ struct HistoryView: View {
 
 struct UtteranceRowView: View {
     let utterance: Utterance
-    @State private var settings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var settings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -1320,7 +1320,7 @@ private struct ToggleSegment: View {
 private struct TranscriptContainer: View {
     let utterance: Utterance
     @Binding var showJSON: Bool
-    @State private var settings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var settings
 
     // Crisp text colors - solid grays instead of opacity
     private static let textPrimary = Color.white

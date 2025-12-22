@@ -340,7 +340,7 @@ final class InterstitialManager {
             Task {
                 while isRecordingInstruction {
                     audioLevel = EphemeralTranscriber.shared.audioLevel
-                    try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                    try? await Task.sleep(for: .milliseconds(50)) // 50ms
                 }
             }
         } catch {

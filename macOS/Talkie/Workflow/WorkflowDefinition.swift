@@ -8,6 +8,7 @@
 import Foundation
 import os
 import SwiftUI
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Workflow")
 // MARK: - Workflow Definition

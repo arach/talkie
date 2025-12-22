@@ -9,6 +9,7 @@
 import Foundation
 import Darwin
 import TalkieKit
+import Observation
 
 /// Information about a discovered process
 public struct DiscoveredProcess: Identifiable, Equatable {

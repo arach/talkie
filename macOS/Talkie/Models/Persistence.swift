@@ -10,6 +10,7 @@ import CloudKit
 import AppKit
 import os
 import Combine
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Persistence")
 

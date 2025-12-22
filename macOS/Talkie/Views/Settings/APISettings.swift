@@ -12,13 +12,16 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - API Settings View
 struct APISettingsView: View {
-    @State var settingsManager: SettingsManager
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var editingProvider: String?
     @State private var editingKeyInput: String = ""
     @State private var revealedKeys: Set<String> = []
     @State private var fetchedKeys: [String: String] = [:]  // Cache fetched keys
 
     var body: some View {
+        @Bindable var settings = settingsManager
+
+        return
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "key",
@@ -230,7 +233,7 @@ struct APISettingsView: View {
                     .foregroundColor(.secondary.opacity(0.8))
                     .fixedSize(horizontal: false, vertical: true)
 
-                Picker("Cost Tier", selection: $settingsManager.llmCostTier) {
+                Picker("Cost Tier", selection: $settings.llmCostTier) {
                     ForEach(LLMCostTier.allCases, id: \.self) { tier in
                         Text(tier.displayName).tag(tier)
                     }
