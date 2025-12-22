@@ -173,6 +173,14 @@ class PermissionsManager {
 struct PermissionsSettingsView: View {
     private let permissionsManager = PermissionsManager.shared
 
+    private var grantedCount: Int {
+        [
+            permissionsManager.microphoneStatus == .granted,
+            permissionsManager.accessibilityStatus == .granted,
+            permissionsManager.automationStatus == .granted
+        ].filter { $0 }.count
+    }
+
     var body: some View {
         SettingsPageContainer {
             SettingsPageHeader(
@@ -181,131 +189,154 @@ struct PermissionsSettingsView: View {
                 subtitle: "System permissions required for Talkie features."
             )
         } content: {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                // Microphone
-                PermissionRow(
-                    icon: "mic.fill",
-                    name: "Microphone",
-                    description: "Required for recording voice memos",
-                    status: permissionsManager.microphoneStatus,
-                    onRequest: {
-                        if permissionsManager.microphoneStatus == .notDetermined {
-                            permissionsManager.requestMicrophonePermission()
-                        } else {
-                            permissionsManager.openMicrophoneSettings()
+            // MARK: - Required Permissions Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(grantedCount == 3 ? Color.green : Color.orange)
+                        .frame(width: 3, height: 14)
+
+                    Text("REQUIRED PERMISSIONS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(grantedCount == 3 ? Color.green : Color.orange)
+                            .frame(width: 6, height: 6)
+                        Text("\(grantedCount)/3 GRANTED")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(grantedCount == 3 ? .green : .orange)
+                    }
+                }
+
+                VStack(spacing: 8) {
+                    // Microphone
+                    PermissionRow(
+                        icon: "mic.fill",
+                        name: "Microphone",
+                        description: "Required for recording voice memos",
+                        status: permissionsManager.microphoneStatus,
+                        onRequest: {
+                            if permissionsManager.microphoneStatus == .notDetermined {
+                                permissionsManager.requestMicrophonePermission()
+                            } else {
+                                permissionsManager.openMicrophoneSettings()
+                            }
+                        }
+                    )
+
+                    // Accessibility
+                    PermissionRow(
+                        icon: "accessibility",
+                        name: "Accessibility",
+                        description: "Required for Quick Open auto-paste feature",
+                        status: permissionsManager.accessibilityStatus,
+                        onRequest: {
+                            permissionsManager.requestAccessibilityPermission()
+                        }
+                    )
+
+                    // Automation
+                    PermissionRow(
+                        icon: "gearshape.2.fill",
+                        name: "Automation",
+                        description: "Required for AppleScript workflows",
+                        status: permissionsManager.automationStatus,
+                        statusOverride: "Check in System Settings",
+                        onRequest: {
+                            permissionsManager.openAutomationSettings()
+                        }
+                    )
+                }
+            }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
+
+            // MARK: - Actions Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.blue)
+                        .frame(width: 3, height: 14)
+
+                    Text("ACTIONS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+                }
+
+                HStack(spacing: 12) {
+                    Button(action: {
+                        permissionsManager.refreshAllPermissions()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(Theme.current.fontXS)
+                            Text("Refresh Status")
+                                .font(Theme.current.fontXSMedium)
                         }
                     }
-                )
+                    .buttonStyle(.bordered)
 
-                Divider()
-
-                // Accessibility
-                PermissionRow(
-                    icon: "accessibility",
-                    name: "Accessibility",
-                    description: "Required for Quick Open auto-paste feature",
-                    status: permissionsManager.accessibilityStatus,
-                    onRequest: {
-                        permissionsManager.requestAccessibilityPermission()
+                    Button(action: {
+                        permissionsManager.openPrivacySettings()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "gear")
+                                .font(Theme.current.fontXS)
+                            Text("Open Privacy Settings")
+                                .font(Theme.current.fontXSMedium)
+                        }
                     }
-                )
+                    .buttonStyle(.bordered)
 
-                Divider()
-
-                // Automation
-                PermissionRow(
-                    icon: "gearshape.2.fill",
-                    name: "Automation",
-                    description: "Required for AppleScript workflows",
-                    status: permissionsManager.automationStatus,
-                    statusOverride: "Check in System Settings",
-                    onRequest: {
-                        permissionsManager.openAutomationSettings()
-                    }
-                )
-            }
-
-            Divider()
-                .padding(.vertical, Spacing.sm)
-
-            // Refresh button
-            HStack {
-                Button(action: {
-                    permissionsManager.refreshAllPermissions()
-                }) {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(Theme.current.fontXS)
-                        Text("REFRESH STATUS")
-                            .font(Theme.current.fontXSMedium)
-                    }
-                    .foregroundColor(Theme.current.foregroundMuted)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, Spacing.xs)
-                    .background(Theme.current.foregroundMuted.opacity(Opacity.light))
-                    .cornerRadius(CornerRadius.xs)
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button(action: {
-                    permissionsManager.openPrivacySettings()
-                }) {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "gear")
-                            .font(Theme.current.fontXS)
-                        Text("OPEN PRIVACY SETTINGS")
-                            .font(Theme.current.fontXSMedium)
-                    }
-                    .foregroundColor(Theme.current.foregroundMuted)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, Spacing.xs)
-                    .background(Theme.current.foregroundMuted.opacity(Opacity.light))
-                    .cornerRadius(CornerRadius.xs)
-                }
-                .buttonStyle(.plain)
+                .padding(12)
+                .background(Theme.current.surface1)
+                .cornerRadius(8)
             }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
 
-            // Info note
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(alignment: .top, spacing: Spacing.sm) {
-                    Image(systemName: "info.circle")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(Theme.current.foregroundMuted)
+            // MARK: - Info Note
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "info.circle.fill")
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(.blue)
 
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Some permissions can only be changed in System Settings → Privacy & Security. Talkie will request permissions when features are first used.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                        .foregroundColor(.secondary)
 
-                // Show app identifier for System Settings lookup (dev/staging builds only)
-                if let bundleID = Bundle.main.bundleIdentifier,
-                   bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
-                    Divider()
-
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "app.badge")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundMuted)
-
-                        VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text("Look for this app in System Settings:")
-                                .font(Theme.current.fontXSMedium)
-                                .foregroundColor(Theme.current.foregroundMuted)
-
-                            Text(bundleID)
+                    // Show app identifier for System Settings lookup (dev/staging builds only)
+                    if let bundleID = Bundle.main.bundleIdentifier,
+                       bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
+                        HStack(spacing: 6) {
+                            Image(systemName: "app.badge")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundMuted.opacity(Opacity.prominent))
+                                .foregroundColor(.secondary)
+                            Text("Look for: \(bundleID)")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
                                 .textSelection(.enabled)
                         }
+                        .padding(8)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(4)
                     }
                 }
             }
-            .padding(Spacing.sm)
-            .background(Theme.current.foregroundMuted.opacity(Opacity.subtle))
-            .cornerRadius(CornerRadius.sm)
+            .padding(12)
+            .background(Color.blue.opacity(0.08))
+            .cornerRadius(8)
         }
         .onAppear {
             // Check permissions when view appears (not on init)

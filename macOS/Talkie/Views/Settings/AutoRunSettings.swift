@@ -38,90 +38,133 @@ struct AutoRunSettingsView: View {
                 subtitle: "Configure workflows that run automatically when memos sync."
             )
         } content: {
-            // Master toggle
+            // MARK: - Master Toggle Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(settingsManager.autoRunWorkflowsEnabled ? Color.green : Color.secondary)
+                        .frame(width: 3, height: 14)
+
+                    Text("AUTOMATION")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(settingsManager.autoRunWorkflowsEnabled ? Color.green : Color.secondary)
+                            .frame(width: 6, height: 6)
+                        Text(settingsManager.autoRunWorkflowsEnabled ? "ENABLED" : "DISABLED")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(settingsManager.autoRunWorkflowsEnabled ? .green : .secondary)
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    Image(systemName: "bolt.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(settingsManager.autoRunWorkflowsEnabled ? .green : .secondary)
+                        .frame(width: 32)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Enable Auto-Run Workflows")
+                            .font(Theme.current.fontSMMedium)
+                        Text("Workflows marked as auto-run will execute automatically when new memos sync from your iPhone.")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $settings.autoRunWorkflowsEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+                .padding(12)
+                .background(Theme.current.surface1)
+                .cornerRadius(8)
+            }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
+
+            if settingsManager.autoRunWorkflowsEnabled {
+                // MARK: - Auto-run Workflows Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settings.autoRunWorkflowsEnabled) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Enable Auto-Run Workflows")
-                                .font(Theme.current.fontSMBold)
-                            Text("When enabled, workflows marked as auto-run will execute automatically when new memos sync from your iPhone.")
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.purple)
+                            .frame(width: 3, height: 14)
+
+                        Text("AUTO-RUN WORKFLOWS")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        if !autoRunWorkflows.isEmpty {
+                            Text("\(autoRunWorkflows.count) ACTIVE")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(.purple.opacity(0.8))
+                        }
+
+                        if !availableWorkflows.isEmpty {
+                            Menu {
+                                ForEach(availableWorkflows) { workflow in
+                                    Button(action: { enableAutoRun(workflow) }) {
+                                        Label(workflow.name, systemImage: workflow.icon)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "plus")
+                                    Text("Add")
+                                }
+                                .font(Theme.current.fontXSMedium)
+                            }
+                        }
+                    }
+
+                    if autoRunWorkflows.isEmpty {
+                        // Default Hey Talkie workflow info
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "waveform.badge.mic")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.purple)
+                                    .frame(width: 32, height: 32)
+                                    .background(Color.purple.opacity(0.15))
+                                    .cornerRadius(6)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Hey Talkie (Default)")
+                                        .font(Theme.current.fontSMMedium)
+                                    Text("Detects \"Hey Talkie\" voice commands and routes to workflows")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                Text("ACTIVE")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green.opacity(0.2))
+                                    .foregroundColor(.green)
+                                    .cornerRadius(4)
+                            }
+                            .padding(12)
+                            .background(Theme.current.surface1)
+                            .cornerRadius(8)
+
+                            Text("The default Hey Talkie workflow runs automatically. Add your own workflows to customize.")
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(.secondary)
                         }
-                    }
-                    .toggleStyle(.switch)
-                }
-                .padding(16)
-                .background(Theme.current.surface1)
-                .cornerRadius(8)
-
-                if settingsManager.autoRunWorkflowsEnabled {
-                    Divider()
-
-                    // Auto-run workflows list
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("AUTO-RUN WORKFLOWS")
-                                .font(Theme.current.fontXSBold)
-                                .foregroundColor(.secondary)
-
-                            Spacer()
-
-                            if !availableWorkflows.isEmpty {
-                                Menu {
-                                    ForEach(availableWorkflows) { workflow in
-                                        Button(action: { enableAutoRun(workflow) }) {
-                                            Label(workflow.name, systemImage: workflow.icon)
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "plus")
-                                        Text("Add")
-                                    }
-                                    .font(Theme.current.fontXSMedium)
-                                }
-                            }
-                        }
-
-                        if autoRunWorkflows.isEmpty {
-                            // Default Hey Talkie workflow info
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "waveform.badge.mic")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.purple)
-                                        .frame(width: 32, height: 32)
-                                        .background(Color.purple.opacity(0.15))
-                                        .cornerRadius(6)
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Hey Talkie (Default)")
-                                            .font(Theme.current.fontSMBold)
-                                        Text("Detects \"Hey Talkie\" voice commands and routes to workflows")
-                                            .font(Theme.current.fontXS)
-                                            .foregroundColor(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    Text("ACTIVE")
-                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.green.opacity(0.2))
-                                        .foregroundColor(.green)
-                                        .cornerRadius(4)
-                                }
-                                .padding(12)
-                                .background(Theme.current.surface1)
-                                .cornerRadius(8)
-
-                                Text("The default Hey Talkie workflow runs automatically. Add your own workflows to customize.")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(.secondary)
-                            }
-                        } else {
+                    } else {
+                        VStack(spacing: 8) {
                             ForEach(autoRunWorkflows) { workflow in
                                 AutoRunWorkflowRow(
                                     workflow: workflow,
@@ -132,26 +175,39 @@ struct AutoRunSettingsView: View {
                             }
                         }
                     }
+                }
+                .padding(16)
+                .background(Theme.current.surface2)
+                .cornerRadius(8)
 
-                    Divider()
+                // MARK: - How It Works Section
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.cyan)
+                            .frame(width: 3, height: 14)
 
-                    // How it works
-                    VStack(alignment: .leading, spacing: 12) {
                         Text("HOW IT WORKS")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            howItWorksRow(number: "1", text: "Record a memo on iPhone")
-                            howItWorksRow(number: "2", text: "Memo syncs to Mac via iCloud")
-                            howItWorksRow(number: "3", text: "Auto-run workflows execute in order")
-                            howItWorksRow(number: "4", text: "Workflows with trigger steps gate themselves (e.g., \"Hey Talkie\")")
-                            howItWorksRow(number: "5", text: "Universal workflows (like indexers) run on all memos")
-                        }
-                        .padding(12)
-                        .background(Theme.current.surface1)
-                        .cornerRadius(8)
+                        Spacer()
                     }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        howItWorksRow(number: "1", text: "Record a memo on iPhone")
+                        howItWorksRow(number: "2", text: "Memo syncs to Mac via iCloud")
+                        howItWorksRow(number: "3", text: "Auto-run workflows execute in order")
+                        howItWorksRow(number: "4", text: "Workflows with trigger steps gate themselves (e.g., \"Hey Talkie\")")
+                        howItWorksRow(number: "5", text: "Universal workflows (like indexers) run on all memos")
+                    }
+                    .padding(12)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
+                }
+                .padding(16)
+                .background(Theme.current.surface2)
+                .cornerRadius(8)
             }
         }
     }

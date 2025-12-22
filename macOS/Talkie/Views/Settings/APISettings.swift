@@ -28,8 +28,38 @@ struct APISettingsView: View {
                 subtitle: "Manage API keys for cloud AI providers. Keys are stored securely in the macOS Keychain."
             )
         } content: {
-            // Provider API Keys
-            VStack(spacing: 16) {
+            // MARK: - Provider API Keys
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.blue)
+                        .frame(width: 3, height: 14)
+
+                    Text("CLOUD PROVIDERS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    // Count configured keys
+                    let configuredCount = [
+                        settingsManager.hasOpenAIKey(),
+                        settingsManager.hasAnthropicKey(),
+                        settingsManager.hasValidApiKey,
+                        settingsManager.hasGroqKey()
+                    ].filter { $0 }.count
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(configuredCount > 0 ? Color.green : Color.orange)
+                            .frame(width: 6, height: 6)
+                        Text("\(configuredCount)/4 CONFIGURED")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(configuredCount > 0 ? .green : .orange)
+                    }
+                }
+
+                VStack(spacing: 12) {
                     APIKeyRow(
                         provider: "OpenAI",
                         icon: "brain.head.profile",
@@ -211,48 +241,93 @@ struct APISettingsView: View {
                         }
                     )
                 }
+            }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
 
-            Divider()
-                .background(Theme.current.divider)
-                .padding(.vertical, 8)
-
-            // LLM Cost Tier Section
+            // MARK: - LLM Cost Tier Section
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    Image(systemName: "gauge.with.dots.needle.33percent")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.purple)
+                        .frame(width: 3, height: 14)
+
                     Text("LLM COST TIER")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    // Current tier badge
+                    Text(settingsManager.llmCostTier.displayName.uppercased())
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(tierColor(settingsManager.llmCostTier))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(tierColor(settingsManager.llmCostTier).opacity(0.15))
+                        .cornerRadius(3)
                 }
 
-                Text("Controls the default model quality for workflow LLM steps. Budget uses cheaper/faster models, Capable uses more powerful models.")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary.opacity(0.8))
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Controls the default model quality for workflow LLM steps.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
 
-                Picker("Cost Tier", selection: $settings.llmCostTier) {
-                    ForEach(LLMCostTier.allCases, id: \.self) { tier in
-                        Text(tier.displayName).tag(tier)
+                    Picker("Cost Tier", selection: $settings.llmCostTier) {
+                        ForEach(LLMCostTier.allCases, id: \.self) { tier in
+                            Text(tier.displayName).tag(tier)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
 
-                // Tier description
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(tierColor(settingsManager.llmCostTier))
-                        .frame(width: 6, height: 6)
-                    Text(tierDescription(settingsManager.llmCostTier))
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                    // Tier description card
+                    HStack(spacing: 12) {
+                        Image(systemName: tierIcon(settingsManager.llmCostTier))
+                            .font(.system(size: 18))
+                            .foregroundColor(tierColor(settingsManager.llmCostTier))
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(settingsManager.llmCostTier.displayName)
+                                .font(Theme.current.fontSMMedium)
+                            Text(tierDescription(settingsManager.llmCostTier))
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
                 }
             }
-            .padding(.horizontal, 4)
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
 
-            Spacer()
+            // MARK: - Keychain Info
+            HStack(spacing: 8) {
+                Image(systemName: "lock.shield")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(.green)
+
+                Text("API keys are encrypted and stored in the macOS Keychain for maximum security.")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(8)
+        }
+    }
+
+    private func tierIcon(_ tier: LLMCostTier) -> String {
+        switch tier {
+        case .budget: return "leaf"
+        case .balanced: return "scale.3d"
+        case .capable: return "sparkles"
         }
     }
 

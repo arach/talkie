@@ -32,12 +32,21 @@ struct OutputSettingsView: View {
                 subtitle: "Configure default output location and path aliases for workflows."
             )
         } content: {
-            // Directory picker
-                VStack(alignment: .leading, spacing: 12) {
+            // MARK: - Default Output Folder Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.blue)
+                        .frame(width: 3, height: 14)
+
                     Text("DEFAULT OUTPUT FOLDER")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
+                    Spacer()
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         TextField("~/Documents/Talkie", text: $outputDirectory)
                             .textFieldStyle(.roundedBorder)
@@ -58,38 +67,34 @@ struct OutputSettingsView: View {
                     }
 
                     // Current value display
-                    HStack(spacing: 4) {
+                    HStack(spacing: 8) {
                         Image(systemName: "folder.fill")
                             .font(Theme.current.fontXS)
                             .foregroundColor(settings.resolvedAccentColor)
                         Text(SaveFileStepConfig.defaultOutputDirectory)
-                            .font(Theme.current.fontXS)
+                            .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        Spacer()
+
+                        if let message = statusMessage {
+                            HStack(spacing: 4) {
+                                Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                    .foregroundColor(message.contains("✓") ? .green : .orange)
+                                Text(message)
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(message.contains("✓") ? .green : .orange)
+                            }
+                        }
                     }
-                    .padding(8)
-                    .background(settings.resolvedAccentColor.opacity(0.1))
+                    .padding(10)
+                    .background(Theme.current.surface1)
                     .cornerRadius(6)
-                }
 
-                // Status message
-                if let message = statusMessage {
-                    HStack(spacing: 6) {
-                        Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .foregroundColor(message.contains("✓") ? .green : .orange)
-                        Text(message)
-                            .font(Theme.current.fontXS)
-                    }
-                }
-
-                Divider()
-
-                // Quick actions
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("QUICK ACTIONS")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 12) {
+                    // Quick actions row
+                    HStack(spacing: 8) {
                         Button(action: openInFinder) {
                             HStack(spacing: 4) {
                                 Image(systemName: "folder.badge.gearshape")
@@ -111,124 +116,146 @@ struct OutputSettingsView: View {
                         Button(action: resetToDefault) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.counterclockwise")
-                                Text("Reset to Default")
+                                Text("Reset")
                             }
                             .font(Theme.current.fontXS)
                         }
                         .buttonStyle(.bordered)
+
+                        Spacer()
+                    }
+                }
+                .padding(12)
+                .background(Theme.current.surface1)
+                .cornerRadius(8)
+            }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
+
+            // MARK: - Path Aliases Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.purple)
+                        .frame(width: 3, height: 14)
+
+                    Text("PATH ALIASES")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    if !pathAliases.isEmpty {
+                        Text("\(pathAliases.count) DEFINED")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(.purple.opacity(0.8))
                     }
                 }
 
-                Divider()
-                    .padding(.vertical, 8)
+                Text("Define shortcuts like @Obsidian, @Notes to use in file paths")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(.secondary.opacity(0.8))
 
-                // MARK: - Path Aliases Section
-                VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("PATH ALIASES")
-                            .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
-
-                        Text("Define shortcuts like @Obsidian, @Notes to use in file paths")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
-                    }
-
-                    // Existing aliases
-                    if !pathAliases.isEmpty {
-                        VStack(spacing: 8) {
-                            ForEach(pathAliases.sorted(by: { $0.key < $1.key }), id: \.key) { alias, path in
-                                HStack(spacing: 12) {
-                                    // Alias name
-                                    HStack(spacing: 2) {
-                                        Text("@")
-                                            .foregroundColor(.blue)
-                                        Text(alias)
-                                            .fontWeight(.medium)
-                                    }
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .frame(width: 100, alignment: .leading)
-
-                                    // Arrow
-                                    Image(systemName: "arrow.right")
-                                        .font(Theme.current.fontXS)
-                                        .foregroundColor(.secondary)
-
-                                    // Path
-                                    Text(path)
-                                        .font(Theme.current.fontXS)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-
-                                    Spacer()
-
-                                    // Delete button
-                                    Button(action: { removeAlias(alias) }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(Theme.current.fontSM)
-                                            .foregroundColor(.secondary.opacity(0.5))
-                                    }
-                                    .buttonStyle(.plain)
+                // Existing aliases
+                if !pathAliases.isEmpty {
+                    VStack(spacing: 6) {
+                        ForEach(pathAliases.sorted(by: { $0.key < $1.key }), id: \.key) { alias, path in
+                            HStack(spacing: 12) {
+                                // Alias name with icon
+                                HStack(spacing: 4) {
+                                    Image(systemName: "at")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.purple)
+                                    Text(alias)
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Theme.current.surface1)
-                                .cornerRadius(6)
+                                .frame(width: 100, alignment: .leading)
+
+                                // Arrow
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary.opacity(0.5))
+
+                                // Path
+                                Text(path)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+
+                                Spacer()
+
+                                // Delete button
+                                Button(action: { removeAlias(alias) }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(Theme.current.fontSM)
+                                        .foregroundColor(.red.opacity(0.6))
+                                }
+                                .buttonStyle(.plain)
                             }
+                            .padding(10)
+                            .background(Theme.current.surface1)
+                            .cornerRadius(6)
                         }
                     }
+                }
 
-                    // Add new alias
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("ADD NEW ALIAS")
-                            .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                // Add new alias
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ADD NEW ALIAS")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
 
-                        HStack(spacing: 8) {
-                            HStack(spacing: 2) {
-                                Text("@")
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.blue)
-                                TextField("Obsidian", text: $newAliasName)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .frame(width: 100)
-                            }
-
-                            TextField("/path/to/folder", text: $newAliasPath)
+                    HStack(spacing: 8) {
+                        HStack(spacing: 2) {
+                            Text("@")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.purple)
+                            TextField("Obsidian", text: $newAliasName)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 11, design: .monospaced))
-
-                            Button(action: { showingAliasFolderPicker = true }) {
-                                Image(systemName: "folder")
-                                    .font(Theme.current.fontSM)
-                            }
-                            .buttonStyle(.bordered)
-
-                            Button(action: addAlias) {
-                                Text("Add")
-                                    .font(Theme.current.fontXSMedium)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(newAliasName.isEmpty || newAliasPath.isEmpty)
+                                .frame(width: 100)
                         }
-                    }
 
-                    // Usage hint
-                    HStack(spacing: 6) {
-                        Image(systemName: "lightbulb")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(.yellow)
-                        Text("Use in Save File step directory: @Obsidian/Voice Notes")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary)
+                        TextField("/path/to/folder", text: $newAliasPath)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+
+                        Button(action: { showingAliasFolderPicker = true }) {
+                            Image(systemName: "folder")
+                                .font(Theme.current.fontSM)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(action: addAlias) {
+                            Text("Add")
+                                .font(Theme.current.fontXSMedium)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(newAliasName.isEmpty || newAliasPath.isEmpty)
                     }
-                    .padding(8)
-                    .background(Color.yellow.opacity(0.1))
-                    .cornerRadius(6)
                 }
+                .padding(12)
+                .background(Theme.current.surface1)
+                .cornerRadius(8)
 
+                // Usage hint
+                HStack(spacing: 8) {
+                    Image(systemName: "lightbulb.fill")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(.yellow)
+                    Text("Use in Save File step directory: @Obsidian/Voice Notes")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(.secondary)
+                }
+                .padding(10)
+                .background(Color.yellow.opacity(0.1))
+                .cornerRadius(6)
+            }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
         }
         .fileImporter(
             isPresented: $showingFolderPicker,

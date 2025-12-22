@@ -29,248 +29,321 @@ struct LocalFilesSettingsView: View {
                 subtitle: "Store your transcripts and audio files locally on your Mac."
             )
         } content: {
-            // Value proposition - always visible
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "lock.shield")
-                            .font(Theme.current.fontSM)
-                            .foregroundColor(.green)
-                        Text("YOUR DATA, YOUR FILES")
-                            .font(Theme.current.fontXSBold)
-                            .foregroundColor(.green)
-                    }
+            // MARK: - Value Proposition
+            HStack(spacing: 12) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.green)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("YOUR DATA, YOUR FILES")
+                        .font(Theme.current.fontSMBold)
+                        .foregroundColor(.green)
 
                     Text("Local files are stored as plain text (Markdown) and standard audio formats. You can open, edit, backup, or move them freely. No lock-in, full portability.")
                         .font(Theme.current.fontXS)
                         .foregroundColor(.secondary)
                 }
-                .padding(16)
-                .background(Color.green.opacity(0.05))
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
-                )
+            }
+            .padding(16)
+            .background(Color.green.opacity(0.08))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
+            )
 
-                Divider()
+            // MARK: - Transcripts Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(settingsManager.saveTranscriptsLocally ? Color.blue : Color.secondary)
+                        .frame(width: 3, height: 14)
 
-                // MARK: - Transcripts Section
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settings.saveTranscriptsLocally) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "doc.text")
-                                    .font(Theme.current.fontSM)
-                                    .foregroundColor(.blue)
-                                Text("Save Transcripts Locally")
-                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            }
-                            HStack(spacing: 4) {
-                                Text("Save as Markdown with YAML frontmatter.")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(.secondary)
-                                Link("File format", destination: URL(string: "https://talkie.jdi.do/docs/file-format")!)
-                                    .font(Theme.current.fontXS)
-                            }
-                        }
-                    }
-                    .toggleStyle(.switch)
-                    .tint(settingsManager.resolvedAccentColor)
-                    .onChange(of: settingsManager.saveTranscriptsLocally) { _, enabled in
-                        if enabled {
-                            TranscriptFileManager.shared.ensureFoldersExist()
-                            syncNow()
-                        }
-                    }
+                    Text("TRANSCRIPTS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
 
-                    if settingsManager.saveTranscriptsLocally {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("TRANSCRIPTS FOLDER")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .foregroundColor(.secondary)
+                    Spacer()
 
-                            HStack(spacing: 8) {
-                                TextField("~/Documents/Talkie/Transcripts", text: $settings.transcriptsFolderPath)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(size: 11, design: .monospaced))
-
-                                Button(action: { showingTranscriptsFolderPicker = true }) {
-                                    Image(systemName: "folder")
-                                        .font(Theme.current.fontSM)
-                                }
-                                .buttonStyle(.bordered)
-                                .help("Browse for folder")
-
-                                Button(action: { TranscriptFileManager.shared.openTranscriptsFolderInFinder() }) {
-                                    Image(systemName: "arrow.up.forward.square")
-                                        .font(Theme.current.fontSM)
-                                }
-                                .buttonStyle(.bordered)
-                                .help("Open in Finder")
-                            }
-                        }
-                        .padding(.leading, 24)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(settingsManager.saveTranscriptsLocally ? Color.green : Color.secondary)
+                            .frame(width: 6, height: 6)
+                        Text(settingsManager.saveTranscriptsLocally ? "ENABLED" : "DISABLED")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(settingsManager.saveTranscriptsLocally ? .green : .secondary)
                     }
                 }
-                .padding(16)
-                .background(Theme.current.surface2)
-                .cornerRadius(8)
 
-                // MARK: - Audio Section
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settings.saveAudioLocally) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "waveform")
-                                    .font(Theme.current.fontSM)
-                                    .foregroundColor(.purple)
-                                Text("Save Audio Files Locally")
-                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            }
-                            Text("Copy M4A audio recordings to your local folder.")
+                HStack(spacing: 12) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.blue)
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Save Transcripts Locally")
+                            .font(Theme.current.fontSMMedium)
+
+                        HStack(spacing: 4) {
+                            Text("Save as Markdown with YAML frontmatter.")
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(.secondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                    .tint(settingsManager.resolvedAccentColor)
-                    .onChange(of: settingsManager.saveAudioLocally) { _, enabled in
-                        if enabled {
-                            TranscriptFileManager.shared.ensureFoldersExist()
-                            syncNow()
+                            Link("File format", destination: URL(string: "https://talkie.jdi.do/docs/file-format")!)
+                                .font(Theme.current.fontXS)
                         }
                     }
 
-                    if settingsManager.saveAudioLocally {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("AUDIO FOLDER")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .foregroundColor(.secondary)
+                    Spacer()
 
-                            HStack(spacing: 8) {
-                                TextField("~/Documents/Talkie/Audio", text: $settings.audioFolderPath)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(size: 11, design: .monospaced))
-
-                                Button(action: { showingAudioFolderPicker = true }) {
-                                    Image(systemName: "folder")
-                                        .font(Theme.current.fontSM)
-                                }
-                                .buttonStyle(.bordered)
-                                .help("Browse for folder")
-
-                                Button(action: { TranscriptFileManager.shared.openAudioFolderInFinder() }) {
-                                    Image(systemName: "arrow.up.forward.square")
-                                        .font(Theme.current.fontSM)
-                                }
-                                .buttonStyle(.bordered)
-                                .help("Open in Finder")
+                    Toggle("", isOn: $settings.saveTranscriptsLocally)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .onChange(of: settingsManager.saveTranscriptsLocally) { _, enabled in
+                            if enabled {
+                                TranscriptFileManager.shared.ensureFoldersExist()
+                                syncNow()
                             }
-
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(.orange)
-                                Text("Audio files can take significant disk space")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(.orange)
-                            }
-                            .padding(8)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(6)
                         }
-                        .padding(.leading, 24)
-                    }
                 }
-                .padding(16)
-                .background(Theme.current.surface2)
+                .padding(12)
+                .background(Theme.current.surface1)
                 .cornerRadius(8)
 
-                // Stats and actions (only show if any local files enabled)
-                if settingsManager.localFilesEnabled {
-                    Divider()
+                if settingsManager.saveTranscriptsLocally {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("FOLDER PATH")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
 
-                    // Stats
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("FILE STATISTICS")
+                        HStack(spacing: 8) {
+                            TextField("~/Documents/Talkie/Transcripts", text: $settings.transcriptsFolderPath)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11, design: .monospaced))
+
+                            Button(action: { showingTranscriptsFolderPicker = true }) {
+                                Image(systemName: "folder")
+                                    .font(Theme.current.fontSM)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Browse for folder")
+
+                            Button(action: { TranscriptFileManager.shared.openTranscriptsFolderInFinder() }) {
+                                Image(systemName: "arrow.up.forward.square")
+                                    .font(Theme.current.fontSM)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Open in Finder")
+                        }
+                    }
+                    .padding(12)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
+                }
+            }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
+
+            // MARK: - Audio Section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(settingsManager.saveAudioLocally ? Color.purple : Color.secondary)
+                        .frame(width: 3, height: 14)
+
+                    Text("AUDIO FILES")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(settingsManager.saveAudioLocally ? Color.green : Color.secondary)
+                            .frame(width: 6, height: 6)
+                        Text(settingsManager.saveAudioLocally ? "ENABLED" : "DISABLED")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(settingsManager.saveAudioLocally ? .green : .secondary)
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 20))
+                        .foregroundColor(.purple)
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Save Audio Files Locally")
+                            .font(Theme.current.fontSMMedium)
+                        Text("Copy M4A audio recordings to your local folder.")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $settings.saveAudioLocally)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .onChange(of: settingsManager.saveAudioLocally) { _, enabled in
+                            if enabled {
+                                TranscriptFileManager.shared.ensureFoldersExist()
+                                syncNow()
+                            }
+                        }
+                }
+                .padding(12)
+                .background(Theme.current.surface1)
+                .cornerRadius(8)
+
+                if settingsManager.saveAudioLocally {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("FOLDER PATH")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 8) {
+                            TextField("~/Documents/Talkie/Audio", text: $settings.audioFolderPath)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11, design: .monospaced))
+
+                            Button(action: { showingAudioFolderPicker = true }) {
+                                Image(systemName: "folder")
+                                    .font(Theme.current.fontSM)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Browse for folder")
+
+                            Button(action: { TranscriptFileManager.shared.openAudioFolderInFinder() }) {
+                                Image(systemName: "arrow.up.forward.square")
+                                    .font(Theme.current.fontSM)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Open in Finder")
+                        }
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(.orange)
+                            Text("Audio files can take significant disk space")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(.orange)
+                        }
+                        .padding(8)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+                    .padding(12)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
+                }
+            }
+            .padding(16)
+            .background(Theme.current.surface2)
+            .cornerRadius(8)
+
+            // Stats and actions (only show if any local files enabled)
+            if settingsManager.localFilesEnabled {
+                // MARK: - Statistics Section
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.cyan)
+                            .frame(width: 3, height: 14)
+
+                        Text("STATISTICS")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
-                        HStack(spacing: 24) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(stats.transcripts)")
-                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.blue)
-                                Text("Transcripts")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(.secondary)
-                            }
+                        Spacer()
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(stats.audioFiles)")
-                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.purple)
-                                Text("Audio Files")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(.secondary)
+                        Button(action: refreshStats) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Refresh")
                             }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(ByteCountFormatter.string(fromByteCount: stats.totalSize, countStyle: .file))
-                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.green)
-                                Text("Total Size")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(.secondary)
-                            }
+                            .font(Theme.current.fontXS)
                         }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.current.surface2)
-                        .cornerRadius(8)
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
                     }
 
-                    // Quick actions
-                    VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 16) {
+                        LocalFilesStatCard(
+                            value: "\(stats.transcripts)",
+                            label: "Transcripts",
+                            color: .blue,
+                            icon: "doc.text"
+                        )
+
+                        LocalFilesStatCard(
+                            value: "\(stats.audioFiles)",
+                            label: "Audio Files",
+                            color: .purple,
+                            icon: "waveform"
+                        )
+
+                        LocalFilesStatCard(
+                            value: ByteCountFormatter.string(fromByteCount: stats.totalSize, countStyle: .file),
+                            label: "Total Size",
+                            color: .green,
+                            icon: "externaldrive"
+                        )
+                    }
+                }
+                .padding(16)
+                .background(Theme.current.surface2)
+                .cornerRadius(8)
+
+                // MARK: - Quick Actions
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.orange)
+                            .frame(width: 3, height: 14)
+
                         Text("QUICK ACTIONS")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
-                        HStack(spacing: 12) {
-                            Button(action: syncNow) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.triangle.2.circlepath")
-                                    Text("Sync Now")
-                                }
-                                .font(Theme.current.fontXS)
-                            }
-                            .buttonStyle(.bordered)
-
-                            Button(action: refreshStats) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.clockwise")
-                                    Text("Refresh Stats")
-                                }
-                                .font(Theme.current.fontXS)
-                            }
-                            .buttonStyle(.bordered)
-                        }
+                        Spacer()
                     }
 
-                    // Status message
-                    if let message = statusMessage {
-                        HStack(spacing: 6) {
-                            Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
-                                .foregroundColor(message.contains("✓") ? .green : .blue)
-                            Text(message)
-                                .font(Theme.current.fontXS)
+                    HStack(spacing: 12) {
+                        Button(action: syncNow) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text("Sync Now")
+                            }
+                            .font(Theme.current.fontXSMedium)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
                         }
-                        .padding(8)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(6)
+                        .buttonStyle(.bordered)
+
+                        if let message = statusMessage {
+                            HStack(spacing: 6) {
+                                Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
+                                    .foregroundColor(message.contains("✓") ? .green : .blue)
+                                Text(message)
+                                    .font(Theme.current.fontXS)
+                            }
+                        }
+
+                        Spacer()
                     }
+                    .padding(12)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
                 }
-
+                .padding(16)
+                .background(Theme.current.surface2)
+                .cornerRadius(8)
+            }
         }
         .fileImporter(
             isPresented: $showingTranscriptsFolderPicker,
@@ -323,6 +396,34 @@ struct LocalFilesSettingsView: View {
 
     private func refreshStats() {
         stats = TranscriptFileManager.shared.getStats()
+    }
+}
+
+// MARK: - Local Files Stat Card Component
+private struct LocalFilesStatCard: View {
+    let value: String
+    let label: String
+    let color: Color
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(color)
+                Text(value)
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .foregroundColor(color)
+            }
+            Text(label)
+                .font(Theme.current.fontXS)
+                .foregroundColor(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.current.surface1)
+        .cornerRadius(8)
     }
 }
 
