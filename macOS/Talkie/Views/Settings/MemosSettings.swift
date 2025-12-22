@@ -22,7 +22,7 @@ struct MemosSettingsView: View {
                     Image(systemName: "info.circle")
                         .foregroundColor(.secondary)
                     Text("Memo preferences coming soon.")
-                        .font(SettingsManager.shared.fontSM)
+                        .font(Theme.current.fontSM)
                         .foregroundColor(.secondary)
                 }
                 .padding()

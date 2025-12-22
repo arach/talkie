@@ -371,7 +371,7 @@ struct APIKeyRow: View {
                         // Reveal button
                         Button(action: onReveal) {
                             Image(systemName: isRevealed ? "eye.slash" : "eye")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(Theme.current.foregroundMuted)
                         }
                         .buttonStyle(.plain)
@@ -396,7 +396,7 @@ struct APIKeyRow: View {
                         onDelete()
                     } label: {
                         Image(systemName: "trash")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
@@ -407,7 +407,7 @@ struct APIKeyRow: View {
                     Button(action: onEdit) {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle.fill")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                             Text("Add API Key")
                                 .font(Theme.current.fontXSMedium)
                         }
@@ -419,9 +419,9 @@ struct APIKeyRow: View {
                     Link(destination: URL(string: helpURL)!) {
                         HStack(spacing: 4) {
                             Text("Get key")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                             Image(systemName: "arrow.up.right.square")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                         }
                         .foregroundColor(.blue)
                     }

@@ -124,7 +124,7 @@ struct QuickActionsSettingsView: View {
                 Text(workflow.name)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                 Text(workflow.description)
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
@@ -134,7 +134,7 @@ struct QuickActionsSettingsView: View {
             // Edit button
             Button(action: { editWorkflow(workflow) }) {
                 Image(systemName: "pencil")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
@@ -145,7 +145,7 @@ struct QuickActionsSettingsView: View {
                 togglePin(workflow)
             } label: {
                 Image(systemName: workflow.isPinned ? "pin.fill" : "pin")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(workflow.isPinned ? .orange : .secondary)
             }
             .buttonStyle(.plain)

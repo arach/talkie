@@ -280,7 +280,19 @@ struct ListViewDebugContent: View {
                 }
             }
 
-            // 4. Audio Testing
+            // 4. Design Audit
+            DebugSection(title: "DESIGN") {
+                VStack(spacing: 4) {
+                    DebugActionButton(icon: "checkmark.seal", label: "Run Audit") {
+                        runDesignAudit()
+                    }
+                    DebugActionButton(icon: "camera.viewfinder", label: "Capture Settings") {
+                        captureSettingsScreenshots()
+                    }
+                }
+            }
+
+            // 5. Audio Testing
             AudioPaddingTestDebugContent()
 
             // 5. Danger zone (platform-wide destructive utils)
@@ -405,6 +417,134 @@ struct ListViewDebugContent: View {
             SystemEventManager.shared.logSync(.system, "Interstitial test", detail: "Temporarily disabled")
             // InterstitialManager.shared.show(utteranceId: 999)
         }
+    }
+
+    // MARK: - Design Audit
+
+    private func runDesignAudit() {
+        NSLog("[DEBUG] Running design audit...")
+        Task { @MainActor in
+            // Fixed location: ~/Desktop/talkie-audit/
+            let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("talkie-audit")
+            try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+
+            // Each audit gets a numbered folder
+            let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+            let auditFolders = existing.filter { $0.hasPrefix("run-") }
+            let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+            let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+            try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+
+            NSLog("[DEBUG] Running audit (run-\(String(format: "%03d", nextNum)))...")
+            let report = await DesignAuditor.shared.auditAll()
+
+            NSLog("[DEBUG] Audit results: Grade \(report.grade) (\(report.overallScore)%)")
+
+            // Capture screenshots
+            let screenshotDir = runDir.appendingPathComponent("screenshots")
+            _ = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotDir)
+
+            // Generate reports
+            await DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
+            await DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+
+            // Update master index
+            await generateAuditIndex(at: baseDir)
+
+            // Open index
+            NSWorkspace.shared.open(baseDir.appendingPathComponent("index.html"))
+        }
+    }
+
+    private func captureSettingsScreenshots() {
+        NSLog("[DEBUG] Capturing settings screenshots...")
+        Task { @MainActor in
+            let outputDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("settings-screenshots")
+            try? FileManager.default.removeItem(at: outputDir)
+            try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+
+            let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
+            NSLog("[DEBUG] Captured \(results.count) screenshots to \(outputDir.path)")
+
+            // Open folder
+            NSWorkspace.shared.open(outputDir)
+        }
+    }
+
+    private func generateAuditIndex(at baseDir: URL) async {
+        let fm = FileManager.default
+        let existing = (try? fm.contentsOfDirectory(atPath: baseDir.path)) ?? []
+        let runs = existing.filter { $0.hasPrefix("run-") }.sorted().reversed()
+
+        var rows = ""
+        for run in runs {
+            let runDir = baseDir.appendingPathComponent(run)
+            let mdPath = runDir.appendingPathComponent("report.md")
+
+            var grade = "?"
+            var score = "?"
+
+            if let content = try? String(contentsOf: mdPath, encoding: .utf8) {
+                if let gradeMatch = content.range(of: #"Grade:\s*([A-F])"#, options: .regularExpression) {
+                    grade = String(content[gradeMatch]).replacingOccurrences(of: "Grade: ", with: "")
+                }
+                if let scoreMatch = content.range(of: #"\((\d+)%\)"#, options: .regularExpression) {
+                    score = String(content[scoreMatch]).replacingOccurrences(of: "(", with: "").replacingOccurrences(of: "%)", with: "")
+                }
+            }
+
+            let attrs = try? fm.attributesOfItem(atPath: runDir.path)
+            let date = (attrs?[.modificationDate] as? Date) ?? Date()
+            let dateStr = date.formatted(date: .abbreviated, time: .shortened)
+
+            let gradeColor = grade == "A" ? "#22c55e" : grade == "B" ? "#84cc16" : grade == "C" ? "#eab308" : grade == "D" ? "#f97316" : "#ef4444"
+
+            rows += """
+                <tr onclick="window.location='\(run)/report.html'" style="cursor:pointer">
+                    <td style="font-weight:600">\(run)</td>
+                    <td>\(dateStr)</td>
+                    <td><span style="color:\(gradeColor);font-weight:700;font-size:18px">\(grade)</span></td>
+                    <td>\(score)%</td>
+                    <td><a href="\(run)/report.html">View →</a></td>
+                </tr>
+            """
+        }
+
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Talkie Design Audits</title>
+            <meta http-equiv="refresh" content="5">
+            <style>
+                body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #fff; padding: 40px; }
+                h1 { font-size: 28px; margin-bottom: 8px; }
+                .subtitle { color: #888; margin-bottom: 32px; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #222; }
+                th { color: #888; font-size: 12px; text-transform: uppercase; }
+                tr:hover { background: #1a1a1a; }
+                a { color: #00d4ff; text-decoration: none; }
+                .refresh { color: #666; font-size: 12px; }
+            </style>
+        </head>
+        <body>
+            <h1>Talkie Design Audits</h1>
+            <p class="subtitle">Auto-refreshes every 5 seconds. Click "Run Audit" in Debug toolbar to add new audit.</p>
+            <table>
+                <tr><th>Run</th><th>Date</th><th>Grade</th><th>Score</th><th>Report</th></tr>
+                \(rows)
+            </table>
+            <p class="refresh">Last updated: \(Date().formatted())</p>
+        </body>
+        </html>
+        """
+
+        try? html.write(to: baseDir.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
     }
 }
 

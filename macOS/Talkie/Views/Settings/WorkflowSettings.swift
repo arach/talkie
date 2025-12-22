@@ -137,16 +137,16 @@ struct AllowedCommandsView: View {
                     if let result = showingWhichResult {
                         HStack(spacing: 6) {
                             Image(systemName: "info.circle")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(settings.resolvedAccentColor)
                             Text(result)
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(settings.resolvedAccentColor)
                         }
                     }
 
                     Text("Enter the full path to the executable (e.g., /Users/you/.bun/bin/claude)")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary)
                 }
 
@@ -167,7 +167,7 @@ struct AllowedCommandsView: View {
                         ForEach(customCommands, id: \.self) { path in
                             HStack {
                                 Image(systemName: "terminal")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.green)
 
                                 Text(path)
@@ -178,7 +178,7 @@ struct AllowedCommandsView: View {
 
                                 Button(action: { removeCommand(path) }) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(SettingsManager.shared.fontSM)
+                                        .font(Theme.current.fontSM)
                                         .foregroundColor(.red.opacity(0.7))
                                 }
                                 .buttonStyle(.plain)
@@ -202,14 +202,14 @@ struct AllowedCommandsView: View {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
                             ForEach(ShellStepConfig.defaultAllowedExecutables.sorted(), id: \.self) { path in
                                 Text(path)
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                     } label: {
                         Text("Show built-in allowed commands")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.blue)
                     }
                 }

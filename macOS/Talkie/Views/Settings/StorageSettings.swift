@@ -34,7 +34,7 @@ struct DatabaseSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Dictations older than this will be automatically deleted.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     HStack {
@@ -44,7 +44,7 @@ struct DatabaseSettingsView: View {
                             step: 24
                         ) {
                             Text("\(live.utteranceTTLHours) hours (\(live.utteranceTTLHours / 24) days)")
-                                .font(SettingsManager.shared.fontSM)
+                                .font(Theme.current.fontSM)
                         }
                     }
                 }
@@ -61,7 +61,7 @@ struct DatabaseSettingsView: View {
                         Image(systemName: "infinity")
                             .foregroundColor(.secondary)
                         Text("Memos are kept indefinitely until manually deleted.")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
                     }
                 }
@@ -141,11 +141,11 @@ struct CloudSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Cloud Sync Coming Soon")
-                            .font(SettingsManager.shared.fontSM)
+                            .font(Theme.current.fontSM)
                             .foregroundColor(.primary)
 
                         Text("Sync your memos and dictations across devices with iCloud.")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary)
                     }
                 }

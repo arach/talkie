@@ -219,19 +219,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "audit",
             description: "Run full design audit on all screens (outputs HTML + Markdown reports)"
         ) { args in
-            let outputDir: URL
-            if let path = args.first {
-                outputDir = URL(fileURLWithPath: path)
-            } else {
-                let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-                outputDir = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Desktop")
-                    .appendingPathComponent("talkie-audit-\(timestamp)")
-            }
+            // Fixed location: ~/Desktop/talkie-audit/
+            let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("talkie-audit")
+            try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
 
-            try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+            // Each audit gets a numbered folder
+            let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+            let auditFolders = existing.filter { $0.hasPrefix("run-") }
+            let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+            let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+            try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-            print("🔍 Running full design audit...")
+            print("🔍 Running full design audit (run-\(String(format: "%03d", nextNum)))...")
             let report = await DesignAuditor.shared.auditAll()
 
             print("\n📊 Results:")
@@ -239,16 +240,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("   Screens: \(report.screens.count)")
             print("   Issues: \(report.totalIssues)")
 
+            // Try to capture screenshots from running Talkie app windows
+            print("\n📸 Attempting to capture screenshots from running app...")
+            let screenshotDir = runDir.appendingPathComponent("screenshots")
+            try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+
+            let capturedCount = await Self.captureRunningAppWindows(to: screenshotDir)
+            if capturedCount > 0 {
+                print("   ✅ Captured \(capturedCount) screenshots")
+            } else {
+                print("   ⚠️ No Talkie windows found - open the app and try again")
+            }
+
+            // Generate reports for this run
             print("\n📝 Generating reports...")
-            await DesignAuditor.shared.generateHTMLReport(from: report, to: outputDir.appendingPathComponent("audit-report.html"))
-            await DesignAuditor.shared.generateMarkdownReport(from: report, to: outputDir.appendingPathComponent("audit-report.md"))
+            await DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
+            await DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
 
-            print("\n✅ Audit complete! Reports saved to: \(outputDir.path)")
+            // Update master index.html with all runs
+            await Self.generateAuditIndex(at: baseDir)
 
-            // Open HTML report
-            NSWorkspace.shared.open(outputDir.appendingPathComponent("audit-report.html"))
+            print("\n✅ Audit complete!")
+            print("   📂 ~/Desktop/talkie-audit/")
+            print("   🌐 index.html - lists all audits")
 
-            exit(0)
+            // Open index
+            NSWorkspace.shared.open(baseDir.appendingPathComponent("index.html"))
+
+            // Graceful exit
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApplication.shared.terminate(nil)
+            }
         }
 
         cliHandler.register(
@@ -331,9 +353,123 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
                 InterstitialManager.shared.show(utteranceId: id)
             }
-        } else {
+        }
+        else if handleDebugURL(url) {
+            // Handled by debug URL handler
+        }
+        else {
             NSLog("[AppDelegate] URL not handled: scheme=\(url.scheme ?? "nil"), host=\(url.host ?? "nil")")
         }
+    }
+
+    /// Handle debug URLs (talkie://d/...) - only in DEBUG builds
+    private func handleDebugURL(_ url: URL) -> Bool {
+        #if DEBUG
+        guard url.host == "d" else { return false }
+
+        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        NSLog("[AppDelegate] Debug navigation: /d/\(path)")
+
+        let components = path.split(separator: "/")
+
+        // Handle capture commands: /d/capture/settings
+        if components.first == "capture" {
+            if components.count >= 2 && components[1] == "settings" {
+                NSLog("[AppDelegate] 📸 Triggering settings capture sequence...")
+                Task { @MainActor in
+                    // Open Settings first
+                    NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+                    try? await Task.sleep(for: .milliseconds(500))
+
+                    // Capture all settings pages with navigation
+                    let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+                    let outputDir = FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent("Desktop")
+                        .appendingPathComponent("settings-capture-\(timestamp)")
+                    try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+
+                    let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
+                    NSLog("[AppDelegate] ✅ Captured \(results.count) settings pages to \(outputDir.path)")
+                    NSWorkspace.shared.open(outputDir)
+                }
+                return true
+            }
+            // Handle /d/capture/audit - run full audit with proper screenshots
+            if components.count >= 2 && components[1] == "audit" {
+                NSLog("[AppDelegate] 🔍 Triggering full audit with capture...")
+                Task { @MainActor in
+                    do {
+                        // Open Settings first
+                        NSLog("[AppDelegate] Opening Settings window...")
+                        NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+                        try await Task.sleep(for: .milliseconds(500))
+
+                        // Setup directories
+                        let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                            .appendingPathComponent("Desktop")
+                            .appendingPathComponent("talkie-audit")
+                        try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+
+                        let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+                        let auditFolders = existing.filter { $0.hasPrefix("run-") }
+                        let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+                        let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+                        try FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+
+                        let screenshotDir = runDir.appendingPathComponent("screenshots")
+                        try FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+
+                        NSLog("[AppDelegate] 📸 Step 1: Capturing screenshots...")
+                        let captureResults = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotDir)
+                        NSLog("[AppDelegate] ✅ Captured \(captureResults.count) screenshots")
+
+                        // Allow autorelease pool to drain - prevents crash in objc_release
+                        NSLog("[AppDelegate] ⏳ Letting memory settle...")
+                        try await Task.sleep(for: .seconds(1))
+
+                        NSLog("[AppDelegate] 🔍 Step 2: Running code audit...")
+                        let report = await DesignAuditor.shared.auditAll()
+                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+
+                        NSLog("[AppDelegate] 📝 Step 3: Generating HTML report...")
+                        await DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
+
+                        NSLog("[AppDelegate] 📝 Step 4: Generating Markdown report...")
+                        await DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+
+                        NSLog("[AppDelegate] 📝 Step 5: Updating index...")
+                        await Self.generateAuditIndex(at: baseDir)
+
+                        NSLog("[AppDelegate] ✅ All done! Opening index...")
+                        NSWorkspace.shared.open(baseDir.appendingPathComponent("index.html"))
+                    } catch {
+                        NSLog("[AppDelegate] ❌ Audit failed: \(error)")
+                    }
+                }
+                return true
+            }
+        }
+
+        // Handle settings navigation: /d/settings/{section}
+        if components.first == "settings" {
+            // Open Settings window first
+            NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+
+            // Then navigate to specific section (with slight delay for window to open)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(
+                    name: .debugNavigate,
+                    object: nil,
+                    userInfo: ["path": path]
+                )
+            }
+            return true
+        }
+
+        return false
+        #else
+        return false
+        #endif
     }
 
     private func configureWindowAppearance() {
@@ -472,5 +608,138 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 logger.info("✅ CloudKit subscription created successfully")
             }
         }
+    }
+
+    // MARK: - Window Capture
+
+    /// Capture screenshots from running Talkie app windows
+    @MainActor
+    private static func captureRunningAppWindows(to directory: URL) async -> Int {
+        var count = 0
+
+        // Get list of all windows
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return 0
+        }
+
+        // Find Talkie windows
+        for windowInfo in windowList {
+            guard let ownerName = windowInfo[kCGWindowOwnerName as String] as? String,
+                  ownerName.contains("Talkie"),
+                  let windowID = windowInfo[kCGWindowNumber as String] as? CGWindowID,
+                  let bounds = windowInfo[kCGWindowBounds as String] as? [String: Any],
+                  let width = bounds["Width"] as? CGFloat,
+                  let height = bounds["Height"] as? CGFloat,
+                  width > 100 && height > 100 else {
+                continue
+            }
+
+            let windowName = windowInfo[kCGWindowName as String] as? String ?? "window"
+            let safeName = windowName.lowercased()
+                .replacingOccurrences(of: " ", with: "-")
+                .replacingOccurrences(of: "/", with: "-")
+
+            // Capture the window
+            if let cgImage = CGWindowListCreateImage(.null, .optionIncludingWindow, windowID, [.boundsIgnoreFraming]) {
+                let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+
+                let filename = "\(String(format: "%02d", count))-\(safeName).png"
+                let fileURL = directory.appendingPathComponent(filename)
+
+                if let tiffData = image.tiffRepresentation,
+                   let bitmapImage = NSBitmapImageRep(data: tiffData),
+                   let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                    try? pngData.write(to: fileURL)
+                    count += 1
+                    print("   📷 Captured: \(windowName)")
+                }
+            }
+        }
+
+        return count
+    }
+
+    // MARK: - Audit Index Generator
+
+    /// Generate index.html listing all audit runs
+    @MainActor
+    private static func generateAuditIndex(at baseDir: URL) async {
+        let fm = FileManager.default
+        let existing = (try? fm.contentsOfDirectory(atPath: baseDir.path)) ?? []
+        let runs = existing.filter { $0.hasPrefix("run-") }.sorted().reversed()
+
+        var rows = ""
+        for run in runs {
+            let runDir = baseDir.appendingPathComponent(run)
+            let mdPath = runDir.appendingPathComponent("report.md")
+
+            // Parse grade and score from markdown
+            var grade = "?"
+            var score = "?"
+            var screens = "?"
+            var issues = "?"
+
+            if let content = try? String(contentsOf: mdPath, encoding: .utf8) {
+                if let gradeMatch = content.range(of: #"Grade:\s*([A-F])"#, options: .regularExpression) {
+                    grade = String(content[gradeMatch]).replacingOccurrences(of: "Grade: ", with: "")
+                }
+                if let scoreMatch = content.range(of: #"\((\d+)%\)"#, options: .regularExpression) {
+                    score = String(content[scoreMatch]).replacingOccurrences(of: "(", with: "").replacingOccurrences(of: "%)", with: "")
+                }
+                if let screensMatch = content.range(of: #"Screens Audited:\s*\*\*(\d+)\*\*"#, options: .regularExpression) {
+                    let matched = String(content[screensMatch])
+                    screens = matched.components(separatedBy: "**").dropFirst().first ?? "?"
+                }
+            }
+
+            // Get folder modification date
+            let attrs = try? fm.attributesOfItem(atPath: runDir.path)
+            let date = (attrs?[.modificationDate] as? Date) ?? Date()
+            let dateStr = date.formatted(date: .abbreviated, time: .shortened)
+
+            let gradeColor = grade == "A" ? "#22c55e" : grade == "B" ? "#84cc16" : grade == "C" ? "#eab308" : grade == "D" ? "#f97316" : "#ef4444"
+
+            rows += """
+                <tr onclick="window.location='\(run)/report.html'" style="cursor:pointer">
+                    <td style="font-weight:600">\(run)</td>
+                    <td>\(dateStr)</td>
+                    <td><span style="color:\(gradeColor);font-weight:700;font-size:18px">\(grade)</span></td>
+                    <td>\(score)%</td>
+                    <td><a href="\(run)/report.html">View →</a></td>
+                </tr>
+            """
+        }
+
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Talkie Design Audits</title>
+            <meta http-equiv="refresh" content="5">
+            <style>
+                body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #fff; padding: 40px; }
+                h1 { font-size: 28px; margin-bottom: 8px; }
+                .subtitle { color: #888; margin-bottom: 32px; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #222; }
+                th { color: #888; font-size: 12px; text-transform: uppercase; }
+                tr:hover { background: #1a1a1a; }
+                a { color: #00d4ff; text-decoration: none; }
+                .refresh { color: #666; font-size: 12px; }
+            </style>
+        </head>
+        <body>
+            <h1>Talkie Design Audits</h1>
+            <p class="subtitle">Auto-refreshes every 5 seconds. Run <code>--debug=audit</code> to add new audit.</p>
+            <table>
+                <tr><th>Run</th><th>Date</th><th>Grade</th><th>Score</th><th>Report</th></tr>
+                \(rows)
+            </table>
+            <p class="refresh">Last updated: \(Date().formatted())</p>
+        </body>
+        </html>
+        """
+
+        try? html.write(to: baseDir.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
     }
 }

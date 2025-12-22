@@ -43,7 +43,7 @@ struct DictationCaptureSettingsView: View {
                             .foregroundColor(.primary)
 
                         Text("Press once to start recording, press again to stop.")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
 
                         HotkeyRecorderButton(
@@ -59,7 +59,7 @@ struct DictationCaptureSettingsView: View {
                             .foregroundColor(.primary)
 
                         Text("Hold down to record, release to stop.")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
 
                         StyledToggle(
@@ -86,7 +86,7 @@ struct DictationCaptureSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Select which microphone to use for recording.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     AudioDeviceSelector()
@@ -137,7 +137,7 @@ struct DictationCaptureSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Sound effects for recording events.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     HStack(spacing: 12) {
@@ -198,7 +198,7 @@ struct DictationOutputSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Where transcribed text is sent after recording completes.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     RadioButtonRow(
@@ -244,7 +244,7 @@ struct DictationOutputSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Which app context should be considered primary for recordings.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     RadioButtonRow(

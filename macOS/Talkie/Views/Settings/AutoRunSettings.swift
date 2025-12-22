@@ -45,7 +45,7 @@ struct AutoRunSettingsView: View {
                             Text("Enable Auto-Run Workflows")
                                 .font(Theme.current.fontSMBold)
                             Text("When enabled, workflows marked as auto-run will execute automatically when new memos sync from your iPhone.")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -99,7 +99,7 @@ struct AutoRunSettingsView: View {
                                         Text("Hey Talkie (Default)")
                                             .font(Theme.current.fontSMBold)
                                         Text("Detects \"Hey Talkie\" voice commands and routes to workflows")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(.secondary)
                                     }
 
@@ -118,7 +118,7 @@ struct AutoRunSettingsView: View {
                                 .cornerRadius(8)
 
                                 Text("The default Hey Talkie workflow runs automatically. Add your own workflows to customize.")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary)
                             }
                         } else {
@@ -166,7 +166,7 @@ struct AutoRunSettingsView: View {
                 .cornerRadius(8)
 
             Text(text)
-                .font(SettingsManager.shared.fontXS)
+                .font(Theme.current.fontXS)
                 .foregroundColor(.secondary)
         }
     }
@@ -256,7 +256,7 @@ struct AutoRunWorkflowRow: View {
                 Text(workflow.name)
                     .font(Theme.current.fontSMBold)
                 Text(workflow.description.isEmpty ? "\(workflow.steps.count) step(s)" : workflow.description)
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
