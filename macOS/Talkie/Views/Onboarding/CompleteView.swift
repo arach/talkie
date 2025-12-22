@@ -11,7 +11,7 @@ import SwiftUI
 
 struct CompleteView: View {
     let onComplete: () -> Void
-    @ObservedObject private var manager = OnboardingManager.shared
+    @State private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var scale: CGFloat = 0.5
     @State private var rotation: Double = 0

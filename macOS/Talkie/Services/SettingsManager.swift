@@ -11,6 +11,7 @@ import CoreData
 import SwiftUI
 import AppKit
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Settings")
 
@@ -326,13 +327,14 @@ enum ThemePreset: String, CaseIterable {
     }
 }
 
-class SettingsManager: ObservableObject {
+@Observable
+class SettingsManager {
     static let shared = SettingsManager()
 
     // MARK: - Batch Update Flag (prevents cascade Theme.invalidate() calls)
 
     /// When true, skip Theme.invalidate() in property didSets (call once at end of batch)
-    private var isBatchingUpdates = false
+    @ObservationIgnored private var isBatchingUpdates = false
 
     // MARK: - Appearance Settings (UserDefaults - device-specific)
 
@@ -347,7 +349,7 @@ class SettingsManager: ObservableObject {
     private let uiAllCapsKey = "uiAllCaps"
 
     /// The currently active theme preset
-    @Published var currentTheme: ThemePreset? {
+    var currentTheme: ThemePreset? {
         didSet {
             if let theme = currentTheme {
                 UserDefaults.standard.set(theme.rawValue, forKey: currentThemeKey)
@@ -402,7 +404,7 @@ class SettingsManager: ObservableObject {
         NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
-    @Published var appearanceMode: AppearanceMode {
+    var appearanceMode: AppearanceMode {
         didSet {
             UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceModeKey)
             if !isBatchingUpdates { Theme.invalidate() }
@@ -410,7 +412,7 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    @Published var accentColor: AccentColorOption {
+    var accentColor: AccentColorOption {
         didSet {
             UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
         }
@@ -422,7 +424,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Font style for UI chrome: labels, headers, buttons, badges, navigation
-    @Published var uiFontStyle: FontStyleOption {
+    var uiFontStyle: FontStyleOption {
         didSet {
             UserDefaults.standard.set(uiFontStyle.rawValue, forKey: uiFontStyleKey)
             if !isBatchingUpdates { Theme.invalidate() }
@@ -430,7 +432,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Font style for content: transcripts, notes, markdown, user-generated text
-    @Published var contentFontStyle: FontStyleOption {
+    var contentFontStyle: FontStyleOption {
         didSet {
             UserDefaults.standard.set(contentFontStyle.rawValue, forKey: contentFontStyleKey)
             if !isBatchingUpdates { Theme.invalidate() }
@@ -444,7 +446,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// UI chrome font size (labels, headers, buttons, badges)
-    @Published var uiFontSize: FontSizeOption {
+    var uiFontSize: FontSizeOption {
         didSet {
             UserDefaults.standard.set(uiFontSize.rawValue, forKey: uiFontSizeKey)
             if !isBatchingUpdates { Theme.invalidate() }
@@ -452,7 +454,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Content font size (transcripts, notes, markdown)
-    @Published var contentFontSize: FontSizeOption {
+    var contentFontSize: FontSizeOption {
         didSet {
             UserDefaults.standard.set(contentFontSize.rawValue, forKey: contentFontSizeKey)
             if !isBatchingUpdates { Theme.invalidate() }
@@ -460,7 +462,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Whether UI chrome labels should be ALL CAPS (tactical style)
-    @Published var uiAllCaps: Bool {
+    var uiAllCaps: Bool {
         didSet {
             UserDefaults.standard.set(uiAllCaps, forKey: uiAllCapsKey)
         }
@@ -1004,7 +1006,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Whether to save transcripts as Markdown files locally (default: false)
-    @Published var saveTranscriptsLocally: Bool {
+    var saveTranscriptsLocally: Bool {
         didSet {
             let value = saveTranscriptsLocally
             DispatchQueue.main.async {
@@ -1014,7 +1016,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Where transcript files are saved
-    @Published var transcriptsFolderPath: String {
+    var transcriptsFolderPath: String {
         didSet {
             let path = transcriptsFolderPath
             DispatchQueue.main.async {
@@ -1024,7 +1026,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Whether to save M4A audio files locally (default: false)
-    @Published var saveAudioLocally: Bool {
+    var saveAudioLocally: Bool {
         didSet {
             let value = saveAudioLocally
             DispatchQueue.main.async {
@@ -1034,7 +1036,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// Where audio files are saved
-    @Published var audioFolderPath: String {
+    var audioFolderPath: String {
         didSet {
             let path = audioFolderPath
             DispatchQueue.main.async {
@@ -1056,7 +1058,7 @@ class SettingsManager: ObservableObject {
     /// Whether auto-run workflows are enabled (default: false)
     /// When enabled, workflows marked as autoRun will execute automatically when memos sync
     /// Note: Only memos created in the last 5 minutes are processed (forward-only behavior)
-    @Published var autoRunWorkflowsEnabled: Bool {
+    var autoRunWorkflowsEnabled: Bool {
         didSet {
             let value = autoRunWorkflowsEnabled
             DispatchQueue.main.async {
@@ -1072,7 +1074,7 @@ class SettingsManager: ObservableObject {
 
     /// Global default cost tier for LLM calls (default: .budget for cost-consciousness)
     /// Individual workflow steps can override this with their own tier setting
-    @Published var llmCostTier: LLMCostTier {
+    var llmCostTier: LLMCostTier {
         didSet {
             let tier = llmCostTier
             DispatchQueue.main.async {
@@ -1089,7 +1091,7 @@ class SettingsManager: ObservableObject {
 
     /// CloudKit sync interval in minutes (default: 10 minutes)
     /// Manual sync button is always available regardless of this setting
-    @Published var syncIntervalMinutes: Int {
+    var syncIntervalMinutes: Int {
         didSet {
             let minutes = syncIntervalMinutes
             DispatchQueue.main.async {
@@ -1106,7 +1108,7 @@ class SettingsManager: ObservableObject {
     }
 
     /// JSON export schedule (default: daily shallow, weekly deep)
-    @Published var jsonExportSchedule: JSONExportSchedule {
+    var jsonExportSchedule: JSONExportSchedule {
         didSet {
             let schedule = jsonExportSchedule
             DispatchQueue.main.async {
@@ -1118,14 +1120,14 @@ class SettingsManager: ObservableObject {
     }
 
     // Internal storage - API keys now use Keychain (secure)
-    @Published private var _geminiApiKey: String = ""
-    @Published private var _openaiApiKey: String?
-    @Published private var _anthropicApiKey: String?
-    @Published private var _groqApiKey: String?
-    @Published private var _selectedModel: String = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+    private var _geminiApiKey: String = ""
+    private var _openaiApiKey: String?
+    private var _anthropicApiKey: String?
+    private var _groqApiKey: String?
+    private var _selectedModel: String = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
 
     // Transcription model settings (consolidated from LiveSettings)
-    @Published private var _liveTranscriptionModelId: String = "whisper:openai_whisper-small"
+    private var _liveTranscriptionModelId: String = "whisper:openai_whisper-small"
 
     private let keychain = KeychainManager.shared
 

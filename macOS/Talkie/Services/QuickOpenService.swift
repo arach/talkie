@@ -134,10 +134,11 @@ extension QuickOpenTarget {
 // MARK: - Quick Open Service
 
 @MainActor
-class QuickOpenService: ObservableObject {
+@Observable
+class QuickOpenService {
     static let shared = QuickOpenService()
 
-    @Published var targets: [QuickOpenTarget] {
+    var targets: [QuickOpenTarget] {
         didSet { saveTargets() }
     }
 

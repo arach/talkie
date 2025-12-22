@@ -28,7 +28,7 @@ enum SettingsSection: String, Hashable {
 }
 
 struct SettingsView: View {
-    @ObservedObject var settingsManager = SettingsManager.shared
+    @State var settingsManager = SettingsManager.shared
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
     @State private var selectedSection: SettingsSection = .appearance  // Default to Appearance (less aggressive)

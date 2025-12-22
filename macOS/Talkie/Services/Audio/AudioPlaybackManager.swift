@@ -13,14 +13,15 @@ import os.log
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioPlayback")
 
 @MainActor
-final class AudioPlaybackManager: NSObject, ObservableObject {
+@Observable
+final class AudioPlaybackManager: NSObject {
     static let shared = AudioPlaybackManager()
 
-    @Published private(set) var isPlaying = false
-    @Published private(set) var currentTime: TimeInterval = 0
-    @Published private(set) var duration: TimeInterval = 0
-    @Published private(set) var progress: Double = 0
-    @Published private(set) var currentAudioID: String?
+    private(set) var isPlaying = false
+    private(set) var currentTime: TimeInterval = 0
+    private(set) var duration: TimeInterval = 0
+    private(set) var progress: Double = 0
+    private(set) var currentAudioID: String?
 
     private var player: AVAudioPlayer?
     private var progressTimer: Timer?

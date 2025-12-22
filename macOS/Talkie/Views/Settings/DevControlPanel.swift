@@ -10,9 +10,9 @@ import SwiftUI
 import TalkieKit
 
 struct DevControlPanelView: View {
-    @ObservedObject private var discovery = ProcessDiscovery.shared
-    @ObservedObject private var engineClient = EngineClient.shared
-    @ObservedObject private var liveMonitor = TalkieLiveStateMonitor.shared
+    @State private var discovery = ProcessDiscovery.shared
+    @State private var engineClient = EngineClient.shared
+    @State private var liveMonitor = TalkieLiveStateMonitor.shared
 
     @State private var autoRefresh = true
     @State private var refreshTimer: Timer?

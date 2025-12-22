@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ModelInstallView: View {
     let onNext: () -> Void
-    @ObservedObject private var manager = OnboardingManager.shared
+    @State private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedModel: ModelChoice = .parakeet
 

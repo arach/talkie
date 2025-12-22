@@ -94,7 +94,8 @@ struct WorkflowContext {
 // MARK: - Workflow Executor
 
 @MainActor
-class WorkflowExecutor: ObservableObject {
+@Observable
+class WorkflowExecutor {
     static let shared = WorkflowExecutor()
 
     private let registry = LLMProviderRegistry.shared

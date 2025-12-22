@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Local Files Settings View
 
 struct LocalFilesSettingsView: View {
-    @ObservedObject private var settingsManager = SettingsManager.shared
+    @State private var settingsManager = SettingsManager.shared
     @State private var showingTranscriptsFolderPicker = false
     @State private var showingAudioFolderPicker = false
     @State private var statusMessage: String?

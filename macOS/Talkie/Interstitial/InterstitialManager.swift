@@ -19,22 +19,23 @@ enum InterstitialViewState {
 }
 
 @MainActor
-final class InterstitialManager: ObservableObject {
+@Observable
+final class InterstitialManager {
     static let shared = InterstitialManager()
 
     private var panel: NSPanel?
     private var localEventMonitor: Any?
 
-    @Published var isVisible: Bool = false
-    @Published var currentUtteranceId: Int64?
-    @Published var editedText: String = ""
-    @Published var isPolishing: Bool = false
-    @Published var polishError: String?
-    @Published private(set) var originalText: String = ""
+    var isVisible: Bool = false
+    var currentUtteranceId: Int64?
+    var editedText: String = ""
+    var isPolishing: Bool = false
+    var polishError: String?
+    private(set) var originalText: String = ""
 
     // View state (editing vs reviewing diff)
-    @Published var viewState: InterstitialViewState = .editing
-    @Published private(set) var prePolishText: String = ""  // Text before last polish
+    var viewState: InterstitialViewState = .editing
+    private(set) var prePolishText: String = ""  // Text before last polish
 
     /// Computed diff between pre-polish and current edited text
     var currentDiff: TextDiff? {
@@ -67,8 +68,8 @@ final class InterstitialManager: ObservableObject {
         }
     }
 
-    @Published private(set) var editHistory: [EditSnapshot] = []
-    @Published var previewingSnapshot: EditSnapshot? = nil  // Currently previewing (not applied)
+    private(set) var editHistory: [EditSnapshot] = []
+    var previewingSnapshot: EditSnapshot? = nil  // Currently previewing (not applied)
 
     /// Preview a snapshot (doesn't change anything, just for viewing)
     func previewSnapshot(_ snapshot: EditSnapshot) {
@@ -110,29 +111,29 @@ final class InterstitialManager: ObservableObject {
     }
 
     // Voice guidance state
-    @Published var isRecordingInstruction: Bool = false
-    @Published var isTranscribingInstruction: Bool = false
-    @Published var voiceInstruction: String?
-    @Published var audioLevel: Float = 0
+    var isRecordingInstruction: Bool = false
+    var isTranscribingInstruction: Bool = false
+    var voiceInstruction: String?
+    var audioLevel: Float = 0
 
     // LLM Settings (exposed for visibility/control)
-    @Published var showLLMSettings: Bool = false
-    @Published var llmTemperature: Double = 0.3
-    @Published var llmMaxTokens: Int = 2048
-    @Published var llmProviderId: String?
-    @Published var llmModelId: String?
+    var showLLMSettings: Bool = false
+    var llmTemperature: Double = 0.3
+    var llmMaxTokens: Int = 2048
+    var llmProviderId: String?
+    var llmModelId: String?
 
     // Editable system prompt (the "magic" instructions for the LLM)
-    @Published var systemPrompt: String = """
+    var systemPrompt: String = """
         You are helping edit transcribed speech. Apply the user's instruction to transform the text.
         Return only the transformed text, nothing else. Preserve the original meaning unless asked otherwise.
         """
 
     // Last generation info (for transparency)
-    @Published private(set) var lastUsedProvider: String?
-    @Published private(set) var lastUsedModel: String?
-    @Published private(set) var lastPrompt: String?
-    @Published private(set) var lastTokenCount: Int?
+    private(set) var lastUsedProvider: String?
+    private(set) var lastUsedModel: String?
+    private(set) var lastPrompt: String?
+    private(set) var lastTokenCount: Int?
 
     private init() {
         // Initialize with registry defaults if available

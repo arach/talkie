@@ -21,7 +21,7 @@ struct DictationPill: View {
     @Binding var duration: TimeInterval
     let onTap: () -> Void
 
-    @ObservedObject private var settings = SettingsManager.shared
+    @State private var settings = SettingsManager.shared
     @State private var isHovered = false
     @State private var pulsePhase: CGFloat = 0
 

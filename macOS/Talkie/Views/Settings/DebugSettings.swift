@@ -20,7 +20,7 @@ struct DebugInfoView: View {
     )
     private var allVoiceMemos: FetchedResults<VoiceMemo>
 
-    @ObservedObject private var settingsManager = SettingsManager.shared
+    @State private var settingsManager = SettingsManager.shared
     @State private var iCloudStatus: String = "Checking..."
 
     private let syncIntervalOptions = [1, 5, 10, 15, 30, 60]

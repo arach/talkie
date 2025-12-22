@@ -75,51 +75,52 @@ enum CheckStatus: Equatable {
 // MARK: - Onboarding Manager
 
 @MainActor
-final class OnboardingManager: ObservableObject {
+@Observable
+final class OnboardingManager {
     static let shared = OnboardingManager()
 
-    @Published var currentStep: OnboardingStep = .welcome
-    @Published var shouldShowOnboarding: Bool
+    var currentStep: OnboardingStep = .welcome
+    var shouldShowOnboarding: Bool
 
     // Permissions state
-    @Published var hasMicrophonePermission = false
-    @Published var hasAccessibilityPermission = false
-    @Published var hasScreenRecordingPermission = false
-    @Published var isRequestingPermission = false
+    var hasMicrophonePermission = false
+    var hasAccessibilityPermission = false
+    var hasScreenRecordingPermission = false
+    var isRequestingPermission = false
 
     // Service setup state
-    @Published var isTalkieLiveRunning = false
-    @Published var isTalkieEngineRunning = false
-    @Published var isCheckingServices = false
-    @Published var isLaunchingServices = false
+    var isTalkieLiveRunning = false
+    var isTalkieEngineRunning = false
+    var isCheckingServices = false
+    var isLaunchingServices = false
 
     // Model installation state
-    @Published var isModelDownloaded = false
-    @Published var isDownloadingModel = false
-    @Published var downloadProgress: Double = 0
-    @Published var downloadStatus: String = ""
-    @Published var selectedModelType: String = "parakeet"  // "parakeet" or "whisper"
+    var isModelDownloaded = false
+    var isDownloadingModel = false
+    var downloadProgress: Double = 0
+    var downloadStatus: String = ""
+    var selectedModelType: String = "parakeet"  // "parakeet" or "whisper"
 
     // Status check state
-    @Published var checkStatuses: [StatusCheck: CheckStatus] = [:]
-    @Published var allChecksComplete = false
+    var checkStatuses: [StatusCheck: CheckStatus] = [:]
+    var allChecksComplete = false
 
     // LLM configuration state
-    @Published var llmProvider: String? = nil  // "openai", "anthropic", or "local"
-    @Published var hasConfiguredLLM = false
-    @Published var selectedProvider: String = "local"
-    @Published var selectedLocalModel: String? = nil  // Persists selected local AI model
-    @Published var openAIKey: String = ""
-    @Published var anthropicKey: String = ""
+    var llmProvider: String? = nil  // "openai", "anthropic", or "local"
+    var hasConfiguredLLM = false
+    var selectedProvider: String = "local"
+    var selectedLocalModel: String? = nil  // Persists selected local AI model
+    var openAIKey: String = ""
+    var anthropicKey: String = ""
 
     // Live mode configuration (default OFF - can be enabled in onboarding or Settings later)
-    @Published var enableLiveMode: Bool = false
+    var enableLiveMode: Bool = false
 
     // First recording celebration
-    @Published var hasCompletedFirstRecording: Bool = false
+    var hasCompletedFirstRecording: Bool = false
 
     // Error handling
-    @Published var errorMessage: String?
+    var errorMessage: String?
 
     private var accessibilityCheckTimer: Timer?
 

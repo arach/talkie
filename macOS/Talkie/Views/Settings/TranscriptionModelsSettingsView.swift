@@ -12,9 +12,9 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TranscriptionModelsSettings")
 
 struct TranscriptionModelsSettingsView: View {
-    @ObservedObject private var settingsManager = SettingsManager.shared
-    @ObservedObject private var engineClient = EngineClient.shared
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var settingsManager = SettingsManager.shared
+    @State private var engineClient = EngineClient.shared
+    @State private var liveSettings = LiveSettings.shared
 
     @State private var showingDeleteConfirmation: (Bool, ModelInfo?) = (false, nil)
 

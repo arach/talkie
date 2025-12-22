@@ -13,8 +13,8 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Auto-Run Settings View
 
 struct AutoRunSettingsView: View {
-    @ObservedObject private var settingsManager = SettingsManager.shared
-    @ObservedObject private var workflowManager = WorkflowManager.shared
+    @State private var settingsManager = SettingsManager.shared
+    @State private var workflowManager = WorkflowManager.shared
     @State private var selectedWorkflowId: UUID?
 
     private var autoRunWorkflows: [WorkflowDefinition] {

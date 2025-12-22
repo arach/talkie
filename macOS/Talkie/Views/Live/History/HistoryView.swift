@@ -57,8 +57,8 @@ private extension Sequence {
 // MARK: - Main Navigation View
 
 struct HistoryView: View {
-    @ObservedObject private var store = DictationStore.shared
-    @ObservedObject private var settings = LiveSettings.shared
+    @State private var store = DictationStore.shared
+    @State private var settings = LiveSettings.shared
 
     @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []  // Multi-select support
@@ -1004,7 +1004,7 @@ struct HistoryView: View {
 
 struct UtteranceRowView: View {
     let utterance: Utterance
-    @ObservedObject private var settings = LiveSettings.shared
+    @State private var settings = LiveSettings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -1320,7 +1320,7 @@ private struct ToggleSegment: View {
 private struct TranscriptContainer: View {
     let utterance: Utterance
     @Binding var showJSON: Bool
-    @ObservedObject private var settings = LiveSettings.shared
+    @State private var settings = LiveSettings.shared
 
     // Crisp text colors - solid grays instead of opacity
     private static let textPrimary = Color.white
@@ -1809,7 +1809,7 @@ private struct PerfChip: View {
 }
 private struct MinimalAudioCard: View {
     let utterance: Utterance
-    @ObservedObject private var playback = AudioPlaybackManager.shared
+    @State private var playback = AudioPlaybackManager.shared
     @State private var isHovering = false
     @State private var isPlayButtonHovered = false
 

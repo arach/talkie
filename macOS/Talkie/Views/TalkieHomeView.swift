@@ -71,23 +71,23 @@ struct TalkieHomeView: View {
             lastChangeCount = syncManager.lastChangeCount
             workflowEventCount = eventManager.events.filter { $0.type == .workflow }.count
         }
-        .onReceive(liveState.$isRunning) { newValue in
+        .onChange(of: liveState.isRunning) { _, newValue in
             isLiveRunning = newValue
         }
-        .onReceive(serviceMonitor.$state) { newValue in
+        .onChange(of: serviceMonitor.state) { _, newValue in
             serviceState = newValue
         }
-        .onReceive(syncManager.$isSyncing) { newValue in
+        .onChange(of: syncManager.isSyncing) { _, newValue in
             isSyncing = newValue
         }
-        .onReceive(syncManager.$lastSyncDate) { newValue in
+        .onChange(of: syncManager.lastSyncDate) { _, newValue in
             lastSyncDate = newValue
         }
-        .onReceive(syncManager.$lastChangeCount) { newValue in
+        .onChange(of: syncManager.lastChangeCount) { _, newValue in
             lastChangeCount = newValue
         }
-        .onReceive(eventManager.$events) { events in
-            workflowEventCount = events.filter { $0.type == .workflow }.count
+        .onChange(of: eventManager.events.count) { _, _ in
+            workflowEventCount = eventManager.events.filter { $0.type == .workflow }.count
         }
     }
 

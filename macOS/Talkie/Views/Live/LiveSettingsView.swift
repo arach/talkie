@@ -24,7 +24,7 @@ enum LiveSettingsSection: String, Hashable {
 }
 
 struct LiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
     @State private var selectedSection: LiveSettingsSection = .general
 
     // Theme-aware colors for light/dark mode
@@ -218,7 +218,7 @@ struct RadioButtonRow<T: Equatable>: View {
 // MARK: - General Settings
 
 struct GeneralLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -377,7 +377,7 @@ struct GeneralLiveSettingsView: View {
 // MARK: - Shortcuts Settings
 
 struct ShortcutsLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
     @State private var isRecordingToggle = false
     @State private var isRecordingPTT = false
 
@@ -440,7 +440,7 @@ struct ShortcutsLiveSettingsView: View {
 // MARK: - Audio Settings
 
 struct AudioLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -474,7 +474,7 @@ struct AudioLiveSettingsView: View {
 // MARK: - Sounds Settings
 
 struct SoundsLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
     @State private var selectedEvent: SoundEvent = .start
 
     private func binding(for event: SoundEvent) -> Binding<TalkieSound> {
@@ -556,8 +556,8 @@ struct SoundsLiveSettingsView: View {
 // MARK: - Transcription Settings
 
 struct TranscriptionLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
-    @ObservedObject private var engineClient = EngineClient.shared
+    @State private var liveSettings = LiveSettings.shared
+    @State private var engineClient = EngineClient.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -692,7 +692,7 @@ struct TranscriptionLiveSettingsView: View {
 // MARK: - Appearance Settings
 
 struct AppearanceLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -855,7 +855,7 @@ private struct AccentColorButton: View {
 // MARK: - Auto-Paste Settings
 
 struct AutoPasteLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -970,7 +970,7 @@ struct AutoPasteLiveSettingsView: View {
 // MARK: - Storage Settings
 
 struct StorageLiveSettingsView: View {
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var liveSettings = LiveSettings.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -1009,7 +1009,7 @@ struct StorageLiveSettingsView: View {
 // MARK: - Permissions Settings
 
 struct PermissionsLiveSettingsView: View {
-    @StateObject private var permissionsManager = PermissionsManager.shared
+    @State private var permissionsManager = PermissionsManager.shared
 
     var body: some View {
         SettingsPageContainer {

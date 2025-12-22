@@ -28,11 +28,12 @@ struct AudioInputDevice: Identifiable, Hashable {
 }
 
 @MainActor
-final class AudioDeviceManager: ObservableObject {
+@Observable
+final class AudioDeviceManager {
     static let shared = AudioDeviceManager()
 
-    @Published private(set) var inputDevices: [AudioInputDevice] = []
-    @Published private(set) var defaultDeviceID: AudioDeviceID = 0
+    private(set) var inputDevices: [AudioInputDevice] = []
+    private(set) var defaultDeviceID: AudioDeviceID = 0
 
     private init() {
         refreshDevices()

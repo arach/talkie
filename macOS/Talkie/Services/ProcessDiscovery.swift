@@ -44,11 +44,12 @@ public struct DiscoveredProcess: Identifiable, Equatable {
 
 /// Service to discover all running Talkie processes
 @MainActor
-public class ProcessDiscovery: ObservableObject {
+@Observable
+public class ProcessDiscovery {
     public static let shared = ProcessDiscovery()
 
-    @Published public private(set) var engineProcesses: [DiscoveredProcess] = []
-    @Published public private(set) var liveProcesses: [DiscoveredProcess] = []
+    public private(set) var engineProcesses: [DiscoveredProcess] = []
+    public private(set) var liveProcesses: [DiscoveredProcess] = []
 
     private init() {}
 

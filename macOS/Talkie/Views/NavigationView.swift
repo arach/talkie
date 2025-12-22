@@ -31,7 +31,7 @@ struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
     // Use let for singletons - @ObservedObject causes full rerender on every settings change
     private let settings = SettingsManager.shared
-    @ObservedObject private var liveDataStore = DictationStore.shared
+    @State private var liveDataStore = DictationStore.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -181,7 +181,7 @@ struct TalkieNavigationView: View {
             // Navigate to Live Settings subsection
             selectedSection = .liveSettings
         }
-        .onReceive(eventManager.$events) { _ in
+        .onChange(of: eventManager.events.count) { _, _ in
             updateEventCounts()
         }
         .onAppear {

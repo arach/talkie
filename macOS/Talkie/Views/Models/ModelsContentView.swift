@@ -19,10 +19,10 @@ extension NSNotification.Name {
 }
 
 struct ModelsContentView: View {
-    @StateObject private var registry = LLMProviderRegistry.shared
-    @StateObject private var settingsManager = SettingsManager.shared
-    @StateObject private var whisperService = WhisperService.shared
-    @StateObject private var parakeetService = ParakeetService.shared
+    @State private var registry = LLMProviderRegistry.shared
+    @State private var settingsManager = SettingsManager.shared
+    @State private var whisperService = WhisperService.shared
+    @State private var parakeetService = ParakeetService.shared
     @State private var selectedProviderId: String = "gemini"
     @State private var downloadingModelId: String?
     @State private var downloadProgress: Double = 0

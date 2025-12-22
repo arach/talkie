@@ -19,17 +19,17 @@ import TalkieKit
 
 struct StatusBar: View {
     // Live state monitoring (watches TalkieLive's recording state from database)
-    @ObservedObject private var liveState = TalkieLiveStateMonitor.shared
+    @State private var liveState = TalkieLiveStateMonitor.shared
 
     // Service monitoring
-    @ObservedObject private var whisperService = WhisperService.shared
-    @ObservedObject private var engineClient = EngineClient.shared
-    @ObservedObject private var serviceMonitor = TalkieServiceMonitor.shared
+    @State private var whisperService = WhisperService.shared
+    @State private var engineClient = EngineClient.shared
+    @State private var serviceMonitor = TalkieServiceMonitor.shared
 
     // App-wide observables
-    @ObservedObject private var events = SystemEventManager.shared
-    @ObservedObject private var syncManager = CloudKitSyncManager.shared
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @State private var events = SystemEventManager.shared
+    @State private var syncManager = CloudKitSyncManager.shared
+    @State private var liveSettings = LiveSettings.shared
 
     @State private var recordingDuration: TimeInterval = 0
     @State private var processingDuration: TimeInterval = 0
@@ -67,7 +67,7 @@ struct StatusBar: View {
     }
 
     // Mic device monitoring
-    @ObservedObject private var audioDevices = AudioDeviceManager.shared
+    @State private var audioDevices = AudioDeviceManager.shared
 
     private var currentMicName: String? {
         if let device = audioDevices.inputDevices.first(where: { $0.id == audioDevices.selectedDeviceID }) {
@@ -438,8 +438,8 @@ struct StatusIcon: View {
 // MARK: - Live Status Icon
 
 struct LiveStatusIcon: View {
-    @ObservedObject private var liveState = TalkieLiveStateMonitor.shared
-    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+    @State private var liveState = TalkieLiveStateMonitor.shared
+    @State private var audioMonitor = AudioLevelMonitor.shared
 
     private var statusColor: Color {
         if !liveState.isRunning { return TalkieTheme.textMuted }
@@ -487,9 +487,9 @@ struct LiveStatusIcon: View {
 // MARK: - Mic Status Icon (Legacy - kept for reference)
 
 struct MicStatusIcon: View {
-    @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
-    @ObservedObject private var audioDevices = AudioDeviceManager.shared
-    @ObservedObject private var layoutManager = SessionLayoutManager.shared
+    @State private var audioMonitor = AudioLevelMonitor.shared
+    @State private var audioDevices = AudioDeviceManager.shared
+    @State private var layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
 
     private var deviceName: String {
@@ -547,7 +547,7 @@ struct MicStatusIcon: View {
 // MARK: - Simple Engine Icon (no badge - badge is in pill now)
 
 struct SimpleEngineIcon: View {
-    @ObservedObject private var serviceMonitor = TalkieServiceMonitor.shared
+    @State private var serviceMonitor = TalkieServiceMonitor.shared
     @State private var isHovered = false
 
     private var statusColor: Color {
@@ -585,8 +585,8 @@ struct SimpleEngineIcon: View {
 // MARK: - Engine Status Icon (Full with badge)
 
 struct EngineStatusIcon: View {
-    @ObservedObject private var serviceMonitor = TalkieServiceMonitor.shared
-    @ObservedObject private var layoutManager = SessionLayoutManager.shared
+    @State private var serviceMonitor = TalkieServiceMonitor.shared
+    @State private var layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
     @State private var showPID = false
     @State private var showEnvBadge = false
@@ -602,8 +602,8 @@ struct EngineStatusIcon: View {
         }
     }
 
-    @ObservedObject private var settings = LiveSettings.shared
-    @ObservedObject private var engineClient = EngineClient.shared
+    @State private var settings = LiveSettings.shared
+    @State private var engineClient = EngineClient.shared
 
     private var label: String {
         // Show loaded model name when running, otherwise show engine state
@@ -783,9 +783,9 @@ struct EngineStatusIcon: View {
 // MARK: - Model Status Icon
 
 struct ModelStatusIcon: View {
-    @ObservedObject private var settings = LiveSettings.shared
-    @ObservedObject private var engineClient = EngineClient.shared
-    @ObservedObject private var layoutManager = SessionLayoutManager.shared
+    @State private var settings = LiveSettings.shared
+    @State private var engineClient = EngineClient.shared
+    @State private var layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
 
     private var modelName: String {
@@ -868,7 +868,7 @@ struct ModelStatusIcon: View {
 // MARK: - Sync Status Icon (NEW - Talkie-specific)
 
 struct SyncStatusIcon: View {
-    @ObservedObject private var syncManager = CloudKitSyncManager.shared
+    @State private var syncManager = CloudKitSyncManager.shared
     @State private var isHovered = false
     @State private var showingSyncHistory = false
 
@@ -932,17 +932,11 @@ struct ConsoleButton: View {
 
     @State private var isHovered = false
 
-    private var statusColor: Color {
-        if errorCount > 0 { return SemanticColor.error }
-        if warningCount > 0 { return SemanticColor.warning }
-        return TalkieTheme.textMuted
-    }
-
     var body: some View {
         Button(action: { showPopover.toggle() }) {
             Image(systemName: "terminal")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(statusColor.opacity(isHovered ? 1.0 : 0.7))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isHovered ? TalkieTheme.textSecondary : TalkieTheme.textTertiary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
                 .background(

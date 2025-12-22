@@ -330,8 +330,9 @@ struct HotkeyConfig: Codable, Equatable {
 
 // MARK: - Live Settings
 
+@Observable
 @MainActor
-final class LiveSettings: ObservableObject {
+final class LiveSettings {
     static let shared = LiveSettings()
 
     // MARK: - Keys
@@ -365,17 +366,17 @@ final class LiveSettings: ObservableObject {
     // MARK: - Published Settings
 
     /// Toggle hotkey (press to start, press to stop)
-    @Published var hotkey: HotkeyConfig {
+    var hotkey: HotkeyConfig {
         didSet { save() }
     }
 
     /// Push-to-talk hotkey (hold to record, release to stop)
-    @Published var pttHotkey: HotkeyConfig {
+    var pttHotkey: HotkeyConfig {
         didSet { save() }
     }
 
     /// Whether push-to-talk hotkey is enabled
-    @Published var pttEnabled: Bool {
+    var pttEnabled: Bool {
         didSet { save() }
     }
 
@@ -399,67 +400,67 @@ final class LiveSettings: ObservableObject {
         }
     }
 
-    @Published var routingMode: RoutingMode {
+    var routingMode: RoutingMode {
         didSet { save() }
     }
 
     /// Selected microphone device ID (0 = system default)
-    @Published var selectedMicrophoneID: UInt32 {
+    var selectedMicrophoneID: UInt32 {
         didSet { save() }
     }
 
-    @Published var utteranceTTLHours: Int {
+    var utteranceTTLHours: Int {
         didSet {
             save()
             DictationStore.shared.ttlHours = utteranceTTLHours
         }
     }
 
-    @Published var overlayStyle: OverlayStyle {
+    var overlayStyle: OverlayStyle {
         didSet { save() }
     }
 
-    @Published var overlayPosition: OverlayPosition {
+    var overlayPosition: OverlayPosition {
         didSet { save() }
     }
 
     // Floating Pill Settings
-    @Published var pillPosition: PillPosition {
+    var pillPosition: PillPosition {
         didSet { save() }
     }
 
-    @Published var pillShowOnAllScreens: Bool {
+    var pillShowOnAllScreens: Bool {
         didSet { save() }
     }
 
-    @Published var pillExpandsDuringRecording: Bool {
+    var pillExpandsDuringRecording: Bool {
         didSet { save() }
     }
 
-    @Published var showOnAir: Bool {
+    var showOnAir: Bool {
         didSet { save() }
     }
 
-    @Published var startSound: TalkieSound {
+    var startSound: TalkieSound {
         didSet { save() }
     }
 
-    @Published var finishSound: TalkieSound {
+    var finishSound: TalkieSound {
         didSet { save() }
     }
 
-    @Published var pastedSound: TalkieSound {
+    var pastedSound: TalkieSound {
         didSet { save() }
     }
 
-    @Published var appearanceMode: AppearanceMode {
+    var appearanceMode: AppearanceMode {
         didSet {
             save()
             applyAppearance()
         }
     }
 
-    @Published var visualTheme: VisualTheme {
+    var visualTheme: VisualTheme {
         didSet {
             save()
             // Optionally update accent color to match theme default
@@ -469,29 +470,29 @@ final class LiveSettings: ObservableObject {
         }
     }
 
-    @Published var fontSize: FontSize {
+    var fontSize: FontSize {
         didSet { save() }
     }
 
-    @Published var accentColor: AccentColorOption {
+    var accentColor: AccentColorOption {
         didSet { save() }
     }
 
     /// Which context (start or end app) is primary for utterances
-    @Published var primaryContextSource: PrimaryContextSource {
+    var primaryContextSource: PrimaryContextSource {
         didSet { save() }
     }
 
     /// How much context to capture from the Accessibility API
-    @Published var contextCaptureDetail: ContextCaptureDetail {
+    var contextCaptureDetail: ContextCaptureDetail {
         didSet { save() }
     }
 
     /// Session-scoped permission for capturing context (resets on app restart)
-    @Published var contextCaptureSessionAllowed: Bool = true
+    var contextCaptureSessionAllowed: Bool = true
 
     /// Whether to activate the start app after pasting
-    @Published var returnToOriginAfterPaste: Bool {
+    var returnToOriginAfterPaste: Bool {
         didSet { save() }
     }
 

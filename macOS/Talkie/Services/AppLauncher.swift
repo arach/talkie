@@ -17,7 +17,8 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppLauncher
 // MARK: - App Launcher
 
 @MainActor
-final class AppLauncher: ObservableObject {
+@Observable
+final class AppLauncher {
     static let shared = AppLauncher()
 
     // Bundle identifiers for helper apps (environment-aware)
@@ -25,8 +26,8 @@ final class AppLauncher: ObservableObject {
     static var liveBundleId: String { TalkieEnvironment.current.liveBundleId }
 
     // Published state for UI
-    @Published private(set) var engineStatus: HelperStatus = .unknown
-    @Published private(set) var liveStatus: HelperStatus = .unknown
+    private(set) var engineStatus: HelperStatus = .unknown
+    private(set) var liveStatus: HelperStatus = .unknown
 
     // Status polling timer
     private var statusTimer: Timer?
@@ -51,7 +52,11 @@ final class AppLauncher: ObservableObject {
     }
 
     deinit {
-        statusTimer?.invalidate()
+        // Defensive cleanup - singleton shouldn't deinit but if it does, clean up
+        // Access to main actor properties is unsafe here, but cleanup is critical
+        Task { @MainActor in
+            statusTimer?.invalidate()
+        }
     }
 
     // MARK: - Status Polling

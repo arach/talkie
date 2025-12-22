@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Home View
 
 struct HomeView: View {
-    @ObservedObject private var store = DictationStore.shared
+    @State private var store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
 
@@ -1638,7 +1638,7 @@ struct RecentActivityCard: View {
 struct RecentActivityRow: View {
     let utterance: Utterance
     var onSelect: ((Utterance) -> Void)?
-    @ObservedObject private var settings = LiveSettings.shared
+    @State private var settings = LiveSettings.shared
 
     @State private var isHovered = false
 

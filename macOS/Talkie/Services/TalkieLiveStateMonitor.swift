@@ -11,14 +11,15 @@ import Combine
 import TalkieKit
 
 @MainActor
-final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateObserverProtocol {
+@Observable
+final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
     static let shared = TalkieLiveStateMonitor()
 
-    @Published var state: LiveState = .idle
-    @Published var elapsedTime: TimeInterval = 0
-    @Published var isRecording: Bool = false
-    @Published var processId: Int32? = nil
-    @Published var isRunning: Bool = false
+    var state: LiveState = .idle
+    var elapsedTime: TimeInterval = 0
+    var isRecording: Bool = false
+    var processId: Int32? = nil
+    var isRunning: Bool = false
 
     // XPC service manager with environment-aware connection
     private let xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>
@@ -50,7 +51,10 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
         // Observe XPC connection state and update isRunning
         xpcManager.$connectionInfo
             .map(\.isConnected)
-            .assign(to: &$isRunning)
+            .sink { [weak self] isConnected in
+                self?.isRunning = isConnected
+            }
+            .store(in: &cancellables)
 
         // Don't auto-connect - connect lazily when needed
     }

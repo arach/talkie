@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - API Settings View
 struct APISettingsView: View {
-    @ObservedObject var settingsManager: SettingsManager
+    @State var settingsManager: SettingsManager
     @State private var editingProvider: String?
     @State private var editingKeyInput: String = ""
     @State private var revealedKeys: Set<String> = []

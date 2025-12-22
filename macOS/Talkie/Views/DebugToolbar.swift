@@ -232,7 +232,7 @@ struct DebugStateTable: View {
 /// Debug content for the main memo list view
 /// Follows iOS pattern: view-specific actions → convenience → platform-wide utils
 struct ListViewDebugContent: View {
-    @ObservedObject private var syncManager = CloudKitSyncManager.shared
+    @State private var syncManager = CloudKitSyncManager.shared
     @State private var showConfirmation = false
     @State private var confirmationAction: (() -> Void)?
     @State private var confirmationMessage = ""

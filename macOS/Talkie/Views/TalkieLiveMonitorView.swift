@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct TalkieLiveMonitorView: View {
-    @ObservedObject private var monitor = TalkieLiveMonitor.shared
+    @State private var monitor = TalkieLiveMonitor.shared
     private let settings = SettingsManager.shared
 
     @State private var showLogs = true
@@ -400,7 +400,7 @@ struct TalkieLiveLogRow: View {
 
 /// A compact badge for showing TalkieLive status in other views
 struct TalkieLiveStatusBadge: View {
-    @ObservedObject private var monitor = TalkieLiveMonitor.shared
+    @State private var monitor = TalkieLiveMonitor.shared
 
     var body: some View {
         HStack(spacing: 4) {

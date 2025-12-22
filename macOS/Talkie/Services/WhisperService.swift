@@ -40,17 +40,18 @@ enum WhisperModel: String, CaseIterable, Codable {
 // MARK: - Whisper Service (XPC-only)
 
 @MainActor
-class WhisperService: ObservableObject {
+@Observable
+class WhisperService {
     static let shared = WhisperService()
 
-    @Published var isTranscribing = false
-    @Published var loadedModel: WhisperModel?
-    @Published var downloadProgress: Float = 0
-    @Published var isDownloading = false
-    @Published var lastError: String?
+    var isTranscribing = false
+    var loadedModel: WhisperModel?
+    var downloadProgress: Float = 0
+    var isDownloading = false
+    var lastError: String?
 
     /// Cached set of downloaded models - queried from TalkieEngine
-    @Published private(set) var downloadedModels: Set<WhisperModel> = []
+    private(set) var downloadedModels: Set<WhisperModel> = []
 
     private init() {
         Task {

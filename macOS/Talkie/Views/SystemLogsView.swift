@@ -314,10 +314,11 @@ class LogFileManager {
 // MARK: - Event Manager
 
 @MainActor
-class SystemEventManager: ObservableObject {
+@Observable
+class SystemEventManager {
     static let shared = SystemEventManager()
 
-    @Published var events: [SystemEvent] = []
+    var events: [SystemEvent] = []
     private let maxEventsInMemory = 500
 
     private var cancellables = Set<AnyCancellable>()
@@ -413,7 +414,7 @@ class SystemEventManager: ObservableObject {
 // MARK: - Console View
 
 struct SystemLogsView: View {
-    @StateObject private var eventManager = SystemEventManager.shared
+    @State private var eventManager = SystemEventManager.shared
     @State private var autoScroll = true
     @State private var filterSource: SystemEventSource? = nil
     @State private var filterType: SystemEventType? = nil

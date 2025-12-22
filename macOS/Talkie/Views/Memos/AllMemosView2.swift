@@ -13,7 +13,7 @@ import CoreData
 // MARK: - All Memos View 2.0
 
 struct AllMemosView2: View {
-    @StateObject private var viewModel = MemosViewModel()
+    @State private var viewModel = MemosViewModel()
     @State private var selectedMemoID: UUID?
     @State private var searchText = ""
 

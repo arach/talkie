@@ -9,8 +9,8 @@
 import SwiftUI
 
 struct InterstitialEditorView: View {
-    @ObservedObject var manager: InterstitialManager
-    @ObservedObject private var settings = SettingsManager.shared
+    @State var manager: InterstitialManager
+    @State private var settings = SettingsManager.shared
     @FocusState private var isTextFieldFocused: Bool
     @FocusState private var isInstructionFocused: Bool
     @State private var customInstruction: String = ""

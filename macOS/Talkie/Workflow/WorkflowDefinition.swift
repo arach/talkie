@@ -2130,10 +2130,11 @@ enum WorkflowColor: String, Codable, CaseIterable {
 // MARK: - Workflow Manager
 
 @MainActor
-class WorkflowManager: ObservableObject {
+@Observable
+class WorkflowManager {
     static let shared = WorkflowManager()
 
-    @Published var workflows: [WorkflowDefinition] = []
+    var workflows: [WorkflowDefinition] = []
 
     private let userDefaultsKey = "workflows_v2"
     private let iCloudPinnedKey = "pinnedWorkflows"

@@ -47,21 +47,22 @@ enum MemoFilter: Hashable, Identifiable {
 // MARK: - Memos ViewModel
 
 @MainActor
-final class MemosViewModel: ObservableObject {
+@Observable
+final class MemosViewModel {
     // MARK: - Published State
 
-    @Published var memos: [MemoModel] = []
-    @Published var isLoading = false
-    @Published var error: Error?
+    var memos: [MemoModel] = []
+    var isLoading = false
+    var error: Error?
 
     // Sort & Filter
-    @Published var sortField: MemoModel.SortField = .timestamp
-    @Published var sortAscending = false
-    @Published var searchQuery = ""
-    @Published var activeFilters: Set<MemoFilter> = []
+    var sortField: MemoModel.SortField = .timestamp
+    var sortAscending = false
+    var searchQuery = ""
+    var activeFilters: Set<MemoFilter> = []
 
     // Pagination
-    @Published var totalCount = 0
+    var totalCount = 0
     private var currentOffset = 0
     private let pageSize = 50
 

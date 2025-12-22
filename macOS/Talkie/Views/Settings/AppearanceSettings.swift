@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - Appearance Settings View
 struct AppearanceSettingsView: View {
-    @ObservedObject private var settingsManager = SettingsManager.shared
+    @State private var settingsManager = SettingsManager.shared
 
     /// Check if this theme is the current active theme
     private func isThemeActive(_ preset: ThemePreset) -> Bool {

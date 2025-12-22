@@ -17,12 +17,13 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "AutoRunProc
 // MARK: - Auto-Run Processor
 
 @MainActor
-class AutoRunProcessor: ObservableObject {
+@Observable
+class AutoRunProcessor {
     static let shared = AutoRunProcessor()
 
-    @Published var isProcessing = false
-    @Published var lastProcessedMemoId: UUID?
-    @Published var processedCount = 0
+    var isProcessing = false
+    var lastProcessedMemoId: UUID?
+    var processedCount = 0
 
     private init() {}
 

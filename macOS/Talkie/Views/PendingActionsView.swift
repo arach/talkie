@@ -11,7 +11,7 @@ import CoreData
 import Combine
 
 struct PendingActionsView: View {
-    @StateObject private var pendingManager = PendingActionsManager.shared
+    @State private var pendingManager = PendingActionsManager.shared
     @Environment(\.managedObjectContext) private var viewContext
     private let settings = SettingsManager.shared
 
@@ -504,7 +504,7 @@ struct RecentActionRow: View {
 
 /// A compact badge for showing in status bar or other places
 struct PendingActionsBadge: View {
-    @StateObject private var pendingManager = PendingActionsManager.shared
+    @State private var pendingManager = PendingActionsManager.shared
 
     var body: some View {
         if pendingManager.hasActiveActions {

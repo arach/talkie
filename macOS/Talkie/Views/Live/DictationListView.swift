@@ -9,7 +9,7 @@ import SwiftUI
 
 /// Simple list view for all Live utterances (no sidebar, for embedding in main navigation)
 struct DictationListView: View {
-    @ObservedObject private var store = DictationStore.shared
+    @State private var store = DictationStore.shared
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []
     @State private var searchText = ""
     @State private var retranscribingIDs: Set<Utterance.ID> = []

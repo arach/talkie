@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 struct WorkflowListColumn: View {
     @Binding var selectedWorkflowID: UUID?
     @Binding var editingWorkflow: WorkflowDefinition?
-    @StateObject private var workflowManager = WorkflowManager.shared
+    @State private var workflowManager = WorkflowManager.shared
     private let settings = SettingsManager.shared
 
     var body: some View {
@@ -87,7 +87,7 @@ struct WorkflowDetailColumn: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Binding var editingWorkflow: WorkflowDefinition?
     @Binding var selectedWorkflowID: UUID?
-    @ObservedObject private var workflowManager = WorkflowManager.shared
+    @State private var workflowManager = WorkflowManager.shared
     private let settings = SettingsManager.shared
     @State private var showingMemoSelector = false
 

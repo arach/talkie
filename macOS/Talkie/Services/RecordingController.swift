@@ -13,16 +13,21 @@ import AVFoundation
 // MARK: - Recording Controller
 
 @MainActor
-final class RecordingController: ObservableObject {
+@Observable
+final class RecordingController {
     static let shared = RecordingController()
 
-    @Published var state: LiveState = .idle
-    @Published var elapsedTime: TimeInterval = 0
-    @Published var transcript: String = ""
+    var state: LiveState = .idle
+    var elapsedTime: TimeInterval = 0
+    var transcript: String = ""
 
+    @ObservationIgnored
     private var timer: Timer?
+    @ObservationIgnored
     private var startTime: Date?
+    @ObservationIgnored
     private var audioRecorder: AVAudioRecorder?
+    @ObservationIgnored
     private var audioURL: URL?
 
     private init() {}

@@ -65,8 +65,8 @@ struct TalkieApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     let persistenceController = PersistenceController.shared
-    @ObservedObject private var settingsManager = SettingsManager.shared
-    @ObservedObject private var onboardingManager = OnboardingManager.shared
+    @State private var settingsManager = SettingsManager.shared
+    @State private var onboardingManager = OnboardingManager.shared
     @FocusedValue(\.sidebarToggle) var sidebarToggle
     @FocusedValue(\.settingsNavigation) var settingsNavigation
     @FocusedValue(\.liveNavigation) var liveNavigation

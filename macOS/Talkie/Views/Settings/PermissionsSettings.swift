@@ -54,12 +54,13 @@ enum PermissionStatus {
 // MARK: - Permissions Manager
 
 @MainActor
-class PermissionsManager: ObservableObject {
+@Observable
+class PermissionsManager {
     static let shared = PermissionsManager()
 
-    @Published var microphoneStatus: PermissionStatus = .unknown
-    @Published var accessibilityStatus: PermissionStatus = .unknown
-    @Published var automationStatus: PermissionStatus = .unknown
+    var microphoneStatus: PermissionStatus = .unknown
+    var accessibilityStatus: PermissionStatus = .unknown
+    var automationStatus: PermissionStatus = .unknown
 
     private init() {
         // Don't check permissions eagerly - let views call refreshAllPermissions() on appear
@@ -170,7 +171,7 @@ class PermissionsManager: ObservableObject {
 // MARK: - Permissions Settings View
 
 struct PermissionsSettingsView: View {
-    @StateObject private var permissionsManager = PermissionsManager.shared
+    @State private var permissionsManager = PermissionsManager.shared
 
     var body: some View {
         SettingsPageContainer {

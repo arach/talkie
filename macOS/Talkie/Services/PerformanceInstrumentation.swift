@@ -273,15 +273,16 @@ struct PerformanceStats {
 
 /// Performance monitor tracking user actions and processing time
 @MainActor
-final class PerformanceMonitor: ObservableObject {
+@Observable
+final class PerformanceMonitor {
     static let shared = PerformanceMonitor()
 
-    @Published var actions: [PerformanceAction] = []
-    @Published var isMonitoring = true
+    var actions: [PerformanceAction] = []
+    var isMonitoring = true
 
     // Metrics
-    @Published var totalActions = 0
-    @Published var averageProcessingTime: TimeInterval = 0
+    var totalActions = 0
+    var averageProcessingTime: TimeInterval = 0
 
     // Track active action for associating operations
     private var activeActionID: UUID?
@@ -466,7 +467,7 @@ struct PerformanceDebugView: View {
 }
 
 private struct MonitorContentView: View {
-    @ObservedObject var monitor: PerformanceMonitor
+    var monitor: PerformanceMonitor
 
     @State private var expandedActions: Set<UUID> = []
     @State private var filterActionType: String? = nil

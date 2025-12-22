@@ -12,14 +12,15 @@ import CloudKit
 // MARK: - CloudKit Sync Engine
 
 @MainActor
-final class CloudKitSyncEngine: ObservableObject {
+@Observable
+final class CloudKitSyncEngine {
     static let shared = CloudKitSyncEngine()
 
     // MARK: - Published State
 
-    @Published var isSyncing = false
-    @Published var lastSyncDate: Date?
-    @Published var syncError: Error?
+    var isSyncing = false
+    var lastSyncDate: Date?
+    var syncError: Error?
 
     // MARK: - Dependencies
 

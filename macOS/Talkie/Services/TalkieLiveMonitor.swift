@@ -56,29 +56,30 @@ public struct TalkieLiveLogEntry: Identifiable, Equatable {
 
 /// Monitors TalkieLive app process and streams its logs
 @MainActor
-public final class TalkieLiveMonitor: ObservableObject {
+@Observable
+public final class TalkieLiveMonitor {
     public static let shared = TalkieLiveMonitor()
 
     // MARK: - Published State
 
-    @Published public private(set) var state: TalkieLiveState = .unknown
-    @Published public private(set) var processId: pid_t?
-    @Published public private(set) var cpuUsage: Double = 0
-    @Published public private(set) var memoryUsage: UInt64 = 0  // in bytes
-    @Published public private(set) var uptime: TimeInterval = 0
-    @Published public private(set) var launchedAt: Date?
+    public private(set) var state: TalkieLiveState = .unknown
+    public private(set) var processId: pid_t?
+    public private(set) var cpuUsage: Double = 0
+    public private(set) var memoryUsage: UInt64 = 0  // in bytes
+    public private(set) var uptime: TimeInterval = 0
+    public private(set) var launchedAt: Date?
 
     /// Recent logs from TalkieLive (keeps last 500)
-    @Published public private(set) var logs: [TalkieLiveLogEntry] = []
+    public private(set) var logs: [TalkieLiveLogEntry] = []
 
     /// Error message if something goes wrong
-    @Published public private(set) var lastError: String?
+    public private(set) var lastError: String?
 
     // MARK: - Private
 
-    private var monitorTimer: Timer?
-    private var logStreamTask: Process?
-    private let maxLogEntries = 500
+    @ObservationIgnored private var monitorTimer: Timer?
+    @ObservationIgnored private var logStreamTask: Process?
+    @ObservationIgnored private let maxLogEntries = 500
 
     private init() {
         logger.info("[TalkieLive] Monitor initialized (lazy - call startMonitoring() when needed)")
@@ -87,8 +88,12 @@ public final class TalkieLiveMonitor: ObservableObject {
     }
 
     deinit {
-        monitorTimer?.invalidate()
-        logStreamTask?.terminate()
+        // Defensive cleanup - singleton shouldn't deinit but if it does, clean up
+        // Access to main actor properties is unsafe here, but cleanup is critical
+        Task { @MainActor in
+            monitorTimer?.invalidate()
+            logStreamTask?.terminate()
+        }
     }
 
     // MARK: - Monitoring
