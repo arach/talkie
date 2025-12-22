@@ -133,8 +133,8 @@ final class TranscriptionRetryManager: ObservableObject {
 
                 AppLogger.shared.log(.transcription, "Retry succeeded", detail: "ID \(utterance.id ?? -1) in \(transcriptionMs)ms")
 
-                // Refresh UtteranceStore to pick up the updated record from DB
-                UtteranceStore.shared.refresh()
+                // Refresh DictationStore to pick up the updated record from DB
+                DictationStore.shared.refresh()
 
             } catch {
                 AppLogger.shared.log(.error, "Retry failed", detail: "ID \(utterance.id ?? -1): \(error.localizedDescription)")
@@ -160,7 +160,7 @@ final class TranscriptionRetryManager: ObservableObject {
     }
 
     /// Manually trigger retry for a single utterance
-    func retrySingle(_ utterance: LiveUtterance) async -> Bool {
+    func retrySingle(_ utterance: LiveDictation) async -> Bool {
         guard let audioURL = utterance.audioURL, utterance.hasAudio else {
             logger.warning("[RetryManager] Cannot retry - no audio file")
             return false

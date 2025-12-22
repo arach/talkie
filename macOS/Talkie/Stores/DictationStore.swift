@@ -1,5 +1,5 @@
 //
-//  UtteranceStore.swift
+//  DictationStore.swift
 //  TalkieLive
 //
 //  Local storage for utterances with TTL
@@ -9,7 +9,7 @@ import Foundation
 import AppKit
 import os.log
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "UtteranceStore")
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "DictationStore")
 
 // MARK: - Utterance Metadata
 
@@ -61,7 +61,7 @@ struct UtteranceMetadata: Codable, Hashable {
 
     init() {}
 
-    /// Initialize with specific fields (used when converting from LiveUtterance)
+    /// Initialize with specific fields (used when converting from LiveDictation)
     init(
         activeAppBundleID: String? = nil,
         activeAppName: String? = nil,
@@ -173,7 +173,7 @@ struct Utterance: Identifiable, Codable, Hashable {
     let durationSeconds: Double?
     var metadata: UtteranceMetadata
 
-    /// Database ID (from LiveUtterance) - used for linking to database records
+    /// Database ID (from LiveDictation) - used for linking to database records
     var liveID: Int64?
 
     // Computed properties
@@ -291,8 +291,8 @@ struct ContextCapture {
 }
 
 @MainActor
-final class UtteranceStore: ObservableObject {
-    static let shared = UtteranceStore()
+final class DictationStore: ObservableObject {
+    static let shared = DictationStore()
 
     /// Published utterances - now backed by SQLite database
     @Published private(set) var utterances: [Utterance] = []
@@ -324,8 +324,8 @@ final class UtteranceStore: ObservableObject {
         if let pre = metadata.perfPreMs { metadataDict["perfPreMs"] = String(pre) }
         if let post = metadata.perfPostMs { metadataDict["perfPostMs"] = String(post) }
 
-        // Convert to LiveUtterance for database storage
-        let liveUtterance = LiveUtterance(
+        // Convert to LiveDictation for database storage
+        let liveUtterance = LiveDictation(
             text: text,
             mode: metadata.routingMode ?? "typing",
             appBundleID: metadata.activeAppBundleID,
@@ -349,8 +349,8 @@ final class UtteranceStore: ObservableObject {
         refresh()
     }
 
-    /// Add a LiveUtterance directly (for new recordings)
-    func addLive(_ liveUtterance: LiveUtterance) {
+    /// Add a LiveDictation directly (for new recordings)
+    func addLive(_ liveUtterance: LiveDictation) {
         LiveDatabase.store(liveUtterance)
         logger.info("Added live utterance: \(liveUtterance.text.prefix(50))...")
         refresh()
@@ -359,6 +359,19 @@ final class UtteranceStore: ObservableObject {
     /// Update an existing utterance
     func update(_ utterance: Utterance) {
         // For now, just refresh - updates go through LiveDatabase directly
+        refresh()
+    }
+
+    /// Update utterance text (for retranscription)
+    func updateText(for id: UUID, newText: String) {
+        // Find the utterance to get its liveID
+        guard let utterance = utterances.first(where: { $0.id == id }),
+              let liveID = utterance.liveID else {
+            logger.warning("Cannot update text: utterance not found or has no liveID")
+            return
+        }
+
+        LiveDatabase.updateText(for: liveID, newText: newText)
         refresh()
     }
 
@@ -395,7 +408,7 @@ final class UtteranceStore: ObservableObject {
 
     /// Refresh from database (incremental when possible)
     func refresh() {
-        let liveUtterances: [LiveUtterance]
+        let liveUtterances: [LiveDictation]
 
         // Incremental fetch: only get new utterances since last refresh
         if let lastRefresh = lastRefreshTimestamp {
@@ -424,7 +437,7 @@ final class UtteranceStore: ObservableObject {
             }
         }
 
-        // Convert new LiveUtterances to Utterances
+        // Convert new LiveDictations to Utterances
         let newUtterances = liveUtterances.compactMap { live -> Utterance? in
             if let liveID = live.id, let existing = existingByLiveID[liveID] {
                 // Check if data has changed
@@ -474,8 +487,8 @@ final class UtteranceStore: ObservableObject {
         }
     }
 
-    /// Build UtteranceMetadata from LiveUtterance, including rich context from metadata dict
-    private func buildMetadata(from live: LiveUtterance) -> UtteranceMetadata {
+    /// Build UtteranceMetadata from LiveDictation, including rich context from metadata dict
+    private func buildMetadata(from live: LiveDictation) -> UtteranceMetadata {
         var metadata = UtteranceMetadata(
             activeAppBundleID: live.appBundleID,
             activeAppName: live.appName,
@@ -568,8 +581,8 @@ final class UtteranceStore: ObservableObject {
 
     func startMonitoring() {
         // Deprecated: We now use XPC push notifications from TalkieLive instead of polling
-        // The XPC service calls UtteranceStore.refresh() when new utterances are added
-        logger.info("[UtteranceStore] ℹ️ Using XPC push notifications (no polling)")
+        // The XPC service calls DictationStore.refresh() when new utterances are added
+        logger.info("[DictationStore] ℹ️ Using XPC push notifications (no polling)")
         refresh()  // Initial load
     }
 

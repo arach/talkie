@@ -82,6 +82,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 button.title = "🎙"  // Fallback
             }
             updateStatusBarTooltip()
+
+            // Monitor Control key to show environment badge
+            NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
+                self?.updateStatusBarBadge(controlPressed: event.modifierFlags.contains(.control))
+                return event
+            }
+        }
+    }
+
+    private func updateStatusBarBadge(controlPressed: Bool) {
+        guard let button = statusItem.button,
+              let bundleID = Bundle.main.bundleIdentifier else { return }
+
+        // Only show badge for dev/staging builds when Control is held
+        if controlPressed && (bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging")) {
+            let badge = bundleID.hasSuffix(".dev") ? "DEV" : "STG"
+            button.title = badge
+            button.image = nil
+        } else {
+            // Restore icon
+            button.title = ""
+            if let image = NSImage(named: "MenuBarIcon") {
+                image.isTemplate = true
+                button.image = image
+            } else {
+                button.title = "🎙"
+            }
         }
     }
 
@@ -159,6 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController.onCancel = { [weak self] in
             self?.liveController.cancelListening()
         }
+        overlayController.liveController = liveController  // For mid-recording intent updates
     }
 
     // MARK: - Floating Pill
@@ -166,7 +194,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupFloatingPill() {
         // Wire up floating pill - handle taps based on current state
         floatingPill.onTap = { [weak self] state, modifiers in
-            guard let self = self else { return }
+            NSLog("[AppDelegate] onTap received: state=%@, modifiers=%d", state.rawValue, modifiers.rawValue)
+
+            guard let self = self else {
+                NSLog("[AppDelegate] self is nil in onTap")
+                return
+            }
 
             let shiftHeld = modifiers.contains(.shift)
             let commandHeld = modifiers.contains(.command)
@@ -175,11 +208,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .idle:
                 // Idle state: Check if there are queued items to show
                 let queuedCount = LiveDatabase.countQueued()
+                NSLog("[AppDelegate] Idle tap: queuedCount=%d", queuedCount)
+
                 if queuedCount > 0 {
                     // Show failed queue picker
+                    NSLog("[AppDelegate] Showing failed queue picker")
                     FailedQueueController.shared.show()
                 } else {
                     // Normal tap: start recording (with optional interstitial mode)
+                    NSLog("[AppDelegate] Starting recording (interstitial=%d)", shiftHeld)
                     self.toggleListening(interstitial: shiftHeld)
                 }
 
@@ -318,8 +355,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleListening(interstitial: Bool) {
+        NSLog("[AppDelegate] toggleListening called: interstitial=%d", interstitial)
         Task {
+            NSLog("[AppDelegate] Calling liveController.toggleListening...")
             await liveController.toggleListening(interstitial: interstitial)
+            NSLog("[AppDelegate] liveController.toggleListening completed")
         }
     }
 
@@ -358,12 +398,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showSettings() {
-        // Open Talkie Core app with Live settings
+        // Open environment-appropriate Talkie app with Live settings
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true  // Bring to front
 
+        // Determine Talkie app path based on current environment
+        let environment = TalkieEnvironment.current
+        let talkiePath: String
+        switch environment {
+        case .production:
+            talkiePath = "/Applications/Talkie.app"
+        case .staging:
+            talkiePath = NSHomeDirectory() + "/Applications/Talkie-Staging.app"
+        case .dev:
+            // For dev builds, try to find Talkie in standard dev locations
+            let devPaths = [
+                NSHomeDirectory() + "/dev/talkie/build/Debug/Talkie.app",
+                NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData/Talkie-*/Build/Products/Debug/Talkie.app"
+            ]
+            talkiePath = devPaths.first { FileManager.default.fileExists(atPath: $0) } ?? "/Applications/Talkie.app"
+        }
+
         NSWorkspace.shared.openApplication(
-            at: URL(fileURLWithPath: "/Applications/Talkie.app"),
+            at: URL(fileURLWithPath: talkiePath),
             configuration: configuration
         ) { app, error in
             if let error = error {
@@ -371,9 +428,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            // After opening Talkie, navigate to Settings
+            // After opening Talkie, navigate to Settings using environment-appropriate URL scheme
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if let url = URL(string: "talkie://settings/live") {
+                let urlString = "\(environment.talkieURLScheme)://settings/live"
+                if let url = URL(string: urlString) {
                     NSWorkspace.shared.open(url)
                 }
             }

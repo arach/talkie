@@ -157,16 +157,16 @@ final class InterstitialManager: ObservableObject {
             dismiss()
         }
 
-        // Fetch utterance from UtteranceStore/LiveDatabase
-        NSLog("[Interstitial] Refreshing UtteranceStore...")
-        UtteranceStore.shared.refresh()
+        // Fetch utterance from DictationStore/LiveDatabase
+        NSLog("[Interstitial] Refreshing DictationStore...")
+        DictationStore.shared.refresh()
 
-        NSLog("[Interstitial] UtteranceStore has \(UtteranceStore.shared.utterances.count) utterances")
+        NSLog("[Interstitial] DictationStore has \(DictationStore.shared.utterances.count) utterances")
         NSLog("[Interstitial] Database path: \(LiveDatabase.databaseURL.path)")
 
         guard let utterance = LiveDatabase.fetch(id: utteranceId) else {
             NSLog("[Interstitial] ERROR: Utterance \(utteranceId) not found in shared database")
-            logger.error("Utterance \(utteranceId) not found in shared database. Database has \(UtteranceStore.shared.utterances.count) utterances.")
+            logger.error("Utterance \(utteranceId) not found in shared database. Database has \(DictationStore.shared.utterances.count) utterances.")
             return
         }
 

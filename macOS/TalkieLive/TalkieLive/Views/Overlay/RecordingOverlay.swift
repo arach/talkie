@@ -20,9 +20,11 @@ final class RecordingOverlayController: ObservableObject {
     @Published var state: LiveState = .idle
     @Published var elapsedTime: TimeInterval = 0
     @Published var transcript: String = ""
+    @Published var captureIntent: String = "Paste"  // Shows current intent during recording
 
     private var timer: Timer?
     private var startTime: Date?
+    private var keyMonitor: Any?  // Event monitor for mid-recording modifiers
 
     private init() {}
 
@@ -136,12 +138,16 @@ final class RecordingOverlayController: ObservableObject {
 
         if state == .listening {
             show()
-        } else if state == .idle {
-            // Delay hide to show success checkmark clearly
-            Task {
-                try? await Task.sleep(for: .milliseconds(900))  // Longer to show checkmark
-                if self.state == .idle {
-                    hide()
+            startKeyMonitoring()  // Monitor for Shift+A during recording
+        } else {
+            stopKeyMonitoring()
+            if state == .idle {
+                // Delay hide to show success checkmark clearly
+                Task {
+                    try? await Task.sleep(for: .milliseconds(900))  // Longer to show checkmark
+                    if self.state == .idle {
+                        hide()
+                    }
                 }
             }
         }
@@ -198,6 +204,7 @@ final class RecordingOverlayController: ObservableObject {
     // Control callbacks - set by AppDelegate
     var onStop: (() -> Void)?
     var onCancel: (() -> Void)?
+    var liveController: LiveController?  // Reference to controller for intent updates
 
     func requestStop() {
         onStop?()
@@ -207,6 +214,43 @@ final class RecordingOverlayController: ObservableObject {
         onCancel?()
         hide()
     }
+
+    // MARK: - Key Monitoring for Mid-Recording Modifiers
+
+    private func startKeyMonitoring() {
+        stopKeyMonitoring()  // Clear any existing monitor
+
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, let controller = self.liveController else { return event }
+
+            let isShiftHeld = event.modifierFlags.contains(.shift)
+            let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+
+            // Detect Shift+A → Save as Memo
+            if isShiftHeld && key == "a" {
+                controller.setSaveAsMemoIntent()
+                self.captureIntent = controller.captureIntent
+                return nil  // Consume event
+            }
+
+            // Detect Shift or Shift+S → Scratchpad
+            if isShiftHeld && (key == "s" || key == "") {
+                controller.setInterstitialIntent()
+                self.captureIntent = controller.captureIntent
+                return nil  // Consume event
+            }
+
+            return event
+        }
+    }
+
+    private func stopKeyMonitoring() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
+        captureIntent = "Paste"  // Reset to default
+    }
 }
 
 // MARK: - Overlay View
@@ -214,9 +258,12 @@ final class RecordingOverlayController: ObservableObject {
 struct RecordingOverlayView: View {
     @EnvironmentObject var controller: RecordingOverlayController
     @ObservedObject private var settings = LiveSettings.shared
-    @ObservedObject private var overlayTuning = OverlayTuning.shared
-    @ObservedObject private var whisperService = WhisperService.shared
     @ObservedObject private var audioMonitor = AudioLevelMonitor.shared
+
+    // Direct access without observation - prevents cycles
+    private let overlayTuning = OverlayTuning.shared
+    private let whisperService = WhisperService.shared
+
     @State private var isOverlayHovered: Bool = false  // Track hover state for controls
     @State private var showCheckmark: Bool = false  // For transcribing → success transition
 

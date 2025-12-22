@@ -115,7 +115,7 @@ struct TalkieServiceMonitorView: View {
         HStack(spacing: Spacing.sm) {
             if monitor.state == .running {
                 // Restart button
-                Button(action: { monitor.restart() }) {
+                Button(action: { Task { await monitor.restart() } }) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 11, weight: .medium))
@@ -149,7 +149,7 @@ struct TalkieServiceMonitorView: View {
                 .help("Stop Talkie Service")
             } else if monitor.state == .stopped {
                 // Start button
-                Button(action: { monitor.launch() }) {
+                Button(action: { Task { await monitor.launch() } }) {
                     HStack(spacing: 4) {
                         Image(systemName: "play.fill")
                             .font(.system(size: 11, weight: .medium))

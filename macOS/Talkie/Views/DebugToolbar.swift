@@ -120,7 +120,7 @@ struct DebugConsoleSheet: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("System Console")
+                Text("System Logs")
                     .font(.headline)
 
                 Spacer()
@@ -134,8 +134,8 @@ struct DebugConsoleSheet: View {
 
             Divider()
 
-            // Console view
-            SystemConsoleView()
+            // Logs view
+            SystemLogsView()
         }
         .frame(width: 700, height: 500)
     }

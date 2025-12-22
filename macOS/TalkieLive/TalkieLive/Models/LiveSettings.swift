@@ -389,7 +389,7 @@ final class LiveSettings: ObservableObject {
     private let selectedModelIdKey = "selectedModelId"
     private let whisperModelKey = "whisperModel"  // Legacy, for migration
     private let routingModeKey = "routingMode"
-    private let utteranceTTLKey = "utteranceTTLHours"
+    private let dictationTTLKey = "dictationTTLHours"
     private let overlayStyleKey = "overlayStyle"
     private let overlayPositionKey = "overlayPosition"
     private let pillPositionKey = "pillPosition"
@@ -453,10 +453,10 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
-    @Published var utteranceTTLHours: Int {
+    @Published var dictationTTLHours: Int {
         didSet {
             save()
-            UtteranceStore.shared.ttlHours = utteranceTTLHours
+            DictationStore.shared.ttlHours = dictationTTLHours
         }
     }
 
@@ -572,8 +572,8 @@ final class LiveSettings: ObservableObject {
             // Migrate from legacy whisperModel setting
             self.selectedModelId = "whisper:\(legacyModel)"
         } else {
-            // Default to whisper small
-            self.selectedModelId = "whisper:openai_whisper-small"
+            // Default to parakeet v3 (fast, accurate, always available)
+            self.selectedModelId = "parakeet:v3"
         }
 
         // Load routing mode
@@ -584,8 +584,8 @@ final class LiveSettings: ObservableObject {
         self.selectedMicrophoneID = UInt32(UserDefaults.standard.integer(forKey: selectedMicrophoneIDKey))
 
         // Load TTL (default 48 hours)
-        let ttl = UserDefaults.standard.integer(forKey: utteranceTTLKey)
-        self.utteranceTTLHours = ttl > 0 ? ttl : 48
+        let ttl = UserDefaults.standard.integer(forKey: dictationTTLKey)
+        self.dictationTTLHours = ttl > 0 ? ttl : 48
 
         // Load overlay style
         if let rawValue = UserDefaults.standard.string(forKey: overlayStyleKey),
@@ -700,7 +700,7 @@ final class LiveSettings: ObservableObject {
         self.returnToOriginAfterPaste = UserDefaults.standard.bool(forKey: returnToOriginAfterPasteKey)
 
         // Apply TTL to store
-        UtteranceStore.shared.ttlHours = utteranceTTLHours
+        DictationStore.shared.ttlHours = dictationTTLHours
     }
 
     // MARK: - Persistence
@@ -716,7 +716,7 @@ final class LiveSettings: ObservableObject {
         UserDefaults.standard.set(selectedModelId, forKey: selectedModelIdKey)
         UserDefaults.standard.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: routingModeKey)
         UserDefaults.standard.set(Int(selectedMicrophoneID), forKey: selectedMicrophoneIDKey)
-        UserDefaults.standard.set(utteranceTTLHours, forKey: utteranceTTLKey)
+        UserDefaults.standard.set(dictationTTLHours, forKey: dictationTTLKey)
         UserDefaults.standard.set(overlayStyle.rawValue, forKey: overlayStyleKey)
         UserDefaults.standard.set(overlayPosition.rawValue, forKey: overlayPositionKey)
         UserDefaults.standard.set(pillPosition.rawValue, forKey: pillPositionKey)

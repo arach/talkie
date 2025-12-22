@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Home View
 
 struct HomeView: View {
-    @ObservedObject private var store = UtteranceStore.shared
+    @ObservedObject private var store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
 
@@ -1714,7 +1714,7 @@ struct RecentActivityRow: View {
 
             Button(role: .destructive) {
                 withAnimation {
-                    UtteranceStore.shared.delete(utterance)
+                    DictationStore.shared.delete(utterance)
                 }
             } label: {
                 Label("Delete", systemImage: "trash")

@@ -22,7 +22,9 @@
       "Bash(xcodegen generate:*)",
       "Bash(sqlite3:*)",
       "Bash(gh pr view:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(swiftc:*)",
+      "WebFetch(domain:deepwiki.com)"
     ]
   }
 }

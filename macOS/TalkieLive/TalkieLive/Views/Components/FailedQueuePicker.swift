@@ -152,7 +152,7 @@ final class FailedQueueController {
 
 @MainActor
 final class FailedQueueViewModel: ObservableObject {
-    @Published var items: [LiveUtterance]
+    @Published var items: [LiveDictation]
     @Published var retryingItems: Set<Int64> = []
     @Published var selectedIndex: Int = 0  // For keyboard navigation
 
@@ -163,7 +163,7 @@ final class FailedQueueViewModel: ObservableObject {
         EngineClient.shared.isConnected
     }
 
-    init(items: [LiveUtterance]) {
+    init(items: [LiveDictation]) {
         self.items = items
     }
 
@@ -194,7 +194,7 @@ final class FailedQueueViewModel: ObservableObject {
         }
     }
 
-    func retry(_ item: LiveUtterance) {
+    func retry(_ item: LiveDictation) {
         guard let id = item.id else { return }
         retryingItems.insert(id)
 
@@ -212,7 +212,7 @@ final class FailedQueueViewModel: ObservableObject {
         }
     }
 
-    func delete(_ item: LiveUtterance) {
+    func delete(_ item: LiveDictation) {
         guard let id = item.id else { return }
 
         // Delete from database (this also removes the audio file)
@@ -357,7 +357,7 @@ struct FailedQueueView: View {
 }
 
 struct FailedItemRow: View {
-    let item: LiveUtterance
+    let item: LiveDictation
     let isRetrying: Bool
     let isEngineConnected: Bool
     let isSelected: Bool
@@ -505,7 +505,7 @@ struct KeyboardHint: View {
 
 #Preview {
     let items = [
-        LiveUtterance(
+        LiveDictation(
             text: "",
             appName: "Slack",
             durationSeconds: 12.5,
@@ -514,7 +514,7 @@ struct KeyboardHint: View {
             transcriptionStatus: .failed,
             transcriptionError: "Engine not running"
         ),
-        LiveUtterance(
+        LiveDictation(
             text: "",
             appName: "Messages",
             durationSeconds: 45.2,

@@ -158,13 +158,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenuItem.target = self
         menu.addItem(statusMenuItem)
 
-        // Add reload option for dev mode
+        // Add daemon control options for dev mode
         if mode == .dev {
             menu.addItem(NSMenuItem.separator())
 
             let reloadItem = NSMenuItem(title: "Reload Engine", action: #selector(reloadEngine), keyEquivalent: "r")
             reloadItem.target = self
             menu.addItem(reloadItem)
+
+            // Show daemon control options only when running as daemon
+            if EngineStatusManager.shared.isDaemonMode {
+                menu.addItem(NSMenuItem.separator())
+
+                let stopDaemonItem = NSMenuItem(title: "Stop & Disable Daemon", action: #selector(stopAndDisableDaemon), keyEquivalent: "")
+                stopDaemonItem.target = self
+                menu.addItem(stopDaemonItem)
+            }
         }
 
         menu.addItem(NSMenuItem.separator())
@@ -245,8 +254,108 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func stopAndDisableDaemon() {
+        let serviceName = EngineStatusManager.shared.activeServiceName
+        let userID = getuid()
+
+        AppLogger.shared.info(.system, "Stopping and disabling daemon: \(serviceName)")
+        EngineStatusManager.shared.log(.warning, "Daemon", "Disabling daemon - will not auto-restart")
+
+        // Unload the launchd service
+        let task = Process()
+        task.launchPath = "/bin/launchctl"
+        task.arguments = ["bootout", "gui/\(userID)/\(serviceName)"]
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            if task.terminationStatus == 0 {
+                AppLogger.shared.info(.system, "Daemon disabled successfully")
+                EngineStatusManager.shared.log(.info, "Daemon", "✓ Daemon disabled - use 'launchctl bootstrap' to re-enable")
+
+                // Show notification
+                let notification = NSUserNotification()
+                notification.title = "TalkieEngine Daemon Disabled"
+                notification.informativeText = "The daemon will not auto-restart. Use 'launchctl bootstrap' or the installer script to re-enable."
+                NSUserNotificationCenter.default.deliver(notification)
+
+                // Exit after disabling
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    NSApp.terminate(nil)
+                }
+            } else {
+                AppLogger.shared.error(.system, "Failed to disable daemon (exit code: \(task.terminationStatus))")
+                EngineStatusManager.shared.log(.error, "Daemon", "Failed to disable (may already be stopped)")
+            }
+        } catch {
+            AppLogger.shared.error(.system, "Error disabling daemon: \(error)")
+            EngineStatusManager.shared.log(.error, "Daemon", "Error: \(error.localizedDescription)")
+        }
+    }
+
     @objc private func quitApp() {
-        NSApp.terminate(nil)
+        // If this is an Xcode debug build (not daemon), offer to re-enable the daemon
+        if EngineStatusManager.shared.launchMode == .dev && !EngineStatusManager.shared.isDaemonMode {
+            offerToReenableDaemon()
+        } else {
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func offerToReenableDaemon() {
+        let alert = NSAlert()
+        alert.messageText = "Re-enable Daemon?"
+        alert.informativeText = "Would you like to re-enable the TalkieEngine daemon before quitting?\n\nThis will restore automatic background operation."
+        alert.addButton(withTitle: "Re-enable & Quit")
+        alert.addButton(withTitle: "Just Quit")
+        alert.alertStyle = .informational
+
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            // Re-enable daemon
+            reenableDaemon()
+            // Quit after re-enabling
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApp.terminate(nil)
+            }
+        } else {
+            // Just quit without re-enabling
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func reenableDaemon() {
+        let serviceName = EngineStatusManager.shared.activeServiceName
+        let userID = getuid()
+        let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(serviceName).plist"
+
+        AppLogger.shared.info(.system, "Re-enabling daemon: \(serviceName)")
+
+        // Bootstrap (load) the launchd service
+        let task = Process()
+        task.launchPath = "/bin/launchctl"
+        task.arguments = ["bootstrap", "gui/\(userID)", plistPath]
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            if task.terminationStatus == 0 {
+                AppLogger.shared.info(.system, "Daemon re-enabled successfully")
+
+                // Show notification
+                let notification = NSUserNotification()
+                notification.title = "TalkieEngine Daemon Enabled"
+                notification.informativeText = "The daemon will auto-start and run in the background."
+                NSUserNotificationCenter.default.deliver(notification)
+            } else {
+                AppLogger.shared.warning(.system, "Failed to re-enable daemon (exit code: \(task.terminationStatus)) - may already be running")
+            }
+        } catch {
+            AppLogger.shared.error(.system, "Error re-enabling daemon: \(error)")
+        }
     }
 
 }

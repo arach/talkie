@@ -173,7 +173,7 @@ struct TalkieHomeView: View {
                     detailText: serviceState == .running
                         ? "Speech-to-text powered by local AI"
                         : "TalkieEngine provides AI transcription",
-                    action: serviceState == .running ? nil : { serviceMonitor.launch() },
+                    action: serviceState == .running ? nil : { Task { await serviceMonitor.launch() } },
                     actionLabel: "Start"
                 )
 

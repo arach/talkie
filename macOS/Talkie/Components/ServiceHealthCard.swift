@@ -149,7 +149,7 @@ struct EngineHealthCard: View {
             statusText: statusText,
             detailText: detailText,
             action: serviceMonitor.state == .running ? nil : {
-                serviceMonitor.launch()
+                Task { await serviceMonitor.launch() }
             },
             actionLabel: "Start Engine"
         )

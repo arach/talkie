@@ -1,5 +1,5 @@
 //
-//  LiveUtterance.swift
+//  LiveDictation.swift
 //  TalkieLive
 //
 //  GRDB record for utterances
@@ -133,7 +133,7 @@ enum QuickActionKind: String, Codable, CaseIterable {
 
 // MARK: - Live Utterance Model
 
-struct LiveUtterance: Identifiable, Hashable {
+struct LiveDictation: Identifiable, Hashable {
     var id: Int64?
     var createdAt: Date
     var text: String
@@ -261,7 +261,7 @@ struct LiveUtterance: Identifiable, Hashable {
 
 // MARK: - GRDB Protocols
 
-extension LiveUtterance: FetchableRecord {
+extension LiveDictation: FetchableRecord {
     init(row: Row) {
         id = row[Columns.id]
         let ts: Double = row[Columns.createdAt]
@@ -318,7 +318,7 @@ extension LiveUtterance: FetchableRecord {
     }
 }
 
-extension LiveUtterance: PersistableRecord {
+extension LiveDictation: PersistableRecord {
     func encode(to container: inout PersistenceContainer) {
         container[Columns.id] = id
         container[Columns.createdAt] = createdAt.timeIntervalSince1970

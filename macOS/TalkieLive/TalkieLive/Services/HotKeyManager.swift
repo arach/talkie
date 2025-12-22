@@ -183,7 +183,11 @@ final class HotKeyManager {
             &hotKeyRef
         )
 
-        logger.info("RegisterEventHotKey status: \(registerStatus)")
+        if registerStatus == noErr {
+            logger.info("✓ RegisterEventHotKey SUCCESS: keyCode=\(keyCode) modifiers=\(modifiers)")
+        } else {
+            logger.error("❌ RegisterEventHotKey FAILED: status=\(registerStatus) keyCode=\(keyCode) modifiers=\(modifiers)")
+        }
     }
 
     func unregisterAll() {

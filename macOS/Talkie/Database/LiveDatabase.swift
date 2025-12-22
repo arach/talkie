@@ -175,7 +175,7 @@ enum LiveDatabase {
 extension LiveDatabase {
     /// Store utterance and return its ID (for fire-and-forget enrichment)
     @discardableResult
-    static func store(_ utterance: LiveUtterance) -> Int64? {
+    static func store(_ utterance: LiveDictation) -> Int64? {
         do {
             return try shared.write { db -> Int64? in
                 var mutable = utterance
@@ -217,59 +217,59 @@ extension LiveDatabase {
         }
     }
 
-    static func fetch(id: Int64) -> LiveUtterance? {
+    static func fetch(id: Int64) -> LiveDictation? {
         try? shared.read { db in
-            try LiveUtterance.fetchOne(db, id: id)
+            try LiveDictation.fetchOne(db, id: id)
         }
     }
 
-    static func all() -> [LiveUtterance] {
+    static func all() -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .order(LiveDictation.Columns.createdAt.desc)
                 .fetchAll(db)
         }) ?? []
     }
 
-    static func recent(limit: Int = 100) -> [LiveUtterance] {
+    static func recent(limit: Int = 100) -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .order(LiveDictation.Columns.createdAt.desc)
                 .limit(limit)
                 .fetchAll(db)
         }) ?? []
     }
 
     /// Fetch utterances created after a specific timestamp (for incremental updates)
-    static func since(timestamp: Date) -> [LiveUtterance] {
+    static func since(timestamp: Date) -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.createdAt > timestamp.timeIntervalSinceReferenceDate)
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .filter(LiveDictation.Columns.createdAt > timestamp.timeIntervalSinceReferenceDate)
+                .order(LiveDictation.Columns.createdAt.desc)
                 .fetchAll(db)
         }) ?? []
     }
 
-    static func search(_ query: String) -> [LiveUtterance] {
+    static func search(_ query: String) -> [LiveDictation] {
         guard !query.isEmpty else { return all() }
         return (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.text.like("%\(query)%"))
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .filter(LiveDictation.Columns.text.like("%\(query)%"))
+                .order(LiveDictation.Columns.createdAt.desc)
                 .fetchAll(db)
         }) ?? []
     }
 
-    static func byApp(_ bundleID: String) -> [LiveUtterance] {
+    static func byApp(_ bundleID: String) -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.appBundleID == bundleID)
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .filter(LiveDictation.Columns.appBundleID == bundleID)
+                .order(LiveDictation.Columns.createdAt.desc)
                 .fetchAll(db)
         }) ?? []
     }
 
-    static func delete(_ utterance: LiveUtterance) {
+    static func delete(_ utterance: LiveDictation) {
         guard let id = utterance.id else { return }
 
         // Delete associated audio file
@@ -278,20 +278,20 @@ extension LiveDatabase {
         }
 
         try? shared.write { db in
-            _ = try LiveUtterance.deleteOne(db, id: id)
+            _ = try LiveDictation.deleteOne(db, id: id)
         }
     }
 
     static func deleteAll() {
         AudioStorage.deleteAll()
         try? shared.write { db in
-            _ = try LiveUtterance.deleteAll(db)
+            _ = try LiveDictation.deleteAll(db)
         }
     }
 
     static func count() -> Int {
         (try? shared.read { db in
-            try LiveUtterance.fetchCount(db)
+            try LiveDictation.fetchCount(db)
         }) ?? 0
     }
 
@@ -370,21 +370,21 @@ extension LiveDatabase {
 // MARK: - Filtered Queries
 
 extension LiveDatabase {
-    static func needsAction(limit: Int = 100) -> [LiveUtterance] {
+    static func needsAction(limit: Int = 100) -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.promotionStatus == PromotionStatus.none.rawValue)
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .filter(LiveDictation.Columns.promotionStatus == PromotionStatus.none.rawValue)
+                .order(LiveDictation.Columns.createdAt.desc)
                 .limit(limit)
                 .fetchAll(db)
         }) ?? []
     }
 
-    static func byStatus(_ status: PromotionStatus, limit: Int = 100) -> [LiveUtterance] {
+    static func byStatus(_ status: PromotionStatus, limit: Int = 100) -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.promotionStatus == status.rawValue)
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .filter(LiveDictation.Columns.promotionStatus == status.rawValue)
+                .order(LiveDictation.Columns.createdAt.desc)
                 .limit(limit)
                 .fetchAll(db)
         }) ?? []
@@ -392,8 +392,8 @@ extension LiveDatabase {
 
     static func countNeedsAction() -> Int {
         (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.promotionStatus == PromotionStatus.none.rawValue)
+            try LiveDictation
+                .filter(LiveDictation.Columns.promotionStatus == PromotionStatus.none.rawValue)
                 .fetchCount(db)
         }) ?? 0
     }
@@ -402,23 +402,23 @@ extension LiveDatabase {
 // MARK: - Queue Methods
 
 extension LiveDatabase {
-    static func fetchQueued() -> [LiveUtterance] {
+    static func fetchQueued() -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.createdInTalkieView == 1)
-                .filter(LiveUtterance.Columns.pasteTimestamp == nil)
-                .filter(LiveUtterance.Columns.promotionStatus == PromotionStatus.none.rawValue)
-                .order(LiveUtterance.Columns.createdAt.desc)
+            try LiveDictation
+                .filter(LiveDictation.Columns.createdInTalkieView == 1)
+                .filter(LiveDictation.Columns.pasteTimestamp == nil)
+                .filter(LiveDictation.Columns.promotionStatus == PromotionStatus.none.rawValue)
+                .order(LiveDictation.Columns.createdAt.desc)
                 .fetchAll(db)
         }) ?? []
     }
 
     static func countQueued() -> Int {
         (try? shared.read { db in
-            try LiveUtterance
-                .filter(LiveUtterance.Columns.createdInTalkieView == 1)
-                .filter(LiveUtterance.Columns.pasteTimestamp == nil)
-                .filter(LiveUtterance.Columns.promotionStatus == PromotionStatus.none.rawValue)
+            try LiveDictation
+                .filter(LiveDictation.Columns.createdInTalkieView == 1)
+                .filter(LiveDictation.Columns.pasteTimestamp == nil)
+                .filter(LiveDictation.Columns.promotionStatus == PromotionStatus.none.rawValue)
                 .fetchCount(db)
         }) ?? 0
     }
@@ -471,27 +471,27 @@ extension LiveDatabase {
 // MARK: - Transcription Retry Methods
 
 extension LiveDatabase {
-    static func fetchNeedsRetry() -> [LiveUtterance] {
+    static func fetchNeedsRetry() -> [LiveDictation] {
         (try? shared.read { db in
-            try LiveUtterance
+            try LiveDictation
                 .filter(
-                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.failed.rawValue ||
-                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.pending.rawValue
+                    LiveDictation.Columns.transcriptionStatus == TranscriptionStatus.failed.rawValue ||
+                    LiveDictation.Columns.transcriptionStatus == TranscriptionStatus.pending.rawValue
                 )
-                .filter(LiveUtterance.Columns.audioFilename != nil)
-                .order(LiveUtterance.Columns.createdAt.desc)
+                .filter(LiveDictation.Columns.audioFilename != nil)
+                .order(LiveDictation.Columns.createdAt.desc)
                 .fetchAll(db)
         }) ?? []
     }
 
     static func countNeedsRetry() -> Int {
         (try? shared.read { db in
-            try LiveUtterance
+            try LiveDictation
                 .filter(
-                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.failed.rawValue ||
-                    LiveUtterance.Columns.transcriptionStatus == TranscriptionStatus.pending.rawValue
+                    LiveDictation.Columns.transcriptionStatus == TranscriptionStatus.failed.rawValue ||
+                    LiveDictation.Columns.transcriptionStatus == TranscriptionStatus.pending.rawValue
                 )
-                .filter(LiveUtterance.Columns.audioFilename != nil)
+                .filter(LiveDictation.Columns.audioFilename != nil)
                 .fetchCount(db)
         }) ?? 0
     }
@@ -524,6 +524,24 @@ extension LiveDatabase {
             try db.execute(
                 sql: "UPDATE utterances SET transcriptionStatus = ?, transcriptionError = ? WHERE id = ?",
                 arguments: [TranscriptionStatus.failed.rawValue, error, id]
+            )
+        }
+    }
+
+    /// Update utterance text (for retranscription)
+    static func updateText(for id: Int64, newText: String) {
+        try? shared.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE utterances
+                    SET text = ?, wordCount = ?
+                    WHERE id = ?
+                    """,
+                arguments: [
+                    newText,
+                    newText.split(separator: " ").count,
+                    id
+                ]
             )
         }
     }

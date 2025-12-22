@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Home View
 
 struct HomeView: View {
-    @ObservedObject private var store = UtteranceStore.shared
+    @ObservedObject private var store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
 

@@ -15,7 +15,7 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Settings")
 
 // MARK: - Appearance Mode
-enum AppearanceMode: String, CaseIterable {
+enum AppearanceMode: String, CaseIterable, CustomStringConvertible {
     case system = "system"
     case light = "light"
     case dark = "dark"
@@ -26,6 +26,10 @@ enum AppearanceMode: String, CaseIterable {
         case .light: return "Light"
         case .dark: return "Dark"
         }
+    }
+
+    var description: String {
+        displayName
     }
 
     var icon: String {

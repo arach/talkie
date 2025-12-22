@@ -13,6 +13,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSetting
 
 enum LiveSettingsSection: String, Hashable {
     case general
+    case appearance
     case shortcuts
     case sounds
     case audio
@@ -54,6 +55,17 @@ struct LiveSettingsView: View {
                                 isSelected: selectedSection == .general
                             ) {
                                 selectedSection = .general
+                            }
+                        }
+
+                        // INTERFACE
+                        SettingsSidebarSection(title: "INTERFACE", isActive: selectedSection == .appearance) {
+                            SettingsSidebarItem(
+                                icon: "paintbrush",
+                                title: "APPEARANCE",
+                                isSelected: selectedSection == .appearance
+                            ) {
+                                selectedSection = .appearance
                             }
                         }
 
@@ -136,6 +148,8 @@ struct LiveSettingsView: View {
                     switch selectedSection {
                     case .general:
                         GeneralLiveSettingsView()
+                    case .appearance:
+                        AppearanceLiveSettingsView()
                     case .shortcuts:
                         ShortcutsLiveSettingsView()
                     case .sounds:
@@ -675,6 +689,169 @@ struct TranscriptionLiveSettingsView: View {
     }
 }
 
+// MARK: - Appearance Settings
+
+struct AppearanceLiveSettingsView: View {
+    @ObservedObject private var liveSettings = LiveSettings.shared
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "paintbrush",
+                title: "APPEARANCE",
+                subtitle: "Customize the look and feel of TalkieLive."
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: 24) {
+                // Visual Theme
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("VISUAL THEME")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Text("Choose a color scheme and aesthetic.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        ForEach(VisualTheme.allCases, id: \.rawValue) { theme in
+                            ThemePreviewCard(
+                                theme: theme,
+                                isSelected: liveSettings.visualTheme == theme
+                            ) {
+                                liveSettings.applyVisualTheme(theme)
+                            }
+                        }
+                    }
+                }
+
+                // Appearance Mode
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("APPEARANCE MODE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Text("Light, dark, or follow system settings.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    TabSelector(
+                        options: AppearanceMode.allCases,
+                        selection: $liveSettings.appearanceMode
+                    )
+                }
+
+                // Font Size
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("FONT SIZE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Text("Adjust text size for readability.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    TabSelector(
+                        options: FontSize.allCases,
+                        selection: $liveSettings.fontSize
+                    )
+                }
+
+                // Accent Color
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("ACCENT COLOR")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Text("Choose your preferred accent color.")
+                        .font(SettingsManager.shared.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
+                        ForEach(AccentColorOption.allCases, id: \.rawValue) { color in
+                            AccentColorButton(
+                                color: color,
+                                isSelected: liveSettings.accentColor == color
+                            ) {
+                                liveSettings.accentColor = color
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Theme Preview Card
+
+private struct ThemePreviewCard: View {
+    let theme: VisualTheme
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Preview colors
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(theme.previewColors.bg)
+                        .frame(height: 40)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(theme.previewColors.accent)
+                        .frame(width: 40, height: 40)
+                }
+
+                // Theme name
+                Text(theme.displayName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.primary)
+
+                // Description
+                Text(theme.description)
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+            .padding(10)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.secondary.opacity(0.05))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Accent Color Button
+
+private struct AccentColorButton: View {
+    let color: AccentColorOption
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            ZStack {
+                Circle()
+                    .fill(color.color ?? .gray)
+                    .frame(width: 32, height: 32)
+
+                if isSelected {
+                    Circle()
+                        .stroke(Color.primary, lineWidth: 2)
+                        .frame(width: 38, height: 38)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help(color.displayName)
+    }
+}
+
 // MARK: - Auto-Paste Settings
 
 struct AutoPasteLiveSettingsView: View {
@@ -748,6 +925,43 @@ struct AutoPasteLiveSettingsView: View {
                         help: "Automatically switches back to the app you were using when the recording started"
                     )
                 }
+
+                // Primary Context Source
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("CONTEXT PREFERENCE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .padding(.top, 1)
+                        Text("Which app context should be considered primary for recordings.")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, 4)
+
+                    RadioButtonRow(
+                        title: PrimaryContextSource.startApp.displayName,
+                        description: PrimaryContextSource.startApp.description,
+                        value: .startApp,
+                        selectedValue: liveSettings.primaryContextSource
+                    ) {
+                        liveSettings.primaryContextSource = .startApp
+                    }
+
+                    RadioButtonRow(
+                        title: PrimaryContextSource.endApp.displayName,
+                        description: PrimaryContextSource.endApp.description,
+                        value: .endApp,
+                        selectedValue: liveSettings.primaryContextSource
+                    ) {
+                        liveSettings.primaryContextSource = .endApp
+                    }
+                }
             }
         }
     }
@@ -795,29 +1009,243 @@ struct StorageLiveSettingsView: View {
 // MARK: - Permissions Settings
 
 struct PermissionsLiveSettingsView: View {
+    @StateObject private var permissionsManager = PermissionsManager.shared
+
     var body: some View {
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "lock.shield",
                 title: "PERMISSIONS",
-                subtitle: "Manage system permissions for Live recording."
+                subtitle: "System permissions required for Live features."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("⚠️ Permissions UI coming soon")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 16) {
+                // Microphone
+                PermissionLiveRow(
+                    icon: "mic.fill",
+                    name: "Microphone",
+                    description: "Required for recording audio",
+                    status: permissionsManager.microphoneStatus,
+                    onRequest: {
+                        if permissionsManager.microphoneStatus == .notDetermined {
+                            permissionsManager.requestMicrophonePermission()
+                        } else {
+                            permissionsManager.openMicrophoneSettings()
+                        }
+                    }
+                )
 
-                Text("Required permissions:")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(.secondary)
+                Divider()
 
-                Text("• Microphone access (for recording)")
-                    .font(SettingsManager.shared.fontSM)
-                Text("• Accessibility access (for auto-paste)")
-                    .font(SettingsManager.shared.fontSM)
+                // Accessibility
+                PermissionLiveRow(
+                    icon: "hand.point.up.left.fill",
+                    name: "Accessibility",
+                    description: "Required to auto-paste transcriptions (simulates Cmd+V)",
+                    status: permissionsManager.accessibilityStatus,
+                    onRequest: {
+                        permissionsManager.requestAccessibilityPermission()
+                    }
+                )
             }
+
+            Divider()
+                .padding(.vertical, 12)
+
+            // Context Capture Privacy Controls
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("CONTEXT CAPTURE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.secondary)
+
+                    Text("Controls what information is captured about active apps during recording.")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+
+                // Session kill-switch
+                StyledToggle(
+                    label: "Enable context capture for this session",
+                    isOn: Binding(
+                        get: { LiveSettings.shared.contextCaptureSessionAllowed },
+                        set: { LiveSettings.shared.contextCaptureSessionAllowed = $0 }
+                    ),
+                    help: "Temporarily disable all context capture (resets on app restart)"
+                )
+
+                // Detail level (only shown if session allowed)
+                if LiveSettings.shared.contextCaptureSessionAllowed {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Detail Level")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+
+                        ForEach([ContextCaptureDetail.off, .metadataOnly, .rich], id: \.rawValue) { detail in
+                            RadioButtonRow(
+                                title: detail.displayName,
+                                description: detail.description,
+                                value: detail,
+                                selectedValue: LiveSettings.shared.contextCaptureDetail
+                            ) {
+                                LiveSettings.shared.contextCaptureDetail = detail
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider()
+                .padding(.vertical, 8)
+
+            // Refresh button
+            HStack {
+                Button(action: {
+                    permissionsManager.refreshAllPermissions()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10))
+                        Text("REFRESH STATUS")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button(action: {
+                    permissionsManager.openPrivacySettings()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "gear")
+                            .font(.system(size: 10))
+                        Text("OPEN PRIVACY SETTINGS")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Info note
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                    Text("TalkieLive runs as a background helper app. These permissions apply to the TalkieLive helper, not Talkie. Grant when prompted, or check System Settings → Privacy & Security.")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // Show bundle ID for dev/staging builds
+                if let bundleID = Bundle.main.bundleIdentifier,
+                   bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
+                    Divider()
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "app.badge")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Look for TalkieLive helper in System Settings:")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            Text("jdi.talkie.live" + (bundleID.hasSuffix(".dev") ? ".dev" : bundleID.hasSuffix(".staging") ? ".staging" : ""))
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.8))
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+            .padding(10)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(8)
         }
+        .onAppear {
+            permissionsManager.refreshAllPermissions()
+        }
+    }
+}
+
+// MARK: - Permission Row for Live Settings
+
+private struct PermissionLiveRow: View {
+    let icon: String
+    let name: String
+    let description: String
+    let status: PermissionStatus
+    let onRequest: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Icon
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(status.color)
+                .frame(width: 32, height: 32)
+                .background(status.color.opacity(0.15))
+                .cornerRadius(8)
+
+            // Name and description
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary)
+
+                Text(description)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // Status badge
+            HStack(spacing: 4) {
+                Image(systemName: status.icon)
+                    .font(.system(size: 10))
+                Text(status.displayName)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+            }
+            .foregroundColor(status.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(status.color.opacity(0.1))
+            .cornerRadius(4)
+
+            // Action button
+            Button(action: onRequest) {
+                Text(status == .granted ? "SETTINGS" : "ENABLE")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(status == .granted ? .secondary : .white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(status == .granted ? Color.secondary.opacity(0.15) : Color.accentColor)
+                    .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
+        .cornerRadius(8)
+        .onHover { isHovered = $0 }
     }
 }
 

@@ -42,6 +42,7 @@ struct StatusBar: View {
     @State private var isHovered = false
     @State private var showPID = false
     @State private var pidCopied = false
+    @State private var controlPressed = false
 
     private var errorCount: Int {
         events.events.filter { $0.type == .error }.count
@@ -123,6 +124,14 @@ struct StatusBar: View {
                                 restartTalkieLive()
                             }
                         }
+                        .onTapGesture(count: 1) { }  // Consume single tap to prevent conflict
+                        .simultaneousGesture(
+                            TapGesture().modifiers(.control)
+                                .onEnded { _ in
+                                    // Ctrl+click: Open Talkie settings
+                                    openTalkieSettings()
+                                }
+                        )
 
                         // Live environment badge (on Ctrl+hover, shows which TalkieLive we're connected to)
                         if showPID, let liveEnv = liveState.connectedMode, liveEnv != .production {
@@ -185,13 +194,7 @@ struct StatusBar: View {
                         }
                     }
 
-                    // Only show divider if we have engine/model status
-                    if serviceMonitor.state != .unknown {
-                        Divider()
-                            .frame(height: 12)
-                    }
-
-                    // Logs button
+                    // Console button
                     ConsoleButton(
                         errorCount: errorCount,
                         warningCount: warningCount,
@@ -199,9 +202,13 @@ struct StatusBar: View {
                         showPopover: $showConsolePopover
                     )
 
-                    // DEV badge (debug builds only)
+                    // DEV badge (debug builds only, shows on CTRL press)
                     #if DEBUG
-                    DevBadgeButton(showConsole: $showConsolePopover)
+                    if controlPressed {
+                        Divider()
+                            .frame(height: 12)
+                        DevBadgeButton(showConsole: $showConsolePopover)
+                    }
                     #endif
                 }
             }
@@ -242,6 +249,15 @@ struct StatusBar: View {
             // Start monitoring service states
             liveState.startMonitoring()
             serviceMonitor.startMonitoring()
+
+            // Monitor Control key for DEV badge
+            NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [self] event in
+                let isControlPressed = event.modifierFlags.contains(.control)
+                if controlPressed != isControlPressed {
+                    controlPressed = isControlPressed
+                }
+                return event
+            }
         }
     }
 
@@ -359,6 +375,15 @@ struct StatusBar: View {
 
     private func restartTalkieLive() {
         AppEnvironment.shared.restart(.talkieLive)
+    }
+
+    private func openTalkieSettings() {
+        // Open Live Settings in the environment-appropriate Talkie app
+        let environment = TalkieEnvironment.current
+        let urlString = "\(environment.talkieURLScheme)://settings/live"
+        if let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
 
@@ -913,15 +938,9 @@ struct ConsoleButton: View {
         return TalkieTheme.textMuted
     }
 
-    private var icon: String {
-        if errorCount > 0 { return "exclamationmark.circle" }
-        if warningCount > 0 { return "exclamationmark.triangle" }
-        return "terminal"
-    }
-
     var body: some View {
         Button(action: { showPopover.toggle() }) {
-            Image(systemName: icon)
+            Image(systemName: "terminal")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(statusColor.opacity(isHovered ? 1.0 : 0.7))
                 .padding(.horizontal, 6)
@@ -934,7 +953,7 @@ struct ConsoleButton: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
-            SystemConsoleView()
+            SystemLogsView()
                 .frame(width: 600, height: 350)
         }
         .help("Logs - \(errorCount) errors, \(warningCount) warnings")

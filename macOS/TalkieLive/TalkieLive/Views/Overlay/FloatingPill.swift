@@ -108,6 +108,11 @@ final class FloatingPillController: ObservableObject {
     func show() {
         isVisible = true
 
+        // IMPORTANT: Preserve callback before clearing windows
+        // This callback gets set in AppDelegate.setupFloatingPill() and must survive window recreation
+        let preservedCallback = onTap
+        pillLogger.info("show(): Preserving onTap callback (nil=\(preservedCallback == nil))")
+
         // Remove existing windows
         for window in windows {
             window.orderOut(nil)
@@ -122,6 +127,10 @@ final class FloatingPillController: ObservableObject {
         for screen in screens {
             createPill(on: screen)
         }
+
+        // Restore callback after window recreation
+        onTap = preservedCallback
+        pillLogger.info("show(): Callback restored (nil=\(self.onTap == nil))")
 
         // Start magnetic tracking
         startMagneticTracking()
@@ -166,8 +175,11 @@ final class FloatingPillController: ObservableObject {
 
         switch LiveSettings.shared.pillPosition {
         case .bottomCenter:
+            // Center based on screen midpoint, accounting for panel width
+            // Use floor to avoid sub-pixel positioning issues
+            let centerX = floor(screenFrame.midX - (panelSize.width / 2))
             return NSPoint(
-                x: screenFrame.midX - panelSize.width / 2,
+                x: centerX,
                 y: screenFrame.minY + 6  // Slight offset from bottom for breathing room
             )
         case .bottomLeft:
@@ -343,8 +355,16 @@ final class FloatingPillController: ObservableObject {
         let modifiers = NSEvent.modifierFlags
         NSLog("[FloatingPill] handleTap: state=%@, modifiers=%d", state.rawValue, modifiers.rawValue)
 
-        // Just report the tap - controller decides what to do
-        onTap?(state, modifiers)
+        // Check if callback is set
+        guard let callback = onTap else {
+            NSLog("[FloatingPill] ⚠️ onTap callback is nil!")
+            pillLogger.error("onTap callback not set - pill tap will not work")
+            return
+        }
+
+        NSLog("[FloatingPill] Calling onTap callback...")
+        callback(state, modifiers)
+        NSLog("[FloatingPill] onTap callback completed")
     }
 }
 
@@ -355,6 +375,7 @@ struct FloatingPillView: View {
     @State private var isHovered = false
     @State private var showPID = false
     @State private var pidCopied = false
+    @State private var tapFeedbackScale: CGFloat = 1.0
 
     // Expansion threshold - only expand when very close (proximity > 0.7) or hovered
     private let expandThreshold: CGFloat = 0.7
@@ -375,8 +396,14 @@ struct FloatingPillView: View {
                 pendingQueueCount: controller.pendingQueueCount,
                 micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
                 forceExpanded: isExpanded,
-                onTap: { controller.handleTap() }
+                onTap: {
+                    // Visual feedback - quick scale down/up
+                    provideTapFeedback()
+                    // Trigger actual handler
+                    controller.handleTap()
+                }
             )
+            .scaleEffect(tapFeedbackScale)
 
             // PID appears on Command+hover
             if showPID {
@@ -434,6 +461,18 @@ struct FloatingPillView: View {
         withAnimation { pidCopied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             withAnimation { pidCopied = false }
+        }
+    }
+
+    private func provideTapFeedback() {
+        // Quick scale down, then bounce back
+        withAnimation(.easeOut(duration: 0.1)) {
+            tapFeedbackScale = 0.92
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                tapFeedbackScale = 1.0
+            }
         }
     }
 }

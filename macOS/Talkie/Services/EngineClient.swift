@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import Combine
 import os
 import TalkieKit
 
@@ -328,18 +329,46 @@ public final class EngineClient: ObservableObject {
 
         connect()
 
-        // Wait for connection to complete (max 5 seconds)
-        for _ in 0..<50 {
-            if connectionState == .connected {
-                return true
-            }
-            if connectionState == .error {
-                return false
-            }
-            try? await Task.sleep(for: .milliseconds(100))
-        }
+        // Wait for connection to complete using Combine publisher (max 5 seconds)
+        return await withCheckedContinuation { continuation in
+            var cancellable: AnyCancellable?
+            var timerCancellable: AnyCancellable?
+            var isResolved = false
 
-        return false
+            // Subscribe to connection state changes
+            cancellable = $connectionState
+                .sink { [weak self] state in
+                    guard !isResolved else { return }
+
+                    switch state {
+                    case .connected:
+                        isResolved = true
+                        timerCancellable?.cancel()
+                        cancellable?.cancel()
+                        continuation.resume(returning: true)
+                    case .error, .disconnected:
+                        if state == .error {
+                            isResolved = true
+                            timerCancellable?.cancel()
+                            cancellable?.cancel()
+                            continuation.resume(returning: false)
+                        }
+                    default:
+                        break
+                    }
+                }
+
+            // Timeout after 5 seconds
+            timerCancellable = Timer.publish(every: 5.0, on: .main, in: .common)
+                .autoconnect()
+                .first()
+                .sink { _ in
+                    guard !isResolved else { return }
+                    isResolved = true
+                    cancellable?.cancel()
+                    continuation.resume(returning: false)
+                }
+        }
     }
 
     private func handleDisconnection(reason: String) {
@@ -361,14 +390,18 @@ public final class EngineClient: ObservableObject {
             ])
         }
 
-        // Write audio data to temp file
-        let tempDir = FileManager.default.temporaryDirectory
-        let audioPath = tempDir.appendingPathComponent("\(UUID().uuidString).wav").path
-
-        try audioData.write(to: URL(fileURLWithPath: audioPath))
+        // Write audio data to temp file (on background thread to avoid blocking main actor)
+        let audioPath = try await Task.detached {
+            let tempDir = FileManager.default.temporaryDirectory
+            let path = tempDir.appendingPathComponent("\(UUID().uuidString).wav")
+            try audioData.write(to: path)
+            return path.path
+        }.value
 
         defer {
-            try? FileManager.default.removeItem(atPath: audioPath)
+            Task.detached {
+                try? FileManager.default.removeItem(atPath: audioPath)
+            }
         }
 
         return try await transcribe(audioPath: audioPath, modelId: modelId)

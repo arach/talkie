@@ -233,7 +233,7 @@ autoreleasepool {
 
     // Configure status manager with launch mode info
     MainActor.assumeIsolated {
-        EngineStatusManager.shared.configure(mode: activeMode, serviceName: activeServiceName)
+        EngineStatusManager.shared.configure(mode: activeMode, serviceName: activeServiceName, isDaemon: isDaemonMode)
     }
 
     // Now start the app

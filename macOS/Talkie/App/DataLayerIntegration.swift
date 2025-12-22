@@ -17,8 +17,8 @@ import CoreData
 func initializeDataLayer() async throws {
     print("🚀 Initializing GRDB data layer...")
 
-    // 1. Initialize GRDB database
-    try DatabaseManager.shared.initialize()
+    // 1. Initialize GRDB database (runs on background thread)
+    try await DatabaseManager.shared.initialize()
     print("✅ GRDB database initialized")
 
     // 2. Check if migration is needed

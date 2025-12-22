@@ -37,6 +37,17 @@ struct AppearanceSettingsView: View {
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
+                    // Preview Label
+                    HStack(spacing: 6) {
+                        Image(systemName: "eye")
+                            .font(SettingsManager.shared.fontXS)
+                            .foregroundColor(.secondary.opacity(0.7))
+                        Text("PREVIEW")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
+                    .padding(.top, 4)
+
                     // Live preview (top) - sidebar + table
                     HStack(spacing: 0) {
                         // Mini sidebar
@@ -164,209 +175,389 @@ struct AppearanceSettingsView: View {
                 .background(Theme.current.surface2)
                 .cornerRadius(8)
 
-                // MARK: - Theme Mode
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("APPEARANCE")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                // MARK: - Theme Mode + Accent Color (side-by-side on larger screens)
+                GeometryReader { geometry in
+                    let useColumns = geometry.size.width > 700
 
-                    HStack(spacing: 12) {
-                        ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
-                            AppearanceModeButton(
-                                mode: mode,
-                                isSelected: settingsManager.appearanceMode == mode,
-                                action: { settingsManager.appearanceMode = mode }
-                            )
+                    if useColumns {
+                        HStack(alignment: .top, spacing: 12) {
+                            // Appearance Mode
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("APPEARANCE")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(.secondary)
+
+                                HStack(spacing: 12) {
+                                    ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                                        AppearanceModeButton(
+                                            mode: mode,
+                                            isSelected: settingsManager.appearanceMode == mode,
+                                            action: { settingsManager.appearanceMode = mode }
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity)
+                            .background(Theme.current.surface2)
+                            .cornerRadius(8)
+
+                            // Accent Color
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("ACCENT COLOR")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(.secondary)
+
+                                Text("Used for buttons, selections, and highlights.")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.8))
+
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                                    ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
+                                        AccentColorButton(
+                                            colorOption: colorOption,
+                                            isSelected: settingsManager.accentColor == colorOption,
+                                            action: { settingsManager.accentColor = colorOption }
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity)
+                            .background(Theme.current.surface2)
+                            .cornerRadius(8)
+                        }
+                    } else {
+                        VStack(spacing: 12) {
+                            // Appearance Mode
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("APPEARANCE")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(.secondary)
+
+                                HStack(spacing: 12) {
+                                    ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                                        AppearanceModeButton(
+                                            mode: mode,
+                                            isSelected: settingsManager.appearanceMode == mode,
+                                            action: { settingsManager.appearanceMode = mode }
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .background(Theme.current.surface2)
+                            .cornerRadius(8)
+
+                            // Accent Color
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("ACCENT COLOR")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(.secondary)
+
+                                Text("Used for buttons, selections, and highlights.")
+                                    .font(SettingsManager.shared.fontXS)
+                                    .foregroundColor(.secondary.opacity(0.8))
+
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                                    ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
+                                        AccentColorButton(
+                                            colorOption: colorOption,
+                                            isSelected: settingsManager.accentColor == colorOption,
+                                            action: { settingsManager.accentColor = colorOption }
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .background(Theme.current.surface2)
+                            .cornerRadius(8)
                         }
                     }
                 }
-                .padding(16)
-                .background(Theme.current.surface2)
-                .cornerRadius(8)
-
-                // MARK: - Accent Color
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("ACCENT COLOR")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
-
-                    Text("Used for buttons, selections, and highlights.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
-
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
-                        ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
-                            AccentColorButton(
-                                colorOption: colorOption,
-                                isSelected: settingsManager.accentColor == colorOption,
-                                action: { settingsManager.accentColor = colorOption }
-                            )
-                        }
-                    }
-                }
-                .padding(16)
-                .background(Theme.current.surface2)
-                .cornerRadius(8)
+                .frame(height: 200)
 
                 // MARK: - Typography
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("TYPOGRAPHY")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                GeometryReader { geometry in
+                    let useColumns = geometry.size.width > 800
 
-                    // UI Chrome: Font + Size together
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("UI Chrome")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("TYPOGRAPHY")
                             .font(Theme.current.fontXSBold)
-                            .textCase(SettingsManager.shared.uiTextCase)
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundColor(.secondary)
 
-                        HStack(spacing: 12) {
-                            // UI Font
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Font")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.8))
-                                HStack(spacing: 4) {
-                                    ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
-                                        FontStyleButton(
-                                            style: style,
-                                            isSelected: settingsManager.uiFontStyle == style,
-                                            action: { settingsManager.uiFontStyle = style }
-                                        )
+                        if useColumns {
+                            // 2-column layout for larger screens
+                            HStack(alignment: .top, spacing: 10) {
+                                // UI Chrome: Font + Size together
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("UI Chrome")
+                                        .font(Theme.current.fontXSBold)
+                                        .textCase(SettingsManager.shared.uiTextCase)
+                                        .foregroundColor(.secondary.opacity(0.6))
+
+                                    HStack(spacing: 12) {
+                                        // UI Font
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Font")
+                                                .font(SettingsManager.shared.fontXS)
+                                                .foregroundColor(.secondary.opacity(0.8))
+                                            HStack(spacing: 4) {
+                                                ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
+                                                    FontStyleButton(
+                                                        style: style,
+                                                        isSelected: settingsManager.uiFontStyle == style,
+                                                        action: { settingsManager.uiFontStyle = style }
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Divider().frame(height: 36)
+
+                                        // UI Size
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Size")
+                                                .font(SettingsManager.shared.fontXS)
+                                                .foregroundColor(.secondary.opacity(0.8))
+                                            HStack(spacing: 4) {
+                                                ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
+                                                    FontSizeButton(
+                                                        size: size,
+                                                        isSelected: settingsManager.uiFontSize == size,
+                                                        action: { settingsManager.uiFontSize = size }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // ALL CAPS toggle
+                                    Toggle(isOn: $settingsManager.uiAllCaps) {
+                                        HStack(spacing: 4) {
+                                            Text("ALL CAPS")
+                                                .font(SettingsManager.shared.fontXS)
+                                                .foregroundColor(.secondary.opacity(0.8))
+                                            Text("labels & headers")
+                                                .font(SettingsManager.shared.fontXS)
+                                                .foregroundColor(.secondary.opacity(0.5))
+                                        }
+                                    }
+                                    .toggleStyle(.switch)
+                                    .tint(settingsManager.resolvedAccentColor)
+                                    .controlSize(.mini)
+                                }
+                                .padding(10)
+                                .frame(maxWidth: .infinity)
+                                .background(Theme.current.surface1)
+                                .cornerRadius(6)
+
+                                // Content: Font + Size together
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Content")
+                                        .font(Theme.current.fontXSBold)
+                                        .textCase(SettingsManager.shared.uiTextCase)
+                                        .foregroundColor(.secondary.opacity(0.6))
+
+                                    HStack(spacing: 12) {
+                                        // Content Font
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Font")
+                                                .font(SettingsManager.shared.fontXS)
+                                                .foregroundColor(.secondary.opacity(0.8))
+                                            HStack(spacing: 4) {
+                                                ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
+                                                    FontStyleButton(
+                                                        style: style,
+                                                        isSelected: settingsManager.contentFontStyle == style,
+                                                        action: { settingsManager.contentFontStyle = style }
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Divider().frame(height: 36)
+
+                                        // Content Size
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Size")
+                                                .font(SettingsManager.shared.fontXS)
+                                                .foregroundColor(.secondary.opacity(0.8))
+                                            HStack(spacing: 4) {
+                                                ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
+                                                    FontSizeButton(
+                                                        size: size,
+                                                        isSelected: settingsManager.contentFontSize == size,
+                                                        action: { settingsManager.contentFontSize = size }
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                                .padding(10)
+                                .frame(maxWidth: .infinity)
+                                .background(Theme.current.surface1)
+                                .cornerRadius(6)
                             }
-
-                            Divider().frame(height: 36)
-
-                            // UI Size
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Size")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.8))
-                                HStack(spacing: 4) {
-                                    ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
-                                        FontSizeButton(
-                                            size: size,
-                                            isSelected: settingsManager.uiFontSize == size,
-                                            action: { settingsManager.uiFontSize = size }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // ALL CAPS toggle
-                        Toggle(isOn: $settingsManager.uiAllCaps) {
-                            HStack(spacing: 4) {
-                                Text("ALL CAPS")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.8))
-                                Text("labels & headers")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.5))
-                            }
-                        }
-                        .toggleStyle(.switch)
-                        .tint(settingsManager.resolvedAccentColor)
-                        .controlSize(.mini)
-                    }
-                    .padding(10)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(6)
-
-                    // Content: Font + Size together
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Content")
-                            .font(Theme.current.fontXSBold)
-                            .textCase(SettingsManager.shared.uiTextCase)
-                            .foregroundColor(.secondary.opacity(0.6))
-
-                        HStack(spacing: 12) {
-                            // Content Font
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Font")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.8))
-                                HStack(spacing: 4) {
-                                    ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
-                                        FontStyleButton(
-                                            style: style,
-                                            isSelected: settingsManager.contentFontStyle == style,
-                                            action: { settingsManager.contentFontStyle = style }
-                                        )
-                                    }
-                                }
-                            }
-
-                            Divider().frame(height: 36)
-
-                            // Content Size
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Size")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.8))
-                                HStack(spacing: 4) {
-                                    ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
-                                        FontSizeButton(
-                                            size: size,
-                                            isSelected: settingsManager.contentFontSize == size,
-                                            action: { settingsManager.contentFontSize = size }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(10)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(6)
-
-                    // Preview
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Preview")
-                            .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            // UI Font Preview
-                            VStack(alignment: .leading, spacing: 2) {
+                        } else {
+                            // Single column layout for smaller screens
+                            // UI Chrome: Font + Size together
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text("UI Chrome")
                                     .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
                                     .foregroundColor(.secondary.opacity(0.6))
-                                Text(settingsManager.uiAllCaps ? "MEMOS · ACTIONS · 12:34 PM" : "Memos · Actions · 12:34 PM")
-                                    .font(settingsManager.themedFont(baseSize: 12))
-                                    .foregroundColor(.primary)
+
+                                HStack(spacing: 12) {
+                                    // UI Font
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Font")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                        HStack(spacing: 4) {
+                                            ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
+                                                FontStyleButton(
+                                                    style: style,
+                                                    isSelected: settingsManager.uiFontStyle == style,
+                                                    action: { settingsManager.uiFontStyle = style }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Divider().frame(height: 36)
+
+                                    // UI Size
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Size")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                        HStack(spacing: 4) {
+                                            ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
+                                                FontSizeButton(
+                                                    size: size,
+                                                    isSelected: settingsManager.uiFontSize == size,
+                                                    action: { settingsManager.uiFontSize = size }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ALL CAPS toggle
+                                Toggle(isOn: $settingsManager.uiAllCaps) {
+                                    HStack(spacing: 4) {
+                                        Text("ALL CAPS")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                        Text("labels & headers")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(.secondary.opacity(0.5))
+                                    }
+                                }
+                                .toggleStyle(.switch)
+                                .tint(settingsManager.resolvedAccentColor)
+                                .controlSize(.mini)
                             }
+                            .padding(10)
+                            .background(Theme.current.surface1)
+                            .cornerRadius(6)
 
-                            Divider()
-
-                            // Content Font Preview
-                            VStack(alignment: .leading, spacing: 2) {
+                            // Content: Font + Size together
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text("Content")
                                     .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
                                     .foregroundColor(.secondary.opacity(0.6))
-                                Text("The quick brown fox jumps over the lazy dog. This is how your transcripts and notes will appear.")
-                                    .font(settingsManager.contentFont(baseSize: 13))
-                                    .foregroundColor(.primary)
+
+                                HStack(spacing: 12) {
+                                    // Content Font
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Font")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                        HStack(spacing: 4) {
+                                            ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
+                                                FontStyleButton(
+                                                    style: style,
+                                                    isSelected: settingsManager.contentFontStyle == style,
+                                                    action: { settingsManager.contentFontStyle = style }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Divider().frame(height: 36)
+
+                                    // Content Size
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Size")
+                                            .font(SettingsManager.shared.fontXS)
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                        HStack(spacing: 4) {
+                                            ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
+                                                FontSizeButton(
+                                                    size: size,
+                                                    isSelected: settingsManager.contentFontSize == size,
+                                                    action: { settingsManager.contentFontSize = size }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                            .padding(10)
+                            .background(Theme.current.surface1)
+                            .cornerRadius(6)
                         }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(settingsManager.surfaceInput)
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
+
+                        // Preview (always full width)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Preview")
+                                .font(SettingsManager.shared.fontXS)
+                                .foregroundColor(.secondary.opacity(0.8))
+
+                            VStack(alignment: .leading, spacing: 12) {
+                                // UI Font Preview
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("UI Chrome")
+                                        .font(Theme.current.fontXSBold)
+                                        .textCase(SettingsManager.shared.uiTextCase)
+                                        .foregroundColor(.secondary.opacity(0.6))
+                                    Text(settingsManager.uiAllCaps ? "MEMOS · ACTIONS · 12:34 PM" : "Memos · Actions · 12:34 PM")
+                                        .font(settingsManager.themedFont(baseSize: 12))
+                                        .foregroundColor(.primary)
+                                }
+
+                                Divider()
+
+                                // Content Font Preview
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Content")
+                                        .font(Theme.current.fontXSBold)
+                                        .textCase(SettingsManager.shared.uiTextCase)
+                                        .foregroundColor(.secondary.opacity(0.6))
+                                    Text("The quick brown fox jumps over the lazy dog. This is how your transcripts and notes will appear.")
+                                        .font(settingsManager.contentFont(baseSize: 13))
+                                        .foregroundColor(.primary)
+                                }
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(settingsManager.surfaceInput)
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                        }
                     }
+                    .padding(16)
+                    .background(Theme.current.surface2)
+                    .cornerRadius(8)
                 }
-                .padding(16)
-                .background(Theme.current.surface2)
-                .cornerRadius(8)
+                .frame(minHeight: 420)
 
                 // Note about accent color
                 HStack(spacing: 6) {
@@ -415,7 +606,7 @@ struct AppearanceModeButton: View {
 }
 
 // MARK: - Accent Color Button
-struct AccentColorButton: View {
+private struct AccentColorButton: View {
     let colorOption: AccentColorOption
     let isSelected: Bool
     let action: () -> Void

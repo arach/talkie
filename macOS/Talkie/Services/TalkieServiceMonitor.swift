@@ -56,24 +56,23 @@ public struct TalkieServiceLogEntry: Identifiable, Equatable {
 }
 
 /// Monitors TalkieEngine (Talkie Service) process and streams its logs
-@MainActor
 public final class TalkieServiceMonitor: ObservableObject {
     public static let shared = TalkieServiceMonitor()
 
-    // MARK: - Published State
+    // MARK: - Published State (MainActor isolated for SwiftUI)
 
-    @Published public private(set) var state: TalkieServiceState = .unknown
-    @Published public private(set) var processId: pid_t?
-    @Published public private(set) var cpuUsage: Double = 0
-    @Published public private(set) var memoryUsage: UInt64 = 0  // in bytes
-    @Published public private(set) var uptime: TimeInterval = 0
-    @Published public private(set) var launchedAt: Date?
+    @MainActor @Published public private(set) var state: TalkieServiceState = .unknown
+    @MainActor @Published public private(set) var processId: pid_t?
+    @MainActor @Published public private(set) var cpuUsage: Double = 0
+    @MainActor @Published public private(set) var memoryUsage: UInt64 = 0  // in bytes
+    @MainActor @Published public private(set) var uptime: TimeInterval = 0
+    @MainActor @Published public private(set) var launchedAt: Date?
 
     /// Recent logs from TalkieEngine (keeps last 500)
-    @Published public private(set) var logs: [TalkieServiceLogEntry] = []
+    @MainActor @Published public private(set) var logs: [TalkieServiceLogEntry] = []
 
     /// Error message if something goes wrong
-    @Published public private(set) var lastError: String?
+    @MainActor @Published public private(set) var lastError: String?
 
     // MARK: - Private
 
@@ -84,7 +83,9 @@ public final class TalkieServiceMonitor: ObservableObject {
     private init() {
         logger.info("[TalkieService] Monitor initialized (lazy - call startMonitoring() when needed)")
         // Check initial state immediately to prevent UI flicker
-        refreshState()
+        Task { @MainActor in
+            refreshState()
+        }
         // Don't auto-start - let views call startMonitoring() when they appear
         // This prevents CPU drain when monitoring views aren't visible
     }
@@ -97,6 +98,7 @@ public final class TalkieServiceMonitor: ObservableObject {
     // MARK: - Monitoring
 
     /// Start monitoring TalkieEngine process
+    @MainActor
     public func startMonitoring() {
         guard monitorTimer == nil else { return }
 
@@ -117,6 +119,7 @@ public final class TalkieServiceMonitor: ObservableObject {
     }
 
     /// Stop monitoring
+    @MainActor
     public func stopMonitoring() {
         monitorTimer?.invalidate()
         monitorTimer = nil
@@ -125,6 +128,7 @@ public final class TalkieServiceMonitor: ObservableObject {
     }
 
     /// Refresh process state by checking for TalkieEngine process
+    @MainActor
     public func refreshState() {
         // Check for TalkieEngine using NSRunningApplication (environment-specific)
         let apps = NSRunningApplication.runningApplications(withBundleIdentifier: kTalkieEngineBundleId)
@@ -144,8 +148,10 @@ public final class TalkieServiceMonitor: ObservableObject {
                 uptime = Date().timeIntervalSince(launched)
             }
 
-            // Get resource usage (this still uses Process, but for stats only)
-            updateResourceUsage(pid: app.processIdentifier)
+            // Get resource usage asynchronously (runs Process on background thread)
+            Task.detached { [weak self] in
+                await self?.updateResourceUsage(pid: app.processIdentifier)
+            }
         } else {
             if state == .running {
                 logger.info("[TalkieService] Process terminated")
@@ -159,8 +165,8 @@ public final class TalkieServiceMonitor: ObservableObject {
         }
     }
 
-    private func updateResourceUsage(pid: pid_t) {
-        // Get CPU and memory usage via ps command
+    private nonisolated func updateResourceUsage(pid: pid_t) async {
+        // Get CPU and memory usage via ps command (runs on background thread)
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/ps")
         task.arguments = ["-p", "\(pid)", "-o", "%cpu=,rss="]
@@ -171,15 +177,20 @@ public final class TalkieServiceMonitor: ObservableObject {
 
         do {
             try task.run()
-            task.waitUntilExit()
+            task.waitUntilExit()  // Blocking, but now on background thread
 
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
                 let parts = output.split(separator: " ").map { String($0) }
                 if parts.count >= 2 {
-                    cpuUsage = Double(parts[0]) ?? 0
-                    // RSS is in KB, convert to bytes
-                    memoryUsage = (UInt64(parts[1]) ?? 0) * 1024
+                    let cpu = Double(parts[0]) ?? 0
+                    let memory = (UInt64(parts[1]) ?? 0) * 1024  // RSS is in KB, convert to bytes
+
+                    // Update UI on main actor
+                    await MainActor.run {
+                        self.cpuUsage = cpu
+                        self.memoryUsage = memory
+                    }
                 }
             }
         } catch {
@@ -190,18 +201,22 @@ public final class TalkieServiceMonitor: ObservableObject {
     // MARK: - Process Control
 
     /// Launch TalkieEngine via launchctl
-    public func launch() {
-        guard state != .running && state != .launching else {
+    public func launch() async {
+        // Check state on main actor
+        let currentState = await MainActor.run { self.state }
+        guard currentState != .running && currentState != .launching else {
             logger.warning("[TalkieService] Already running or launching")
             return
         }
 
-        state = .launching
-        lastError = nil
+        await MainActor.run {
+            self.state = .launching
+            self.lastError = nil
+        }
 
         logger.info("[TalkieService] Launching via launchctl...")
 
-        // Use launchctl to start the service
+        // Use launchctl to start the service (runs on background thread)
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         task.arguments = ["start", "jdi.talkie.engine"]
@@ -212,27 +227,34 @@ public final class TalkieServiceMonitor: ObservableObject {
 
         do {
             try task.run()
-            task.waitUntilExit()
+            task.waitUntilExit()  // Blocking, but now on background thread
 
             if task.terminationStatus == 0 {
                 logger.info("[TalkieService] Launch command sent successfully")
-                launchedAt = Date()
+                await MainActor.run {
+                    self.launchedAt = Date()
+                }
                 // State will be updated by monitor
             } else {
                 let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
                 let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
                 logger.error("[TalkieService] Launch failed: \(errorMessage)")
-                lastError = errorMessage
-                state = .stopped
+                await MainActor.run {
+                    self.lastError = errorMessage
+                    self.state = .stopped
+                }
             }
         } catch {
             logger.error("[TalkieService] Launch failed: \(error.localizedDescription)")
-            lastError = error.localizedDescription
-            state = .stopped
+            await MainActor.run {
+                self.lastError = error.localizedDescription
+                self.state = .stopped
+            }
         }
     }
 
     /// Terminate TalkieEngine gracefully
+    @MainActor
     public func terminate() {
         guard state == .running, let pid = processId else {
             logger.warning("[TalkieService] Not running")
@@ -246,7 +268,8 @@ public final class TalkieServiceMonitor: ObservableObject {
         kill(pid, SIGTERM)
 
         // Force kill after 3 seconds if still running
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))
             self?.refreshState()
             if self?.state == .running, let stillPid = self?.processId {
                 logger.warning("[TalkieService] Force killing PID \(stillPid)")
@@ -256,14 +279,14 @@ public final class TalkieServiceMonitor: ObservableObject {
     }
 
     /// Restart TalkieEngine
-    public func restart() {
+    @MainActor
+    public func restart() async {
         logger.info("[TalkieService] Restarting...")
         terminate()
 
         // Wait for termination then launch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.launch()
-        }
+        try? await Task.sleep(for: .seconds(1.5))
+        await launch()
     }
 
     // MARK: - Log Streaming
@@ -328,15 +351,18 @@ public final class TalkieServiceMonitor: ObservableObject {
             // Parse the log entry
             let entry = parseCompactLogEntry(line)
             if let entry = entry {
-                addLogEntry(entry)
+                // Update UI on main actor
+                Task { @MainActor in
+                    addLogEntry(entry)
 
-                // Also forward to system console for important logs
-                if entry.level == .error || entry.level == .fault {
-                    SystemEventManager.shared.logSync(
-                        .error,
-                        "[TalkieService] \(entry.message)",
-                        detail: entry.category
-                    )
+                    // Also forward to system console for important logs
+                    if entry.level == .error || entry.level == .fault {
+                        SystemEventManager.shared.logSync(
+                            .error,
+                            "[TalkieService] \(entry.message)",
+                            detail: entry.category
+                        )
+                    }
                 }
             }
         }
@@ -392,6 +418,7 @@ public final class TalkieServiceMonitor: ObservableObject {
         )
     }
 
+    @MainActor
     private func addLogEntry(_ entry: TalkieServiceLogEntry) {
         logs.insert(entry, at: 0)
         if logs.count > maxLogEntries {
@@ -400,6 +427,7 @@ public final class TalkieServiceMonitor: ObservableObject {
     }
 
     /// Clear all logs
+    @MainActor
     public func clearLogs() {
         logs.removeAll()
         logger.info("[TalkieService] Logs cleared")
@@ -408,12 +436,14 @@ public final class TalkieServiceMonitor: ObservableObject {
     // MARK: - Helpers
 
     /// Format memory usage for display
+    @MainActor
     public var formattedMemory: String {
         let mb = Double(memoryUsage) / 1_048_576
         return String(format: "%.1f MB", mb)
     }
 
     /// Format uptime for display
+    @MainActor
     public var formattedUptime: String {
         let hours = Int(uptime) / 3600
         let minutes = (Int(uptime) % 3600) / 60

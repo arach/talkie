@@ -14,8 +14,8 @@ import os.log
 
 struct LogViewerConsole: View {
     var body: some View {
-        // Reuse Talkie's existing SystemConsoleView
-        SystemConsoleView()
+        // Reuse Talkie's existing SystemLogsView
+        SystemLogsView()
     }
 }
 

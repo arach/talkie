@@ -321,19 +321,28 @@ actor GRDBRepository: MemoRepository {
 
         var filteredRequest = request
 
-        for filter in filters {
-            switch filter {
-            case .shortRecordings:
-                // Filter for memos under 30 seconds
-                filteredRequest = filteredRequest.filter(MemoModel.Columns.duration < 30.0)
+        // Separate filters by type
+        let shortRecordingFilter = filters.contains(where: { if case .shortRecordings = $0 { return true } else { return false } })
+        let sourceFilters = filters.compactMap { filter -> MemoModel.Source? in
+            if case .source(let source) = filter { return source }
+            return nil
+        }
 
-            case .source(let source):
-                // Filter by origin device ID pattern
-                let pattern: String
+        // Apply short recordings filter (AND logic)
+        if shortRecordingFilter {
+            filteredRequest = filteredRequest.filter(MemoModel.Columns.duration < 30.0)
+        }
+
+        // Apply source filters (OR logic for multiple sources)
+        if !sourceFilters.isEmpty {
+            // Build OR conditions for all selected sources
+            var conditions: [SQLExpression] = []
+
+            for source in sourceFilters {
                 switch source {
                 case .iPhone:
                     // No prefix or empty = iPhone (legacy format)
-                    filteredRequest = filteredRequest.filter(
+                    conditions.append(
                         MemoModel.Columns.originDeviceId == nil ||
                         MemoModel.Columns.originDeviceId == "" ||
                         (!MemoModel.Columns.originDeviceId.like("mac-%") &&
@@ -341,21 +350,27 @@ actor GRDBRepository: MemoRepository {
                          !MemoModel.Columns.originDeviceId.like("watch-%"))
                     )
                 case .watch:
-                    pattern = "watch-%"
-                    filteredRequest = filteredRequest.filter(MemoModel.Columns.originDeviceId.like(pattern))
+                    conditions.append(MemoModel.Columns.originDeviceId.like("watch-%"))
                 case .mac:
-                    pattern = "mac-%"
-                    filteredRequest = filteredRequest.filter(MemoModel.Columns.originDeviceId.like(pattern))
+                    conditions.append(MemoModel.Columns.originDeviceId.like("mac-%"))
                 case .live:
-                    pattern = "live-%"
-                    filteredRequest = filteredRequest.filter(MemoModel.Columns.originDeviceId.like(pattern))
+                    conditions.append(MemoModel.Columns.originDeviceId.like("live-%"))
                 case .unknown:
-                    // This case shouldn't normally be used as a filter, but handle it anyway
-                    filteredRequest = filteredRequest.filter(
+                    conditions.append(
                         MemoModel.Columns.originDeviceId == nil ||
                         MemoModel.Columns.originDeviceId == ""
                     )
                 }
+            }
+
+            // Combine all source conditions with OR
+            if !conditions.isEmpty {
+                // Start with the first condition, then OR with the rest
+                var combinedCondition = conditions[0]
+                for i in 1..<conditions.count {
+                    combinedCondition = combinedCondition || conditions[i]
+                }
+                filteredRequest = filteredRequest.filter(combinedCondition)
             }
         }
 

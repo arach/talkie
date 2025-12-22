@@ -31,7 +31,7 @@ struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
     // Use let for singletons - @ObservedObject causes full rerender on every settings change
     private let settings = SettingsManager.shared
-    @ObservedObject private var liveDataStore = UtteranceStore.shared
+    @ObservedObject private var liveDataStore = DictationStore.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -567,14 +567,14 @@ struct TalkieNavigationView: View {
         case .liveRecent:
             // Simple utterance list without sidebar navigation
             TalkieSection("LiveRecent") {
-                UtteranceListView()
+                DictationListView()
             }
         case .liveSettings:
             // Live settings view using Talkie design system
             LiveSettingsView()
         case .systemConsole:
-            TalkieSection("SystemConsole") {
-                SystemConsoleView(onClose: {
+            TalkieSection("SystemLogs") {
+                SystemLogsView(onClose: {
                     // Return to previous section, or home if none
                     selectedSection = previousSection ?? .home
                 })

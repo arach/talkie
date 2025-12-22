@@ -2848,13 +2848,13 @@ struct StorageSettingsSection: View {
             SettingsCard(title: "RETENTION") {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     HStack {
-                        Text("Keep transcriptions for:")
+                        Text("Keep dictations for:")
                             .font(.system(size: 11))
                             .foregroundColor(TalkieTheme.textPrimary)
 
                         Spacer()
 
-                        Picker("", selection: $settings.utteranceTTLHours) {
+                        Picker("", selection: $settings.dictationTTLHours) {
                             ForEach(ttlOptions, id: \.self) { hours in
                                 Text(formatTTL(hours)).tag(hours)
                             }
@@ -2863,7 +2863,7 @@ struct StorageSettingsSection: View {
                         .frame(width: 120)
                     }
 
-                    Text("Older transcriptions will be automatically deleted.")
+                    Text("Older dictations will be automatically deleted.")
                         .font(.system(size: 10))
                         .foregroundColor(TalkieTheme.textTertiary)
                 }
@@ -2906,7 +2906,7 @@ struct StorageSettingsSection: View {
                             label: "Prune Old",
                             color: SemanticColor.warning
                         ) {
-                            LiveDatabase.prune(olderThanHours: settings.utteranceTTLHours)
+                            LiveDatabase.prune(olderThanHours: settings.dictationTTLHours)
                             refreshStats()
                         }
 

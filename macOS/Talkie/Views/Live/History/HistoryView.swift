@@ -57,7 +57,7 @@ private extension Sequence {
 // MARK: - Main Navigation View
 
 struct HistoryView: View {
-    @ObservedObject private var store = UtteranceStore.shared
+    @ObservedObject private var store = DictationStore.shared
     @ObservedObject private var settings = LiveSettings.shared
 
     @State private var selectedSection: LiveNavigationSection? = .home
@@ -430,7 +430,7 @@ struct HistoryView: View {
         AppLogger.shared.log(.transcription, "Transcribing dropped file", detail: "\(originalFilename) (\(detailStr))")
 
         // Create pending utterance first (so we have audio saved even if transcription fails)
-        let pendingUtterance = LiveUtterance(
+        let pendingUtterance = LiveDictation(
             text: "[Transcription pending...]",
             mode: "dropped",
             appBundleID: "dropped.file",
@@ -584,7 +584,8 @@ struct HistoryView: View {
                         icon: "terminal",
                         title: "Logs",
                         badge: errorCount > 0 ? "\(errorCount)" : nil,
-                        badgeColor: SemanticColor.error
+                        badgeColor: SemanticColor.error,
+                        iconSize: 15
                     ) {
                         selectedSection = .logs
                     }
@@ -2610,8 +2611,8 @@ private struct SmartActionsCard: View {
     @State private var hoveredAction: QuickActionKind? = nil
     @State private var actionFeedback: QuickActionKind? = nil
 
-    // Map Utterance to LiveUtterance for database operations
-    private var liveUtterance: LiveUtterance? {
+    // Map Utterance to LiveDictation for database operations
+    private var liveUtterance: LiveDictation? {
         // Use direct ID lookup if available
         guard let liveID = utterance.liveID else {
             // Fallback to fuzzy match for legacy utterances
@@ -2768,7 +2769,7 @@ private struct SmartActionsCard: View {
 
         guard let live = liveUtterance else {
             NSLog("[HistoryView] No liveUtterance found for utterance ID: \(utterance.id), liveID: \(utterance.liveID?.description ?? "nil")")
-            // Fallback for legacy utterances without LiveUtterance
+            // Fallback for legacy utterances without LiveDictation
             if action == .copyToClipboard {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(utterance.text, forType: .string)

@@ -11,11 +11,11 @@ import GRDB
 
 // MARK: - Database Manager
 
-@MainActor
 final class DatabaseManager {
     static let shared = DatabaseManager()
 
     private var dbQueue: DatabaseQueue?
+    private let lock = NSLock()
 
     /// Database file location
     private static var databaseURL: URL {
@@ -34,7 +34,8 @@ final class DatabaseManager {
     private init() {}
 
     /// Initialize database (call on app launch)
-    func initialize() throws {
+    /// Runs on background thread to avoid blocking UI
+    func initialize() async throws {
         let dbQueue = try DatabaseQueue(path: Self.databaseURL.path)
 
         // Configure database
@@ -53,11 +54,18 @@ final class DatabaseManager {
         // Run migrations
         try migrator.migrate(dbQueue)
 
+        // Thread-safe assignment
+        lock.lock()
         self.dbQueue = dbQueue
+        lock.unlock()
     }
 
     /// Get database queue (must call initialize() first)
+    /// Thread-safe accessor
     func database() throws -> DatabaseQueue {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard let db = dbQueue else {
             throw DatabaseError.notInitialized
         }

@@ -21,7 +21,8 @@ final class LiveController: ObservableObject {
     private var recordingStartTime: Date?
     private var capturedContext: UtteranceMetadata?  // Baseline only - enrichment happens after paste
     private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
-    private var routeToInterstitial: Bool = false  // Shift-click: route to Talkie Core interstitial instead of paste
+    private var routeToInterstitial: Bool = false  // Shift or Shift+S: route to Talkie Core interstitial instead of paste
+    private var saveAsMemo: Bool = false  // Shift+A: auto-promote to memo after transcription
     private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
     private var traceID: String?
 
@@ -31,6 +32,14 @@ final class LiveController: ObservableObject {
 
     // Timer for updating elapsed time in database during recording
     private var elapsedTimeTimer: Timer?
+
+    // Watchdog for stuck state detection
+    private var watchdogTimer: Timer?
+    private var stateEntryTime: Date?
+
+    // Timeout thresholds
+    private let transcribingTimeout: TimeInterval = 120.0  // 2 minutes max for transcription
+    private let routingTimeout: TimeInterval = 30.0        // 30 seconds max for routing
 
     init(
         audio: LiveAudioCapture,
@@ -51,6 +60,19 @@ final class LiveController: ObservableObject {
 
             // Sync published state
             self.state = newState
+
+            // Track state entry time for watchdog
+            self.stateEntryTime = Date()
+
+            // Manage watchdog timer based on state
+            switch newState {
+            case .transcribing, .routing:
+                // Start watchdog for processing states
+                self.startWatchdog()
+            case .idle, .listening:
+                // Stop watchdog when not in processing states
+                self.stopWatchdog()
+            }
 
             // Broadcast state change via XPC service for real-time IPC
             let elapsed = self.recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
@@ -110,13 +132,20 @@ final class LiveController: ObservableObject {
     /// Toggle mode: press to start, press to stop
     /// - Parameter interstitial: If true (Shift-click), route to Talkie Core interstitial instead of paste
     func toggleListening(interstitial: Bool = false) async {
+        logger.info("[LiveController] toggleListening: state=\(self.state.rawValue), interstitial=\(interstitial)")
+
         switch state {
         case .idle:
+            logger.info("[LiveController] Calling start()...")
             await start()
+            logger.info("[LiveController] start() completed")
         case .listening:
+            logger.info("[LiveController] Calling stop()...")
             stop(interstitial: interstitial)
+            logger.info("[LiveController] stop() completed")
         case .transcribing, .routing:
             // Don't interrupt processing
+            logger.info("[LiveController] Ignoring toggle - currently processing")
             break
         }
     }
@@ -196,7 +225,7 @@ final class LiveController: ObservableObject {
 
         // Save the audio file for retry
         if let audioFilename = pendingAudioFilename {
-            let utterance = LiveUtterance(
+            let utterance = LiveDictation(
                 text: "[Queued for retry]",
                 mode: "queued",
                 appBundleID: capturedContext?.activeAppBundleID,
@@ -227,7 +256,7 @@ final class LiveController: ObservableObject {
         logger.info("Pushed to queue (was \(previousState.rawValue))")
 
         // Refresh the queue count
-        UtteranceStore.shared.refresh()
+        DictationStore.shared.refresh()
     }
 
     /// Reset cancelled flag when starting a new recording
@@ -270,10 +299,45 @@ final class LiveController: ObservableObject {
         return startApp
     }
 
+    // MARK: - Capture Intent (Mid-Recording Modifiers)
+
+    /// Set intent to route to interstitial editor (Shift or Shift+S during recording)
+    func setInterstitialIntent() {
+        guard state == .listening else { return }
+        routeToInterstitial = true
+        saveAsMemo = false  // Mutually exclusive
+        logger.info("Intent set: Interstitial editor")
+    }
+
+    /// Set intent to save as memo (Shift+A during recording)
+    func setSaveAsMemoIntent() {
+        guard state == .listening else { return }
+        saveAsMemo = true
+        routeToInterstitial = false  // Mutually exclusive
+        logger.info("Intent set: Save as memo")
+    }
+
+    /// Clear capture intent (return to normal paste behavior)
+    func clearIntent() {
+        guard state == .listening else { return }
+        routeToInterstitial = false
+        saveAsMemo = false
+        logger.info("Intent cleared: Normal paste")
+    }
+
+    /// Get current capture intent for UI display
+    var captureIntent: String {
+        if saveAsMemo { return "Save as Memo" }
+        if routeToInterstitial { return "Open in Scratchpad" }
+        return "Paste"
+    }
+
     private func start() async {
         // Reset cancelled flag for new recording
         resetCancelled()
         traceID = nil
+        routeToInterstitial = false
+        saveAsMemo = false
 
         // Capture baseline context FIRST to get the REAL target app
         // before any potential TalkieLive activation
@@ -350,6 +414,107 @@ final class LiveController: ObservableObject {
     private func stopElapsedTimeTimer() {
         elapsedTimeTimer?.invalidate()
         elapsedTimeTimer = nil
+    }
+
+    // MARK: - Watchdog Timer (Stuck State Detection)
+
+    /// Start watchdog timer to detect stuck states
+    private func startWatchdog() {
+        stopWatchdog()  // Clear any existing timer
+
+        // Check every 5 seconds for stuck states
+        watchdogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.checkForStuckState()
+            }
+        }
+        logger.info("Watchdog started")
+    }
+
+    /// Stop watchdog timer
+    private func stopWatchdog() {
+        watchdogTimer?.invalidate()
+        watchdogTimer = nil
+    }
+
+    /// Check if current state has exceeded timeout threshold
+    private func checkForStuckState() {
+        guard let entryTime = stateEntryTime else { return }
+
+        let elapsed = Date().timeIntervalSince(entryTime)
+        let threshold: TimeInterval
+
+        switch self.state {
+        case .transcribing:
+            threshold = transcribingTimeout
+        case .routing:
+            threshold = routingTimeout
+        default:
+            // Not a monitored state
+            return
+        }
+
+        // Check if we've exceeded the timeout
+        if elapsed > threshold {
+            let timeoutStr = String(format: "%.0fs", elapsed)
+            logger.error("⏱ STUCK STATE DETECTED: \(self.state.rawValue) exceeded \(threshold)s (actual: \(timeoutStr))")
+            AppLogger.shared.log(.error, "Stuck state timeout", detail: "\(self.state.rawValue) • \(timeoutStr)")
+
+            // Recover from stuck state
+            recoverFromStuckState(reason: "Timeout after \(timeoutStr)")
+        }
+    }
+
+    /// Recover from stuck state by pushing to queue and resetting
+    private func recoverFromStuckState(reason: String) {
+        logger.warning("🔧 Recovering from stuck state: \(reason)")
+        AppLogger.shared.log(.system, "Auto-recovery triggered", detail: reason)
+
+        // Cancel any in-flight transcription task
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+
+        // If we have audio, save it to queue for retry
+        if let audioFilename = pendingAudioFilename {
+            let utterance = LiveDictation(
+                text: "[Auto-recovered - timeout]",
+                mode: "queued",
+                appBundleID: capturedContext?.activeAppBundleID,
+                appName: capturedContext?.activeAppName,
+                windowTitle: capturedContext?.activeWindowTitle,
+                durationSeconds: recordingStartTime.map { Date().timeIntervalSince($0) },
+                transcriptionModel: LiveSettings.shared.selectedModelId,
+                metadata: capturedContext.flatMap { buildMetadataDict(from: $0) },
+                audioFilename: audioFilename,
+                transcriptionStatus: .pending,
+                transcriptionError: reason,
+                createdInTalkieView: createdInTalkieView,
+                pasteTimestamp: nil
+            )
+            LiveDatabase.store(utterance)
+            TalkieLiveXPCService.shared.notifyUtteranceAdded()
+            AppLogger.shared.log(.database, "Auto-recovery: queued", detail: "Audio saved for retry")
+        }
+
+        // Play error sound to alert user
+        NSSound.beep()
+
+        // Clear state
+        recordingStartTime = nil
+        capturedContext = nil
+        startApp = nil
+        pendingAudioFilename = nil
+        traceID = nil
+        isCancelled = false
+        routeToInterstitial = false
+        createdInTalkieView = false
+
+        // Force reset to idle
+        stateMachine.transition(.forceReset)
+        logger.info("Auto-recovery complete - reset to idle")
+
+        // Refresh stores to show queued item
+        DictationStore.shared.refresh()
     }
 
     private func stop(interstitial: Bool = false) {
@@ -524,7 +689,86 @@ final class LiveController: ObservableObject {
             // Track milestone
             ProcessingMilestones.shared.markRouting()
 
-            // Interstitial mode: Shift-click to route to Talkie Core for editing
+            // Save as Memo mode: Shift+A to auto-promote to permanent memo
+            if saveAsMemo {
+                NSLog("[LiveController] === SAVE AS MEMO MODE ACTIVATED ===")
+                logger.info("=== SAVE AS MEMO MODE ACTIVATED ===")
+                AppLogger.shared.log(.system, "Saving as memo", detail: "Shift+A mode")
+
+                let routeEnd = Date()
+                let totalMs = Int(routeEnd.timeIntervalSince(pipelineStart) * 1000)
+                let postMs = Int(routeEnd.timeIntervalSince(engineEnd) * 1000)
+                let appMs = max(0, totalMs - transcriptionMs)
+
+                metadata.perfEndToEndMs = totalMs
+                metadata.perfInAppMs = appMs
+                metadata.perfPreMs = preMs
+                metadata.perfPostMs = postMs
+
+                let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", transcriptionSec)
+                AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
+
+                // Store in GRDB first
+                logTiming("Creating LiveDictation for memo")
+                let dictation = LiveDictation(
+                    text: result.text,
+                    mode: "memo",  // Mark as memo mode
+                    appBundleID: metadata.activeAppBundleID,
+                    appName: metadata.activeAppName,
+                    windowTitle: metadata.activeWindowTitle,
+                    durationSeconds: durationSeconds,
+                    transcriptionModel: metadata.transcriptionModel,
+                    perfEngineMs: transcriptionMs,
+                    perfEndToEndMs: metadata.perfEndToEndMs,
+                    perfInAppMs: metadata.perfInAppMs,
+                    sessionID: externalRefId,
+                    metadata: buildMetadataDict(from: metadata),
+                    audioFilename: audioFilename,
+                    createdInTalkieView: createdInTalkieView,
+                    pasteTimestamp: Date()  // Mark as delivered
+                )
+
+                if let id = LiveDatabase.store(dictation) {
+                    logTiming("Database stored")
+
+                    // Notify Talkie via XPC
+                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
+
+                    // Schedule enrichment
+                    if let baseline = capturedContext {
+                        ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                    }
+
+                    // Auto-promote to memo (uses existing QuickActionRunner)
+                    logTiming("Auto-promoting to memo")
+                    Task {
+                        await QuickActionRunner.shared.run(.promoteToMemo, for: dictation)
+                    }
+                    AppLogger.shared.log(.system, "Auto-promoted to memo", detail: "ID: \(id)")
+                }
+
+                // Play success sound
+                SoundManager.shared.playPasted()
+                logTiming("Sound triggered")
+
+                // Reset flag and finish
+                saveAsMemo = false
+                recordingStartTime = nil
+                capturedContext = nil
+                startApp = nil
+                pendingAudioFilename = nil
+                traceID = nil
+
+                // Complete the flow
+                stateMachine.transition(.complete)
+
+                // Refresh stores
+                DictationStore.shared.refresh()
+                logTiming("Pipeline complete (saved as memo)")
+                return
+            }
+
+            // Interstitial mode: Shift or Shift+S to route to Talkie Core for editing
             NSLog("[LiveController] Checking routeToInterstitial flag: \(self.routeToInterstitial)")
             logger.info("Checking routeToInterstitial flag: \(self.routeToInterstitial)")
             if routeToInterstitial {
@@ -546,8 +790,8 @@ final class LiveController: ObservableObject {
                 AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
 
                 // Store in GRDB with mode "interstitial", pasteTimestamp = nil
-                logTiming("Creating LiveUtterance for interstitial")
-                let utterance = LiveUtterance(
+                logTiming("Creating LiveDictation for interstitial")
+                let utterance = LiveDictation(
                     text: result.text,
                     mode: "interstitial",
                     appBundleID: metadata.activeAppBundleID,
@@ -597,7 +841,7 @@ final class LiveController: ObservableObject {
                 stateMachine.transition(.complete)
 
                 // Refresh stores
-                UtteranceStore.shared.refresh()
+                DictationStore.shared.refresh()
                 logTiming("Pipeline complete (interstitial)")
                 return
             }
@@ -629,8 +873,8 @@ final class LiveController: ObservableObject {
                 #endif
 
                 // Store in GRDB with createdInTalkieView = true, pasteTimestamp = nil
-                logTiming("Creating LiveUtterance")
-                let utterance = LiveUtterance(
+                logTiming("Creating LiveDictation")
+                let utterance = LiveDictation(
                     text: result.text,
                     mode: "queued",
                     appBundleID: metadata.activeAppBundleID,
@@ -697,8 +941,8 @@ final class LiveController: ObservableObject {
                 }
 
                 // Store in GRDB with pasteTimestamp = now (already pasted)
-                logTiming("Creating LiveUtterance")
-                let utterance = LiveUtterance(
+                logTiming("Creating LiveDictation")
+                let utterance = LiveDictation(
                     text: result.text,
                     mode: settings.routingMode == .paste ? "paste" : "clipboard",
                     appBundleID: metadata.activeAppBundleID,
@@ -730,10 +974,10 @@ final class LiveController: ObservableObject {
             ProcessingMilestones.shared.markDbRecordStored()
             logTiming("Milestone: DB stored")
 
-            // Refresh UtteranceStore to pick up the new record from DB
-            logTiming("Refreshing UtteranceStore")
-            UtteranceStore.shared.refresh()
-            logTiming("UtteranceStore refreshed")
+            // Refresh DictationStore to pick up the new record from DB
+            logTiming("Refreshing DictationStore")
+            DictationStore.shared.refresh()
+            logTiming("DictationStore refreshed")
 
             // Final success log
             AppLogger.shared.log(.system, "Pipeline complete", detail: "Ready for next recording")
@@ -751,7 +995,7 @@ final class LiveController: ObservableObject {
             AppLogger.shared.log(.file, "Audio preserved", detail: "\(audioFilename) - queued for retry")
 
             // Store a record with failed status so we can retry later
-            let utterance = LiveUtterance(
+            let utterance = LiveDictation(
                 text: "[Transcription failed - retry pending]",
                 mode: "failed",
                 appBundleID: capturedContext?.activeAppBundleID,

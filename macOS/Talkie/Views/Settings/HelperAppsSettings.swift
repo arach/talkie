@@ -165,27 +165,25 @@ private struct HelperAppRow: View {
                     .foregroundColor(.secondary)
 
                 // Technical info (PID, Environment)
-                if status == .running {
-                    HStack(spacing: 8) {
-                        if let pid = processId {
-                            HStack(spacing: 3) {
-                                Image(systemName: "number")
-                                    .font(.system(size: 8))
-                                Text(verbatim: "PID \(String(format: "%d", pid))")
-                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            }
-                            .foregroundColor(.secondary.opacity(0.7))
+                HStack(spacing: 8) {
+                    if let pid = processId {
+                        HStack(spacing: 3) {
+                            Image(systemName: "number")
+                                .font(.system(size: 8))
+                            Text(verbatim: "PID \(String(format: "%d", pid))")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
                         }
+                        .foregroundColor(.secondary.opacity(0.7))
+                    }
 
-                        if let env = environment, env != .production {
-                            HStack(spacing: 3) {
-                                Image(systemName: "server.rack")
-                                    .font(.system(size: 8))
-                                Text(env.displayName)
-                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            }
-                            .foregroundColor(env == .dev ? .purple.opacity(0.8) : .orange.opacity(0.8))
+                    if let env = environment, env != .production {
+                        HStack(spacing: 3) {
+                            Image(systemName: "server.rack")
+                                .font(.system(size: 8))
+                            Text(env.displayName)
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
                         }
+                        .foregroundColor(env == .dev ? .purple.opacity(0.8) : .orange.opacity(0.8))
                     }
                 }
             }

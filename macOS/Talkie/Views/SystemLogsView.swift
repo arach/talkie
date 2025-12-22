@@ -1,9 +1,9 @@
 //
-//  SystemConsoleView.swift
+//  SystemLogsView.swift
 //  Talkie macOS
 //
-//  Live activity console with tactical dark theme
-//  Events persist to log files and console reads from them
+//  Live activity logs viewer with tactical dark theme
+//  Events persist to log files and logs viewer reads from them
 //
 
 import SwiftUI
@@ -13,6 +13,28 @@ import os
 private let fileLogger = Logger(subsystem: "jdi.talkie.core", category: "LogFile")
 
 // MARK: - System Event Model
+
+enum SystemEventSource: String, CaseIterable {
+    case talkie = "Talkie"
+    case talkieLive = "TalkieLive"
+    case talkieEngine = "Engine"
+
+    var color: Color {
+        switch self {
+        case .talkie: return Color(red: 0.4, green: 0.7, blue: 1.0) // Blue
+        case .talkieLive: return Color(red: 0.7, green: 0.5, blue: 1.0) // Purple
+        case .talkieEngine: return Color(red: 1.0, green: 0.6, blue: 0.3) // Orange
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .talkie: return "app.fill"
+        case .talkieLive: return "menubar.rectangle"
+        case .talkieEngine: return "gearshape.fill"
+        }
+    }
+}
 
 enum SystemEventType: String, CaseIterable {
     case sync = "SYNC"
@@ -37,21 +59,24 @@ enum SystemEventType: String, CaseIterable {
 struct SystemEvent: Identifiable {
     let id: UUID
     let timestamp: Date
+    let source: SystemEventSource
     let type: SystemEventType
     let message: String
     let detail: String?
 
-    init(type: SystemEventType, message: String, detail: String? = nil) {
+    init(source: SystemEventSource = .talkie, type: SystemEventType, message: String, detail: String? = nil) {
         self.id = UUID()
         self.timestamp = Date()
+        self.source = source
         self.type = type
         self.message = message
         self.detail = detail
     }
 
-    init(id: UUID, timestamp: Date, type: SystemEventType, message: String, detail: String?) {
+    init(id: UUID, timestamp: Date, source: SystemEventSource, type: SystemEventType, message: String, detail: String?) {
         self.id = id
         self.timestamp = timestamp
+        self.source = source
         self.type = type
         self.message = message
         self.detail = detail
@@ -64,26 +89,40 @@ struct SystemEvent: Identifiable {
         let ts = isoFormatter.string(from: timestamp)
         let escapedMessage = message.replacingOccurrences(of: "|", with: "\\|")
         let escapedDetail = detail?.replacingOccurrences(of: "|", with: "\\|") ?? ""
-        return "\(ts)|\(type.rawValue)|\(escapedMessage)|\(escapedDetail)"
+        return "\(ts)|\(source.rawValue)|\(type.rawValue)|\(escapedMessage)|\(escapedDetail)"
     }
 
     /// Parse from log file format
     static func fromLogLine(_ line: String) -> SystemEvent? {
         let parts = line.components(separatedBy: "|")
-        guard parts.count >= 3 else { return nil }
 
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // New format: timestamp|source|type|message|detail (5 parts)
+        if parts.count >= 4 {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
-        guard let timestamp = isoFormatter.date(from: parts[0]),
-              let type = SystemEventType(rawValue: parts[1]) else { return nil }
+            guard let timestamp = isoFormatter.date(from: parts[0]) else { return nil }
 
-        let message = parts[2].replacingOccurrences(of: "\\|", with: "|")
-        let detail = parts.count > 3 && !parts[3].isEmpty
-            ? parts[3].replacingOccurrences(of: "\\|", with: "|")
-            : nil
+            // Check if this is new format (has source field)
+            if let source = SystemEventSource(rawValue: parts[1]),
+               let type = SystemEventType(rawValue: parts[2]) {
+                // New format
+                let message = parts[3].replacingOccurrences(of: "\\|", with: "|")
+                let detail = parts.count > 4 && !parts[4].isEmpty
+                    ? parts[4].replacingOccurrences(of: "\\|", with: "|")
+                    : nil
+                return SystemEvent(id: UUID(), timestamp: timestamp, source: source, type: type, message: message, detail: detail)
+            } else if let type = SystemEventType(rawValue: parts[1]) {
+                // Old format (backwards compatibility): timestamp|type|message|detail
+                let message = parts[2].replacingOccurrences(of: "\\|", with: "|")
+                let detail = parts.count > 3 && !parts[3].isEmpty
+                    ? parts[3].replacingOccurrences(of: "\\|", with: "|")
+                    : nil
+                return SystemEvent(id: UUID(), timestamp: timestamp, source: .talkie, type: type, message: message, detail: detail)
+            }
+        }
 
-        return SystemEvent(id: UUID(), timestamp: timestamp, type: type, message: message, detail: detail)
+        return nil
     }
 }
 
@@ -102,6 +141,22 @@ class LogFileManager {
             return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Talkie/logs", isDirectory: true)
         }
         return appSupport.appendingPathComponent("Talkie/logs", isDirectory: true)
+    }
+
+    /// Get logs directory for a specific source app
+    private func logsDirectory(for source: SystemEventSource) -> URL {
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Talkie/logs", isDirectory: true)
+        }
+
+        switch source {
+        case .talkie:
+            return appSupport.appendingPathComponent("Talkie/logs", isDirectory: true)
+        case .talkieLive:
+            return appSupport.appendingPathComponent("TalkieLive/logs", isDirectory: true)
+        case .talkieEngine:
+            return appSupport.appendingPathComponent("TalkieEngine/logs", isDirectory: true)
+        }
     }
 
     private init() {
@@ -181,6 +236,47 @@ class LogFileManager {
         loadEvents(from: Date(), limit: limit)
     }
 
+    /// Load events from a specific source's log file
+    func loadEventsFrom(source: SystemEventSource, date: Date, limit: Int = 500) -> [SystemEvent] {
+        let sourcePath = logsDirectory(for: source).appendingPathComponent(logFileName(for: date))
+        guard let content = try? String(contentsOf: sourcePath, encoding: .utf8) else {
+            return []
+        }
+
+        let lines = content.components(separatedBy: .newlines)
+        var events: [SystemEvent] = []
+
+        // Read from end to get most recent first, up to limit
+        for line in lines.reversed() {
+            guard !line.isEmpty, let event = SystemEvent.fromLogLine(line) else { continue }
+            events.append(event)
+            if events.count >= limit { break }
+        }
+
+        return events
+    }
+
+    /// Load today's events from all sources or a specific source
+    func loadTodayEventsFrom(sources: [SystemEventSource]?, limit: Int = 500) -> [SystemEvent] {
+        let sourcesToLoad = sources ?? SystemEventSource.allCases
+        var allEvents: [SystemEvent] = []
+
+        for source in sourcesToLoad {
+            let sourceEvents = loadEventsFrom(source: source, date: Date(), limit: limit)
+            allEvents.append(contentsOf: sourceEvents)
+        }
+
+        // Sort by timestamp descending
+        allEvents.sort { $0.timestamp > $1.timestamp }
+
+        // Trim to limit
+        if allEvents.count > limit {
+            allEvents = Array(allEvents.prefix(limit))
+        }
+
+        return allEvents
+    }
+
     /// Get list of available log files
     func availableLogFiles() -> [URL] {
         guard let files = try? fileManager.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: [.creationDateKey]) else {
@@ -241,14 +337,14 @@ class SystemEventManager: ObservableObject {
         }
     }
 
-    private func loadHistoricalEvents() {
-        let historical = LogFileManager.shared.loadTodayEvents(limit: maxEventsInMemory)
+    private func loadHistoricalEvents(from sources: [SystemEventSource]? = nil) {
+        let historical = LogFileManager.shared.loadTodayEventsFrom(sources: sources, limit: maxEventsInMemory)
         events = historical
     }
 
     /// Reload events from file (useful after clearing or for refresh)
-    func reloadFromFile() {
-        loadHistoricalEvents()
+    func reloadFromFile(from sources: [SystemEventSource]? = nil) {
+        loadHistoricalEvents(from: sources)
     }
 
     func log(_ type: SystemEventType, _ message: String, detail: String? = nil) async {
@@ -316,9 +412,10 @@ class SystemEventManager: ObservableObject {
 
 // MARK: - Console View
 
-struct SystemConsoleView: View {
+struct SystemLogsView: View {
     @StateObject private var eventManager = SystemEventManager.shared
     @State private var autoScroll = true
+    @State private var filterSource: SystemEventSource? = nil
     @State private var filterType: SystemEventType? = nil
     @State private var searchQuery = ""
 
@@ -335,6 +432,11 @@ struct SystemConsoleView: View {
     var filteredEvents: [SystemEvent] {
         var events = eventManager.events
 
+        // Apply source filter
+        if let filter = filterSource {
+            events = events.filter { $0.source == filter }
+        }
+
         // Apply type filter
         if let filter = filterType {
             events = events.filter { $0.type == filter }
@@ -346,7 +448,8 @@ struct SystemConsoleView: View {
             events = events.filter {
                 $0.message.lowercased().contains(query) ||
                 ($0.detail?.lowercased().contains(query) ?? false) ||
-                $0.type.rawValue.lowercased().contains(query)
+                $0.type.rawValue.lowercased().contains(query) ||
+                $0.source.rawValue.lowercased().contains(query)
             }
         }
 
@@ -382,13 +485,9 @@ struct SystemConsoleView: View {
                 .font(SettingsManager.shared.fontXS)
                 .foregroundColor(subtleGreen.opacity(0.7))
 
-            Text("SYSTEM CONSOLE")
+            Text("SYSTEM LOGS")
                 .font(Theme.current.fontXSBold)
                 .foregroundColor(Theme.current.foreground)
-
-            Text("v1.0")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
 
             Spacer()
 
@@ -454,50 +553,96 @@ struct SystemConsoleView: View {
     // MARK: - Filter Bar
 
     private var filterBar: some View {
-        HStack(spacing: 6) {
-            // Type filter chips
-            filterChip(nil, label: "ALL")
-            filterChip(.sync, label: "SYNC")
-            filterChip(.record, label: "RECORD")
-            filterChip(.transcribe, label: "WHISPER")
-            filterChip(.workflow, label: "WORKFLOW")
-            filterChip(.error, label: "ERROR")
-
-            Spacer()
-
-            // Search field
+        VStack(spacing: 8) {
+            // Top row: Source selection (visually distinct - larger, segmented style)
             HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 10))
+                sourceFilterChip(nil, label: "ALL LOGS")
+                sourceFilterChip(.talkie, label: "TALKIE")
+                sourceFilterChip(.talkieLive, label: "LIVE")
+                sourceFilterChip(.talkieEngine, label: "ENGINE")
+
+                Spacer()
+
+                // Event count
+                Text("\(filteredEvents.count)")
+                    .font(SettingsManager.shared.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
-
-                TextField("Search...", text: $searchQuery)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(Theme.current.foreground)
-                    .frame(width: 120)
-
-                if !searchQuery.isEmpty {
-                    Button(action: { searchQuery = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(Theme.current.foregroundMuted)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Theme.current.surface1)
-            .cornerRadius(4)
 
-            Text("\(filteredEvents.count)")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
+            // Bottom row: Type filters + search
+            HStack(spacing: 6) {
+                Text("FILTER")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundMuted.opacity(0.6))
+
+                filterChip(nil, label: "ALL")
+                filterChip(.sync, label: "SYNC")
+                filterChip(.record, label: "RECORD")
+                filterChip(.transcribe, label: "WHISPER")
+                filterChip(.workflow, label: "WORKFLOW")
+                filterChip(.error, label: "ERROR")
+
+                Spacer()
+
+                // Search field
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    TextField("Search...", text: $searchQuery)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(Theme.current.foreground)
+                        .frame(width: 120)
+
+                    if !searchQuery.isEmpty {
+                        Button(action: { searchQuery = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(Theme.current.foregroundMuted)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Theme.current.surface1)
+                .cornerRadius(4)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(bgColor)
+    }
+
+    private func sourceFilterChip(_ source: SystemEventSource?, label: String) -> some View {
+        let isSelected = filterSource == source
+        let chipColor = source?.color ?? .white
+
+        return Button(action: { filterSource = source }) {
+            HStack(spacing: 4) {
+                if let source = source {
+                    Image(systemName: source.icon)
+                        .font(.system(size: 9, weight: .medium))
+                }
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.3)
+            }
+            .foregroundColor(isSelected ? .white : chipColor.opacity(0.7))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isSelected ? chipColor.opacity(0.85) : chipColor.opacity(0.12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(isSelected ? chipColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func filterChip(_ type: SystemEventType?, label: String) -> some View {
@@ -542,6 +687,16 @@ struct SystemConsoleView: View {
                 // Scroll to bottom on appear (tail mode)
                 if autoScroll, let newestEvent = filteredEvents.first {
                     proxy.scrollTo(newestEvent.id, anchor: .bottom)
+                }
+            }
+            .onChange(of: filterSource) { _, newSource in
+                // Reload events from log files when source filter changes
+                if let source = newSource {
+                    // Load only this source's logs
+                    eventManager.reloadFromFile(from: [source])
+                } else {
+                    // Load all sources
+                    eventManager.reloadFromFile(from: nil)
                 }
             }
         }
@@ -614,6 +769,13 @@ struct ConsoleEventRow: View {
                 .foregroundColor(Theme.current.foregroundMuted)
                 .frame(width: 52, alignment: .leading)
 
+            // Source indicator (icon)
+            Image(systemName: event.source.icon)
+                .font(.system(size: 8))
+                .foregroundColor(event.source.color)
+                .frame(width: 14, alignment: .center)
+                .help(event.source.rawValue)
+
             // Type badge (compact)
             Text(event.type.rawValue)
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -653,6 +815,6 @@ struct ConsoleEventRow: View {
 // MARK: - Preview
 
 #Preview {
-    SystemConsoleView()
+    SystemLogsView()
         .frame(width: 600, height: 400)
 }

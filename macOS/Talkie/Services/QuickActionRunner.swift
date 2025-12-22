@@ -21,7 +21,7 @@ final class QuickActionRunner {
     private init() {}
 
     /// Execute a quick action on a Live utterance
-    func run(_ action: QuickActionKind, for live: LiveUtterance) async {
+    func run(_ action: QuickActionKind, for live: LiveDictation) async {
         logger.info("Running action: \(action.displayName) for Live #\(live.id ?? 0)")
         AppLogger.shared.log(.system, "Quick Action", detail: action.displayName)
 
@@ -58,7 +58,7 @@ final class QuickActionRunner {
 
     // MARK: - Execute-Only Actions
 
-    private func typeAgain(_ live: LiveUtterance) async {
+    private func typeAgain(_ live: LiveDictation) async {
         // Use the existing TranscriptRouter to type the text
         let router = TranscriptRouter(mode: .paste)
         await router.handle(transcript: live.text)
@@ -66,14 +66,14 @@ final class QuickActionRunner {
         AppLogger.shared.log(.ui, "Text typed", detail: "\(live.text.prefix(40))...")
     }
 
-    private func copyToClipboard(_ live: LiveUtterance) {
+    private func copyToClipboard(_ live: LiveDictation) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(live.text, forType: .string)
         logger.info("Copied to clipboard for Live #\(live.id ?? 0)")
         AppLogger.shared.log(.ui, "Copied", detail: "\(live.wordCount ?? 0) words")
     }
 
-    private func retryTranscription(_ live: LiveUtterance) async {
+    private func retryTranscription(_ live: LiveDictation) async {
         guard live.hasAudio, let audioURL = live.audioURL else {
             logger.error("No audio file for Live #\(live.id ?? 0)")
             AppLogger.shared.log(.error, "Retry failed", detail: "No audio file available")
@@ -88,7 +88,7 @@ final class QuickActionRunner {
 
     // MARK: - Promote-to-Memo Actions
 
-    private func promoteToMemo(_ live: LiveUtterance) async {
+    private func promoteToMemo(_ live: LiveDictation) async {
         guard live.canPromote else {
             logger.warning("Live #\(live.id ?? 0) already promoted")
             return
@@ -105,7 +105,7 @@ final class QuickActionRunner {
         AppLogger.shared.log(.database, "Promoted to memo", detail: memoID)
     }
 
-    private func createResearchMemo(_ live: LiveUtterance) async {
+    private func createResearchMemo(_ live: LiveDictation) async {
         guard live.canPromote else {
             logger.warning("Live #\(live.id ?? 0) already promoted")
             return
@@ -122,7 +122,7 @@ final class QuickActionRunner {
 
     // MARK: - Promote-to-Command Actions
 
-    private func sendToClaude(_ live: LiveUtterance) async {
+    private func sendToClaude(_ live: LiveDictation) async {
         guard live.canPromote else {
             logger.warning("Live #\(live.id ?? 0) already promoted")
             return
@@ -137,7 +137,7 @@ final class QuickActionRunner {
         AppLogger.shared.log(.system, "Sent to Claude", detail: commandID)
     }
 
-    private func runWorkflow(_ live: LiveUtterance) async {
+    private func runWorkflow(_ live: LiveDictation) async {
         guard live.canPromote else {
             logger.warning("Live #\(live.id ?? 0) already promoted")
             return
@@ -154,7 +154,7 @@ final class QuickActionRunner {
 
     // MARK: - Meta Actions
 
-    private func markIgnored(_ live: LiveUtterance) {
+    private func markIgnored(_ live: LiveDictation) {
         LiveDatabase.markAsIgnored(id: live.id)
         logger.info("Marked Live #\(live.id ?? 0) as ignored")
         AppLogger.shared.log(.database, "Marked ignored", detail: "Live #\(live.id ?? 0)")
@@ -165,7 +165,7 @@ final class QuickActionRunner {
 
 extension QuickActionKind {
     /// Actions available for a given Live (context-aware)
-    static func availableActions(for live: LiveUtterance) -> [QuickActionKind] {
+    static func availableActions(for live: LiveDictation) -> [QuickActionKind] {
         var actions: [QuickActionKind] = []
 
         // Always available execute-only actions

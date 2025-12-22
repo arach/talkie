@@ -178,9 +178,9 @@ struct MigrationGateView: View {
                 // Show main app
                 TalkieNavigationView()
                     .task {
-                        // Initialize GRDB on first launch after migration
+                        // Initialize GRDB on first launch after migration (runs on background thread)
                         do {
-                            try DatabaseManager.shared.initialize()
+                            try await DatabaseManager.shared.initialize()
                             print("✅ GRDB database initialized")
 
                             // Start CloudKit sync
@@ -206,10 +206,10 @@ struct MigrationGateView: View {
         Task { @MainActor in
             print("\n🚀 [App Startup] Initializing Talkie...")
 
-            // Initialize GRDB first
+            // Initialize GRDB first (runs on background thread to avoid blocking UI)
             let dbStartTime = Date()
             do {
-                try DatabaseManager.shared.initialize()
+                try await DatabaseManager.shared.initialize()
                 let elapsed = Date().timeIntervalSince(dbStartTime)
                 print("✅ [App Startup] GRDB database initialized in \(Int(elapsed * 1000))ms")
             } catch {

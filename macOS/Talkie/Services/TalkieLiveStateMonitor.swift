@@ -145,8 +145,8 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
 
     nonisolated func utteranceWasAdded() {
         Task { @MainActor in
-            // Notify UtteranceStore to refresh
-            UtteranceStore.shared.refresh()
+            // Notify DictationStore to refresh
+            DictationStore.shared.refresh()
             NSLog("[Live] 🔄 Utterance notification received, refreshed store")
         }
     }

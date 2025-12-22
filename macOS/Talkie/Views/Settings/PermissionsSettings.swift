@@ -62,7 +62,8 @@ class PermissionsManager: ObservableObject {
     @Published var automationStatus: PermissionStatus = .unknown
 
     private init() {
-        refreshAllPermissions()
+        // Don't check permissions eagerly - let views call refreshAllPermissions() on appear
+        // This prevents triggering permission prompts just by accessing .shared
     }
 
     func refreshAllPermissions() {
@@ -117,10 +118,26 @@ class PermissionsManager: ObservableObject {
     // MARK: - Automation (AppleScript)
 
     func checkAutomationPermission() {
-        // There's no direct API to check automation permission
-        // We'll mark it as unknown/not determinable programmatically
-        // The user needs to check System Settings manually
-        automationStatus = .unknown
+        // Try indirect detection: attempt to get app name via AppleScript
+        // If it works, we likely have automation permission
+        let script = """
+        tell application "System Events"
+            get name of first process whose frontmost is true
+        end tell
+        """
+
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            let result = appleScript.executeAndReturnError(&error)
+
+            if error == nil && result.stringValue != nil {
+                automationStatus = .granted
+            } else {
+                automationStatus = .denied
+            }
+        } else {
+            automationStatus = .unknown
+        }
     }
 
     // MARK: - Open System Settings
@@ -250,19 +267,48 @@ struct PermissionsSettingsView: View {
             }
 
             // Info note
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
 
-                Text("Some permissions can only be changed in System Settings → Privacy & Security. Talkie will request permissions when features are first used.")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text("Some permissions can only be changed in System Settings → Privacy & Security. Talkie will request permissions when features are first used.")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // Show app identifier for System Settings lookup (dev/staging builds only)
+                if let bundleID = Bundle.main.bundleIdentifier,
+                   bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
+                    Divider()
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "app.badge")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Look for this app in System Settings:")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            Text(bundleID)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.8))
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
             }
             .padding(10)
             .background(Color.secondary.opacity(0.05))
             .cornerRadius(8)
+        }
+        .onAppear {
+            // Check permissions when view appears (not on init)
+            permissionsManager.refreshAllPermissions()
         }
     }
 }

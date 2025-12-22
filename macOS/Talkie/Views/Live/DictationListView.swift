@@ -1,5 +1,5 @@
 //
-//  UtteranceListView.swift
+//  DictationListView.swift
 //  Talkie
 //
 //  Simplified utterance list without sidebar navigation
@@ -8,10 +8,11 @@
 import SwiftUI
 
 /// Simple list view for all Live utterances (no sidebar, for embedding in main navigation)
-struct UtteranceListView: View {
-    @ObservedObject private var store = UtteranceStore.shared
+struct DictationListView: View {
+    @ObservedObject private var store = DictationStore.shared
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []
     @State private var searchText = ""
+    @State private var retranscribingIDs: Set<Utterance.ID> = []
 
     private var filteredUtterances: [Utterance] {
         guard !searchText.isEmpty else {
@@ -69,10 +70,20 @@ struct UtteranceListView: View {
                                 Label("Promote to Memo", systemImage: "arrow.up.doc")
                             }
 
-                            Button {
-                                // TODO: Re-transcribe with better model
-                            } label: {
-                                Label("Enhance", systemImage: "waveform.badge.magnifyingglass")
+                            if utterance.metadata.audioFilename != nil {
+                                Menu {
+                                    Button("whisper-small (Fast)") {
+                                        retranscribe(utterance, with: "whisper:openai_whisper-small")
+                                    }
+                                    Button("whisper-medium") {
+                                        retranscribe(utterance, with: "whisper:openai_whisper-medium")
+                                    }
+                                    Button("whisper-large-v3 (Best)") {
+                                        retranscribe(utterance, with: "whisper:openai_whisper-large-v3")
+                                    }
+                                } label: {
+                                    Label("Retranscribe", systemImage: "waveform.badge.magnifyingglass")
+                                }
                             }
 
                             Button {
@@ -153,5 +164,40 @@ struct UtteranceListView: View {
                 .foregroundColor(TalkieTheme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func retranscribe(_ utterance: Utterance, with modelId: String) {
+        guard let audioFilename = utterance.metadata.audioFilename else {
+            print("[DictationListView] Cannot retranscribe: no audio file")
+            return
+        }
+
+        // Construct full audio path
+        let audioPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("TalkieLive/Utterances")
+            .appendingPathComponent(audioFilename)
+            .path
+
+        retranscribingIDs.insert(utterance.id)
+
+        Task {
+            do {
+                let engineClient = EngineClient.shared
+                let newText = try await engineClient.transcribe(audioPath: audioPath, modelId: modelId)
+
+                // Update utterance text
+                await MainActor.run {
+                    store.updateText(for: utterance.id, newText: newText)
+                    retranscribingIDs.remove(utterance.id)
+                }
+
+                print("[DictationListView] Successfully retranscribed utterance with \(modelId)")
+            } catch {
+                print("[DictationListView] Failed to retranscribe: \(error.localizedDescription)")
+                await MainActor.run {
+                    retranscribingIDs.remove(utterance.id)
+                }
+            }
+        }
     }
 }

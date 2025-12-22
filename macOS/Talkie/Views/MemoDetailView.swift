@@ -39,6 +39,8 @@ struct MemoDetailView: View {
     @State private var showingWorkflowPicker = false
     @State private var cachedQuickActionItems: [QuickActionItem] = []
     @State private var cachedWorkflowRuns: [WorkflowRun] = []
+    @State private var showingRetranscribeSheet = false
+    @State private var isRetranscribing = false
 
     // MARK: - Quick Actions Logic
 
@@ -710,6 +712,41 @@ struct MemoDetailView: View {
         }
     }
 
+    private func retranscribe(with modelId: String) {
+        guard let audioData = memo.audioData else {
+            logger.error("Cannot retranscribe: no audio data")
+            return
+        }
+
+        isRetranscribing = true
+
+        Task {
+            do {
+                let engineClient = EngineClient.shared
+                let transcript = try await engineClient.transcribe(audioData: audioData, modelId: modelId)
+
+                // Save new transcript
+                await MainActor.run {
+                    if let context = memo.managedObjectContext {
+                        context.perform {
+                            self.memo.transcription = transcript
+                            self.memo.lastModified = Date()
+                            try? context.save()
+                        }
+                    }
+                    isRetranscribing = false
+                }
+
+                logger.info("Successfully retranscribed memo with \(modelId)")
+            } catch {
+                logger.error("Failed to retranscribe: \(error.localizedDescription)")
+                await MainActor.run {
+                    isRetranscribing = false
+                }
+            }
+        }
+    }
+
     private func resolveProviderAndModel(from settings: SettingsManager) -> (String, String) {
         // Check selected model to determine provider
         let selectedModel = settings.selectedModel
@@ -917,11 +954,11 @@ struct MemoDetailView: View {
 
     @ViewBuilder
     private var transcriptView: some View {
-        if memo.isTranscribing {
+        if memo.isTranscribing || isRetranscribing {
             HStack(spacing: 8) {
                 ProgressView()
                     .controlSize(.small)
-                Text("PROCESSING...")
+                Text(isRetranscribing ? "RETRANSCRIBING..." : "PROCESSING...")
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(.secondary)
             }
@@ -966,6 +1003,23 @@ struct MemoDetailView: View {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(transcript, forType: .string)
                                 }
+
+                                Divider()
+
+                                if memo.audioData != nil {
+                                    Menu("Retranscribe") {
+                                        Button("whisper-small (Fast)") {
+                                            retranscribe(with: "whisper:openai_whisper-small")
+                                        }
+                                        Button("whisper-medium") {
+                                            retranscribe(with: "whisper:openai_whisper-medium")
+                                        }
+                                        Button("whisper-large-v3 (Best)") {
+                                            retranscribe(with: "whisper:openai_whisper-large-v3")
+                                        }
+                                    }
+                                }
+
                                 if memo.sortedTranscriptVersions.count > 1 {
                                     Divider()
                                     Button("Version History (\(memo.sortedTranscriptVersions.count))") {

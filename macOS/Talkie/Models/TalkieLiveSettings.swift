@@ -184,7 +184,7 @@ typealias AppTheme = AppearanceMode
 
 /// Design system font sizes - canonical integer sizes, no fractional scaling
 /// Each size tier defines proper integer point sizes for crisp rendering
-enum FontSize: String, CaseIterable, Codable {
+enum FontSize: String, CaseIterable, Codable, CustomStringConvertible {
     case small = "small"
     case medium = "medium"
     case large = "large"
@@ -195,6 +195,10 @@ enum FontSize: String, CaseIterable, Codable {
         case .medium: return "Medium"
         case .large: return "Large"
         }
+    }
+
+    var description: String {
+        displayName
     }
 
     // MARK: - Design System Sizes (integers only, no scaling)
@@ -407,7 +411,7 @@ final class LiveSettings: ObservableObject {
     @Published var utteranceTTLHours: Int {
         didSet {
             save()
-            UtteranceStore.shared.ttlHours = utteranceTTLHours
+            DictationStore.shared.ttlHours = utteranceTTLHours
         }
     }
 
@@ -647,7 +651,7 @@ final class LiveSettings: ObservableObject {
         self.returnToOriginAfterPaste = UserDefaults.standard.bool(forKey: returnToOriginAfterPasteKey)
 
         // Apply TTL to store
-        UtteranceStore.shared.ttlHours = utteranceTTLHours
+        DictationStore.shared.ttlHours = utteranceTTLHours
     }
 
     // MARK: - Persistence

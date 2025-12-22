@@ -150,7 +150,7 @@ final class QueuePickerController {
         hostingView = nil
     }
 
-    private func pasteAndDismiss(_ item: LiveUtterance) {
+    private func pasteAndDismiss(_ item: LiveDictation) {
         guard let id = item.id else {
             dismiss()
             return
@@ -200,18 +200,18 @@ final class QueuePickerController {
 
 @MainActor
 final class QueuePickerViewModel: ObservableObject {
-    @Published var items: [LiveUtterance]
+    @Published var items: [LiveDictation]
     @Published var selectedIndex: Int = 0
 
-    var onSelect: ((LiveUtterance) -> Void)?
+    var onSelect: ((LiveDictation) -> Void)?
     var onDismiss: (() -> Void)?
 
-    var selectedItem: LiveUtterance? {
+    var selectedItem: LiveDictation? {
         guard selectedIndex >= 0, selectedIndex < items.count else { return nil }
         return items[selectedIndex]
     }
 
-    init(items: [LiveUtterance]) {
+    init(items: [LiveDictation]) {
         self.items = items
     }
 
@@ -227,7 +227,7 @@ final class QueuePickerViewModel: ObservableObject {
         }
     }
 
-    func select(_ item: LiveUtterance) {
+    func select(_ item: LiveDictation) {
         onSelect?(item)
     }
 
@@ -304,7 +304,7 @@ struct QueuePickerView: View {
 }
 
 struct QueueItemRow: View {
-    let item: LiveUtterance
+    let item: LiveDictation
     let isSelected: Bool
 
     var body: some View {
@@ -367,9 +367,9 @@ struct QueueItemRow: View {
 
 #Preview {
     let items = [
-        LiveUtterance(text: "This is a test utterance that was queued because it was recorded inside Talkie Live", appName: "Talkie Live", wordCount: 16, createdInTalkieView: true),
-        LiveUtterance(text: "Another queued item with some longer text to show how it wraps and truncates properly", appName: "Talkie Live", wordCount: 14, createdInTalkieView: true),
-        LiveUtterance(text: "Short one", appName: "Talkie Live", wordCount: 2, createdInTalkieView: true),
+        LiveDictation(text: "This is a test utterance that was queued because it was recorded inside Talkie Live", appName: "Talkie Live", wordCount: 16, createdInTalkieView: true),
+        LiveDictation(text: "Another queued item with some longer text to show how it wraps and truncates properly", appName: "Talkie Live", wordCount: 14, createdInTalkieView: true),
+        LiveDictation(text: "Short one", appName: "Talkie Live", wordCount: 2, createdInTalkieView: true),
     ]
     let viewModel = QueuePickerViewModel(items: items)
 

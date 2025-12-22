@@ -170,8 +170,8 @@ final class BootSequence {
         record("ProcessingMilestones")
 
         // Utterance store
-        UtteranceStore.shared.refresh()
-        record("UtteranceStore")
+        DictationStore.shared.refresh()
+        record("DictationStore")
     }
 
     private func initUI() {

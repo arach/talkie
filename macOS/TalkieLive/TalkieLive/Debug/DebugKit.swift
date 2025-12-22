@@ -2904,7 +2904,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                         }
 
                         DebugActionButton(icon: "trash", label: "Prune Old Data") {
-                            let hours = LiveSettings.shared.utteranceTTLHours
+                            let hours = LiveSettings.shared.dictationTTLHours
                             LiveDatabase.prune(olderThanHours: hours)
                             AppLogger.shared.log(.database, "Pruned data", detail: "Older than \(hours)h")
                         }
@@ -3037,17 +3037,17 @@ struct DebugToolbarOverlay<Content: View>: View {
         }
     }
 
-    /// Test interstitial flow: creates a test utterance and opens Talkie Core's interstitial editor
+    /// Test interstitial flow: creates a test dictation and opens Talkie Core's interstitial editor
     private func testInterstitialFlow() {
         NSLog("[DEBUG] Testing interstitial flow")
         NSLog("[DEBUG] Database path: \(LiveDatabase.databaseURL.path)")
         NSLog("[DEBUG] Database count: \(LiveDatabase.count())")
-        AppLogger.shared.log(.system, "Testing interstitial", detail: "Creating test utterance")
+        AppLogger.shared.log(.system, "Testing interstitial", detail: "Creating test dictation")
 
-        // Create a test utterance in the database
-        let testText = "This is a test utterance for interstitial debugging at \(Date())"
+        // Create a test dictation in the database
+        let testText = "This is a test dictation for interstitial debugging at \(Date())"
 
-        let utterance = LiveUtterance(
+        let utterance = LiveDictation(
             id: nil,
             createdAt: Date(),
             text: testText,
@@ -3075,13 +3075,13 @@ struct DebugToolbarOverlay<Content: View>: View {
 
         // Store test record and get its ID
         guard let utteranceId = LiveDatabase.store(utterance) else {
-            NSLog("[DEBUG] Failed to create test utterance")
-            AppLogger.shared.log(.error, "Interstitial test failed", detail: "Could not create utterance")
+            NSLog("[DEBUG] Failed to create test dictation")
+            AppLogger.shared.log(.error, "Interstitial test failed", detail: "Could not create dictation")
             return
         }
 
-        NSLog("[DEBUG] Created test utterance ID: \(utteranceId)")
-        AppLogger.shared.log(.system, "Test utterance created", detail: "ID: \(utteranceId)")
+        NSLog("[DEBUG] Created test dictation ID: \(utteranceId)")
+        AppLogger.shared.log(.system, "Test dictation created", detail: "ID: \(utteranceId)")
 
         // Open the interstitial URL
         let urlString = "\(TalkieEnvironment.current.talkieURLScheme)://interstitial/\(utteranceId)"

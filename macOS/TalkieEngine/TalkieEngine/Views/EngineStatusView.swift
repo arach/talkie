@@ -222,6 +222,7 @@ class EngineStatusManager: ObservableObject {
     // Launch mode info (set from main.swift)
     @Published var launchMode: EngineServiceMode = .dev
     @Published var activeServiceName: String = ""
+    @Published var isDaemonMode: Bool = false  // true = daemon, false = Xcode/direct launch
 
     // Deep link navigation - set to highlight a specific metric by externalRefId
     @Published var highlightedMetricRefId: String?
@@ -256,10 +257,12 @@ class EngineStatusManager: ObservableObject {
     }
 
     /// Configure launch mode (called from main.swift)
-    func configure(mode: EngineServiceMode, serviceName: String) {
+    func configure(mode: EngineServiceMode, serviceName: String, isDaemon: Bool = false) {
         self.launchMode = mode
         self.activeServiceName = serviceName
-        log(.info, "Config", "Mode: \(mode.displayName), XPC: \(serviceName)")
+        self.isDaemonMode = isDaemon
+        let launchType = isDaemon ? "daemon" : "debug"
+        log(.info, "Config", "Mode: \(mode.displayName), XPC: \(serviceName), Launch: \(launchType)")
     }
 
     // MARK: - Timer Management (only runs when status window visible)
@@ -812,6 +815,9 @@ struct EngineStatusView: View {
             statItem(icon: "waveform", label: "TRANSCRIPTIONS", value: "\(statusManager.totalTranscriptions)")
             statItem(icon: "cpu", label: "MODEL", value: statusManager.currentModel ?? "None")
             statItem(icon: "number", label: "PID", value: "\(ProcessInfo.processInfo.processIdentifier)")
+            statItem(icon: statusManager.isDaemonMode ? "server.rack" : "hammer",
+                    label: "LAUNCH",
+                    value: statusManager.isDaemonMode ? "DAEMON" : "XCODE")
 
             #if DEBUG
             // Process stats (dev only)

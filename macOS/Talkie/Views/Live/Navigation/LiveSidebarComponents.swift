@@ -36,6 +36,7 @@ struct SidebarNavItem: View {
     var badge: String? = nil
     var badgeColor: Color = .secondary
     var isSubtle: Bool = false  // For settings - more muted
+    var iconSize: CGFloat = 13  // Default icon size, can be customized
     let action: () -> Void
 
     @State private var isHovered = false
@@ -63,7 +64,7 @@ struct SidebarNavItem: View {
             if isCollapsed {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: icon)
-                        .font(.system(size: 13))
+                        .font(.system(size: iconSize))
                         .foregroundColor(foregroundColor)
                         .frame(width: 32, height: 28)
                         .background(
@@ -84,7 +85,7 @@ struct SidebarNavItem: View {
             } else {
                 HStack(spacing: 8) {
                     Image(systemName: icon)
-                        .font(.system(size: 13))
+                        .font(.system(size: iconSize))
                         .foregroundColor(foregroundColor)
                         .frame(width: 20)
 

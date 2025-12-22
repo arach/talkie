@@ -305,6 +305,31 @@ struct PermissionsSettingsSection: View {
                 tipRow(icon: "arrow.clockwise", text: "Toggle permissions off and on if they seem stuck")
                 tipRow(icon: "trash", text: "Remove and re-add the app in System Settings if issues persist")
                 tipRow(icon: "hammer", text: "Permissions can reset after app updates or rebuilds")
+
+                // Show bundle ID for dev/staging builds
+                if let bundleID = Bundle.main.bundleIdentifier,
+                   bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
+                    Divider()
+                        .padding(.vertical, Spacing.xs)
+
+                    HStack(alignment: .top, spacing: Spacing.sm) {
+                        Image(systemName: "app.badge")
+                            .font(.system(size: 10))
+                            .foregroundColor(TalkieTheme.textTertiary)
+                            .frame(width: 14)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Look for this app in System Settings:")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(TalkieTheme.textSecondary)
+
+                            Text(bundleID)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
             }
             .padding(Spacing.md)
             .background(TalkieTheme.surfaceElevated)
