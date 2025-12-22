@@ -15,7 +15,7 @@ final class DatabaseManager {
     static let shared = DatabaseManager()
 
     private var dbQueue: DatabaseQueue?
-    private let lock = NSLock()
+    nonisolated(unsafe) private let lock = NSLock()
 
     /// Database file location
     private static var databaseURL: URL {
@@ -56,8 +56,8 @@ final class DatabaseManager {
 
         // Thread-safe assignment
         lock.lock()
+        defer { lock.unlock() }
         self.dbQueue = dbQueue
-        lock.unlock()
     }
 
     /// Get database queue (must call initialize() first)

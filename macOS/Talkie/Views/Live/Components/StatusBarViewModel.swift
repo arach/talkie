@@ -46,6 +46,7 @@ final class StatusBarViewModel {
 
     // MARK: - Initialization
 
+    @MainActor
     init(
         liveMonitor: TalkieLiveStateMonitor = .shared,
         engineClient: EngineClient = .shared,

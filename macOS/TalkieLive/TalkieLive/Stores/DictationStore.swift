@@ -403,7 +403,15 @@ final class DictationStore {
                 liveID: live.id
             )
         }
-        logger.debug("Refreshed \(self.utterances.count) utterances from database")
+        logger.info("🔄 DictationStore.refresh - loaded \(self.utterances.count) utterances from database")
+        if !utterances.isEmpty {
+            logger.info("   First 3 utterances:")
+            for (i, u) in utterances.prefix(3).enumerated() {
+                logger.info("   [\(i)] \(u.text.prefix(50))... at \(u.timestamp)")
+            }
+        } else {
+            logger.warning("   ⚠️ No utterances loaded!")
+        }
     }
 
     /// Build UtteranceMetadata from LiveDictation, including rich context from metadata dict

@@ -170,7 +170,7 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             try await db.write { db in
-                var mutableMemo = memo
+                let mutableMemo = memo
                 try mutableMemo.save(db)
             }
         }
@@ -180,7 +180,7 @@ actor GRDBRepository: MemoRepository {
         try await instrumentRepositoryWrite("deleteMemo") {
             let db = try await dbManager.database()
 
-            try await db.write { db in
+            _ = try await db.write { db in
                 try MemoModel
                     .filter(MemoModel.Columns.id == id.uuidString)
                     .deleteAll(db)
@@ -221,7 +221,7 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             try await db.write { db in
-                var mutableVersion = version
+                let mutableVersion = version
                 try mutableVersion.save(db)
             }
         }
@@ -232,7 +232,7 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             try await db.write { db in
-                var mutableRun = run
+                let mutableRun = run
                 try mutableRun.save(db)
             }
         }
@@ -243,7 +243,7 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             try await db.write { db in
-                var mutableStep = step
+                let mutableStep = step
                 try mutableStep.save(db)
             }
         }
@@ -254,7 +254,7 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             try await db.write { db in
-                var mutableEvent = event
+                let mutableEvent = event
                 try mutableEvent.save(db)
             }
         }

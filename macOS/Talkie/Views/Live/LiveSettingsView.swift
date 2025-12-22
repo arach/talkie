@@ -271,11 +271,11 @@ struct GeneralLiveSettingsView: View {
                                 description: OverlayStyle.particles.description,
                                 value: OverlayStyle.particles,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WavyParticlesPreview(calm: false)),
                                 onSelect: {
                                     live.overlayStyle = .particles
                                     logger.info("Overlay style changed to: particles")
-                                }
+                                },
+                                preview: AnyView(WavyParticlesPreview(calm: false))
                             )
 
                             RadioButtonRow(
@@ -283,11 +283,11 @@ struct GeneralLiveSettingsView: View {
                                 description: OverlayStyle.particlesCalm.description,
                                 value: OverlayStyle.particlesCalm,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WavyParticlesPreview(calm: true)),
                                 onSelect: {
                                     live.overlayStyle = .particlesCalm
                                     logger.info("Overlay style changed to: particlesCalm")
-                                }
+                                },
+                                preview: AnyView(WavyParticlesPreview(calm: true))
                             )
 
                             RadioButtonRow(
@@ -295,11 +295,11 @@ struct GeneralLiveSettingsView: View {
                                 description: OverlayStyle.waveform.description,
                                 value: OverlayStyle.waveform,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WaveformBarsPreview(sensitive: false)),
                                 onSelect: {
                                     live.overlayStyle = .waveform
                                     logger.info("Overlay style changed to: waveform")
-                                }
+                                },
+                                preview: AnyView(WaveformBarsPreview(sensitive: false))
                             )
 
                             RadioButtonRow(
@@ -307,11 +307,11 @@ struct GeneralLiveSettingsView: View {
                                 description: OverlayStyle.waveformSensitive.description,
                                 value: OverlayStyle.waveformSensitive,
                                 selectedValue: live.overlayStyle,
-                                preview: AnyView(WaveformBarsPreview(sensitive: true)),
                                 onSelect: {
                                     live.overlayStyle = .waveformSensitive
                                     logger.info("Overlay style changed to: waveformSensitive")
-                                }
+                                },
+                                preview: AnyView(WaveformBarsPreview(sensitive: true))
                             )
 
                             Text("Position")

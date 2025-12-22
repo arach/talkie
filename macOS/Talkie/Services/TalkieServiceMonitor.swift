@@ -96,10 +96,20 @@ public final class TalkieServiceMonitor {
     deinit {
         // Defensive cleanup - singleton shouldn't deinit but if it does, clean up
         // Access to main actor properties is unsafe here, but cleanup is critical
+        #if compiler(>=6.0)
+        // Suppress Swift 6 warning about Task outliving deinit - this is intentional cleanup
+        nonisolated(unsafe) let timer = monitorTimer
+        nonisolated(unsafe) let task = logStreamTask
+        Task {
+            timer?.invalidate()
+            task?.terminate()
+        }
+        #else
         Task { @MainActor in
             monitorTimer?.invalidate()
             logStreamTask?.terminate()
         }
+        #endif
     }
 
     // MARK: - Monitoring

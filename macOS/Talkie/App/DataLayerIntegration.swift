@@ -120,7 +120,7 @@ func performanceTest() async {
 
     let newStart = Date()
     let repository = GRDBRepository()
-    let newMemos = try? await repository.fetchMemos(
+    _ = try? await repository.fetchMemos(
         sortBy: .timestamp,
         ascending: false,
         limit: 50,

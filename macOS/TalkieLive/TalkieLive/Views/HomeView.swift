@@ -6,11 +6,14 @@
 //
 
 import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "jdi.talkie.live", category: "HomeView")
 
 // MARK: - Home View
 
 struct HomeView: View {
-    @State private var store = DictationStore.shared
+    private let store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
 
@@ -65,8 +68,10 @@ struct HomeView: View {
 
                     // Row 2: Recent (2 slots) | Top Apps (2 slots)
                     HStack(alignment: .top, spacing: GridLayout.gutter) {
+                        let recentUtterances = Array(store.utterances.prefix(5))
+                        let _ = logger.info("📊 HomeView.body - store.utterances.count=\(store.utterances.count), passing \(recentUtterances.count) to RecentActivityCard")
                         RecentActivityCard(
-                            utterances: Array(store.utterances.prefix(5)),
+                            utterances: recentUtterances,
                             onSelectUtterance: onSelectUtterance
                         )
                         .frame(width: GridLayout.width(slots: 2, in: containerWidth))
@@ -112,15 +117,18 @@ struct HomeView: View {
         }
         .background(TalkieTheme.surface)
         .onAppear {
+            logger.info("🎬 HomeView.onAppear - store.utterances.count=\(store.utterances.count)")
             loadActivityData()
         }
-        .onChange(of: store.utterances.count) { _, _ in
+        .onChange(of: store.utterances.count) { oldValue, newValue in
+            logger.info("🔄 HomeView.onChange - utterances count changed: \(oldValue) -> \(newValue)")
             loadActivityData()
         }
     }
 
     private func loadActivityData() {
         let utterances = store.utterances
+        logger.info("📈 loadActivityData - processing \(utterances.count) utterances")
         let calendar = Calendar.current
 
         // Calculate unique days with activity
@@ -1666,6 +1674,7 @@ struct RecentActivityCard: View {
     var onSelectUtterance: ((Utterance) -> Void)?
 
     var body: some View {
+        let _ = logger.info("🎴 RecentActivityCard.body - received \(utterances.count) utterances, isEmpty=\(utterances.isEmpty)")
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("RECENT")

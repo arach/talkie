@@ -80,6 +80,7 @@ struct TalkieApp: App {
                 .environment(LiveSettings.shared)
                 .environment(CloudKitSyncManager.shared)
                 .environment(SystemEventManager.shared)
+                .environment(RelativeTimeTicker.shared)
                 .frame(minWidth: 900, minHeight: 600)
                 .tint(SettingsManager.shared.accentColor.color)
                 .onOpenURL { url in

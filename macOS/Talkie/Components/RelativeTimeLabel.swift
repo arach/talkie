@@ -8,15 +8,14 @@
 import SwiftUI
 
 struct RelativeTimeLabel: View {
-    static let defaultRefreshInterval: TimeInterval = 60
+    @Environment(RelativeTimeTicker.self) private var ticker
 
     let date: Date
-    var interval: TimeInterval = defaultRefreshInterval
     let formatter: (Date) -> String
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: interval)) { _ in
-            Text(formatter(date))
-        }
+        // Reference ticker time to invalidate the view on each tick.
+        let _ = ticker.now
+        Text(formatter(date))
     }
 }

@@ -194,7 +194,7 @@ struct DictationListView: View {
                 print("[DictationListView] Successfully retranscribed utterance with \(modelId)")
             } catch {
                 print("[DictationListView] Failed to retranscribe: \(error.localizedDescription)")
-                await MainActor.run {
+                _ = await MainActor.run {
                     retranscribingIDs.remove(utterance.id)
                 }
             }
