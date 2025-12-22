@@ -255,16 +255,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func stopAndDisableDaemon() {
-        let serviceName = EngineStatusManager.shared.activeServiceName
+        // Use launchdLabel (the plist Label), not activeServiceName (the XPC MachService)
+        let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
         let userID = getuid()
 
-        AppLogger.shared.info(.system, "Stopping and disabling daemon: \(serviceName)")
+        AppLogger.shared.info(.system, "Stopping and disabling daemon: \(launchdLabel)")
         EngineStatusManager.shared.log(.warning, "Daemon", "Disabling daemon - will not auto-restart")
 
         // Unload the launchd service
         let task = Process()
         task.launchPath = "/bin/launchctl"
-        task.arguments = ["bootout", "gui/\(userID)/\(serviceName)"]
+        task.arguments = ["bootout", "gui/\(userID)/\(launchdLabel)"]
 
         do {
             try task.run()
@@ -327,11 +328,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func reenableDaemon() {
-        let serviceName = EngineStatusManager.shared.activeServiceName
+        // Use launchdLabel (the plist Label), not activeServiceName (the XPC MachService)
+        let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
         let userID = getuid()
-        let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(serviceName).plist"
+        let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(launchdLabel).plist"
 
-        AppLogger.shared.info(.system, "Re-enabling daemon: \(serviceName)")
+        AppLogger.shared.info(.system, "Re-enabling daemon: \(launchdLabel)")
 
         // Bootstrap (load) the launchd service
         let task = Process()
