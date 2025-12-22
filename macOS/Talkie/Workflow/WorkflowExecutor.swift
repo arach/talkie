@@ -10,6 +10,7 @@ import CoreData
 import AppKit
 import UserNotifications
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "WorkflowExecutor")
 // MARK: - Workflow Execution Context
@@ -94,7 +95,8 @@ struct WorkflowContext {
 // MARK: - Workflow Executor
 
 @MainActor
-class WorkflowExecutor: ObservableObject {
+@Observable
+class WorkflowExecutor {
     static let shared = WorkflowExecutor()
 
     private let registry = LLMProviderRegistry.shared
@@ -844,7 +846,7 @@ class WorkflowExecutor: ObservableObject {
         return try await withThrowingTaskGroup(of: String.self) { group in
             // Timeout task
             group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(config.timeout) * 1_000_000_000)
+                try await Task.sleep(for: .seconds(config.timeout))
                 throw WorkflowError.executionFailed("Command timed out after \(config.timeout) seconds")
             }
 

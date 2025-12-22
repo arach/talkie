@@ -225,11 +225,24 @@ extension LiveDatabase {
     }
 
     static func all() -> [LiveDictation] {
-        (try? shared.read { db in
-            try LiveDictation
-                .order(LiveDictation.Columns.createdAt.desc)
-                .fetchAll(db)
-        }) ?? []
+        do {
+            let results = try shared.read { db in
+                try LiveDictation
+                    .order(LiveDictation.Columns.createdAt.desc)
+                    .fetchAll(db)
+            }
+            logger.info("[LiveDatabase] all() - fetched \(results.count) dictations from database")
+            if !results.isEmpty {
+                logger.info("   First 3:")
+                for (i, d) in results.prefix(3).enumerated() {
+                    logger.info("   [\(i)] \(d.text.prefix(50))... at \(d.createdAt)")
+                }
+            }
+            return results
+        } catch {
+            logger.error("[LiveDatabase] all() error: \(error)")
+            return []
+        }
     }
 
     static func recent(limit: Int = 100) -> [LiveDictation] {

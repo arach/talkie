@@ -291,11 +291,12 @@ struct ContextCapture {
 }
 
 @MainActor
-final class DictationStore: ObservableObject {
+@Observable
+final class DictationStore {
     static let shared = DictationStore()
 
     /// Published utterances - now backed by SQLite database
-    @Published private(set) var utterances: [Utterance] = []
+    private(set) var utterances: [Utterance] = []
 
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48
@@ -402,7 +403,15 @@ final class DictationStore: ObservableObject {
                 liveID: live.id
             )
         }
-        logger.debug("Refreshed \(self.utterances.count) utterances from database")
+        logger.info("🔄 DictationStore.refresh - loaded \(self.utterances.count) utterances from database")
+        if !utterances.isEmpty {
+            logger.info("   First 3 utterances:")
+            for (i, u) in utterances.prefix(3).enumerated() {
+                logger.info("   [\(i)] \(u.text.prefix(50))... at \(u.timestamp)")
+            }
+        } else {
+            logger.warning("   ⚠️ No utterances loaded!")
+        }
     }
 
     /// Build UtteranceMetadata from LiveDictation, including rich context from metadata dict

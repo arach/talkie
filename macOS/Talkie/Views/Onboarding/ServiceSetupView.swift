@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ServiceSetupView: View {
     let onNext: () -> Void
-    @ObservedObject private var manager = OnboardingManager.shared
+    @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
     private var colors: OnboardingColors {

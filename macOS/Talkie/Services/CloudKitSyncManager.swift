@@ -14,11 +14,13 @@ import Foundation
 import CloudKit
 import CoreData
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "CloudKitSync")
 
 @MainActor
-class CloudKitSyncManager: ObservableObject {
+@Observable
+class CloudKitSyncManager {
     static let shared = CloudKitSyncManager()
 
     private let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
@@ -41,19 +43,19 @@ class CloudKitSyncManager: ObservableObject {
         }
     }
 
-    @Published var isSyncing = false
-    @Published var lastSyncDate: Date?
-    @Published var lastChangeCount: Int = 0
-    @Published var syncHistory: [SyncEvent] = []
+    var isSyncing = false
+    var lastSyncDate: Date?
+    var lastChangeCount: Int = 0
+    var syncHistory: [SyncEvent] = []
 
     private let maxHistoryCount = 50 // Keep last 50 sync events
 
     // MARK: - Timers and Schedulers
-    private var syncTimer: Timer?
-    private var remoteChangeObserver: NSObjectProtocol?
-    private var syncIntervalObserver: NSObjectProtocol?
-    private var debounceTimer: Timer?
-    private let debounceInterval: TimeInterval = 3.0 // Coalesce rapid notifications
+    @ObservationIgnored private var syncTimer: Timer?
+    @ObservationIgnored private var remoteChangeObserver: NSObjectProtocol?
+    @ObservationIgnored private var syncIntervalObserver: NSObjectProtocol?
+    @ObservationIgnored private var debounceTimer: Timer?
+    @ObservationIgnored private let debounceInterval: TimeInterval = 3.0 // Coalesce rapid notifications
 
     // Sync interval from settings (default 10 minutes)
     private var syncInterval: TimeInterval {
@@ -61,17 +63,17 @@ class CloudKitSyncManager: ObservableObject {
     }
 
     // Background activity scheduler - wakes app even when terminated
-    private var backgroundActivityScheduler: NSBackgroundActivityScheduler?
+    @ObservationIgnored private var backgroundActivityScheduler: NSBackgroundActivityScheduler?
     // Background sync at 1.5x foreground interval
     private var backgroundSyncInterval: TimeInterval {
         syncInterval * 1.5
     }
 
     // App Nap prevention - keeps sync running when app loses focus
-    private var appNapActivity: NSObjectProtocol?
+    @ObservationIgnored private var appNapActivity: NSObjectProtocol?
 
     // Static cached formatter for status display
-    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+    @ObservationIgnored private static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
         return f
@@ -82,21 +84,21 @@ class CloudKitSyncManager: ObservableObject {
     }
 
     deinit {
-        // Clean up timers
-        syncTimer?.invalidate()
-        debounceTimer?.invalidate()
-
-        // Clean up observers
-        if let observer = remoteChangeObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = syncIntervalObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-
-        // End App Nap prevention (inline to avoid main actor isolation issue)
-        if let activity = appNapActivity {
-            ProcessInfo.processInfo.endActivity(activity)
+        // Defensive cleanup - singleton shouldn't deinit but if it does, clean up
+        // Access to main actor properties is unsafe here, but cleanup is critical
+        Task { @MainActor in
+            syncTimer?.invalidate()
+            debounceTimer?.invalidate()
+            backgroundActivityScheduler?.invalidate()
+            if let activity = appNapActivity {
+                ProcessInfo.processInfo.endActivity(activity)
+            }
+            if let observer = remoteChangeObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = syncIntervalObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
     }
 
@@ -384,7 +386,7 @@ class CloudKitSyncManager: ObservableObject {
                 // If we detected changes, give Core Data a moment to import them
                 // NSPersistentCloudKitContainer handles import automatically; we just need to refresh
                 if result.changeCount > 0 {
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                    try? await Task.sleep(for: .milliseconds(500)) // 500ms
                     context.refreshAllObjects()
 
                     // BRIDGE 1: Sync Core Data → GRDB
@@ -836,7 +838,7 @@ class CloudKitSyncManager: ObservableObject {
         }
 
         // Wait a moment for all async tasks to complete
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        try? await Task.sleep(for: .seconds(1)) // 1 second
 
         let duration = Date().timeIntervalSince(syncStart)
         logger.info("🌉 [Bridge 1] Complete: \(createdCount) created, \(updatedCount) updated, \(errorCount) errors (\(String(format: "%.1fs", duration)))")

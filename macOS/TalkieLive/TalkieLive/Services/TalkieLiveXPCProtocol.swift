@@ -36,4 +36,7 @@ public var kTalkieLiveXPCServiceName: String {
 
     /// Called when TalkieLive adds a new utterance to the database
     func utteranceWasAdded()
+
+    /// Called when audio level changes (throttled to ~2Hz)
+    func audioLevelDidChange(level: Float)
 }

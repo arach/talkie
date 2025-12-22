@@ -166,13 +166,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             reloadItem.target = self
             menu.addItem(reloadItem)
 
-            // Show daemon control options only when running as daemon
-            if EngineStatusManager.shared.isDaemonMode {
-                menu.addItem(NSMenuItem.separator())
+            menu.addItem(NSMenuItem.separator())
 
+            if EngineStatusManager.shared.isDaemonMode {
+                // Running as daemon - offer to stop
                 let stopDaemonItem = NSMenuItem(title: "Stop & Disable Daemon", action: #selector(stopAndDisableDaemon), keyEquivalent: "")
                 stopDaemonItem.target = self
                 menu.addItem(stopDaemonItem)
+            } else {
+                // Running from Xcode - offer to switch to daemon OR take over from daemon
+                let switchToDaemonItem = NSMenuItem(title: "Switch to Daemon Mode", action: #selector(switchToDaemonMode), keyEquivalent: "")
+                switchToDaemonItem.target = self
+                menu.addItem(switchToDaemonItem)
+
+                let takeOverItem = NSMenuItem(title: "Stop Daemon (Dev Takes Over)", action: #selector(stopDaemonForDev), keyEquivalent: "")
+                takeOverItem.target = self
+                menu.addItem(takeOverItem)
             }
         }
 
@@ -255,16 +264,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func stopAndDisableDaemon() {
-        let serviceName = EngineStatusManager.shared.activeServiceName
+        // Use launchdLabel (the plist Label), not activeServiceName (the XPC MachService)
+        let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
         let userID = getuid()
 
-        AppLogger.shared.info(.system, "Stopping and disabling daemon: \(serviceName)")
+        AppLogger.shared.info(.system, "Stopping and disabling daemon: \(launchdLabel)")
         EngineStatusManager.shared.log(.warning, "Daemon", "Disabling daemon - will not auto-restart")
 
         // Unload the launchd service
         let task = Process()
         task.launchPath = "/bin/launchctl"
-        task.arguments = ["bootout", "gui/\(userID)/\(serviceName)"]
+        task.arguments = ["bootout", "gui/\(userID)/\(launchdLabel)"]
 
         do {
             try task.run()
@@ -290,6 +300,97 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } catch {
             AppLogger.shared.error(.system, "Error disabling daemon: \(error)")
+            EngineStatusManager.shared.log(.error, "Daemon", "Error: \(error.localizedDescription)")
+        }
+    }
+
+    @objc private func stopDaemonForDev() {
+        // Stop the daemon so this dev instance can take over the XPC service
+        let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
+        let userID = getuid()
+
+        AppLogger.shared.info(.system, "Stopping daemon for dev takeover: \(launchdLabel)")
+        EngineStatusManager.shared.log(.info, "Daemon", "Stopping daemon - dev will take over")
+
+        let task = Process()
+        task.launchPath = "/bin/launchctl"
+        task.arguments = ["bootout", "gui/\(userID)/\(launchdLabel)"]
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            if task.terminationStatus == 0 {
+                AppLogger.shared.info(.system, "Daemon stopped - dev is now primary")
+                EngineStatusManager.shared.log(.info, "Daemon", "✓ Daemon stopped - dev instance is now primary")
+            } else if task.terminationStatus == 3 {
+                // Exit code 3 = not running, which is fine
+                AppLogger.shared.info(.system, "Daemon was not running")
+                EngineStatusManager.shared.log(.info, "Daemon", "Daemon was not running - dev is primary")
+            } else {
+                AppLogger.shared.error(.system, "Failed to stop daemon (exit code: \(task.terminationStatus))")
+                EngineStatusManager.shared.log(.error, "Daemon", "Failed to stop (code: \(task.terminationStatus))")
+            }
+        } catch {
+            AppLogger.shared.error(.system, "Error stopping daemon: \(error)")
+            EngineStatusManager.shared.log(.error, "Daemon", "Error: \(error.localizedDescription)")
+        }
+    }
+
+    @objc private func switchToDaemonMode() {
+        let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
+        let userID = getuid()
+        let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(launchdLabel).plist"
+
+        AppLogger.shared.info(.system, "Switching to daemon mode: \(launchdLabel)")
+        EngineStatusManager.shared.log(.info, "Daemon", "Switching to daemon mode...")
+
+        // Check if plist exists
+        guard FileManager.default.fileExists(atPath: plistPath) else {
+            AppLogger.shared.error(.system, "Daemon plist not found at: \(plistPath)")
+            EngineStatusManager.shared.log(.error, "Daemon", "Plist not found - run install script first")
+
+            let alert = NSAlert()
+            alert.messageText = "Daemon Not Installed"
+            alert.informativeText = "The daemon plist was not found at:\n\(plistPath)\n\nRun the install script first."
+            alert.alertStyle = .warning
+            alert.runModal()
+            return
+        }
+
+        // Bootstrap (load) the launchd service
+        let task = Process()
+        task.launchPath = "/bin/launchctl"
+        task.arguments = ["bootstrap", "gui/\(userID)", plistPath]
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            if task.terminationStatus == 0 {
+                AppLogger.shared.info(.system, "Daemon started successfully")
+                EngineStatusManager.shared.log(.info, "Daemon", "✓ Daemon started - quitting Xcode instance")
+
+                // Quit this instance - daemon will take over
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NSApp.terminate(nil)
+                }
+            } else {
+                // Exit code 37 = already loaded, which is fine
+                if task.terminationStatus == 37 {
+                    AppLogger.shared.info(.system, "Daemon already running")
+                    EngineStatusManager.shared.log(.info, "Daemon", "Daemon already running - quitting Xcode instance")
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        NSApp.terminate(nil)
+                    }
+                } else {
+                    AppLogger.shared.error(.system, "Failed to start daemon (exit code: \(task.terminationStatus))")
+                    EngineStatusManager.shared.log(.error, "Daemon", "Failed to start daemon (code: \(task.terminationStatus))")
+                }
+            }
+        } catch {
+            AppLogger.shared.error(.system, "Error starting daemon: \(error)")
             EngineStatusManager.shared.log(.error, "Daemon", "Error: \(error.localizedDescription)")
         }
     }
@@ -327,11 +428,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func reenableDaemon() {
-        let serviceName = EngineStatusManager.shared.activeServiceName
+        // Use launchdLabel (the plist Label), not activeServiceName (the XPC MachService)
+        let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
         let userID = getuid()
-        let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(serviceName).plist"
+        let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(launchdLabel).plist"
 
-        AppLogger.shared.info(.system, "Re-enabling daemon: \(serviceName)")
+        AppLogger.shared.info(.system, "Re-enabling daemon: \(launchdLabel)")
 
         // Bootstrap (load) the launchd service
         let task = Process()

@@ -9,6 +9,7 @@
 
 import Foundation
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "PendingActionsManager")
 
@@ -78,18 +79,19 @@ struct RecentAction: Identifiable, Equatable {
 
 // MARK: - Pending Actions Manager
 
+@Observable
 @MainActor
-class PendingActionsManager: ObservableObject {
+class PendingActionsManager {
     static let shared = PendingActionsManager()
 
     /// Currently running actions
-    @Published private(set) var pendingActions: [PendingAction] = []
+    private(set) var pendingActions: [PendingAction] = []
 
     /// Recent completed/failed actions (keeps last 20)
-    @Published private(set) var recentActions: [RecentAction] = []
+    private(set) var recentActions: [RecentAction] = []
 
     /// Maximum number of recent actions to keep
-    private let maxRecentActions = 20
+    @ObservationIgnored private let maxRecentActions = 20
 
     /// Quick check if any actions are running
     var hasActiveActions: Bool {

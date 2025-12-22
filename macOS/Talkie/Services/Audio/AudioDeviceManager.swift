@@ -10,6 +10,7 @@ import Foundation
 import CoreAudio
 import AVFoundation
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AudioDeviceManager")
 
@@ -28,11 +29,12 @@ struct AudioInputDevice: Identifiable, Hashable {
 }
 
 @MainActor
-final class AudioDeviceManager: ObservableObject {
+@Observable
+final class AudioDeviceManager {
     static let shared = AudioDeviceManager()
 
-    @Published private(set) var inputDevices: [AudioInputDevice] = []
-    @Published private(set) var defaultDeviceID: AudioDeviceID = 0
+    private(set) var inputDevices: [AudioInputDevice] = []
+    private(set) var defaultDeviceID: AudioDeviceID = 0
 
     private init() {
         refreshDevices()

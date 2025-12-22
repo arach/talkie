@@ -27,6 +27,7 @@ final class LocalSwiftBackend: ExecutionBackend {
 
     // MARK: - Initialization
 
+    @MainActor
     init(
         executor: WorkflowExecutor = .shared,
         coreDataContext: NSManagedObjectContext

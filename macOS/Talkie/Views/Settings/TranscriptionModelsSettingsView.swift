@@ -2,8 +2,7 @@
 //  TranscriptionModelsSettingsView.swift
 //  Talkie
 //
-//  Transcription model settings for Live Mode
-//  Workflows select their models per-step in the workflow editor
+//  Transcription model settings - grouped by family with compact cards
 //
 
 import SwiftUI
@@ -12,55 +11,65 @@ import os
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TranscriptionModelsSettings")
 
 struct TranscriptionModelsSettingsView: View {
-    @ObservedObject private var settingsManager = SettingsManager.shared
-    @ObservedObject private var engineClient = EngineClient.shared
-    @ObservedObject private var liveSettings = LiveSettings.shared
+    @Environment(SettingsManager.self) private var settingsManager
+    @Environment(EngineClient.self) private var engineClient
+    @Environment(LiveSettings.self) private var liveSettings
 
     @State private var showingDeleteConfirmation: (Bool, ModelInfo?) = (false, nil)
 
+    // Group models by family
+    private var whisperModels: [ModelInfo] {
+        engineClient.availableModels.filter { $0.family.lowercased() == "whisper" }
+    }
+
+    private var parakeetModels: [ModelInfo] {
+        engineClient.availableModels.filter { $0.family.lowercased() == "parakeet" }
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
+            VStack(alignment: .leading, spacing: 24) {
                 // Header
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Transcription Models")
-                        .font(Theme.current.fontTitle)
-                        .fontWeight(.semibold)
-                        .foregroundColor(Theme.current.foreground)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("LIVE / SETTINGS / TRANSCRIPTION")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(settingsManager.midnightTextTertiary)
 
-                    Text("Manage speech-to-text models. Download models to use them in Live Mode or workflows.")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                    Text("TRANSCRIPTION MODELS")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(settingsManager.midnightTextPrimary)
+
+                    Text("Select a model for speech-to-text. Larger models are more accurate but slower.")
+                        .font(.system(size: 12))
+                        .foregroundColor(settingsManager.midnightTextSecondary)
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+
+                // Whisper Models Section
+                if !whisperModels.isEmpty {
+                    modelFamilySection(
+                        title: "WHISPER",
+                        subtitle: "OpenAI's speech recognition models",
+                        models: whisperModels
+                    )
                 }
 
-                // Live Mode model picker
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("LIVE MODE")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .textCase(.uppercase)
-
-                    liveModePicker
+                // Parakeet Models Section
+                if !parakeetModels.isEmpty {
+                    modelFamilySection(
+                        title: "PARAKEET",
+                        subtitle: "NVIDIA's multilingual models",
+                        models: parakeetModels
+                    )
                 }
 
-                Divider()
-
-                // Available models grid
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("AVAILABLE MODELS")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .textCase(.uppercase)
-
-                    modelGrid
-                }
+                Spacer(minLength: 40)
             }
-            .padding(Spacing.lg)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.current.background)
+        .background(settingsManager.midnightBase)
         .onAppear {
-            // Refresh model status when view appears
             engineClient.refreshStatus()
         }
         .alert(isPresented: Binding(
@@ -80,92 +89,84 @@ struct TranscriptionModelsSettingsView: View {
         }
     }
 
-    // MARK: - Live Mode Picker
+    // MARK: - Model Family Section
 
-    private var liveModePicker: some View {
-        let downloadedModels = engineClient.availableModels.filter { $0.isDownloaded }
+    private func modelFamilySection(title: String, subtitle: String, models: [ModelInfo]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Section header with family-specific colors
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(title == "WHISPER" ? Color.orange : Color.cyan)
+                    .frame(width: 3, height: 14)
 
-        return VStack(alignment: .leading, spacing: Spacing.xs) {
-            if downloadedModels.isEmpty {
-                Text("No models downloaded. Download a model below to use in Live Mode.")
-                    .font(Theme.current.fontSM)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-                    .padding(.vertical, Spacing.sm)
-            } else {
-                Picker("Live Mode Model", selection: $settingsManager.liveTranscriptionModelId) {
-                    ForEach(downloadedModels) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(settingsManager.midnightTextPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 10))
+                        .foregroundColor(settingsManager.midnightTextTertiary)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(maxWidth: 300, alignment: .leading)
-                .onChange(of: settingsManager.liveTranscriptionModelId) { oldValue, newValue in
-                    guard oldValue != newValue else { return }
-                    logger.info("Live transcription model changed: \(oldValue) -> \(newValue)")
 
-                    // Preload the new model in the engine
-                    Task {
-                        do {
-                            try await engineClient.preloadModel(newValue)
-                            logger.info("Successfully preloaded model: \(newValue)")
-                        } catch {
-                            logger.error("Failed to preload model \(newValue): \(error.localizedDescription)")
-                        }
-                    }
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+
+            // Model cards grid - 2 columns matching Models sidebar style
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ], spacing: 8) {
+                ForEach(models) { model in
+                    STTModelCard(
+                        modelInfo: model,
+                        downloadProgress: engineClient.downloadProgress,
+                        isSelected: settingsManager.liveTranscriptionModelId == model.id,
+                        onSelect: { selectModel(model) },
+                        onDownload: { downloadModel(model) },
+                        onDelete: { showingDeleteConfirmation = (true, model) },
+                        onCancel: { Task { await engineClient.cancelDownload() } }
+                    )
                 }
             }
-        }
-    }
-
-    // MARK: - Model Grid
-
-    private var modelGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ],
-            spacing: 12
-        ) {
-            ForEach(engineClient.availableModels) { model in
-                TranscriptionModelCard(
-                    model: model,
-                    isSelected: false,  // Selection happens via Live Mode picker above
-                    downloadProgress: engineClient.downloadProgress,
-                    onSelect: {
-                        // No-op: Selection handled by Live Mode picker
-                    },
-                    onDownload: {
-                        downloadModel(model)
-                    },
-                    onDelete: {
-                        showingDeleteConfirmation = (true, model)
-                    },
-                    onCancel: {
-                        Task {
-                            await engineClient.cancelDownload()
-                        }
-                    }
-                )
-            }
+            .padding(.horizontal, 24)
         }
     }
 
     // MARK: - Actions
 
+    private func selectModel(_ model: ModelInfo) {
+        settingsManager.liveTranscriptionModelId = model.id
+
+        Task {
+            do {
+                try await engineClient.preloadModel(model.id)
+                logger.info("Successfully preloaded model: \(model.id)")
+            } catch {
+                logger.error("Failed to preload model \(model.id): \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func downloadModel(_ model: ModelInfo) {
-        logger.info("Downloading model: \(model.id) - Functionality to be implemented")
-        // TODO: Implement model download via EngineClient
+        logger.info("Downloading model: \(model.id)")
+        Task {
+            do {
+                try await engineClient.downloadModel(model.id)
+                logger.info("Successfully downloaded model: \(model.id)")
+            } catch {
+                logger.error("Failed to download model \(model.id): \(error.localizedDescription)")
+            }
+        }
     }
 
     private func deleteModel(_ model: ModelInfo) {
-        logger.info("Deleting model: \(model.id) - Functionality to be implemented")
+        logger.info("Deleting model: \(model.id)")
         // TODO: Implement model deletion via EngineClient
     }
 }
 
 #Preview {
     TranscriptionModelsSettingsView()
-        .frame(width: 700, height: 600)
+        .frame(width: 900, height: 700)
 }

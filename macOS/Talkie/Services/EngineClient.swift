@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import os
 import TalkieKit
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Engine")
 
@@ -184,28 +185,30 @@ public enum EngineConnectionState: String {
 
 /// Client for communicating with TalkieEngine XPC service
 @MainActor
-public final class EngineClient: ObservableObject {
+@Observable
+public final class EngineClient {
     public static let shared = EngineClient()
 
     // MARK: - Published State
-    @Published public var connectionState: EngineConnectionState = .disconnected
-    @Published public var status: EngineStatus?
-    @Published public var lastError: String?
+    public var connectionState: EngineConnectionState = .disconnected
+    public var status: EngineStatus?
+    public var lastError: String?
 
     // MARK: - Session Stats
-    @Published public private(set) var connectedAt: Date?
-    @Published public private(set) var transcriptionCount: Int = 0
-    @Published public private(set) var lastTranscriptionAt: Date?
+    public private(set) var connectedAt: Date?
+    public private(set) var transcriptionCount: Int = 0
+    public private(set) var lastTranscriptionAt: Date?
 
     // MARK: - Model Management State
-    @Published public var availableModels: [ModelInfo] = []
-    @Published public var downloadProgress: DownloadProgress?
-    @Published public var isDownloading: Bool = false
+    public var availableModels: [ModelInfo] = []
+    public var downloadProgress: DownloadProgress?
+    public var isDownloading: Bool = false
 
     /// Computed property for backwards compatibility
     public var isConnected: Bool { connectionState == .connected }
 
     // XPC service manager with environment-aware connection
+    @ObservationIgnored
     private let xpcManager: XPCServiceManager<TalkieEngineProtocol>
 
     /// The mode we're currently connected to (for UI display)
@@ -329,46 +332,21 @@ public final class EngineClient: ObservableObject {
 
         connect()
 
-        // Wait for connection to complete using Combine publisher (max 5 seconds)
-        return await withCheckedContinuation { continuation in
-            var cancellable: AnyCancellable?
-            var timerCancellable: AnyCancellable?
-            var isResolved = false
-
-            // Subscribe to connection state changes
-            cancellable = $connectionState
-                .sink { [weak self] state in
-                    guard !isResolved else { return }
-
-                    switch state {
-                    case .connected:
-                        isResolved = true
-                        timerCancellable?.cancel()
-                        cancellable?.cancel()
-                        continuation.resume(returning: true)
-                    case .error, .disconnected:
-                        if state == .error {
-                            isResolved = true
-                            timerCancellable?.cancel()
-                            cancellable?.cancel()
-                            continuation.resume(returning: false)
-                        }
-                    default:
-                        break
-                    }
-                }
-
-            // Timeout after 5 seconds
-            timerCancellable = Timer.publish(every: 5.0, on: .main, in: .common)
-                .autoconnect()
-                .first()
-                .sink { _ in
-                    guard !isResolved else { return }
-                    isResolved = true
-                    cancellable?.cancel()
-                    continuation.resume(returning: false)
-                }
+        // Wait for connection to complete (max 5 seconds)
+        let startTime = Date()
+        while Date().timeIntervalSince(startTime) < 5.0 {
+            switch connectionState {
+            case .connected:
+                return true
+            case .error:
+                return false
+            default:
+                try? await Task.sleep(for: .milliseconds(100)) // 0.1 seconds
+            }
         }
+
+        // Timeout
+        return false
     }
 
     private func handleDisconnection(reason: String) {

@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Quick Actions Settings View
 
 struct QuickActionsSettingsView: View {
-    @ObservedObject private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
     @State private var selectedWorkflow: WorkflowDefinition?
     @State private var showingWorkflowEditor = false
 
@@ -113,7 +113,7 @@ struct QuickActionsSettingsView: View {
         HStack(spacing: 12) {
             // Icon
             Image(systemName: workflow.icon)
-                .font(SettingsManager.shared.fontTitle)
+                .font(Theme.current.fontTitle)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 24, height: 24)
                 .background(workflow.color.color.opacity(0.15))
@@ -124,7 +124,7 @@ struct QuickActionsSettingsView: View {
                 Text(workflow.name)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                 Text(workflow.description)
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
@@ -134,7 +134,7 @@ struct QuickActionsSettingsView: View {
             // Edit button
             Button(action: { editWorkflow(workflow) }) {
                 Image(systemName: "pencil")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
@@ -145,7 +145,7 @@ struct QuickActionsSettingsView: View {
                 togglePin(workflow)
             } label: {
                 Image(systemName: workflow.isPinned ? "pin.fill" : "pin")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(workflow.isPinned ? .orange : .secondary)
             }
             .buttonStyle(.plain)

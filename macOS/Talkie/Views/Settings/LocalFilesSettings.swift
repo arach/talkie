@@ -13,13 +13,15 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Local Files Settings View
 
 struct LocalFilesSettingsView: View {
-    @ObservedObject private var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var showingTranscriptsFolderPicker = false
     @State private var showingAudioFolderPicker = false
     @State private var statusMessage: String?
     @State private var stats: (transcripts: Int, audioFiles: Int, totalSize: Int64) = (0, 0, 0)
 
     var body: some View {
+        @Bindable var settings = settingsManager
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "folder.badge.person.crop",
@@ -31,7 +33,7 @@ struct LocalFilesSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.shield")
-                            .font(SettingsManager.shared.fontSM)
+                            .font(Theme.current.fontSM)
                             .foregroundColor(.green)
                         Text("YOUR DATA, YOUR FILES")
                             .font(Theme.current.fontXSBold)
@@ -39,7 +41,7 @@ struct LocalFilesSettingsView: View {
                     }
 
                     Text("Local files are stored as plain text (Markdown) and standard audio formats. You can open, edit, backup, or move them freely. No lock-in, full portability.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary)
                 }
                 .padding(16)
@@ -54,21 +56,21 @@ struct LocalFilesSettingsView: View {
 
                 // MARK: - Transcripts Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settingsManager.saveTranscriptsLocally) {
+                    Toggle(isOn: $settings.saveTranscriptsLocally) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: "doc.text")
-                                    .font(SettingsManager.shared.fontSM)
+                                    .font(Theme.current.fontSM)
                                     .foregroundColor(.blue)
                                 Text("Save Transcripts Locally")
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                             }
                             HStack(spacing: 4) {
                                 Text("Save as Markdown with YAML frontmatter.")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary)
                                 Link("File format", destination: URL(string: "https://talkie.jdi.do/docs/file-format")!)
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                             }
                         }
                     }
@@ -88,20 +90,20 @@ struct LocalFilesSettingsView: View {
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 8) {
-                                TextField("~/Documents/Talkie/Transcripts", text: $settingsManager.transcriptsFolderPath)
+                                TextField("~/Documents/Talkie/Transcripts", text: $settings.transcriptsFolderPath)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(size: 11, design: .monospaced))
 
                                 Button(action: { showingTranscriptsFolderPicker = true }) {
                                     Image(systemName: "folder")
-                                        .font(SettingsManager.shared.fontSM)
+                                        .font(Theme.current.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Browse for folder")
 
                                 Button(action: { TranscriptFileManager.shared.openTranscriptsFolderInFinder() }) {
                                     Image(systemName: "arrow.up.forward.square")
-                                        .font(SettingsManager.shared.fontSM)
+                                        .font(Theme.current.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Open in Finder")
@@ -116,17 +118,17 @@ struct LocalFilesSettingsView: View {
 
                 // MARK: - Audio Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $settingsManager.saveAudioLocally) {
+                    Toggle(isOn: $settings.saveAudioLocally) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: "waveform")
-                                    .font(SettingsManager.shared.fontSM)
+                                    .font(Theme.current.fontSM)
                                     .foregroundColor(.purple)
                                 Text("Save Audio Files Locally")
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                             }
                             Text("Copy M4A audio recordings to your local folder.")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -146,20 +148,20 @@ struct LocalFilesSettingsView: View {
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 8) {
-                                TextField("~/Documents/Talkie/Audio", text: $settingsManager.audioFolderPath)
+                                TextField("~/Documents/Talkie/Audio", text: $settings.audioFolderPath)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(size: 11, design: .monospaced))
 
                                 Button(action: { showingAudioFolderPicker = true }) {
                                     Image(systemName: "folder")
-                                        .font(SettingsManager.shared.fontSM)
+                                        .font(Theme.current.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Browse for folder")
 
                                 Button(action: { TranscriptFileManager.shared.openAudioFolderInFinder() }) {
                                     Image(systemName: "arrow.up.forward.square")
-                                        .font(SettingsManager.shared.fontSM)
+                                        .font(Theme.current.fontSM)
                                 }
                                 .buttonStyle(.bordered)
                                 .help("Open in Finder")
@@ -167,10 +169,10 @@ struct LocalFilesSettingsView: View {
 
                             HStack(spacing: 6) {
                                 Image(systemName: "exclamationmark.triangle")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.orange)
                                 Text("Audio files can take significant disk space")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.orange)
                             }
                             .padding(8)
@@ -200,7 +202,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                                     .foregroundColor(.blue)
                                 Text("Transcripts")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary)
                             }
 
@@ -209,7 +211,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                                     .foregroundColor(.purple)
                                 Text("Audio Files")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary)
                             }
 
@@ -218,7 +220,7 @@ struct LocalFilesSettingsView: View {
                                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                                     .foregroundColor(.green)
                                 Text("Total Size")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary)
                             }
                         }
@@ -240,7 +242,7 @@ struct LocalFilesSettingsView: View {
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                     Text("Sync Now")
                                 }
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                             }
                             .buttonStyle(.bordered)
 
@@ -249,7 +251,7 @@ struct LocalFilesSettingsView: View {
                                     Image(systemName: "arrow.clockwise")
                                     Text("Refresh Stats")
                                 }
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                             }
                             .buttonStyle(.bordered)
                         }
@@ -261,7 +263,7 @@ struct LocalFilesSettingsView: View {
                             Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
                                 .foregroundColor(message.contains("✓") ? .green : .blue)
                             Text(message)
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                         }
                         .padding(8)
                         .background(Color.green.opacity(0.1))

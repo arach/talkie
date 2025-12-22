@@ -38,6 +38,16 @@ public enum EngineServiceMode: String, CaseIterable {
         case .dev: return "dev"
         }
     }
+
+    /// Launchd service label (for launchctl commands)
+    /// This is the Label in the plist, NOT the MachService name
+    public var launchdLabel: String {
+        switch self {
+        case .production: return "jdi.talkie.engine"
+        case .staging: return "jdi.talkie.engine.staging"
+        case .dev: return "jdi.talkie.engine.dev"
+        }
+    }
 }
 
 /// Default service name based on build configuration

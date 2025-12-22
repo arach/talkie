@@ -16,13 +16,18 @@ extension NSNotification.Name {
     static let navigateToLiveSettings = NSNotification.Name("navigateToLiveSettings")
     static let navigateToEngineMonitor = NSNotification.Name("navigateToEngineMonitor")
     static let navigateToLiveMonitor = NSNotification.Name("navigateToLiveMonitor")
+
+    #if DEBUG
+    /// Debug navigation for screenshots: talkie://d/{path}
+    static let debugNavigate = NSNotification.Name("debugNavigate")
+    #endif
 }
 
 struct ModelsContentView: View {
-    @StateObject private var registry = LLMProviderRegistry.shared
-    @StateObject private var settingsManager = SettingsManager.shared
-    @StateObject private var whisperService = WhisperService.shared
-    @StateObject private var parakeetService = ParakeetService.shared
+    private let registry = LLMProviderRegistry.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
+    private let whisperService = WhisperService.shared
+    private let parakeetService = ParakeetService.shared
     @State private var selectedProviderId: String = "gemini"
     @State private var downloadingModelId: String?
     @State private var downloadProgress: Double = 0
@@ -146,7 +151,11 @@ struct ModelsContentView: View {
 
     @State private var configuringProvider: String?
 
+    @ViewBuilder
     private var cloudProvidersSection: some View {
+        @Bindable var settings = settingsManager
+
+
         LazyVGrid(columns: [
             GridItem(.flexible(), spacing: 8),
             GridItem(.flexible(), spacing: 8),
@@ -230,7 +239,7 @@ struct ModelsContentView: View {
                     "Free tier available"
                 ],
                 isConfiguring: configuringProvider == "gemini",
-                apiKeyBinding: $settingsManager.geminiApiKey,
+                apiKeyBinding: $settings.geminiApiKey,
                 onConfigure: {
                     withAnimation {
                         configuringProvider = configuringProvider == "gemini" ? nil : "gemini"
@@ -424,57 +433,73 @@ struct ModelsContentView: View {
         }
     }
 
-    // MARK: - Speech-to-Text Column
-
-    @State private var expandedSTT: String? = nil
+    // MARK: - Speech-to-Text Column (Compact Grid)
 
     private var speechToTextColumn: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             #if arch(arm64)
-            // Parakeet card
-            ExpandableSTTCard(
-                name: "Parakeet",
-                provider: "Nvidia",
-                description: "The fastest speech-to-text model available with near real-time transcription.",
-                isRecommended: true,
-                isExpanded: expandedSTT == "parakeet",
-                isActive: parakeetService.loadedModel != nil,
-                hasInstalledModel: parakeetService.downloadedModels.count > 0,
-                onToggle: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        expandedSTT = expandedSTT == "parakeet" ? nil : "parakeet"
+            // Parakeet family section
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text("PARAKEET")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.cyan)
+                    Text("— NVIDIA")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(settingsManager.midnightTextTertiary)
+                }
+
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8)
+                ], spacing: 8) {
+                    ForEach(ParakeetModel.allCases, id: \.rawValue) { model in
+                        STTModelCard(
+                            name: model.sttCardName,
+                            family: .parakeet,
+                            size: model.sttCardSize,
+                            speedTier: model.sttSpeedTier,
+                            languageInfo: model.sttLanguages,
+                            isDownloaded: parakeetService.isModelDownloaded(model),
+                            isDownloading: downloadingParakeetModel == model,
+                            downloadProgress: downloadingParakeetModel == model ? 0.5 : 0,
+                            onDownload: { downloadParakeetModel(model) },
+                            onDelete: { deleteParakeetModel(model) }
+                        )
                     }
                 }
-            ) {
-                ParakeetVariantTable(
-                    parakeetService: parakeetService,
-                    downloadingModel: downloadingParakeetModel,
-                    onDownload: { model in downloadParakeetModel(model) },
-                    onDelete: { model in deleteParakeetModel(model) }
-                )
             }
 
-            // Whisper card
-            ExpandableSTTCard(
-                name: "Whisper",
-                provider: "OpenAI",
-                description: "General purpose speech recognition system trained on large-scale audio data.",
-                isRecommended: false,
-                isExpanded: expandedSTT == "whisper",
-                isActive: whisperService.loadedModel != nil,
-                hasInstalledModel: whisperService.downloadedModels.count > 0,
-                onToggle: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        expandedSTT = expandedSTT == "whisper" ? nil : "whisper"
+            // Whisper family section
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text("WHISPER")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.orange)
+                    Text("— OpenAI")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(settingsManager.midnightTextTertiary)
+                }
+
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8)
+                ], spacing: 8) {
+                    ForEach(WhisperModel.allCases, id: \.rawValue) { model in
+                        STTModelCard(
+                            name: model.sttCardName,
+                            family: .whisper,
+                            size: model.sttCardSize,
+                            speedTier: model.sttSpeedTier,
+                            languageInfo: model.sttLanguages,
+                            isDownloaded: whisperService.isModelDownloaded(model),
+                            isDownloading: downloadingWhisperModel == model,
+                            downloadProgress: downloadingWhisperModel == model ? 0.5 : 0,
+                            onDownload: { downloadWhisperModel(model) },
+                            onDelete: { deleteWhisperModel(model) }
+                        )
                     }
                 }
-            ) {
-                WhisperVariantTable(
-                    whisperService: whisperService,
-                    downloadingModel: downloadingWhisperModel,
-                    onDownload: { model in downloadWhisperModel(model) },
-                    onDelete: { model in deleteWhisperModel(model) }
-                )
             }
             #else
             HStack(spacing: 8) {

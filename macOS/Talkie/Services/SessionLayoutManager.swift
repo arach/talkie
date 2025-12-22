@@ -14,29 +14,31 @@
 import SwiftUI
 import Combine
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "SessionLayout")
 
 @MainActor
-final class SessionLayoutManager: ObservableObject {
+@Observable
+final class SessionLayoutManager {
     static let shared = SessionLayoutManager()
 
     // MARK: - Published State
 
-    @Published var isLayoutLocked: Bool = false
-    @Published var isCommandHeld: Bool = false
+    var isLayoutLocked: Bool = false
+    var isCommandHeld: Bool = false
 
     // Overlay positions (nil = use default)
-    @Published var onAirPosition: CGPoint?
-    @Published var pillPosition: CGPoint?
-    @Published var waveOverlayPosition: CGPoint?
+    var onAirPosition: CGPoint?
+    var pillPosition: CGPoint?
+    var waveOverlayPosition: CGPoint?
 
     // Visual feedback
-    @Published var showDragHints: Bool = false
+    var showDragHints: Bool = false
 
     // MARK: - Keyboard Monitoring
 
-    private var eventMonitor: Any?
+    @ObservationIgnored private var eventMonitor: Any?
 
     private init() {
         startMonitoringModifiers()
@@ -129,7 +131,7 @@ struct DraggableOverlay: ViewModifier {
     let overlayType: OverlayType
     let defaultPosition: CGPoint
 
-    @ObservedObject private var layoutManager = SessionLayoutManager.shared
+    private let layoutManager = SessionLayoutManager.shared
     @State private var isDragging = false
     @State private var dragOffset: CGSize = .zero
 
@@ -195,7 +197,7 @@ extension View {
 // MARK: - Global Keyboard Shortcuts
 
 struct SessionLayoutKeyboardShortcuts: View {
-    @ObservedObject private var layoutManager = SessionLayoutManager.shared
+    private let layoutManager = SessionLayoutManager.shared
 
     var body: some View {
         EmptyView()

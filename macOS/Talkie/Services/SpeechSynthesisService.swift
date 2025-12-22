@@ -8,25 +8,27 @@
 
 import AVFoundation
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "SpeechSynthesis")
 
 // MARK: - Speech Synthesis Service
 
 @MainActor
-class SpeechSynthesisService: NSObject, ObservableObject {
+@Observable
+class SpeechSynthesisService: NSObject {
     static let shared = SpeechSynthesisService()
 
     private let synthesizer = AVSpeechSynthesizer()
 
-    @Published var isSpeaking = false
-    @Published var availableVoices: [AVSpeechSynthesisVoice] = []
+    var isSpeaking = false
+    var availableVoices: [AVSpeechSynthesisVoice] = []
 
     // Settings
-    @Published var selectedVoiceIdentifier: String?
-    @Published var speechRate: Float = AVSpeechUtteranceDefaultSpeechRate
-    @Published var speechPitch: Float = 1.0
-    @Published var speechVolume: Float = 1.0
+    var selectedVoiceIdentifier: String?
+    var speechRate: Float = AVSpeechUtteranceDefaultSpeechRate
+    var speechPitch: Float = 1.0
+    var speechVolume: Float = 1.0
 
     private var completionHandler: (() -> Void)?
 

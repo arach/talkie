@@ -2,7 +2,7 @@
 //  DictationPill.swift
 //  Talkie
 //
-//  Floating pill for ephemeral dictation - mirrors TalkieLive's StatePill design language
+//  Floating pill for ephemeral dictation - mirrors TalkieLive's LivePill design language
 //  Sliver (collapsed) → Expanded (on hover) with same transitions
 //
 
@@ -15,13 +15,13 @@ enum DictationPillState {
     case success
 }
 
-/// Dictation pill matching TalkieLive's iconic sliver/expand pattern
+/// Dictation pill matching TalkieLive's iconic sliver/expand pattern (LivePill)
 struct DictationPill: View {
     @Binding var state: DictationPillState
     @Binding var duration: TimeInterval
     let onTap: () -> Void
 
-    @ObservedObject private var settings = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settings
     @State private var isHovered = false
     @State private var pulsePhase: CGFloat = 0
 

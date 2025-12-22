@@ -21,7 +21,8 @@ struct LogViewerConsole: View {
 
 // MARK: - AppLogger
 
-final class AppLogger: ObservableObject {
+@Observable
+final class AppLogger {
     static let shared = AppLogger()
 
     private let logger = Logger(subsystem: "jdi.talkie", category: "AppLogger")

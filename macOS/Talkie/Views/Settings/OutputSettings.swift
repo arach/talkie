@@ -35,7 +35,7 @@ struct OutputSettingsView: View {
             // Directory picker
                 VStack(alignment: .leading, spacing: 12) {
                     Text("DEFAULT OUTPUT FOLDER")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 8) {
@@ -45,7 +45,7 @@ struct OutputSettingsView: View {
 
                         Button(action: { showingFolderPicker = true }) {
                             Image(systemName: "folder")
-                                .font(SettingsManager.shared.fontSM)
+                                .font(Theme.current.fontSM)
                         }
                         .buttonStyle(.bordered)
                         .help("Browse for folder")
@@ -60,10 +60,10 @@ struct OutputSettingsView: View {
                     // Current value display
                     HStack(spacing: 4) {
                         Image(systemName: "folder.fill")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(settings.resolvedAccentColor)
                         Text(SaveFileStepConfig.defaultOutputDirectory)
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary)
                     }
                     .padding(8)
@@ -77,7 +77,7 @@ struct OutputSettingsView: View {
                         Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                             .foregroundColor(message.contains("✓") ? .green : .orange)
                         Text(message)
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                     }
                 }
 
@@ -86,7 +86,7 @@ struct OutputSettingsView: View {
                 // Quick actions
                 VStack(alignment: .leading, spacing: 12) {
                     Text("QUICK ACTIONS")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 12) {
@@ -95,7 +95,7 @@ struct OutputSettingsView: View {
                                 Image(systemName: "folder.badge.gearshape")
                                 Text("Open in Finder")
                             }
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                         }
                         .buttonStyle(.bordered)
 
@@ -104,7 +104,7 @@ struct OutputSettingsView: View {
                                 Image(systemName: "folder.badge.plus")
                                 Text("Create Folder")
                             }
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                         }
                         .buttonStyle(.bordered)
 
@@ -113,7 +113,7 @@ struct OutputSettingsView: View {
                                 Image(systemName: "arrow.counterclockwise")
                                 Text("Reset to Default")
                             }
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                         }
                         .buttonStyle(.bordered)
                     }
@@ -130,7 +130,7 @@ struct OutputSettingsView: View {
                             .foregroundColor(.secondary)
 
                         Text("Define shortcuts like @Obsidian, @Notes to use in file paths")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.8))
                     }
 
@@ -151,12 +151,12 @@ struct OutputSettingsView: View {
 
                                     // Arrow
                                     Image(systemName: "arrow.right")
-                                        .font(SettingsManager.shared.fontXS)
+                                        .font(Theme.current.fontXS)
                                         .foregroundColor(.secondary)
 
                                     // Path
                                     Text(path)
-                                        .font(SettingsManager.shared.fontXS)
+                                        .font(Theme.current.fontXS)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
@@ -166,7 +166,7 @@ struct OutputSettingsView: View {
                                     // Delete button
                                     Button(action: { removeAlias(alias) }) {
                                         Image(systemName: "xmark.circle.fill")
-                                            .font(SettingsManager.shared.fontSM)
+                                            .font(Theme.current.fontSM)
                                             .foregroundColor(.secondary.opacity(0.5))
                                     }
                                     .buttonStyle(.plain)
@@ -182,7 +182,7 @@ struct OutputSettingsView: View {
                     // Add new alias
                     VStack(alignment: .leading, spacing: 8) {
                         Text("ADD NEW ALIAS")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 8) {
@@ -202,7 +202,7 @@ struct OutputSettingsView: View {
 
                             Button(action: { showingAliasFolderPicker = true }) {
                                 Image(systemName: "folder")
-                                    .font(SettingsManager.shared.fontSM)
+                                    .font(Theme.current.fontSM)
                             }
                             .buttonStyle(.bordered)
 
@@ -218,10 +218,10 @@ struct OutputSettingsView: View {
                     // Usage hint
                     HStack(spacing: 6) {
                         Image(systemName: "lightbulb")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.yellow)
                         Text("Use in Save File step directory: @Obsidian/Voice Notes")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary)
                     }
                     .padding(8)

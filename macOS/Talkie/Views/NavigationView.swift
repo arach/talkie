@@ -29,9 +29,9 @@ enum NavigationSection: Hashable {
 
 struct TalkieNavigationView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    // Use let for singletons - @ObservedObject causes full rerender on every settings change
+    // Use let for singletons - we subscribe to remote data, we don't own it
     private let settings = SettingsManager.shared
-    @ObservedObject private var liveDataStore = DictationStore.shared
+    private let liveDataStore = DictationStore.shared
 
     @FetchRequest(
         sortDescriptors: [
@@ -46,7 +46,7 @@ struct TalkieNavigationView: View {
     @State private var selectedMemo: VoiceMemo?
     @State private var searchText = ""
     @State private var isSectionLoading = false
-    // Use let for singletons to avoid unnecessary view updates
+    // Use let for @Observable singletons (not @State which breaks observation)
     private let eventManager = SystemEventManager.shared
     private let pendingActionsManager = PendingActionsManager.shared
 
@@ -128,17 +128,6 @@ struct TalkieNavigationView: View {
                                 )
                                 .transition(.opacity)
                         }
-
-                        // Logs button - bottom right corner
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Spacer()
-                                logsButton
-                                    .padding(.trailing, 16)
-                                    .padding(.bottom, shouldShowStatusBar ? 40 : 16)
-                            }
-                        }
                     }
 
                     // StatusBar only on content area (not under sidebar) - hide on short windows
@@ -181,7 +170,7 @@ struct TalkieNavigationView: View {
             // Navigate to Live Settings subsection
             selectedSection = .liveSettings
         }
-        .onReceive(eventManager.$events) { _ in
+        .onChange(of: eventManager.events.count) { _, _ in
             updateEventCounts()
         }
         .onAppear {
@@ -219,40 +208,6 @@ struct TalkieNavigationView: View {
         let recent = eventManager.events.prefix(100)
         cachedErrorCount = recent.filter { $0.type == .error }.count
         cachedWorkflowCount = recent.filter { $0.type == .workflow }.count
-    }
-
-    // MARK: - Logs Button
-
-    private var logsButton: some View {
-        Button(action: {
-            selectedSection = .systemConsole
-        }) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(Theme.current.foreground)
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(Theme.current.surface1)
-                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    )
-
-                // Error count badge
-                if consoleErrorCount > 0 {
-                    Text("\(consoleErrorCount)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange)
-                        .clipShape(Capsule())
-                        .offset(x: 8, y: -8)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .help("View logs (\(consoleErrorCount) errors)")
     }
 
     // Old statusBarView removed - now using unified StatusBar component
@@ -546,8 +501,8 @@ struct TalkieNavigationView: View {
                 ActivityLogFullView()
             }
         case .allMemos:
-            // AllMemosView2 already wraps itself in TalkieSection
-            AllMemosView2()
+            // AllMemos already wraps itself in TalkieSection
+            AllMemos()
         case .liveDashboard:
             // Live home view with insights, activity, and stats
             TalkieSection("LiveDashboard") {

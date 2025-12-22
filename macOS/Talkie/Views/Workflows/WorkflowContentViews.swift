@@ -15,7 +15,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 struct WorkflowsContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @StateObject private var workflowManager = WorkflowManager.shared
+    private let workflowManager = WorkflowManager.shared
     private let settings = SettingsManager.shared
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?

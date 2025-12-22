@@ -9,9 +9,9 @@ import SwiftUI
 import TalkieKit
 
 struct HelperAppsSettingsView: View {
-    @ObservedObject private var appLauncher = AppLauncher.shared
-    @ObservedObject private var engineMonitor = TalkieServiceMonitor.shared
-    @ObservedObject private var liveMonitor = TalkieLiveStateMonitor.shared
+    private let appLauncher = AppLauncher.shared
+    private let engineMonitor = TalkieServiceMonitor.shared
+    private let liveMonitor = TalkieLiveStateMonitor.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -63,9 +63,9 @@ struct HelperAppsSettingsView: View {
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10))
+                            .font(Theme.current.fontXS)
                         Text("REFRESH STATUS")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(Theme.current.fontXSMedium)
                     }
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 10)
@@ -82,9 +82,9 @@ struct HelperAppsSettingsView: View {
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "gear")
-                            .font(.system(size: 10))
+                            .font(Theme.current.fontXS)
                         Text("OPEN LOGIN ITEMS")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(Theme.current.fontXSMedium)
                     }
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 10)
@@ -98,11 +98,11 @@ struct HelperAppsSettingsView: View {
             // Info
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 11))
+                    .font(Theme.current.fontXS)
                     .foregroundColor(.secondary)
 
                 Text("Helper apps run in the background to provide voice capture and AI processing. They automatically start when you log in.")
-                    .font(.system(size: 10))
+                    .font(Theme.current.fontXS)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -157,11 +157,11 @@ private struct HelperAppRow: View {
             // Name and description
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(Theme.current.fontSMMedium)
                     .foregroundColor(.primary)
 
                 Text(description)
-                    .font(.system(size: 10))
+                    .font(Theme.current.fontXS)
                     .foregroundColor(.secondary)
 
                 // Technical info (PID, Environment)
@@ -193,9 +193,9 @@ private struct HelperAppRow: View {
             // Status badge
             HStack(spacing: 4) {
                 Image(systemName: status.icon)
-                    .font(.system(size: 10))
+                    .font(Theme.current.fontXS)
                 Text(status.rawValue)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(Theme.current.fontXSMedium)
             }
             .foregroundColor(statusColor)
             .padding(.horizontal, 8)
@@ -228,7 +228,7 @@ private struct HelperAppRow: View {
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 14))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(.secondary)
                     .frame(width: 28, height: 28)
                     .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)

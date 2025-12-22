@@ -203,17 +203,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             let shiftHeld = modifiers.contains(.shift)
             let commandHeld = modifiers.contains(.command)
+            let optionHeld = modifiers.contains(.option)
 
             switch state {
             case .idle:
-                // Idle state: Check if there are queued items to show
-                let queuedCount = LiveDatabase.countQueued()
-                NSLog("[AppDelegate] Idle tap: queuedCount=%d", queuedCount)
+                // Option+tap: Show failed queue picker if there are queued items
+                if optionHeld {
+                    let queuedCount = LiveDatabase.countQueued()
+                    NSLog("[AppDelegate] Option+tap: queuedCount=%d", queuedCount)
 
-                if queuedCount > 0 {
-                    // Show failed queue picker
-                    NSLog("[AppDelegate] Showing failed queue picker")
-                    FailedQueueController.shared.show()
+                    if queuedCount > 0 {
+                        NSLog("[AppDelegate] Showing failed queue picker")
+                        FailedQueueController.shared.show()
+                    } else {
+                        NSLog("[AppDelegate] No queued items to show")
+                        NSSound.beep()
+                    }
                 } else {
                     // Normal tap: start recording (with optional interstitial mode)
                     NSLog("[AppDelegate] Starting recording (interstitial=%d)", shiftHeld)
@@ -252,11 +257,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.showQueuePicker()
         }
 
-        // Listen for hotkey changes
+        // Listen for hotkey changes (from settings UI in this process)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(hotkeyDidChange),
             name: .hotkeyDidChange,
+            object: nil
+        )
+
+        // Listen for UserDefaults changes (from Talkie main app updating settings)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDefaultsDidChange),
+            name: UserDefaults.didChangeNotification,
             object: nil
         )
 
@@ -304,6 +317,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func hotkeyDidChange() {
+        print("[AppDelegate] 📨 Received .hotkeyDidChange notification")
+        print("[AppDelegate] Current hotkey: \(LiveSettings.shared.hotkey.displayString) (keyCode=\(LiveSettings.shared.hotkey.keyCode), modifiers=\(LiveSettings.shared.hotkey.modifiers))")
+
         // Unregister old hotkeys and register new ones
         hotKeyManager.unregisterAll()
         pttHotKeyManager.unregisterAll()
@@ -311,6 +327,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Update menu item key equivalent
         updateMenuKeyEquivalent()
+    }
+
+    @objc private func userDefaultsDidChange() {
+        // UserDefaults changed (possibly from Talkie main app)
+        // Re-register hotkeys in case they were updated from the settings UI in Talkie
+        Task { @MainActor in
+            print("[AppDelegate] 🔄 UserDefaults changed - re-registering hotkeys")
+            hotkeyDidChange()
+        }
     }
 
     private func updateMenuKeyEquivalent() {

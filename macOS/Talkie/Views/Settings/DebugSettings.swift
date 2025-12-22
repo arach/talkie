@@ -20,7 +20,7 @@ struct DebugInfoView: View {
     )
     private var allVoiceMemos: FetchedResults<VoiceMemo>
 
-    @ObservedObject private var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var iCloudStatus: String = "Checking..."
 
     private let syncIntervalOptions = [1, 5, 10, 15, 30, 60]
@@ -46,7 +46,9 @@ struct DebugInfoView: View {
     }
 
     var body: some View {
-        SettingsPageContainer {
+        @Bindable var settings = settingsManager
+
+        return SettingsPageContainer {
             SettingsPageHeader(
                 icon: "info.circle",
                 title: "DEBUG INFO",
@@ -101,7 +103,7 @@ struct DebugInfoView: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
 
-                    Picker("", selection: $settingsManager.syncIntervalMinutes) {
+                    Picker("", selection: $settings.syncIntervalMinutes) {
                         ForEach(syncIntervalOptions, id: \.self) { minutes in
                             Text(minutes == 1 ? "1 minute" : "\(minutes) minutes")
                                 .tag(minutes)

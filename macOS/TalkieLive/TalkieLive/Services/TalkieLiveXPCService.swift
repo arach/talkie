@@ -30,6 +30,9 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
     // Reference to LiveController for toggle recording
     weak var liveController: LiveController?
 
+    // Audio level observation
+    private var audioLevelCancellable: AnyCancellable?
+
     private override init() {
         super.init()
     }
@@ -43,6 +46,13 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
         listener?.resume()
         NSLog("[TalkieLiveXPC] ✓ Service started: \(kTalkieLiveXPCServiceName)")
         NSLog("[TalkieLiveXPC] ℹ️ State notifications are optional - recording will work even if no observers connect")
+
+        // Observe audio level (throttled to 2Hz - "sign of life" indicator)
+        audioLevelCancellable = AudioLevelMonitor.shared.$level
+            .throttle(for: .milliseconds(500), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] level in
+                self?.broadcastAudioLevel(level)
+            }
     }
 
     func stopService() {
@@ -54,60 +64,63 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
 
     // MARK: - State Updates (Called by LiveController)
 
-    /// Update state and notify observers (async, non-blocking, fail-safe)
-    /// This method is designed to NEVER impact the caller - all XPC operations
-    /// are detached and any failures are logged but don't propagate
+    /// Update state and notify observers immediately (synchronous, fail-safe)
+    /// Called from MainActor so we can broadcast directly without async hops
     func updateState(_ state: String, elapsedTime: TimeInterval) {
         self.currentState = state
         self.currentElapsedTime = elapsedTime
 
-        // Broadcast to all observers in detached task (non-blocking, fail-safe)
-        Task.detached { [weak self] in
-            await self?.broadcastStateChange(state: state, elapsedTime: elapsedTime)
-        }
+        // Broadcast immediately to all observers (no async delay)
+        broadcastStateChange(state: state, elapsedTime: elapsedTime)
     }
 
-    /// Notify observers that a new utterance was added (async, non-blocking, fail-safe)
+    /// Notify observers that a new utterance was added
     func notifyUtteranceAdded() {
-        // Broadcast to all observers in detached task (non-blocking, fail-safe)
-        Task.detached { [weak self] in
-            await self?.broadcastUtteranceAdded()
+        broadcastUtteranceAdded()
+    }
+
+    private func broadcastStateChange(state: String, elapsedTime: TimeInterval) {
+        // Notify all connected observers immediately
+        for connection in observers {
+            guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                NSLog("[TalkieLiveXPC] ⚠️ Error sending state to observer: \(error)")
+            }) as? TalkieLiveStateObserverProtocol else { continue }
+
+            // Fire-and-forget notification
+            observer.stateDidChange(state: state, elapsedTime: elapsedTime)
+        }
+
+        // Only log when state actually changes (not on every elapsed time update)
+        if state != lastLoggedState {
+            NSLog("[TalkieLiveXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
+            lastLoggedState = state
         }
     }
 
-    private func broadcastStateChange(state: String, elapsedTime: TimeInterval) async {
-        await MainActor.run {
-            // Notify all connected observers
-            for connection in observers {
-                guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                    NSLog("[TalkieLiveXPC] ⚠️ Error sending state to observer: \(error)")
-                }) as? TalkieLiveStateObserverProtocol else { continue }
+    private func broadcastUtteranceAdded() {
+        // Notify all connected observers
+        for connection in observers {
+            guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                NSLog("[TalkieLiveXPC] ⚠️ Error sending utterance notification to observer: \(error)")
+            }) as? TalkieLiveStateObserverProtocol else { continue }
 
-                // Fire-and-forget notification (won't block even if observer is slow)
-                observer.stateDidChange(state: state, elapsedTime: elapsedTime)
-            }
-
-            // Only log when state actually changes (not on every elapsed time update)
-            if state != lastLoggedState {
-                NSLog("[TalkieLiveXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
-                lastLoggedState = state
-            }
+            observer.utteranceWasAdded()
         }
+
+        NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new utterance")
     }
 
-    private func broadcastUtteranceAdded() async {
-        await MainActor.run {
-            // Notify all connected observers
-            for connection in observers {
-                guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                    NSLog("[TalkieLiveXPC] ⚠️ Error sending utterance notification to observer: \(error)")
-                }) as? TalkieLiveStateObserverProtocol else { continue }
+    private func broadcastAudioLevel(_ level: Float) {
+        // Only broadcast if we have observers (skip if no Talkie connected)
+        guard !observers.isEmpty else { return }
 
-                // Fire-and-forget notification (won't block even if observer is slow)
-                observer.utteranceWasAdded()
-            }
+        // Fire-and-forget to all observers
+        for connection in observers {
+            guard let observer = connection.remoteObjectProxyWithErrorHandler({ _ in
+                // Silently ignore - audio level is non-critical
+            }) as? TalkieLiveStateObserverProtocol else { continue }
 
-            NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new utterance")
+            observer.audioLevelDidChange(level: level)
         }
     }
 

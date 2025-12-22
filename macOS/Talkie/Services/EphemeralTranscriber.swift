@@ -9,21 +9,23 @@
 import AVFoundation
 import AppKit
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "EphemeralTranscriber")
 
 /// Ephemeral transcription service for voice guidance
 /// Captures audio, transcribes via TalkieEngine, returns text without any persistence
 @MainActor
-public final class EphemeralTranscriber: ObservableObject {
+@Observable
+public final class EphemeralTranscriber {
     public static let shared = EphemeralTranscriber()
 
     // MARK: - Published State
 
-    @Published public private(set) var isRecording: Bool = false
-    @Published public private(set) var isTranscribing: Bool = false
-    @Published public private(set) var audioLevel: Float = 0
-    @Published public private(set) var error: String?
+    public private(set) var isRecording: Bool = false
+    public private(set) var isTranscribing: Bool = false
+    public private(set) var audioLevel: Float = 0
+    public private(set) var error: String?
 
     // MARK: - Private State
 

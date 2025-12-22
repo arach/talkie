@@ -9,16 +9,32 @@
 import Foundation
 import Combine
 import TalkieKit
+import Observation
 
 @MainActor
-final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateObserverProtocol {
+@Observable
+final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
     static let shared = TalkieLiveStateMonitor()
 
-    @Published var state: LiveState = .idle
-    @Published var elapsedTime: TimeInterval = 0
-    @Published var isRecording: Bool = false
-    @Published var processId: Int32? = nil
-    @Published var isRunning: Bool = false
+    var state: LiveState = .idle
+    var elapsedTime: TimeInterval = 0
+    var isRecording: Bool = false
+    var processId: Int32? = nil
+    var audioLevel: Float = 0
+
+    // MARK: - Connection State (separated to avoid conflicts)
+
+    /// True if XPC connection to TalkieLive is active
+    private(set) var isXPCConnected: Bool = false
+
+    /// True if TalkieLive process is running (detected via bundle ID)
+    private(set) var isProcessDetected: Bool = false
+
+    /// True if TalkieLive is available (either XPC connected OR process detected)
+    /// This is the primary property views should observe
+    var isRunning: Bool {
+        isXPCConnected || isProcessDetected
+    }
 
     // XPC service manager with environment-aware connection
     private let xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>
@@ -47,10 +63,16 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
         // Now we can set self as the exported object for receiving callbacks
         xpcManager.setExportedObject(self)
 
-        // Observe XPC connection state and update isRunning
+        // Observe XPC connection state separately from process detection
         xpcManager.$connectionInfo
             .map(\.isConnected)
-            .assign(to: &$isRunning)
+            .sink { [weak self] isConnected in
+                self?.isXPCConnected = isConnected
+                if isConnected {
+                    NSLog("[Live] XPC connected")
+                }
+            }
+            .store(in: &cancellables)
 
         // Don't auto-connect - connect lazily when needed
     }
@@ -58,6 +80,9 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     /// Call this when you actually need to monitor TalkieLive state
     func startMonitoring() {
         guard !xpcManager.isConnected else { return }
+
+        // First try to get PID from running app (fallback if XPC not available)
+        refreshProcessId()
 
         Task {
             await xpcManager.connect()
@@ -138,16 +163,23 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     // MARK: - TalkieLiveStateObserverProtocol
 
     nonisolated func stateDidChange(state stateString: String, elapsedTime elapsed: TimeInterval) {
-        Task { @MainActor [weak self] in
+        // Use DispatchQueue for lower latency than Task scheduling
+        DispatchQueue.main.async { [weak self] in
             self?.updateState(stateString, elapsed)
         }
     }
 
     nonisolated func utteranceWasAdded() {
-        Task { @MainActor in
+        DispatchQueue.main.async {
             // Notify DictationStore to refresh
             DictationStore.shared.refresh()
             NSLog("[Live] 🔄 Utterance notification received, refreshed store")
+        }
+    }
+
+    nonisolated func audioLevelDidChange(level: Float) {
+        DispatchQueue.main.async { [weak self] in
+            self?.audioLevel = level
         }
     }
 
@@ -170,6 +202,26 @@ final class TalkieLiveStateMonitor: NSObject, ObservableObject, TalkieLiveStateO
     }
 
     // MARK: - Helper Methods
+
+    /// Refresh process ID by checking for running TalkieLive app
+    /// This provides a fallback when XPC isn't available yet
+    func refreshProcessId() {
+        // Try to find running TalkieLive app for current environment
+        let bundleId = TalkieEnvironment.current.liveBundleId
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+
+        if let app = apps.first {
+            processId = app.processIdentifier
+            isProcessDetected = true
+            NSLog("[Live] Found running process - PID: \(app.processIdentifier) (bundle: \(bundleId))")
+        } else {
+            // Only clear if we don't have XPC connection (which provides its own PID)
+            if !isXPCConnected {
+                isProcessDetected = false
+            }
+            NSLog("[Live] No process found for bundle: \(bundleId)")
+        }
+    }
 
     /// Check if TalkieLive is actively recording
     var isActivelyRecording: Bool {

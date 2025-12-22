@@ -9,6 +9,7 @@ import Foundation
 import FluidAudio
 import AVFoundation
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "ParakeetService")
 
@@ -42,21 +43,22 @@ enum ParakeetModel: String, CaseIterable, Codable {
 
 // MARK: - Parakeet Service
 
+@Observable
 @MainActor
-class ParakeetService: ObservableObject {
+class ParakeetService {
     static let shared = ParakeetService()
 
-    @Published var isTranscribing = false
-    @Published var loadedModel: ParakeetModel?
-    @Published var downloadProgress: Float = 0
-    @Published var isDownloading = false
-    @Published var lastError: String?
+    var isTranscribing = false
+    var loadedModel: ParakeetModel?
+    var downloadProgress: Float = 0
+    var isDownloading = false
+    var lastError: String?
 
     /// Cached set of downloaded models - updated on download/delete
-    @Published private(set) var downloadedModels: Set<ParakeetModel> = []
+    private(set) var downloadedModels: Set<ParakeetModel> = []
 
-    private var asrManager: AsrManager?
-    private var currentModelVersion: ParakeetModel?
+    @ObservationIgnored private var asrManager: AsrManager?
+    @ObservationIgnored private var currentModelVersion: ParakeetModel?
 
     private init() {
         refreshDownloadedModels()
@@ -156,7 +158,7 @@ class ParakeetService: ObservableObject {
                 throw ParakeetError.alreadyTranscribing
             }
             logger.debug("Waiting for previous transcription to complete...")
-            try await Task.sleep(nanoseconds: 500_000_000)
+            try await Task.sleep(for: .milliseconds(500))
         }
 
         isTranscribing = true

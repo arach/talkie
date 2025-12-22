@@ -10,13 +10,17 @@ import SwiftUI
 import TalkieKit
 
 struct DevControlPanelView: View {
-    @ObservedObject private var discovery = ProcessDiscovery.shared
-    @ObservedObject private var engineClient = EngineClient.shared
-    @ObservedObject private var liveMonitor = TalkieLiveStateMonitor.shared
+    private let discovery = ProcessDiscovery.shared
+    @Environment(EngineClient.self) private var engineClient
+    private let liveMonitor = TalkieLiveStateMonitor.shared
 
     @State private var autoRefresh = true
     @State private var refreshTimer: Timer?
     @State private var logs: [LogEntry] = []
+
+    // External Data Auditor
+    @State private var auditor = ExternalDataAuditor()
+    @State private var showingAuditResults = false
 
     struct LogEntry: Identifiable {
         let id = UUID()
@@ -73,6 +77,11 @@ struct DevControlPanelView: View {
 
                 // Quick Actions
                 quickActionsSection
+
+                Divider()
+
+                // External Data Audit
+                externalDataAuditSection
 
                 // Logs Section
                 if !logs.isEmpty {
@@ -447,14 +456,154 @@ struct DevControlPanelView: View {
     private func startAutoRefresh() {
         guard autoRefresh else { return }
         refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-            discovery.scan()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak discovery] _ in
+            Task { @MainActor in
+                discovery?.scan()
+            }
         }
     }
 
     private func stopAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+    }
+
+    // MARK: - External Data Audit Section
+
+    private var externalDataAuditSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("EXTERNAL DATA AUDIT")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(.secondary)
+
+            VStack(spacing: 6) {
+                // Run Audit
+                actionButton(
+                    icon: "magnifyingglass",
+                    title: "Run External Data Audit",
+                    description: "Scan for orphaned audio files and missing references",
+                    color: .blue
+                ) {
+                    Task {
+                        do {
+                            addLog("Starting external data audit...", level: .info)
+                            let results = try await auditor.performAudit()
+                            addLog("Audit complete: \(results.coreDataOrphanedFiles.count) CoreData orphans, \(results.grdbOrphanedFiles.count) GRDB orphans", level: .success)
+                            showingAuditResults = true
+                        } catch {
+                            addLog("Audit failed: \(error.localizedDescription)", level: .error)
+                        }
+                    }
+                }
+
+                // Show Results
+                if let results = auditor.auditResults {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Last Audit:")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            Text(results.timestamp.formatted(date: .omitted, time: .shortened))
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            if results.hasIssues {
+                                Text("⚠️ Issues Found")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text("✅ All Clear")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.green)
+                            }
+                        }
+
+                        // Quick stats
+                        HStack(spacing: 12) {
+                            statView(
+                                label: "CoreData Orphans",
+                                value: "\(results.coreDataOrphanedFiles.count)",
+                                color: results.coreDataOrphanedFiles.isEmpty ? .green : .orange
+                            )
+
+                            statView(
+                                label: "GRDB Orphans",
+                                value: "\(results.grdbOrphanedFiles.count)",
+                                color: results.grdbOrphanedFiles.isEmpty ? .green : .orange
+                            )
+
+                            statView(
+                                label: "Total Storage",
+                                value: ByteCountFormatter.string(fromByteCount: results.totalStorageBytes, countStyle: .file),
+                                color: .blue
+                            )
+                        }
+
+                        // Cleanup button
+                        if results.hasIssues {
+                            Button(action: {
+                                Task {
+                                    do {
+                                        addLog("Cleaning up orphaned files...", level: .info)
+                                        let (cdDeleted, grdbDeleted, bytesFreed) = try await auditor.cleanupOrphanedFiles()
+                                        addLog("Cleanup complete: Deleted \(cdDeleted + grdbDeleted) files, freed \(ByteCountFormatter.string(fromByteCount: bytesFreed, countStyle: .file))", level: .success)
+                                        // Re-run audit
+                                        _ = try await auditor.performAudit()
+                                    } catch {
+                                        addLog("Cleanup failed: \(error.localizedDescription)", level: .error)
+                                    }
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "trash.fill")
+                                        .font(.system(size: 10))
+                                    Text("Clean Up Orphaned Files")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .foregroundColor(.orange)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.orange.opacity(0.1))
+                                .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        // View details button
+                        Button(action: {
+                            showingAuditResults = true
+                        }) {
+                            Text("View Full Report")
+                                .font(.system(size: 9))
+                                .foregroundColor(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.05))
+                    .cornerRadius(6)
+                }
+            }
+        }
+        .sheet(isPresented: $showingAuditResults) {
+            if let results = auditor.auditResults {
+                AuditResultsView(results: results, auditor: auditor)
+            }
+        }
+    }
+
+    private func statView(label: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 8))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+        }
     }
 
     // MARK: - Logs Section
@@ -532,24 +681,13 @@ struct DevControlPanelView: View {
     }
 
     private func restartDaemon(_ process: DiscoveredProcess) {
-        // Stop first
-        let stopSuccess = discovery.stopDaemon(for: process)
+        // Use launchctl kickstart -k for atomic restart
+        let success = discovery.restartDaemon(for: process)
 
-        if stopSuccess {
-            addLog("Stopped \(process.name) daemon", level: .info)
-
-            // Wait a moment before starting
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                let startSuccess = discovery.startDaemon(for: process)
-
-                if startSuccess {
-                    addLog("Restarted \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
-                } else {
-                    addLog("Failed to restart \(process.name) daemon", level: .error)
-                }
-            }
+        if success {
+            addLog("Restarted \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
         } else {
-            addLog("Failed to stop \(process.name) daemon for restart", level: .error)
+            addLog("Failed to restart \(process.name) daemon", level: .error)
         }
     }
 

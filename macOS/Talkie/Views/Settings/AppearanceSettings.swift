@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - Appearance Settings View
 struct AppearanceSettingsView: View {
-    @ObservedObject private var settingsManager = SettingsManager.shared
+    @Environment(SettingsManager.self) private var settingsManager: SettingsManager
 
     /// Check if this theme is the current active theme
     private func isThemeActive(_ preset: ThemePreset) -> Bool {
@@ -20,6 +20,8 @@ struct AppearanceSettingsView: View {
     }
 
     var body: some View {
+        @Bindable var settings = settingsManager
+
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "paintbrush",
@@ -34,13 +36,13 @@ struct AppearanceSettingsView: View {
                         .foregroundColor(.secondary)
 
                     Text("Apply a curated theme preset with one click.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.8))
 
                     // Preview Label
                     HStack(spacing: 6) {
                         Image(systemName: "eye")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.7))
                         Text("PREVIEW")
                             .font(Theme.current.fontXSBold)
@@ -54,21 +56,21 @@ struct AppearanceSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("TALKIE")
                                 .font(Theme.current.fontXSBold)
-                                .foregroundColor(SettingsManager.shared.tacticalForeground)
+                                .foregroundColor(Theme.current.foreground)
                                 .padding(.bottom, 4)
 
                             ForEach(["All Memos", "Recent", "Processed"], id: \.self) { item in
                                 HStack(spacing: 6) {
                                     Image(systemName: item == "All Memos" ? "square.stack" : (item == "Recent" ? "clock" : "checkmark.circle"))
-                                        .font(SettingsManager.shared.fontXS)
+                                        .font(Theme.current.fontXS)
                                         .foregroundColor(item == "All Memos" ? .accentColor : Theme.current.foregroundMuted)
                                     Text(item)
-                                        .font(SettingsManager.shared.fontSM)
-                                        .foregroundColor(item == "All Memos" ? SettingsManager.shared.tacticalForeground : Theme.current.foregroundSecondary)
+                                        .font(Theme.current.fontSM)
+                                        .foregroundColor(item == "All Memos" ? Theme.current.foreground : Theme.current.foregroundSecondary)
                                     Spacer()
                                     if item == "All Memos" {
                                         Text("103")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(Theme.current.foregroundMuted)
                                     }
                                 }
@@ -80,7 +82,7 @@ struct AppearanceSettingsView: View {
                         }
                         .padding(8)
                         .frame(width: 130)
-                        .background(SettingsManager.shared.tacticalBackground)
+                        .background(Theme.current.backgroundSecondary)
 
                         Rectangle()
                             .fill(Theme.current.divider)
@@ -115,16 +117,16 @@ struct AppearanceSettingsView: View {
                                         .frame(height: 0.5)
                                     HStack(spacing: 0) {
                                         Text(["Nov 30, 11:22", "Nov 29, 15:42", "Nov 29, 12:51", "Nov 28, 21:49", "Nov 28, 19:33"][i])
-                                            .font(SettingsManager.shared.fontSM)
+                                            .font(Theme.current.fontSM)
                                             .foregroundColor(Theme.current.foregroundMuted)
                                             .frame(width: 90, alignment: .leading)
                                         Text(["Recording 2025-11-30", "Quick memo 11/29", "Recording 11/29", "Quick memo 11/28", "Meeting notes"][i])
-                                            .font(SettingsManager.shared.fontSM)
-                                            .foregroundColor(SettingsManager.shared.tacticalForeground)
+                                            .font(Theme.current.fontSM)
+                                            .foregroundColor(Theme.current.foreground)
                                             .lineLimit(1)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(["0:09", "0:34", "0:08", "0:31", "1:04"][i])
-                                            .font(SettingsManager.shared.fontSM)
+                                            .font(Theme.current.fontSM)
                                             .foregroundColor(Theme.current.foregroundMuted)
                                             .frame(width: 40, alignment: .trailing)
                                     }
@@ -134,7 +136,7 @@ struct AppearanceSettingsView: View {
                                 }
                             }
                         }
-                        .background(SettingsManager.shared.tacticalBackground)
+                        .background(Theme.current.backgroundSecondary)
                     }
                     .cornerRadius(6)
                     .overlay(
@@ -155,7 +157,7 @@ struct AppearanceSettingsView: View {
                                                 .stroke(preset.previewColors.accent, lineWidth: 1)
                                         )
                                     Text(preset.displayName)
-                                        .font(SettingsManager.shared.fontXS)
+                                        .font(Theme.current.fontXS)
                                         .foregroundColor(isThemeActive(preset) ? .primary : .secondary)
                                 }
                                 .padding(.horizontal, 8)
@@ -209,7 +211,7 @@ struct AppearanceSettingsView: View {
                                     .foregroundColor(.secondary)
 
                                 Text("Used for buttons, selections, and highlights.")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary.opacity(0.8))
 
                                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
@@ -256,7 +258,7 @@ struct AppearanceSettingsView: View {
                                     .foregroundColor(.secondary)
 
                                 Text("Used for buttons, selections, and highlights.")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(.secondary.opacity(0.8))
 
                                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
@@ -300,7 +302,7 @@ struct AppearanceSettingsView: View {
                                         // UI Font
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text("Font")
-                                                .font(SettingsManager.shared.fontXS)
+                                                .font(Theme.current.fontXS)
                                                 .foregroundColor(.secondary.opacity(0.8))
                                             HStack(spacing: 4) {
                                                 ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
@@ -318,7 +320,7 @@ struct AppearanceSettingsView: View {
                                         // UI Size
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text("Size")
-                                                .font(SettingsManager.shared.fontXS)
+                                                .font(Theme.current.fontXS)
                                                 .foregroundColor(.secondary.opacity(0.8))
                                             HStack(spacing: 4) {
                                                 ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
@@ -333,13 +335,13 @@ struct AppearanceSettingsView: View {
                                     }
 
                                     // ALL CAPS toggle
-                                    Toggle(isOn: $settingsManager.uiAllCaps) {
+                                    Toggle(isOn: $settings.uiAllCaps) {
                                         HStack(spacing: 4) {
                                             Text("ALL CAPS")
-                                                .font(SettingsManager.shared.fontXS)
+                                                .font(Theme.current.fontXS)
                                                 .foregroundColor(.secondary.opacity(0.8))
                                             Text("labels & headers")
-                                                .font(SettingsManager.shared.fontXS)
+                                                .font(Theme.current.fontXS)
                                                 .foregroundColor(.secondary.opacity(0.5))
                                         }
                                     }
@@ -363,7 +365,7 @@ struct AppearanceSettingsView: View {
                                         // Content Font
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text("Font")
-                                                .font(SettingsManager.shared.fontXS)
+                                                .font(Theme.current.fontXS)
                                                 .foregroundColor(.secondary.opacity(0.8))
                                             HStack(spacing: 4) {
                                                 ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
@@ -381,7 +383,7 @@ struct AppearanceSettingsView: View {
                                         // Content Size
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text("Size")
-                                                .font(SettingsManager.shared.fontXS)
+                                                .font(Theme.current.fontXS)
                                                 .foregroundColor(.secondary.opacity(0.8))
                                             HStack(spacing: 4) {
                                                 ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
@@ -413,7 +415,7 @@ struct AppearanceSettingsView: View {
                                     // UI Font
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Font")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(.secondary.opacity(0.8))
                                         HStack(spacing: 4) {
                                             ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
@@ -431,7 +433,7 @@ struct AppearanceSettingsView: View {
                                     // UI Size
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Size")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(.secondary.opacity(0.8))
                                         HStack(spacing: 4) {
                                             ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
@@ -446,13 +448,13 @@ struct AppearanceSettingsView: View {
                                 }
 
                                 // ALL CAPS toggle
-                                Toggle(isOn: $settingsManager.uiAllCaps) {
+                                Toggle(isOn: $settings.uiAllCaps) {
                                     HStack(spacing: 4) {
                                         Text("ALL CAPS")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(.secondary.opacity(0.8))
                                         Text("labels & headers")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(.secondary.opacity(0.5))
                                     }
                                 }
@@ -475,7 +477,7 @@ struct AppearanceSettingsView: View {
                                     // Content Font
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Font")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(.secondary.opacity(0.8))
                                         HStack(spacing: 4) {
                                             ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
@@ -493,7 +495,7 @@ struct AppearanceSettingsView: View {
                                     // Content Size
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Size")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(.secondary.opacity(0.8))
                                         HStack(spacing: 4) {
                                             ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
@@ -515,7 +517,7 @@ struct AppearanceSettingsView: View {
                         // Preview (always full width)
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Preview")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(.secondary.opacity(0.8))
 
                             VStack(alignment: .leading, spacing: 12) {
@@ -562,10 +564,10 @@ struct AppearanceSettingsView: View {
                 // Note about accent color
                 HStack(spacing: 6) {
                     Image(systemName: "info.circle")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(settingsManager.resolvedAccentColor)
                     Text("Accent color applies to Talkie only. System accent color is set in System Settings.")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary)
                 }
                 .padding(8)
@@ -585,7 +587,7 @@ struct AppearanceModeButton: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: mode.icon)
-                    .font(SettingsManager.shared.fontHeadline)
+                    .font(Theme.current.fontHeadline)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 48, height: 48)
                     .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
@@ -669,7 +671,7 @@ struct FontStyleButton: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: style.icon)
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(isSelected ? .accentColor : .secondary)
                     .frame(width: 28, height: 28)
                     .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
@@ -735,7 +737,7 @@ struct ThemePresetCard: View {
                         .overlay(
                             HStack(spacing: 6) {
                                 Image(systemName: preset.icon)
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(preset.previewColors.accent)
                                 Text("Aa")
                                     .font(.system(size: 11, weight: .medium, design: preset.uiFontStyle == .monospace ? .monospaced : (preset.uiFontStyle == .rounded ? .rounded : .default)))
@@ -745,7 +747,7 @@ struct ThemePresetCard: View {
 
                                 if isActive {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .font(SettingsManager.shared.fontSM)
+                                        .font(Theme.current.fontSM)
                                         .foregroundColor(preset.previewColors.accent)
                                 }
                             }
@@ -774,7 +776,7 @@ struct ThemePresetCard: View {
                     }
 
                     Text(preset.description)
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)

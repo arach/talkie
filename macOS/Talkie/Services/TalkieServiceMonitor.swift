@@ -11,6 +11,7 @@ import Foundation
 import AppKit
 import os
 import TalkieKit
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TalkieServiceMonitor")
 
@@ -56,29 +57,31 @@ public struct TalkieServiceLogEntry: Identifiable, Equatable {
 }
 
 /// Monitors TalkieEngine (Talkie Service) process and streams its logs
-public final class TalkieServiceMonitor: ObservableObject {
+@MainActor
+@Observable
+public final class TalkieServiceMonitor {
     public static let shared = TalkieServiceMonitor()
 
     // MARK: - Published State (MainActor isolated for SwiftUI)
 
-    @MainActor @Published public private(set) var state: TalkieServiceState = .unknown
-    @MainActor @Published public private(set) var processId: pid_t?
-    @MainActor @Published public private(set) var cpuUsage: Double = 0
-    @MainActor @Published public private(set) var memoryUsage: UInt64 = 0  // in bytes
-    @MainActor @Published public private(set) var uptime: TimeInterval = 0
-    @MainActor @Published public private(set) var launchedAt: Date?
+    public private(set) var state: TalkieServiceState = .unknown
+    public private(set) var processId: pid_t?
+    public private(set) var cpuUsage: Double = 0
+    public private(set) var memoryUsage: UInt64 = 0  // in bytes
+    public private(set) var uptime: TimeInterval = 0
+    public private(set) var launchedAt: Date?
 
     /// Recent logs from TalkieEngine (keeps last 500)
-    @MainActor @Published public private(set) var logs: [TalkieServiceLogEntry] = []
+    public private(set) var logs: [TalkieServiceLogEntry] = []
 
     /// Error message if something goes wrong
-    @MainActor @Published public private(set) var lastError: String?
+    public private(set) var lastError: String?
 
     // MARK: - Private
 
-    private var monitorTimer: Timer?
-    private var logStreamTask: Process?
-    private let maxLogEntries = 500
+    @ObservationIgnored private var monitorTimer: Timer?
+    @ObservationIgnored private var logStreamTask: Process?
+    @ObservationIgnored private let maxLogEntries = 500
 
     private init() {
         logger.info("[TalkieService] Monitor initialized (lazy - call startMonitoring() when needed)")
@@ -91,8 +94,22 @@ public final class TalkieServiceMonitor: ObservableObject {
     }
 
     deinit {
-        monitorTimer?.invalidate()
-        logStreamTask?.terminate()
+        // Defensive cleanup - singleton shouldn't deinit but if it does, clean up
+        // Access to main actor properties is unsafe here, but cleanup is critical
+        #if compiler(>=6.0)
+        // Suppress Swift 6 warning about Task outliving deinit - this is intentional cleanup
+        nonisolated(unsafe) let timer = monitorTimer
+        nonisolated(unsafe) let task = logStreamTask
+        Task {
+            timer?.invalidate()
+            task?.terminate()
+        }
+        #else
+        Task { @MainActor in
+            monitorTimer?.invalidate()
+            logStreamTask?.terminate()
+        }
+        #endif
     }
 
     // MARK: - Monitoring

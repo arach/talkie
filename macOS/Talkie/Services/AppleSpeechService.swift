@@ -10,18 +10,20 @@
 import Foundation
 import Speech
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppleSpeechService")
 
 // MARK: - Apple Speech Service
 
 @MainActor
-class AppleSpeechService: ObservableObject {
+@Observable
+class AppleSpeechService {
     static let shared = AppleSpeechService()
 
-    @Published var isTranscribing = false
-    @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
-    @Published var lastError: String?
+    var isTranscribing = false
+    var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+    var lastError: String?
 
     private let recognizer: SFSpeechRecognizer?
 

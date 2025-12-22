@@ -175,6 +175,25 @@ extension MemoModel {
             .count
     }
 
+    /// Preview snippet of transcript (first ~80 chars, cleaned up)
+    var transcriptPreview: String? {
+        guard let transcript = transcription, !transcript.isEmpty else { return nil }
+        // Clean up whitespace and get first portion
+        let cleaned = transcript
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.count <= 80 {
+            return cleaned
+        }
+        // Truncate at word boundary
+        let truncated = String(cleaned.prefix(80))
+        if let lastSpace = truncated.lastIndex(of: " ") {
+            return String(truncated[..<lastSpace]) + "..."
+        }
+        return truncated + "..."
+    }
+
     /// Has audio file
     var hasAudio: Bool {
         audioFilePath != nil

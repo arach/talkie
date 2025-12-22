@@ -257,7 +257,7 @@ struct WaveformVisualization: View {
 
 struct WaveformCard: View {
     let utterance: Utterance
-    @ObservedObject private var playback = AudioPlaybackManager.shared
+    private let playback = AudioPlaybackManager.shared
 
     private var isThisPlaying: Bool {
         playback.currentAudioID == utterance.id.uuidString && playback.isPlaying

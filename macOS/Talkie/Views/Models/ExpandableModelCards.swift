@@ -619,4 +619,3 @@ struct STTVariantRow: View {
         }
     }
 }
-

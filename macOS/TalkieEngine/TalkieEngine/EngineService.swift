@@ -418,6 +418,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     // MARK: - Parakeet Transcription
 
     private func transcribeWithParakeet(audioPath: String, modelId: String, trace: TranscriptionTrace) async throws -> TranscriptionResult {
+        // TranscriptionTrace now auto-emits os_signpost for each step - visible in Instruments
         let asrVersion: AsrModelVersion = modelId == "v2" ? .v2 : .v3
 
         // Check if model needs loading
@@ -477,10 +478,10 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         samples.append(contentsOf: fadedSegment)
         trace.end("+\(fadedSegment.count) samples (fade tail)")
 
-        // Run inference
+        // Run inference - trace captures timing with mach_absolute_time
         trace.begin("inference")
         let result = try await manager.transcribe(samples)
-        trace.end()
+        trace.end()  // Duration captured in trace, emitted to signpost
 
         // Post-process: trim and dedupe trailing repeated words (from echo-tail padding)
         trace.begin("post_process")

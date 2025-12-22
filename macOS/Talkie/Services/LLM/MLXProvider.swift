@@ -10,6 +10,7 @@ import MLXLMCommon
 import MLX
 import MLXLLM
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLM")
 #if arch(arm64)
@@ -90,16 +91,18 @@ class MLXProvider: LLMProvider {
 // MARK: - MLX Model Manager
 
 @MainActor
-class MLXModelManager: ObservableObject {
+@Observable
+class MLXModelManager {
     static let shared = MLXModelManager()
 
-    @Published var loadedModelId: String?
-    @Published var isLoading: Bool = false
-    @Published var loadProgress: Double = 0
+    var loadedModelId: String?
+    var isLoading: Bool = false
+    var loadProgress: Double = 0
 
     /// Cached set of installed model IDs - updated on download/delete
-    @Published private(set) var installedModelIds: Set<String> = []
+    private(set) var installedModelIds: Set<String> = []
 
+    @ObservationIgnored
     private var loadedContainer: ModelContainer?
 
     private let modelsDirectory: URL = {
@@ -293,13 +296,14 @@ class MLXModelManager: ObservableObject {
 
 /// Stub MLXModelManager for Intel Macs where MLX is not available
 @MainActor
-class MLXModelManager: ObservableObject {
+@Observable
+class MLXModelManager {
     static let shared = MLXModelManager()
 
-    @Published var loadedModelId: String?
-    @Published var isLoading: Bool = false
-    @Published var loadProgress: Double = 0
-    @Published private(set) var installedModelIds: Set<String> = []
+    var loadedModelId: String?
+    var isLoading: Bool = false
+    var loadProgress: Double = 0
+    private(set) var installedModelIds: Set<String> = []
 
     private init() {}
 

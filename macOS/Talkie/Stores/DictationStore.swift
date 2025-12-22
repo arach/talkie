@@ -291,11 +291,12 @@ struct ContextCapture {
 }
 
 @MainActor
-final class DictationStore: ObservableObject {
+@Observable
+final class DictationStore {
     static let shared = DictationStore()
 
     /// Published utterances - now backed by SQLite database
-    @Published private(set) var utterances: [Utterance] = []
+    private(set) var utterances: [Utterance] = []
 
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48
@@ -390,7 +391,9 @@ final class DictationStore: ObservableObject {
                 logger.info("Deleted utterance by timestamp: \(utterance.text.prefix(30))...")
             }
         }
-        refresh()
+
+        // Immediately remove from local array (don't wait for incremental refresh)
+        utterances.removeAll { $0.id == utterance.id }
     }
 
     /// Clear all utterances
@@ -579,14 +582,23 @@ final class DictationStore: ObservableObject {
 
     // MARK: - Monitoring
 
+    /// Timer for fallback polling
+    private var pollingTimer: Timer?
+
     func startMonitoring() {
-        // Deprecated: We now use XPC push notifications from TalkieLive instead of polling
-        // The XPC service calls DictationStore.refresh() when new utterances are added
-        logger.info("[DictationStore] ℹ️ Using XPC push notifications (no polling)")
         refresh()  // Initial load
+
+        // Two-layer refresh: XPC push (primary) + polling (fallback safety net)
+        // XPC provides real-time updates, polling catches anything missed
+        pollingTimer?.invalidate()
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.refresh()
+        }
+        logger.info("[DictationStore] ℹ️ Started monitoring with XPC + 5s polling fallback")
     }
 
     func stopMonitoring() {
-        // No-op: polling timer removed, using XPC push notifications
+        pollingTimer?.invalidate()
+        pollingTimer = nil
     }
 }

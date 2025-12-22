@@ -75,7 +75,7 @@ struct TerminalSetupView: View {
         Task {
             for line in lines {
                 displayedLines.append(line)
-                try? await Task.sleep(nanoseconds: UInt64(line.delay * 1_000_000_000))
+                try? await Task.sleep(for: .seconds(line.delay))
             }
         }
     }

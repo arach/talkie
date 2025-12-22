@@ -9,6 +9,7 @@
 import Foundation
 import Darwin
 import TalkieKit
+import Observation
 
 /// Information about a discovered process
 public struct DiscoveredProcess: Identifiable, Equatable {
@@ -44,11 +45,12 @@ public struct DiscoveredProcess: Identifiable, Equatable {
 
 /// Service to discover all running Talkie processes
 @MainActor
-public class ProcessDiscovery: ObservableObject {
+@Observable
+public class ProcessDiscovery {
     public static let shared = ProcessDiscovery()
 
-    @Published public private(set) var engineProcesses: [DiscoveredProcess] = []
-    @Published public private(set) var liveProcesses: [DiscoveredProcess] = []
+    public private(set) var engineProcesses: [DiscoveredProcess] = []
+    public private(set) var liveProcesses: [DiscoveredProcess] = []
 
     private init() {}
 
@@ -256,7 +258,7 @@ public class ProcessDiscovery: ObservableObject {
         }
     }
 
-    /// Stop a daemon process using launchctl
+    /// Stop a daemon process using launchctl bootout (properly unloads and prevents restart)
     public func stopDaemon(for process: DiscoveredProcess) -> Bool {
         guard process.isDaemon, let env = process.environment else { return false }
 
@@ -271,14 +273,22 @@ public class ProcessDiscovery: ObservableObject {
             return false
         }
 
-        // Use launchctl to stop the service
+        // Use launchctl bootout to properly unload the service
+        // This prevents launchd from restarting it (unlike 'stop' which is temporary)
+        let uid = getuid()
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        task.arguments = ["stop", label]
+        task.arguments = ["bootout", "gui/\(uid)/\(label)"]
 
         do {
             try task.run()
             task.waitUntilExit()
+
+            // If bootout fails, fall back to kill
+            if task.terminationStatus != 0 {
+                NSLog("[ProcessDiscovery] bootout failed for \(label), falling back to kill")
+                _ = kill(pid: process.pid)
+            }
 
             // Wait a moment for the service to stop
             Thread.sleep(forTimeInterval: 0.5)
@@ -288,9 +298,47 @@ public class ProcessDiscovery: ObservableObject {
                 scan()
             }
 
-            return task.terminationStatus == 0
+            return true
         } catch {
             NSLog("[ProcessDiscovery] Failed to stop daemon \(label): \(error)")
+            // Fall back to kill
+            return kill(pid: process.pid)
+        }
+    }
+
+    /// Restart a daemon process using launchctl kickstart
+    public func restartDaemon(for process: DiscoveredProcess) -> Bool {
+        guard process.isDaemon, let env = process.environment else { return false }
+
+        let label: String
+        switch process.name {
+        case "TalkieEngine":
+            label = env.engineLaunchdLabel
+        case "TalkieLive":
+            label = env.liveLaunchdLabel
+        default:
+            return false
+        }
+
+        // Use launchctl kickstart -k to restart (kills existing and starts new)
+        let uid = getuid()
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        task.arguments = ["kickstart", "-k", "gui/\(uid)/\(label)"]
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            Thread.sleep(forTimeInterval: 0.5)
+
+            Task { @MainActor in
+                scan()
+            }
+
+            return task.terminationStatus == 0
+        } catch {
+            NSLog("[ProcessDiscovery] Failed to restart daemon \(label): \(error)")
             return false
         }
     }

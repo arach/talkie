@@ -8,6 +8,7 @@
 
 import Foundation
 import AppKit
+import CoreData
 import os.log
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "QuickAction")
@@ -94,15 +95,105 @@ final class QuickActionRunner {
             return
         }
 
-        // TODO: Create memo via TalkieBridge when available
-        // For now, generate a placeholder memo ID
-        let memoID = "memo_\(UUID().uuidString.prefix(8))"
+        let context = PersistenceController.shared.container.viewContext
 
-        // Mark as promoted in database
-        LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
+        // Create new VoiceMemo in CoreData
+        let memo = VoiceMemo(context: context)
+        memo.id = UUID()
 
-        logger.info("Promoted Live #\(live.id ?? 0) to memo: \(memoID)")
-        AppLogger.shared.log(.database, "Promoted to memo", detail: memoID)
+        // Basic content
+        memo.title = String(live.text.prefix(100)) // Use first 100 chars as title
+        memo.transcription = live.text
+        memo.createdAt = live.createdAt
+        memo.lastModified = Date()
+        memo.duration = live.durationSeconds ?? 0
+        memo.sortOrder = Int32(-live.createdAt.timeIntervalSince1970)
+
+        // Origin tracking
+        memo.originDeviceId = "live" // Mark as coming from Live dictation
+
+        // Context metadata - store in notes field
+        var contextNotes: [String] = []
+        if let appName = live.appName {
+            contextNotes.append("📱 App: \(appName)")
+        }
+        if let windowTitle = live.windowTitle {
+            contextNotes.append("🪟 Window: \(windowTitle)")
+        }
+        if let metadata = live.metadata {
+            if let browserURL = metadata["browserURL"] {
+                contextNotes.append("🌐 URL: \(browserURL)")
+            } else if let documentURL = metadata["documentURL"] {
+                contextNotes.append("📄 Document: \(documentURL)")
+            }
+            if let terminalDir = metadata["terminalWorkingDir"] {
+                contextNotes.append("💻 Working Dir: \(terminalDir)")
+            }
+        }
+
+        // Performance metrics
+        if let totalMs = live.perfEndToEndMs {
+            contextNotes.append("⏱ Latency: \(totalMs)ms")
+        }
+
+        // Transcription metadata
+        if let model = live.transcriptionModel {
+            contextNotes.append("🤖 Model: \(model)")
+        }
+
+        if !contextNotes.isEmpty {
+            memo.notes = """
+            Promoted from Live Dictation
+
+            \(contextNotes.joined(separator: "\n"))
+
+            ---
+            Original timestamp: \(live.createdAt.formatted())
+            """
+        }
+
+        // Copy audio file if it exists
+        if let audioFilename = live.audioFilename,
+           let sourceURL = live.audioURL,
+           FileManager.default.fileExists(atPath: sourceURL.path) {
+
+            // Create destination path in Talkie's storage
+            let destDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Talkie/Audio", isDirectory: true)
+
+            // Create directory if needed
+            try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+
+            let destURL = destDir.appendingPathComponent(audioFilename)
+
+            // Copy audio file
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                memo.fileURL = destURL.path
+                logger.info("Copied audio file to Talkie storage")
+            } catch {
+                logger.error("Failed to copy audio: \(error.localizedDescription)")
+                // Continue without audio
+            }
+        }
+
+        // Save to CoreData
+        do {
+            try context.save()
+            let memoID = memo.id?.uuidString ?? "unknown"
+
+            // Mark as promoted in Live database
+            LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
+
+            logger.info("Promoted Live #\(live.id ?? 0) to memo: \(memoID)")
+            AppLogger.shared.log(.database, "Promoted to memo", detail: String(live.text.prefix(40)))
+
+            // Play success sound
+            NSSound.beep()
+        } catch {
+            logger.error("Failed to save memo: \(error.localizedDescription)")
+            AppLogger.shared.log(.error, "Promote failed", detail: error.localizedDescription)
+        }
     }
 
     private func createResearchMemo(_ live: LiveDictation) async {

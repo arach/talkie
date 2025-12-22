@@ -67,7 +67,8 @@ final class RecordingOverlayController: ObservableObject {
 
             // Calculate final position
             let finalX: CGFloat
-            switch LiveSettings.shared.overlayPosition {
+            let position = LiveSettings.shared.overlayPosition
+            switch position {
             case .topCenter:
                 finalX = screenFrame.midX - panelWidth / 2
             case .topLeft:
@@ -77,13 +78,30 @@ final class RecordingOverlayController: ObservableObject {
             }
             let finalY = screenFrame.maxY - panelHeight - margin
 
-            // Start position: above the screen (hidden behind menu bar)
-            let startY = screenFrame.maxY + 10  // Above visible area
-            panel.setFrameOrigin(NSPoint(x: finalX, y: startY))
+            // Start position: slide from logical direction based on position
+            // topCenter: from top, topLeft: from top-left, topRight: from top-right
+            let startX: CGFloat
+            let startY: CGFloat
+            switch position {
+            case .topCenter:
+                // Slide from top (above screen)
+                startX = finalX
+                startY = screenFrame.maxY + 10
+            case .topLeft:
+                // Slide from top-left (diagonal)
+                startX = screenFrame.minX - panelWidth - 10
+                startY = screenFrame.maxY + 10
+            case .topRight:
+                // Slide from top-right (diagonal)
+                startX = screenFrame.maxX + 10
+                startY = screenFrame.maxY + 10
+            }
+
+            panel.setFrameOrigin(NSPoint(x: startX, y: startY))
             panel.alphaValue = 0
             panel.orderFront(nil)
 
-            // Animate sliding down from top
+            // Animate sliding to final position from logical edge
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.2
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -119,13 +137,30 @@ final class RecordingOverlayController: ObservableObject {
 
         let screenFrame = screen.visibleFrame
         let currentFrame = panel.frame
+        let position = LiveSettings.shared.overlayPosition
 
-        // Animate sliding up into the menu bar and fading out
+        // Animate sliding back to the edge it came from (reverse of show animation)
+        let exitX: CGFloat
+        let exitY: CGFloat
+        switch position {
+        case .topCenter:
+            // Slide back up to top
+            exitX = currentFrame.origin.x
+            exitY = screenFrame.maxY + 10
+        case .topLeft:
+            // Slide back to top-left
+            exitX = screenFrame.minX - currentFrame.width - 10
+            exitY = screenFrame.maxY + 10
+        case .topRight:
+            // Slide back to top-right
+            exitX = screenFrame.maxX + 10
+            exitY = screenFrame.maxY + 10
+        }
+
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            // Slide up above the screen
-            panel.animator().setFrameOrigin(NSPoint(x: currentFrame.origin.x, y: screenFrame.maxY + 10))
+            panel.animator().setFrameOrigin(NSPoint(x: exitX, y: exitY))
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             self?.window?.orderOut(nil)

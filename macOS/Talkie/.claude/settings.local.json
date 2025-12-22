@@ -24,7 +24,14 @@
       "Bash(gh pr view:*)",
       "Bash(git add:*)",
       "Bash(swiftc:*)",
-      "WebFetch(domain:deepwiki.com)"
+      "WebFetch(domain:deepwiki.com)",
+      "Bash(git checkout:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(git commit:*)",
+      "Bash(log show:*)",
+      "Bash(uuidgen:*)",
+      "Bash(git push:*)"
     ]
   }
 }

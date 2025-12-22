@@ -139,7 +139,7 @@ extension SyncEvent: FetchableRecord, PersistableRecord {
 
 struct SyncHistoryView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var syncManager = CloudKitSyncManager.shared
+    @Environment(CloudKitSyncManager.self) private var syncManager
 
     var body: some View {
         VStack(spacing: 0) {

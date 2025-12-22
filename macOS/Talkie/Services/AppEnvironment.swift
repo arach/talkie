@@ -96,15 +96,10 @@ final class AppEnvironment {
             return false
         }
 
-        do {
-            let configuration = NSWorkspace.OpenConfiguration()
-            NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
-            logger.info("Launched \(app.appName) from \(appURL.path)")
-            return true
-        } catch {
-            logger.error("Failed to launch \(app.appName): \(error.localizedDescription)")
-            return false
-        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
+        logger.info("Launched \(app.appName) from \(appURL.path)")
+        return true
     }
 
     // MARK: - Private Helpers

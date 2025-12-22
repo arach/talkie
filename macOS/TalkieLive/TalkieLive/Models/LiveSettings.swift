@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Carbon.HIToolbox
+import TalkieKit
 
 // MARK: - Appearance Options
 
@@ -382,32 +383,9 @@ struct HotkeyConfig: Codable, Equatable {
 final class LiveSettings: ObservableObject {
     static let shared = LiveSettings()
 
-    // MARK: - Keys
-    private let hotkeyKey = "hotkey"
-    private let pttHotkeyKey = "pttHotkey"
-    private let pttEnabledKey = "pttEnabled"
-    private let selectedModelIdKey = "selectedModelId"
-    private let whisperModelKey = "whisperModel"  // Legacy, for migration
-    private let routingModeKey = "routingMode"
-    private let dictationTTLKey = "dictationTTLHours"
-    private let overlayStyleKey = "overlayStyle"
-    private let overlayPositionKey = "overlayPosition"
-    private let pillPositionKey = "pillPosition"
-    private let pillShowOnAllScreensKey = "pillShowOnAllScreens"
-    private let pillExpandsDuringRecordingKey = "pillExpandsDuringRecording"
-    private let startSoundKey = "startSound"
-    private let finishSoundKey = "finishSound"
-    private let pastedSoundKey = "pastedSound"
-    private let appearanceModeKey = "appearanceMode"
-    private let visualThemeKey = "visualTheme"
-    private let fontSizeKey = "fontSize"
-    private let accentColorKey = "accentColor"
-    private let primaryContextSourceKey = "primaryContextSource"
-    private let contextCaptureDetailKey = "contextCaptureDetail"
-    private let returnToOriginAfterPasteKey = "returnToOriginAfterPaste"
-    private let selectedMicrophoneIDKey = "selectedMicrophoneID"
-    // Legacy key for migration
-    private let legacyThemeKey = "theme"
+    // MARK: - Shared Settings Storage
+    // Uses TalkieSharedSettings from TalkieKit for cross-app sync with Talkie
+    private var storage: UserDefaults { TalkieSharedSettings }
 
     // MARK: - Published Settings
 
@@ -546,8 +524,12 @@ final class LiveSettings: ObservableObject {
     // MARK: - Init
 
     private init() {
+        // Read from shared storage (Talkie is the owner, we're just reading)
+        // Note: Use TalkieSharedSettings directly since storage property requires self
+        let store = TalkieSharedSettings
+
         // Load toggle hotkey
-        if let data = UserDefaults.standard.data(forKey: hotkeyKey),
+        if let data = store.data(forKey: LiveSettingsKey.hotkey),
            let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
             self.hotkey = config
         } else {
@@ -555,7 +537,7 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load push-to-talk hotkey
-        if let data = UserDefaults.standard.data(forKey: pttHotkeyKey),
+        if let data = store.data(forKey: LiveSettingsKey.pttHotkey),
            let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
             self.pttHotkey = config
         } else {
@@ -563,32 +545,29 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load PTT enabled state (default: false)
-        self.pttEnabled = UserDefaults.standard.bool(forKey: pttEnabledKey)
+        self.pttEnabled = store.bool(forKey: LiveSettingsKey.pttEnabled)
 
-        // Load selected model ID (with migration from legacy whisperModel)
-        if let modelId = UserDefaults.standard.string(forKey: selectedModelIdKey) {
+        // Load selected model ID
+        if let modelId = store.string(forKey: LiveSettingsKey.selectedModelId) {
             self.selectedModelId = modelId
-        } else if let legacyModel = UserDefaults.standard.string(forKey: whisperModelKey) {
-            // Migrate from legacy whisperModel setting
-            self.selectedModelId = "whisper:\(legacyModel)"
         } else {
             // Default to parakeet v3 (fast, accurate, always available)
             self.selectedModelId = "parakeet:v3"
         }
 
         // Load routing mode
-        let routingRaw = UserDefaults.standard.string(forKey: routingModeKey) ?? "paste"
+        let routingRaw = store.string(forKey: LiveSettingsKey.routingMode) ?? "paste"
         self.routingMode = routingRaw == "clipboardOnly" ? .clipboardOnly : .paste
 
         // Load selected microphone (0 = system default)
-        self.selectedMicrophoneID = UInt32(UserDefaults.standard.integer(forKey: selectedMicrophoneIDKey))
+        self.selectedMicrophoneID = UInt32(store.integer(forKey: LiveSettingsKey.selectedMicrophoneID))
 
         // Load TTL (default 48 hours)
-        let ttl = UserDefaults.standard.integer(forKey: dictationTTLKey)
+        let ttl = store.integer(forKey: LiveSettingsKey.utteranceTTLHours)
         self.dictationTTLHours = ttl > 0 ? ttl : 48
 
         // Load overlay style
-        if let rawValue = UserDefaults.standard.string(forKey: overlayStyleKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.overlayStyle),
            let style = OverlayStyle(rawValue: rawValue) {
             self.overlayStyle = style
         } else {
@@ -596,7 +575,7 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load overlay position
-        if let rawValue = UserDefaults.standard.string(forKey: overlayPositionKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.overlayPosition),
            let position = OverlayPosition(rawValue: rawValue) {
             self.overlayPosition = position
         } else {
@@ -604,7 +583,7 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load pill position
-        if let rawValue = UserDefaults.standard.string(forKey: pillPositionKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.pillPosition),
            let position = PillPosition(rawValue: rawValue) {
             self.pillPosition = position
         } else {
@@ -612,60 +591,49 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load pill settings
-        self.pillShowOnAllScreens = UserDefaults.standard.object(forKey: pillShowOnAllScreensKey) as? Bool ?? true
-        self.pillExpandsDuringRecording = UserDefaults.standard.object(forKey: pillExpandsDuringRecordingKey) as? Bool ?? true
+        self.pillShowOnAllScreens = store.object(forKey: LiveSettingsKey.pillShowOnAllScreens) as? Bool ?? true
+        self.pillExpandsDuringRecording = store.object(forKey: LiveSettingsKey.pillExpandsDuringRecording) as? Bool ?? true
 
         // Load sounds (default to pop for start/finish, tink for pasted)
-        if let rawValue = UserDefaults.standard.string(forKey: startSoundKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.startSound),
            let sound = TalkieSound(rawValue: rawValue) {
             self.startSound = sound
         } else {
             self.startSound = .pop
         }
 
-        if let rawValue = UserDefaults.standard.string(forKey: finishSoundKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.finishSound),
            let sound = TalkieSound(rawValue: rawValue) {
             self.finishSound = sound
         } else {
             self.finishSound = .pop
         }
 
-        if let rawValue = UserDefaults.standard.string(forKey: pastedSoundKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.pastedSound),
            let sound = TalkieSound(rawValue: rawValue) {
             self.pastedSound = sound
         } else {
             self.pastedSound = .tink
         }
 
-        // Load appearance mode (with migration from legacy theme key)
-        if let rawValue = UserDefaults.standard.string(forKey: appearanceModeKey),
+        // Load appearance mode
+        if let rawValue = store.string(forKey: LiveSettingsKey.appearanceMode),
            let mode = AppearanceMode(rawValue: rawValue) {
             self.appearanceMode = mode
-        } else if let legacyTheme = UserDefaults.standard.string(forKey: legacyThemeKey) {
-            // Migrate from legacy theme setting
-            switch legacyTheme {
-            case "system": self.appearanceMode = .system
-            case "light": self.appearanceMode = .light
-            case "dark", "midnight": self.appearanceMode = .dark
-            default: self.appearanceMode = .system
-            }
         } else {
             self.appearanceMode = .system
         }
 
         // Load visual theme
-        if let rawValue = UserDefaults.standard.string(forKey: visualThemeKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.visualTheme),
            let theme = VisualTheme(rawValue: rawValue) {
             self.visualTheme = theme
-        } else if let legacyTheme = UserDefaults.standard.string(forKey: legacyThemeKey) {
-            // Migrate: midnight -> midnight theme, others -> live
-            self.visualTheme = legacyTheme == "midnight" ? .midnight : .live
         } else {
             self.visualTheme = .live
         }
 
         // Load font size
-        if let rawValue = UserDefaults.standard.string(forKey: fontSizeKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.fontSize),
            let size = FontSize(rawValue: rawValue) {
             self.fontSize = size
         } else {
@@ -673,7 +641,7 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load accent color
-        if let rawValue = UserDefaults.standard.string(forKey: accentColorKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.accentColor),
            let color = AccentColorOption(rawValue: rawValue) {
             self.accentColor = color
         } else {
@@ -681,7 +649,7 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load primary context source (default: start app)
-        if let rawValue = UserDefaults.standard.string(forKey: primaryContextSourceKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.primaryContextSource),
            let source = PrimaryContextSource(rawValue: rawValue) {
             self.primaryContextSource = source
         } else {
@@ -689,7 +657,7 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load context capture detail (default: rich)
-        if let rawValue = UserDefaults.standard.string(forKey: contextCaptureDetailKey),
+        if let rawValue = store.string(forKey: LiveSettingsKey.contextCaptureDetail),
            let detail = ContextCaptureDetail(rawValue: rawValue) {
             self.contextCaptureDetail = detail
         } else {
@@ -697,41 +665,44 @@ final class LiveSettings: ObservableObject {
         }
 
         // Load return to origin setting (default: false)
-        self.returnToOriginAfterPaste = UserDefaults.standard.bool(forKey: returnToOriginAfterPasteKey)
+        self.returnToOriginAfterPaste = store.bool(forKey: LiveSettingsKey.returnToOriginAfterPaste)
 
         // Apply TTL to store
         DictationStore.shared.ttlHours = dictationTTLHours
     }
 
     // MARK: - Persistence
+    // Writes to shared storage so Talkie sees changes (though Talkie is the primary owner)
 
     private func save() {
+        let store = storage
+
         if let data = try? JSONEncoder().encode(hotkey) {
-            UserDefaults.standard.set(data, forKey: hotkeyKey)
+            store.set(data, forKey: LiveSettingsKey.hotkey)
         }
         if let data = try? JSONEncoder().encode(pttHotkey) {
-            UserDefaults.standard.set(data, forKey: pttHotkeyKey)
+            store.set(data, forKey: LiveSettingsKey.pttHotkey)
         }
-        UserDefaults.standard.set(pttEnabled, forKey: pttEnabledKey)
-        UserDefaults.standard.set(selectedModelId, forKey: selectedModelIdKey)
-        UserDefaults.standard.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: routingModeKey)
-        UserDefaults.standard.set(Int(selectedMicrophoneID), forKey: selectedMicrophoneIDKey)
-        UserDefaults.standard.set(dictationTTLHours, forKey: dictationTTLKey)
-        UserDefaults.standard.set(overlayStyle.rawValue, forKey: overlayStyleKey)
-        UserDefaults.standard.set(overlayPosition.rawValue, forKey: overlayPositionKey)
-        UserDefaults.standard.set(pillPosition.rawValue, forKey: pillPositionKey)
-        UserDefaults.standard.set(pillShowOnAllScreens, forKey: pillShowOnAllScreensKey)
-        UserDefaults.standard.set(pillExpandsDuringRecording, forKey: pillExpandsDuringRecordingKey)
-        UserDefaults.standard.set(startSound.rawValue, forKey: startSoundKey)
-        UserDefaults.standard.set(finishSound.rawValue, forKey: finishSoundKey)
-        UserDefaults.standard.set(pastedSound.rawValue, forKey: pastedSoundKey)
-        UserDefaults.standard.set(appearanceMode.rawValue, forKey: appearanceModeKey)
-        UserDefaults.standard.set(visualTheme.rawValue, forKey: visualThemeKey)
-        UserDefaults.standard.set(fontSize.rawValue, forKey: fontSizeKey)
-        UserDefaults.standard.set(accentColor.rawValue, forKey: accentColorKey)
-        UserDefaults.standard.set(primaryContextSource.rawValue, forKey: primaryContextSourceKey)
-        UserDefaults.standard.set(contextCaptureDetail.rawValue, forKey: contextCaptureDetailKey)
-        UserDefaults.standard.set(returnToOriginAfterPaste, forKey: returnToOriginAfterPasteKey)
+        store.set(pttEnabled, forKey: LiveSettingsKey.pttEnabled)
+        store.set(selectedModelId, forKey: LiveSettingsKey.selectedModelId)
+        store.set(routingMode == .clipboardOnly ? "clipboardOnly" : "paste", forKey: LiveSettingsKey.routingMode)
+        store.set(Int(selectedMicrophoneID), forKey: LiveSettingsKey.selectedMicrophoneID)
+        store.set(dictationTTLHours, forKey: LiveSettingsKey.utteranceTTLHours)
+        store.set(overlayStyle.rawValue, forKey: LiveSettingsKey.overlayStyle)
+        store.set(overlayPosition.rawValue, forKey: LiveSettingsKey.overlayPosition)
+        store.set(pillPosition.rawValue, forKey: LiveSettingsKey.pillPosition)
+        store.set(pillShowOnAllScreens, forKey: LiveSettingsKey.pillShowOnAllScreens)
+        store.set(pillExpandsDuringRecording, forKey: LiveSettingsKey.pillExpandsDuringRecording)
+        store.set(startSound.rawValue, forKey: LiveSettingsKey.startSound)
+        store.set(finishSound.rawValue, forKey: LiveSettingsKey.finishSound)
+        store.set(pastedSound.rawValue, forKey: LiveSettingsKey.pastedSound)
+        store.set(appearanceMode.rawValue, forKey: LiveSettingsKey.appearanceMode)
+        store.set(visualTheme.rawValue, forKey: LiveSettingsKey.visualTheme)
+        store.set(fontSize.rawValue, forKey: LiveSettingsKey.fontSize)
+        store.set(accentColor.rawValue, forKey: LiveSettingsKey.accentColor)
+        store.set(primaryContextSource.rawValue, forKey: LiveSettingsKey.primaryContextSource)
+        store.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
+        store.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)
     }
 
     // MARK: - Appearance Application

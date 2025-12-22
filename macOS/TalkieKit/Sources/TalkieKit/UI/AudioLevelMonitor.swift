@@ -8,13 +8,15 @@
 import Foundation
 import Combine
 import AppKit
+import Observation
 
 @MainActor
-public final class AudioLevelMonitor: ObservableObject {
+@Observable
+public final class AudioLevelMonitor {
     public static let shared = AudioLevelMonitor()
 
-    @Published public var level: Float = 0
-    @Published public var isSilent: Bool = false
+    public var level: Float = 0
+    public var isSilent: Bool = false
 
     // Silent detection settings
     private let silenceThreshold: Float = 0.02

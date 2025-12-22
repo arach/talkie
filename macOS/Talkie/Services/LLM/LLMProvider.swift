@@ -7,6 +7,7 @@
 
 import Foundation
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLM")
 // MARK: - LLM Configuration (loaded from LLMConfig.json)
@@ -145,14 +146,15 @@ struct GenerationOptions {
 
 // MARK: - Provider Registry
 
+@Observable
 @MainActor
-class LLMProviderRegistry: ObservableObject {
+class LLMProviderRegistry {
     static let shared = LLMProviderRegistry()
 
-    @Published private(set) var providers: [LLMProvider] = []
-    @Published private(set) var allModels: [LLMModel] = []
-    @Published var selectedProviderId: String?
-    @Published var selectedModelId: String?
+    private(set) var providers: [LLMProvider] = []
+    private(set) var allModels: [LLMModel] = []
+    var selectedProviderId: String?
+    var selectedModelId: String?
 
     private init() {
         // Register providers synchronously so they're available immediately

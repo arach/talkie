@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "QuickOpenSe
 // MARK: - Quick Open Settings View
 
 struct QuickOpenSettingsView: View {
-    @StateObject private var quickOpenService = QuickOpenService.shared
+    private let quickOpenService = QuickOpenService.shared
 
     var body: some View {
         SettingsPageContainer {

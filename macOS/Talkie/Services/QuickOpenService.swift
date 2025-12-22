@@ -9,6 +9,7 @@ import Foundation
 import AppKit
 import SwiftUI
 import os
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "QuickOpen")
 
@@ -134,10 +135,11 @@ extension QuickOpenTarget {
 // MARK: - Quick Open Service
 
 @MainActor
-class QuickOpenService: ObservableObject {
+@Observable
+class QuickOpenService {
     static let shared = QuickOpenService()
 
-    @Published var targets: [QuickOpenTarget] {
+    var targets: [QuickOpenTarget] {
         didSet { saveTargets() }
     }
 

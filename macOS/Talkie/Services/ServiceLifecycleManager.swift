@@ -14,6 +14,7 @@ import Foundation
 import AppKit
 import os
 import TalkieKit
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "ServiceLifecycle")
 
@@ -34,13 +35,14 @@ public enum ServiceType {
 
 /// Unified service lifecycle manager
 @MainActor
-public class ServiceLifecycleManager: ObservableObject {
+@Observable
+public class ServiceLifecycleManager {
     // MARK: - Published State
 
-    @Published public private(set) var state: ServiceState = .unknown
-    @Published public private(set) var processId: pid_t?
-    @Published public private(set) var launchedAt: Date?
-    @Published public private(set) var lastError: String?
+    public private(set) var state: ServiceState = .unknown
+    public private(set) var processId: pid_t?
+    public private(set) var launchedAt: Date?
+    public private(set) var lastError: String?
 
     // MARK: - Configuration
 
@@ -63,10 +65,6 @@ public class ServiceLifecycleManager: ObservableObject {
 
         // Check initial state
         refreshState()
-    }
-
-    deinit {
-        monitorTimer?.invalidate()
     }
 
     // MARK: - Monitoring

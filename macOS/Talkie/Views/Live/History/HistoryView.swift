@@ -57,8 +57,8 @@ private extension Sequence {
 // MARK: - Main Navigation View
 
 struct HistoryView: View {
-    @ObservedObject private var store = DictationStore.shared
-    @ObservedObject private var settings = LiveSettings.shared
+    private let store = DictationStore.shared
+    @Environment(LiveSettings.self) private var settings
 
     @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedUtteranceIDs: Set<Utterance.ID> = []  // Multi-select support
@@ -1004,7 +1004,7 @@ struct HistoryView: View {
 
 struct UtteranceRowView: View {
     let utterance: Utterance
-    @ObservedObject private var settings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var settings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -1320,7 +1320,7 @@ private struct ToggleSegment: View {
 private struct TranscriptContainer: View {
     let utterance: Utterance
     @Binding var showJSON: Bool
-    @ObservedObject private var settings = LiveSettings.shared
+    @Environment(LiveSettings.self) private var settings
 
     // Crisp text colors - solid grays instead of opacity
     private static let textPrimary = Color.white
@@ -1809,9 +1809,23 @@ private struct PerfChip: View {
 }
 private struct MinimalAudioCard: View {
     let utterance: Utterance
-    @ObservedObject private var playback = AudioPlaybackManager.shared
+    private let playback = AudioPlaybackManager.shared
     @State private var isHovering = false
     @State private var isPlayButtonHovered = false
+    @State private var showVolumeSlider = false
+    @State private var volume: Float = SettingsManager.shared.playbackVolume
+
+    private var volumeIcon: String {
+        if volume == 0 {
+            return "speaker.slash.fill"
+        } else if volume < 0.33 {
+            return "speaker.wave.1.fill"
+        } else if volume < 0.66 {
+            return "speaker.wave.2.fill"
+        } else {
+            return "speaker.wave.3.fill"
+        }
+    }
 
     private var isThisPlaying: Bool {
         playback.currentAudioID == utterance.id.uuidString && playback.isPlaying
@@ -1911,10 +1925,42 @@ private struct MinimalAudioCard: View {
                             .foregroundColor(TalkieTheme.textMuted)
                     }
                 }
+
+                // Volume control
+                HStack(spacing: 4) {
+                    if showVolumeSlider {
+                        Slider(value: $volume, in: 0...1) { editing in
+                            if !editing {
+                                SettingsManager.shared.playbackVolume = volume
+                            }
+                        }
+                        .frame(width: 60)
+                        .controlSize(.mini)
+                        .onChange(of: volume) { _, newValue in
+                            AudioPlaybackManager.shared.volume = newValue
+                        }
+                    }
+
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            showVolumeSlider.toggle()
+                        }
+                    }) {
+                        Image(systemName: volumeIcon)
+                            .font(.system(size: 11))
+                            .foregroundColor(TalkieTheme.textSecondary)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Adjust volume")
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
             .padding(.bottom, 10)
+            .onAppear {
+                volume = SettingsManager.shared.playbackVolume
+            }
 
             // Divider
             Rectangle()

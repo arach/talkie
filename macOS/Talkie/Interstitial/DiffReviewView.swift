@@ -14,8 +14,8 @@ struct DiffReviewView: View {
     let onReject: () -> Void
 
     // Access manager for prompt info
-    @ObservedObject var manager = InterstitialManager.shared
-    @ObservedObject private var settings = SettingsManager.shared
+    @State var manager = InterstitialManager.shared
+    @Environment(SettingsManager.self) private var settings
     @State private var showPromptDetails = false
 
     // MARK: - Theme colors

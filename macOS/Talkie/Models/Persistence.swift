@@ -10,6 +10,7 @@ import CloudKit
 import AppKit
 import os
 import Combine
+import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Persistence")
 
@@ -19,8 +20,8 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Persistence
 class WALManager {
     static let shared = WALManager()
 
-    private var purgeTimer: Timer?
-    private let purgeInterval: TimeInterval = 3600 // Purge history every hour
+    @ObservationIgnored private var purgeTimer: Timer?
+    @ObservationIgnored private let purgeInterval: TimeInterval = 3600 // Purge history every hour
 
     private init() {}
 
@@ -124,7 +125,8 @@ class WALManager {
 // MARK: - Sync Status Manager
 
 @MainActor
-class SyncStatusManager: ObservableObject {
+@Observable
+class SyncStatusManager {
     static let shared = SyncStatusManager()
 
     enum SyncState: Equatable {
@@ -134,18 +136,19 @@ class SyncStatusManager: ObservableObject {
         case error(String)
     }
 
-    @Published var state: SyncState = .idle
-    @Published var lastSyncDate: Date?
-    @Published var iCloudAvailable: Bool = false
-    @Published var pendingChanges: Int = 0
+    var state: SyncState = .idle
+    var lastSyncDate: Date?
+    var iCloudAvailable: Bool = false
+    var pendingChanges: Int = 0
+    private var lastRefresh: Date = Date() // Used to trigger UI updates for relative time strings
 
-    private var displayTimer: Timer?
+    @ObservationIgnored private var displayTimer: Timer?
 
     private init() {
         // Update display every 30s so "Just now" becomes "30s ago" etc.
         displayTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.objectWillChange.send()
+                self?.lastRefresh = Date() // Trigger UI update for @Observable
             }
         }
     }
@@ -174,6 +177,7 @@ class SyncStatusManager: ObservableObject {
     }
 
     var lastSyncAgo: String {
+        _ = lastRefresh
         guard let lastSync = lastSyncDate else {
             return "—"
         }

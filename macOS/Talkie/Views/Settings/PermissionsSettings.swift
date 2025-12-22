@@ -32,11 +32,11 @@ enum PermissionStatus {
 
     var color: Color {
         switch self {
-        case .granted: return .green
-        case .denied: return .red
-        case .notDetermined: return .orange
-        case .restricted: return .red
-        case .unknown: return .secondary
+        case .granted: return SemanticColor.success
+        case .denied: return SemanticColor.error
+        case .notDetermined: return SemanticColor.warning
+        case .restricted: return SemanticColor.error
+        case .unknown: return Theme.current.foregroundMuted
         }
     }
 
@@ -54,12 +54,13 @@ enum PermissionStatus {
 // MARK: - Permissions Manager
 
 @MainActor
-class PermissionsManager: ObservableObject {
+@Observable
+class PermissionsManager {
     static let shared = PermissionsManager()
 
-    @Published var microphoneStatus: PermissionStatus = .unknown
-    @Published var accessibilityStatus: PermissionStatus = .unknown
-    @Published var automationStatus: PermissionStatus = .unknown
+    var microphoneStatus: PermissionStatus = .unknown
+    var accessibilityStatus: PermissionStatus = .unknown
+    var automationStatus: PermissionStatus = .unknown
 
     private init() {
         // Don't check permissions eagerly - let views call refreshAllPermissions() on appear
@@ -170,7 +171,7 @@ class PermissionsManager: ObservableObject {
 // MARK: - Permissions Settings View
 
 struct PermissionsSettingsView: View {
-    @StateObject private var permissionsManager = PermissionsManager.shared
+    private let permissionsManager = PermissionsManager.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -180,7 +181,7 @@ struct PermissionsSettingsView: View {
                 subtitle: "System permissions required for Talkie features."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 // Microphone
                 PermissionRow(
                     icon: "mic.fill",
@@ -225,24 +226,24 @@ struct PermissionsSettingsView: View {
             }
 
             Divider()
-                .padding(.vertical, 8)
+                .padding(.vertical, Spacing.sm)
 
             // Refresh button
             HStack {
                 Button(action: {
                     permissionsManager.refreshAllPermissions()
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10))
+                            .font(Theme.current.fontXS)
                         Text("REFRESH STATUS")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(Theme.current.fontXSMedium)
                     }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Theme.current.foregroundMuted.opacity(Opacity.light))
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
 
@@ -251,31 +252,31 @@ struct PermissionsSettingsView: View {
                 Button(action: {
                     permissionsManager.openPrivacySettings()
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "gear")
-                            .font(.system(size: 10))
+                            .font(Theme.current.fontXS)
                         Text("OPEN PRIVACY SETTINGS")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(Theme.current.fontXSMedium)
                     }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Theme.current.foregroundMuted.opacity(Opacity.light))
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
 
             // Info note
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(alignment: .top, spacing: Spacing.sm) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundMuted)
 
                     Text("Some permissions can only be changed in System Settings → Privacy & Security. Talkie will request permissions when features are first used.")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -284,27 +285,27 @@ struct PermissionsSettingsView: View {
                    bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
                     Divider()
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "app.badge")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("Look for this app in System Settings:")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.secondary)
+                                .font(Theme.current.fontXSMedium)
+                                .foregroundColor(Theme.current.foregroundMuted)
 
                             Text(bundleID)
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.8))
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundMuted.opacity(Opacity.prominent))
                                 .textSelection(.enabled)
                         }
                     }
                 }
             }
-            .padding(10)
-            .background(Color.secondary.opacity(0.05))
-            .cornerRadius(8)
+            .padding(Spacing.sm)
+            .background(Theme.current.foregroundMuted.opacity(Opacity.subtle))
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             // Check permissions when view appears (not on init)
@@ -326,56 +327,56 @@ private struct PermissionRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.md) {
             // Icon
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(Theme.current.fontTitle)
                 .foregroundColor(status.color)
                 .frame(width: 32, height: 32)
-                .background(status.color.opacity(0.15))
-                .cornerRadius(8)
+                .background(status.color.opacity(Opacity.medium))
+                .cornerRadius(CornerRadius.sm)
 
             // Name and description
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(name)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.primary)
+                    .font(Theme.current.fontSMBold)
+                    .foregroundColor(Theme.current.foreground)
 
                 Text(description)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             Spacer()
 
             // Status badge
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.xxs) {
                 Image(systemName: status.icon)
-                    .font(.system(size: 10))
+                    .font(Theme.current.fontXS)
                 Text(statusOverride ?? status.displayName)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(Theme.current.fontXSMedium)
             }
-            .foregroundColor(statusOverride != nil ? .secondary : status.color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(status.color.opacity(0.1))
-            .cornerRadius(4)
+            .foregroundColor(statusOverride != nil ? Theme.current.foregroundMuted : status.color)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xxs)
+            .background(status.color.opacity(Opacity.light))
+            .cornerRadius(CornerRadius.xs)
 
             // Action button
             Button(action: onRequest) {
                 Text(status == .granted ? "SETTINGS" : "ENABLE")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(status == .granted ? .secondary : .white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(status == .granted ? Color.secondary.opacity(0.15) : Color.accentColor)
-                    .cornerRadius(4)
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(status == .granted ? Theme.current.foregroundMuted : .white)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(status == .granted ? Theme.current.foregroundMuted.opacity(Opacity.medium) : Color.accentColor)
+                    .cornerRadius(CornerRadius.xs)
             }
             .buttonStyle(.plain)
         }
-        .padding(12)
+        .padding(Spacing.md)
         .background(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .onHover { isHovered = $0 }
     }
 }
