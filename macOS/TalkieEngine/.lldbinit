@@ -1,0 +1,3 @@
+# LLDB init for TalkieEngine
+# Pass SIGTERM through to the process instead of stopping in debugger
+process handle SIGTERM -s false -n true -p true
