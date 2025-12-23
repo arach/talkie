@@ -8,7 +8,7 @@ CACHE_FILE="$PROJECT_ROOT/.deriveddata"
 
 # Try cached path first
 if [ -f "$CACHE_FILE" ]; then
-  CACHED_DIR=$(cat "$CACHE_FILE")
+  CACHED_DIR=$(cat "$CACHE_FILE" | sed 's:/*$::')  # Strip trailing slash
   APP="$CACHED_DIR/Build/Products/Debug/Talkie.app"
   if [ -d "$APP" ]; then
     # Kill only THIS worktree's Talkie (not others)
@@ -24,11 +24,12 @@ fi
 
 # Scan DerivedData for matching project
 for dir in ~/Library/Developer/Xcode/DerivedData/Talkie-*/; do
+  dir="${dir%/}"  # Strip trailing slash
   info="$dir/info.plist"
   if [ -f "$info" ]; then
     workspace=$(/usr/libexec/PlistBuddy -c "Print :WorkspacePath" "$info" 2>/dev/null)
     if [ "$workspace" = "$XCODEPROJ" ]; then
-      # Cache it for next time
+      # Cache it for next time (without trailing slash)
       echo "$dir" > "$CACHE_FILE"
 
       APP="$dir/Build/Products/Debug/Talkie.app"

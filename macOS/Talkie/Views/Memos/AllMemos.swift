@@ -91,8 +91,31 @@ struct AllMemos: View {
                     selectedVoiceMemo = nil
                 }
             }
+            .onChange(of: viewModel.memos) { _, newMemos in
+                // Clean up selection when memos change (e.g., deletion)
+                let validIDs = Set(newMemos.map { $0.id })
+                let invalidIDs = selectedMemoIDs.subtracting(validIDs)
+                if !invalidIDs.isEmpty {
+                    selectedMemoIDs.subtract(invalidIDs)
+                    // Clear the voice memo if it was deleted
+                    if let current = selectedVoiceMemo, let id = current.id, !validIDs.contains(id) {
+                        selectedVoiceMemo = nil
+                    }
+                }
+            }
         } onLoad: {
             await viewModel.loadMemos()
+        }
+        .onAppear {
+            // Force refresh when view appears (catches external changes like direct DB edits)
+            Task { await viewModel.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .init("SelectMemoInAllMemos"))) { notification in
+            // Handle deep link to specific memo
+            if let memoID = notification.object as? UUID {
+                selectedMemoIDs = [memoID]
+                loadVoiceMemo(id: memoID)
+            }
         }
     }
 
@@ -152,125 +175,72 @@ struct AllMemos: View {
     // MARK: - Header
 
     private var headerView: some View {
-        VStack(spacing: 0) {
-            // Top row: Search and sort controls
-            HStack(spacing: Spacing.md) {
-                // Search
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(TalkieTheme.textMuted)
-                        .font(.system(size: 12))
+        HStack(spacing: Spacing.sm) {
+            // Compact search
+            HStack(spacing: 5) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .font(.system(size: 11))
 
-                    TextField("Search memos...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                TextField("Search memos...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .frame(minWidth: 80, maxWidth: 140)
 
-                    if !searchText.isEmpty {
-                        TalkieButtonSync("ClearSearch") {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(TalkieTheme.textMuted)
-                                .font(.system(size: 12))
-                        }
-                        .buttonStyle(.plain)
+                if !searchText.isEmpty {
+                    TalkieButtonSync("ClearSearch") {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(TalkieTheme.textMuted)
+                            .font(.system(size: 11))
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, 6)
-                .background(TalkieTheme.surfaceCard)
-                .cornerRadius(CornerRadius.sm)
-
-                Spacer()
             }
-            .padding(Spacing.md)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(6)
 
-            // Smart filters row
-            if viewModel.hasActiveFilters || showFiltersButton {
-                smartFiltersView
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.bottom, Spacing.md)
+            // Inline filter chips
+            filterChip(filter: .shortRecordings, label: "Short", icon: "clock")
+            filterChip(filter: .source(.iPhone(deviceName: nil)), label: "iPhone", icon: "iphone")
+            filterChip(filter: .source(.mac(deviceName: nil)), label: "Mac", icon: "desktopcomputer")
+            filterChip(filter: .source(.live), label: "Live", icon: "waveform.circle.fill")
+
+            Spacer()
+
+            // Refresh button
+            Button {
+                Task { await viewModel.refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11))
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                    .animation(viewModel.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+            }
+            .buttonStyle(.plain)
+            .help("Refresh memos")
+
+            // View mode toggle (only show when 10+ memos)
+            if viewModel.totalCount >= previewThreshold {
+                viewModeToggle
             }
         }
-        .background(TalkieTheme.surfaceElevated)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, 10)
+        .background(Color.black.opacity(0.3))
         .overlay(
             Rectangle()
-                .fill(TalkieTheme.border)
+                .fill(Color.white.opacity(0.06))
                 .frame(height: 1),
             alignment: .bottom
         )
     }
 
-    private var showFiltersButton: Bool {
-        // Always show filters section for discoverability
-        true
-    }
-
-    // MARK: - Smart Filters
-
-    private var smartFiltersView: some View {
-        HStack(spacing: Spacing.sm) {
-            // Filter label
-            Text("Filters:")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(TalkieTheme.textMuted)
-
-            // Short recordings filter
-            filterChip(
-                filter: .shortRecordings,
-                label: "Short",
-                icon: "clock"
-            )
-
-            // Source filters
-            filterChip(
-                filter: .source(.iPhone(deviceName: nil)),
-                label: "iPhone",
-                icon: "iphone"
-            )
-
-            filterChip(
-                filter: .source(.mac(deviceName: nil)),
-                label: "Mac",
-                icon: "desktopcomputer"
-            )
-
-            filterChip(
-                filter: .source(.live),
-                label: "Live",
-                icon: "waveform.circle.fill"
-            )
-
-            // Clear all button (only when filters are active)
-            if viewModel.hasActiveFilters {
-                TalkieButton("ClearAllFilters") {
-                    await viewModel.clearFilters()
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 10))
-                        Text("Clear")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(TalkieTheme.textMuted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(TalkieTheme.surfaceCard)
-                    .cornerRadius(CornerRadius.sm)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Spacer()
-
-            // Active filter count
-            if viewModel.hasActiveFilters {
-                Text("\(viewModel.displayedCount) filtered")
-                    .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textMuted)
-            }
-        }
-    }
+    // MARK: - Filter Chips
 
     private func filterChip(filter: MemoFilter, label: String, icon: String) -> some View {
         TalkieButton("Filter.\(filter.id)") {
@@ -367,7 +337,7 @@ struct AllMemos: View {
                                 MemoRowEnhanced(
                                     memo: memo,
                                     isSelected: selectedMemoIDs.contains(memo.id),
-                                    isMultiSelected: selectedMemoIDs.count > 1,
+                                    isMultiSelected: isMultiSelectMode,
                                     onSelect: { event in
                                         handleSelection(memo: memo, event: event)
                                     },
@@ -376,6 +346,7 @@ struct AllMemos: View {
                                     isEvenRow: index.isMultiple(of: 2)
                                 )
                                 .id(memo.id)
+                                .animation(.easeIn(duration: 0.15), value: isMultiSelectMode)
                                 .onAppear {
                                     if memo.id == viewModel.memos.last?.id {
                                         Task { await viewModel.loadNextPage() }
@@ -403,21 +374,28 @@ struct AllMemos: View {
         }
     }
 
+    private var isMultiSelectMode: Bool {
+        selectedMemoIDs.count > 1
+    }
+
     private var tableHeader: some View {
         HStack(spacing: 0) {
             // Spacer for accent bar alignment
             Color.clear.frame(width: 3)
 
-            // Select all checkbox
-            Button {
-                toggleSelectAll()
-            } label: {
-                Image(systemName: selectAllIcon)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(selectedMemoIDs.isEmpty ? Color.white.opacity(0.2) : .accentColor)
-                    .frame(width: 28)
+            // Select all checkbox - only in multi-select mode
+            if isMultiSelectMode {
+                Button {
+                    toggleSelectAll()
+                } label: {
+                    Image(systemName: selectAllIcon)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(selectedMemoIDs.isEmpty ? Color.white.opacity(0.2) : .accentColor)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 32)
+                .transition(.scale.combined(with: .opacity))
             }
-            .buttonStyle(.plain)
 
             // Title (sortable)
             sortableColumnHeader(title: "TITLE", field: .title, alignment: .leading)
@@ -448,6 +426,7 @@ struct AllMemos: View {
                 .frame(height: 1),
             alignment: .bottom
         )
+        .animation(.easeIn(duration: 0.15), value: isMultiSelectMode)
     }
 
     private var selectAllIcon: String {
@@ -675,28 +654,32 @@ struct AllMemos: View {
 
     @ViewBuilder
     private var inspectorContent: some View {
-        // Content
         if selectedMemoIDs.count > 1 {
-                // Multi-select state
+            // Multi-select state
+            inspectorPanel {
                 VStack(spacing: Spacing.md) {
+                    Spacer()
+
                     Image(systemName: "square.stack.3d.up")
-                        .font(.system(size: 48))
-                        .foregroundColor(.accentColor.opacity(0.6))
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary.opacity(0.4))
 
-                    Text("\(selectedMemoIDs.count) MEMOS SELECTED")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                    VStack(spacing: 6) {
+                        Text("\(selectedMemoIDs.count) Memos Selected")
+                            .font(Theme.current.fontSMBold)
+                            .foregroundColor(.secondary)
 
-                    Text("Cmd+click to toggle, Shift+click for range")
-                        .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textMuted)
+                        Text("⌘-click to toggle, ⇧-click for range")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
 
                     // Bulk action buttons
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         Button {
                             // Export all selected
                         } label: {
-                            Label("Export All", systemImage: "square.and.arrow.up")
+                            Label("Export", systemImage: "square.and.arrow.up")
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
@@ -704,59 +687,70 @@ struct AllMemos: View {
                         Button {
                             selectedMemoIDs.removeAll()
                         } label: {
-                            Label("Clear Selection", systemImage: "xmark")
+                            Label("Clear", systemImage: "xmark")
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
                     .padding(.top, Spacing.sm)
+
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(TalkieTheme.surface)
-            } else if let voiceMemo = selectedVoiceMemo {
-                MemoDetailView(memo: voiceMemo)
-                    .id(voiceMemo.id)  // Stable identity for SwiftUI diffing
-            } else {
-                // Empty state - tasteful, minimal
-                VStack(spacing: 16) {
-                    // Subtle icon
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 32, weight: .light))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.accentColor.opacity(0.5), Color.accentColor.opacity(0.2)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-
-                    VStack(spacing: 4) {
-                        Text("No Selection")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(TalkieTheme.textSecondary)
-
-                        Text("Select a memo to view details")
-                            .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textMuted)
-                    }
-
-                    // Keyboard hint
-                    HStack(spacing: 4) {
-                        Text("⌘I")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(Color.white.opacity(0.06))
-                            .cornerRadius(3)
-
-                        Text("to toggle inspector")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundColor(TalkieTheme.textMuted.opacity(0.6))
-                    .padding(.top, 8)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        } else if let voiceMemo = selectedVoiceMemo {
+            MemoDetailView(memo: voiceMemo)
+                .id(voiceMemo.id)
+        } else {
+            // Empty state - matches original MemoInspectorEmptyState
+            inspectorPanel {
+                VStack(spacing: 16) {
+                    Spacer()
+
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary.opacity(0.3))
+
+                    VStack(spacing: 6) {
+                        Text("No Memo Selected")
+                            .font(Theme.current.fontSMBold)
+                            .foregroundColor(.secondary)
+
+                        Text("Click on a memo to view details")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    /// Consistent inspector panel wrapper with header
+    @ViewBuilder
+    private func inspectorPanel<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("DETAILS")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(height: 0.5)
+
+            // Content
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     // MARK: - Helpers
@@ -883,39 +877,37 @@ struct MemoRowEnhanced: View {
 
     @State private var isHovering = false
 
-    // Pre-computed colors - no runtime opacity math
-    private static let selectedBg = Color.accentColor.opacity(0.15)
+    // Pre-computed colors
+    private static let selectedBg = Color.accentColor.opacity(0.12)
     private static let hoverBg = Color.white.opacity(0.03)
-    private static let evenRowBg = Color.white.opacity(0.015)
-    private static let accentBar = Color.accentColor
 
     var body: some View {
         Button {
             onSelect(NSApp.currentEvent)
         } label: {
             HStack(spacing: 0) {
-                // Left accent bar for selected state
-                Rectangle()
-                    .fill(isSelected ? Self.accentBar : Color.clear)
-                    .frame(width: 3)
+                // Checkbox - only in multi-select mode, with animation
+                if isMultiSelected {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(isSelected ? .accentColor : Color.white.opacity(0.25))
+                        .frame(width: 32, height: 28)
+                        .transition(.scale.combined(with: .opacity))
+                }
 
-                // Checkbox (always visible - no layout shifts)
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isSelected ? .accentColor : Color.white.opacity(0.2))
-                    .frame(width: 28)
+                // Source icon (color-coded)
+                sourceIcon
+                    .padding(.trailing, 10)
 
-                // Title - stronger typography
+                // Title
                 Text(memo.displayTitle)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? .primary : TalkieTheme.textPrimary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Duration - monospace for alignment
-                Text(formatDuration(memo.duration))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(TalkieTheme.textMuted)
+                // Duration badge (sortable column position)
+                durationBadge
                     .frame(width: durationWidth, alignment: .trailing)
 
                 // Date
@@ -923,20 +915,54 @@ struct MemoRowEnhanced: View {
                     .font(.system(size: 11))
                     .foregroundColor(TalkieTheme.textMuted)
                     .frame(width: dateWidth, alignment: .trailing)
-                    .padding(.trailing, 4)
+                    .padding(.trailing, 8)
             }
-            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
             .contentShape(Rectangle())
             .background(rowBackground)
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
+        .overlay(
+            Rectangle()
+                .fill(Color.white.opacity(0.04))
+                .frame(height: 1),
+            alignment: .bottom
+        )
+    }
+
+    // Source icon - color-coded rounded square
+    private var sourceIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(memo.source.color.opacity(0.12))
+                .frame(width: 28, height: 28)
+
+            Image(systemName: memo.source.icon)
+                .font(.system(size: 12))
+                .foregroundColor(memo.source.color)
+        }
+    }
+
+    // Duration badge with waveform
+    private var durationBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "waveform")
+                .font(.system(size: 8))
+            Text(formatDuration(memo.duration))
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+        }
+        .foregroundColor(TalkieTheme.textMuted)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(4)
     }
 
     private var rowBackground: Color {
         if isSelected { return Self.selectedBg }
         if isHovering { return Self.hoverBg }
-        if isEvenRow { return Self.evenRowBg }
         return .clear
     }
 
