@@ -1,8 +1,8 @@
 //
-//  AutoRunSettings.swift
+//  AutomationsSettings.swift
 //  Talkie macOS
 //
-//  Extracted from SettingsView.swift
+//  Automations settings - workflows that run automatically on memo sync
 //
 
 import SwiftUI
@@ -10,9 +10,9 @@ import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
-// MARK: - Auto-Run Settings View
+// MARK: - Automations Settings View
 
-struct AutoRunSettingsView: View {
+struct AutomationsSettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     private let workflowManager = WorkflowManager.shared
     @State private var selectedWorkflowId: UUID?
@@ -34,7 +34,7 @@ struct AutoRunSettingsView: View {
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "bolt.circle",
-                title: "AUTO-RUN",
+                title: "AUTOMATIONS",
                 subtitle: "Configure workflows that run automatically when memos sync."
             )
         } content: {
@@ -42,9 +42,9 @@ struct AutoRunSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle(isOn: $settings.autoRunWorkflowsEnabled) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Enable Auto-Run Workflows")
+                            Text("Enable Automations")
                                 .font(Theme.current.fontSMBold)
-                            Text("When enabled, workflows marked as auto-run will execute automatically when new memos sync from your iPhone.")
+                            Text("When enabled, selected workflows will execute automatically when new memos sync from your iPhone.")
                                 .font(SettingsManager.shared.fontXS)
                                 .foregroundColor(.secondary)
                         }
@@ -61,7 +61,7 @@ struct AutoRunSettingsView: View {
                     // Auto-run workflows list
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("AUTO-RUN WORKFLOWS")
+                            Text("AUTOMATED WORKFLOWS")
                                 .font(Theme.current.fontXSBold)
                                 .foregroundColor(.secondary)
 
@@ -123,7 +123,7 @@ struct AutoRunSettingsView: View {
                             }
                         } else {
                             ForEach(autoRunWorkflows) { workflow in
-                                AutoRunWorkflowRow(
+                                AutomationsWorkflowRow(
                                     workflow: workflow,
                                     onDisable: { disableAutoRun(workflow) },
                                     onMoveUp: autoRunWorkflows.first?.id == workflow.id ? nil : { moveWorkflowUp(workflow) },
@@ -144,7 +144,7 @@ struct AutoRunSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             howItWorksRow(number: "1", text: "Record a memo on iPhone")
                             howItWorksRow(number: "2", text: "Memo syncs to Mac via iCloud")
-                            howItWorksRow(number: "3", text: "Auto-run workflows execute in order")
+                            howItWorksRow(number: "3", text: "Automated workflows execute in order")
                             howItWorksRow(number: "4", text: "Workflows with trigger steps gate themselves (e.g., \"Hey Talkie\")")
                             howItWorksRow(number: "5", text: "Universal workflows (like indexers) run on all memos")
                         }
@@ -214,7 +214,7 @@ struct AutoRunSettingsView: View {
     }
 }
 
-struct AutoRunWorkflowRow: View {
+struct AutomationsWorkflowRow: View {
     let workflow: WorkflowDefinition
     let onDisable: () -> Void
     let onMoveUp: (() -> Void)?
@@ -289,7 +289,7 @@ struct AutoRunWorkflowRow: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Remove from auto-run")
+            .help("Remove from automations")
         }
         .padding(12)
         .background(Theme.current.surface1)
