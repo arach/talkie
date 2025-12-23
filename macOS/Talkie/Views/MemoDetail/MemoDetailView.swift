@@ -780,7 +780,7 @@ private struct MemoMetadataView: View {
             Text(durationText)
                 .font(.monoXSmall)
         }
-        .foregroundColor(.secondary)
+        .foregroundColor(Theme.current.foregroundSecondary)
     }
 }
 
@@ -798,7 +798,7 @@ private struct MemoDetailHeaderSection: View {
     var body: some View {
         if showHeader {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     if isEditing {
                         TextField("Recording title", text: $editedTitle)
                             .font(Theme.current.fontTitleMedium)
@@ -807,7 +807,7 @@ private struct MemoDetailHeaderSection: View {
                     } else {
                         Text(memoTitle)
                             .font(Theme.current.fontTitleMedium)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Theme.current.foreground)
                     }
 
                     MemoMetadataView(
@@ -845,7 +845,7 @@ private struct MemoDetailHeaderSection: View {
                     } else {
                         Text(memoTitle)
                             .font(Theme.current.fontTitleMedium)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Theme.current.foreground)
                             .lineLimit(1)
                     }
 
@@ -907,7 +907,7 @@ private struct MemoDetailTranscriptHeader: View {
     var body: some View {
         Text("TRANSCRIPT")
             .font(.techLabel)
-            .foregroundColor(.secondary)
+            .foregroundColor(Theme.current.foregroundSecondary)
     }
 }
 
@@ -945,19 +945,19 @@ private struct MemoDetailTranscriptProgressView: View {
     let isRetranscribing: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.sm) {
             ProgressView()
                 .controlSize(.small)
             Text(isRetranscribing ? "RETRANSCRIBING..." : "PROCESSING...")
                 .font(Theme.current.fontXSBold)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
-        .padding(12)
+        .padding(Spacing.sm)
         .frame(maxWidth: .infinity)
         .background(Theme.current.surfaceAlternate)
-        .cornerRadius(4)
+        .cornerRadius(CornerRadius.xs)
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
                 .strokeBorder(settings.borderDefault, lineWidth: 0.5)
         )
     }
@@ -997,15 +997,15 @@ private struct MemoDetailTranscriptEditorView: View {
     var body: some View {
         TextEditor(text: $editedTranscript)
             .font(settings.contentFontBody)
-            .foregroundColor(.primary)
+            .foregroundColor(Theme.current.foreground)
             .lineSpacing(4)
             .scrollContentBackground(.hidden)
-            .padding(12)
+            .padding(Spacing.sm)
             .frame(minHeight: 150)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.accentColor.opacity(0.4), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .strokeBorder(Color.accentColor.opacity(Opacity.strong), lineWidth: 1)
             )
     }
 }
@@ -1020,13 +1020,13 @@ private struct MemoDetailTranscriptDisplayView: View {
         ZStack(alignment: .topTrailing) {
             Text(transcript)
                 .font(settings.contentFontBody)
-                .foregroundColor(.primary)
+                .foregroundColor(Theme.current.foreground)
                 .textSelection(.enabled)
                 .lineSpacing(4)
                 .padding(14)
                 .padding(.top, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.md))
                 .contextMenu {
                     MemoDetailTranscriptContextMenu(
                         memo: memo,
@@ -1036,7 +1036,7 @@ private struct MemoDetailTranscriptDisplayView: View {
                 }
 
             InlineQuickOpenBar(transcript: transcript)
-                .padding(8)
+                .padding(Spacing.sm)
         }
     }
 }
@@ -1081,13 +1081,13 @@ private struct MemoDetailTranscriptEmptyState: View {
     let settings: SettingsManager
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.sm) {
             Image(systemName: "waveform.circle")
                 .font(settings.fontDisplay)
-                .foregroundColor(.secondary.opacity(0.5))
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
             Text("NO TRANSCRIPT AVAILABLE")
                 .font(Theme.current.fontSMBold)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
@@ -1120,13 +1120,13 @@ private struct MemoDetailQuickActionsSection: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Text("QUICK ACTIONS")
                 .font(.techLabel)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ], spacing: 8) {
+                GridItem(.flexible(), spacing: Spacing.sm),
+                GridItem(.flexible(), spacing: Spacing.sm),
+                GridItem(.flexible(), spacing: Spacing.sm)
+            ], spacing: Spacing.sm) {
                 ForEach(items) { item in
                     buttonProvider(item)
                 }
@@ -1147,40 +1147,40 @@ private struct MemoDetailRecentRunsSection: View {
             HStack {
                 Text("RECENT RUNS")
                     .font(.techLabel)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
                 if runs.count > 3 {
                     Text("\(runs.count) runs")
                         .font(.techLabelSmall)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
             }
 
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 ForEach(Array(runs.prefix(3)), id: \.id) { run in
                     Button(action: { onSelect(run) }) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Spacing.sm) {
                             Image(systemName: run.workflowIcon ?? "bolt.fill")
-                                .font(settings.fontSM)
+                                .font(Theme.current.fontSM)
                                 .foregroundColor(.accentColor)
                                 .frame(width: 20)
 
                             Text(run.workflowName ?? "Workflow")
                                 .font(Theme.current.fontBodyMedium)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Theme.current.foreground)
                                 .lineLimit(1)
 
                             Spacer()
 
                             if run.status == "completed" {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(settings.fontSM)
+                                    .font(Theme.current.fontSM)
                                     .foregroundColor(.green)
                             } else if run.status == "failed" {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(settings.fontSM)
+                                    .font(Theme.current.fontSM)
                                     .foregroundColor(.red)
                             } else {
                                 ProgressView()
@@ -1191,16 +1191,16 @@ private struct MemoDetailRecentRunsSection: View {
                                 date: run.runDate ?? Date(),
                                 formatter: formatTimeAgo
                             )
-                            .font(settings.fontXS)
-                            .foregroundColor(.secondary)
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                             Image(systemName: "chevron.right")
-                                .font(settings.fontXS)
-                                .foregroundColor(.secondary.opacity(0.5))
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.sm)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
                     }
                     .buttonStyle(.plain)
                 }
@@ -1220,24 +1220,24 @@ private struct MemoDetailNotesSection: View {
             HStack {
                 Text("NOTES")
                     .font(.techLabel)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
                 if showNotesSaved {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(settings.fontXS)
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                 }
             }
 
             TextEditor(text: $editedNotes)
                 .font(settings.contentFontBody)
-                .foregroundColor(.primary)
+                .foregroundColor(Theme.current.foreground)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 80)
-                .padding(12)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                .padding(Spacing.sm)
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
                 .onChange(of: editedNotes) { _, _ in
                     onNotesChange()
                 }
@@ -1258,7 +1258,7 @@ private struct MemoDetailPlaybackSection: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Text("PLAYBACK")
                 .font(.techLabel)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             AudioPlayerCard(
                 isPlaying: isPlaying,
@@ -1279,20 +1279,20 @@ private struct MemoDetailDangerZoneSection: View {
     var body: some View {
         Divider()
 
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.sm) {
             Spacer()
 
             Button(action: onDelete) {
                 HStack(spacing: 4) {
                     Image(systemName: "trash")
-                        .font(settings.fontSM)
+                        .font(Theme.current.fontSM)
                     Text("DELETE MEMO")
                         .font(Theme.current.fontSMMedium)
                 }
-                .foregroundColor(.red.opacity(0.8))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                .foregroundColor(.red.opacity(Opacity.prominent))
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
             }
             .buttonStyle(.plain)
         }

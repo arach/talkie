@@ -30,41 +30,41 @@ struct DatabaseSettingsView: View {
             )
         } content: {
             // MARK: - Dictation Retention
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 // Section header with accent bar
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.purple)
                         .frame(width: 3, height: 14)
 
                     Text("DICTATION RETENTION")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     Text("AUTO-DELETE")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                 }
 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
                     Text("Dictations older than the specified time will be automatically deleted to save space.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     // Retention slider
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("Keep for")
                                 .font(Theme.current.fontSM)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
 
                             Spacer()
 
                             Text(formatRetention(hours: live.utteranceTTLHours))
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.primary)
+                                .font(Theme.current.fontBodyMedium)
+                                .foregroundColor(Theme.current.foreground)
                         }
 
                         Stepper(
@@ -77,102 +77,102 @@ struct DatabaseSettingsView: View {
                         .labelsHidden()
 
                         // Quick presets
-                        HStack(spacing: 8) {
+                        HStack(spacing: Spacing.sm) {
                             ForEach([24, 48, 168, 336, 720], id: \.self) { hours in
                                 Button(action: { live.utteranceTTLHours = hours }) {
                                     Text(formatRetentionShort(hours: hours))
-                                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                        .foregroundColor(live.utteranceTTLHours == hours ? .white : .secondary)
-                                        .padding(.horizontal, 8)
+                                        .font(.labelSmall)
+                                        .foregroundColor(live.utteranceTTLHours == hours ? .white : Theme.current.foregroundSecondary)
+                                        .padding(.horizontal, Spacing.sm)
                                         .padding(.vertical, 4)
                                         .background(live.utteranceTTLHours == hours ? Color.purple : Theme.current.surface2)
-                                        .cornerRadius(4)
+                                        .cornerRadius(CornerRadius.xs)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Memo Retention
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.cyan)
                         .frame(width: 3, height: 14)
 
                     Text("MEMO RETENTION")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     HStack(spacing: 4) {
                         Image(systemName: "infinity")
-                            .font(.system(size: 10))
+                            .font(Theme.current.fontXS)
                         Text("PERMANENT")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(.techLabelSmall)
                     }
-                    .foregroundColor(.green.opacity(0.8))
+                    .foregroundColor(.green.opacity(Opacity.prominent))
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(.green.opacity(0.7))
+                        .foregroundColor(.green.opacity(Opacity.prominent))
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text("Memos are kept indefinitely")
                             .font(Theme.current.fontSM)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Theme.current.foreground)
                         Text("Manually delete memos you no longer need from the Memos list.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                     }
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Cleanup Actions
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.orange)
                         .frame(width: 3, height: 14)
 
                     Text("MAINTENANCE")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
 
-                VStack(spacing: 12) {
+                VStack(spacing: Spacing.sm) {
                     // Prune old dictations
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "clock.badge.xmark")
-                            .font(.system(size: 18))
+                            .font(.headlineLarge)
                             .foregroundColor(.orange)
                             .frame(width: 24)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("Prune Old Dictations")
                                 .font(Theme.current.fontSMMedium)
                             Text("Delete dictations older than retention period now")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()
@@ -189,23 +189,23 @@ struct DatabaseSettingsView: View {
                         .buttonStyle(.bordered)
                         .disabled(isPruning)
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Clean orphaned files
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "doc.badge.gearshape")
-                            .font(.system(size: 18))
+                            .font(.headlineLarge)
                             .foregroundColor(.blue)
                             .frame(width: 24)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("Clean Orphaned Files")
                                 .font(Theme.current.fontSMMedium)
                             Text("Remove audio files with no database entry")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()
@@ -222,29 +222,29 @@ struct DatabaseSettingsView: View {
                         .buttonStyle(.bordered)
                         .disabled(isCleaningOrphans)
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
 
                 // Status message
                 if let message = statusMessage {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
                             .font(Theme.current.fontXS)
                             .foregroundColor(message.contains("✓") ? .green : .blue)
                         Text(message)
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
-                    .padding(8)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             logger.debug("DatabaseSettingsView appeared")
@@ -316,65 +316,65 @@ struct CloudSettingsView: View {
                 subtitle: "Configure cloud sync and backup."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 // Coming soon card
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack(spacing: Spacing.sm) {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(Color.blue)
                             .frame(width: 3, height: 14)
 
                         Text("ICLOUD SYNC")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Spacer()
 
                         Text("COMING SOON")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(.techLabelSmall)
                             .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, Spacing.xs)
+                            .padding(.vertical, Spacing.xxs)
                             .background(Color.blue)
                             .cornerRadius(3)
                     }
 
-                    HStack(spacing: 16) {
+                    HStack(spacing: Spacing.md) {
                         Image(systemName: "icloud")
-                            .font(.system(size: 32))
-                            .foregroundColor(.blue.opacity(0.6))
+                            .font(.displayMedium)
+                            .foregroundColor(.blue.opacity(Opacity.half))
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Sync Across Devices")
                                 .font(Theme.current.fontSMMedium)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Theme.current.foreground)
 
                             Text("Sync your memos and dictations seamlessly across all your Apple devices using iCloud.")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary.opacity(0.8))
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    .padding(16)
+                    .padding(Spacing.md)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Feature list
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         featureRow(icon: "arrow.triangle.2.circlepath", text: "Automatic background sync")
                         featureRow(icon: "lock.shield", text: "End-to-end encryption")
                         featureRow(icon: "iphone.and.arrow.forward", text: "Seamless iPhone integration")
                     }
                 }
-                .padding(16)
+                .padding(Spacing.md)
                 .background(Theme.current.surface2)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
         }
     }
 
     private func featureRow(icon: String, text: String) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
                 .font(Theme.current.fontXS)
                 .foregroundColor(.blue)
@@ -382,7 +382,7 @@ struct CloudSettingsView: View {
 
             Text(text)
                 .font(Theme.current.fontXS)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 }

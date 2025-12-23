@@ -37,7 +37,7 @@ struct LiveSettingsView: View {
             VStack(spacing: 0) {
                 // Settings Header
                 Text("LIVE SETTINGS")
-                    .font(.system(size: 10, weight: .bold, design: .default))
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(Theme.current.foreground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
@@ -46,7 +46,7 @@ struct LiveSettingsView: View {
 
                 // Menu Sections
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 16) {
+                    VStack(spacing: Spacing.md) {
                         // GENERAL
                         SettingsSidebarSection(title: "GENERAL", isActive: selectedSection == .general) {
                             SettingsSidebarItem(
@@ -193,18 +193,18 @@ struct RadioButtonRow<T: Equatable>: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Spacing.sm) {
                 Image(systemName: selectedValue == value ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 14))
-                    .foregroundColor(selectedValue == value ? .accentColor : .secondary)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(selectedValue == value ? .accentColor : Theme.current.foregroundSecondary)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(title)
                         .font(Theme.current.fontSM)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                     Text(description)
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
 
                 Spacer()
@@ -217,7 +217,7 @@ struct RadioButtonRow<T: Equatable>: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.vertical, 6)
+        .padding(.vertical, Spacing.xs)
     }
 }
 
@@ -241,16 +241,16 @@ struct GeneralLiveSettingsView: View {
                 LiveRecordingHealthCard()
 
                 // Main layout: Screen LEFT, Settings RIGHT
-                HStack(alignment: .top, spacing: 24) {
+                HStack(alignment: .top, spacing: Spacing.xl) {
                     // LEFT: Mock screen preview
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("PREVIEW")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Hover to simulate recording")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                         LivePreviewScreen(
                             overlayStyle: $live.overlayStyle,
@@ -263,10 +263,10 @@ struct GeneralLiveSettingsView: View {
                     // RIGHT: Settings (HUD top, ON AIR middle, Pill bottom)
                     VStack(alignment: .leading, spacing: 0) {
                         // HUD Section (top-aligned)
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
                             Text("HUD")
                                 .font(Theme.current.fontXSBold)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
 
                             StyledToggle(
                                 label: "Show HUD overlay",
@@ -284,14 +284,14 @@ struct GeneralLiveSettingsView: View {
                             )
 
                             if live.overlayStyle.showsTopOverlay {
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: Spacing.sm) {
                                     LiveStyleSelector(selection: $live.overlayStyle)
 
                                     // Speed toggle (applies to both particles and waveform)
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: Spacing.sm) {
                                         Text("Speed")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(TalkieTheme.textTertiary)
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
 
                                         Picker("", selection: Binding(
                                             get: {
@@ -317,23 +317,23 @@ struct GeneralLiveSettingsView: View {
                                         .frame(width: 100)
                                     }
                                 }
-                                .padding(.leading, 4)
+                                .padding(.leading, Spacing.xxs)
                             }
                         }
 
-                        Spacer().frame(height: 16)
+                        Spacer().frame(height: Spacing.md)
 
                         // ON AIR (small middle section)
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack(spacing: Spacing.xs) {
                                 Text("ON AIR")
                                     .font(.system(size: 8, weight: .black))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
+                                    .padding(.vertical, Spacing.xxs)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .fill(live.showOnAir ? Color.red : Color.gray.opacity(0.5))
+                                        RoundedRectangle(cornerRadius: Spacing.xxs)
+                                            .fill(live.showOnAir ? Color.red : Color.gray.opacity(Opacity.half))
                                     )
 
                                 Toggle("", isOn: $live.showOnAir)
@@ -343,17 +343,17 @@ struct GeneralLiveSettingsView: View {
                             }
 
                             Text("Neon sign in top-left during recording")
-                                .font(.system(size: 9))
-                                .foregroundColor(TalkieTheme.textMuted)
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundMuted)
                         }
 
                         Spacer()
 
                         // Pill Section (bottom-aligned)
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
                             Text("PILL")
                                 .font(Theme.current.fontXSBold)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
 
                             StyledToggle(
                                 label: "Expand during recording",
@@ -399,16 +399,16 @@ struct ShortcutsLiveSettingsView: View {
                 subtitle: "Configure keyboard shortcuts for Live recording."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
                 // Toggle Hotkey
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("TOGGLE RECORDING")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Press once to start recording, press again to stop.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     HotkeyRecorderButton(
                         hotkey: $live.hotkey,
@@ -420,11 +420,11 @@ struct ShortcutsLiveSettingsView: View {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("PUSH-TO-TALK")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Hold down to record, release to stop.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     StyledToggle(
                         label: "Enable Push-to-Talk",
@@ -460,16 +460,16 @@ struct AudioLiveSettingsView: View {
                 subtitle: "Configure microphone input for Live recording."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
                 // Microphone Selection
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("INPUT DEVICE")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Select which microphone to use for recording. The level meter shows real-time input volume.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     AudioDeviceSelector()
                 }
@@ -498,14 +498,14 @@ struct SoundsLiveSettingsView: View {
                 subtitle: "Configure audio feedback for recording events."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
                 // Event Selector
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("SELECT EVENT")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         ForEach(SoundEvent.allCases, id: \.rawValue) { event in
                             SoundEventCard(
                                 event: event,
@@ -536,14 +536,14 @@ struct SoundsLiveSettingsView: View {
                 }
 
                 // Sound Grid for selected event
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("SOUND FOR \(selectedEvent.rawValue.uppercased())")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text(selectedEvent.description)
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     SoundGrid(selection: {
                         switch selectedEvent {
@@ -594,11 +594,11 @@ struct TranscriptionLiveSettingsView: View {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("TRANSCRIPTION MODELS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Select a model to use for Live transcription. Models are downloaded and managed by the engine.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     // Model grid
                     if engineClient.availableModels.isEmpty {
@@ -607,16 +607,16 @@ struct TranscriptionLiveSettingsView: View {
                                 .controlSize(.small)
                             Text("Loading available models...")
                                 .font(Theme.current.fontSM)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                         .padding(.vertical, 20)
                     } else {
                         LazyVGrid(
                             columns: [
-                                GridItem(.flexible(), spacing: 8),
-                                GridItem(.flexible(), spacing: 8)
+                                GridItem(.flexible(), spacing: Spacing.sm),
+                                GridItem(.flexible(), spacing: Spacing.sm)
                             ],
-                            spacing: 8
+                            spacing: Spacing.sm
                         ) {
                             ForEach(engineClient.availableModels) { model in
                                 STTModelCard(
@@ -638,7 +638,7 @@ struct TranscriptionLiveSettingsView: View {
                                 )
                             }
                         }
-                        .padding(.top, 8)
+                        .padding(.top, Spacing.sm)
                     }
                 }
             }
@@ -726,19 +726,19 @@ struct AutoPasteLiveSettingsView: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("ROUTING MODE")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .top, spacing: Spacing.xs) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                             .padding(.top, 1)
                         Text("Controls where transcribed text is sent after recording completes.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.bottom, 4)
@@ -762,19 +762,19 @@ struct AutoPasteLiveSettingsView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("BEHAVIOR")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .top, spacing: Spacing.xs) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                             .padding(.top, 1)
                         Text("Contextual options for how Live interacts with your workflow.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.bottom, 4)
@@ -787,19 +787,19 @@ struct AutoPasteLiveSettingsView: View {
                 }
 
                 // Primary Context Source
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("CONTEXT PREFERENCE")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .top, spacing: Spacing.xs) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                             .padding(.top, 1)
                         Text("Which app context should be considered primary for recordings.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.bottom, 4)
@@ -844,14 +844,14 @@ struct StorageLiveSettingsView: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("RETENTION PERIOD")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Recordings older than this will be automatically deleted.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     HStack {
                         Stepper(
@@ -882,7 +882,7 @@ struct PermissionsLiveSettingsView: View {
                 subtitle: "System permissions required for Live features."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 // Microphone
                 PermissionLiveRow(
                     icon: "mic.fill",
@@ -913,18 +913,18 @@ struct PermissionsLiveSettingsView: View {
             }
 
             Divider()
-                .padding(.vertical, 12)
+                .padding(.vertical, Spacing.sm)
 
             // Context Capture Privacy Controls
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("CONTEXT CAPTURE")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Controls what information is captured about active apps during recording.")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                 }
 
                 // Session kill-switch
@@ -939,10 +939,10 @@ struct PermissionsLiveSettingsView: View {
 
                 // Detail level (only shown if session allowed)
                 if LiveSettings.shared.contextCaptureSessionAllowed {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("Detail Level")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .font(Theme.current.fontSMMedium)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         ForEach([ContextCaptureDetail.off, .metadataOnly, .rich], id: \.rawValue) { detail in
                             RadioButtonRow(
@@ -959,24 +959,24 @@ struct PermissionsLiveSettingsView: View {
             }
 
             Divider()
-                .padding(.vertical, 8)
+                .padding(.vertical, Spacing.sm)
 
             // Refresh button
             HStack {
                 Button(action: {
                     permissionsManager.refreshAllPermissions()
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10))
+                            .font(Theme.current.fontXS)
                         Text("REFRESH STATUS")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(Theme.current.fontXSMedium)
                     }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Color.secondary.opacity(Opacity.light))
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
 
@@ -985,31 +985,31 @@ struct PermissionsLiveSettingsView: View {
                 Button(action: {
                     permissionsManager.openPrivacySettings()
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "gear")
-                            .font(.system(size: 10))
+                            .font(Theme.current.fontXS)
                         Text("OPEN PRIVACY SETTINGS")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(Theme.current.fontXSMedium)
                     }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Color.secondary.opacity(Opacity.light))
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
 
             // Info note
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(alignment: .top, spacing: Spacing.sm) {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("TalkieLive runs as a background helper app. These permissions apply to the TalkieLive helper, not Talkie. Grant when prompted, or check System Settings → Privacy & Security.")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -1018,27 +1018,27 @@ struct PermissionsLiveSettingsView: View {
                    bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
                     Divider()
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "app.badge")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("Look for TalkieLive helper in System Settings:")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.secondary)
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
 
                             Text("jdi.talkie.live" + (bundleID.hasSuffix(".dev") ? ".dev" : bundleID.hasSuffix(".staging") ? ".staging" : ""))
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.8))
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                                 .textSelection(.enabled)
                         }
                     }
                 }
             }
-            .padding(10)
-            .background(Color.secondary.opacity(0.05))
-            .cornerRadius(8)
+            .padding(Spacing.sm)
+            .background(Color.secondary.opacity(Opacity.subtle))
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             permissionsManager.refreshAllPermissions()
@@ -1058,56 +1058,56 @@ private struct PermissionLiveRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             // Icon
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(Theme.current.fontTitle)
                 .foregroundColor(status.color)
                 .frame(width: 32, height: 32)
-                .background(status.color.opacity(0.15))
-                .cornerRadius(8)
+                .background(status.color.opacity(Opacity.medium))
+                .cornerRadius(CornerRadius.sm)
 
             // Name and description
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(name)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.primary)
+                    .font(Theme.current.fontSMMedium)
+                    .foregroundColor(Theme.current.foreground)
 
                 Text(description)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             Spacer()
 
             // Status badge
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.xxs) {
                 Image(systemName: status.icon)
-                    .font(.system(size: 10))
+                    .font(Theme.current.fontXS)
                 Text(status.displayName)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(Theme.current.fontXSMedium)
             }
             .foregroundColor(status.color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(status.color.opacity(0.1))
-            .cornerRadius(4)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xxs)
+            .background(status.color.opacity(Opacity.light))
+            .cornerRadius(CornerRadius.xs)
 
             // Action button
             Button(action: onRequest) {
                 Text(status == .granted ? "SETTINGS" : "ENABLE")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(status == .granted ? .secondary : .white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(status == .granted ? Color.secondary.opacity(0.15) : Color.accentColor)
-                    .cornerRadius(4)
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(status == .granted ? Theme.current.foregroundSecondary : .white)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(status == .granted ? Color.secondary.opacity(Opacity.medium) : Color.accentColor)
+                    .cornerRadius(CornerRadius.xs)
             }
             .buttonStyle(.plain)
         }
-        .padding(12)
+        .padding(Spacing.sm)
         .background(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .onHover { isHovered = $0 }
     }
 }

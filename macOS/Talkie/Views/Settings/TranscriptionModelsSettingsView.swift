@@ -28,24 +28,24 @@ struct TranscriptionModelsSettingsView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
                 // Header
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("LIVE / SETTINGS / TRANSCRIPTION")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(settingsManager.midnightTextTertiary)
+                        .font(Theme.current.fontXSMedium)
+                        .foregroundColor(Theme.current.foregroundMuted)
 
                     Text("TRANSCRIPTION MODELS")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(settingsManager.midnightTextPrimary)
+                        .font(Theme.current.fontHeadlineBold)
+                        .foregroundColor(Theme.current.foreground)
 
                     Text("Select a model for speech-to-text. Larger models are more accurate but slower.")
-                        .font(.system(size: 12))
-                        .foregroundColor(settingsManager.midnightTextSecondary)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineLimit(2)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.top, Spacing.md)
 
                 // Whisper Models Section
                 if !whisperModels.isEmpty {
@@ -68,7 +68,7 @@ struct TranscriptionModelsSettingsView: View {
                 Spacer(minLength: 40)
             }
         }
-        .background(settingsManager.midnightBase)
+        .background(Theme.current.background)
         .onAppear {
             engineClient.refreshStatus()
         }
@@ -92,31 +92,31 @@ struct TranscriptionModelsSettingsView: View {
     // MARK: - Model Family Section
 
     private func modelFamilySection(title: String, subtitle: String, models: [ModelInfo]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             // Section header with family-specific colors
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(title == "WHISPER" ? Color.orange : Color.cyan)
                     .frame(width: 3, height: 14)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(settingsManager.midnightTextPrimary)
+                        .font(Theme.current.fontSMBold)
+                        .foregroundColor(Theme.current.foreground)
                     Text(subtitle)
-                        .font(.system(size: 10))
-                        .foregroundColor(settingsManager.midnightTextTertiary)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
                 }
 
                 Spacer()
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, Spacing.lg)
 
             // Model cards grid - 2 columns matching Models sidebar style
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ], spacing: 8) {
+                GridItem(.flexible(), spacing: Spacing.sm),
+                GridItem(.flexible(), spacing: Spacing.sm)
+            ], spacing: Spacing.sm) {
                 ForEach(models) { model in
                     STTModelCard(
                         modelInfo: model,
@@ -129,7 +129,7 @@ struct TranscriptionModelsSettingsView: View {
                     )
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, Spacing.lg)
         }
     }
 

@@ -29,15 +29,15 @@ struct APISettingsView: View {
             )
         } content: {
             // MARK: - Provider API Keys
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.blue)
                         .frame(width: 3, height: 14)
 
                     Text("CLOUD PROVIDERS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -49,17 +49,17 @@ struct APISettingsView: View {
                         settingsManager.hasGroqKey()
                     ].filter { $0 }.count
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xxs) {
                         Circle()
                             .fill(configuredCount > 0 ? Color.green : Color.orange)
                             .frame(width: 6, height: 6)
                         Text("\(configuredCount)/4 CONFIGURED")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(.techLabelSmall)
                             .foregroundColor(configuredCount > 0 ? .green : .orange)
                     }
                 }
 
-                VStack(spacing: 12) {
+                VStack(spacing: Spacing.sm) {
                     APIKeyRow(
                         provider: "OpenAI",
                         icon: "brain.head.profile",
@@ -242,37 +242,37 @@ struct APISettingsView: View {
                     )
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - LLM Cost Tier Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.purple)
                         .frame(width: 3, height: 14)
 
                     Text("LLM COST TIER")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     // Current tier badge
                     Text(settingsManager.llmCostTier.displayName.uppercased())
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.techLabelSmall)
                         .foregroundColor(tierColor(settingsManager.llmCostTier))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(tierColor(settingsManager.llmCostTier).opacity(0.15))
-                        .cornerRadius(3)
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, Spacing.xxs)
+                        .background(tierColor(settingsManager.llmCostTier).opacity(Opacity.medium))
+                        .cornerRadius(CornerRadius.xs)
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Controls the default model quality for workflow LLM steps.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Picker("Cost Tier", selection: $settings.llmCostTier) {
                         ForEach(LLMCostTier.allCases, id: \.self) { tier in
@@ -283,43 +283,43 @@ struct APISettingsView: View {
                     .labelsHidden()
 
                     // Tier description card
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: tierIcon(settingsManager.llmCostTier))
-                            .font(.system(size: 18))
+                            .font(Theme.current.fontHeadline)
                             .foregroundColor(tierColor(settingsManager.llmCostTier))
                             .frame(width: 24)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text(settingsManager.llmCostTier.displayName)
                                 .font(Theme.current.fontSMMedium)
                             Text(tierDescription(settingsManager.llmCostTier))
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Keychain Info
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: "lock.shield")
                     .font(Theme.current.fontXS)
                     .foregroundColor(.green)
 
                 Text("API keys are encrypted and stored in the macOS Keychain for maximum security.")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
-            .padding(12)
-            .background(Color.green.opacity(0.1))
-            .cornerRadius(8)
+            .padding(Spacing.sm)
+            .background(Color.green.opacity(Opacity.light))
+            .cornerRadius(CornerRadius.sm)
         }
     }
 
@@ -378,42 +378,42 @@ struct APIKeyRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             // Header row
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: icon)
                     .font(Theme.current.fontTitle)
-                    .foregroundColor(isConfigured ? settings.resolvedAccentColor : .secondary)
+                    .foregroundColor(isConfigured ? settings.resolvedAccentColor : Theme.current.foregroundSecondary)
                     .frame(width: 20)
 
                 Text(provider.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(Theme.current.fontSMBold)
 
                 Spacer()
 
                 // Status indicator
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.xs) {
                     Circle()
                         .fill(isConfigured ? Color.green : Color.orange)
                         .frame(width: 6, height: 6)
                     Text(isConfigured ? "CONFIGURED" : "NOT SET")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(.techLabelSmall)
                         .foregroundColor(isConfigured ? .green : .orange)
                 }
             }
 
             if isEditing {
                 // Edit mode
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     SecureField(placeholder, text: $editingKey)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(Theme.current.fontSM)
                         .textFieldStyle(.plain)
-                        .padding(10)
+                        .padding(Spacing.sm)
                         .background(Theme.current.surface1)
-                        .cornerRadius(6)
+                        .cornerRadius(CornerRadius.xs)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(settings.resolvedAccentColor.opacity(0.5), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                .stroke(settings.resolvedAccentColor.opacity(Opacity.half), lineWidth: 1)
                         )
 
                     Button(action: onCancel) {
@@ -432,11 +432,11 @@ struct APIKeyRow: View {
                 }
             } else if isConfigured {
                 // Display mode with key - passive text field style
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     // Key display styled as disabled text field
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.sm) {
                         Text(isRevealed ? (currentKey ?? "") : maskedKey)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(Theme.current.fontSM)
                             .foregroundColor(Theme.current.foregroundMuted)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -452,8 +452,8 @@ struct APIKeyRow: View {
                         .buttonStyle(.plain)
                         .help(isRevealed ? "Hide API key" : "Reveal API key")
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.sm)
                     .background(Theme.current.surface1)
                     .cornerRadius(CornerRadius.xs)
                     .overlay(
@@ -478,9 +478,9 @@ struct APIKeyRow: View {
                 }
             } else {
                 // Not configured - show add button
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     Button(action: onEdit) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.xs) {
                             Image(systemName: "plus.circle.fill")
                                 .font(Theme.current.fontXS)
                             Text("Add API Key")
@@ -492,7 +492,7 @@ struct APIKeyRow: View {
                     Spacer()
 
                     Link(destination: URL(string: helpURL)!) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Text("Get key")
                                 .font(Theme.current.fontXS)
                             Image(systemName: "arrow.up.right.square")
@@ -503,12 +503,12 @@ struct APIKeyRow: View {
                 }
             }
         }
-        .padding(16)
+        .padding(Spacing.md)
         .background(Theme.current.surface2)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .stroke(Theme.current.foreground.opacity(Opacity.light), lineWidth: 1)
         )
     }
 }

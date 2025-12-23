@@ -23,7 +23,7 @@ struct AIResultSection<Content: View>: View {
                 Text(title.uppercased())
                     .font(.techLabel)
             }
-            .foregroundColor(.secondary)
+            .foregroundColor(Theme.current.foregroundSecondary)
 
             content()
                 .padding(Spacing.md)
@@ -51,19 +51,19 @@ struct ActionButtonMac: View {
 
     var body: some View {
         Button(action: triggerAction) {
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 ZStack {
                     // Main icon
                     Image(systemName: icon)
-                        .font(SettingsManager.shared.fontTitle)
-                        .foregroundColor(triggered ? .accentColor : .secondary)
+                        .font(Theme.current.fontTitle)
+                        .foregroundColor(triggered ? .accentColor : Theme.current.foregroundSecondary)
                         .frame(width: 20, height: 20)
                         .scaleEffect(triggered ? 1.2 : 1.0)
 
                     // Triggered flash overlay
                     if triggered {
                         Circle()
-                            .fill(Color.accentColor.opacity(0.3))
+                            .fill(Color.accentColor.opacity(Opacity.strong))
                             .frame(width: 32, height: 32)
                             .scaleEffect(triggered ? 1.5 : 0.5)
                             .opacity(triggered ? 0 : 1)
@@ -73,11 +73,11 @@ struct ActionButtonMac: View {
 
                 Text(title)
                     .font(Theme.current.fontXSMedium)
-                    .foregroundColor(triggered ? .accentColor : .secondary)
+                    .foregroundColor(triggered ? .accentColor : Theme.current.foregroundSecondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.vertical, Spacing.sm)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
         }
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {
@@ -85,7 +85,7 @@ struct ActionButtonMac: View {
             if runCount > 0 {
                 Text("\(runCount)")
                     .font(.techLabelSmall)
-                    .foregroundColor(.primary.opacity(0.7))
+                    .foregroundColor(Theme.current.foreground.opacity(Opacity.prominent))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(SettingsManager.shared.surfaceSelected)
@@ -128,20 +128,20 @@ struct WorkflowRunListItem: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.sm) {
                 // Icon
                 Image(systemName: workflowIcon)
-                    .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 24, height: 24)
                     .background(SettingsManager.shared.surfaceAlternate)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 // Workflow name (clickable to navigate)
                 Button(action: onNavigateToWorkflow) {
                     Text(workflowName)
                         .font(Theme.current.fontBodyMedium)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                         .underline(isHovering)
                 }
                 .buttonStyle(.plain)
@@ -149,32 +149,32 @@ struct WorkflowRunListItem: View {
                 // Model badge
                 if let model = modelInfo {
                     Text(model)
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.7))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, Spacing.xxs)
                         .background(SettingsManager.shared.surfaceAlternate)
-                        .cornerRadius(3)
+                        .cornerRadius(CornerRadius.xs)
                 }
 
                 Spacer()
 
                 // Timestamp
                 Text(formatRunDate(runDate))
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
 
                 // Chevron
                 Image(systemName: "chevron.right")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary.opacity(0.4))
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.strong))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.sm)
             .background(isHovering ? SettingsManager.shared.surfaceHover : Theme.current.surface1)
-            .cornerRadius(6)
+            .cornerRadius(CornerRadius.sm)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
                     .strokeBorder(SettingsManager.shared.borderDefault, lineWidth: 0.5)
             )
         }
@@ -220,75 +220,75 @@ struct WorkflowRunDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header bar
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.sm) {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
 
                 Image(systemName: workflowIcon)
-                    .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Button(action: onNavigateToWorkflow) {
                     Text(workflowName)
                         .font(Theme.current.fontBodyMedium)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                 }
                 .buttonStyle(.plain)
 
                 if let model = modelId {
                     Text(model)
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.7))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, Spacing.xxs)
                         .background(SettingsManager.shared.surfaceAlternate)
-                        .cornerRadius(3)
+                        .cornerRadius(CornerRadius.xs)
                 }
 
                 Spacer()
 
                 Text(formatFullDate(runDate))
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.sm)
             .background(Theme.current.surface1)
 
             Divider()
-                .opacity(0.5)
+                .opacity(Opacity.half)
 
             // Step-by-step execution
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
                     if stepExecutions.isEmpty {
                         // Fallback to simple output if no step data
                         if let output = run.output, !output.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 Text("OUTPUT")
                                     .font(Theme.current.fontSMBold)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
                                 Text(output)
                                     .font(SettingsManager.shared.contentFontBody)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(Theme.current.foreground)
                                     .textSelection(.enabled)
                                     .lineSpacing(3)
-                                    .padding(12)
+                                    .padding(Spacing.sm)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Theme.current.surface1)
-                                    .cornerRadius(6)
+                                    .cornerRadius(CornerRadius.sm)
                             }
                         }
                     } else {
@@ -313,7 +313,7 @@ struct WorkflowRunDetailView: View {
                         }
                     }
                 }
-                .padding(16)
+                .padding(Spacing.lg)
             }
         }
         .background(SettingsManager.shared.surfaceInput)
@@ -336,34 +336,34 @@ struct StepExecutionCard: View {
     @State private var showInput = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             // Step header
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 Text("\(step.stepNumber)")
                     .font(Theme.current.fontSMBold)
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
                     .background(settings.resolvedAccentColor)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 Image(systemName: step.stepIcon)
-                    .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text(step.stepType.uppercased())
                     .font(Theme.current.fontSMBold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 Spacer()
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
                         .font(Theme.current.fontXSMedium)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 6)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 3)
                         .background(SettingsManager.shared.surfaceAlternate)
-                        .cornerRadius(3)
+                        .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
@@ -373,28 +373,28 @@ struct StepExecutionCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("INPUT")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
 
                     Text(step.input)
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineSpacing(2)
                         .lineLimit(10)
-                        .padding(10)
+                        .padding(Spacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(SettingsManager.shared.surfaceAlternate)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                 }
             }
 
             // Output
             OutputCard(step.output, label: "output → {{\(step.outputKey)}}", isHighlighted: isLast)
         }
-        .padding(12)
+        .padding(Spacing.sm)
         .background(Theme.current.surface2)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .strokeBorder(SettingsManager.shared.borderDefault, lineWidth: 0.5)
         )
     }
@@ -407,9 +407,9 @@ struct BrowseWorkflowsButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 Image(systemName: "magnifyingglass")
-                    .font(SettingsManager.shared.fontTitle)
+                    .font(Theme.current.fontTitle)
                     .foregroundColor(.accentColor)
 
                 Text("MORE")
@@ -417,14 +417,14 @@ struct BrowseWorkflowsButton: View {
                     .foregroundColor(.accentColor)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, Spacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.accentColor.opacity(isHovering ? 0.15 : 0.08))
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(Color.accentColor.opacity(isHovering ? Opacity.medium : Opacity.light))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color.accentColor.opacity(0.3), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .strokeBorder(Color.accentColor.opacity(Opacity.strong), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -464,7 +464,7 @@ struct WaveformView: View {
                     let isPast = barProgress < progress
 
                     Rectangle()
-                        .fill(isPast ? Color.accentColor : Color.secondary.opacity(0.25))
+                        .fill(isPast ? Color.accentColor : Theme.current.foregroundSecondary.opacity(Opacity.strong))
                         .frame(width: max(1, barWidth), height: geometry.size.height * barHeight(at: index))
                 }
             }
@@ -504,7 +504,7 @@ struct OutputCard: View {
                     if let label = label {
                         Text(label.uppercased())
                             .font(.techLabelSmall)
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                     }
 
                     Spacer()
@@ -513,17 +513,17 @@ struct OutputCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: copied ? "checkmark" : "doc.on.doc")
                                 .font(Theme.current.fontXSMedium)
-                                .foregroundColor(copied ? .green : .secondary.opacity(0.5))
+                                .foregroundColor(copied ? .green : Theme.current.foregroundSecondary.opacity(Opacity.half))
                             if copied {
                                 Text("COPIED")
                                     .font(.techLabelSmall)
                             }
                         }
-                        .foregroundColor(copied ? .green : .secondary.opacity(0.5))
-                        .padding(.horizontal, 6)
+                        .foregroundColor(copied ? .green : Theme.current.foregroundSecondary.opacity(Opacity.half))
+                        .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 3)
                         .background(copied ? SettingsManager.shared.surfaceSuccess : SettingsManager.shared.surfaceAlternate)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -532,7 +532,7 @@ struct OutputCard: View {
             // Content
             Text(displayContent)
                 .font(.bodySmall)
-                .foregroundColor(.primary)
+                .foregroundColor(Theme.current.foreground)
                 .textSelection(.enabled)
                 .lineSpacing(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -674,9 +674,9 @@ struct TranscriptQuickActions: View {
                     .foregroundColor(.green)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, Spacing.sm)
         .padding(.vertical, 4)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.95), in: RoundedRectangle(cornerRadius: 8))
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.95), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
     }
 
     // MARK: - Button Views
@@ -689,7 +689,7 @@ struct TranscriptQuickActions: View {
         } label: {
             Image(systemName: copiedState == "copy" ? "checkmark" : "doc.on.doc")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(copiedState == "copy" ? .green : .secondary)
+                .foregroundColor(copiedState == "copy" ? .green : Theme.current.foregroundSecondary)
                 .frame(width: 24, height: 24)
         }
         .buttonStyle(.plain)
@@ -714,7 +714,7 @@ struct TranscriptQuickActions: View {
                 } else {
                     Image(systemName: "app")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .frame(width: 20, height: 20)
                 }
             }
@@ -871,71 +871,71 @@ struct WorkflowPickerSheet: View {
                     Text("Run Workflow")
                         .font(Theme.current.fontTitleBold)
                     Text(memo.title ?? "Untitled Memo")
-                        .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontBody)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineLimit(1)
                 }
                 Spacer()
                 Button(action: onCancel) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(SettingsManager.shared.fontHeadline)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontHeadline)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(16)
+            .padding(Spacing.lg)
 
             // Search bar
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: "magnifyingglass")
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 TextField("Search workflows...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(SettingsManager.shared.fontBody)
+                    .font(Theme.current.fontBody)
 
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(SettingsManager.shared.fontSM)
-                            .foregroundColor(.secondary)
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(10)
+            .padding(Spacing.sm)
             .background(Theme.current.surface1)
-            .cornerRadius(8)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .cornerRadius(CornerRadius.sm)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.bottom, Spacing.sm)
 
             Divider()
 
             if availableWorkflows.isEmpty {
-                VStack(spacing: 16) {
+                VStack(spacing: Spacing.lg) {
                     Image(systemName: "flowchart")
                         .font(SettingsManager.shared.fontDisplay)
-                        .foregroundColor(.secondary.opacity(0.4))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.strong))
 
                     Text("No Workflows")
                         .font(Theme.current.fontBodyMedium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Create a workflow in Settings → Workflows")
-                        .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filteredWorkflows.isEmpty {
-                VStack(spacing: 12) {
+                VStack(spacing: Spacing.sm) {
                     Image(systemName: "magnifyingglass")
-                        .font(SettingsManager.shared.fontTitle)
-                        .foregroundColor(.secondary.opacity(0.4))
+                        .font(Theme.current.fontTitle)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.strong))
 
                     Text("No matching workflows")
-                        .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontBody)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -960,8 +960,8 @@ struct WorkflowPickerSheet: View {
             // Footer
             HStack {
                 Text("\(filteredWorkflows.count) workflow\(filteredWorkflows.count == 1 ? "" : "s")")
-                    .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
@@ -979,7 +979,7 @@ struct WorkflowPickerSheet: View {
                 .disabled(selectedWorkflow == nil)
                 .keyboardShortcut(.return, modifiers: [])
             }
-            .padding(16)
+            .padding(Spacing.lg)
         }
         .frame(width: 450, height: 450)
         .background(SettingsManager.shared.surfaceInput)
@@ -991,23 +991,23 @@ struct WorkflowPickerRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             // Icon
             Image(systemName: workflow.icon)
-                .font(SettingsManager.shared.fontTitle)
+                .font(Theme.current.fontTitle)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 28)
 
             // Info
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(workflow.name)
                     .font(Theme.current.fontBodyMedium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 if !workflow.description.isEmpty {
                     Text(workflow.description)
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineLimit(1)
                 }
             }
@@ -1016,8 +1016,8 @@ struct WorkflowPickerRow: View {
 
             // Step count
             Text("\(workflow.steps.count) step\(workflow.steps.count == 1 ? "" : "s")")
-                .font(SettingsManager.shared.fontXS)
-                .foregroundColor(.secondary)
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
         .padding(.vertical, 4)
     }
@@ -1055,7 +1055,7 @@ struct AudioPlayerCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             // Play/Pause button
             Button(action: onTogglePlayback) {
                 ZStack {
@@ -1072,7 +1072,7 @@ struct AudioPlayerCard: View {
             .onHover { isPlayButtonHovered = $0 }
 
             // Waveform + timeline
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 AudioWaveformBars(progress: progress, isPlaying: isPlaying)
                     .frame(height: 32)
 
@@ -1080,13 +1080,13 @@ struct AudioPlayerCard: View {
                 HStack {
                     Text(formatTime(currentTime))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     Text(formatTime(duration))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                 }
             }
 
@@ -1114,31 +1114,31 @@ struct AudioPlayerCard: View {
                 }) {
                     Image(systemName: volumeIcon)
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
                 .help("Adjust volume")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
         .onAppear {
             volume = SettingsManager.shared.playbackVolume
         }
     }
 
     private var playButtonBackground: Color {
-        if isPlaying { return Color.accentColor.opacity(0.25) }
-        if isPlayButtonHovered { return Color(nsColor: .controlBackgroundColor).opacity(0.8) }
-        return Color(nsColor: .separatorColor).opacity(0.3)
+        if isPlaying { return Color.accentColor.opacity(Opacity.strong) }
+        if isPlayButtonHovered { return Color(nsColor: .controlBackgroundColor).opacity(Opacity.prominent) }
+        return Color(nsColor: .separatorColor).opacity(Opacity.strong)
     }
 
     private var playButtonForeground: Color {
-        if isPlaying { return .primary }
-        if isPlayButtonHovered { return .primary }
-        return .secondary
+        if isPlaying { return Theme.current.foreground }
+        if isPlayButtonHovered { return Theme.current.foreground }
+        return Theme.current.foregroundSecondary
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
@@ -1235,7 +1235,7 @@ private struct AudioWaveformBar: View {
         } else if isPast {
             return .accentColor
         } else {
-            return .secondary.opacity(0.3)
+            return Theme.current.foregroundSecondary.opacity(Opacity.strong)
         }
     }
 

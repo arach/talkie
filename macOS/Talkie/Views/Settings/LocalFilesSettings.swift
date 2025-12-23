@@ -30,66 +30,66 @@ struct LocalFilesSettingsView: View {
             )
         } content: {
             // MARK: - Value Proposition
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: "lock.shield.fill")
                     .font(.system(size: 24))
                     .foregroundColor(.green)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("YOUR DATA, YOUR FILES")
                         .font(Theme.current.fontSMBold)
                         .foregroundColor(.green)
 
                     Text("Local files are stored as plain text (Markdown) and standard audio formats. You can open, edit, backup, or move them freely. No lock-in, full portability.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
             }
-            .padding(16)
-            .background(Color.green.opacity(0.08))
-            .cornerRadius(8)
+            .padding(Spacing.md)
+            .background(Color.green.opacity(Opacity.light))
+            .cornerRadius(CornerRadius.sm)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(Color.green.opacity(Opacity.medium), lineWidth: 1)
             )
 
             // MARK: - Transcripts Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(settingsManager.saveTranscriptsLocally ? Color.blue : Color.secondary)
                         .frame(width: 3, height: 14)
 
                     Text("TRANSCRIPTS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xxs) {
                         Circle()
                             .fill(settingsManager.saveTranscriptsLocally ? Color.green : Color.secondary)
                             .frame(width: 6, height: 6)
                         Text(settingsManager.saveTranscriptsLocally ? "ENABLED" : "DISABLED")
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(settingsManager.saveTranscriptsLocally ? .green : .secondary)
+                            .foregroundColor(settingsManager.saveTranscriptsLocally ? .green : Theme.current.foregroundSecondary)
                     }
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Image(systemName: "doc.text.fill")
                         .font(.system(size: 20))
                         .foregroundColor(.blue)
                         .frame(width: 28)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text("Save Transcripts Locally")
                             .font(Theme.current.fontSMMedium)
 
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Text("Save as Markdown with YAML frontmatter.")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                             Link("File format", destination: URL(string: "https://talkie.jdi.do/docs/file-format")!)
                                 .font(Theme.current.fontXS)
                         }
@@ -107,17 +107,17 @@ struct LocalFilesSettingsView: View {
                             }
                         }
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
                 if settingsManager.saveTranscriptsLocally {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("FOLDER PATH")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
-                        HStack(spacing: 8) {
+                        HStack(spacing: Spacing.sm) {
                             TextField("~/Documents/Talkie/Transcripts", text: $settings.transcriptsFolderPath)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 11, design: .monospaced))
@@ -137,50 +137,50 @@ struct LocalFilesSettingsView: View {
                             .help("Open in Finder")
                         }
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Audio Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(settingsManager.saveAudioLocally ? Color.purple : Color.secondary)
                         .frame(width: 3, height: 14)
 
                     Text("AUDIO FILES")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xxs) {
                         Circle()
                             .fill(settingsManager.saveAudioLocally ? Color.green : Color.secondary)
                             .frame(width: 6, height: 6)
                         Text(settingsManager.saveAudioLocally ? "ENABLED" : "DISABLED")
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(settingsManager.saveAudioLocally ? .green : .secondary)
+                            .foregroundColor(settingsManager.saveAudioLocally ? .green : Theme.current.foregroundSecondary)
                     }
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Image(systemName: "waveform")
                         .font(.system(size: 20))
                         .foregroundColor(.purple)
                         .frame(width: 28)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text("Save Audio Files Locally")
                             .font(Theme.current.fontSMMedium)
                         Text("Copy M4A audio recordings to your local folder.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
                     Spacer()
@@ -195,17 +195,17 @@ struct LocalFilesSettingsView: View {
                             }
                         }
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
                 if settingsManager.saveAudioLocally {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("FOLDER PATH")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
-                        HStack(spacing: 8) {
+                        HStack(spacing: Spacing.sm) {
                             TextField("~/Documents/Talkie/Audio", text: $settings.audioFolderPath)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 11, design: .monospaced))
@@ -225,7 +225,7 @@ struct LocalFilesSettingsView: View {
                             .help("Open in Finder")
                         }
 
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.xs) {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(.orange)
@@ -233,46 +233,46 @@ struct LocalFilesSettingsView: View {
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(.orange)
                         }
-                        .padding(8)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(6)
+                        .padding(Spacing.sm)
+                        .background(Color.orange.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // Stats and actions (only show if any local files enabled)
             if settingsManager.localFilesEnabled {
                 // MARK: - Statistics Section
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.sm) {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(Color.cyan)
                             .frame(width: 3, height: 14)
 
                         Text("STATISTICS")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Spacer()
 
                         Button(action: refreshStats) {
-                            HStack(spacing: 4) {
+                            HStack(spacing: Spacing.xxs) {
                                 Image(systemName: "arrow.clockwise")
                                 Text("Refresh")
                             }
                             .font(Theme.current.fontXS)
                         }
                         .buttonStyle(.plain)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
-                    HStack(spacing: 16) {
+                    HStack(spacing: Spacing.md) {
                         LocalFilesStatCard(
                             value: "\(stats.transcripts)",
                             label: "Transcripts",
@@ -295,38 +295,38 @@ struct LocalFilesSettingsView: View {
                         )
                     }
                 }
-                .padding(16)
+                .padding(Spacing.md)
                 .background(Theme.current.surface2)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
                 // MARK: - Quick Actions
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.sm) {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(Color.orange)
                             .frame(width: 3, height: 14)
 
                         Text("QUICK ACTIONS")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Spacer()
                     }
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Button(action: syncNow) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: Spacing.xs) {
                                 Image(systemName: "arrow.triangle.2.circlepath")
                                 Text("Sync Now")
                             }
                             .font(Theme.current.fontXSMedium)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, Spacing.sm)
                         }
                         .buttonStyle(.bordered)
 
                         if let message = statusMessage {
-                            HStack(spacing: 6) {
+                            HStack(spacing: Spacing.xs) {
                                 Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
                                     .foregroundColor(message.contains("✓") ? .green : .blue)
                                 Text(message)
@@ -336,13 +336,13 @@ struct LocalFilesSettingsView: View {
 
                         Spacer()
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
-                .padding(16)
+                .padding(Spacing.md)
                 .background(Theme.current.surface2)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
         }
         .fileImporter(
@@ -407,8 +407,8 @@ private struct LocalFilesStatCard: View {
     let icon: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
                 Image(systemName: icon)
                     .font(Theme.current.fontXS)
                     .foregroundColor(color)
@@ -418,12 +418,12 @@ private struct LocalFilesStatCard: View {
             }
             Text(label)
                 .font(Theme.current.fontXS)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
-        .padding(12)
+        .padding(Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 }
 

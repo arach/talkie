@@ -190,29 +190,29 @@ struct PermissionsSettingsView: View {
             )
         } content: {
             // MARK: - Required Permissions Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(grantedCount == 3 ? Color.green : Color.orange)
+                        .fill(grantedCount == 3 ? SemanticColor.success : SemanticColor.warning)
                         .frame(width: 3, height: 14)
 
                     Text("REQUIRED PERMISSIONS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xxs) {
                         Circle()
-                            .fill(grantedCount == 3 ? Color.green : Color.orange)
+                            .fill(grantedCount == 3 ? SemanticColor.success : SemanticColor.warning)
                             .frame(width: 6, height: 6)
                         Text("\(grantedCount)/3 GRANTED")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(grantedCount == 3 ? .green : .orange)
+                            .font(.techLabelSmall)
+                            .foregroundColor(grantedCount == 3 ? SemanticColor.success : SemanticColor.warning)
                     }
                 }
 
-                VStack(spacing: 8) {
+                VStack(spacing: Spacing.sm) {
                     // Microphone
                     PermissionRow(
                         icon: "mic.fill",
@@ -252,29 +252,29 @@ struct PermissionsSettingsView: View {
                     )
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Actions Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.blue)
+                        .fill(SemanticColor.pin)
                         .frame(width: 3, height: 14)
 
                     Text("ACTIONS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Button(action: {
                         permissionsManager.refreshAllPermissions()
                     }) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.xs) {
                             Image(systemName: "arrow.clockwise")
                                 .font(Theme.current.fontXS)
                             Text("Refresh Status")
@@ -286,7 +286,7 @@ struct PermissionsSettingsView: View {
                     Button(action: {
                         permissionsManager.openPrivacySettings()
                     }) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.xs) {
                             Image(systemName: "gear")
                                 .font(Theme.current.fontXS)
                             Text("Open Privacy Settings")
@@ -297,46 +297,46 @@ struct PermissionsSettingsView: View {
 
                     Spacer()
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Info Note
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: Spacing.sm) {
                 Image(systemName: "info.circle.fill")
                     .font(Theme.current.fontSM)
-                    .foregroundColor(.blue)
+                    .foregroundColor(SemanticColor.pin)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("Some permissions can only be changed in System Settings → Privacy & Security. Talkie will request permissions when features are first used.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     // Show app identifier for System Settings lookup (dev/staging builds only)
                     if let bundleID = Bundle.main.bundleIdentifier,
                        bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Spacing.xs) {
                             Image(systemName: "app.badge")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                             Text("Look for: \(bundleID)")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .font(.monoXSmall)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                                 .textSelection(.enabled)
                         }
-                        .padding(8)
+                        .padding(Spacing.sm)
                         .background(Theme.current.surface1)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                     }
                 }
             }
-            .padding(12)
-            .background(Color.blue.opacity(0.08))
-            .cornerRadius(8)
+            .padding(Spacing.sm)
+            .background(SemanticColor.pin.opacity(Opacity.light))
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             // Check permissions when view appears (not on init)

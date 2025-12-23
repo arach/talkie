@@ -56,89 +56,89 @@ struct DebugInfoView: View {
             )
         } content: {
             // MARK: - App Info
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.cyan)
                         .frame(width: 3, height: 14)
 
                     Text("APP INFORMATION")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     // Environment badge
                     Text(environment.uppercased())
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(Theme.current.fontXSBold)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, Spacing.xxs)
                         .background(environment == "Development" ? Color.orange : Color.green)
-                        .cornerRadius(3)
+                        .cornerRadius(CornerRadius.xs)
                 }
 
-                VStack(spacing: 8) {
+                VStack(spacing: Spacing.sm) {
                     debugRow(label: "Bundle ID", value: bundleID, icon: "app.badge")
                     debugRow(label: "Version", value: "\(version) (\(build))", icon: "number")
                     debugRow(label: "Voice Memos", value: "\(allVoiceMemos.count)", icon: "doc.text")
                     debugRow(label: "Last Sync", value: SyncStatusManager.shared.lastSyncAgo, icon: "arrow.triangle.2.circlepath")
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - iCloud Status
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.blue)
                         .frame(width: 3, height: 14)
 
                     Text("ICLOUD STATUS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
 
-                VStack(spacing: 8) {
+                VStack(spacing: Spacing.sm) {
                     debugRow(label: "Account Status", value: iCloudStatus, icon: "icloud", valueColor: iCloudStatusColor)
                     debugRow(label: "Container", value: "iCloud.com.jdi.talkie", icon: "externaldrive.connected.to.line.below")
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Sync Status
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(syncStatusColor)
                         .frame(width: 3, height: 14)
 
                     Text("SYNC STATUS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xxs) {
                         Circle()
                             .fill(syncStatusColor)
                             .frame(width: 6, height: 6)
                         Text(syncStatusText.uppercased())
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(Theme.current.fontXSMedium)
                             .foregroundColor(syncStatusColor)
                     }
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Text("Sync every")
                         .font(Theme.current.fontSM)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Picker("", selection: $settings.syncIntervalMinutes) {
                         ForEach(syncIntervalOptions, id: \.self) { minutes in
@@ -151,44 +151,44 @@ struct DebugInfoView: View {
 
                     Spacer()
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
                 Text("Manual sync is always available via the toolbar button. Lower intervals use more battery and network.")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Onboarding
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.purple)
                         .frame(width: 3, height: 14)
 
                     Text("ONBOARDING")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Image(systemName: "wand.and.stars")
-                        .font(.system(size: 18))
+                        .font(Theme.current.fontHeadline)
                         .foregroundColor(.purple)
                         .frame(width: 24)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text("Setup Wizard")
                             .font(Theme.current.fontSMMedium)
                         Text("Re-run the setup wizard to configure permissions, services, and models.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
                     Spacer()
@@ -201,13 +201,13 @@ struct DebugInfoView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             checkiCloudStatus()
@@ -215,30 +215,30 @@ struct DebugInfoView: View {
     }
 
     @ViewBuilder
-    private func debugRow(label: String, value: String, icon: String, valueColor: Color = .primary) -> some View {
-        HStack(spacing: 10) {
+    private func debugRow(label: String, value: String, icon: String, valueColor: Color = Theme.current.foreground) -> some View {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
                 .font(Theme.current.fontXS)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
                 .frame(width: 16)
 
             Text(label)
                 .font(Theme.current.fontXS)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
                 .frame(width: 100, alignment: .leading)
 
             Text(value)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(Theme.current.fontSMMedium)
                 .foregroundColor(valueColor)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.sm)
         .background(Theme.current.surface1)
-        .cornerRadius(6)
+        .cornerRadius(CornerRadius.xs)
     }
 
     private var iCloudStatusColor: Color {

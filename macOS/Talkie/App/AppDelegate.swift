@@ -14,6 +14,30 @@ import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppDelegate")
 
+// Free function to capture settings screenshots using subprocess
+@MainActor
+private func captureSettingsScreenshots(to directory: URL) async -> Int {
+    // Get the path to this executable
+    let execPath = Bundle.main.executablePath ?? ""
+
+    // Run settings-screenshots command as subprocess
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: execPath)
+    process.arguments = ["--debug=settings-screenshots", directory.path]
+
+    do {
+        try process.run()
+        process.waitUntilExit()
+
+        // Count files in directory
+        let files = try? FileManager.default.contentsOfDirectory(atPath: directory.path)
+        return files?.filter { $0.hasSuffix(".png") }.count ?? 0
+    } catch {
+        print("   ⚠️ Failed to capture screenshots: \(error)")
+        return 0
+    }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
     // CLI command handler
@@ -240,22 +264,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("   Screens: \(report.screens.count)")
             print("   Issues: \(report.totalIssues)")
 
-            // Try to capture screenshots from running Talkie app windows
-            print("\n📸 Attempting to capture screenshots from running app...")
-            let screenshotDir = runDir.appendingPathComponent("screenshots")
-            try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
-
-            let capturedCount = await Self.captureRunningAppWindows(to: screenshotDir)
-            if capturedCount > 0 {
-                print("   ✅ Captured \(capturedCount) screenshots")
-            } else {
-                print("   ⚠️ No Talkie windows found - open the app and try again")
-            }
-
             // Generate reports for this run
             print("\n📝 Generating reports...")
             await DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
             await DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+
+            // Capture settings page screenshots by calling separate generator
+            let screenshotDir = runDir.appendingPathComponent("screenshots")
+            print("\n📸 Capturing settings screenshots...")
+            let screenshotResults = await captureSettingsScreenshots(to: screenshotDir)
+            print("   ✅ Captured \(screenshotResults) screenshots")
 
             // Update master index.html with all runs
             await Self.generateAuditIndex(at: baseDir)
@@ -264,8 +282,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("   📂 ~/Desktop/talkie-audit/")
             print("   🌐 index.html - lists all audits")
 
-            // Open index
-            NSWorkspace.shared.open(baseDir.appendingPathComponent("index.html"))
+            // Open report
+            NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
 
             // Graceful exit
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

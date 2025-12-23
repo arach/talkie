@@ -874,10 +874,17 @@ class DesignAuditor {
 
                 .dossier.active { display: block; }
 
-                .dossier-close {
+                .dossier-nav {
                     position: fixed;
                     top: 20px;
                     right: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    z-index: 101;
+                }
+
+                .dossier-nav button {
                     background: var(--surface);
                     border: 1px solid var(--border);
                     color: var(--text);
@@ -885,11 +892,42 @@ class DesignAuditor {
                     height: 40px;
                     border-radius: 8px;
                     cursor: pointer;
-                    font-size: 20px;
+                    font-size: 18px;
+                    transition: all 0.15s;
+                }
+
+                .dossier-nav button:hover {
+                    border-color: var(--accent);
+                    background: var(--surface2);
+                }
+
+                .nav-counter {
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    padding: 0 12px;
+                    font-family: 'SF Mono', monospace;
+                }
+
+                .nav-hint {
+                    position: fixed;
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    color: var(--text-secondary);
                     z-index: 101;
                 }
 
-                .dossier-close:hover { border-color: var(--accent); }
+                .nav-hint kbd {
+                    background: var(--surface2);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    margin: 0 2px;
+                }
 
                 .dossier-content {
                     max-width: 1600px;
@@ -1209,7 +1247,13 @@ class DesignAuditor {
 
             html += """
                 <div class="dossier" id="dossier-\(screen.screen.rawValue)">
-                    <button class="dossier-close" onclick="closeDossier()">&times;</button>
+                    <div class="dossier-nav">
+                        <button class="nav-prev" onclick="navigatePrev()" title="Previous (←)">←</button>
+                        <span class="nav-counter">1 of \(report.screens.count)</span>
+                        <button class="nav-next" onclick="navigateNext()" title="Next (→)">→</button>
+                        <button onclick="closeDossier()" title="Close (Esc)">&times;</button>
+                    </div>
+                    <div class="nav-hint">Use <kbd>←</kbd> <kbd>→</kbd> arrow keys to navigate · <kbd>Esc</kbd> to close</div>
                     <div class="dossier-content">
                         <div class="dossier-header">
                             <div>
@@ -1378,24 +1422,80 @@ class DesignAuditor {
             """
         }
 
-        // Add JavaScript for dossier navigation
+        // Add JavaScript for dossier navigation with arrow keys
+        let screenIds = report.screens.map { "'\($0.screen.rawValue)'" }.joined(separator: ", ")
+
         html += """
             </div>
 
             <script>
+                const screenIds = [\(screenIds)];
+                let currentIndex = -1;
+
                 function showDossier(screenId) {
+                    // Close any open dossier first
+                    document.querySelectorAll('.dossier').forEach(d => d.classList.remove('active'));
+
+                    // Open the requested dossier
                     document.getElementById('dossier-' + screenId).classList.add('active');
                     document.body.style.overflow = 'hidden';
+
+                    // Update current index
+                    currentIndex = screenIds.indexOf(screenId);
+                    updateNavCounter();
                 }
 
                 function closeDossier() {
                     document.querySelectorAll('.dossier').forEach(d => d.classList.remove('active'));
                     document.body.style.overflow = '';
+                    currentIndex = -1;
                 }
 
-                // Close on escape key
+                function navigatePrev() {
+                    if (currentIndex > 0) {
+                        showDossier(screenIds[currentIndex - 1]);
+                    }
+                }
+
+                function navigateNext() {
+                    if (currentIndex < screenIds.length - 1) {
+                        showDossier(screenIds[currentIndex + 1]);
+                    }
+                }
+
+                function updateNavCounter() {
+                    document.querySelectorAll('.nav-counter').forEach(el => {
+                        el.textContent = (currentIndex + 1) + ' of ' + screenIds.length;
+                    });
+
+                    // Update prev/next button states
+                    document.querySelectorAll('.nav-prev').forEach(el => {
+                        el.style.opacity = currentIndex > 0 ? '1' : '0.3';
+                        el.style.pointerEvents = currentIndex > 0 ? 'auto' : 'none';
+                    });
+                    document.querySelectorAll('.nav-next').forEach(el => {
+                        el.style.opacity = currentIndex < screenIds.length - 1 ? '1' : '0.3';
+                        el.style.pointerEvents = currentIndex < screenIds.length - 1 ? 'auto' : 'none';
+                    });
+                }
+
+                // Keyboard navigation
                 document.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') closeDossier();
+                    if (currentIndex === -1) return; // No dossier open
+
+                    switch(e.key) {
+                        case 'Escape':
+                            closeDossier();
+                            break;
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            navigatePrev();
+                            break;
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            navigateNext();
+                            break;
+                    }
                 });
 
                 // Close on click outside

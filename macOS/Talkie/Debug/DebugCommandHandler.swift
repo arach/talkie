@@ -48,7 +48,7 @@ class DebugCommandHandler {
             await captureSettingsScreenshots(args: args)
 
         case "design-audit":
-            runDesignAudit()
+            await runDesignAudit()
 
         case "help":
             printHelp()
@@ -91,7 +91,7 @@ class DebugCommandHandler {
         exit(0)
     }
 
-    private func runDesignAudit() {
+    private func runDesignAudit() async {
         print("🔍 Running design audit...")
 
         // Fixed location: ~/Desktop/talkie-audit/
@@ -122,6 +122,12 @@ class DebugCommandHandler {
         print("   - report.html")
         print("   - report.md")
 
+        // Capture settings screenshots
+        let screenshotsDir = runDir.appendingPathComponent("screenshots")
+        print("📸 Capturing settings screenshots...")
+        let screenshots = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotsDir)
+        print("✅ Captured \(screenshots.count) screenshots")
+
         // Open result
         NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
         exit(0)
@@ -151,8 +157,11 @@ class DebugCommandHandler {
               Default: ~/Desktop/settings-screenshots-<timestamp>/
 
           design-audit
-              Run design system audit and generate HTML/Markdown reports
+              Run design system audit with reports and screenshots
               Output: ~/Desktop/talkie-audit/run-XXX/
+                - report.html (interactive report)
+                - report.md (markdown report)
+                - screenshots/ (all settings pages)
 
           help
               Show this help message

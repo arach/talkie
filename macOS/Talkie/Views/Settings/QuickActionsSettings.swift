@@ -26,120 +26,120 @@ struct QuickActionsSettingsView: View {
             )
         } content: {
             // MARK: - Pinned Workflows
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.orange)
                         .frame(width: 3, height: 14)
 
                     Text("PINNED WORKFLOWS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     if !pinnedWorkflows.isEmpty {
                         Text("\(pinnedWorkflows.count) PINNED")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(.orange.opacity(0.8))
+                            .font(.techLabelSmall)
+                            .foregroundColor(.orange.opacity(Opacity.prominent))
                     }
                 }
 
                 if pinnedWorkflows.isEmpty {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "pin.slash")
                             .font(.system(size: 20))
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("No workflows pinned")
                                 .font(Theme.current.fontSMMedium)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Theme.current.foreground)
                             Text("Pin workflows from the list below to show them as quick actions.")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                     }
-                    .padding(16)
+                    .padding(Spacing.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 } else {
-                    VStack(spacing: 6) {
+                    VStack(spacing: Spacing.xs) {
                         ForEach(pinnedWorkflows) { workflow in
                             workflowRow(workflow, isPinned: true)
                         }
                     }
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Available Workflows
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.blue)
                         .frame(width: 3, height: 14)
 
                     Text("AVAILABLE WORKFLOWS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     if !unpinnedWorkflows.isEmpty {
                         Text("\(unpinnedWorkflows.count) AVAILABLE")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .font(.techLabelSmall)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                     }
                 }
 
                 if unpinnedWorkflows.isEmpty {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(.green)
+                            .foregroundColor(SemanticColor.success)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("All workflows are pinned")
                                 .font(Theme.current.fontSMMedium)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Theme.current.foreground)
                             Text("All your workflows are showing as quick actions.")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                     }
-                    .padding(16)
+                    .padding(Spacing.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 } else {
-                    VStack(spacing: 6) {
+                    VStack(spacing: Spacing.xs) {
                         ForEach(unpinnedWorkflows) { workflow in
                             workflowRow(workflow, isPinned: false)
                         }
                     }
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Info
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: "icloud")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.blue)
+                    .foregroundColor(SemanticColor.pin)
 
                 Text("Pinned workflows sync to your iPhone via iCloud for quick access in the iOS app.")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
-            .padding(12)
-            .background(Color.blue.opacity(0.1))
-            .cornerRadius(8)
+            .padding(Spacing.sm)
+            .background(SemanticColor.pin.opacity(Opacity.light))
+            .cornerRadius(CornerRadius.sm)
         }
         .sheet(isPresented: $showingWorkflowEditor) {
             if let workflow = selectedWorkflow {
@@ -169,23 +169,23 @@ struct QuickActionsSettingsView: View {
 
     @ViewBuilder
     private func workflowRow(_ workflow: WorkflowDefinition, isPinned: Bool) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             // Icon
             Image(systemName: workflow.icon)
-                .font(.system(size: 14))
+                .font(.headlineSmall)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 28, height: 28)
-                .background(workflow.color.color.opacity(0.15))
-                .cornerRadius(6)
+                .background(workflow.color.color.opacity(Opacity.medium))
+                .cornerRadius(Spacing.xs)
 
             // Name and description
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(workflow.name)
                     .font(Theme.current.fontSMMedium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
                 Text(workflow.description.isEmpty ? "\(workflow.steps.count) step(s)" : workflow.description)
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .lineLimit(1)
             }
 
@@ -194,22 +194,22 @@ struct QuickActionsSettingsView: View {
             // Status badge
             if !workflow.isEnabled {
                 Text("DISABLED")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.2))
-                    .cornerRadius(3)
+                    .font(.techLabelSmall)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, Spacing.xxs)
+                    .background(Theme.current.foregroundSecondary.opacity(Opacity.medium))
+                    .cornerRadius(CornerRadius.xs)
             }
 
             // Edit button
             Button(action: { editWorkflow(workflow) }) {
                 Image(systemName: "pencil")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 24, height: 24)
                     .background(Theme.current.surface2)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
             }
             .buttonStyle(.plain)
             .help("Edit workflow")
@@ -220,17 +220,17 @@ struct QuickActionsSettingsView: View {
             } label: {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
                     .font(Theme.current.fontSM)
-                    .foregroundColor(isPinned ? .orange : .secondary)
+                    .foregroundColor(isPinned ? SemanticColor.warning : Theme.current.foregroundSecondary)
                     .frame(width: 28, height: 28)
-                    .background(isPinned ? Color.orange.opacity(0.15) : Theme.current.surface2)
-                    .cornerRadius(6)
+                    .background(isPinned ? SemanticColor.warning.opacity(Opacity.medium) : Theme.current.surface2)
+                    .cornerRadius(Spacing.xs)
             }
             .buttonStyle(.plain)
             .help(isPinned ? "Unpin from quick actions" : "Pin to quick actions")
         }
-        .padding(12)
+        .padding(Spacing.sm)
         .background(Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 
     private func editWorkflow(_ workflow: WorkflowDefinition) {

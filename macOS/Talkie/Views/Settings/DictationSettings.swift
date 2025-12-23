@@ -30,45 +30,45 @@ struct DictationCaptureSettingsView: View {
             )
         } content: {
             // MARK: - Shortcuts Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.orange)
                         .frame(width: 3, height: 14)
 
                     Text("SHORTCUTS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
 
-                VStack(spacing: 12) {
+                VStack(spacing: Spacing.sm) {
                     // Toggle Hotkey
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("Toggle Recording")
                             .font(Theme.current.fontSMMedium)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Theme.current.foreground)
 
                         Text("Press once to start recording, press again to stop.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                         HotkeyRecorderButton(
                             hotkey: $live.hotkey,
                             isRecording: $isRecordingToggle
                         )
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Push-to-Talk Hotkey
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("Push-to-Talk")
                                 .font(Theme.current.fontSMMedium)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Theme.current.foreground)
 
                             Spacer()
 
@@ -79,7 +79,7 @@ struct DictationCaptureSettingsView: View {
 
                         Text("Hold down to record, release to stop.")
                             .font(Theme.current.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                         if live.pttEnabled {
                             HotkeyRecorderButton(
@@ -88,25 +88,25 @@ struct DictationCaptureSettingsView: View {
                             )
                         }
                     }
-                    .padding(12)
+                    .padding(Spacing.sm)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Audio Input Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.blue)
                         .frame(width: 3, height: 14)
 
                     Text("AUDIO INPUT")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -115,36 +115,36 @@ struct DictationCaptureSettingsView: View {
                         .foregroundColor(.blue)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Select which microphone to use for recording.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     AudioDeviceSelector()
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Visual Feedback Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.purple)
                         .frame(width: 3, height: 14)
 
                     Text("VISUAL FEEDBACK")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
 
-                VStack(spacing: 8) {
+                VStack(spacing: Spacing.sm) {
                     StyledToggle(
                         label: "Show HUD overlay",
                         isOn: Binding(
@@ -172,38 +172,38 @@ struct DictationCaptureSettingsView: View {
                         help: "Display neon ON AIR sign during recording"
                     )
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Audio Feedback Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.green)
                         .frame(width: 3, height: 14)
 
                     Text("AUDIO FEEDBACK")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     Text(selectedSoundEvent.rawValue.uppercased())
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Sound effects for recording events.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         ForEach(SoundEvent.allCases, id: \.rawValue) { event in
                             SoundEventCard(
                                 event: event,
@@ -229,13 +229,13 @@ struct DictationCaptureSettingsView: View {
                         }
                     }())
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             logger.debug("DictationCaptureSettingsView appeared")
@@ -260,27 +260,27 @@ struct DictationOutputSettingsView: View {
             )
         } content: {
             // MARK: - Paste Action Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.blue)
                         .frame(width: 3, height: 14)
 
                     Text("PASTE ACTION")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     Text(live.routingMode.displayName.uppercased())
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.blue.opacity(0.8))
+                        .font(.techLabelSmall)
+                        .foregroundColor(.blue.opacity(Opacity.prominent))
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Where transcribed text is sent after recording completes.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     RadioButtonRow(
                         title: RoutingMode.paste.displayName,
@@ -300,24 +300,24 @@ struct DictationOutputSettingsView: View {
                         live.routingMode = .clipboardOnly
                     }
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Behavior Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.orange)
                         .frame(width: 3, height: 14)
 
                     Text("BEHAVIOR")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
@@ -327,32 +327,32 @@ struct DictationOutputSettingsView: View {
                     isOn: $live.returnToOriginAfterPaste,
                     help: "Switch back to the app you were using when recording started"
                 )
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Context Preference Section
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.purple)
                         .frame(width: 3, height: 14)
 
                     Text("CONTEXT PREFERENCE")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Which app context should be considered primary for recordings.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     RadioButtonRow(
                         title: PrimaryContextSource.startApp.displayName,
@@ -372,13 +372,13 @@ struct DictationOutputSettingsView: View {
                         live.primaryContextSource = .endApp
                     }
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(16)
+            .padding(Spacing.md)
             .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             logger.debug("DictationOutputSettingsView appeared")
