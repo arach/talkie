@@ -27,25 +27,25 @@ struct OnboardingView: View {
 
             // Grid pattern
             GridPatternView(lineColor: colors.gridLine)
-                .opacity(0.5)
+                .opacity(Opacity.half)
 
             VStack(spacing: 0) {
                 // Top bar - fixed height for consistent layout
                 HStack {
                     #if DEBUG
                     // Debug hint (subtle but clickable)
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xxs) {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
-                            .font(.system(size: 8))
+                            .font(Theme.current.fontXS)
                         Text("⌘D")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.monoXSmall)
                     }
-                    .foregroundColor(colors.textTertiary.opacity(showDebugToolbar ? 0.7 : 0.3))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
+                    .foregroundColor(colors.textTertiary.opacity(showDebugToolbar ? Opacity.prominent : Opacity.strong))
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, Spacing.xxs)
                     .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(showDebugToolbar ? colors.accent.opacity(0.1) : Color.clear)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .fill(showDebugToolbar ? colors.accent.opacity(Opacity.light) : Color.clear)
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -71,8 +71,8 @@ struct OnboardingView: View {
                         dismiss()
                     }) {
                         Text("SKIP ONBOARDING")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .tracking(1)
+                            .font(.techLabel)
+                            .tracking(Tracking.normal)
                             .foregroundColor(colors.textTertiary)
                     }
                     .buttonStyle(.borderless)
@@ -126,7 +126,7 @@ struct OnboardingView: View {
                         }
                     }) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(Theme.current.fontBody)
                             .foregroundColor(colors.textTertiary)
                             .frame(width: 40, height: 40)
                     }
@@ -199,7 +199,7 @@ struct OnboardingView: View {
                     }
                 )
                 .frame(width: 680, height: 100)
-                .shadow(color: .black.opacity(0.5), radius: 20, y: -5)
+                .shadow(color: .black.opacity(Opacity.half), radius: Spacing.lg, y: -5)
                 .transition(.move(edge: .bottom))
             }
         }
@@ -219,29 +219,29 @@ private struct DebugShelf: View {
     @State private var storyboardProgress: String = ""
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Spacing.sm) {
             // Header
             HStack {
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "wrench.and.screwdriver")
-                        .font(.system(size: 9))
+                        .font(.techLabelSmall)
                     Text("DEBUG NAVIGATION")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(1)
+                        .font(Theme.current.fontXSBold)
+                        .tracking(Tracking.normal)
                 }
-                .foregroundColor(colors.textTertiary.opacity(0.6))
+                .foregroundColor(colors.textTertiary.opacity(Opacity.half))
 
                 Spacer()
 
                 Text("⌘D to toggle • Jump to any step")
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundColor(colors.textTertiary.opacity(0.4))
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(colors.textTertiary.opacity(Opacity.strong))
 
                 // Close button
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(colors.textTertiary.opacity(0.5))
+                        .font(Theme.current.fontBody)
+                        .foregroundColor(colors.textTertiary.opacity(Opacity.half))
                 }
                 .buttonStyle(.plain)
                 .help("Close (⌘D)")
@@ -249,7 +249,7 @@ private struct DebugShelf: View {
 
             // Step buttons
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     ForEach(OnboardingStep.allCases, id: \.rawValue) { step in
                         DebugStepButton(
                             colors: colors,
@@ -266,7 +266,7 @@ private struct DebugShelf: View {
                     // Storyboard generator button
                     Divider()
                         .frame(height: 30)
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, Spacing.xxs)
 
                     Menu {
                         Button("Generate Now") {
@@ -288,24 +288,24 @@ private struct DebugShelf: View {
                             showCLIHelp()
                         }
                     } label: {
-                        VStack(spacing: 2) {
+                        VStack(spacing: Spacing.xxs) {
                             if isGeneratingStoryboard {
                                 ProgressView()
                                     .scaleEffect(0.6)
                                     .frame(width: 12, height: 12)
                             } else {
                                 Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(Theme.current.fontXSBold)
                             }
 
                             Text(isGeneratingStoryboard ? "..." : "Storyboard")
-                                .font(.system(size: 8, design: .monospaced))
+                                .font(Theme.current.fontXS)
                         }
                         .foregroundColor(isGeneratingStoryboard ? colors.textTertiary : colors.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .fill(colors.surfaceCard)
                         )
                     }
@@ -313,18 +313,18 @@ private struct DebugShelf: View {
                     .disabled(isGeneratingStoryboard)
                     .help("Generate storyboard (click for options)")
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, Spacing.xxs)
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
+        .padding(.vertical, Spacing.sm)
+        .padding(.horizontal, Spacing.md)
         .background(
             Rectangle()
                 .fill(colors.background)
         )
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(colors.border.opacity(0.3))
+                .fill(colors.border.opacity(Opacity.strong))
                 .frame(height: 1)
         }
     }
@@ -511,19 +511,19 @@ private struct DebugStepButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 2) {
+            VStack(spacing: Spacing.xxs) {
                 Text("\(step.rawValue + 1)")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(.techLabelSmall)
                     .foregroundColor(isActive ? .white : colors.textSecondary)
 
                 Text(stepName)
-                    .font(.system(size: 8, design: .monospaced))
+                    .font(Theme.current.fontXS)
                     .foregroundColor(isActive ? .white : colors.textTertiary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
             .background(
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(isActive ? colors.accent : colors.surfaceCard)
             )
         }
