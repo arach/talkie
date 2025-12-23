@@ -32,6 +32,10 @@ struct DesignOverlay: View {
                         .allowsHitTesting(false)
                 }
 
+                // TODO: Advanced layout tools and inspection tools
+                // Files exist in Debug/DesignMode/Tools/ but need integration
+                // Temporarily disabled to allow build
+
                 // Floating toolbar button
                 VStack {
                     if overlayPosition.isTop {
@@ -58,6 +62,21 @@ struct DesignOverlay: View {
             }
         }
     }
+
+    // TODO: Re-enable when tool files are properly integrated
+    // @ViewBuilder
+    // private func toolOverlay(for tool: DesignTool) -> some View {
+    //     switch tool {
+    //     case .ruler:
+    //         RulerTool()
+    //     case .colorPicker:
+    //         ColorPickerTool()
+    //     case .typography:
+    //         TypographyInspectorTool()
+    //     case .spacing:
+    //         SpacingInspectorTool()
+    //     }
+    // }
 
     @ViewBuilder
     private var toolbarContent: some View {
@@ -102,7 +121,7 @@ struct DesignOverlay: View {
         VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
-                Text("Visual Decorators")
+                Text("Design Tools")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
 
@@ -123,6 +142,25 @@ struct DesignOverlay: View {
 
             Divider()
                 .background(Color.white.opacity(0.2))
+
+            // Section: Inspection Tools
+            Text("Inspection Tools")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+                .padding(.top, 4)
+
+            ForEach(DesignTool.allCases, id: \.self) { tool in
+                toolToggleRow(tool: tool)
+            }
+
+            Divider()
+                .background(Color.white.opacity(0.2))
+                .padding(.vertical, 4)
+
+            // Section: Visual Decorators
+            Text("Visual Decorators")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
 
             // Toggle controls
             toggleRow(
@@ -157,6 +195,36 @@ struct DesignOverlay: View {
 
             Divider()
                 .background(Color.white.opacity(0.2))
+                .padding(.vertical, 4)
+
+            // Section: Advanced Layout Tools
+            Text("Advanced Layout")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            toggleRow(
+                icon: "plus.viewfinder",
+                label: "Center Guides",
+                isOn: $designMode.showCenterGuides
+            )
+
+            toggleRow(
+                icon: "rectangle.inset.filled",
+                label: "Edge Guides",
+                isOn: $designMode.showEdgeGuides
+            )
+
+            toggleRow(
+                icon: "viewfinder",
+                label: "Element Bounds",
+                isOn: $designMode.showElementBounds
+            )
+
+            // Pixel Zoom (multi-state)
+            pixelZoomRow()
+
+            Divider()
+                .background(Color.white.opacity(0.2))
 
             // Quick actions
             HStack(spacing: 6) {
@@ -187,6 +255,37 @@ struct DesignOverlay: View {
     }
 
     @ViewBuilder
+    private func toolToggleRow(tool: DesignTool) -> some View {
+        Button(action: {
+            // Toggle tool - if already active, deactivate; otherwise activate
+            if designMode.activeTool == tool {
+                designMode.activeTool = nil
+            } else {
+                designMode.activeTool = tool
+            }
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: tool.icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(designMode.activeTool == tool ? .cyan : .white.opacity(0.5))
+                    .frame(width: 16)
+
+                Text(tool.rawValue)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.9))
+
+                Spacer()
+
+                // Active indicator (circle instead of toggle)
+                Circle()
+                    .fill(designMode.activeTool == tool ? Color.cyan : Color.white.opacity(0.2))
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
     private func toggleRow(icon: String, label: String, isOn: Binding<Bool>) -> some View {
         Button(action: { isOn.wrappedValue.toggle() }) {
             HStack(spacing: 8) {
@@ -213,6 +312,45 @@ struct DesignOverlay: View {
                         .offset(x: isOn.wrappedValue ? 7 : -7)
                 }
             }
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func pixelZoomRow() -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundColor(designMode.pixelZoomLevel > 0 ? .cyan : .white.opacity(0.5))
+                .frame(width: 16)
+
+            Text("Pixel Zoom")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.9))
+
+            Spacer()
+
+            // Zoom level selector (Off, 2x, 4x)
+            HStack(spacing: 4) {
+                zoomButton(level: 0, label: "Off")
+                zoomButton(level: 2, label: "2×")
+                zoomButton(level: 4, label: "4×")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func zoomButton(level: Int, label: String) -> some View {
+        Button(action: { designMode.pixelZoomLevel = level }) {
+            Text(label)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(designMode.pixelZoomLevel == level ? .black : .white.opacity(0.7))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(designMode.pixelZoomLevel == level ? Color.cyan : Color.white.opacity(0.15))
+                )
         }
         .buttonStyle(.plain)
     }
