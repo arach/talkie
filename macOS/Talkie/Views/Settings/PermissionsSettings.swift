@@ -217,7 +217,7 @@ struct PermissionsSettingsView: View {
                     PermissionRow(
                         icon: "mic.fill",
                         name: "Microphone",
-                        description: "Required for recording voice memos",
+                        description: "Required for voice memos (Live dictation uses TalkieLive)",
                         status: permissionsManager.microphoneStatus,
                         onRequest: {
                             if permissionsManager.microphoneStatus == .notDetermined {
@@ -232,7 +232,7 @@ struct PermissionsSettingsView: View {
                     PermissionRow(
                         icon: "accessibility",
                         name: "Accessibility",
-                        description: "Required for Quick Open auto-paste feature",
+                        description: "Required for auto-paste after dictation",
                         status: permissionsManager.accessibilityStatus,
                         onRequest: {
                             permissionsManager.requestAccessibilityPermission()
@@ -250,88 +250,92 @@ struct PermissionsSettingsView: View {
                             permissionsManager.openAutomationSettings()
                         }
                     )
-                }
-            }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
 
-            // MARK: - Actions Section
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(SemanticColor.pin)
-                        .frame(width: 3, height: 14)
+                    // Footer with actions
+                    HStack {
+                        Spacer()
 
-                    Text("ACTIONS")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Spacer()
-                }
-
-                HStack(spacing: Spacing.sm) {
-                    Button(action: {
-                        permissionsManager.refreshAllPermissions()
-                    }) {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(Theme.current.fontXS)
-                            Text("Refresh Status")
-                                .font(Theme.current.fontXSMedium)
+                        Button(action: {
+                            permissionsManager.refreshAllPermissions()
+                        }) {
+                            HStack(spacing: Spacing.xxs) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 9))
+                                Text("Refresh")
+                                    .font(Theme.current.fontXS)
+                            }
+                            .foregroundColor(Theme.current.foregroundSecondary)
                         }
-                    }
-                    .buttonStyle(.bordered)
+                        .buttonStyle(.plain)
 
-                    Button(action: {
-                        permissionsManager.openPrivacySettings()
-                    }) {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: "gear")
-                                .font(Theme.current.fontXS)
-                            Text("Open Privacy Settings")
-                                .font(Theme.current.fontXSMedium)
+                        Text("·")
+                            .foregroundColor(Theme.current.foregroundMuted)
+
+                        Button(action: {
+                            permissionsManager.openPrivacySettings()
+                        }) {
+                            HStack(spacing: Spacing.xxs) {
+                                Image(systemName: "arrow.up.forward.square")
+                                    .font(.system(size: 9))
+                                Text("Open System Settings")
+                                    .font(Theme.current.fontXS)
+                            }
+                            .foregroundColor(Theme.current.foregroundSecondary)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
+                    .padding(.top, Spacing.xs)
                 }
-                .padding(Spacing.sm)
-                .background(Theme.current.surface1)
-                .cornerRadius(CornerRadius.sm)
             }
             .padding(Spacing.md)
             .background(Theme.current.surface2)
             .cornerRadius(CornerRadius.sm)
 
             // MARK: - Info Note
-            HStack(alignment: .top, spacing: Spacing.sm) {
-                Image(systemName: "info.circle.fill")
-                    .font(Theme.current.fontSM)
-                    .foregroundColor(SemanticColor.pin)
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(alignment: .top, spacing: Spacing.sm) {
+                    Image(systemName: "info.circle.fill")
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(SemanticColor.pin)
 
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Some permissions can only be changed in System Settings → Privacy & Security. Talkie will request permissions when features are first used.")
+                    Text("Permissions are managed in System Settings → Privacy & Security. Live dictation uses TalkieLive which has its own permissions.")
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
+                }
 
-                    // Show app identifier for System Settings lookup (dev/staging builds only)
-                    if let bundleID = Bundle.main.bundleIdentifier,
-                       bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: "app.badge")
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                            Text("Look for: \(bundleID)")
-                                .font(.monoXSmall)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                                .textSelection(.enabled)
+                // Show app identifiers for System Settings lookup (dev/staging builds only)
+                if let bundleID = Bundle.main.bundleIdentifier,
+                   bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("LOOK FOR IN SYSTEM SETTINGS:")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(Theme.current.foregroundMuted)
+
+                        HStack(spacing: Spacing.md) {
+                            HStack(spacing: Spacing.xxs) {
+                                Text("Talkie:")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundMuted)
+                                Text("jdi.talkie" + (bundleID.hasSuffix(".dev") ? ".dev" : ".staging"))
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                    .textSelection(.enabled)
+                            }
+
+                            HStack(spacing: Spacing.xxs) {
+                                Text("Live:")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundMuted)
+                                Text("jdi.talkie.live" + (bundleID.hasSuffix(".dev") ? ".dev" : ".staging"))
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                    .textSelection(.enabled)
+                            }
                         }
-                        .padding(Spacing.sm)
-                        .background(Theme.current.surface1)
-                        .cornerRadius(CornerRadius.xs)
                     }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.xs)
                 }
             }
             .padding(Spacing.sm)
