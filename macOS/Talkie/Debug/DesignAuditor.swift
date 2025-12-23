@@ -250,6 +250,13 @@ struct ScreenAuditResult {
         default: return "F"
         }
     }
+
+    var totalIssues: Int {
+        fontUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+            + colorUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+            + spacingUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+            + opacityUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+    }
 }
 
 // MARK: - Issue Categories (Compiler-style)

@@ -25,6 +25,13 @@ enum NavigationSection: Hashable {
     case allowedCommands
     case settings
     case smartFolder(String)
+
+    #if DEBUG
+    // Design God Mode sections (only visible when DesignModeManager.shared.isEnabled)
+    case designHome       // Design system token reference
+    case designAudit      // Design system compliance audit
+    case designComponents // Component library showcase
+    #endif
 }
 
 struct TalkieNavigationView: View {
@@ -193,6 +200,9 @@ struct TalkieNavigationView: View {
                 ]
             }
         }
+        .overlay {
+            DesignOverlay()
+        }
         #endif
     }
 
@@ -314,6 +324,29 @@ struct TalkieNavigationView: View {
                             badge: cachedErrorCount > 0 ? "\(cachedErrorCount)" : nil,
                             badgeColor: .orange
                         )
+
+                        #if DEBUG
+                        // Design God Mode section (only when enabled via ⌘⇧D)
+                        if DesignModeManager.shared.isEnabled {
+                            sidebarSectionHeader("Design")
+                                .padding(.top, Spacing.sm)
+                            sidebarButton(
+                                section: .designHome,
+                                icon: "paintbrush.fill",
+                                title: "Design Home"
+                            )
+                            sidebarButton(
+                                section: .designAudit,
+                                icon: "checkmark.seal.fill",
+                                title: "Audit"
+                            )
+                            sidebarButton(
+                                section: .designComponents,
+                                icon: "square.grid.2x2",
+                                title: "Components"
+                            )
+                        }
+                        #endif
                     }
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, 4)
@@ -427,6 +460,12 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "AllowedCommands"
         case .settings: return "Settings"
         case .smartFolder(let name): return "SmartFolder.\(name)"
+
+        #if DEBUG
+        case .designHome: return "DesignHome"
+        case .designAudit: return "DesignAudit"
+        case .designComponents: return "DesignComponents"
+        #endif
         }
     }
 
@@ -553,6 +592,22 @@ struct TalkieNavigationView: View {
             TalkieSection("Settings") {
                 SettingsView()
             }
+
+        #if DEBUG
+        case .designHome:
+            TalkieSection("DesignHome") {
+                DesignHomeView()
+            }
+        case .designAudit:
+            TalkieSection("DesignAudit") {
+                DesignAuditView()
+            }
+        case .designComponents:
+            TalkieSection("DesignComponents") {
+                DesignComponentsView()
+            }
+        #endif
+
         default:
             EmptyView()
         }
@@ -571,6 +626,10 @@ struct TalkieNavigationView: View {
         switch selectedSection {
         case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .settings:
             return true
+        #if DEBUG
+        case .designHome, .designAudit, .designComponents:
+            return true
+        #endif
         default:
             return false
         }
@@ -647,6 +706,13 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "ALLOWED COMMANDS"
         case .settings: return "SETTINGS"
         case .smartFolder(let name): return name.uppercased()
+
+        #if DEBUG
+        case .designHome: return "DESIGN HOME"
+        case .designAudit: return "DESIGN AUDIT"
+        case .designComponents: return "COMPONENTS"
+        #endif
+
         case .none: return "MEMOS"
         }
     }

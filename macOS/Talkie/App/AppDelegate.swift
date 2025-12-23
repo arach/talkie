@@ -106,6 +106,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             andEventID: AEEventID(kAEGetURL)
         )
         logger.info("URL handler registered")
+
+        #if DEBUG
+        // Setup keyboard shortcut for Design God Mode (⌘⇧D)
+        setupDesignModeShortcut()
+        #endif
     }
 
     // MARK: - Debug Commands
@@ -801,4 +806,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         try? html.write(to: baseDir.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
     }
+
+    // MARK: - Design God Mode
+
+    #if DEBUG
+    /// Setup ⌘⇧D keyboard shortcut to toggle Design God Mode
+    /// When enabled, adds design sections to sidebar and enables visual overlays
+    private func setupDesignModeShortcut() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Check for ⌘⇧D (Command+Shift+D)
+            let hasCommand = event.modifierFlags.contains(.command)
+            let hasShift = event.modifierFlags.contains(.shift)
+            let isD = event.charactersIgnoringModifiers?.lowercased() == "d"
+
+            if hasCommand && hasShift && isD {
+                // Toggle Design God Mode
+                DesignModeManager.shared.isEnabled.toggle()
+
+                // Show toast notification
+                let message = DesignModeManager.shared.isEnabled
+                    ? "🎨 Design God Mode: ON"
+                    : "Design God Mode: OFF"
+                self?.showToast(message: message)
+
+                return nil  // Consume event
+            }
+
+            return event  // Pass through
+        }
+
+        logger.info("⌘⇧D keyboard shortcut registered for Design God Mode")
+    }
+
+    /// Show a brief toast notification (simple alert-style for now)
+    private func showToast(message: String) {
+        DispatchQueue.main.async {
+            // For now, use console + optional visual feedback later
+            print(message)
+
+            // Future: Could use NSUserNotification or custom window overlay
+            // For V0, console print is sufficient
+        }
+    }
+    #endif
 }

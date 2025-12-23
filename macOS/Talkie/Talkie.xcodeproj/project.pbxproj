@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C6A3250E16F043F28496E2C4 /* DesignOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658DDCAA2E9C4BEC86A4AB2E /* DesignOverlay.swift */; };
+		C275DE776AEA47ECBAC057C4 /* DesignHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF2A0AE4BF0D4835A4C5A6E2 /* DesignHomeView.swift */; };
+		07010AA6728642D2894DC684 /* DesignComponentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9533E378696941C886DB66AD /* DesignComponentsView.swift */; };
+		9335586B825B4AC6A65EA0B2 /* DesignAuditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7025568B9D0D41469C0C0003 /* DesignAuditView.swift */; };
+		A47208EE7CE144FC8B7980BE /* DesignModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1939351699024A0FA0FAD204 /* DesignModeManager.swift */; };
 		02A99E5DBE9D497A8B40800A /* UnifiedDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */; };
 		554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684217B1E2147AEA420E54B /* BuildInfo.swift */; };
 		5F04619116E34992AC571692 /* STTModelCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EBDA091AD54DD09BC8578B /* STTModelCard.swift */; };
@@ -206,6 +211,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		658DDCAA2E9C4BEC86A4AB2E /* DesignOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignOverlay.swift; sourceTree = "<group>"; };
+		FF2A0AE4BF0D4835A4C5A6E2 /* DesignHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignHomeView.swift; sourceTree = "<group>"; };
+		9533E378696941C886DB66AD /* DesignComponentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignComponentsView.swift; sourceTree = "<group>"; };
+		7025568B9D0D41469C0C0003 /* DesignAuditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignAuditView.swift; sourceTree = "<group>"; };
+		1939351699024A0FA0FAD204 /* DesignModeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignModeManager.swift; sourceTree = "<group>"; };
 		B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedDashboard.swift; sourceTree = "<group>"; };
 		0684217B1E2147AEA420E54B /* BuildInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.swift; sourceTree = "<group>"; };
 		30EBDA091AD54DD09BC8578B /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
@@ -419,6 +429,26 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F746045C89164E219BEE4F55 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				FF2A0AE4BF0D4835A4C5A6E2 /* DesignHomeView.swift */,
+				9533E378696941C886DB66AD /* DesignComponentsView.swift */,
+				7025568B9D0D41469C0C0003 /* DesignAuditView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		51DAABC31C3E47B4ADC94B0E /* DesignMode */ = {
+			isa = PBXGroup;
+			children = (
+				658DDCAA2E9C4BEC86A4AB2E /* DesignOverlay.swift */,
+				F746045C89164E219BEE4F55 /* Views */,
+				1939351699024A0FA0FAD204 /* DesignModeManager.swift */,
+			);
+			path = DesignMode;
+			sourceTree = "<group>";
+		};
 		00C4A81C9F724B75B40F8ED3 /* MemoDetail */ = {
 			isa = PBXGroup;
 			children = (
@@ -817,6 +847,7 @@
 		CF255B7C16461CF1674389DB /* Debug */ = {
 			isa = PBXGroup;
 			children = (
+				51DAABC31C3E47B4ADC94B0E /* DesignMode */,
 				53D9EC6C2EF9D8BD00DC8EC9 /* DesignAuditor.swift */,
 				53D9EC6D2EF9D8BD00DC8EC9 /* SettingsStoryboardGenerator.swift */,
 				E0CEC1D425A68FF0A280F2CE /* DebugCommandHandler.swift */,
@@ -986,6 +1017,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C6A3250E16F043F28496E2C4 /* DesignOverlay.swift in Sources */,
+				C275DE776AEA47ECBAC057C4 /* DesignHomeView.swift in Sources */,
+				07010AA6728642D2894DC684 /* DesignComponentsView.swift in Sources */,
+				9335586B825B4AC6A65EA0B2 /* DesignAuditView.swift in Sources */,
+				A47208EE7CE144FC8B7980BE /* DesignModeManager.swift in Sources */,
 				02A99E5DBE9D497A8B40800A /* UnifiedDashboard.swift in Sources */,
 				554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */,
 				5F04619116E34992AC571692 /* STTModelCard.swift in Sources */,
