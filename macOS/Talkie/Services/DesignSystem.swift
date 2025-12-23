@@ -2,45 +2,150 @@
 //  DesignSystem.swift
 //  Talkie macOS
 //
-//  Design tokens matching iOS for consistent cross-platform styling.
+//  Talkie Design System v1.0
 //
+//  ═══════════════════════════════════════════════════════════════════════════
+//  PHILOSOPHY
+//  ═══════════════════════════════════════════════════════════════════════════
+//
+//  Talkie is a professional voice tool. The design should feel:
+//  • Precise    — Like a high-end audio interface (Logic Pro, Ableton)
+//  • Focused    — Minimal distractions, content-first
+//  • Trustworthy — Clean, predictable, no surprises
+//
+//  ═══════════════════════════════════════════════════════════════════════════
+//  8PT GRID (Industry Standard)
+//  ═══════════════════════════════════════════════════════════════════════════
+//
+//  Used by: Apple HIG, Material Design, IBM Carbon, Figma/Sketch defaults
+//
+//  Why 8pt?
+//  • Divides evenly into common screen sizes (1920, 1440, 1080, 768)
+//  • Scales well (4pt half-grid for fine adjustments)
+//  • Creates consistent visual rhythm
+//  • Matches Apple's SF font metrics
+//
+//  ═══════════════════════════════════════════════════════════════════════════
+//  TYPOGRAPHY (Major Second Scale: 1.125)
+//  ═══════════════════════════════════════════════════════════════════════════
+//
+//  Scale: 10pt → 11pt → 13pt → 15pt → 18pt → 32pt
+//
+//  Why Major Second (1.125)?
+//  • Tight ratio suits dense UI — not overwhelming jumps
+//  • Used by: Apple Notes, Notion, Linear
+//  • Alternative: Major Third (1.25) for more dramatic hierarchy
+//
+//  Font usage:
+//  • SF Pro     — UI chrome (labels, buttons, navigation)
+//  • SF Mono    — Content (transcripts, timestamps, technical data)
+//
+//  ═══════════════════════════════════════════════════════════════════════════
+//  TEXT OPACITY (WCAG-Informed)
+//  ═══════════════════════════════════════════════════════════════════════════
+//
+//  Primary:     100%  — 21:1 contrast on dark bg
+//  Secondary:    70%  — ~14:1 contrast (exceeds AAA)
+//  Muted:        40%  — ~7:1 contrast (meets AA)
+//  Disabled:     25%  — Intentionally low, de-emphasized
+//
+//  ═══════════════════════════════════════════════════════════════════════════
+//  DEPENDABLE PATTERNS
+//  ═══════════════════════════════════════════════════════════════════════════
+//
+//  A Title is always:      fontHeadlineBold (18pt) or fontTitleBold (15pt)
+//  A Label is always:      fontXSBold (10pt) + tracking + secondary color
+//  Secondary text:         fontSM (11pt) + foregroundSecondary
+//  A Card is always:       surface2 + cornerRadius.sm (8pt) + padding.md (12pt)
+//  A Button is always:     32pt height + padding.lg horizontal
+//
+//  When in doubt: round to the nearest 8pt value.
+//
+//  ═══════════════════════════════════════════════════════════════════════════
 
 import SwiftUI
 
-// MARK: - Spacing (Tighter, tactical feel)
-/// Consistent spacing scale used throughout the app.
-/// Matches iOS Spacing enum for cross-platform consistency.
+// MARK: - Spacing (8pt Grid System)
+/// Consistent spacing scale based on 8pt grid.
+/// Base unit: 4pt (half-grid for tight spacing)
+/// Full grid: 8pt increments
+///
+/// Visual rhythm:
+///   xxs (2pt) - Micro: icon-to-text, tight grouping
+///   xs  (4pt) - Compact: related elements, inline spacing
+///   sm  (8pt) - Standard: within components
+///   md  (12pt) - Medium: between related sections
+///   lg  (16pt) - Large: section padding
+///   xl  (24pt) - Extra: major section breaks
+///   xxl (32pt) - Maximum: page margins, hero spacing
+///
 enum Spacing {
-    /// 2pt - Micro spacing for tight element grouping
+    /// 2pt - Micro spacing for tight element grouping (icon gaps)
     static let xxs: CGFloat = 2
-    /// 6pt - Extra small spacing for related elements
-    static let xs: CGFloat = 6
-    /// 10pt - Small spacing within sections
-    static let sm: CGFloat = 10
-    /// 14pt - Medium spacing between sections
-    static let md: CGFloat = 14
-    /// 20pt - Large spacing for major section breaks
-    static let lg: CGFloat = 20
-    /// 28pt - Extra large spacing
-    static let xl: CGFloat = 28
-    /// 40pt - Maximum spacing for major divisions
-    static let xxl: CGFloat = 40
+    /// 4pt - Compact spacing for related elements (half-grid)
+    static let xs: CGFloat = 4
+    /// 8pt - Standard spacing within components (1x grid)
+    static let sm: CGFloat = 8
+    /// 12pt - Medium spacing between related sections (1.5x grid)
+    static let md: CGFloat = 12
+    /// 16pt - Large spacing for section padding (2x grid)
+    static let lg: CGFloat = 16
+    /// 24pt - Extra large spacing for major breaks (3x grid)
+    static let xl: CGFloat = 24
+    /// 32pt - Maximum spacing for page margins (4x grid)
+    static let xxl: CGFloat = 32
+    /// 48pt - Hero spacing for major layout divisions (6x grid)
+    static let xxxl: CGFloat = 48
+}
+
+// MARK: - Component Sizes (8pt Grid)
+/// Standard heights for interactive components.
+/// All values on 8pt grid for visual consistency.
+enum ComponentSize {
+    /// 24pt - Tiny buttons, icon-only controls
+    static let tiny: CGFloat = 24
+    /// 28pt - Small buttons, compact rows
+    static let small: CGFloat = 28
+    /// 32pt - Standard buttons, form fields
+    static let medium: CGFloat = 32
+    /// 40pt - Large buttons, prominent actions
+    static let large: CGFloat = 40
+    /// 48pt - Extra large, hero buttons
+    static let xlarge: CGFloat = 48
+    /// 56pt - Maximum, primary CTAs
+    static let xxlarge: CGFloat = 56
+}
+
+/// Icon sizes following 8pt grid
+enum IconSize {
+    /// 12pt - Inline icons, badges
+    static let xs: CGFloat = 12
+    /// 16pt - Standard inline icons
+    static let sm: CGFloat = 16
+    /// 20pt - Medium icons, navigation
+    static let md: CGFloat = 20
+    /// 24pt - Large icons, buttons
+    static let lg: CGFloat = 24
+    /// 32pt - Hero icons, empty states
+    static let xl: CGFloat = 32
+    /// 48pt - Feature icons, onboarding
+    static let xxl: CGFloat = 48
 }
 
 // MARK: - Onboarding Layout Constants
 /// Standardized layout measurements for onboarding flow.
-/// Used in all onboarding screens for consistent positioning.
+/// Uses 8pt grid values for consistent spacing.
 enum OnboardingLayout {
     /// 48pt - Header zone height (top icon/status area)
-    static let headerHeight: CGFloat = 48
+    static let headerHeight: CGFloat = ComponentSize.xlarge
     /// 48pt - Footer zone height (action button area)
-    static let footerHeight: CGFloat = 48
-    /// 48pt - Standard button height in footer
-    static let buttonHeight: CGFloat = 48
+    static let footerHeight: CGFloat = ComponentSize.xlarge
+    /// 40pt - Standard button height in footer
+    static let buttonHeight: CGFloat = ComponentSize.large
     /// 24pt - Top padding for content after header
-    static let contentTopPadding: CGFloat = 24
+    static let contentTopPadding: CGFloat = Spacing.xl
     /// 24pt - Horizontal padding for all content
-    static let horizontalPadding: CGFloat = 24
+    static let horizontalPadding: CGFloat = Spacing.xl
 }
 
 // MARK: - Corner Radius
@@ -209,20 +314,26 @@ enum MidnightSurface {
 struct TalkieToggleStyle: ToggleStyle {
     var onColor: Color = SemanticColor.success
 
+    // Toggle dimensions on 4pt grid
+    private let trackWidth: CGFloat = 36
+    private let trackHeight: CGFloat = 20
+    private let knobSize: CGFloat = 16
+    private let knobOffset: CGFloat = 8
+
     func makeBody(configuration: Configuration) -> some View {
         HStack {
             configuration.label
 
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(configuration.isOn ? onColor : Color.secondary.opacity(0.25))
-                    .frame(width: 36, height: 20)
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(configuration.isOn ? onColor : Color.secondary.opacity(Opacity.strong))
+                    .frame(width: trackWidth, height: trackHeight)
 
                 Circle()
                     .fill(Color.white)
-                    .shadow(color: .black.opacity(0.15), radius: 1, x: 0, y: 1)
-                    .frame(width: 16, height: 16)
-                    .offset(x: configuration.isOn ? 8 : -8)
+                    .shadow(color: .black.opacity(Opacity.medium), radius: 1, x: 0, y: 1)
+                    .frame(width: knobSize, height: knobSize)
+                    .offset(x: configuration.isOn ? knobOffset : -knobOffset)
             }
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isOn)
             .onTapGesture {
@@ -355,8 +466,8 @@ private struct TinyButtonStyleView: View {
     var body: some View {
         configuration.label
             .foregroundColor(isHovered ? (hoverForeground ?? foregroundColor) : foregroundColor)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(isHovered ? hoverBackground.opacity(Opacity.light) : Color.clear)
@@ -613,6 +724,28 @@ struct Theme: Equatable {
     let surfaceAlternate: Color
     let surfaceWarning: Color
     let surfaceInfo: Color
+
+    // MARK: - Semantic Aliases (for TalkieTheme migration)
+    /// Primary surface - use for main content areas
+    var surface: Color { surfaceBase }
+    /// Elevated surface - use for sidebars, toolbars
+    var surfaceElevated: Color { surface1 }
+    /// Card surface - use for cards, panels
+    var surfaceCard: Color { surface2 }
+    /// Primary text - use for main content
+    var textPrimary: Color { foreground }
+    /// Secondary text - use for descriptions
+    var textSecondary: Color { foregroundSecondary }
+    /// Tertiary text - use for timestamps, metadata
+    var textTertiary: Color { foregroundSecondary.opacity(Opacity.prominent) }
+    /// Muted text - use for placeholders, disabled
+    var textMuted: Color { foregroundMuted }
+    /// Border color - use for card borders
+    var border: Color { divider }
+    /// Subtle border - use for inner dividers
+    var borderSubtle: Color { divider.opacity(Opacity.half) }
+    /// Accent color
+    var accent: Color { .accentColor }
 
     // MARK: - Current Theme (singleton access)
 

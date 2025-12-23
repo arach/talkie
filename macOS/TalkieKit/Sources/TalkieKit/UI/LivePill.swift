@@ -21,8 +21,8 @@ import AppKit
 private enum VisualState: Equatable {
     case warmingUp
     case success
-    case offline
-    case idle(hasPending: Bool)
+    case offline(queuedCount: Int)  // Show how many are piling up while stuck
+    case idle
     case listening(interstitialHint: Bool)
     case transcribing
     case routing
@@ -37,6 +37,11 @@ private enum VisualState: Equatable {
         case .transcribing: return SemanticColor.warning
         case .routing: return SemanticColor.success
         }
+    }
+
+    var isOffline: Bool {
+        if case .offline = self { return true }
+        return false
     }
 
     var sliverColor: Color {
@@ -136,9 +141,11 @@ public struct LivePill: View {
     private var visualState: VisualState {
         if isWarmingUp { return .warmingUp }
         if showSuccess { return .success }
-        if !isEngineConnected { return .offline }
+        // Offline: show how many are queued up while stuck
+        if !isEngineConnected { return .offline(queuedCount: pendingQueueCount) }
         switch state {
-        case .idle: return .idle(hasPending: pendingQueueCount > 0)
+        // When connected, idle is always clean - pending items are someone else's problem
+        case .idle: return .idle
         case .listening: return .listening(interstitialHint: isHovered && isShiftHeld)
         case .transcribing: return .transcribing
         case .routing: return .routing
@@ -184,33 +191,25 @@ public struct LivePill: View {
 
     private var sliverContent: some View {
         HStack(spacing: 4) {
-            // Warning indicator for offline/queue
-            if case .offline = visualState {
+            // Warning indicator when offline
+            if case .offline(let count) = visualState {
                 Circle()
                     .fill(SemanticColor.warning)
                     .frame(width: 4, height: 4)
-            } else if case .idle(let hasPending) = visualState, hasPending {
-                Circle()
-                    .fill(SemanticColor.warning)
-                    .frame(width: 4, height: 4)
-            }
 
-            // Main sliver bar with optional pulse
-            sliverBar
-
-            // Queue badge - clickable to retry/clear
-            if case .idle(let hasPending) = visualState, hasPending {
-                Button(action: { onQueueTap?() }) {
-                    Text("\(pendingQueueCount)")
+                // Show count if things are piling up
+                if count > 0 {
+                    Text("\(count)")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Capsule().fill(SemanticColor.warning))
                 }
-                .buttonStyle(.plain)
-                .help("Click to retry failed transcriptions")
             }
+
+            // Main sliver bar with optional pulse
+            sliverBar
         }
         .frame(height: 18)
         .padding(.horizontal, 6)
@@ -309,41 +308,34 @@ public struct LivePill: View {
             }
             .foregroundColor(SemanticColor.success)
 
-        case .offline:
-            Text("Offline")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(SemanticColor.warning)
-
-        case .idle(let hasPending):
+        case .offline(let count):
             HStack(spacing: 4) {
-                // Show mic name only when Command is held
-                if isCommandHeld, let micName = micDeviceName {
-                    HStack(spacing: 3) {
-                        Image(systemName: "mic")
-                            .font(.system(size: 8, weight: .medium))
-                        Text(shortMicName(micName))
-                            .font(.system(size: 9, weight: .medium))
-                    }
-                    .foregroundColor(TalkieTheme.textTertiary)
-                    .help(micName)
-                } else {
-                    Text("REC")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                Text("Offline")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(SemanticColor.warning)
+                // Show queued count when things are piling up
+                if count > 0 {
+                    Text("(\(count))")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(SemanticColor.warning.opacity(0.8))
                 }
+            }
 
-                if hasPending {
-                    Button(action: { onQueueTap?() }) {
-                        Text("\(pendingQueueCount)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(SemanticColor.warning))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Click to retry failed transcriptions")
+        case .idle:
+            // Clean idle - just show REC or mic name
+            if isCommandHeld, let micName = micDeviceName {
+                HStack(spacing: 3) {
+                    Image(systemName: "mic")
+                        .font(.system(size: 8, weight: .medium))
+                    Text(shortMicName(micName))
+                        .font(.system(size: 9, weight: .medium))
                 }
+                .foregroundColor(TalkieTheme.textTertiary)
+                .help(micName)
+            } else {
+                Text("REC")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(TalkieTheme.textSecondary)
             }
 
         case .listening(let interstitialHint):

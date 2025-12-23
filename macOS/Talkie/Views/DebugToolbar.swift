@@ -280,9 +280,15 @@ struct ListViewDebugContent: View {
                 }
             }
 
-            // 4. Design Audit
-            DebugSection(title: "DESIGN") {
+            // 4. Design System Debug
+            DesignDebugToolbarSection()
+
+            // 4b. Design Audit
+            DebugSection(title: "AUDIT") {
                 VStack(spacing: 4) {
+                    DebugActionButton(icon: "paintbrush.pointed", label: "Design Canvas") {
+                        openDesignCanvas()
+                    }
                     DebugActionButton(icon: "checkmark.seal", label: "Run Audit") {
                         runDesignAudit()
                     }
@@ -416,6 +422,27 @@ struct ListViewDebugContent: View {
             NSLog("[DEBUG] Interstitial test temporarily disabled")
             SystemEventManager.shared.logSync(.system, "Interstitial test", detail: "Temporarily disabled")
             // InterstitialManager.shared.show(utteranceId: 999)
+        }
+    }
+
+    // MARK: - Design Canvas
+
+    private func openDesignCanvas() {
+        NSLog("[DEBUG] Opening Design Canvas...")
+
+        DispatchQueue.main.async {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1300, height: 900),
+                styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Talkie Design Canvas"
+            window.contentView = NSHostingView(rootView: DesignCanvas())
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 
@@ -675,6 +702,96 @@ struct ListViewDebugContent: View {
 
 /// Alias for backwards compatibility
 typealias MainDebugContent = ListViewDebugContent
+
+// MARK: - Design Debug Toolbar Section
+
+/// Toolbar section for design system debugging
+/// Controls highlight modes: Grid, Hierarchy, Fonts, Spacing
+struct DesignDebugToolbarSection: View {
+    @State private var debugState = DesignDebugState.shared
+
+    var body: some View {
+        DebugSection(title: "DESIGN") {
+            VStack(spacing: 4) {
+                // Mode toggles
+                HStack(spacing: 4) {
+                    modeToggle("G", isActive: debugState.showGrid, color: .cyan) {
+                        debugState.toggleGrid()
+                    }
+                    modeToggle("H", isActive: debugState.highlightMode == .hierarchy, color: .purple) {
+                        debugState.toggleHierarchy()
+                    }
+                    modeToggle("F", isActive: debugState.highlightMode == .fonts, color: .orange) {
+                        debugState.toggleFonts()
+                    }
+                    modeToggle("S", isActive: debugState.highlightMode == .spacing, color: .green) {
+                        debugState.toggleSpacing()
+                    }
+                }
+
+                // Current mode indicator
+                if debugState.showGrid || debugState.highlightMode != .none {
+                    HStack(spacing: 4) {
+                        if debugState.showGrid {
+                            Text("Grid")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.cyan)
+                        }
+                        if debugState.highlightMode != .none {
+                            Text(debugState.highlightMode.rawValue)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(debugState.highlightMode.color)
+                        }
+
+                        Spacer()
+
+                        Button(action: { debugState.clear() }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                }
+
+                // Legend
+                VStack(alignment: .leading, spacing: 2) {
+                    legendRow("G", "8pt Grid Overlay", .cyan)
+                    legendRow("H", "Text Hierarchy (100/70/40%)", .purple)
+                    legendRow("F", "Font Sizes", .orange)
+                    legendRow("S", "Spacing Values", .green)
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private func modeToggle(_ key: String, isActive: Bool, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(key)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(isActive ? .white : color)
+                .frame(width: 28, height: 24)
+                .background(isActive ? color : color.opacity(0.15))
+                .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func legendRow(_ key: String, _ desc: String, _ color: Color) -> some View {
+        HStack(spacing: 4) {
+            Text("[\(key)]")
+                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                .foregroundColor(color)
+                .frame(width: 20)
+            Text(desc)
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(.secondary)
+        }
+    }
+}
 
 // MARK: - Engine Processes Monitor
 

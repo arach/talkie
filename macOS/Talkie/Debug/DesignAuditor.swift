@@ -149,15 +149,16 @@ struct DesignTokens {
         "Theme.current.fontTitle"
     ]
 
-    // Spacing values from Spacing enum
+    // Spacing values from Spacing enum (8pt grid)
     static let validSpacing: [String: CGFloat] = [
-        "Spacing.xxs": 2,
-        "Spacing.xs": 6,
-        "Spacing.sm": 10,
-        "Spacing.md": 14,
-        "Spacing.lg": 20,
-        "Spacing.xl": 28,
-        "Spacing.xxl": 40
+        "Spacing.xxs": 2,   // Micro
+        "Spacing.xs": 4,    // Half-grid
+        "Spacing.sm": 8,    // 1x grid
+        "Spacing.md": 12,   // 1.5x grid
+        "Spacing.lg": 16,   // 2x grid
+        "Spacing.xl": 24,   // 3x grid
+        "Spacing.xxl": 32,  // 4x grid
+        "Spacing.xxxl": 48  // 6x grid
     ]
 
     // Opacity values from Opacity enum
@@ -589,14 +590,16 @@ class DesignAuditor {
         if let match = pattern.range(of: #"\d+"#, options: .regularExpression) {
             let numStr = String(pattern[match])
             if let num = Int(numStr) {
+                // Map to closest 8pt grid value
                 switch num {
-                case 0...3: return "Spacing.xxs (2pt)"
-                case 4...7: return "Spacing.xs (6pt)"
-                case 8...12: return "Spacing.sm (10pt)"
-                case 13...17: return "Spacing.md (14pt)"
-                case 18...24: return "Spacing.lg (20pt)"
-                case 25...34: return "Spacing.xl (28pt)"
-                default: return "Spacing.xxl (40pt)"
+                case 0...2: return "Spacing.xxs (2pt)"
+                case 3...5: return "Spacing.xs (4pt)"
+                case 6...9: return "Spacing.sm (8pt)"
+                case 10...14: return "Spacing.md (12pt)"
+                case 15...19: return "Spacing.lg (16pt)"
+                case 20...27: return "Spacing.xl (24pt)"
+                case 28...39: return "Spacing.xxl (32pt)"
+                default: return "Spacing.xxxl (48pt)"
                 }
             }
         }

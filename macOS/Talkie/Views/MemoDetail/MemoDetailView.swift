@@ -906,8 +906,10 @@ private struct MemoDetailTranscriptSection: View {
 private struct MemoDetailTranscriptHeader: View {
     var body: some View {
         Text("TRANSCRIPT")
-            .font(.techLabel)
+            .font(.techLabel)  // 10pt bold, tracked
             .foregroundColor(Theme.current.foregroundSecondary)
+            .debugFont("10pt")
+            .debugHierarchy("70%")
     }
 }
 
@@ -1019,12 +1021,12 @@ private struct MemoDetailTranscriptDisplayView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Text(transcript)
-                .font(settings.contentFontBody)
+                .font(settings.contentFontBody)  // 14pt - content reading font
                 .foregroundColor(Theme.current.foreground)
                 .textSelection(.enabled)
-                .lineSpacing(4)
-                .padding(14)
-                .padding(.top, 32)
+                .lineSpacing(Spacing.xs)  // 4pt - comfortable reading
+                .padding(Spacing.md)  // 12pt (was 14pt - now on grid)
+                .padding(.top, Spacing.xxl)  // 32pt - room for quick open bar
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.md))
                 .contextMenu {
@@ -1034,6 +1036,9 @@ private struct MemoDetailTranscriptDisplayView: View {
                         onRetranscribe: onRetranscribe
                     )
                 }
+                .debugFont("14pt")
+                .debugHierarchy("100%")
+                .debugSpacing("md=12pt")
 
             InlineQuickOpenBar(transcript: transcript)
                 .padding(Spacing.sm)
@@ -1117,10 +1122,12 @@ private struct MemoDetailQuickActionsSection: View {
     let buttonProvider: (MemoDetailView.QuickActionItem) -> ActionButtonMac
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {  // 8pt between header and grid
             Text("QUICK ACTIONS")
-                .font(.techLabel)
+                .font(.techLabel)  // 10pt bold, tracked - section header pattern
                 .foregroundColor(Theme.current.foregroundSecondary)
+                .debugFont("10pt")
+                .debugHierarchy("70%")
 
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: Spacing.sm),

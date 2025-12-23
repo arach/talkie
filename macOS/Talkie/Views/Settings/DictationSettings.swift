@@ -31,22 +31,28 @@ struct DictationCaptureSettingsView: View {
         } content: {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 // MARK: - Visual Feedback with Preview
-                VStack(alignment: .leading, spacing: Spacing.md) {
+                VStack(alignment: .leading, spacing: Spacing.md) {  // 12pt between header and content
                     Text("VISUAL FEEDBACK")
-                        .font(Theme.current.fontXSBold)
+                        .font(Theme.current.fontXSBold)  // 10pt bold - section header pattern
                         .foregroundColor(Theme.current.foregroundSecondary)
+                        .debugFont("10pt")
+                        .debugHierarchy("70%")
 
                     // Main layout: Preview LEFT, Settings RIGHT
                     HStack(alignment: .top, spacing: Spacing.xl) {
                         // LEFT: Mock screen preview
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {  // 4pt tight grouping
                             Text("PREVIEW")
-                                .font(Theme.current.fontXSBold)
+                                .font(Theme.current.fontXSBold)  // 10pt bold
                                 .foregroundColor(Theme.current.foregroundSecondary)
+                                .debugFont("10pt")
+                                .debugHierarchy("70%")
 
                             Text("Hover to simulate recording")
-                                .font(Theme.current.fontXS)
+                                .font(Theme.current.fontXS)  // 10pt regular
                                 .foregroundColor(Theme.current.foregroundMuted)
+                                .debugFont("10pt")
+                                .debugHierarchy("40%")
 
                             LivePreviewScreen(
                                 overlayStyle: $live.overlayStyle,
@@ -59,10 +65,13 @@ struct DictationCaptureSettingsView: View {
                         // RIGHT: Settings (HUD top, ON AIR middle, Pill bottom)
                         VStack(alignment: .leading, spacing: 0) {
                             // HUD Section
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {  // 8pt - standard component spacing
                                 Text("HUD")
-                                    .font(Theme.current.fontXSBold)
+                                    .font(Theme.current.fontXSBold)  // 10pt bold
                                     .foregroundColor(Theme.current.foregroundSecondary)
+                                    .debugFont("10pt")
+                                    .debugHierarchy("70%")
+                                    .debugSpacing("sm=8pt")
 
                                 StyledToggle(
                                     label: "Show HUD overlay",

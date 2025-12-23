@@ -41,47 +41,60 @@ struct MemoRowView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                // Title
+        HStack(spacing: Spacing.sm) {  // 8pt - standard component spacing
+            VStack(alignment: .leading, spacing: Spacing.xxs) {  // 2pt - micro gap
+                // Title - 13pt medium, primary (100%)
                 Text(memoTitle)
                     .font(Theme.current.fontBodyMedium)
                     .foregroundColor(Theme.current.foreground)
                     .lineLimit(1)
+                    .debugFont("13pt")
+                    .debugHierarchy("100%")
 
-                // Minimal metadata: source + duration + relative time
-                HStack(spacing: 4) {
-                    // Source badge (icon only for compactness)
+                // Metadata row - 10pt, secondary (70%)
+                HStack(spacing: Spacing.xs) {  // 4pt - tight grouping
+                    // Source icon - 10pt (on scale)
                     if memo.source != .unknown {
                         Image(systemName: memo.source.icon)
-                            .font(.system(size: 9))
+                            .font(Theme.current.fontXS)  // 10pt (was 9pt - off scale!)
                             .foregroundColor(memo.source.color)
+                            .debugFont("10pt")
                     }
 
+                    // Duration - MONOSPACE for alignment
                     Text(formatDuration(memo.duration))
-                        .font(settings.fontXS)
+                        .font(.monoXSmall)  // Monospace for technical data
+                        .debugFont("mono")
 
+                    // Separator - muted (40%)
                     Text("·")
-                        .font(settings.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundMuted)
+                        .debugHierarchy("40%")
 
+                    // Timestamp
                     Text(formatDateCompact(memoCreatedAt))
-                        .font(settings.fontXS)
+                        .font(Theme.current.fontXS)
+                        .debugFont("10pt")
                 }
                 .foregroundColor(Theme.current.foregroundSecondary)
+                .debugHierarchy("70%")
+                .debugSpacing("xs=4pt")
             }
+            .debugSpacing("xxs=2pt")
 
             Spacer()
 
-            // Processing indicator (only when active)
+            // Processing indicator
             if memo.isTranscribing {
                 ProgressView()
                     .scaleEffect(0.5)
-                    .frame(width: 12, height: 12)
+                    .frame(width: IconSize.xs, height: IconSize.xs)  // 12pt
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 4)
+        .padding(.vertical, Spacing.sm)  // 8pt (was 6pt - off grid!)
+        .padding(.horizontal, Spacing.xs)  // 4pt
+        .debugSpacing("sm=8pt")
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

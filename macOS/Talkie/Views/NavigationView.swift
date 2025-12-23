@@ -25,6 +25,13 @@ enum NavigationSection: Hashable {
     case allowedCommands
     case settings
     case smartFolder(String)
+
+    // Design mode sections (DEBUG only)
+    #if DEBUG
+    case designHome
+    case designComponents
+    case designAudit
+    #endif
 }
 
 struct TalkieNavigationView: View {
@@ -129,6 +136,9 @@ struct TalkieNavigationView: View {
                                 .transition(.opacity)
                         }
                     }
+                    #if DEBUG
+                    .designDebugOverlay()
+                    #endif
 
                     // StatusBar only on content area (not under sidebar) - hide on short windows
                     if shouldShowStatusBar {
@@ -192,6 +202,9 @@ struct TalkieNavigationView: View {
                     "AutoRun": SettingsManager.shared.autoRunWorkflowsEnabled ? "ON" : "OFF"
                 ]
             }
+        }
+        .overlay {
+            DesignToolbar()
         }
         #endif
     }
@@ -314,6 +327,29 @@ struct TalkieNavigationView: View {
                             badge: cachedErrorCount > 0 ? "\(cachedErrorCount)" : nil,
                             badgeColor: .orange
                         )
+
+                        // Design section (DEBUG only - visible when toolbar is visible)
+                        #if DEBUG
+                        if !DesignModeManager.shared.isHidden {
+                            designSectionHeader
+                                .padding(.top, Spacing.sm)
+                            sidebarButton(
+                                section: .designHome,
+                                icon: "swatchpalette.fill",
+                                title: "Design Home"
+                            )
+                            sidebarButton(
+                                section: .designComponents,
+                                icon: "square.stack.3d.up",
+                                title: "Components"
+                            )
+                            sidebarButton(
+                                section: .designAudit,
+                                icon: "checkmark.seal",
+                                title: "Audit"
+                            )
+                        }
+                        #endif
                     }
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, 4)
@@ -349,6 +385,33 @@ struct TalkieNavigationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 4)
     }
+
+    #if DEBUG
+    /// Design section header with swatch indicator
+    @ViewBuilder
+    private var designSectionHeader: some View {
+        HStack(spacing: 4) {
+            // Swatch indicator linking to design toolbar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(
+                    LinearGradient(
+                        colors: [Theme.current.accent, SemanticColor.success, SemanticColor.warning],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 12, height: 6)
+
+            Text("DESIGN")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Theme.current.foregroundMuted)
+        }
+        .opacity(isSidebarCollapsed ? 0 : 1)
+        .frame(height: isSidebarCollapsed ? 0 : 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 4)
+    }
+    #endif
 
     /// Custom sidebar button with controlled selection styling and instrumentation
     @ViewBuilder
@@ -427,6 +490,11 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "AllowedCommands"
         case .settings: return "Settings"
         case .smartFolder(let name): return "SmartFolder.\(name)"
+        #if DEBUG
+        case .designHome: return "DesignHome"
+        case .designComponents: return "DesignComponents"
+        case .designAudit: return "DesignAudit"
+        #endif
         }
     }
 
@@ -553,6 +621,20 @@ struct TalkieNavigationView: View {
             TalkieSection("Settings") {
                 SettingsView()
             }
+        #if DEBUG
+        case .designHome:
+            TalkieSection("DesignHome") {
+                DesignHomePage()
+            }
+        case .designComponents:
+            TalkieSection("DesignComponents") {
+                ComponentLibraryPage()
+            }
+        case .designAudit:
+            TalkieSection("DesignAudit") {
+                AuditPage()
+            }
+        #endif
         default:
             EmptyView()
         }
@@ -571,6 +653,10 @@ struct TalkieNavigationView: View {
         switch selectedSection {
         case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .settings:
             return true
+        #if DEBUG
+        case .designHome, .designComponents, .designAudit:
+            return true
+        #endif
         default:
             return false
         }
@@ -647,6 +733,11 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "ALLOWED COMMANDS"
         case .settings: return "SETTINGS"
         case .smartFolder(let name): return name.uppercased()
+        #if DEBUG
+        case .designHome: return "DESIGN HOME"
+        case .designComponents: return "COMPONENTS"
+        case .designAudit: return "AUDIT"
+        #endif
         case .none: return "MEMOS"
         }
     }

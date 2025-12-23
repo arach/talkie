@@ -12,6 +12,22 @@ import CoreData
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
+// MARK: - Design Exploration Window
+
+struct DesignExplorationWindow: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        MemoRowExplorationPreview()
+            .frame(minWidth: 900, minHeight: 700)
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Done") { dismiss() }
+                }
+            }
+    }
+}
+
 // MARK: - Debug Info View
 
 struct DebugInfoView: View {
@@ -22,6 +38,7 @@ struct DebugInfoView: View {
 
     @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var iCloudStatus: String = "Checking..."
+    @State private var showDesignExploration = false
 
     private let syncIntervalOptions = [1, 5, 10, 15, 30, 60]
 
@@ -208,6 +225,59 @@ struct DebugInfoView: View {
             .padding(Spacing.md)
             .background(Theme.current.surface2)
             .cornerRadius(CornerRadius.sm)
+
+            // MARK: - Design System
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.cyan)
+                        .frame(width: 3, height: 14)
+
+                    Text("DESIGN SYSTEM")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Spacer()
+                }
+
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "paintpalette")
+                        .font(Theme.current.fontHeadline)
+                        .foregroundColor(.cyan)
+                        .frame(width: 24)
+
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("Design Exploration")
+                            .font(Theme.current.fontSMMedium)
+                        Text("Interactive before/after comparison with grid overlay and highlight modes.")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+
+                    Spacer()
+
+                    Button(action: {
+                        showDesignExploration = true
+                    }) {
+                        Text("OPEN")
+                            .font(Theme.current.fontXSBold)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface1)
+                .cornerRadius(CornerRadius.sm)
+
+                Text("Press G for grid, H for hierarchy, F for fonts, S for spacing, C to toggle views.")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(Spacing.md)
+            .background(Theme.current.surface2)
+            .cornerRadius(CornerRadius.sm)
+        }
+        .sheet(isPresented: $showDesignExploration) {
+            DesignExplorationWindow()
         }
         .onAppear {
             checkiCloudStatus()
