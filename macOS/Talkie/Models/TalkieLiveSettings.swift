@@ -608,6 +608,14 @@ final class LiveSettings {
         storage.set(primaryContextSource.rawValue, forKey: LiveSettingsKey.primaryContextSource)
         storage.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
         storage.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)
+
+        // Notify TalkieLive that settings changed (cross-process)
+        DistributedNotificationCenter.default().postNotificationName(
+            .liveSettingsDidChange,
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
     }
 
     // MARK: - Appearance Application

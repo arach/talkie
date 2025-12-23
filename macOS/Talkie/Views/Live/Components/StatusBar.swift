@@ -20,6 +20,7 @@ import TalkieKit
 struct StatusBar: View {
     // Direct service access - use let for @Observable singletons
     private let liveState = TalkieLiveStateMonitor.shared
+    private let liveClient = TalkieLiveClient.shared  // URL-based commands
     private let serviceMonitor = TalkieServiceMonitor.shared
     private let events = SystemEventManager.shared
     private let liveSettings = LiveSettings.shared
@@ -101,7 +102,13 @@ struct StatusBar: View {
                             micDeviceName: microphoneName,
                             audioLevel: 0,  // StatusBar doesn't have audio capture - just shows pill
                             onTap: {
-                                TalkieLiveStateMonitor.shared.toggleRecording()
+                                // Use URL scheme - explicit start/stop, not toggle
+                                if liveState.state == .idle {
+                                    liveClient.startRecording()
+                                } else if liveState.state == .listening {
+                                    liveClient.stopRecording()
+                                }
+                                // Ignore taps during transcribing/routing states
                             }
                         )
                         .contextMenu {
@@ -268,7 +275,7 @@ struct StatusBar: View {
     }
 
     private func launchTalkieLive() {
-        _ = AppEnvironment.shared.launch(.talkieLive)
+        liveClient.launchTalkieLive()
     }
 
     private func restartTalkieLive() {

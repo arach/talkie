@@ -76,7 +76,17 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
 
     /// Notify observers that a new utterance was added
     func notifyUtteranceAdded() {
+        // XPC broadcast to connected observers (legacy)
         broadcastUtteranceAdded()
+
+        // DistributedNotification for cross-process (new, no connection needed)
+        DistributedNotificationCenter.default().postNotificationName(
+            .liveDictationWasAdded,
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+        NSLog("[TalkieLive] 📤 Posted liveDictationWasAdded notification")
     }
 
     private func broadcastStateChange(state: String, elapsedTime: TimeInterval) {

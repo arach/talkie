@@ -671,6 +671,93 @@ final class LiveSettings: ObservableObject {
         DictationStore.shared.ttlHours = dictationTTLHours
     }
 
+    // MARK: - Reload
+
+    /// Reload all settings from shared storage (call when notified of cross-process changes)
+    func reload() {
+        let store = TalkieSharedSettings
+
+        // Reload hotkeys
+        if let data = store.data(forKey: LiveSettingsKey.hotkey),
+           let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
+            self.hotkey = config
+        }
+
+        if let data = store.data(forKey: LiveSettingsKey.pttHotkey),
+           let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
+            self.pttHotkey = config
+        }
+
+        self.pttEnabled = store.bool(forKey: LiveSettingsKey.pttEnabled)
+
+        // Reload model
+        if let modelId = store.string(forKey: LiveSettingsKey.selectedModelId) {
+            self.selectedModelId = modelId
+        }
+
+        // Reload routing
+        let routingRaw = store.string(forKey: LiveSettingsKey.routingMode) ?? "paste"
+        self.routingMode = routingRaw == "clipboardOnly" ? .clipboardOnly : .paste
+
+        // Reload audio
+        self.selectedMicrophoneID = UInt32(store.integer(forKey: LiveSettingsKey.selectedMicrophoneID))
+
+        // Reload TTL
+        let ttl = store.integer(forKey: LiveSettingsKey.utteranceTTLHours)
+        self.dictationTTLHours = ttl > 0 ? ttl : 48
+        DictationStore.shared.ttlHours = dictationTTLHours
+
+        // Reload overlay/pill
+        if let rawValue = store.string(forKey: LiveSettingsKey.overlayStyle),
+           let style = OverlayStyle(rawValue: rawValue) {
+            self.overlayStyle = style
+        }
+
+        if let rawValue = store.string(forKey: LiveSettingsKey.overlayPosition),
+           let position = OverlayPosition(rawValue: rawValue) {
+            self.overlayPosition = position
+        }
+
+        if let rawValue = store.string(forKey: LiveSettingsKey.pillPosition),
+           let position = PillPosition(rawValue: rawValue) {
+            self.pillPosition = position
+        }
+
+        self.pillShowOnAllScreens = store.object(forKey: LiveSettingsKey.pillShowOnAllScreens) as? Bool ?? true
+        self.pillExpandsDuringRecording = store.object(forKey: LiveSettingsKey.pillExpandsDuringRecording) as? Bool ?? true
+
+        // Reload sounds
+        if let rawValue = store.string(forKey: LiveSettingsKey.startSound),
+           let sound = TalkieSound(rawValue: rawValue) {
+            self.startSound = sound
+        }
+
+        if let rawValue = store.string(forKey: LiveSettingsKey.finishSound),
+           let sound = TalkieSound(rawValue: rawValue) {
+            self.finishSound = sound
+        }
+
+        if let rawValue = store.string(forKey: LiveSettingsKey.pastedSound),
+           let sound = TalkieSound(rawValue: rawValue) {
+            self.pastedSound = sound
+        }
+
+        // Reload context settings
+        if let rawValue = store.string(forKey: LiveSettingsKey.primaryContextSource),
+           let source = PrimaryContextSource(rawValue: rawValue) {
+            self.primaryContextSource = source
+        }
+
+        if let rawValue = store.string(forKey: LiveSettingsKey.contextCaptureDetail),
+           let detail = ContextCaptureDetail(rawValue: rawValue) {
+            self.contextCaptureDetail = detail
+        }
+
+        self.returnToOriginAfterPaste = store.bool(forKey: LiveSettingsKey.returnToOriginAfterPaste)
+
+        NSLog("[LiveSettings] ✓ Reloaded from shared storage")
+    }
+
     // MARK: - Persistence
     // Writes to shared storage so Talkie sees changes (though Talkie is the primary owner)
 

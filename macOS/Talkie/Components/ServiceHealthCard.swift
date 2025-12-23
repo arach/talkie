@@ -96,38 +96,22 @@ struct ServiceHealthCard: View {
 // MARK: - Live Recording Health Card
 
 struct LiveRecordingHealthCard: View {
-    private let liveState = TalkieLiveStateMonitor.shared
+    private let liveClient = TalkieLiveClient.shared
 
     var body: some View {
         ServiceHealthCard(
             icon: "waveform.circle.fill",
             title: "Live Recording",
-            isHealthy: liveState.isRunning,
-            statusText: liveState.isRunning ? "Active" : "Inactive",
-            detailText: liveState.isRunning
+            isHealthy: liveClient.isRunning,
+            statusText: liveClient.isRunning ? "Ready" : "Offline",
+            detailText: liveClient.isRunning
                 ? "Live Mode is active and ready to record voice memos."
                 : "Live Mode is not active. Enable Live Mode to access recording features and hotkeys.",
-            action: liveState.isRunning ? nil : {
-                // Launch TalkieLive
-                launchTalkieLive()
+            action: liveClient.isRunning ? nil : {
+                liveClient.launchTalkieLive()
             },
             actionLabel: "Enable Live Mode"
         )
-        .onAppear {
-            liveState.startMonitoring()
-        }
-    }
-
-    private func launchTalkieLive() {
-        // TODO: Implement TalkieLive launch
-        let appPath = "/Applications/TalkieLive.app"
-        if FileManager.default.fileExists(atPath: appPath) {
-            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: appPath),
-                                              configuration: NSWorkspace.OpenConfiguration())
-        } else {
-            // Try to find it in build products
-            NSLog("[Talkie] TalkieLive.app not found at \(appPath)")
-        }
     }
 }
 

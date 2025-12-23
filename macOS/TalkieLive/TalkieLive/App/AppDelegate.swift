@@ -22,6 +22,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    // MARK: - URL Handling (deep links from Talkie app or automation)
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            handleIncomingURL(url)
+        }
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        let command = url.host ?? "unknown"
+        let currentState = liveController?.state ?? .idle
+
+        // Log receipt (access log style)
+        NSLog("[TalkieLive] 📥 URL received: %@ (current state: %@)", url.absoluteString, currentState.rawValue)
+
+        switch command {
+        case "start":
+            if currentState == .idle {
+                NSLog("[TalkieLive] ✓ start: initiating recording")
+                toggleListening(interstitial: false)
+            } else {
+                NSLog("[TalkieLive] ⏭ start: ignored (already in state: %@)", currentState.rawValue)
+            }
+
+        case "stop":
+            if currentState == .listening {
+                NSLog("[TalkieLive] ✓ stop: stopping recording")
+                toggleListening(interstitial: false)
+            } else {
+                NSLog("[TalkieLive] ⏭ stop: ignored (not recording, state: %@)", currentState.rawValue)
+            }
+
+        default:
+            NSLog("[TalkieLive] ⚠️ Unknown URL command: %@", command)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Essential sync init (settings needed for appearance)
         BootSequence.shared.initEssentials()
@@ -265,11 +302,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
-        // Listen for UserDefaults changes (from Talkie main app updating settings)
+        // Listen for UserDefaults changes (local process only)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(userDefaultsDidChange),
             name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+
+        // Listen for LiveSettings changes from Talkie app (cross-process)
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(liveSettingsDidChange),
+            name: .liveSettingsDidChange,
             object: nil
         )
 
@@ -330,10 +375,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func userDefaultsDidChange() {
-        // UserDefaults changed (possibly from Talkie main app)
-        // Re-register hotkeys in case they were updated from the settings UI in Talkie
+        // UserDefaults changed (local process only - this won't fire for cross-process changes)
         Task { @MainActor in
-            print("[AppDelegate] 🔄 UserDefaults changed - re-registering hotkeys")
+            print("[AppDelegate] 🔄 UserDefaults changed locally")
+            hotkeyDidChange()
+        }
+    }
+
+    @objc private func liveSettingsDidChange() {
+        // LiveSettings changed in Talkie app (cross-process notification)
+        Task { @MainActor in
+            NSLog("[TalkieLive] 📥 LiveSettings changed (from Talkie) - reloading settings")
+
+            // Reload settings from shared UserDefaults
+            LiveSettings.shared.reload()
+
+            // Re-register hotkeys with new settings
             hotkeyDidChange()
         }
     }

@@ -8,6 +8,18 @@
 
 import Foundation
 
+// MARK: - Cross-Process Notifications
+
+public extension Notification.Name {
+    /// Posted by Talkie when LiveSettings change (cross-process via DistributedNotificationCenter)
+    /// TalkieLive listens for this to reload settings
+    static let liveSettingsDidChange = Notification.Name("com.jdi.talkie.liveSettingsDidChange")
+
+    /// Posted by TalkieLive when a new dictation is saved (cross-process via DistributedNotificationCenter)
+    /// Talkie listens for this to refresh DictationStore
+    static let liveDictationWasAdded = Notification.Name("com.jdi.talkie.liveDictationWasAdded")
+}
+
 // MARK: - Shared Settings Storage
 
 /// Shared UserDefaults suite name for cross-app settings sync
