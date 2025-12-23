@@ -8,9 +8,13 @@
 import Foundation
 import AppKit
 import os
+import os.signpost
 import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
+
+/// Signpost log for XPC round-trip profiling in Instruments
+private let xpcSignpostLog = OSLog(subsystem: "jdi.talkie.live", category: .pointsOfInterest)
 
 /// Log level for dev logging
 private enum LogLevel { case debug, info, warning, error }
@@ -613,6 +617,11 @@ public final class EngineClient: ObservableObject {
         let startTime = Date()
         let timeoutSeconds: Double = 120 // 2 minute timeout for long audio files
 
+        // Start XPC round-trip signpost for Instruments profiling
+        let signpostID = OSSignpostID(log: xpcSignpostLog)
+        os_signpost(.begin, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID,
+                    "file=%{public}s model=%{public}s", fileName, modelId)
+
         // Use a continuation wrapper that ensures exactly one resume
         // This prevents leaks when XPC connection dies or timeout fires
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
@@ -636,6 +645,8 @@ public final class EngineClient: ObservableObject {
 
             // Start timeout timer
             let timeoutWork = DispatchWorkItem {
+                // End signpost on timeout
+                os_signpost(.end, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID, "timeout")
                 resumeOnce(with: .failure(EngineClientError.transcriptionFailed("Timeout after \(Int(timeoutSeconds))s - engine may have disconnected")))
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
@@ -646,6 +657,8 @@ public final class EngineClient: ObservableObject {
                 timeoutWork.cancel()
 
                 if let error = error {
+                    // End signpost with error
+                    os_signpost(.end, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID, "error=%{public}s", error)
                     resumeOnce(with: .failure(EngineClientError.transcriptionFailed(error)))
                 } else if let transcript = transcript {
                     // Update stats on success
@@ -654,10 +667,19 @@ public final class EngineClient: ObservableObject {
                         self.transcriptionCount += 1
                         self.lastTranscriptionAt = Date()
                         let wordCount = transcript.split(separator: " ").count
+                        let charCount = transcript.count
+
+                        // End signpost with result metadata
+                        os_signpost(.end, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID,
+                                    "elapsed=%.0fms words=%d chars=%d", elapsed * 1000, wordCount, charCount)
+
                         logger.info("[Engine] ✓ Transcription #\(self.transcriptionCount) completed in \(String(format: "%.1f", elapsed))s (\(wordCount) words)")
+                    } else {
+                        os_signpost(.end, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID, "success")
                     }
                     resumeOnce(with: .success(transcript))
                 } else {
+                    os_signpost(.end, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID, "empty")
                     resumeOnce(with: .failure(EngineClientError.emptyResponse))
                 }
             }

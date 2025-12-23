@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  TalkieEngine.instrpkg
+  Custom Instruments package for profiling TalkieEngine transcription pipeline
+
+  Usage:
+  1. Open Instruments
+  2. File > Open... > select this file
+  3. Or: xctrace record --template TalkieEngine.instrpkg --attach TalkieEngine
+-->
+<plist version="1.0">
+<dict>
+    <!-- Package metadata -->
+    <key>com.apple.xcode.instrument-package</key>
+    <dict>
+        <key>identifier</key>
+        <string>jdi.talkie.engine.instruments</string>
+        <key>name</key>
+        <string>TalkieEngine Profiler</string>
+        <key>description</key>
+        <string>Profile TalkieEngine transcription pipeline with step-level timing</string>
+        <key>version</key>
+        <string>1.0</string>
+    </dict>
+
+    <!-- Instruments to include -->
+    <key>com.apple.xcode.instruments</key>
+    <array>
+        <!-- Points of Interest (our custom signposts) -->
+        <dict>
+            <key>type</key>
+            <string>os-signpost</string>
+            <key>title</key>
+            <string>Transcription Steps</string>
+            <key>subsystem</key>
+            <string>jdi.talkie.engine</string>
+            <key>category</key>
+            <string>PointsOfInterest</string>
+        </dict>
+
+        <!-- XPC Round-trip from TalkieLive -->
+        <dict>
+            <key>type</key>
+            <string>os-signpost</string>
+            <key>title</key>
+            <string>XPC Round-trip</string>
+            <key>subsystem</key>
+            <string>jdi.talkie.live</string>
+            <key>category</key>
+            <string>PointsOfInterest</string>
+        </dict>
+
+        <!-- Neural Engine operations -->
+        <dict>
+            <key>type</key>
+            <string>os-signpost</string>
+            <key>title</key>
+            <string>Neural Engine</string>
+            <key>subsystem</key>
+            <string>com.apple.e5rt</string>
+        </dict>
+    </array>
+</dict>
+</plist>
