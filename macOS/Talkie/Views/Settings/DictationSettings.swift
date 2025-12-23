@@ -198,12 +198,10 @@ struct DictationCaptureSettingsView: View {
 
                         // Push-to-Talk Hotkey
                         VStack(alignment: .leading, spacing: Spacing.sm) {
-                            HStack {
+                            HStack(spacing: Spacing.sm) {
                                 Text("Push-to-Talk")
                                     .font(Theme.current.fontSMMedium)
                                     .foregroundColor(Theme.current.foreground)
-
-                                Spacer()
 
                                 Toggle("", isOn: $live.pttEnabled)
                                     .toggleStyle(.switch)
@@ -215,12 +213,11 @@ struct DictationCaptureSettingsView: View {
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(Theme.current.foregroundMuted)
 
-                            if live.pttEnabled {
-                                HotkeyRecorderButton(
-                                    hotkey: $live.pttHotkey,
-                                    isRecording: $isRecordingPTT
-                                )
-                            }
+                            HotkeyRecorderButton(
+                                hotkey: $live.pttHotkey,
+                                isRecording: $isRecordingPTT
+                            )
+                            .opacity(live.pttEnabled ? 1.0 : 0.5)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -298,6 +295,12 @@ struct DictationCaptureSettingsView: View {
                         }
                     }())
                 }
+
+                Divider()
+                    .opacity(Opacity.medium)
+
+                // MARK: - Settings Recap (JSON)
+                CaptureSettingsRecap()
             }
         }
         .onAppear {
@@ -446,6 +449,89 @@ struct DictationOutputSettingsView: View {
         .onAppear {
             logger.debug("DictationOutputSettingsView appeared")
         }
+    }
+}
+
+// MARK: - Capture Settings Recap (JSON)
+
+/// Compact JSON representation of capture settings
+struct CaptureSettingsRecap: View {
+    @Environment(LiveSettings.self) private var liveSettings: LiveSettings
+
+    private var jsonString: String {
+        let settings: [String: Any] = [
+            "hotkey": liveSettings.hotkey.displayString,
+            "ptt": [
+                "enabled": liveSettings.pttEnabled,
+                "hotkey": liveSettings.pttHotkey.displayString
+            ],
+            "hud": [
+                "style": liveSettings.overlayStyle.rawValue,
+                "position": liveSettings.overlayPosition.rawValue
+            ],
+            "pill": [
+                "position": liveSettings.pillPosition.rawValue,
+                "expands": liveSettings.pillExpandsDuringRecording,
+                "allScreens": liveSettings.pillShowOnAllScreens
+            ],
+            "onAir": liveSettings.showOnAir,
+            "sounds": [
+                "start": liveSettings.startSound.rawValue,
+                "finish": liveSettings.finishSound.rawValue,
+                "paste": liveSettings.pastedSound.rawValue
+            ]
+        ]
+
+        // Format as compact JSON
+        if let data = try? JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys]),
+           let string = String(data: data, encoding: .utf8) {
+            return string
+        }
+        return "{}"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack {
+                Image(systemName: "curlybraces")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+
+                Text("SETTINGS")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundMuted)
+
+                Spacer()
+
+                Button(action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(jsonString, forType: .string)
+                }) {
+                    Image(systemName: "doc.on.doc")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
+                .buttonStyle(.plain)
+                .help("Copy to clipboard")
+            }
+
+            Text(jsonString)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(Theme.current.foregroundSecondary)
+                .textSelection(.enabled)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(Theme.current.surface1.opacity(Opacity.half))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .stroke(Theme.current.divider.opacity(Opacity.half), lineWidth: 0.5)
+                )
+        )
     }
 }
 
