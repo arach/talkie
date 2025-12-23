@@ -32,9 +32,29 @@ struct DesignOverlay: View {
                         .allowsHitTesting(false)
                 }
 
-                // TODO: Advanced layout tools and inspection tools
-                // Files exist in Debug/DesignMode/Tools/ but need integration
-                // Temporarily disabled to allow build
+                // Advanced layout tools (independent overlays)
+                // TODO: Fix Swift compilation issue - tools not visible to DesignOverlay
+                // if designMode.showCenterGuides {
+                //     CenterGuidesOverlay()
+                // }
+
+                // if designMode.showEdgeGuides {
+                //     EdgeGuidesOverlay()
+                // }
+
+                // if designMode.showElementBounds {
+                //     ElementBoundsOverlay()
+                // }
+
+                // if designMode.pixelZoomLevel > 0 {
+                //     PixelZoomOverlay(zoomLevel: designMode.pixelZoomLevel)
+                // }
+
+                // Active tool overlay
+                // TODO: Fix tool visibility issue
+                // if let activeTool = designMode.activeTool {
+                //     toolOverlay(for: activeTool)
+                // }
 
                 // Floating toolbar button
                 VStack {
@@ -63,7 +83,7 @@ struct DesignOverlay: View {
         }
     }
 
-    // TODO: Re-enable when tool files are properly integrated
+    // TODO: Re-enable when tool visibility issue is fixed
     // @ViewBuilder
     // private func toolOverlay(for tool: DesignTool) -> some View {
     //     switch tool {
