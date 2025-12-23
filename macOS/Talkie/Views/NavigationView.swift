@@ -443,6 +443,17 @@ struct TalkieNavigationView: View {
                     .tracking(3)
                     .foregroundColor(Theme.current.foregroundMuted)
 
+                // Worktree badge
+                if BuildInfo.isWorktree {
+                    Text("WT")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.2))
+                        .cornerRadius(3)
+                }
+
                 Spacer()
 
                 chevronButton(icon: "chevron.left", help: "Collapse Sidebar")
@@ -487,7 +498,7 @@ struct TalkieNavigationView: View {
     private var twoColumnDetailView: some View {
         switch selectedSection {
         case .home:
-            TalkieHomeView()
+            UnifiedDashboard()  // New unified view (was TalkieHomeView)
         case .models:
             TalkieSection("Models") {
                 ModelsContentView()

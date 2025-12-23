@@ -233,7 +233,7 @@ extension LiveDatabase {
                 let metadataJSON = metaDict.isEmpty ? nil : (try? JSONEncoder().encode(metaDict)).flatMap { String(data: $0, encoding: .utf8) }
 
                 try db.execute(
-                    sql: "UPDATE utterances SET metadata = ? WHERE id = ?",
+                    sql: "UPDATE dictations SET metadata = ? WHERE id = ?",
                     arguments: [metadataJSON, id]
                 )
             }
@@ -329,7 +329,7 @@ extension LiveDatabase {
         let audioFilenames: [String] = (try? shared.read { db in
             try String.fetchAll(
                 db,
-                sql: "SELECT audioFilename FROM utterances WHERE createdAt < ? AND audioFilename IS NOT NULL",
+                sql: "SELECT audioFilename FROM dictations WHERE createdAt < ? AND audioFilename IS NOT NULL",
                 arguments: [cutoffTS]
             )
         }) ?? []
@@ -342,7 +342,7 @@ extension LiveDatabase {
         // Delete database records
         try? shared.write { db in
             try db.execute(
-                sql: "DELETE FROM utterances WHERE createdAt < ?",
+                sql: "DELETE FROM dictations WHERE createdAt < ?",
                 arguments: [cutoffTS]
             )
         }
@@ -356,7 +356,7 @@ extension LiveDatabase {
         guard let id else { return }
         try? shared.write { db in
             try db.execute(
-                sql: "UPDATE utterances SET promotionStatus = ?, talkieMemoID = ? WHERE id = ?",
+                sql: "UPDATE dictations SET promotionStatus = ?, talkieMemoID = ? WHERE id = ?",
                 arguments: [PromotionStatus.memo.rawValue, talkieMemoID, id]
             )
         }
@@ -366,7 +366,7 @@ extension LiveDatabase {
         guard let id else { return }
         try? shared.write { db in
             try db.execute(
-                sql: "UPDATE utterances SET promotionStatus = ?, commandID = ? WHERE id = ?",
+                sql: "UPDATE dictations SET promotionStatus = ?, commandID = ? WHERE id = ?",
                 arguments: [PromotionStatus.command.rawValue, commandID, id]
             )
         }
@@ -376,7 +376,7 @@ extension LiveDatabase {
         guard let id else { return }
         try? shared.write { db in
             try db.execute(
-                sql: "UPDATE utterances SET promotionStatus = ? WHERE id = ?",
+                sql: "UPDATE dictations SET promotionStatus = ? WHERE id = ?",
                 arguments: [PromotionStatus.ignored.rawValue, id]
             )
         }
@@ -386,7 +386,7 @@ extension LiveDatabase {
         guard let id else { return }
         try? shared.write { db in
             try db.execute(
-                sql: "UPDATE utterances SET promotionStatus = ?, talkieMemoID = NULL, commandID = NULL WHERE id = ?",
+                sql: "UPDATE dictations SET promotionStatus = ?, talkieMemoID = NULL, commandID = NULL WHERE id = ?",
                 arguments: [PromotionStatus.none.rawValue, id]
             )
         }
@@ -454,7 +454,7 @@ extension LiveDatabase {
         let now = Date().timeIntervalSince1970
         try? shared.write { db in
             try db.execute(
-                sql: "UPDATE utterances SET pasteTimestamp = ? WHERE id = ?",
+                sql: "UPDATE dictations SET pasteTimestamp = ? WHERE id = ?",
                 arguments: [now, id]
             )
         }
@@ -527,7 +527,7 @@ extension LiveDatabase {
         try? shared.write { db in
             try db.execute(
                 sql: """
-                    UPDATE utterances
+                    UPDATE dictations
                     SET transcriptionStatus = ?, transcriptionError = NULL,
                         text = ?, wordCount = ?, perfEngineMs = ?, transcriptionModel = ?
                     WHERE id = ?
@@ -548,7 +548,7 @@ extension LiveDatabase {
         guard let id else { return }
         try? shared.write { db in
             try db.execute(
-                sql: "UPDATE utterances SET transcriptionStatus = ?, transcriptionError = ? WHERE id = ?",
+                sql: "UPDATE dictations SET transcriptionStatus = ?, transcriptionError = ? WHERE id = ?",
                 arguments: [TranscriptionStatus.failed.rawValue, error, id]
             )
         }
@@ -559,7 +559,7 @@ extension LiveDatabase {
         try? shared.write { db in
             try db.execute(
                 sql: """
-                    UPDATE utterances
+                    UPDATE dictations
                     SET text = ?, wordCount = ?
                     WHERE id = ?
                     """,
@@ -603,7 +603,7 @@ private extension LiveDatabase {
 
         // Log existing count but continue to check for additional old data
         let existingCount = (try? dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM utterances")
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM dictations")
         }) ?? 0
 
         logger.info("[LiveDatabase] Current record count: \(existingCount), checking for old data to migrate...")
@@ -657,14 +657,14 @@ private extension LiveDatabase {
                         // Check for duplicate by timestamp (within 1 second)
                         let createdAt = row["createdAt"] as Double? ?? 0
                         let exists = try Int.fetchOne(db, sql: """
-                            SELECT COUNT(*) FROM utterances WHERE ABS(createdAt - ?) < 1
+                            SELECT COUNT(*) FROM dictations WHERE ABS(createdAt - ?) < 1
                             """, arguments: [createdAt]) ?? 0
 
                         if exists > 0 { continue }
 
                         try db.execute(
                             sql: """
-                                INSERT INTO utterances (
+                                INSERT INTO dictations (
                                     createdAt, text, mode, appBundleID, appName, windowTitle,
                                     durationSeconds, wordCount, transcriptionModel, audioFilename,
                                     perfEngineMs, perfEndToEndMs, perfInAppMs,
@@ -728,14 +728,14 @@ private extension LiveDatabase {
 
                         // Check for duplicate by timestamp (within 1 second)
                         let exists = try Int.fetchOne(db, sql: """
-                            SELECT COUNT(*) FROM utterances WHERE ABS(createdAt - ?) < 1
+                            SELECT COUNT(*) FROM dictations WHERE ABS(createdAt - ?) < 1
                             """, arguments: [unixTimestamp]) ?? 0
 
                         if exists > 0 { continue }
 
                         try db.execute(
                             sql: """
-                                INSERT INTO utterances (
+                                INSERT INTO dictations (
                                     createdAt, text, mode, appBundleID, appName, windowTitle,
                                     durationSeconds, transcriptionModel, audioFilename,
                                     transcriptionStatus, promotionStatus, createdInTalkieView
