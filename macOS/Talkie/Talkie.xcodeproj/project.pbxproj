@@ -66,6 +66,8 @@
 		4F5A6DF3769EF9034B8F2C01 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA115E69E2A9DEA695B5B87 /* KeychainManager.swift */; };
 		4FC4D3FE14963ADA842948B3 /* EphemeralTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC1AA5999188EF8471202B3 /* EphemeralTranscriber.swift */; };
 		519BBE720E920B03F91C4DE5 /* PermissionsSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B27964C4CFB40790B338031 /* PermissionsSetupView.swift */; };
+		532942002EFB505D00DC369D /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 532941FF2EFB505D00DC369D /* FluidAudio */; };
+		532942022EFB509700DC369D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 532942012EFB509700DC369D /* GRDB */; };
 		5392B4F98C1877EEA01B99E4 /* ProcessDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3FC74D32957072E591AE0E /* ProcessDiscovery.swift */; };
 		53D9EC6E2EF9D8BD00DC8EC9 /* SettingsStoryboardGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D9EC6D2EF9D8BD00DC8EC9 /* SettingsStoryboardGenerator.swift */; };
 		53D9EC6F2EF9D8BD00DC8EC9 /* DesignAuditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D9EC6C2EF9D8BD00DC8EC9 /* DesignAuditor.swift */; };
@@ -420,6 +422,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				532942002EFB505D00DC369D /* FluidAudio in Frameworks */,
+				532942022EFB509700DC369D /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -545,6 +549,13 @@
 				1939351699024A0FA0FAD204 /* DesignModeManager.swift */,
 			);
 			path = DesignMode;
+			sourceTree = "<group>";
+		};
+		532941FE2EFB505D00DC369D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		53A7622465701BF0425306D5 /* App */ = {
@@ -817,6 +828,7 @@
 				976DB5AE94679723D8726EDE /* Workflow */,
 				5329415E2EFB48DB00DC369D /* TalkieAgent */,
 				EC3EE94DAAE074F1D0B4D2E1 /* Products */,
+				532941FE2EFB505D00DC369D /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -981,6 +993,8 @@
 			);
 			name = TalkieAgent;
 			packageProductDependencies = (
+				532941FF2EFB505D00DC369D /* FluidAudio */,
+				532942012EFB509700DC369D /* GRDB */,
 			);
 			productName = TalkieAgent;
 			productReference = 5329415D2EFB48DB00DC369D /* TalkieAgent.app */;
@@ -1023,6 +1037,7 @@
 				2FF38F9ED0B7E6B9F0739462 /* XCLocalSwiftPackageReference "../../Packages/DebugKit" */,
 				4E3C4ECEA0C3CC5BEF8F10AB /* XCLocalSwiftPackageReference "../TalkieKit" */,
 				37A17E34390212ECAED9BFF7 /* XCLocalSwiftPackageReference "../../Packages/WFKit" */,
+				532941FD2EFB504700DC369D /* XCRemoteSwiftPackageReference "WhisperKit" */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
@@ -1698,6 +1713,14 @@
 				version = 0.7.11;
 			};
 		};
+		532941FD2EFB504700DC369D /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		8E2FBDF079FA33ECCBBEBD40 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift.git";
@@ -1720,6 +1743,16 @@
 		46A4FF7ED5361369A679A309 /* TalkieKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TalkieKit;
+		};
+		532941FF2EFB505D00DC369D /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4C77F332EB0FCCF18342C18A /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+		532942012EFB509700DC369D /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8E2FBDF079FA33ECCBBEBD40 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
 		};
 		6F3171CA8771D255AD77C856 /* DebugKit */ = {
 			isa = XCSwiftPackageProductDependency;
