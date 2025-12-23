@@ -111,8 +111,10 @@ struct DesignHomeView: View {
     private var spacingSection: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             sectionHeader(
+                icon: "ruler.fill",
                 title: "Spacing Scale",
-                subtitle: "8pt grid system for consistent visual rhythm"
+                subtitle: "8pt grid system for consistent visual rhythm",
+                accentColor: .cyan
             )
 
             VStack(alignment: .leading, spacing: Spacing.md) {
@@ -125,7 +127,15 @@ struct DesignHomeView: View {
                 spacingToken("xxl", value: Spacing.xxl, usage: "Maximum spacing for major layout divisions")
             }
             .padding(Spacing.lg)
-            .background(Theme.current.surface1)
+            .background(
+                ZStack {
+                    Theme.current.surface1
+
+                    // Subtle accent border
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.cyan.opacity(0.2), lineWidth: 1)
+                }
+            )
             .cornerRadius(CornerRadius.md)
         }
     }
@@ -135,8 +145,10 @@ struct DesignHomeView: View {
     private var typographySection: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             sectionHeader(
+                icon: "textformat.size",
                 title: "Typography",
-                subtitle: "Type hierarchy guides user attention and establishes information hierarchy"
+                subtitle: "Type hierarchy guides user attention and establishes information hierarchy",
+                accentColor: .purple
             )
 
             VStack(alignment: .leading, spacing: Spacing.lg) {
@@ -205,7 +217,14 @@ struct DesignHomeView: View {
                 }
             }
             .padding(Spacing.lg)
-            .background(Theme.current.surface1)
+            .background(
+                ZStack {
+                    Theme.current.surface1
+
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                }
+            )
             .cornerRadius(CornerRadius.md)
         }
     }
@@ -215,8 +234,10 @@ struct DesignHomeView: View {
     private var colorsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             sectionHeader(
+                icon: "paintpalette.fill",
                 title: "Color Palette",
-                subtitle: "Semantic color system for consistent visual language"
+                subtitle: "Semantic color system for consistent visual language",
+                accentColor: .pink
             )
 
             VStack(alignment: .leading, spacing: Spacing.lg) {
@@ -263,7 +284,14 @@ struct DesignHomeView: View {
                 }
             }
             .padding(Spacing.lg)
-            .background(Theme.current.surface1)
+            .background(
+                ZStack {
+                    Theme.current.surface1
+
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.pink.opacity(0.2), lineWidth: 1)
+                }
+            )
             .cornerRadius(CornerRadius.md)
         }
     }
@@ -273,8 +301,10 @@ struct DesignHomeView: View {
     private var screenResolutionSection: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             sectionHeader(
+                icon: "rectangle.on.rectangle.angled",
                 title: "Screen Resolution Guidance",
-                subtitle: "Responsive design strategy for various screen sizes"
+                subtitle: "Responsive design strategy for various screen sizes",
+                accentColor: .orange
             )
 
             VStack(alignment: .leading, spacing: Spacing.md) {
@@ -311,7 +341,14 @@ struct DesignHomeView: View {
                 .padding(.top, Spacing.sm)
             }
             .padding(Spacing.lg)
-            .background(Theme.current.surface1)
+            .background(
+                ZStack {
+                    Theme.current.surface1
+
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                }
+            )
             .cornerRadius(CornerRadius.md)
         }
     }
@@ -321,8 +358,10 @@ struct DesignHomeView: View {
     private var componentDimensionsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             sectionHeader(
+                icon: "square.on.circle.fill",
                 title: "Component Dimensions",
-                subtitle: "Standard heights and the 8pt grid system"
+                subtitle: "Standard heights and the 8pt grid system",
+                accentColor: .green
             )
 
             VStack(alignment: .leading, spacing: Spacing.md) {
@@ -348,31 +387,80 @@ struct DesignHomeView: View {
                 .padding(.top, Spacing.sm)
             }
             .padding(Spacing.lg)
-            .background(Theme.current.surface1)
+            .background(
+                ZStack {
+                    Theme.current.surface1
+
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                }
+            )
             .cornerRadius(CornerRadius.md)
         }
     }
 
     // MARK: - Helper Views
 
-    private func sectionHeader(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(title)
-                .font(Theme.current.fontHeadlineBold)
-                .foregroundColor(Theme.current.foreground)
+    private func sectionHeader(icon: String, title: String, subtitle: String, accentColor: Color) -> some View {
+        HStack(spacing: Spacing.md) {
+            // Icon with gradient background
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                accentColor.opacity(0.3),
+                                accentColor.opacity(0.15)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 48, height: 48)
 
-            Text(subtitle)
-                .font(Theme.current.fontBody)
-                .foregroundColor(Theme.current.foregroundSecondary)
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(accentColor)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(title)
+                    .font(Theme.current.fontHeadlineBold)
+                    .foregroundColor(Theme.current.foreground)
+
+                Text(subtitle)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+            }
+
+            Spacer()
         }
     }
 
     private func spacingToken(_ name: String, value: CGFloat, usage: String) -> some View {
         HStack(spacing: Spacing.md) {
-            // Visual bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(TalkieTheme.accent)
-                .frame(width: value, height: 20)
+            // Visual bar with gradient and glow
+            ZStack {
+                // Glow effect
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.cyan.opacity(0.3))
+                    .frame(width: value + 4, height: 24)
+                    .blur(radius: 4)
+
+                // Main bar
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.cyan,
+                                Color.cyan.opacity(0.7)
+                            ]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: value, height: 20)
+            }
 
             // Token info
             VStack(alignment: .leading, spacing: 2) {
@@ -383,10 +471,10 @@ struct DesignHomeView: View {
 
                     Text("\(Int(value))pt")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundMuted)
+                        .foregroundColor(Color.cyan)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Theme.current.surface2)
+                        .background(Color.cyan.opacity(0.15))
                         .cornerRadius(4)
                 }
 
@@ -454,14 +542,36 @@ struct DesignHomeView: View {
 
     private func colorSwatch(name: String, color: Color, usage: String) -> some View {
         HStack(spacing: Spacing.md) {
-            // Color swatch
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(color)
-                .frame(width: 60, height: 32)
-                .overlay(
-                    RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
+            // Color swatch with depth
+            ZStack {
+                // Shadow
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(color.opacity(0.4))
+                    .frame(width: 64, height: 36)
+                    .blur(radius: 6)
+                    .offset(y: 2)
+
+                // Main swatch
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(color)
+                    .frame(width: 60, height: 32)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                    )
+                    .overlay(
+                        // Highlight reflection
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.15),
+                                Color.clear
+                            ]),
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                        .cornerRadius(CornerRadius.sm)
+                    )
+            }
 
             // Color info
             VStack(alignment: .leading, spacing: 2) {
@@ -522,14 +632,32 @@ struct DesignHomeView: View {
 
     private func cornerRadiusExample(_ name: String, value: CGFloat, usage: String) -> some View {
         HStack(spacing: Spacing.md) {
-            // Visual example
-            RoundedRectangle(cornerRadius: value)
-                .fill(TalkieTheme.accent.opacity(0.3))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    RoundedRectangle(cornerRadius: value)
-                        .stroke(TalkieTheme.accent, lineWidth: 2)
-                )
+            // Visual example with depth
+            ZStack {
+                // Glow
+                RoundedRectangle(cornerRadius: value)
+                    .fill(Color.green.opacity(0.3))
+                    .frame(width: 44, height: 44)
+                    .blur(radius: 6)
+
+                // Main shape
+                RoundedRectangle(cornerRadius: value)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.green.opacity(0.4),
+                                Color.green.opacity(0.2)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: value)
+                            .stroke(Color.green, lineWidth: 2)
+                    )
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: Spacing.xs) {
@@ -539,10 +667,10 @@ struct DesignHomeView: View {
 
                     Text("\(Int(value))pt")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundMuted)
+                        .foregroundColor(Color.green)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Theme.current.surface2)
+                        .background(Color.green.opacity(0.15))
                         .cornerRadius(4)
                 }
 

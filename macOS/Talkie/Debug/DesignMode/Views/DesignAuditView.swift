@@ -72,6 +72,17 @@ struct DesignAuditView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.current.background)
+        .onAppear {
+            loadCachedAudit()
+        }
+    }
+
+    // MARK: - Actions
+
+    private func loadCachedAudit() {
+        if auditReport == nil {
+            auditReport = DesignAuditor.shared.loadLatestAudit()
+        }
     }
 
     // MARK: - Subviews

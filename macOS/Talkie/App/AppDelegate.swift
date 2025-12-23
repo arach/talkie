@@ -423,36 +423,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 NSLog("[AppDelegate] 🔍 Triggering code audit (no screenshots)...")
 
                 // Run entirely on background queue
-                DispatchQueue.global(qos: .userInitiated).async {
-                    autoreleasepool {
-                        // Setup directories
-                        let baseDir = FileManager.default.homeDirectoryForCurrentUser
-                            .appendingPathComponent("Desktop")
-                            .appendingPathComponent("talkie-audit")
-                        try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+                Task.detached {
+                    // Setup directories
+                    let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent("Desktop")
+                        .appendingPathComponent("talkie-audit")
+                    try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
 
-                        let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
-                        let auditFolders = existing.filter { $0.hasPrefix("run-") }
-                        let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
-                        let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
-                        try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+                    let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+                    let auditFolders = existing.filter { $0.hasPrefix("run-") }
+                    let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+                    let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+                    try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-                        NSLog("[AppDelegate] 🔍 Running code audit...")
-                        let report = DesignAuditor.shared.auditAll()
-                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                    NSLog("[AppDelegate] 🔍 Running code audit...")
+                    let report = await DesignAuditor.shared.auditAll()
+                    NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                        NSLog("[AppDelegate] 📝 Generating reports...")
+                    NSLog("[AppDelegate] 📝 Generating reports...")
+                    await MainActor.run {
                         DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                         DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+                    }
 
-                        // Back to main for UI operations
-                        DispatchQueue.main.async {
-                            Task { @MainActor in
-                                await Self.generateAuditIndex(at: baseDir)
-                                NSLog("[AppDelegate] ✅ All done!")
-                                NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
-                            }
-                        }
+                    // Back to main for UI operations
+                    await Self.generateAuditIndex(at: baseDir)
+                    await MainActor.run {
+                        NSLog("[AppDelegate] ✅ All done!")
+                        NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                     }
                 }
                 return true
@@ -490,23 +488,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     try? await Task.sleep(for: .milliseconds(500))
 
                     // Run audit on background queue
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        autoreleasepool {
-                            NSLog("[AppDelegate] 🔍 Running code audit...")
-                            let report = DesignAuditor.shared.auditAll()
-                            NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                    Task.detached {
+                        NSLog("[AppDelegate] 🔍 Running code audit...")
+                        let report = await DesignAuditor.shared.auditAll()
+                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                            NSLog("[AppDelegate] 📝 Generating reports...")
+                        NSLog("[AppDelegate] 📝 Generating reports...")
+                        await MainActor.run {
                             DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                             DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+                        }
 
-                            DispatchQueue.main.async {
-                                Task { @MainActor in
-                                    await Self.generateAuditIndex(at: baseDir)
-                                    NSLog("[AppDelegate] ✅ All done!")
-                                    NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
-                                }
-                            }
+                        await Self.generateAuditIndex(at: baseDir)
+                        await MainActor.run {
+                            NSLog("[AppDelegate] ✅ All done!")
+                            NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                         }
                     }
                 }
