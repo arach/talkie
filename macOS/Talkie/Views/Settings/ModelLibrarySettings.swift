@@ -21,28 +21,28 @@ struct ModelLibraryView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
                 // Header
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("SETTINGS / AI & LLM")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(settings.midnightTextTertiary)
+                        .font(Theme.current.fontXSMedium)
+                        .foregroundColor(Theme.current.foregroundMuted)
 
                     Text("CLOUD AI PROVIDERS")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(settings.midnightTextPrimary)
+                        .font(Theme.current.fontHeadlineBold)
+                        .foregroundColor(Theme.current.foreground)
 
                     Text("Configure API keys to enable cloud AI models for workflows and smart features.")
-                        .font(.system(size: 12))
-                        .foregroundColor(settings.midnightTextSecondary)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineLimit(2)
                 }
 
                 // Cloud Providers Grid
                 LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12)
-                ], spacing: 8) {
+                    GridItem(.flexible(), spacing: Spacing.sm),
+                    GridItem(.flexible(), spacing: Spacing.sm)
+                ], spacing: Spacing.sm) {
                     ExpandableCloudProviderCard(
                         providerId: "openai",
                         name: "OpenAI",
@@ -111,18 +111,18 @@ struct ModelLibraryView: View {
 
                 // Quick configure hint
                 if !hasAnyProviderConfigured {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "key.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(settings.midnightTextTertiary)
+                            .font(Theme.current.fontBody)
+                            .foregroundColor(Theme.current.foregroundMuted)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("No API keys configured")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(settings.midnightTextSecondary)
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                             Text("Click 'Configure' on any provider to add your API key")
-                                .font(.system(size: 11))
-                                .foregroundColor(settings.midnightTextTertiary)
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundMuted)
                         }
 
                         Spacer()
@@ -131,33 +131,33 @@ struct ModelLibraryView: View {
                             NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
                         }) {
                             Text("Go to API Keys")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(settings.midnightTextSecondary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(settings.midnightSurfaceElevated)
-                                .cornerRadius(4)
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                                .padding(.horizontal, Spacing.sm)
+                                .padding(.vertical, Spacing.xs)
+                                .background(Theme.current.surface2)
+                                .cornerRadius(CornerRadius.xs)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(settings.midnightBorder, lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                        .stroke(Theme.current.divider, lineWidth: 1)
                                 )
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(16)
-                    .background(settings.midnightSurface)
-                    .cornerRadius(8)
+                    .padding(Spacing.md)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(settings.midnightBorder, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .stroke(Theme.current.divider, lineWidth: 1)
                     )
                 }
 
-                Spacer(minLength: 40)
+                Spacer(minLength: Spacing.xxl)
             }
-            .padding(24)
+            .padding(Spacing.xl)
         }
-        .background(settings.midnightBase)
+        .background(Theme.current.background)
     }
 
     private var hasAnyProviderConfigured: Bool {

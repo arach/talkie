@@ -16,6 +16,11 @@ extension NSNotification.Name {
     static let navigateToLiveSettings = NSNotification.Name("navigateToLiveSettings")
     static let navigateToEngineMonitor = NSNotification.Name("navigateToEngineMonitor")
     static let navigateToLiveMonitor = NSNotification.Name("navigateToLiveMonitor")
+
+    #if DEBUG
+    /// Debug navigation for screenshots: talkie://d/{path}
+    static let debugNavigate = NSNotification.Name("debugNavigate")
+    #endif
 }
 
 struct ModelsContentView: View {

@@ -49,7 +49,7 @@ struct DevControlPanelView: View {
                 subtitle: "Manage multiple service instances during development"
             )
         } content: {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 // Connection Status
                 connectionStatusSection
 
@@ -120,12 +120,12 @@ struct DevControlPanelView: View {
     }
 
     private var connectionStatusSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             Text("ACTIVE CONNECTIONS")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(.techLabel)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.sm) {
                 // Engine
                 connectionBadge(
                     title: "Engine",
@@ -143,70 +143,70 @@ struct DevControlPanelView: View {
                 )
             }
         }
-        .padding(12)
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(8)
+        .padding(Spacing.sm)
+        .background(Color.secondary.opacity(Opacity.subtle))
+        .cornerRadius(CornerRadius.sm)
     }
 
     private func connectionBadge(title: String, isConnected: Bool, environment: TalkieEnvironment?, pid: Int32?) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.xs) {
             Circle()
                 .fill(isConnected ? Color.green : Color.red)
                 .frame(width: 8, height: 8)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(title)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.primary)
+                    .font(.labelSmall)
+                    .foregroundColor(Theme.current.foreground)
 
-                HStack(spacing: 4) {
+                HStack(spacing: Spacing.xxs) {
                     if let env = environment {
                         Text(env.displayName)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.techLabelSmall)
                             .foregroundColor(envColor(env))
                     }
 
                     if let pid = pid {
                         Text(verbatim: "PID \(String(format: "%d", pid))")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .font(.techLabelSmall)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                 }
             }
 
             Spacer()
         }
-        .padding(8)
-        .background(isConnected ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
-        .cornerRadius(6)
+        .padding(Spacing.sm)
+        .background(isConnected ? Color.green.opacity(Opacity.light) : Color.red.opacity(Opacity.light))
+        .cornerRadius(CornerRadius.xs)
     }
 
     // MARK: - Service Section
 
     private func serviceSection(title: String, processes: [DiscoveredProcess], serviceName: String, connectedPID: Int32?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 Text(title.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.techLabel)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
                 Text("\(processes.count) instance\(processes.count == 1 ? "" : "s")")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.techLabelSmall)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             if processes.isEmpty {
                 Text("No instances found")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .font(.labelSmall)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
-                    .background(Color.secondary.opacity(0.05))
-                    .cornerRadius(6)
+                    .padding(.vertical, Spacing.lg)
+                    .background(Color.secondary.opacity(Opacity.subtle))
+                    .cornerRadius(CornerRadius.xs)
             } else {
-                VStack(spacing: 6) {
+                VStack(spacing: Spacing.xs) {
                     ForEach(processes) { process in
                         processRow(process: process, isConnected: process.pid == connectedPID)
                     }
@@ -216,58 +216,58 @@ struct DevControlPanelView: View {
     }
 
     private func processRow(process: DiscoveredProcess, isConnected: Bool) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.sm) {
             // Status indicator
             Circle()
                 .fill(isConnected ? Color.green : (process.isDaemon ? Color.blue : Color.orange))
                 .frame(width: 6, height: 6)
 
             // Process info
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                HStack(spacing: Spacing.xs) {
                     Text(verbatim: "PID \(String(format: "%d", process.pid))")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.primary)
+                        .font(.labelMedium)
+                        .foregroundColor(Theme.current.foreground)
 
                     if let env = process.environment {
                         Text(env.displayName)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(.techLabelSmall)
                             .foregroundColor(envColor(env))
-                            .padding(.horizontal, 4)
+                            .padding(.horizontal, Spacing.xxs)
                             .padding(.vertical, 1)
-                            .background(envColor(env).opacity(0.2))
-                            .cornerRadius(3)
+                            .background(envColor(env).opacity(Opacity.medium))
+                            .cornerRadius(CornerRadius.xs)
                     }
 
                     Text(process.modeDescription)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 4)
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .padding(.horizontal, Spacing.xxs)
                         .padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(3)
+                        .background(Color.secondary.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
 
                     if isConnected {
                         Text("CONNECTED")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
                             .foregroundColor(.green)
-                            .padding(.horizontal, 4)
+                            .padding(.horizontal, Spacing.xxs)
                             .padding(.vertical, 1)
-                            .background(Color.green.opacity(0.2))
-                            .cornerRadius(3)
+                            .background(Color.green.opacity(Opacity.medium))
+                            .cornerRadius(CornerRadius.xs)
                     }
                 }
 
                 if let xpcService = process.xpcService {
                     Text("XPC: \(xpcService)")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundMuted)
                 }
 
                 if let path = process.bundlePath {
                     Text(shortPath(path))
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundMuted.opacity(Opacity.prominent))
                         .lineLimit(1)
                 }
             }
@@ -275,23 +275,23 @@ struct DevControlPanelView: View {
             Spacer()
 
             // Action buttons - different for daemon vs direct launch
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.xs) {
                 if process.isDaemon {
                     // Daemon: show stop/restart buttons
                     Button(action: {
                         stopDaemon(process)
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Image(systemName: "stop.fill")
-                                .font(.system(size: 10))
+                                .font(.labelSmall)
                             Text("Stop")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.labelSmall)
                         }
                         .foregroundColor(.orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(4)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xxs)
+                        .background(Color.orange.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                     .help("Stop daemon via launchctl")
@@ -299,17 +299,17 @@ struct DevControlPanelView: View {
                     Button(action: {
                         restartDaemon(process)
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.xxs) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 10))
+                                .font(.labelSmall)
                             Text("Restart")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.labelSmall)
                         }
                         .foregroundColor(.blue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(4)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xxs)
+                        .background(Color.blue.opacity(Opacity.light))
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                     .help("Restart daemon via launchctl")
@@ -319,7 +319,7 @@ struct DevControlPanelView: View {
                         killProcess(process)
                     }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(.bodyMedium)
                             .foregroundColor(.red)
                     }
                     .buttonStyle(.plain)
@@ -327,20 +327,20 @@ struct DevControlPanelView: View {
                 }
             }
         }
-        .padding(8)
-        .background(isConnected ? Color.green.opacity(0.05) : Color.secondary.opacity(0.03))
-        .cornerRadius(6)
+        .padding(Spacing.sm)
+        .background(isConnected ? Color.green.opacity(Opacity.subtle) : Color.secondary.opacity(Opacity.subtle))
+        .cornerRadius(CornerRadius.xs)
     }
 
     // MARK: - Quick Actions
 
     private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             Text("QUICK ACTIONS")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(.techLabel)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 // Refresh
                 actionButton(
                     icon: "arrow.clockwise",
@@ -387,13 +387,13 @@ struct DevControlPanelView: View {
 
                 // Auto-refresh toggle
                 Toggle(isOn: $autoRefresh) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "timer")
-                            .font(.system(size: 10))
+                            .font(.labelSmall)
                         Text("Auto-refresh every 3s")
-                            .font(.system(size: 10))
+                            .font(.labelSmall)
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .toggleStyle(.switch)
                 .onChange(of: autoRefresh) { _, enabled in
@@ -409,27 +409,27 @@ struct DevControlPanelView: View {
 
     private func actionButton(icon: String, title: String, description: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(.bodySmall)
                     .foregroundColor(color)
                     .frame(width: 20)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(title)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.primary)
+                        .font(.labelSmall)
+                        .foregroundColor(Theme.current.foreground)
 
                     Text(description)
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
 
                 Spacer()
             }
-            .padding(8)
-            .background(Color.secondary.opacity(0.05))
-            .cornerRadius(6)
+            .padding(Spacing.sm)
+            .background(Color.secondary.opacity(Opacity.subtle))
+            .cornerRadius(CornerRadius.xs)
         }
         .buttonStyle(.plain)
     }
@@ -471,12 +471,12 @@ struct DevControlPanelView: View {
     // MARK: - External Data Audit Section
 
     private var externalDataAuditSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             Text("EXTERNAL DATA AUDIT")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(.techLabel)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 // Run Audit
                 actionButton(
                     icon: "magnifyingglass",
@@ -498,31 +498,31 @@ struct DevControlPanelView: View {
 
                 // Show Results
                 if let results = auditor.auditResults {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
                         HStack {
                             Text("Last Audit:")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary)
+                                .font(.labelSmall)
+                                .foregroundColor(Theme.current.foregroundSecondary)
 
                             Text(results.timestamp.formatted(date: .omitted, time: .shortened))
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .font(.techLabelSmall)
+                                .foregroundColor(Theme.current.foregroundSecondary)
 
                             Spacer()
 
                             if results.hasIssues {
-                                Text("⚠️ Issues Found")
-                                    .font(.system(size: 9, weight: .bold))
+                                Text("Issues Found")
+                                    .font(.techLabelSmall)
                                     .foregroundColor(.orange)
                             } else {
-                                Text("✅ All Clear")
-                                    .font(.system(size: 9, weight: .bold))
+                                Text("All Clear")
+                                    .font(.techLabelSmall)
                                     .foregroundColor(.green)
                             }
                         }
 
                         // Quick stats
-                        HStack(spacing: 12) {
+                        HStack(spacing: Spacing.sm) {
                             statView(
                                 label: "CoreData Orphans",
                                 value: "\(results.coreDataOrphanedFiles.count)",
@@ -557,17 +557,17 @@ struct DevControlPanelView: View {
                                     }
                                 }
                             }) {
-                                HStack(spacing: 4) {
+                                HStack(spacing: Spacing.xxs) {
                                     Image(systemName: "trash.fill")
-                                        .font(.system(size: 10))
+                                        .font(.labelSmall)
                                     Text("Clean Up Orphaned Files")
-                                        .font(.system(size: 10, weight: .medium))
+                                        .font(.labelSmall)
                                 }
                                 .foregroundColor(.orange)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.orange.opacity(0.1))
-                                .cornerRadius(4)
+                                .padding(.horizontal, Spacing.sm)
+                                .padding(.vertical, Spacing.xxs)
+                                .background(Color.orange.opacity(Opacity.light))
+                                .cornerRadius(CornerRadius.xs)
                             }
                             .buttonStyle(.plain)
                         }
@@ -577,14 +577,14 @@ struct DevControlPanelView: View {
                             showingAuditResults = true
                         }) {
                             Text("View Full Report")
-                                .font(.system(size: 9))
+                                .font(.techLabelSmall)
                                 .foregroundColor(.blue)
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.05))
-                    .cornerRadius(6)
+                    .padding(Spacing.sm)
+                    .background(Color.secondary.opacity(Opacity.subtle))
+                    .cornerRadius(CornerRadius.xs)
                 }
             }
         }
@@ -596,12 +596,12 @@ struct DevControlPanelView: View {
     }
 
     private func statView(label: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
             Text(label)
-                .font(.system(size: 8))
-                .foregroundColor(.secondary)
+                .font(.system(size: 8, weight: .regular))
+                .foregroundColor(Theme.current.foregroundSecondary)
             Text(value)
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(.labelMedium)
                 .foregroundColor(color)
         }
     }
@@ -609,28 +609,28 @@ struct DevControlPanelView: View {
     // MARK: - Logs Section
 
     private var logsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 Text("ACTIVITY LOG")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.techLabel)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
                 Button(action: { logs.removeAll() }) {
                     Text("Clear")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 ForEach(logs.prefix(10)) { log in
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Text(timeString(log.timestamp))
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .font(.techLabelSmall)
+                            .foregroundColor(Theme.current.foregroundMuted)
                             .frame(width: 50, alignment: .leading)
 
                         Circle()
@@ -638,18 +638,18 @@ struct DevControlPanelView: View {
                             .frame(width: 4, height: 4)
 
                         Text(log.message)
-                            .font(.system(size: 10))
+                            .font(.labelSmall)
                             .foregroundColor(log.level.color)
                             .lineLimit(2)
 
                         Spacer()
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, Spacing.xxs)
                 }
             }
-            .padding(8)
-            .background(Color.secondary.opacity(0.03))
-            .cornerRadius(6)
+            .padding(Spacing.sm)
+            .background(Color.secondary.opacity(Opacity.subtle))
+            .cornerRadius(CornerRadius.xs)
         }
     }
 

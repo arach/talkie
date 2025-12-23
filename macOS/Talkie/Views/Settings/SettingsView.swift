@@ -39,13 +39,63 @@ enum SettingsSection: String, Hashable {
     // Legacy/compatibility
     case audio               // For TalkieLive HistoryView compatibility
     case engine              // For TalkieLive HistoryView compatibility
+
+    /// Convert URL path segment to section (e.g., "permissions" → .permissions)
+    static func from(path: String) -> SettingsSection? {
+        switch path {
+        case "appearance": return .appearance
+        case "dictation-capture", "capture": return .dictationCapture
+        case "dictation-output", "output": return .dictationOutput
+        case "quick-actions", "actions": return .quickActions
+        case "quick-open": return .quickOpen
+        case "auto-run", "autorun": return .autoRun
+        case "ai-providers", "providers", "api": return .aiProviders
+        case "transcription", "transcription-models": return .transcriptionModels
+        case "llm", "llm-models": return .llmModels
+        case "database", "db": return .database
+        case "files": return .files
+        case "cloud", "sync": return .cloud
+        case "permissions": return .permissions
+        case "debug", "debug-info": return .debugInfo
+        case "dev", "dev-control": return .devControl
+        default: return nil
+        }
+    }
+
+    /// URL path segment for this section
+    var pathSegment: String {
+        switch self {
+        case .appearance: return "appearance"
+        case .dictationCapture: return "dictation-capture"
+        case .dictationOutput: return "dictation-output"
+        case .quickActions: return "quick-actions"
+        case .quickOpen: return "quick-open"
+        case .autoRun: return "auto-run"
+        case .aiProviders: return "ai-providers"
+        case .transcriptionModels: return "transcription"
+        case .llmModels: return "llm"
+        case .database: return "database"
+        case .files: return "files"
+        case .cloud: return "cloud"
+        case .permissions: return "permissions"
+        case .debugInfo: return "debug"
+        case .devControl: return "dev"
+        case .audio: return "audio"
+        case .engine: return "engine"
+        }
+    }
 }
 
 struct SettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager
     @State private var apiKeyInput: String = ""
     @State private var showingSaveConfirmation = false
-    @State private var selectedSection: SettingsSection = .appearance  // Default to Appearance (less aggressive)
+    @State private var selectedSection: SettingsSection
+
+    /// Initialize with optional starting section (defaults to .appearance)
+    init(initialSection: SettingsSection = .appearance) {
+        _selectedSection = State(initialValue: initialSection)
+    }
 
     // Theme-aware colors for light/dark mode
     private var sidebarBackground: Color { Theme.current.backgroundSecondary }
@@ -219,6 +269,22 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 800, minHeight: 600)
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: .debugNavigate)) { notification in
+            // Handle talkie://d/settings/{section} navigation
+            guard let path = notification.userInfo?["path"] as? String else { return }
+            let components = path.split(separator: "/")
+
+            // Check if this is a settings path: settings/permissions, settings/appearance, etc.
+            guard components.first == "settings", components.count >= 2 else { return }
+
+            let sectionName = String(components[1])
+            if let section = SettingsSection.from(path: sectionName) {
+                selectedSection = section
+                NSLog("[SettingsView] Debug navigated to: \(section)")
+            }
+        }
+        #endif
     }
 
     @ViewBuilder

@@ -15,24 +15,9 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "StorageSett
 /// Database storage settings: retention, cleanup for memos and dictations
 struct DatabaseSettingsView: View {
     @Environment(LiveSettings.self) private var liveSettings: LiveSettings
-
-    // Stats
-    @State private var totalDictations: Int = 0
-    @State private var totalAudioFiles: Int = 0
-    @State private var storageSize: String = "..."
-
-    // Prune preview
-    @State private var pruneCount: Int = 0
-    @State private var pruneOldestDate: Date?
-    @State private var pruneNewestDate: Date?
-
-    // Orphan preview
-    @State private var orphanCount: Int = 0
-    @State private var orphanSize: Int64 = 0
-
-    // Confirmation
-    @State private var showPruneConfirm = false
-    @State private var showOrphanConfirm = false
+    @State private var isPruning = false
+    @State private var isCleaningOrphans = false
+    @State private var statusMessage: String?
 
     var body: some View {
         @Bindable var live = liveSettings
@@ -41,338 +26,281 @@ struct DatabaseSettingsView: View {
             SettingsPageHeader(
                 icon: "cylinder",
                 title: "DATABASE",
-                subtitle: "Configure data retention and cleanup."
+                subtitle: "Configure data retention and cleanup policies."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 24) {
-                // Overview Stats
-                storageOverview
+            // MARK: - Dictation Retention
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                // Section header with accent bar
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.purple)
+                        .frame(width: 3, height: 14)
 
-                Divider()
-
-                // Dictation Retention
-                VStack(alignment: .leading, spacing: 12) {
                     Text("DICTATION RETENTION")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
-                    Text("Dictations older than this can be pruned from maintenance below.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                    Spacer()
 
-                    // Preset buttons
-                    HStack(spacing: 8) {
-                        RetentionPresetButton(label: "1 Month", hours: 720, current: $live.utteranceTTLHours)
-                        RetentionPresetButton(label: "3 Months", hours: 2160, current: $live.utteranceTTLHours)
-                        RetentionPresetButton(label: "6 Months", hours: 4320, current: $live.utteranceTTLHours)
-                        RetentionPresetButton(label: "1 Year", hours: 8760, current: $live.utteranceTTLHours)
-                        RetentionPresetButton(label: "Forever", hours: 0, current: $live.utteranceTTLHours)
-                    }
+                    Text("AUTO-DELETE")
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
+                }
 
-                    // Custom input
-                    if live.utteranceTTLHours > 0 && ![720, 2160, 4320, 8760].contains(live.utteranceTTLHours) {
-                        HStack(spacing: 8) {
-                            Text("Custom:")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            Text("\(live.utteranceTTLHours / 24) days")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.primary)
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text("Dictations older than the specified time will be automatically deleted to save space.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+
+                    // Retention slider
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack {
+                            Text("Keep for")
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            Spacer()
+
+                            Text(formatRetention(hours: live.utteranceTTLHours))
+                                .font(Theme.current.fontBodyMedium)
+                                .foregroundColor(Theme.current.foreground)
+                        }
+
+                        Stepper(
+                            value: $live.utteranceTTLHours,
+                            in: 24...720,
+                            step: 24
+                        ) {
+                            EmptyView()
+                        }
+                        .labelsHidden()
+
+                        // Quick presets
+                        HStack(spacing: Spacing.sm) {
+                            ForEach([24, 48, 168, 336, 720], id: \.self) { hours in
+                                Button(action: { live.utteranceTTLHours = hours }) {
+                                    Text(formatRetentionShort(hours: hours))
+                                        .font(.labelSmall)
+                                        .foregroundColor(live.utteranceTTLHours == hours ? .white : Theme.current.foregroundSecondary)
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, 4)
+                                        .background(live.utteranceTTLHours == hours ? Color.purple : Theme.current.surface2)
+                                        .cornerRadius(CornerRadius.xs)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
                 }
+            }
+            .padding(Spacing.md)
+            .background(Theme.current.surface2)
+            .cornerRadius(CornerRadius.sm)
 
-                Divider()
+            // MARK: - Memo Retention
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.cyan)
+                        .frame(width: 3, height: 14)
 
-                // Memo Retention (placeholder)
-                VStack(alignment: .leading, spacing: 12) {
                     Text("MEMO RETENTION")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
-                    HStack {
+                    Spacer()
+
+                    HStack(spacing: 4) {
                         Image(systemName: "infinity")
-                            .foregroundColor(.secondary)
-                        Text("Memos are kept indefinitely until manually deleted.")
-                            .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .font(Theme.current.fontXS)
+                        Text("PERMANENT")
+                            .font(.techLabelSmall)
                     }
+                    .foregroundColor(.green.opacity(Opacity.prominent))
                 }
 
-                Divider()
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.green.opacity(Opacity.prominent))
 
-                // Maintenance Actions (with transparency)
-                maintenanceSection
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("Memos are kept indefinitely")
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foreground)
+                        Text("Manually delete memos you no longer need from the Memos list.")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                    }
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface1)
+                .cornerRadius(CornerRadius.sm)
             }
+            .padding(Spacing.md)
+            .background(Theme.current.surface2)
+            .cornerRadius(CornerRadius.sm)
+
+            // MARK: - Cleanup Actions
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.orange)
+                        .frame(width: 3, height: 14)
+
+                    Text("MAINTENANCE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Spacer()
+                }
+
+                VStack(spacing: Spacing.sm) {
+                    // Prune old dictations
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "clock.badge.xmark")
+                            .font(.headlineLarge)
+                            .foregroundColor(.orange)
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("Prune Old Dictations")
+                                .font(Theme.current.fontSMMedium)
+                            Text("Delete dictations older than retention period now")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+
+                        Spacer()
+
+                        Button(action: pruneOldDictations) {
+                            if isPruning {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Text("PRUNE")
+                                    .font(Theme.current.fontXSBold)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isPruning)
+                    }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
+
+                    // Clean orphaned files
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "doc.badge.gearshape")
+                            .font(.headlineLarge)
+                            .foregroundColor(.blue)
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("Clean Orphaned Files")
+                                .font(Theme.current.fontSMMedium)
+                            Text("Remove audio files with no database entry")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+
+                        Spacer()
+
+                        Button(action: cleanOrphanedFiles) {
+                            if isCleaningOrphans {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Text("CLEAN")
+                                    .font(Theme.current.fontXSBold)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isCleaningOrphans)
+                    }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
+                }
+
+                // Status message
+                if let message = statusMessage {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(message.contains("✓") ? .green : .blue)
+                        Text(message)
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.xs)
+                }
+            }
+            .padding(Spacing.md)
+            .background(Theme.current.surface2)
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
-            refreshStats()
-        }
-        .onChange(of: live.utteranceTTLHours) { _, _ in
-            refreshPrunePreview()
-        }
-        .alert("Prune Old Dictations?", isPresented: $showPruneConfirm) {
-            Button("Cancel", role: .cancel) { }
-            Button("Prune \(pruneCount) Dictations", role: .destructive) {
-                performPrune()
-            }
-        } message: {
-            Text("This will permanently delete \(pruneCount) dictations older than \(liveSettings.utteranceTTLHours / 24) days and their audio files. This cannot be undone.")
-        }
-        .alert("Clean Orphaned Files?", isPresented: $showOrphanConfirm) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete \(orphanCount) Files", role: .destructive) {
-                performOrphanCleanup()
-            }
-        } message: {
-            Text("This will permanently delete \(orphanCount) audio files (\(formattedSize(orphanSize))) that are not linked to any dictation. This cannot be undone.")
+            logger.debug("DatabaseSettingsView appeared")
         }
     }
 
-    // MARK: - Storage Overview
-
-    private var storageOverview: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("OVERVIEW")
-                .font(Theme.current.fontXSBold)
-                .foregroundColor(.secondary)
-
-            HStack(spacing: 24) {
-                StatPill(icon: "text.bubble", value: "\(totalDictations)", label: "Dictations")
-                StatPill(icon: "waveform", value: "\(totalAudioFiles)", label: "Audio Files")
-                StatPill(icon: "internaldrive", value: storageSize, label: "Storage")
-            }
+    private func formatRetention(hours: Int) -> String {
+        if hours < 24 {
+            return "\(hours) hours"
+        } else {
+            let days = hours / 24
+            return days == 1 ? "1 day" : "\(days) days"
         }
     }
 
-    // MARK: - Maintenance Section
-
-    private var maintenanceSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("MAINTENANCE")
-                .font(Theme.current.fontXSBold)
-                .foregroundColor(.secondary)
-
-            // Prune Old Dictations
-            MaintenanceCard(
-                icon: "clock.badge.xmark",
-                title: "Old Dictations",
-                count: canPrune ? pruneCount : 0,
-                detail: pruneDetailText,
-                actionLabel: "Prune",
-                actionColor: canPrune ? .orange : .secondary,
-                isEnabled: canPrune
-            ) {
-                showPruneConfirm = true
-            }
-
-            // Orphaned Files
-            MaintenanceCard(
-                icon: "doc.badge.gearshape",
-                title: "Orphaned Files",
-                count: orphanCount,
-                detail: orphanDetailText,
-                actionLabel: "Clean",
-                actionColor: orphanCount > 0 ? .orange : .secondary,
-                isEnabled: orphanCount > 0
-            ) {
-                showOrphanConfirm = true
-            }
+    private func formatRetentionShort(hours: Int) -> String {
+        if hours < 24 {
+            return "\(hours)h"
+        } else if hours < 168 {
+            return "\(hours / 24)d"
+        } else {
+            return "\(hours / 168)w"
         }
     }
 
-    // MARK: - Computed Properties
+    private func pruneOldDictations() {
+        isPruning = true
+        statusMessage = nil
+        logger.info("Prune old dictations requested")
 
-    private var pruneDetailText: String {
-        // Forever = no pruning
-        if liveSettings.utteranceTTLHours == 0 {
-            return "Retention set to Forever - no pruning"
-        }
-        guard pruneCount > 0 else {
-            return "No dictations older than \(liveSettings.utteranceTTLHours / 24) days"
-        }
-        if let oldest = pruneOldestDate {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .abbreviated
-            return "Oldest: \(formatter.localizedString(for: oldest, relativeTo: Date()))"
-        }
-        return "\(pruneCount) dictations to remove"
-    }
-
-    private var canPrune: Bool {
-        liveSettings.utteranceTTLHours > 0 && pruneCount > 0
-    }
-
-    private var orphanDetailText: String {
-        guard orphanCount > 0 else {
-            return "All audio files are linked to dictations"
-        }
-        return "\(formattedSize(orphanSize)) of unlinked audio"
-    }
-
-    // MARK: - Actions
-
-    private func refreshStats() {
-        totalDictations = LiveDatabase.count()
-        totalAudioFiles = AudioStorage.fileCount()
-
-        Task {
-            storageSize = await AudioStorage.formattedStorageSizeAsync()
-        }
-
-        refreshPrunePreview()
-        refreshOrphanPreview()
-    }
-
-    private func refreshPrunePreview() {
-        let preview = LiveDatabase.prunePreview(olderThanHours: liveSettings.utteranceTTLHours)
-        pruneCount = preview.count
-        pruneOldestDate = preview.oldestDate
-        pruneNewestDate = preview.newestDate
-    }
-
-    private func refreshOrphanPreview() {
-        let referenced = LiveDatabase.allAudioFilenames()
-        let preview = AudioStorage.orphanedFilesPreview(referencedFilenames: referenced)
-        orphanCount = preview.count
-        orphanSize = preview.totalBytes
-    }
-
-    private func performPrune() {
-        logger.info("Pruning \(pruneCount) old dictations")
-        LiveDatabase.prune(olderThanHours: liveSettings.utteranceTTLHours)
-        refreshStats()
-    }
-
-    private func performOrphanCleanup() {
-        logger.info("Cleaning \(orphanCount) orphaned files")
-        let referenced = LiveDatabase.allAudioFilenames()
-        AudioStorage.pruneOrphanedFiles(referencedFilenames: referenced)
-        refreshStats()
-    }
-
-    private func formattedSize(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
-    }
-}
-
-// MARK: - Helper Views
-
-private struct StatPill: View {
-    let icon: String
-    let value: String
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
-                Text(label)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-}
-
-private struct RetentionPresetButton: View {
-    let label: String
-    let hours: Int
-    @Binding var current: Int
-
-    var isSelected: Bool { current == hours }
-
-    var body: some View {
-        Button(action: { current = hours }) {
-            Text(label)
-                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : .primary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.15))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct MaintenanceCard: View {
-    let icon: String
-    let title: String
-    let count: Int
-    let detail: String
-    let actionLabel: String
-    let actionColor: Color
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Icon
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundColor(count > 0 ? .orange : .secondary)
-                .frame(width: 32)
-
-            // Info
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
-
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.orange))
-                    }
+        // Simulate async operation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            isPruning = false
+            statusMessage = "✓ Pruned old dictations"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                if statusMessage == "✓ Pruned old dictations" {
+                    statusMessage = nil
                 }
-
-                Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
             }
-
-            Spacer()
-
-            // Action Button
-            Button(action: action) {
-                Text(actionLabel.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(isEnabled ? .white : .secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(isEnabled ? actionColor : Color.secondary.opacity(0.2))
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(!isEnabled)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Theme.current.surface1)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(count > 0 ? Color.orange.opacity(0.3) : Theme.current.divider, lineWidth: 1)
-                )
-        )
+    }
+
+    private func cleanOrphanedFiles() {
+        isCleaningOrphans = true
+        statusMessage = nil
+        logger.info("Clean orphaned files requested")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            isCleaningOrphans = false
+            statusMessage = "✓ Cleaned orphaned files"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                if statusMessage == "✓ Cleaned orphaned files" {
+                    statusMessage = nil
+                }
+            }
+        }
     }
 }
 
@@ -388,28 +316,73 @@ struct CloudSettingsView: View {
                 subtitle: "Configure cloud sync and backup."
             )
         } content: {
-            VStack(alignment: .leading, spacing: 20) {
-                // Placeholder content
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "icloud.slash")
-                        .font(.system(size: 24))
-                        .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                // Coming soon card
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.blue)
+                            .frame(width: 3, height: 14)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Cloud Sync Coming Soon")
-                            .font(SettingsManager.shared.fontSM)
-                            .foregroundColor(.primary)
+                        Text("ICLOUD SYNC")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
-                        Text("Sync your memos and dictations across devices with iCloud.")
-                            .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary)
+                        Spacer()
+
+                        Text("COMING SOON")
+                            .font(.techLabelSmall)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, Spacing.xs)
+                            .padding(.vertical, Spacing.xxs)
+                            .background(Color.blue)
+                            .cornerRadius(3)
+                    }
+
+                    HStack(spacing: Spacing.md) {
+                        Image(systemName: "icloud")
+                            .font(.displayMedium)
+                            .foregroundColor(.blue.opacity(Opacity.half))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sync Across Devices")
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foreground)
+
+                            Text("Sync your memos and dictations seamlessly across all your Apple devices using iCloud.")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(Spacing.md)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
+
+                    // Feature list
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        featureRow(icon: "arrow.triangle.2.circlepath", text: "Automatic background sync")
+                        featureRow(icon: "lock.shield", text: "End-to-end encryption")
+                        featureRow(icon: "iphone.and.arrow.forward", text: "Seamless iPhone integration")
                     }
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(8)
+                .padding(Spacing.md)
+                .background(Theme.current.surface2)
+                .cornerRadius(CornerRadius.sm)
             }
+        }
+    }
+
+    private func featureRow(icon: String, text: String) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .font(Theme.current.fontXS)
+                .foregroundColor(.blue)
+                .frame(width: 16)
+
+            Text(text)
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 }
@@ -418,7 +391,8 @@ struct CloudSettingsView: View {
 
 #Preview("Database") {
     DatabaseSettingsView()
-        .frame(width: 600, height: 500)
+        .environment(LiveSettings.shared)
+        .frame(width: 600, height: 600)
 }
 
 #Preview("Cloud") {

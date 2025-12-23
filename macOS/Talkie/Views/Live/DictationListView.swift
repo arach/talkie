@@ -166,12 +166,12 @@ struct DictationListView: View {
 
     private var headerView: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.sm) {
                 // Search
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(TalkieTheme.textMuted)
-                        .font(.system(size: 12))
+                        .font(Theme.current.fontSM)
 
                     TextField("Search dictations...", text: $searchText)
                         .textFieldStyle(.plain)
@@ -183,7 +183,7 @@ struct DictationListView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(TalkieTheme.textMuted)
-                                .font(.system(size: 12))
+                                .font(Theme.current.fontSM)
                         }
                         .buttonStyle(.plain)
                     }
@@ -197,7 +197,7 @@ struct DictationListView: View {
 
                 // Count
                 Text("\(filteredUtterances.count) dictations")
-                    .font(.system(size: 11))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(TalkieTheme.textMuted)
             }
             .padding(12)
@@ -215,7 +215,7 @@ struct DictationListView: View {
         HStack {
             if selectedUtteranceIDs.count > 1 {
                 Text("\(selectedUtteranceIDs.count) selected")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.current.fontSMMedium)
                     .foregroundColor(.accentColor)
 
                 Spacer()
@@ -224,13 +224,13 @@ struct DictationListView: View {
                     selectedUtteranceIDs.removeAll()
                 } label: {
                     Label("Clear", systemImage: "xmark.circle")
-                        .font(.system(size: 11))
+                        .font(Theme.current.fontSM)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(TalkieTheme.textMuted)
             } else {
                 Text("\(filteredUtterances.count) dictations")
-                    .font(.system(size: 11))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(TalkieTheme.textMuted)
                 Spacer()
             }
@@ -249,20 +249,20 @@ struct DictationListView: View {
         Group {
             if selectedUtteranceIDs.count > 1 {
                 // Multi-select state
-                VStack(spacing: 12) {
+                VStack(spacing: Spacing.sm) {
                     Image(systemName: "square.stack.3d.up")
                         .font(.system(size: 48))
-                        .foregroundColor(.accentColor.opacity(0.6))
+                        .foregroundColor(.accentColor.opacity(Opacity.half))
 
                     Text("\(selectedUtteranceIDs.count) DICTATIONS SELECTED")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(TalkieTheme.textSecondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Cmd+click to toggle, Shift+click for range")
-                        .font(.system(size: 11))
+                        .font(Theme.current.fontSM)
                         .foregroundColor(TalkieTheme.textMuted)
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Button {
                             selectedUtteranceIDs.removeAll()
                         } label: {
@@ -290,18 +290,18 @@ struct DictationListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.sm) {
             Image(systemName: "waveform")
                 .font(.system(size: 48))
-                .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
+                .foregroundColor(TalkieTheme.textMuted.opacity(Opacity.strong))
 
             Text("No recordings found")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(TalkieTheme.textSecondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             if !searchText.isEmpty {
                 Text("Try a different search")
-                    .font(.system(size: 12))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(TalkieTheme.textMuted)
             }
         }
@@ -309,12 +309,12 @@ struct DictationListView: View {
     }
 
     private var emptyDetailState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.sm) {
             Image(systemName: "waveform.badge.mic")
                 .font(.system(size: 36))
-                .foregroundColor(TalkieTheme.textMuted.opacity(0.3))
+                .foregroundColor(TalkieTheme.textMuted.opacity(Opacity.strong))
             Text("Select a recording")
-                .font(.system(size: 12))
+                .font(Theme.current.fontSM)
                 .foregroundColor(TalkieTheme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -494,12 +494,12 @@ struct DictationRowEnhanced: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             // Leading: App icon or Live icon
             leadingIcon
 
             // Main content
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 // Title row
                 HStack {
                     Text(displayTitle)
@@ -511,15 +511,15 @@ struct DictationRowEnhanced: View {
 
                     // Relative time (minutes only, then actual time after 1h)
                     Text(formatTimeAgo(utterance.timestamp))
-                        .font(.system(size: 11))
+                        .font(Theme.current.fontSM)
                         .foregroundColor(TalkieTheme.textMuted)
                 }
 
                 // Preview + metadata
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.xs) {
                     if let preview = previewText {
                         Text(preview)
-                            .font(.system(size: 11))
+                            .font(Theme.current.fontSM)
                             .foregroundColor(TalkieTheme.textMuted)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -535,8 +535,8 @@ struct DictationRowEnhanced: View {
             }
 
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.sm)
         .contentShape(Rectangle())
         .background(rowBackground)
         .overlay(
@@ -558,7 +558,7 @@ struct DictationRowEnhanced: View {
     private var leadingIcon: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(iconColor.opacity(0.12))
+                .fill(iconColor.opacity(Opacity.medium))
                 .frame(width: 36, height: 36)
 
             if let bundleID = utterance.metadata.activeAppBundleID {
@@ -577,15 +577,15 @@ struct DictationRowEnhanced: View {
     }
 
     private func durationBadge(_ duration: Double) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: Spacing.xxs) {
             Image(systemName: "waveform")
                 .font(.system(size: 9))
             Text(formatDuration(duration))
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
         }
         .foregroundColor(TalkieTheme.textMuted)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, Spacing.xs)
+        .padding(.vertical, Spacing.xxs)
         .background(TalkieTheme.surfaceCard)
         .cornerRadius(4)
     }
@@ -593,9 +593,9 @@ struct DictationRowEnhanced: View {
     private var rowBackground: some View {
         Group {
             if isSelected {
-                Color.accentColor.opacity(0.12)
+                Color.accentColor.opacity(Opacity.medium)
             } else if isHovering {
-                TalkieTheme.surfaceCard.opacity(0.5)
+                TalkieTheme.surfaceCard.opacity(Opacity.half)
             } else {
                 Color.clear
             }

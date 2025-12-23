@@ -1,0 +1,25 @@
+{
+  "slug": "extract-action-items",
+  "name": "Extract Action Items",
+  "description": "Identify and list all tasks from the memo",
+  "icon": "checkmark.square",
+  "color": "green",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "extract-tasks",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "provider": "gemini",
+          "modelId": "gemini-2.0-flash",
+          "prompt": "You are a task extraction specialist. Identify and list all action items from the following voice memo transcript. Format as a JSON array of task objects with \"title\" and \"priority\" (high/medium/low).\n\nTranscript:\n{{TRANSCRIPT}}\n\nReturn ONLY valid JSON in this format:\n[{\"title\": \"Task description\", \"priority\": \"medium\"}]",
+          "temperature": 0.3,
+          "maxTokens": 2048
+        }
+      }
+    }
+  ]
+}

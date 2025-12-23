@@ -47,6 +47,9 @@ class DebugCommandHandler {
         case "settings-screenshots":
             await captureSettingsScreenshots(args: args)
 
+        case "design-audit":
+            await runDesignAudit()
+
         case "help":
             printHelp()
             exit(0)
@@ -88,6 +91,48 @@ class DebugCommandHandler {
         exit(0)
     }
 
+    private func runDesignAudit() async {
+        print("🔍 Running design audit...")
+
+        // Fixed location: ~/Desktop/talkie-audit/
+        let baseDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Desktop")
+            .appendingPathComponent("talkie-audit")
+        try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+
+        // Each audit gets a numbered folder
+        let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+        let auditFolders = existing.filter { $0.hasPrefix("run-") }
+        let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+        let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+        try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+
+        print("📁 Output: \(runDir.path)")
+
+        let report = DesignAuditor.shared.auditAll()
+
+        print("📊 Grade: \(report.grade) (\(report.overallScore)%)")
+        print("   Issues: \(report.totalIssues) total across \(report.screens.count) screens")
+
+        // Generate reports
+        DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
+        DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+
+        print("✅ Reports generated:")
+        print("   - report.html")
+        print("   - report.md")
+
+        // Capture settings screenshots
+        let screenshotsDir = runDir.appendingPathComponent("screenshots")
+        print("📸 Capturing settings screenshots...")
+        let screenshots = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotsDir)
+        print("✅ Captured \(screenshots.count) screenshots")
+
+        // Open result
+        NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
+        exit(0)
+    }
+
     // MARK: - Help
 
     private func printHelp() {
@@ -110,6 +155,13 @@ class DebugCommandHandler {
           settings-screenshots [output-dir]
               Capture individual screenshots of each settings page
               Default: ~/Desktop/settings-screenshots-<timestamp>/
+
+          design-audit
+              Run design system audit with reports and screenshots
+              Output: ~/Desktop/talkie-audit/run-XXX/
+                - report.html (interactive report)
+                - report.md (markdown report)
+                - screenshots/ (all settings pages)
 
           help
               Show this help message

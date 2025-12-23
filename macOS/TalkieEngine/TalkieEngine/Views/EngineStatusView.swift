@@ -382,17 +382,18 @@ class EngineStatusManager: ObservableObject {
         }
     }
 
-    /// Get current process memory usage in MB
+    /// Get current process memory usage in MB (physical footprint)
+    /// Uses phys_footprint which matches Xcode's memory gauge - represents actual memory pressure
     private func getProcessMemoryMB() -> Double {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
             }
         }
         if result == KERN_SUCCESS {
-            return Double(info.resident_size) / 1_000_000  // Convert to MB
+            return Double(info.phys_footprint) / 1_048_576  // Convert to MB (1024*1024)
         }
         return 0
     }

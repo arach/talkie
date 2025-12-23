@@ -403,13 +403,22 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Transcribe directly from client's file
         trace.begin("inference")
         let results = try await whisper.transcribe(audioPath: audioPath)
-        trace.end("\(results.count) segments")
 
-        trace.begin("post_process")
+        // Post-process
         let transcript = results.map { $0.text }
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        trace.end()
+        let wordCount = transcript.split(separator: " ").count
+        let charCount = transcript.count
+
+        // End inference with result metadata for signpost
+        let inferenceMs = trace.end("\(results.count) segments, \(charCount) chars, \(wordCount) words")
+
+        // Alert on slow transcriptions (>5s inference)
+        if inferenceMs > 5000 {
+            AppLogger.shared.warning(.performance, "SLOW WHISPER INFERENCE: \(inferenceMs)ms")
+            EngineStatusManager.shared.log(.warning, "Perf", "⚠️ Slow Whisper inference: \(inferenceMs)ms")
+        }
 
         AppLogger.shared.info(.transcription, "Whisper transcribed: \(transcript.prefix(50))...")
         return TranscriptionResult(transcript: transcript, audioDuration: nil, sampleCount: nil)
@@ -481,13 +490,22 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         // Run inference - trace captures timing with mach_absolute_time
         trace.begin("inference")
         let result = try await manager.transcribe(samples)
-        trace.end()  // Duration captured in trace, emitted to signpost
 
         // Post-process: trim and dedupe trailing repeated words (from echo-tail padding)
-        trace.begin("post_process")
         let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let transcript = dedupeTrailingWords(trimmed)
-        trace.end()
+        let wordCount = transcript.split(separator: " ").count
+        let charCount = transcript.count
+
+        // End inference with result metadata for signpost
+        let inferenceMs = trace.end("\(charCount) chars, \(wordCount) words")
+
+        // Alert on slow transcriptions (>5s inference)
+        if inferenceMs > 5000 {
+            let rtf = Double(inferenceMs) / 1000.0 / audioDuration
+            AppLogger.shared.warning(.performance, "SLOW INFERENCE: \(inferenceMs)ms for \(String(format: "%.1f", audioDuration))s audio (RTF: \(String(format: "%.2f", rtf)))")
+            EngineStatusManager.shared.log(.warning, "Perf", "⚠️ Slow inference: \(inferenceMs)ms (\(String(format: "%.1fx", audioDuration * 1000 / Double(inferenceMs))) realtime)")
+        }
 
         AppLogger.shared.info(.transcription, "Parakeet transcribed: \(transcript.prefix(50))... (\(samples.count) samples)")
         return TranscriptionResult(transcript: transcript, audioDuration: audioDuration, sampleCount: originalSampleCount)

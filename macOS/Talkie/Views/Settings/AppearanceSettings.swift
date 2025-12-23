@@ -30,59 +30,59 @@ struct AppearanceSettingsView: View {
             )
         } content: {
             // MARK: - Theme Presets
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("QUICK THEMES")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Apply a curated theme preset with one click.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     // Preview Label
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "eye")
-                            .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                         Text("PREVIEW")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                     }
-                    .padding(.top, 4)
+                    .padding(.top, Spacing.xs)
 
                     // Live preview (top) - sidebar + table
                     HStack(spacing: 0) {
                         // Mini sidebar
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text("TALKIE")
                                 .font(Theme.current.fontXSBold)
-                                .foregroundColor(SettingsManager.shared.tacticalForeground)
-                                .padding(.bottom, 4)
+                                .foregroundColor(Theme.current.foreground)
+                                .padding(.bottom, Spacing.xs)
 
                             ForEach(["All Memos", "Recent", "Processed"], id: \.self) { item in
-                                HStack(spacing: 6) {
+                                HStack(spacing: Spacing.xs) {
                                     Image(systemName: item == "All Memos" ? "square.stack" : (item == "Recent" ? "clock" : "checkmark.circle"))
-                                        .font(SettingsManager.shared.fontXS)
+                                        .font(Theme.current.fontXS)
                                         .foregroundColor(item == "All Memos" ? .accentColor : Theme.current.foregroundMuted)
                                     Text(item)
-                                        .font(SettingsManager.shared.fontSM)
-                                        .foregroundColor(item == "All Memos" ? SettingsManager.shared.tacticalForeground : Theme.current.foregroundSecondary)
+                                        .font(Theme.current.fontSM)
+                                        .foregroundColor(item == "All Memos" ? Theme.current.foreground : Theme.current.foregroundSecondary)
                                     Spacer()
                                     if item == "All Memos" {
                                         Text("103")
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(Theme.current.foregroundMuted)
                                     }
                                 }
-                                .padding(.horizontal, 6)
+                                .padding(.horizontal, Spacing.xs)
                                 .padding(.vertical, 3)
-                                .background(item == "All Memos" ? Color.accentColor.opacity(0.15) : Color.clear)
-                                .cornerRadius(4)
+                                .background(item == "All Memos" ? Color.accentColor.opacity(Opacity.medium) : Color.clear)
+                                .cornerRadius(CornerRadius.xs)
                             }
                         }
-                        .padding(8)
+                        .padding(Spacing.sm)
                         .frame(width: 130)
-                        .background(SettingsManager.shared.tacticalBackground)
+                        .background(Theme.current.backgroundSecondary)
 
                         Rectangle()
                             .fill(Theme.current.divider)
@@ -105,50 +105,50 @@ struct AppearanceSettingsView: View {
                                     .foregroundColor(Theme.current.foregroundSecondary)
                                     .frame(width: 40, alignment: .trailing)
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, Spacing.xs)
                             .background(Theme.current.backgroundSecondary)
 
                             // Sample rows
                             ForEach(0..<5) { i in
                                 VStack(spacing: 0) {
                                     Rectangle()
-                                        .fill(Theme.current.divider.opacity(0.3))
+                                        .fill(Theme.current.divider.opacity(Opacity.strong))
                                         .frame(height: 0.5)
                                     HStack(spacing: 0) {
                                         Text(["Nov 30, 11:22", "Nov 29, 15:42", "Nov 29, 12:51", "Nov 28, 21:49", "Nov 28, 19:33"][i])
-                                            .font(SettingsManager.shared.fontSM)
+                                            .font(Theme.current.fontSM)
                                             .foregroundColor(Theme.current.foregroundMuted)
                                             .frame(width: 90, alignment: .leading)
                                         Text(["Recording 2025-11-30", "Quick memo 11/29", "Recording 11/29", "Quick memo 11/28", "Meeting notes"][i])
-                                            .font(SettingsManager.shared.fontSM)
-                                            .foregroundColor(SettingsManager.shared.tacticalForeground)
+                                            .font(Theme.current.fontSM)
+                                            .foregroundColor(Theme.current.foreground)
                                             .lineLimit(1)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(["0:09", "0:34", "0:08", "0:31", "1:04"][i])
-                                            .font(SettingsManager.shared.fontSM)
+                                            .font(Theme.current.fontSM)
                                             .foregroundColor(Theme.current.foregroundMuted)
                                             .frame(width: 40, alignment: .trailing)
                                     }
-                                    .padding(.horizontal, 8)
+                                    .padding(.horizontal, Spacing.sm)
                                     .padding(.vertical, 3)
-                                    .background(i == 0 ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .background(i == 0 ? Color.accentColor.opacity(Opacity.medium) : Color.clear)
                                 }
                             }
                         }
-                        .background(SettingsManager.shared.tacticalBackground)
+                        .background(Theme.current.backgroundSecondary)
                     }
-                    .cornerRadius(6)
+                    .cornerRadius(Spacing.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: Spacing.xs)
                             .stroke(Theme.current.divider, lineWidth: 0.5)
                     )
 
                     // Theme selection (bottom)
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
                             Button(action: { settingsManager.applyTheme(preset) }) {
-                                HStack(spacing: 6) {
+                                HStack(spacing: Spacing.xs) {
                                     RoundedRectangle(cornerRadius: 3)
                                         .fill(preset.previewColors.bg)
                                         .frame(width: 14, height: 14)
@@ -157,15 +157,15 @@ struct AppearanceSettingsView: View {
                                                 .stroke(preset.previewColors.accent, lineWidth: 1)
                                         )
                                     Text(preset.displayName)
-                                        .font(SettingsManager.shared.fontXS)
-                                        .foregroundColor(isThemeActive(preset) ? .primary : .secondary)
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(isThemeActive(preset) ? Theme.current.foreground : Theme.current.foregroundSecondary)
                                 }
-                                .padding(.horizontal, 8)
+                                .padding(.horizontal, Spacing.sm)
                                 .padding(.vertical, 5)
-                                .background(isThemeActive(preset) ? Color.accentColor.opacity(0.15) : Theme.current.backgroundTertiary)
-                                .cornerRadius(4)
+                                .background(isThemeActive(preset) ? Color.accentColor.opacity(Opacity.medium) : Theme.current.backgroundTertiary)
+                                .cornerRadius(CornerRadius.xs)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                                         .stroke(isThemeActive(preset) ? Color.accentColor : Color.clear, lineWidth: 1)
                                 )
                             }
@@ -173,23 +173,23 @@ struct AppearanceSettingsView: View {
                         }
                     }
                 }
-                .padding(16)
+                .padding(Spacing.lg)
                 .background(Theme.current.surface2)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
                 // MARK: - Theme Mode + Accent Color (side-by-side on larger screens)
                 GeometryReader { geometry in
                     let useColumns = geometry.size.width > 700
 
                     if useColumns {
-                        HStack(alignment: .top, spacing: 12) {
+                        HStack(alignment: .top, spacing: Spacing.sm) {
                             // Appearance Mode
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 Text("APPEARANCE")
                                     .font(Theme.current.fontXSBold)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
-                                HStack(spacing: 12) {
+                                HStack(spacing: Spacing.sm) {
                                     ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                                         AppearanceModeButton(
                                             mode: mode,
@@ -199,22 +199,22 @@ struct AppearanceSettingsView: View {
                                     }
                                 }
                             }
-                            .padding(16)
+                            .padding(Spacing.lg)
                             .frame(maxWidth: .infinity)
                             .background(Theme.current.surface2)
-                            .cornerRadius(8)
+                            .cornerRadius(CornerRadius.sm)
 
                             // Accent Color
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 Text("ACCENT COLOR")
                                     .font(Theme.current.fontXSBold)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
                                 Text("Used for buttons, selections, and highlights.")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.8))
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: Spacing.sm)], spacing: Spacing.sm) {
                                     ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
                                         AccentColorButton(
                                             colorOption: colorOption,
@@ -224,20 +224,20 @@ struct AppearanceSettingsView: View {
                                     }
                                 }
                             }
-                            .padding(16)
+                            .padding(Spacing.lg)
                             .frame(maxWidth: .infinity)
                             .background(Theme.current.surface2)
-                            .cornerRadius(8)
+                            .cornerRadius(CornerRadius.sm)
                         }
                     } else {
-                        VStack(spacing: 12) {
+                        VStack(spacing: Spacing.sm) {
                             // Appearance Mode
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 Text("APPEARANCE")
                                     .font(Theme.current.fontXSBold)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
-                                HStack(spacing: 12) {
+                                HStack(spacing: Spacing.sm) {
                                     ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                                         AppearanceModeButton(
                                             mode: mode,
@@ -247,21 +247,21 @@ struct AppearanceSettingsView: View {
                                     }
                                 }
                             }
-                            .padding(16)
+                            .padding(Spacing.lg)
                             .background(Theme.current.surface2)
-                            .cornerRadius(8)
+                            .cornerRadius(CornerRadius.sm)
 
                             // Accent Color
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 Text("ACCENT COLOR")
                                     .font(Theme.current.fontXSBold)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
                                 Text("Used for buttons, selections, and highlights.")
-                                    .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary.opacity(0.8))
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: Spacing.sm)], spacing: Spacing.sm) {
                                     ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
                                         AccentColorButton(
                                             colorOption: colorOption,
@@ -271,9 +271,9 @@ struct AppearanceSettingsView: View {
                                     }
                                 }
                             }
-                            .padding(16)
+                            .padding(Spacing.lg)
                             .background(Theme.current.surface2)
-                            .cornerRadius(8)
+                            .cornerRadius(CornerRadius.sm)
                         }
                     }
                 }
@@ -283,28 +283,28 @@ struct AppearanceSettingsView: View {
                 GeometryReader { geometry in
                     let useColumns = geometry.size.width > 800
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("TYPOGRAPHY")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         if useColumns {
                             // 2-column layout for larger screens
-                            HStack(alignment: .top, spacing: 10) {
+                            HStack(alignment: .top, spacing: Spacing.sm) {
                                 // UI Chrome: Font + Size together
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: Spacing.sm) {
                                     Text("UI Chrome")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
 
-                                    HStack(spacing: 12) {
+                                    HStack(spacing: Spacing.sm) {
                                         // UI Font
-                                        VStack(alignment: .leading, spacing: 4) {
+                                        VStack(alignment: .leading, spacing: Spacing.xs) {
                                             Text("Font")
-                                                .font(SettingsManager.shared.fontXS)
-                                                .foregroundColor(.secondary.opacity(0.8))
-                                            HStack(spacing: 4) {
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                            HStack(spacing: Spacing.xs) {
                                                 ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
                                                     FontStyleButton(
                                                         style: style,
@@ -318,11 +318,11 @@ struct AppearanceSettingsView: View {
                                         Divider().frame(height: 36)
 
                                         // UI Size
-                                        VStack(alignment: .leading, spacing: 4) {
+                                        VStack(alignment: .leading, spacing: Spacing.xs) {
                                             Text("Size")
-                                                .font(SettingsManager.shared.fontXS)
-                                                .foregroundColor(.secondary.opacity(0.8))
-                                            HStack(spacing: 4) {
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                            HStack(spacing: Spacing.xs) {
                                                 ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
                                                     FontSizeButton(
                                                         size: size,
@@ -336,38 +336,38 @@ struct AppearanceSettingsView: View {
 
                                     // ALL CAPS toggle
                                     Toggle(isOn: $settings.uiAllCaps) {
-                                        HStack(spacing: 4) {
+                                        HStack(spacing: Spacing.xs) {
                                             Text("ALL CAPS")
-                                                .font(SettingsManager.shared.fontXS)
-                                                .foregroundColor(.secondary.opacity(0.8))
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                                             Text("labels & headers")
-                                                .font(SettingsManager.shared.fontXS)
-                                                .foregroundColor(.secondary.opacity(0.5))
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                                         }
                                     }
                                     .toggleStyle(.switch)
                                     .tint(settingsManager.resolvedAccentColor)
                                     .controlSize(.mini)
                                 }
-                                .padding(10)
+                                .padding(Spacing.sm)
                                 .frame(maxWidth: .infinity)
                                 .background(Theme.current.surface1)
-                                .cornerRadius(6)
+                                .cornerRadius(Spacing.xs)
 
                                 // Content: Font + Size together
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: Spacing.sm) {
                                     Text("Content")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
 
-                                    HStack(spacing: 12) {
+                                    HStack(spacing: Spacing.sm) {
                                         // Content Font
-                                        VStack(alignment: .leading, spacing: 4) {
+                                        VStack(alignment: .leading, spacing: Spacing.xs) {
                                             Text("Font")
-                                                .font(SettingsManager.shared.fontXS)
-                                                .foregroundColor(.secondary.opacity(0.8))
-                                            HStack(spacing: 4) {
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                            HStack(spacing: Spacing.xs) {
                                                 ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
                                                     FontStyleButton(
                                                         style: style,
@@ -381,11 +381,11 @@ struct AppearanceSettingsView: View {
                                         Divider().frame(height: 36)
 
                                         // Content Size
-                                        VStack(alignment: .leading, spacing: 4) {
+                                        VStack(alignment: .leading, spacing: Spacing.xs) {
                                             Text("Size")
-                                                .font(SettingsManager.shared.fontXS)
-                                                .foregroundColor(.secondary.opacity(0.8))
-                                            HStack(spacing: 4) {
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                            HStack(spacing: Spacing.xs) {
                                                 ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
                                                     FontSizeButton(
                                                         size: size,
@@ -397,27 +397,27 @@ struct AppearanceSettingsView: View {
                                         }
                                     }
                                 }
-                                .padding(10)
+                                .padding(Spacing.sm)
                                 .frame(maxWidth: .infinity)
                                 .background(Theme.current.surface1)
-                                .cornerRadius(6)
+                                .cornerRadius(Spacing.xs)
                             }
                         } else {
                             // Single column layout for smaller screens
                             // UI Chrome: Font + Size together
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 Text("UI Chrome")
                                     .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
-                                    .foregroundColor(.secondary.opacity(0.6))
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
 
-                                HStack(spacing: 12) {
+                                HStack(spacing: Spacing.sm) {
                                     // UI Font
-                                    VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: Spacing.xs) {
                                         Text("Font")
-                                            .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary.opacity(0.8))
-                                        HStack(spacing: 4) {
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                        HStack(spacing: Spacing.xs) {
                                             ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
                                                 FontStyleButton(
                                                     style: style,
@@ -431,11 +431,11 @@ struct AppearanceSettingsView: View {
                                     Divider().frame(height: 36)
 
                                     // UI Size
-                                    VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: Spacing.xs) {
                                         Text("Size")
-                                            .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary.opacity(0.8))
-                                        HStack(spacing: 4) {
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                        HStack(spacing: Spacing.xs) {
                                             ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
                                                 FontSizeButton(
                                                     size: size,
@@ -449,37 +449,37 @@ struct AppearanceSettingsView: View {
 
                                 // ALL CAPS toggle
                                 Toggle(isOn: $settings.uiAllCaps) {
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: Spacing.xs) {
                                         Text("ALL CAPS")
-                                            .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary.opacity(0.8))
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                                         Text("labels & headers")
-                                            .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary.opacity(0.5))
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
                                     }
                                 }
                                 .toggleStyle(.switch)
                                 .tint(settingsManager.resolvedAccentColor)
                                 .controlSize(.mini)
                             }
-                            .padding(10)
+                            .padding(Spacing.sm)
                             .background(Theme.current.surface1)
-                            .cornerRadius(6)
+                            .cornerRadius(Spacing.xs)
 
                             // Content: Font + Size together
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 Text("Content")
                                     .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
-                                    .foregroundColor(.secondary.opacity(0.6))
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
 
-                                HStack(spacing: 12) {
+                                HStack(spacing: Spacing.sm) {
                                     // Content Font
-                                    VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: Spacing.xs) {
                                         Text("Font")
-                                            .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary.opacity(0.8))
-                                        HStack(spacing: 4) {
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                        HStack(spacing: Spacing.xs) {
                                             ForEach(FontStyleOption.allCases, id: \.rawValue) { style in
                                                 FontStyleButton(
                                                     style: style,
@@ -493,11 +493,11 @@ struct AppearanceSettingsView: View {
                                     Divider().frame(height: 36)
 
                                     // Content Size
-                                    VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: Spacing.xs) {
                                         Text("Size")
-                                            .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary.opacity(0.8))
-                                        HStack(spacing: 4) {
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                        HStack(spacing: Spacing.xs) {
                                             ForEach(FontSizeOption.allCases, id: \.rawValue) { size in
                                                 FontSizeButton(
                                                     size: size,
@@ -509,70 +509,70 @@ struct AppearanceSettingsView: View {
                                     }
                                 }
                             }
-                            .padding(10)
+                            .padding(Spacing.sm)
                             .background(Theme.current.surface1)
-                            .cornerRadius(6)
+                            .cornerRadius(Spacing.xs)
                         }
 
                         // Preview (always full width)
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
                             Text("Preview")
-                                .font(SettingsManager.shared.fontXS)
-                                .foregroundColor(.secondary.opacity(0.8))
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
                                 // UI Font Preview
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: Spacing.xxs) {
                                     Text("UI Chrome")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
                                     Text(settingsManager.uiAllCaps ? "MEMOS · ACTIONS · 12:34 PM" : "Memos · Actions · 12:34 PM")
                                         .font(settingsManager.themedFont(baseSize: 12))
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(Theme.current.foreground)
                                 }
 
                                 Divider()
 
                                 // Content Font Preview
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: Spacing.xxs) {
                                     Text("Content")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
                                     Text("The quick brown fox jumps over the lazy dog. This is how your transcripts and notes will appear.")
                                         .font(settingsManager.contentFont(baseSize: 13))
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(Theme.current.foreground)
                                 }
                             }
-                            .padding(12)
+                            .padding(Spacing.sm)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(settingsManager.surfaceInput)
-                            .cornerRadius(6)
+                            .cornerRadius(Spacing.xs)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: Spacing.xs)
+                                    .stroke(Theme.current.foreground.opacity(Opacity.light), lineWidth: 1)
                             )
                         }
                     }
-                    .padding(16)
+                    .padding(Spacing.lg)
                     .background(Theme.current.surface2)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
                 .frame(minHeight: 420)
 
                 // Note about accent color
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "info.circle")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(settingsManager.resolvedAccentColor)
                     Text("Accent color applies to Talkie only. System accent color is set in System Settings.")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
-                .padding(8)
-                .background(settingsManager.resolvedAccentColor.opacity(0.1))
-                .cornerRadius(6)
+                .padding(Spacing.sm)
+                .background(settingsManager.resolvedAccentColor.opacity(Opacity.light))
+                .cornerRadius(Spacing.xs)
         }
     }
 }
@@ -585,21 +585,21 @@ struct AppearanceModeButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: Spacing.sm) {
                 Image(systemName: mode.icon)
-                    .font(SettingsManager.shared.fontHeadline)
-                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .font(Theme.current.fontHeadline)
+                    .foregroundColor(isSelected ? .accentColor : Theme.current.foregroundSecondary)
                     .frame(width: 48, height: 48)
-                    .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
-                    .cornerRadius(10)
+                    .background(isSelected ? Color.accentColor.opacity(Opacity.medium) : Theme.current.surface1)
+                    .cornerRadius(Spacing.sm)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: Spacing.sm)
                             .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
                     )
 
                 Text(mode.displayName)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
-                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
             }
         }
         .buttonStyle(.plain)
@@ -619,7 +619,7 @@ private struct AccentColorButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.xs) {
                 // Color swatch
                 if colorOption == .system {
                     // Gradient for system
@@ -637,8 +637,8 @@ private struct AccentColorButton: View {
                 }
 
                 Text(colorOption.displayName)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
-                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
 
                 Spacer()
 
@@ -648,13 +648,13 @@ private struct AccentColorButton: View {
                         .foregroundColor(.accentColor)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(isSelected ? Color.accentColor.opacity(0.1) : Theme.current.surface1)
-            .cornerRadius(6)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.sm)
+            .background(isSelected ? Color.accentColor.opacity(Opacity.light) : Theme.current.surface1)
+            .cornerRadius(Spacing.xs)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: Spacing.xs)
+                    .stroke(isSelected ? Color.accentColor.opacity(Opacity.half) : Theme.current.foreground.opacity(Opacity.light), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -669,21 +669,21 @@ struct FontStyleButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: Spacing.xs) {
                 Image(systemName: style.icon)
-                    .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(isSelected ? .accentColor : Theme.current.foregroundSecondary)
                     .frame(width: 28, height: 28)
-                    .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
-                    .cornerRadius(6)
+                    .background(isSelected ? Color.accentColor.opacity(Opacity.medium) : Theme.current.surface1)
+                    .cornerRadius(Spacing.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: Spacing.xs)
                             .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
                     )
 
                 Text(style.displayName)
-                    .font(.system(size: 8, weight: isSelected ? .medium : .regular, design: .monospaced))
-                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
             }
         }
         .buttonStyle(.plain)
@@ -699,22 +699,22 @@ struct FontSizeButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.xs) {
                 Image(systemName: size.icon)
                     .font(.system(size: size.previewFontSize - 2))
-                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .foregroundColor(isSelected ? .accentColor : Theme.current.foregroundSecondary)
 
                 Text(size.displayName)
                     .font(.system(size: size.previewFontSize, weight: isSelected ? .medium : .regular, design: .monospaced))
-                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, Spacing.sm)
             .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Theme.current.surface1)
-            .cornerRadius(4)
+            .background(isSelected ? Color.accentColor.opacity(Opacity.medium) : Theme.current.surface1)
+            .cornerRadius(CornerRadius.xs)
             .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .stroke(isSelected ? Color.accentColor : Theme.current.foreground.opacity(Opacity.light), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -729,46 +729,46 @@ struct ThemePresetCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 // Preview bar
                 HStack(spacing: 0) {
                     preset.previewColors.bg
                         .frame(height: 32)
                         .overlay(
-                            HStack(spacing: 6) {
+                            HStack(spacing: Spacing.xs) {
                                 Image(systemName: preset.icon)
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(preset.previewColors.accent)
                                 Text("Aa")
-                                    .font(.system(size: 11, weight: .medium, design: preset.uiFontStyle == .monospace ? .monospaced : (preset.uiFontStyle == .rounded ? .rounded : .default)))
+                                    .font(Theme.current.fontSM)
                                     .foregroundColor(preset.previewColors.fg)
 
                                 Spacer()
 
                                 if isActive {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .font(SettingsManager.shared.fontSM)
+                                        .font(Theme.current.fontSM)
                                         .foregroundColor(preset.previewColors.accent)
                                 }
                             }
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, Spacing.sm)
                             , alignment: .leading
                         )
                 }
-                .cornerRadius(6)
+                .cornerRadius(Spacing.xs)
 
                 // Name and description
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    HStack(spacing: Spacing.xs) {
                         Text(preset.displayName)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.primary)
+                            .font(Theme.current.fontSMBold)
+                            .foregroundColor(Theme.current.foreground)
 
                         if isActive {
                             Text("ACTIVE")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .font(Theme.current.fontXSBold)
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 4)
+                                .padding(.horizontal, Spacing.xs)
                                 .padding(.vertical, 1)
                                 .background(Color.accentColor)
                                 .cornerRadius(3)
@@ -776,18 +776,18 @@ struct ThemePresetCard: View {
                     }
 
                     Text(preset.description)
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
             }
-            .padding(10)
-            .background(isActive ? Color.accentColor.opacity(0.1) : Theme.current.surface1)
-            .cornerRadius(8)
+            .padding(Spacing.sm)
+            .background(isActive ? Color.accentColor.opacity(Opacity.light) : Theme.current.surface1)
+            .cornerRadius(CornerRadius.sm)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isActive ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: isActive ? 2 : 1)
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(isActive ? Color.accentColor : Theme.current.foreground.opacity(Opacity.light), lineWidth: isActive ? 2 : 1)
             )
         }
         .buttonStyle(.plain)

@@ -252,18 +252,61 @@ struct ScreenAuditResult {
     }
 }
 
+// MARK: - Issue Categories (Compiler-style)
+
+enum IssueCategory: String, CaseIterable {
+    case fontHardcoded = "FONT-001"
+    case fontWrongAccessor = "FONT-002"
+    case colorHardcoded = "COLOR-001"
+    case colorSystemColor = "COLOR-002"
+    case spacingHardcoded = "SPACING-001"
+    case spacingNonStandard = "SPACING-002"
+    case opacityHardcoded = "OPACITY-001"
+    case compliant = "OK"
+
+    var title: String {
+        switch self {
+        case .fontHardcoded: return "Hard-coded font size"
+        case .fontWrongAccessor: return "Wrong font accessor"
+        case .colorHardcoded: return "Hard-coded color"
+        case .colorSystemColor: return "System color instead of theme"
+        case .spacingHardcoded: return "Hard-coded spacing"
+        case .spacingNonStandard: return "Non-standard spacing value"
+        case .opacityHardcoded: return "Hard-coded opacity"
+        case .compliant: return "Compliant"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .compliant: return "✓"
+        default: return "⚠️"
+        }
+    }
+
+    var severity: String {
+        switch self {
+        case .compliant: return "ok"
+        case .fontWrongAccessor, .colorSystemColor: return "warning"
+        default: return "error"
+        }
+    }
+}
+
 struct PatternUsage: Identifiable {
     let id = UUID()
     let pattern: String
     let count: Int
     let isCompliant: Bool
     let suggestion: String?
+    let category: IssueCategory
 
-    init(pattern: String, count: Int, isCompliant: Bool, suggestion: String? = nil) {
+    init(pattern: String, count: Int, isCompliant: Bool, suggestion: String? = nil, category: IssueCategory = .compliant) {
         self.pattern = pattern
         self.count = count
         self.isCompliant = isCompliant
         self.suggestion = suggestion
+        self.category = isCompliant ? .compliant : category
     }
 }
 
@@ -324,7 +367,9 @@ class DesignAuditor {
             for (pattern, count) in fonts {
                 let isCompliant = DesignTokens.validFontPatterns.contains(where: { pattern.contains($0) })
                 let suggestion = isCompliant ? nil : suggestFontReplacement(for: pattern)
-                result.fontUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+                let category: IssueCategory = isCompliant ? .compliant :
+                    pattern.contains("SettingsManager.shared") ? .fontWrongAccessor : .fontHardcoded
+                result.fontUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion, category: category))
             }
 
             // Analyze colors
@@ -332,7 +377,9 @@ class DesignAuditor {
             for (pattern, count) in colors {
                 let isCompliant = DesignTokens.validColorPatterns.contains(where: { pattern.contains($0) })
                 let suggestion = isCompliant ? nil : suggestColorReplacement(for: pattern)
-                result.colorUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+                let category: IssueCategory = isCompliant ? .compliant :
+                    (pattern.contains(".primary") || pattern.contains(".secondary")) ? .colorSystemColor : .colorHardcoded
+                result.colorUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion, category: category))
             }
 
             // Analyze spacing
@@ -340,7 +387,8 @@ class DesignAuditor {
             for (pattern, count) in spacing {
                 let isCompliant = pattern.contains("Spacing.")
                 let suggestion = isCompliant ? nil : suggestSpacingReplacement(for: pattern)
-                result.spacingUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+                let category: IssueCategory = isCompliant ? .compliant : .spacingHardcoded
+                result.spacingUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion, category: category))
             }
 
             // Analyze opacity
@@ -348,7 +396,8 @@ class DesignAuditor {
             for (pattern, count) in opacity {
                 let isCompliant = pattern.contains("Opacity.")
                 let suggestion = isCompliant ? nil : suggestOpacityReplacement(for: pattern)
-                result.opacityUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion))
+                let category: IssueCategory = isCompliant ? .compliant : .opacityHardcoded
+                result.opacityUsage.append(PatternUsage(pattern: pattern, count: count, isCompliant: isCompliant, suggestion: suggestion, category: category))
             }
         }
 
@@ -825,10 +874,17 @@ class DesignAuditor {
 
                 .dossier.active { display: block; }
 
-                .dossier-close {
+                .dossier-nav {
                     position: fixed;
                     top: 20px;
                     right: 20px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    z-index: 101;
+                }
+
+                .dossier-nav button {
                     background: var(--surface);
                     border: 1px solid var(--border);
                     color: var(--text);
@@ -836,11 +892,42 @@ class DesignAuditor {
                     height: 40px;
                     border-radius: 8px;
                     cursor: pointer;
-                    font-size: 20px;
+                    font-size: 18px;
+                    transition: all 0.15s;
+                }
+
+                .dossier-nav button:hover {
+                    border-color: var(--accent);
+                    background: var(--surface2);
+                }
+
+                .nav-counter {
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    padding: 0 12px;
+                    font-family: 'SF Mono', monospace;
+                }
+
+                .nav-hint {
+                    position: fixed;
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    color: var(--text-secondary);
                     z-index: 101;
                 }
 
-                .dossier-close:hover { border-color: var(--accent); }
+                .nav-hint kbd {
+                    background: var(--surface2);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    margin: 0 2px;
+                }
 
                 .dossier-content {
                     max-width: 1600px;
@@ -934,66 +1021,128 @@ class DesignAuditor {
                     border: 1px solid var(--border);
                 }
 
-                /* Issues section at bottom */
+                /* Compiler-style issues section */
                 .dossier-issues {
-                    background: var(--surface);
+                    background: #1a1a1a;
                     border: 1px solid var(--border);
                     border-radius: 12px;
-                    padding: 24px;
+                    overflow: hidden;
                 }
 
                 .dossier-issues h3 {
-                    font-size: 14px;
+                    font-size: 12px;
                     font-weight: 600;
-                    margin-bottom: 16px;
-                    color: var(--error);
+                    padding: 12px 16px;
+                    background: #252525;
+                    border-bottom: 1px solid var(--border);
+                    color: var(--text-secondary);
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
                 }
 
-                .issue-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-                    gap: 12px;
+                .compiler-output {
+                    font-family: 'SF Mono', 'Menlo', monospace;
+                    font-size: 12px;
+                    line-height: 1.5;
                 }
 
-                .issue-item {
+                .compiler-summary {
                     display: flex;
-                    align-items: flex-start;
-                    gap: 12px;
-                    padding: 12px;
-                    background: var(--surface2);
-                    border-radius: 8px;
+                    gap: 16px;
+                    padding: 12px 16px;
+                    background: #1f1f1f;
+                    border-bottom: 1px solid var(--border);
                 }
 
-                .issue-count {
+                .error-count { color: var(--error); }
+                .warning-count { color: var(--warning); }
+
+                .compiler-success {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 20px 16px;
+                    color: var(--success);
+                }
+
+                .success-icon { font-size: 16px; }
+
+                .issue-category {
+                    border-bottom: 1px solid var(--border);
+                }
+
+                .issue-category:last-child {
+                    border-bottom: none;
+                }
+
+                .category-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 10px 16px;
+                    background: #1f1f1f;
+                    cursor: pointer;
+                }
+
+                .category-code {
+                    font-size: 10px;
+                    font-weight: 700;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                }
+
+                .category-code.error {
                     background: var(--error);
                     color: var(--bg);
-                    font-size: 11px;
-                    font-weight: 700;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    min-width: 32px;
-                    text-align: center;
                 }
 
-                .issue-details {
+                .category-code.warning {
+                    background: var(--warning);
+                    color: var(--bg);
+                }
+
+                .category-title {
                     flex: 1;
+                    color: var(--text);
                 }
 
-                .issue-pattern {
-                    font-family: monospace;
-                    font-size: 12px;
-                    margin-bottom: 4px;
-                    color: var(--warning);
-                }
-
-                .issue-suggestion {
-                    font-size: 11px;
+                .category-count {
                     color: var(--text-secondary);
+                    font-size: 11px;
                 }
 
-                .issue-suggestion::before {
-                    content: "→ ";
+                .category-issues {
+                    padding: 0;
+                }
+
+                .compiler-line {
+                    display: flex;
+                    align-items: baseline;
+                    gap: 12px;
+                    padding: 6px 16px 6px 32px;
+                    border-top: 1px solid #252525;
+                }
+
+                .compiler-line:hover {
+                    background: #252525;
+                }
+
+                .line-pattern {
+                    flex: 1;
+                    color: var(--warning);
+                    font-size: 11px;
+                }
+
+                .line-count {
+                    color: var(--text-secondary);
+                    font-size: 10px;
+                    min-width: 30px;
+                }
+
+                .line-fix {
                     color: var(--success);
+                    font-size: 11px;
+                    opacity: 0.8;
                 }
 
                 /* Score meters */
@@ -1098,7 +1247,13 @@ class DesignAuditor {
 
             html += """
                 <div class="dossier" id="dossier-\(screen.screen.rawValue)">
-                    <button class="dossier-close" onclick="closeDossier()">&times;</button>
+                    <div class="dossier-nav">
+                        <button class="nav-prev" onclick="navigatePrev()" title="Previous (←)">←</button>
+                        <span class="nav-counter">1 of \(report.screens.count)</span>
+                        <button class="nav-next" onclick="navigateNext()" title="Next (→)">→</button>
+                        <button onclick="closeDossier()" title="Close (Esc)">&times;</button>
+                    </div>
+                    <div class="nav-hint">Use <kbd>←</kbd> <kbd>→</kbd> arrow keys to navigate · <kbd>Esc</kbd> to close</div>
                     <div class="dossier-content">
                         <div class="dossier-header">
                             <div>
@@ -1202,24 +1357,61 @@ class DesignAuditor {
                         </div>
 
                         <div class="dossier-issues">
-                            <h3>🚨 Issues Found (\(allIssues.reduce(0) { $0 + $1.count }) total occurrences)</h3>
-                            <div class="issue-grid">
+                            <h3>Compiler Output</h3>
+                            <div class="compiler-output">
             """
 
-            for issue in allIssues {
-                html += """
-                                <div class="issue-item">
-                                    <span class="issue-count">×\(issue.count)</span>
-                                    <div class="issue-details">
-                                        <div class="issue-pattern">\(issue.pattern)</div>
-                                        <div class="issue-suggestion">\(issue.suggestion ?? "Use design tokens")</div>
-                                    </div>
-                                </div>
-                """
-            }
+            // Group issues by category
+            let issuesByCategory = Dictionary(grouping: allIssues) { $0.category }
+            let sortedCategories = issuesByCategory.keys.sorted { $0.rawValue < $1.rawValue }
 
             if allIssues.isEmpty {
-                html += "<div style=\"padding: 20px; text-align: center; color: var(--success);\">✓ No issues found - this screen is compliant!</div>"
+                html += """
+                                <div class="compiler-success">
+                                    <span class="success-icon">✓</span>
+                                    <span>Build succeeded - 0 warnings, 0 errors</span>
+                                </div>
+                """
+            } else {
+                let errorCount = allIssues.filter { $0.category.severity == "error" }.count
+                let warningCount = allIssues.filter { $0.category.severity == "warning" }.count
+
+                html += """
+                                <div class="compiler-summary">
+                                    <span class="error-count">\(errorCount) errors</span>
+                                    <span class="warning-count">\(warningCount) warnings</span>
+                                </div>
+                """
+
+                for category in sortedCategories {
+                    guard let categoryIssues = issuesByCategory[category] else { continue }
+                    let totalCount = categoryIssues.reduce(0) { $0 + $1.count }
+
+                    html += """
+                                <div class="issue-category">
+                                    <div class="category-header">
+                                        <span class="category-code \(category.severity)">\(category.rawValue)</span>
+                                        <span class="category-title">\(category.title)</span>
+                                        <span class="category-count">×\(totalCount)</span>
+                                    </div>
+                                    <div class="category-issues">
+                    """
+
+                    for issue in categoryIssues.sorted(by: { $0.count > $1.count }) {
+                        html += """
+                                        <div class="compiler-line">
+                                            <code class="line-pattern">\(issue.pattern)</code>
+                                            <span class="line-count">×\(issue.count)</span>
+                                            <span class="line-fix">→ \(issue.suggestion ?? "Use design tokens")</span>
+                                        </div>
+                        """
+                    }
+
+                    html += """
+                                    </div>
+                                </div>
+                    """
+                }
             }
 
             html += """
@@ -1230,24 +1422,80 @@ class DesignAuditor {
             """
         }
 
-        // Add JavaScript for dossier navigation
+        // Add JavaScript for dossier navigation with arrow keys
+        let screenIds = report.screens.map { "'\($0.screen.rawValue)'" }.joined(separator: ", ")
+
         html += """
             </div>
 
             <script>
+                const screenIds = [\(screenIds)];
+                let currentIndex = -1;
+
                 function showDossier(screenId) {
+                    // Close any open dossier first
+                    document.querySelectorAll('.dossier').forEach(d => d.classList.remove('active'));
+
+                    // Open the requested dossier
                     document.getElementById('dossier-' + screenId).classList.add('active');
                     document.body.style.overflow = 'hidden';
+
+                    // Update current index
+                    currentIndex = screenIds.indexOf(screenId);
+                    updateNavCounter();
                 }
 
                 function closeDossier() {
                     document.querySelectorAll('.dossier').forEach(d => d.classList.remove('active'));
                     document.body.style.overflow = '';
+                    currentIndex = -1;
                 }
 
-                // Close on escape key
+                function navigatePrev() {
+                    if (currentIndex > 0) {
+                        showDossier(screenIds[currentIndex - 1]);
+                    }
+                }
+
+                function navigateNext() {
+                    if (currentIndex < screenIds.length - 1) {
+                        showDossier(screenIds[currentIndex + 1]);
+                    }
+                }
+
+                function updateNavCounter() {
+                    document.querySelectorAll('.nav-counter').forEach(el => {
+                        el.textContent = (currentIndex + 1) + ' of ' + screenIds.length;
+                    });
+
+                    // Update prev/next button states
+                    document.querySelectorAll('.nav-prev').forEach(el => {
+                        el.style.opacity = currentIndex > 0 ? '1' : '0.3';
+                        el.style.pointerEvents = currentIndex > 0 ? 'auto' : 'none';
+                    });
+                    document.querySelectorAll('.nav-next').forEach(el => {
+                        el.style.opacity = currentIndex < screenIds.length - 1 ? '1' : '0.3';
+                        el.style.pointerEvents = currentIndex < screenIds.length - 1 ? 'auto' : 'none';
+                    });
+                }
+
+                // Keyboard navigation
                 document.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') closeDossier();
+                    if (currentIndex === -1) return; // No dossier open
+
+                    switch(e.key) {
+                        case 'Escape':
+                            closeDossier();
+                            break;
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            navigatePrev();
+                            break;
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            navigateNext();
+                            break;
+                    }
                 });
 
                 // Close on click outside

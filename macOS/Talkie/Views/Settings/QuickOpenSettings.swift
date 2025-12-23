@@ -24,23 +24,23 @@ struct QuickOpenSettingsView: View {
             )
         } content: {
             // Enabled targets
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("ENABLED APPS")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 if quickOpenService.enabledTargets.isEmpty {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "app.badge.checkmark")
                             .foregroundColor(Theme.current.foregroundSecondary)
                         Text("No apps enabled")
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
-                    .font(.system(size: 11, design: .monospaced))
-                    .padding(12)
+                    .font(Theme.current.fontSM)
+                    .padding(Spacing.sm)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 } else {
                     VStack(spacing: 4) {
                         ForEach(quickOpenService.enabledTargets) { target in
@@ -58,24 +58,24 @@ struct QuickOpenSettingsView: View {
                 .background(Theme.current.divider)
 
             // Disabled targets
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("AVAILABLE APPS")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 let disabledTargets = quickOpenService.targets.filter { !$0.isEnabled }
                 if disabledTargets.isEmpty {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "checkmark.circle")
-                            .foregroundColor(.green)
+                            .foregroundColor(SemanticColor.success)
                         Text("All apps are enabled")
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
-                    .font(.system(size: 11, design: .monospaced))
-                    .padding(12)
+                    .font(Theme.current.fontSM)
+                    .padding(Spacing.sm)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 } else {
                     VStack(spacing: 4) {
                         ForEach(disabledTargets) { target in
@@ -93,34 +93,34 @@ struct QuickOpenSettingsView: View {
                 .background(Theme.current.divider)
 
             // Info section
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("HOW IT WORKS")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(Theme.current.fontXSBold)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     infoRow(icon: "doc.on.clipboard", text: "Content is copied to clipboard")
                     infoRow(icon: "arrow.up.forward.app", text: "Target app is opened automatically")
                     infoRow(icon: "command", text: "Use ⌘1-⌘9 shortcuts for quick access")
                 }
-                .padding(12)
+                .padding(Spacing.sm)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
         }
     }
 
     @ViewBuilder
     private func infoRow(icon: String, text: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundSecondary)
                 .frame(width: 16)
 
             Text(text)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 
@@ -143,22 +143,22 @@ private struct QuickOpenTargetRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             // Icon
             targetIcon
                 .frame(width: 28, height: 28)
                 .background(iconBackgroundColor)
-                .cornerRadius(6)
+                .cornerRadius(CornerRadius.xs)
 
             // Name
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(target.name)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
+                    .font(Theme.current.fontSMMedium)
+                    .foregroundColor(Theme.current.foreground)
 
                 Text(openMethodDescription)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             Spacer()
@@ -180,9 +180,9 @@ private struct QuickOpenTargetRow: View {
             .controlSize(.small)
             .labelsHidden()
         }
-        .padding(10)
+        .padding(Spacing.sm)
         .background(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .onHover { isHovered = $0 }
     }
 
@@ -190,11 +190,11 @@ private struct QuickOpenTargetRow: View {
     private var targetIcon: some View {
         if let bundleId = target.bundleId {
             AppIconView(bundleIdentifier: bundleId, size: 22)
-                .opacity(target.isInstalled ? 1.0 : 0.4)
+                .opacity(target.isInstalled ? 1.0 : Opacity.strong)
         } else {
             Image(systemName: "app")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
+                .font(Theme.current.fontBody)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 
@@ -236,24 +236,24 @@ private struct ShortcutPicker: View {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.xxs) {
                 if let shortcut = currentShortcut {
                     Text("⌘\(shortcut)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(Theme.current.fontXSMedium)
                         .foregroundColor(.accentColor)
                 } else {
                     Text("—")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8))
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(4)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xxs)
+            .background(Theme.current.foregroundSecondary.opacity(Opacity.light))
+            .cornerRadius(CornerRadius.xs)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()

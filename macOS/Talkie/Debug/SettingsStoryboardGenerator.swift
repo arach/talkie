@@ -17,7 +17,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
     case dictationOutput = 2
     case quickActions = 3
     case quickOpen = 4
-    case automations = 5
+    case autoRun = 5
     case aiProviders = 6
     case transcriptionModels = 7
     case llmModels = 8
@@ -33,7 +33,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         case .dictationOutput: return "Dictation Output"
         case .quickActions: return "Quick Actions"
         case .quickOpen: return "Quick Open"
-        case .automations: return "Automations"
+        case .autoRun: return "Auto-Run"
         case .aiProviders: return "AI Providers"
         case .transcriptionModels: return "Transcription Models"
         case .llmModels: return "LLM Models"
@@ -48,7 +48,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         switch self {
         case .appearance: return "Appearance"
         case .dictationCapture, .dictationOutput: return "Dictation"
-        case .quickActions, .quickOpen, .automations: return "Memos"
+        case .quickActions, .quickOpen, .autoRun: return "Memos"
         case .aiProviders, .transcriptionModels, .llmModels: return "AI Models"
         case .database, .files: return "Storage"
         case .permissions, .debugInfo: return "System"
@@ -63,7 +63,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         case .dictationOutput: return "DictationSettings.swift"
         case .quickActions: return "QuickActionsSettings.swift"
         case .quickOpen: return "QuickOpenSettings.swift"
-        case .automations: return "AutomationsSettings.swift"
+        case .autoRun: return "AutoRunSettings.swift"
         case .aiProviders: return "APISettings.swift"
         case .transcriptionModels: return "TranscriptionModelsSettingsView.swift"
         case .llmModels: return "ModelLibrarySettings.swift"
@@ -71,6 +71,25 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         case .files: return "LocalFilesSettings.swift"
         case .permissions: return "PermissionsSettings.swift"
         case .debugInfo: return "DebugSettings.swift"
+        }
+    }
+
+    /// Map to the real SettingsSection enum used by SettingsView
+    var settingsSection: SettingsSection {
+        switch self {
+        case .appearance: return .appearance
+        case .dictationCapture: return .dictationCapture
+        case .dictationOutput: return .dictationOutput
+        case .quickActions: return .quickActions
+        case .quickOpen: return .quickOpen
+        case .autoRun: return .autoRun
+        case .aiProviders: return .aiProviders
+        case .transcriptionModels: return .transcriptionModels
+        case .llmModels: return .llmModels
+        case .database: return .database
+        case .files: return .files
+        case .permissions: return .permissions
+        case .debugInfo: return .debugInfo
         }
     }
 }
@@ -207,19 +226,32 @@ class SettingsStoryboardGenerator {
         // Create directory if needed
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
+        // First, try to capture the REAL settings window if it exists
+        if let realScreenshots = await captureRealSettingsWindow(to: directory) {
+            return realScreenshots
+        }
+
+        // Fallback: render isolated views
+        print("⚠️ No real settings window found, using isolated views...")
         let window = createRenderWindow()
 
         for page in SettingsPage.allCases {
             print("📸 Capturing \(page.title)...")
 
+            // Set window title to match current page
+            window.title = "Settings — \(page.title)"
+
             let view = createView(for: page)
             window.contentView = NSHostingView(rootView: view)
             window.makeKeyAndOrderFront(nil)
 
-            try? await Task.sleep(for: .milliseconds(500))
+            // Wait for window to render fully
+            try? await Task.sleep(for: .milliseconds(600))
 
             if let screenshot = captureWindow(window) {
-                let filename = "settings-\(String(format: "%02d", page.rawValue))-\(page.title.lowercased().replacingOccurrences(of: " ", with: "-")).png"
+                // Use pathSegment for filename consistency: settings-appearance.png, settings-permissions.png
+                let pathSegment = page.settingsSection.pathSegment
+                let filename = "settings-\(pathSegment).png"
                 let fileURL = directory.appendingPathComponent(filename)
 
                 if let tiffData = screenshot.tiffRepresentation,
@@ -234,6 +266,85 @@ class SettingsStoryboardGenerator {
 
         window.close()
         return results
+    }
+
+    /// Capture the actual running Settings window by navigating through tabs
+    private func captureRealSettingsWindow(to directory: URL) async -> [SettingsPage: URL]? {
+        // Find the real Settings window by title
+        guard let settingsWindow = NSApp.windows.first(where: { $0.title.contains("Settings") || $0.title.contains("Preferences") }) else {
+            print("📷 No Settings window open - will open and capture...")
+
+            // Try to open settings window via notification
+            NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+            try? await Task.sleep(for: .milliseconds(500))
+
+            // Check again
+            guard let window = NSApp.windows.first(where: { $0.title.contains("Settings") || $0.title.contains("Preferences") }) else {
+                return nil
+            }
+
+            return await captureWindowNavigating(window, to: directory)
+        }
+
+        return await captureWindowNavigating(settingsWindow, to: directory)
+    }
+
+    /// Navigate through settings tabs and capture each one using /d/ paths
+    private func captureWindowNavigating(_ window: NSWindow, to directory: URL) async -> [SettingsPage: URL] {
+        var results: [SettingsPage: URL] = [:]
+
+        window.makeKeyAndOrderFront(nil)
+
+        for page in SettingsPage.allCases {
+            // Use the SettingsSection's pathSegment for navigation (e.g., "appearance", "permissions")
+            let pathSegment = page.settingsSection.pathSegment
+            let debugPath = "settings/\(pathSegment)"
+
+            print("📸 Navigating to /d/\(debugPath)...")
+
+            // Post debug navigate notification (same system as talkie://d/ URLs)
+            #if DEBUG
+            NotificationCenter.default.post(
+                name: .debugNavigate,
+                object: nil,
+                userInfo: ["path": debugPath]
+            )
+            #endif
+
+            // Wait for navigation animation
+            try? await Task.sleep(for: .milliseconds(400))
+
+            // Capture using CGWindowListCreateImage for full chrome
+            if let screenshot = captureRealWindow(windowNumber: CGWindowID(window.windowNumber)) {
+                // Filename matches pathSegment: settings-appearance.png, settings-permissions.png
+                let filename = "settings-\(pathSegment).png"
+                let fileURL = directory.appendingPathComponent(filename)
+
+                if let tiffData = screenshot.tiffRepresentation,
+                   let bitmapImage = NSBitmapImageRep(data: tiffData),
+                   let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                    try? pngData.write(to: fileURL)
+                    results[page] = fileURL
+                    print("  ✅ Captured: \(filename)")
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Capture a real window with its chrome using CGWindowListCreateImage
+    private func captureRealWindow(windowNumber: CGWindowID) -> NSImage? {
+        let cgImage = CGWindowListCreateImage(
+            .null,
+            .optionIncludingWindow,
+            windowNumber,
+            [.boundsIgnoreFraming]
+        )
+
+        guard let cgImage = cgImage else { return nil }
+
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 
     /// Capture all pages as a grid composite image
@@ -476,17 +587,44 @@ class SettingsStoryboardGenerator {
     private func createRenderWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: CGSize(width: 900, height: 700)),
-            styleMask: [.borderless],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.title = "Talkie Settings"
+        window.isOpaque = true
+        window.backgroundColor = NSColor(white: 0.1, alpha: 1.0)
         window.level = .floating
+        window.center()
         return window
     }
 
     private func captureWindow(_ window: NSWindow) -> NSImage? {
+        // Use CGWindowListCreateImage to capture full window including chrome
+        guard let windowNumber = window.windowNumber as? CGWindowID else {
+            return captureContentOnly(window)
+        }
+
+        // Small delay to ensure window is rendered
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+
+        // Capture the full window including title bar
+        let cgImage = CGWindowListCreateImage(
+            .null,
+            .optionIncludingWindow,
+            windowNumber,
+            [.boundsIgnoreFraming]
+        )
+
+        guard let cgImage = cgImage else {
+            return captureContentOnly(window)
+        }
+
+        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        return image
+    }
+
+    private func captureContentOnly(_ window: NSWindow) -> NSImage? {
         guard let contentView = window.contentView else { return nil }
 
         let bounds = contentView.bounds
@@ -502,48 +640,14 @@ class SettingsStoryboardGenerator {
     }
 
     private func createView(for page: SettingsPage) -> AnyView {
-        let view = HStack(spacing: 0) {
-            // Sidebar (simplified - just show selected state)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("SETTINGS")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 20)
-                    .padding(.bottom, 12)
+        // Use the REAL SettingsView with the section selected
+        let section = page.settingsSection
 
-                ForEach(SettingsPage.allCases, id: \.self) { p in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(p == page ? Color.accentColor : Color.clear)
-                            .frame(width: 6, height: 6)
-
-                        Text(p.title.uppercased())
-                            .font(.system(size: 9, weight: p == page ? .semibold : .regular))
-                            .foregroundColor(p == page ? .white : .gray)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(p == page ? Color.accentColor.opacity(0.2) : Color.clear)
-                    )
-                }
-
-                Spacer()
-            }
-            .frame(width: 220)
-            .background(Color(white: 0.12))
-
-            // Content
-            contentView(for: page)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(width: 900, height: 700)
-        .background(Color(white: 0.1))
-        .environment(SettingsManager.shared)
-        .environment(LiveSettings.shared)
-        .environment(EngineClient.shared)
+        let view = SettingsView(initialSection: section)
+            .frame(width: 900, height: 700)
+            .environment(SettingsManager.shared)
+            .environment(LiveSettings.shared)
+            .environment(EngineClient.shared)
 
         return AnyView(view)
     }
@@ -594,38 +698,6 @@ class SettingsStoryboardGenerator {
         }
 
         return AnyView(view)
-    }
-
-    @ViewBuilder
-    private func contentView(for page: SettingsPage) -> some View {
-        switch page {
-        case .appearance:
-            AppearanceSettingsView()
-        case .dictationCapture:
-            DictationCaptureSettingsView()
-        case .dictationOutput:
-            DictationOutputSettingsView()
-        case .quickActions:
-            QuickActionsSettingsView()
-        case .quickOpen:
-            QuickOpenSettingsView()
-        case .automations:
-            AutomationsSettingsView()
-        case .aiProviders:
-            APISettingsView()
-        case .transcriptionModels:
-            TranscriptionModelsSettingsView()
-        case .llmModels:
-            ModelLibraryView()
-        case .database:
-            DatabaseSettingsView()
-        case .files:
-            LocalFilesSettingsView()
-        case .permissions:
-            PermissionsSettingsView()
-        case .debugInfo:
-            DebugInfoView()
-        }
     }
 }
 

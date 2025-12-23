@@ -78,7 +78,7 @@ struct TalkieNavigationView: View {
 
     private var mainContent: some View {
         GeometryReader { geometry in
-            HStack(spacing: 0) {
+            HStack(spacing: Spacing.xxs) {
                 // Sidebar - full height
                 sidebarView
                     .frame(width: currentSidebarWidth)
@@ -90,7 +90,7 @@ struct TalkieNavigationView: View {
                     .frame(width: 1)
 
                 // Content area + StatusBar
-                VStack(spacing: 0) {
+                VStack(spacing: Spacing.xxs) {
                     // Main content area
                     ZStack {
                         if isTwoColumnSection {
@@ -98,7 +98,7 @@ struct TalkieNavigationView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             // 3-column: content list + detail
-                            HStack(spacing: 0) {
+                            HStack(spacing: Spacing.xxs) {
                                 contentColumnView
                                     .frame(width: 300)
 
@@ -114,7 +114,7 @@ struct TalkieNavigationView: View {
                         // Loading indicator during section transitions
                         if isSectionLoading {
                             Rectangle()
-                                .fill(Theme.current.background.opacity(0.5))
+                                .fill(Theme.current.background.opacity(Opacity.half))
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .overlay(
                                     ProgressView()
@@ -232,14 +232,14 @@ struct TalkieNavigationView: View {
 
 
     private var sidebarView: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Spacing.xxs) {
             // Header with collapse toggle (matches TalkieLive)
             sidebarHeader
 
             // Navigation content
             if isSidebarCollapsed {
                 // Collapsed: simple VStack, no scroll, natural sizing
-                VStack(spacing: 0) {
+                VStack(spacing: Spacing.xxs) {
                     sidebarButton(section: .home, icon: "house.fill", title: "Home")
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
                     sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
@@ -263,7 +263,7 @@ struct TalkieNavigationView: View {
 
                         // Memos section
                         sidebarSectionHeader("Memos")
-                            .padding(.top, 12)
+                            .padding(.top, Spacing.sm)
                         sidebarButton(
                             section: .allMemos,
                             icon: "square.stack",
@@ -274,7 +274,7 @@ struct TalkieNavigationView: View {
 
                         // Live section
                         sidebarSectionHeader("Live")
-                            .padding(.top, 12)
+                            .padding(.top, Spacing.sm)
                         sidebarButton(
                             section: .liveDashboard,
                             icon: "chart.xyaxis.line",
@@ -295,7 +295,7 @@ struct TalkieNavigationView: View {
 
                         // Activity section
                         sidebarSectionHeader("Activity")
-                            .padding(.top, 12)
+                            .padding(.top, Spacing.sm)
                         sidebarButton(
                             section: .aiResults,
                             icon: "chart.line.uptrend.xyaxis",
@@ -312,7 +312,7 @@ struct TalkieNavigationView: View {
 
                         // Tools section
                         sidebarSectionHeader("Tools")
-                            .padding(.top, 12)
+                            .padding(.top, Spacing.sm)
                         sidebarButton(
                             section: .workflows,
                             icon: "wand.and.stars",
@@ -331,7 +331,7 @@ struct TalkieNavigationView: View {
                             badgeColor: .orange
                         )
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, 4)
                 }
             }
@@ -339,15 +339,15 @@ struct TalkieNavigationView: View {
             Spacer(minLength: 0)
 
             // Settings pinned to bottom
-            VStack(spacing: 0) {
+            VStack(spacing: Spacing.xxs) {
                 Divider()
-                    .opacity(isSidebarCollapsed ? 0 : 0.5)
+                    .opacity(isSidebarCollapsed ? 0 : Opacity.half)
                 sidebarButton(
                     section: .settings,
                     icon: "gear",
                     title: "Settings"
                 )
-                .padding(.horizontal, 8)
+                .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 6)
             }
         }
@@ -627,8 +627,8 @@ struct TalkieNavigationView: View {
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "text.below.photo")
-                        .font(SettingsManager.shared.fontDisplay)
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .font(Theme.current.fontDisplay)
+                        .foregroundColor(.secondary.opacity(Opacity.half))
 
                     Text("SELECT A MEMO")
                         .font(Theme.current.fontBodyBold)
@@ -728,7 +728,7 @@ struct TalkieNavigationView: View {
 
     @ViewBuilder
     private var memoListView: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: Spacing.xxs) {
             // Search field (moved from sidebar to content column)
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
@@ -739,9 +739,9 @@ struct TalkieNavigationView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, Spacing.sm)
             .padding(.vertical, 6)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            .background(Color(nsColor: .textBackgroundColor).opacity(Opacity.half))
             .cornerRadius(6)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -752,7 +752,7 @@ struct TalkieNavigationView: View {
                 VStack(spacing: 16) {
                     Spacer()
                     Image(systemName: "waveform")
-                        .font(SettingsManager.shared.fontDisplay)
+                        .font(Theme.current.fontDisplay)
                         .foregroundColor(Theme.current.foregroundMuted)
 
                     Text("NO MEMOS")
@@ -858,7 +858,7 @@ private struct SidebarButtonContent: View {
                     // Hover state (only show when not selected)
                     if isHovering && !isSelected {
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Theme.current.backgroundTertiary.opacity(0.5))
+                            .fill(Theme.current.backgroundTertiary.opacity(Opacity.half))
                     }
                 }
             )
