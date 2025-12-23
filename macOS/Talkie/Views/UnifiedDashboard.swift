@@ -73,18 +73,22 @@ struct UnifiedDashboard: View {
                     // Row 1: Streak + Today + Quick Stat
                     statsRow
 
-                    // Row 2: Activity Heatmap
-                    if activityData.count > 7 {
-                        activityHeatmap
+                    // Row 2: Activity Heatmap + Quick Actions (side by side)
+                    HStack(alignment: .top, spacing: 20) {
+                        // Quick Actions (always visible, compact)
+                        quickActionsCompact
+                            .frame(width: 200)
+
+                        // Activity Heatmap (if enough data)
+                        if activityData.count > 7 {
+                            activityHeatmap
+                        }
                     }
 
                     // Row 3: Unified Recent Activity
                     recentActivitySection
 
-                    // Row 4: Quick Actions
-                    quickActionsSection
-
-                    // Row 5: System Status (compact)
+                    // Row 4: System Status (compact)
                     systemStatusRow
                 } else {
                     welcomeCard
@@ -160,7 +164,7 @@ struct UnifiedDashboard: View {
             // Total Memos
             CompactStatCard(
                 icon: "doc.text.fill",
-                value: "\(allMemos.count)",
+                value: formatNumber(allMemos.count),
                 label: "Memos",
                 detail: "Voice recordings",
                 color: .blue
@@ -169,7 +173,7 @@ struct UnifiedDashboard: View {
             // Total Dictations
             CompactStatCard(
                 icon: "waveform",
-                value: "\(dictationStore.utterances.count)",
+                value: formatNumber(dictationStore.utterances.count),
                 label: "Dictations",
                 detail: "Quick captures",
                 color: .purple
@@ -340,7 +344,42 @@ struct UnifiedDashboard: View {
         .padding(.vertical, 32)
     }
 
-    // MARK: - Quick Actions
+    // MARK: - Quick Actions (Compact - for sidebar)
+
+    private var quickActionsCompact: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("QUICK ACTIONS")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1)
+                .foregroundColor(Theme.current.foregroundMuted)
+
+            VStack(spacing: 6) {
+                CompactActionButton(icon: "mic.fill", title: "Record", color: .green) {
+                    // Trigger recording
+                }
+                CompactActionButton(icon: "doc.badge.plus", title: "New Memo", color: .blue) {
+                    // Create memo
+                }
+                CompactActionButton(icon: "wand.and.stars", title: "Workflows", color: .orange) {
+                    NotificationCenter.default.post(name: .init("NavigateToWorkflows"), object: nil)
+                }
+                CompactActionButton(icon: "gear", title: "Settings", color: .secondary) {
+                    NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Theme.current.surface1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Theme.current.divider, lineWidth: 1)
+                )
+        )
+    }
+
+    // MARK: - Quick Actions (Full width - legacy)
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -671,10 +710,10 @@ struct MemoActivityRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // Provenance icon (where it came from)
+            // Provenance icon (where it came from) - neutral color, icon is enough
             Image(systemName: memo.source.icon)
                 .font(.system(size: 12))
-                .foregroundColor(memo.source.color)
+                .foregroundColor(Theme.current.foregroundSecondary)
                 .frame(width: 18)
 
             // Title/Preview
@@ -685,16 +724,12 @@ struct MemoActivityRow: View {
 
             Spacer()
 
-            // Source badge (subtle)
-            Text(memo.source.displayName)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(memo.source.color.opacity(0.8))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    Capsule()
-                        .fill(memo.source.color.opacity(0.15))
-                )
+            // Duration (more useful than source badge)
+            if memo.duration > 0 {
+                Text(formatDuration(memo.duration))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
 
             // Time ago
             if let date = memo.createdAt {
@@ -720,6 +755,15 @@ struct MemoActivityRow: View {
                 isHovered = hovering
             }
         }
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        if mins > 0 {
+            return String(format: "%d:%02d", mins, secs)
+        }
+        return String(format: "0:%02d", secs)
     }
 
     private var memoTitle: String {
@@ -1101,6 +1145,51 @@ struct ActivityHeatmapGrid: View {
         }
 
         return grid
+    }
+}
+
+// MARK: - Compact Action Button
+
+private struct CompactActionButton: View {
+    let icon: String
+    let title: String
+    let color: Color
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(color)
+                    .frame(width: 20)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.current.foreground)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .opacity(isHovered ? 1 : 0.5)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.1)) {
+                isHovered = hovering
+            }
+        }
     }
 }
 
