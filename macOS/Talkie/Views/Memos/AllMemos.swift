@@ -529,63 +529,47 @@ struct MemoRowEnhanced: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Leading: Source icon (color-coded)
-            sourceIcon
-
-            // Main content
-            VStack(alignment: .leading, spacing: 4) {
-                // Title row
-                HStack {
-                    Text(memo.displayTitle)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(TalkieTheme.textPrimary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    // Relative time
-                    Text(RelativeTimeFormatter.format(memo.createdAt))
-                        .font(.system(size: 11))
-                        .foregroundColor(TalkieTheme.textMuted)
-                }
-
-                // Preview snippet + metadata
-                HStack(spacing: 8) {
-                    // Transcript preview (if available)
-                    if let preview = memo.transcriptPreview, !preview.isEmpty {
-                        Text(preview)
-                            .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textMuted)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text("No transcript")
-                            .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textMuted.opacity(0.5))
-                            .italic()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    // Duration badge
-                    durationBadge
-                }
-            }
-
-            // Selection checkbox (visible on hover or when selected in multi-select mode)
+        HStack(spacing: 0) {
+            // LEFT: Selection checkbox (standard placement)
             if isMultiSelected || isHovering {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
-                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted.opacity(0.5))
+                    .font(.system(size: 14))
+                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted.opacity(0.4))
+                    .frame(width: 28)
+            } else {
+                // Reserve space for alignment consistency
+                Color.clear
+                    .frame(width: 28)
             }
+
+            // Title (main content, flexible width)
+            Text(memo.displayTitle)
+                .font(.system(size: 13))
+                .foregroundColor(TalkieTheme.textPrimary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 12)
+
+            // Duration (plain text, right-aligned)
+            Text(formatDuration(memo.duration))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(TalkieTheme.textMuted)
+                .frame(width: 44, alignment: .trailing)
+
+            // Date (plain text, right-aligned)
+            Text(RelativeTimeFormatter.format(memo.createdAt))
+                .font(.system(size: 12))
+                .foregroundColor(TalkieTheme.textMuted)
+                .frame(width: 80, alignment: .trailing)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
         .background(rowBackground)
         .overlay(
             Rectangle()
-                .fill(TalkieTheme.border.opacity(0.5))
+                .fill(TalkieTheme.border.opacity(0.3))
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -597,33 +581,7 @@ struct MemoRowEnhanced: View {
         }
     }
 
-    // MARK: - Subviews
-
-    private var sourceIcon: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(memo.source.color.opacity(0.12))
-                .frame(width: 32, height: 32)
-
-            Image(systemName: memo.source.icon)
-                .font(.system(size: 14))
-                .foregroundColor(memo.source.color)
-        }
-    }
-
-    private var durationBadge: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "waveform")
-                .font(.system(size: 9))
-            Text(formatDuration(memo.duration))
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-        }
-        .foregroundColor(TalkieTheme.textMuted)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(TalkieTheme.surfaceCard)
-        .cornerRadius(4)
-    }
+    // MARK: - Helpers
 
     private var rowBackground: some View {
         Group {
