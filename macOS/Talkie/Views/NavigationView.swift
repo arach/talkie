@@ -170,6 +170,22 @@ struct TalkieNavigationView: View {
             // Navigate to Live Settings subsection
             selectedSection = .liveSettings
         }
+        .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToAllMemos"))) { _ in
+            selectedSection = .allMemos
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToMemoDetail"))) { notification in
+            // Navigate to AllMemos and select the specific memo
+            selectedSection = .allMemos
+            // Post a follow-up notification for AllMemos to select the memo
+            if let memoID = notification.object as? UUID {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NotificationCenter.default.post(
+                        name: .init("SelectMemoInAllMemos"),
+                        object: memoID
+                    )
+                }
+            }
+        }
         .onChange(of: eventManager.events.count) { _, _ in
             updateEventCounts()
         }

@@ -207,8 +207,41 @@ enum AudioStorage {
             }
         }
 
+        invalidateCache()
         if deletedCount > 0 {
             logger.info("Pruned \(deletedCount) orphaned audio files")
         }
+    }
+
+    /// Preview orphaned files (count and total size)
+    static func orphanedFilesPreview(referencedFilenames: Set<String>) -> (count: Int, totalBytes: Int64) {
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(
+            at: audioDirectory,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else {
+            return (0, 0)
+        }
+
+        var count = 0
+        var totalBytes: Int64 = 0
+
+        for fileURL in contents {
+            let filename = fileURL.lastPathComponent
+            if !referencedFilenames.contains(filename) {
+                count += 1
+                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    totalBytes += Int64(size)
+                }
+            }
+        }
+
+        return (count, totalBytes)
+    }
+
+    /// Get total file count in audio directory
+    static func fileCount() -> Int {
+        let fm = FileManager.default
+        return (try? fm.contentsOfDirectory(at: audioDirectory, includingPropertiesForKeys: nil).count) ?? 0
     }
 }

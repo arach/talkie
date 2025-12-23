@@ -20,7 +20,7 @@ enum AppScreen: String, CaseIterable, Identifiable {
     case settingsDictationOutput = "settings-dictation-output"
     case settingsQuickActions = "settings-quick-actions"
     case settingsQuickOpen = "settings-quick-open"
-    case settingsAutoRun = "settings-auto-run"
+    case settingsAutomations = "settings-automations"
     case settingsAIProviders = "settings-ai-providers"
     case settingsTranscription = "settings-transcription"
     case settingsLLM = "settings-llm"
@@ -56,7 +56,7 @@ enum AppScreen: String, CaseIterable, Identifiable {
         case .settingsDictationOutput: return "Dictation Output"
         case .settingsQuickActions: return "Quick Actions"
         case .settingsQuickOpen: return "Quick Open"
-        case .settingsAutoRun: return "Auto-Run"
+        case .settingsAutomations: return "Automations"
         case .settingsAIProviders: return "AI Providers"
         case .settingsTranscription: return "Transcription Models"
         case .settingsLLM: return "LLM Models"
@@ -80,7 +80,7 @@ enum AppScreen: String, CaseIterable, Identifiable {
     var section: ScreenSection {
         switch self {
         case .settingsAppearance, .settingsDictationCapture, .settingsDictationOutput,
-             .settingsQuickActions, .settingsQuickOpen, .settingsAutoRun,
+             .settingsQuickActions, .settingsQuickOpen, .settingsAutomations,
              .settingsAIProviders, .settingsTranscription, .settingsLLM,
              .settingsDatabase, .settingsFiles, .settingsPermissions, .settingsDebug:
             return .settings
@@ -101,7 +101,7 @@ enum AppScreen: String, CaseIterable, Identifiable {
         case .settingsDictationCapture, .settingsDictationOutput: return ["Views/Settings/DictationSettings.swift"]
         case .settingsQuickActions: return ["Views/Settings/QuickActionsSettings.swift"]
         case .settingsQuickOpen: return ["Views/Settings/QuickOpenSettings.swift"]
-        case .settingsAutoRun: return ["Views/Settings/AutoRunSettings.swift"]
+        case .settingsAutomations: return ["Views/Settings/AutomationsSettings.swift"]
         case .settingsAIProviders: return ["Views/Settings/APISettings.swift"]
         case .settingsTranscription: return ["Views/Settings/TranscriptionModelsSettingsView.swift"]
         case .settingsLLM: return ["Views/Settings/ModelLibrarySettings.swift"]

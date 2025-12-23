@@ -347,6 +347,49 @@ extension LiveDatabase {
             )
         }
     }
+
+    /// Preview what would be pruned (count and oldest date)
+    static func prunePreview(olderThanHours hours: Int) -> (count: Int, oldestDate: Date?, newestDate: Date?) {
+        let cutoff = Date().addingTimeInterval(-Double(hours) * 60 * 60)
+        let cutoffTS = cutoff.timeIntervalSince1970
+
+        return (try? shared.read { db -> (Int, Date?, Date?) in
+            let count = try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM dictations WHERE createdAt < ?",
+                arguments: [cutoffTS]
+            ) ?? 0
+
+            let oldest: Double? = try Double.fetchOne(
+                db,
+                sql: "SELECT MIN(createdAt) FROM dictations WHERE createdAt < ?",
+                arguments: [cutoffTS]
+            )
+
+            let newest: Double? = try Double.fetchOne(
+                db,
+                sql: "SELECT MAX(createdAt) FROM dictations WHERE createdAt < ?",
+                arguments: [cutoffTS]
+            )
+
+            return (
+                count,
+                oldest.map { Date(timeIntervalSince1970: $0) },
+                newest.map { Date(timeIntervalSince1970: $0) }
+            )
+        }) ?? (0, nil, nil)
+    }
+
+    /// Get all audio filenames referenced in database
+    static func allAudioFilenames() -> Set<String> {
+        let filenames: [String] = (try? shared.read { db in
+            try String.fetchAll(
+                db,
+                sql: "SELECT audioFilename FROM dictations WHERE audioFilename IS NOT NULL"
+            )
+        }) ?? []
+        return Set(filenames)
+    }
 }
 
 // MARK: - Promotion Methods
