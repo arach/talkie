@@ -27,35 +27,51 @@ struct AllMemos: View {
     // For keyboard/click selection
     @State private var lastClickedID: UUID?
 
+    // Column widths (resizable)
+    @State private var durationColumnWidth: CGFloat = 70
+    @State private var dateColumnWidth: CGFloat = 90
+    @State private var dragStartWidth: CGFloat = 0
+
+
+    // View mode: auto switches based on count, or user can force
+    enum ViewMode: String, CaseIterable {
+        case auto = "Auto"
+        case condensed = "Condensed"
+        case expanded = "Expanded"
+    }
+    @State private var viewMode: ViewMode = .auto
+
+    // Threshold for auto-switching from preview to table
+    private let previewThreshold = 10
+
+    private var usePreviewMode: Bool {
+        switch viewMode {
+        case .auto: return viewModel.totalCount < previewThreshold
+        case .condensed: return false
+        case .expanded: return true
+        }
+    }
+
     private var selectedMemoID: UUID? {
         selectedMemoIDs.count == 1 ? selectedMemoIDs.first : nil
+    }
+
+    private var allSelected: Bool {
+        !viewModel.memos.isEmpty && selectedMemoIDs.count == viewModel.memos.count
+    }
+
+    private var someSelected: Bool {
+        !selectedMemoIDs.isEmpty && selectedMemoIDs.count < viewModel.memos.count
     }
 
     var body: some View {
         TalkieSection("AllMemos") {
             HSplitView {
-                // Left: Memos list
-                VStack(spacing: 0) {
-                    // Header with search and sort controls
-                    headerView
+                listPane
+                    .frame(minWidth: 350, idealWidth: 500)
 
-                    // Memos table
-                    if viewModel.isLoading && viewModel.memos.isEmpty {
-                        loadingView
-                    } else if viewModel.memos.isEmpty {
-                        emptyView
-                    } else {
-                        memosTable
-                    }
-
-                    // Footer with stats
-                    footerView
-                }
-                .frame(minWidth: 400, idealWidth: 500)
-
-                // Right: Memo detail (resizable)
-                detailPane
-                    .frame(minWidth: 350)
+                inspectorContent
+                    .frame(minWidth: 300)
             }
             .onChange(of: searchText) { _, newValue in
                 // Debounce search (500ms)
@@ -77,6 +93,25 @@ struct AllMemos: View {
             }
         } onLoad: {
             await viewModel.loadMemos()
+        }
+    }
+
+    // MARK: - List Pane
+
+    @ViewBuilder
+    private var listPane: some View {
+        VStack(spacing: 0) {
+            headerView
+
+            if viewModel.isLoading && viewModel.memos.isEmpty {
+                loadingView
+            } else if viewModel.memos.isEmpty {
+                emptyView
+            } else {
+                memosTable
+            }
+
+            footerView
         }
     }
 
@@ -301,42 +336,66 @@ struct AllMemos: View {
     // MARK: - Memos Table
 
     private var memosTable: some View {
-        VStack(spacing: 0) {
-            tableHeader
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
+        ScrollViewReader { proxy in
+            ScrollView {
+                if usePreviewMode {
+                    // Preview mode: card-style layout with spacing
+                    LazyVStack(spacing: 8) {
                         ForEach(viewModel.memos) { memo in
-                            MemoRowEnhanced(
+                            MemoRowPreview(
                                 memo: memo,
                                 isSelected: selectedMemoIDs.contains(memo.id),
-                                isMultiSelected: selectedMemoIDs.count > 1,
                                 onSelect: { event in
                                     handleSelection(memo: memo, event: event)
                                 }
                             )
                             .id(memo.id)
                             .onAppear {
-                                // Load more when approaching end
                                 if memo.id == viewModel.memos.last?.id {
-                                    Task {
-                                        await viewModel.loadNextPage()
-                                    }
+                                    Task { await viewModel.loadNextPage() }
                                 }
                             }
                         }
-
-                        // Loading indicator for pagination
-                        if viewModel.isLoading && !viewModel.memos.isEmpty {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                Text("Loading more...")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(TalkieTheme.textMuted)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                } else {
+                    // Table mode: compact rows with header
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        Section {
+                            ForEach(Array(viewModel.memos.enumerated()), id: \.element.id) { index, memo in
+                                MemoRowEnhanced(
+                                    memo: memo,
+                                    isSelected: selectedMemoIDs.contains(memo.id),
+                                    isMultiSelected: selectedMemoIDs.count > 1,
+                                    onSelect: { event in
+                                        handleSelection(memo: memo, event: event)
+                                    },
+                                    durationWidth: durationColumnWidth,
+                                    dateWidth: dateColumnWidth,
+                                    isEvenRow: index.isMultiple(of: 2)
+                                )
+                                .id(memo.id)
+                                .onAppear {
+                                    if memo.id == viewModel.memos.last?.id {
+                                        Task { await viewModel.loadNextPage() }
+                                    }
+                                }
                             }
-                            .padding(.vertical, Spacing.md)
+
+                            // Loading indicator for pagination
+                            if viewModel.isLoading && !viewModel.memos.isEmpty {
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                    Text("Loading more...")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(TalkieTheme.textMuted)
+                                }
+                                .padding(.vertical, Spacing.md)
+                            }
+                        } header: {
+                            tableHeader
                         }
                     }
                 }
@@ -346,69 +405,111 @@ struct AllMemos: View {
 
     private var tableHeader: some View {
         HStack(spacing: 0) {
-            // Checkbox column spacer
-            Color.clear.frame(width: 28)
+            // Spacer for accent bar alignment
+            Color.clear.frame(width: 3)
 
-            // Title
+            // Select all checkbox
             Button {
-                Task { await viewModel.changeSortField(.title) }
+                toggleSelectAll()
             } label: {
-                HStack(spacing: 4) {
-                    Text("Title")
-                        .font(.system(size: 11, weight: .semibold))
-                    if viewModel.sortField == .title {
-                        Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                }
-                .foregroundColor(viewModel.sortField == .title ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
+                Image(systemName: selectAllIcon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(selectedMemoIDs.isEmpty ? Color.white.opacity(0.2) : .accentColor)
+                    .frame(width: 28)
             }
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Duration
-            Button {
-                Task { await viewModel.changeSortField(.duration) }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Duration")
-                        .font(.system(size: 11, weight: .semibold))
-                    if viewModel.sortField == .duration {
-                        Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                }
-                .foregroundColor(viewModel.sortField == .duration ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
-            }
-            .buttonStyle(.plain)
-            .frame(width: 56, alignment: .trailing)
+            // Title (sortable)
+            sortableColumnHeader(title: "TITLE", field: .title, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Date
-            Button {
-                Task { await viewModel.changeSortField(.timestamp) }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Date")
-                        .font(.system(size: 11, weight: .semibold))
-                    if viewModel.sortField == .timestamp {
-                        Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                }
-                .foregroundColor(viewModel.sortField == .timestamp ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
-            }
-            .buttonStyle(.plain)
-            .frame(width: 80, alignment: .trailing)
+            // Duration (sortable, resizable)
+            sortableColumnHeader(title: "DURATION", field: .duration, alignment: .trailing)
+                .frame(width: durationColumnWidth, alignment: .trailing)
+                .overlay(
+                    columnResizeHandle(width: $durationColumnWidth),
+                    alignment: .trailing
+                )
+
+            // Date (sortable, resizable)
+            sortableColumnHeader(title: "DATE", field: .timestamp, alignment: .trailing)
+                .frame(width: dateColumnWidth, alignment: .trailing)
+                .padding(.trailing, 4)
+                .overlay(
+                    columnResizeHandle(width: $dateColumnWidth, minWidth: 60),
+                    alignment: .trailing
+                )
         }
-        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(TalkieTheme.surfaceElevated)
+        .background(TalkieTheme.surface)
         .overlay(
             Rectangle()
-                .fill(TalkieTheme.border)
+                .fill(Color.white.opacity(0.06))
                 .frame(height: 1),
             alignment: .bottom
         )
+    }
+
+    private var selectAllIcon: String {
+        if allSelected {
+            return "checkmark.circle.fill"
+        } else if someSelected {
+            return "minus.circle.fill"
+        } else {
+            return "circle"
+        }
+    }
+
+    private func toggleSelectAll() {
+        if allSelected {
+            selectedMemoIDs.removeAll()
+        } else {
+            selectedMemoIDs = Set(viewModel.memos.map { $0.id })
+        }
+    }
+
+    private func sortableColumnHeader(title: String, field: MemoModel.SortField, alignment: Alignment) -> some View {
+        Button {
+            Task { await viewModel.changeSortField(field) }
+        } label: {
+            HStack(spacing: 3) {
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.5)
+                if viewModel.sortField == field {
+                    Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                }
+            }
+            .foregroundColor(viewModel.sortField == field ? Color.white.opacity(0.9) : Color.white.opacity(0.4))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func columnResizeHandle(width: Binding<CGFloat>, minWidth: CGFloat = 50) -> some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if dragStartWidth == 0 {
+                            dragStartWidth = width.wrappedValue
+                        }
+                        width.wrappedValue = max(minWidth, dragStartWidth + value.translation.width)
+                    }
+                    .onEnded { _ in
+                        dragStartWidth = 0
+                    }
+            )
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
     }
 
     // MARK: - Empty/Loading States
@@ -449,51 +550,86 @@ struct AllMemos: View {
     // MARK: - Footer
 
     private var footerView: some View {
-        HStack {
-            // Selection count or total count
-            if selectedMemoIDs.count > 1 {
-                Text("\(selectedMemoIDs.count) selected")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.accentColor)
-            } else {
-                Text("\(viewModel.displayedCount) of \(viewModel.totalCount) memos")
+        HStack(spacing: Spacing.md) {
+            // Left: Count info (always visible)
+            HStack(spacing: 4) {
+                if selectedMemoIDs.count > 1 {
+                    // Selection mode: show both selection and total
+                    Text("\(selectedMemoIDs.count) selected")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.accentColor)
+
+                    Text("·")
+                        .foregroundColor(TalkieTheme.textMuted)
+                }
+
+                Text("\(viewModel.displayedCount) of \(viewModel.totalCount)")
                     .font(.system(size: 11))
                     .foregroundColor(TalkieTheme.textMuted)
             }
 
-            Spacer()
+            // Center: Load more (if applicable)
+            if viewModel.hasMorePages && selectedMemoIDs.count <= 1 {
+                Spacer()
+
+                TalkieButton("LoadMore") {
+                    await viewModel.loadNextPage()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Load more")
+                            .font(.system(size: 11, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            } else {
+                Spacer()
+            }
+
+            // View mode toggle (only after graduating to 10+ memos)
+            if viewModel.totalCount >= previewThreshold && selectedMemoIDs.count <= 1 {
+                viewModeToggle
+            }
 
             // Bulk actions when multi-selected
             if selectedMemoIDs.count > 1 {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     Button {
                         // Export selected
                     } label: {
-                        Label("Export", systemImage: "square.and.arrow.up")
-                            .font(.system(size: 11))
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 10))
+                            Text("Export")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(TalkieTheme.textPrimary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(TalkieTheme.surfaceCard)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(TalkieTheme.textMuted)
 
                     Button {
                         selectedMemoIDs.removeAll()
                     } label: {
-                        Label("Clear", systemImage: "xmark.circle")
-                            .font(.system(size: 11))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(TalkieTheme.textMuted)
+                            .frame(width: 20, height: 20)
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(TalkieTheme.textMuted)
+                    .help("Clear selection")
                 }
-            } else if viewModel.hasMorePages {
-                TalkieButton("LoadMore") {
-                    await viewModel.loadNextPage()
-                } label: {
-                    Text("Load More")
-                }
-                .font(.system(size: 11, weight: .medium))
             }
         }
-        .padding(Spacing.sm)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
         .background(TalkieTheme.surfaceElevated)
         .overlay(
             Rectangle()
@@ -503,68 +639,124 @@ struct AllMemos: View {
         )
     }
 
-    // MARK: - Detail Pane
+    // MARK: - View Mode Toggle
+
+    private var viewModeToggle: some View {
+        HStack(spacing: 2) {
+            ForEach(ViewMode.allCases, id: \.self) { mode in
+                Button {
+                    viewMode = mode
+                } label: {
+                    Image(systemName: iconForMode(mode))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(viewMode == mode ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
+                        .frame(width: 24, height: 20)
+                        .background(viewMode == mode ? Color.white.opacity(0.08) : Color.clear)
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .help(mode.rawValue)
+            }
+        }
+        .padding(2)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(6)
+    }
+
+    private func iconForMode(_ mode: ViewMode) -> String {
+        switch mode {
+        case .auto: return "sparkles"
+        case .condensed: return "list.bullet"
+        case .expanded: return "rectangle.grid.1x2"
+        }
+    }
+
+    // MARK: - Inspector Content
 
     @ViewBuilder
-    private var detailPane: some View {
+    private var inspectorContent: some View {
+        // Content
         if selectedMemoIDs.count > 1 {
-            // Multi-select state
-            VStack(spacing: Spacing.md) {
-                Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 48))
-                    .foregroundColor(.accentColor.opacity(0.6))
+                // Multi-select state
+                VStack(spacing: Spacing.md) {
+                    Image(systemName: "square.stack.3d.up")
+                        .font(.system(size: 48))
+                        .foregroundColor(.accentColor.opacity(0.6))
 
-                Text("\(selectedMemoIDs.count) MEMOS SELECTED")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    Text("\(selectedMemoIDs.count) MEMOS SELECTED")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(TalkieTheme.textSecondary)
 
-                Text("Cmd+click to toggle, Shift+click for range")
-                    .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    Text("Cmd+click to toggle, Shift+click for range")
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textMuted)
 
-                // Bulk action buttons
-                HStack(spacing: 12) {
-                    Button {
-                        // Export all selected
-                    } label: {
-                        Label("Export All", systemImage: "square.and.arrow.up")
+                    // Bulk action buttons
+                    HStack(spacing: 12) {
+                        Button {
+                            // Export all selected
+                        } label: {
+                            Label("Export All", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+
+                        Button {
+                            selectedMemoIDs.removeAll()
+                        } label: {
+                            Label("Clear Selection", systemImage: "xmark")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-
-                    Button {
-                        selectedMemoIDs.removeAll()
-                    } label: {
-                        Label("Clear Selection", systemImage: "xmark")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .padding(.top, Spacing.sm)
                 }
-                .padding(.top, Spacing.sm)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(TalkieTheme.surface)
-        } else if let voiceMemo = selectedVoiceMemo {
-            MemoDetailView(memo: voiceMemo)
-                .id(voiceMemo.id)  // Stable identity for SwiftUI diffing
-        } else {
-            // Empty state
-            VStack(spacing: Spacing.md) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 48))
-                    .foregroundColor(TalkieTheme.textMuted.opacity(0.4))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(TalkieTheme.surface)
+            } else if let voiceMemo = selectedVoiceMemo {
+                MemoDetailView(memo: voiceMemo)
+                    .id(voiceMemo.id)  // Stable identity for SwiftUI diffing
+            } else {
+                // Empty state - tasteful, minimal
+                VStack(spacing: 16) {
+                    // Subtle icon
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.accentColor.opacity(0.5), Color.accentColor.opacity(0.2)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
 
-                Text("SELECT A MEMO")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(TalkieTheme.textMuted)
+                    VStack(spacing: 4) {
+                        Text("No Selection")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(TalkieTheme.textSecondary)
 
-                Text("Click a memo to view details")
-                    .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textMuted.opacity(0.7))
+                        Text("Select a memo to view details")
+                            .font(.system(size: 11))
+                            .foregroundColor(TalkieTheme.textMuted)
+                    }
+
+                    // Keyboard hint
+                    HStack(spacing: 4) {
+                        Text("⌘I")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(3)
+
+                        Text("to toggle inspector")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(TalkieTheme.textMuted.opacity(0.6))
+                    .padding(.top, 8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(TalkieTheme.surface)
-        }
     }
 
     // MARK: - Helpers
@@ -586,6 +778,98 @@ struct AllMemos: View {
     }
 }
 
+// MARK: - Preview Memo Row (Rich view for early users)
+
+struct MemoRowPreview: View {
+    let memo: MemoModel
+    let isSelected: Bool
+    let onSelect: (NSEvent?) -> Void
+
+    @State private var isHovering = false
+
+    private static let selectedBg = Color.accentColor.opacity(0.12)
+    private static let hoverBg = Color.white.opacity(0.03)
+    private static let cardBg = Color.white.opacity(0.02)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Top row: Title + Duration
+            HStack(alignment: .center) {
+                // Selection indicator
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(isSelected ? .accentColor : Color.white.opacity(0.2))
+
+                Text(memo.displayTitle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isSelected ? .primary : TalkieTheme.textPrimary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                // Duration pill
+                Text(formatDuration(memo.duration))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(4)
+            }
+
+            // Transcript preview
+            if let preview = memo.transcriptPreview, !preview.isEmpty {
+                Text(preview)
+                    .font(.system(size: 12))
+                    .foregroundColor(TalkieTheme.textSecondary)
+                    .lineLimit(2)
+                    .padding(.leading, 22) // Align with title (past checkbox)
+            }
+
+            // Bottom row: Date + Source
+            HStack(spacing: 12) {
+                Text(RelativeTimeFormatter.format(memo.createdAt))
+                    .font(.system(size: 11))
+                    .foregroundColor(TalkieTheme.textMuted)
+
+                if memo.source != .unknown {
+                    HStack(spacing: 4) {
+                        Image(systemName: memo.source.icon)
+                            .font(.system(size: 9))
+                        Text(memo.source.displayName)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(memo.source.color.opacity(0.8))
+                }
+
+                Spacer()
+            }
+            .padding(.leading, 22)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Self.selectedBg : (isHovering ? Self.hoverBg : Self.cardBg))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isSelected ? Color.accentColor.opacity(0.3) : Color.white.opacity(0.04), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .buttonStyle(.plain)
+        .onTapGesture { onSelect(NSApp.currentEvent) }
+    }
+
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        let secondsStr = seconds < 10 ? "0\(seconds)" : "\(seconds)"
+        return "\(minutes):\(secondsStr)"
+    }
+}
+
 // MARK: - Enhanced Memo Row (Better Visual Hierarchy)
 
 struct MemoRowEnhanced: View {
@@ -593,80 +877,74 @@ struct MemoRowEnhanced: View {
     let isSelected: Bool
     let isMultiSelected: Bool
     let onSelect: (NSEvent?) -> Void
+    var durationWidth: CGFloat = 70
+    var dateWidth: CGFloat = 90
+    var isEvenRow: Bool = false
 
     @State private var isHovering = false
 
+    // Pre-computed colors - no runtime opacity math
+    private static let selectedBg = Color.accentColor.opacity(0.15)
+    private static let hoverBg = Color.white.opacity(0.03)
+    private static let evenRowBg = Color.white.opacity(0.015)
+    private static let accentBar = Color.accentColor
+
     var body: some View {
-        HStack(spacing: 0) {
-            // LEFT: Selection checkbox (standard placement)
-            if isMultiSelected || isHovering {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted.opacity(0.4))
-                    .frame(width: 28)
-            } else {
-                // Reserve space for alignment consistency
-                Color.clear
-                    .frame(width: 28)
-            }
-
-            // Title (main content, flexible width)
-            Text(memo.displayTitle)
-                .font(.system(size: 13))
-                .foregroundColor(TalkieTheme.textPrimary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: 12)
-
-            // Duration (plain text, right-aligned)
-            Text(formatDuration(memo.duration))
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(TalkieTheme.textMuted)
-                .frame(width: 56, alignment: .trailing)
-
-            // Date (plain text, right-aligned)
-            Text(RelativeTimeFormatter.format(memo.createdAt))
-                .font(.system(size: 12))
-                .foregroundColor(TalkieTheme.textMuted)
-                .frame(width: 80, alignment: .trailing)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .background(rowBackground)
-        .overlay(
-            Rectangle()
-                .fill(TalkieTheme.border.opacity(0.3))
-                .frame(height: 1),
-            alignment: .bottom
-        )
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .onTapGesture {
+        Button {
             onSelect(NSApp.currentEvent)
+        } label: {
+            HStack(spacing: 0) {
+                // Left accent bar for selected state
+                Rectangle()
+                    .fill(isSelected ? Self.accentBar : Color.clear)
+                    .frame(width: 3)
+
+                // Checkbox (always visible - no layout shifts)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isSelected ? .accentColor : Color.white.opacity(0.2))
+                    .frame(width: 28)
+
+                // Title - stronger typography
+                Text(memo.displayTitle)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? .primary : TalkieTheme.textPrimary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Duration - monospace for alignment
+                Text(formatDuration(memo.duration))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .frame(width: durationWidth, alignment: .trailing)
+
+                // Date
+                Text(RelativeTimeFormatter.format(memo.createdAt))
+                    .font(.system(size: 11))
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .frame(width: dateWidth, alignment: .trailing)
+                    .padding(.trailing, 4)
+            }
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .background(rowBackground)
         }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 
-    // MARK: - Helpers
-
-    private var rowBackground: some View {
-        Group {
-            if isSelected {
-                Color.accentColor.opacity(0.12)
-            } else if isHovering {
-                TalkieTheme.surfaceCard.opacity(0.5)
-            } else {
-                Color.clear
-            }
-        }
+    private var rowBackground: Color {
+        if isSelected { return Self.selectedBg }
+        if isHovering { return Self.hoverBg }
+        if isEvenRow { return Self.evenRowBg }
+        return .clear
     }
 
     private func formatDuration(_ duration: Double) -> String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        let secondsStr = seconds < 10 ? "0\(seconds)" : "\(seconds)"
+        return "\(minutes):\(secondsStr)"
     }
 }
 
@@ -675,37 +953,24 @@ struct MemoRowEnhanced: View {
 enum RelativeTimeFormatter {
     static func format(_ date: Date) -> String {
         let now = Date()
+        let calendar = Calendar.current
         let interval = now.timeIntervalSince(date)
 
-        // Less than 1 minute
-        if interval < 60 {
-            return "Just now"
+        // Today: show relative time
+        if calendar.isDateInToday(date) {
+            if interval < 3600 {
+                let minutes = max(1, Int(interval / 60))
+                return "\(minutes)m ago"
+            } else {
+                let hours = Int(interval / 3600)
+                return "\(hours)h ago"
+            }
         }
 
-        // Less than 1 hour
-        if interval < 3600 {
-            let minutes = Int(interval / 60)
-            return "\(minutes)m ago"
-        }
-
-        // Less than 24 hours
-        if interval < 86400 {
-            let hours = Int(interval / 3600)
-            return "\(hours)h ago"
-        }
-
-        // Yesterday
-        let calendar = Calendar.current
-        if calendar.isDateInYesterday(date) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "h:mm a"
-            return "Yesterday, \(formatter.string(from: date))"
-        }
-
-        // This week (within 7 days)
+        // This week: show short day name
         if interval < 604800 {
             let formatter = DateFormatter()
-            formatter.dateFormat = "EEEE"  // Day name
+            formatter.dateFormat = "EEE"  // Mon, Tue, Wed
             return formatter.string(from: date)
         }
 
