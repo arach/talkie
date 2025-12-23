@@ -67,13 +67,9 @@ final class AppEnvironment {
     /// In debug mode: prefers debug builds from DerivedData
     /// In release mode: uses /Applications install
     func findApp(_ app: HelperApp) -> URL? {
-        var foundPath: URL?
-
-        // Debug mode: search DerivedData
+        // Debug mode: check stable dev builds first
         if isDebug {
-            foundPath = findDebugBuild(for: app)
-            if let path = foundPath {
-                logger.info("Found debug build for \(app.appName): \(path.path)")
+            if let path = findDebugBuild(for: app) {
                 return path
             }
         }
@@ -81,7 +77,6 @@ final class AppEnvironment {
         // Fall back to installed version
         let installedPath = URL(fileURLWithPath: "/Applications/\(app.appName)")
         if FileManager.default.fileExists(atPath: installedPath.path) {
-            logger.info("Using installed \(app.appName): \(installedPath.path)")
             return installedPath
         }
 
@@ -98,13 +93,23 @@ final class AppEnvironment {
 
         let configuration = NSWorkspace.OpenConfiguration()
         NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
-        logger.info("Launched \(app.appName) from \(appURL.path)")
+        // Silent launch - no log needed for normal operation
         return true
     }
 
     // MARK: - Private Helpers
 
     private func findDebugBuild(for app: HelperApp) -> URL? {
+        // First check stable dev builds location
+        let stableDebugPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Developer/Talkie/Debug")
+            .appendingPathComponent(app.appName)
+
+        if FileManager.default.fileExists(atPath: stableDebugPath.path) {
+            return stableDebugPath
+        }
+
+        // Fall back to searching DerivedData
         let derivedDataPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Developer/Xcode/DerivedData")
 

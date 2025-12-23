@@ -7,6 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B75AEA86D01A435FA9CEB7EB /* TalkieLiveClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF01B4EAE506460993AB3BE3 /* TalkieLiveClient.swift */; };
+		40E5E572AAFF44DABF8279D2 /* AppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C22484FEE3479983B30FE5 /* AppIntents.swift */; };
+		538FB3BA811E44CBAEE85D00 /* DesignToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB8C0D45C5042ED8B679B7D /* DesignToolbar.swift */; };
+		36372D4076AE4B47854477D4 /* DesignHomePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63262F63CFB948DF977E4FC3 /* DesignHomePage.swift */; };
+		69B2590D49284411AB39C6CD /* ComponentLibraryPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F50CDE00DC84ADD861D811B /* ComponentLibraryPage.swift */; };
+		1CE7491C12E3479497EE7BD1 /* AuditPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFF5912305049DE8890397F /* AuditPage.swift */; };
+		42F24943BA124F4494FBCFF2 /* DesignModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B419661DF64C5198244D55 /* DesignModeManager.swift */; };
+		ECEA596E84064C609F72C090 /* DesignCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD3E356BB1C46E586FBE6B1 /* DesignCanvas.swift */; };
+		36B53A0F60B54995BF4A1550 /* DesignSystemCaseStudy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3A9799A6434DA1A70B8FC1 /* DesignSystemCaseStudy.swift */; };
+		7046DB1D275245359BA003AD /* MemoRowViewV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A990C4C7C3B497B961D20F0 /* MemoRowViewV2.swift */; };
+		D30E909170134889BAD7F5AA /* DesignDebugState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 312EC396FCCD451BA043D854 /* DesignDebugState.swift */; };
+		3A61637F34E149548168BFB5 /* MemoRowExploration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD01E5C17E3B402BABDF729B /* MemoRowExploration.swift */; };
+		E503892EA22A4CB2A8C1F050 /* DesignSystemShowcase.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDE1ECDE9EE46B7A91E16AD /* DesignSystemShowcase.swift */; };
 		02A99E5DBE9D497A8B40800A /* UnifiedDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */; };
 		554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684217B1E2147AEA420E54B /* BuildInfo.swift */; };
 		5F04619116E34992AC571692 /* STTModelCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EBDA091AD54DD09BC8578B /* STTModelCard.swift */; };
@@ -206,6 +219,19 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CF01B4EAE506460993AB3BE3 /* TalkieLiveClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieLiveClient.swift; sourceTree = "<group>"; };
+		02C22484FEE3479983B30FE5 /* AppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntents.swift; sourceTree = "<group>"; };
+		1FB8C0D45C5042ED8B679B7D /* DesignToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignToolbar.swift; sourceTree = "<group>"; };
+		63262F63CFB948DF977E4FC3 /* DesignHomePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignHomePage.swift; sourceTree = "<group>"; };
+		7F50CDE00DC84ADD861D811B /* ComponentLibraryPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentLibraryPage.swift; sourceTree = "<group>"; };
+		8DFF5912305049DE8890397F /* AuditPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditPage.swift; sourceTree = "<group>"; };
+		87B419661DF64C5198244D55 /* DesignModeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignModeManager.swift; sourceTree = "<group>"; };
+		EFD3E356BB1C46E586FBE6B1 /* DesignCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignCanvas.swift; sourceTree = "<group>"; };
+		1B3A9799A6434DA1A70B8FC1 /* DesignSystemCaseStudy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystemCaseStudy.swift; sourceTree = "<group>"; };
+		3A990C4C7C3B497B961D20F0 /* MemoRowViewV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoRowViewV2.swift; sourceTree = "<group>"; };
+		312EC396FCCD451BA043D854 /* DesignDebugState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignDebugState.swift; sourceTree = "<group>"; };
+		DD01E5C17E3B402BABDF729B /* MemoRowExploration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoRowExploration.swift; sourceTree = "<group>"; };
+		DEDE1ECDE9EE46B7A91E16AD /* DesignSystemShowcase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystemShowcase.swift; sourceTree = "<group>"; };
 		B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedDashboard.swift; sourceTree = "<group>"; };
 		0684217B1E2147AEA420E54B /* BuildInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.swift; sourceTree = "<group>"; };
 		30EBDA091AD54DD09BC8578B /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
@@ -419,6 +445,25 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		7B3172A97B5247F8AEA90341 /* DesignPages */ = {
+			isa = PBXGroup;
+			children = (
+				63262F63CFB948DF977E4FC3 /* DesignHomePage.swift */,
+				7F50CDE00DC84ADD861D811B /* ComponentLibraryPage.swift */,
+				8DFF5912305049DE8890397F /* AuditPage.swift */,
+			);
+			path = DesignPages;
+			sourceTree = "<group>";
+		};
+		338FB2EC3893403C9833F476 /* Debug */ = {
+			isa = PBXGroup;
+			children = (
+				DD01E5C17E3B402BABDF729B /* MemoRowExploration.swift */,
+				DEDE1ECDE9EE46B7A91E16AD /* DesignSystemShowcase.swift */,
+			);
+			path = Debug;
+			sourceTree = "<group>";
+		};
 		00C4A81C9F724B75B40F8ED3 /* MemoDetail */ = {
 			isa = PBXGroup;
 			children = (
@@ -518,6 +563,7 @@
 		53A7622465701BF0425306D5 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				02C22484FEE3479983B30FE5 /* AppIntents.swift */,
 				0684217B1E2147AEA420E54B /* BuildInfo.swift */,
 				C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */,
 				41CBA070F3919E79B1D5E26F /* DataLayerIntegration.swift */,
@@ -536,6 +582,8 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				3A990C4C7C3B497B961D20F0 /* MemoRowViewV2.swift */,
+				338FB2EC3893403C9833F476 /* Debug */,
 				B28FEE08E41D44699D5E5F51 /* UnifiedDashboard.swift */,
 				53D9EC812EF9D96F00DC8EC9 /* Shared */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
@@ -817,6 +865,12 @@
 		CF255B7C16461CF1674389DB /* Debug */ = {
 			isa = PBXGroup;
 			children = (
+				1FB8C0D45C5042ED8B679B7D /* DesignToolbar.swift */,
+				7B3172A97B5247F8AEA90341 /* DesignPages */,
+				87B419661DF64C5198244D55 /* DesignModeManager.swift */,
+				EFD3E356BB1C46E586FBE6B1 /* DesignCanvas.swift */,
+				1B3A9799A6434DA1A70B8FC1 /* DesignSystemCaseStudy.swift */,
+				312EC396FCCD451BA043D854 /* DesignDebugState.swift */,
 				53D9EC6C2EF9D8BD00DC8EC9 /* DesignAuditor.swift */,
 				53D9EC6D2EF9D8BD00DC8EC9 /* SettingsStoryboardGenerator.swift */,
 				E0CEC1D425A68FF0A280F2CE /* DebugCommandHandler.swift */,
@@ -853,6 +907,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				CF01B4EAE506460993AB3BE3 /* TalkieLiveClient.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
 				96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */,
 				CC6A6916FC176D4E84E1D897 /* AppLauncher.swift */,
@@ -986,6 +1041,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B75AEA86D01A435FA9CEB7EB /* TalkieLiveClient.swift in Sources */,
+				40E5E572AAFF44DABF8279D2 /* AppIntents.swift in Sources */,
+				538FB3BA811E44CBAEE85D00 /* DesignToolbar.swift in Sources */,
+				36372D4076AE4B47854477D4 /* DesignHomePage.swift in Sources */,
+				69B2590D49284411AB39C6CD /* ComponentLibraryPage.swift in Sources */,
+				1CE7491C12E3479497EE7BD1 /* AuditPage.swift in Sources */,
+				42F24943BA124F4494FBCFF2 /* DesignModeManager.swift in Sources */,
+				ECEA596E84064C609F72C090 /* DesignCanvas.swift in Sources */,
+				36B53A0F60B54995BF4A1550 /* DesignSystemCaseStudy.swift in Sources */,
+				7046DB1D275245359BA003AD /* MemoRowViewV2.swift in Sources */,
+				D30E909170134889BAD7F5AA /* DesignDebugState.swift in Sources */,
+				3A61637F34E149548168BFB5 /* MemoRowExploration.swift in Sources */,
+				E503892EA22A4CB2A8C1F050 /* DesignSystemShowcase.swift in Sources */,
 				02A99E5DBE9D497A8B40800A /* UnifiedDashboard.swift in Sources */,
 				554AF335B43B4D45915EE364 /* BuildInfo.swift in Sources */,
 				5F04619116E34992AC571692 /* STTModelCard.swift in Sources */,

@@ -206,35 +206,9 @@ struct PersistenceController {
         return "mac-" + (Host.current().localizedName ?? UUID().uuidString)
     }
 
+    /// Preview just uses real data - no synthetic garbage
     @MainActor
-    static let preview: PersistenceController = {
-        let result = PersistenceController(inMemory: true)
-        let viewContext = result.container.viewContext
-
-        // Create sample voice memos for preview
-        for i in 0..<5 {
-            let memo = VoiceMemo(context: viewContext)
-            memo.id = UUID()
-            memo.title = "Sample Recording \(i + 1)"
-            memo.createdAt = Date().addingTimeInterval(-Double(i * 3600))
-            memo.duration = Double.random(in: 30...180)
-            memo.fileURL = "sample_\(i).m4a"
-            memo.sortOrder = Int32(-Date().addingTimeInterval(-Double(i * 3600)).timeIntervalSince1970)
-
-            if i % 2 == 0 {
-                memo.transcription = "This is a sample transcription for recording \(i + 1)."
-            }
-        }
-
-        do {
-            try viewContext.save()
-        } catch {
-            let nsError = error as NSError
-            logger.error("Failed to save preview context: \(nsError.localizedDescription)")
-            // Continue with empty preview data rather than crashing
-        }
-        return result
-    }()
+    static var preview: PersistenceController { shared }
 
     let container: NSPersistentCloudKitContainer
 
@@ -244,8 +218,13 @@ struct PersistenceController {
         logger.info("Initializing PersistenceController (token-based sync)...")
 
         if inMemory {
-            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
-            logger.info("Using in-memory store")
+            // CRITICAL: Disable CloudKit for in-memory/preview stores!
+            // Without this, preview data can leak to CloudKit.
+            if let description = container.persistentStoreDescriptions.first {
+                description.url = URL(fileURLWithPath: "/dev/null")
+                description.cloudKitContainerOptions = nil  // Explicitly disable CloudKit sync
+            }
+            logger.info("Using in-memory store (CloudKit disabled)")
         } else {
             // Configure CloudKit sync - MUST enable history tracking for proper sync!
             // NSPersistentCloudKitContainer requires these options to function correctly.
