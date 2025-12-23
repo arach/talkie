@@ -1,0 +1,108 @@
+{
+  "slug": "learning-capture",
+  "name": "Learning Capture",
+  "description": "Voice notes while reading or learning → Obsidian with auto-tags and backlinks",
+  "icon": "book.pages",
+  "color": "indigo",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "extract-concepts",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "balanced",
+          "prompt": "Analyze this learning note and extract:\n\n{{TRANSCRIPT}}\n\nReturn JSON:\n{\n  \"mainTopic\": \"primary subject being learned\",\n  \"concepts\": [\"concept1\", \"concept2\"],\n  \"keyInsight\": \"the core insight or aha moment\",\n  \"relatedTopics\": [\"related1\", \"related2\"],\n  \"questions\": [\"questions raised or to explore\"],\n  \"source\": \"book/video/article name if mentioned, else null\"\n}",
+          "systemPrompt": "You help organize learning notes. Extract concepts precisely - these become Obsidian links. Keep insights concise but preserve the aha moment.",
+          "temperature": 0.3,
+          "maxTokens": 1024
+        }
+      }
+    },
+    {
+      "id": "parse-json",
+      "type": "Transform Data",
+      "config": {
+        "transform": {
+          "operation": "Extract JSON",
+          "parameters": {
+            "fallback": "{\"mainTopic\": \"Learning Note\", \"concepts\": [], \"keyInsight\": \"\", \"relatedTopics\": [], \"questions\": []}"
+          }
+        }
+      }
+    },
+    {
+      "id": "format-note",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "budget",
+          "prompt": "Format this as an Obsidian note with wiki-style backlinks:\n\nMain Topic: {{parse-json.mainTopic}}\nConcepts: {{parse-json.concepts}}\nKey Insight: {{parse-json.keyInsight}}\nRelated: {{parse-json.relatedTopics}}\nQuestions: {{parse-json.questions}}\nSource: {{parse-json.source}}\n\nOriginal transcript:\n{{TRANSCRIPT}}\n\nRules:\n- Use [[Concept Name]] for all concepts and related topics\n- Add a ## Key Insight section with the core aha moment\n- Add ## Questions section if there are open questions\n- Add ## Raw Notes with a cleaned-up version of the transcript\n- Keep it scannable - use bullets not paragraphs\n- If source mentioned, add ## Source with link placeholder",
+          "temperature": 0.3,
+          "maxTokens": 2048
+        }
+      }
+    },
+    {
+      "id": "generate-tags",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "budget",
+          "prompt": "Generate 3-5 Obsidian tags for this learning note:\n\nTopic: {{parse-json.mainTopic}}\nConcepts: {{parse-json.concepts}}\n\nReturn ONLY a comma-separated list of lowercase tags without # symbol.\nExample: swift, concurrency, ios-development, async-await",
+          "temperature": 0.2,
+          "maxTokens": 100
+        }
+      }
+    },
+    {
+      "id": "save-note",
+      "type": "Save to File",
+      "config": {
+        "saveFile": {
+          "filename": "{{DATE}}-{{parse-json.mainTopic}}.md",
+          "directory": "@Obsidian/Learning",
+          "content": "---\ncreated: {{DATE}}\ntags: [{{generate-tags}}, learning]\ntopic: \"{{parse-json.mainTopic}}\"\n---\n\n# {{parse-json.mainTopic}}\n\n{{format-note}}",
+          "appendIfExists": false
+        }
+      }
+    },
+    {
+      "id": "check-questions",
+      "type": "Conditional Branch",
+      "config": {
+        "conditional": {
+          "condition": "{{parse-json.questions.length}} > 0",
+          "thenSteps": ["create-review-reminder"],
+          "elseSteps": []
+        }
+      }
+    },
+    {
+      "id": "create-review-reminder",
+      "type": "Create Reminder",
+      "config": {
+        "appleReminders": {
+          "listName": "Learning",
+          "title": "Review: {{parse-json.mainTopic}}",
+          "notes": "Questions to explore:\n{{parse-json.questions}}\n\nNote: @Obsidian/Learning/{{DATE}}-{{parse-json.mainTopic}}.md",
+          "dueDate": "{{NOW+3d}}",
+          "priority": 9
+        }
+      }
+    },
+    {
+      "id": "notify",
+      "type": "Send Notification",
+      "config": {
+        "notification": {
+          "title": "Learning captured",
+          "body": "{{parse-json.mainTopic}} → Obsidian",
+          "sound": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+{
+  "id": "00000000-TEST-FLOW-0000-000000000001",
+  "name": "Brain Dump Processor",
+  "description": "Capture freeform brainstorms, extract ideas, create next actions, and save to your idea garden",
+  "icon": "brain.head.profile",
+  "color": "purple",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "STEP-0001-0000-0000-000000000001",
+      "type": "Transcribe Audio",
+      "outputKey": "transcript",
+      "isEnabled": true,
+      "config": {
+        "transcribe": {
+          "model": "openai_whisper-small",
+          "overwriteExisting": false,
+          "saveAsVersion": true
+        }
+      }
+    },
+    {
+      "id": "STEP-0002-0000-0000-000000000002",
+      "type": "LLM Generation",
+      "outputKey": "extracted",
+      "isEnabled": true,
+      "config": {
+        "llm": {
+          "provider": "gemini",
+          "modelId": "gemini-2.0-flash",
+          "prompt": "You are a personal thinking partner. Analyze this voice brainstorm and extract the distinct ideas.\n\nTranscript:\n{{transcript}}\n\nFor each idea found, categorize it as: project, someday, reference, or actionable.\n\nReturn as JSON:\n{\n  \"ideas\": [{\"title\": \"short title\", \"description\": \"1-2 sentences\", \"category\": \"project|someday|reference|actionable\"}],\n  \"nextActions\": [\"specific next step to take\"],\n  \"connections\": \"any interesting connections between ideas\"\n}",
+          "systemPrompt": "You help people capture and organize their creative thinking. Be concise but insightful.",
+          "temperature": 0.5,
+          "maxTokens": 2048,
+          "topP": 0.9
+        }
+      }
+    },
+    {
+      "id": "STEP-0003-0000-0000-000000000003",
+      "type": "Transform Data",
+      "outputKey": "parsed",
+      "isEnabled": true,
+      "config": {
+        "transform": {
+          "operation": "Extract JSON",
+          "parameters": {
+            "path": "$",
+            "fallback": "{\"ideas\": [], \"nextActions\": []}"
+          }
+        }
+      }
+    },
+    {
+      "id": "STEP-0004-0000-0000-000000000004",
+      "type": "Conditional Branch",
+      "outputKey": "hasActions",
+      "isEnabled": true,
+      "config": {
+        "conditional": {
+          "condition": "{{parsed.nextActions.length}} > 0",
+          "thenSteps": ["STEP-0005-0000-0000-000000000005"],
+          "elseSteps": []
+        }
+      }
+    },
+    {
+      "id": "STEP-0005-0000-0000-000000000005",
+      "type": "Create Reminder",
+      "outputKey": "reminder",
+      "isEnabled": true,
+      "config": {
+        "appleReminders": {
+          "listName": "Inbox",
+          "title": "{{parsed.nextActions[0]}}",
+          "notes": "From brainstorm: {{TITLE}}\n\nRelated ideas: {{parsed.ideas[0].title}}",
+          "dueDate": "{{NOW+1d}}",
+          "priority": 5
+        }
+      }
+    },
+    {
+      "id": "STEP-0006-0000-0000-000000000006",
+      "type": "Run Shell Command",
+      "outputKey": "formattedIdeas",
+      "isEnabled": true,
+      "config": {
+        "shell": {
+          "executable": "/opt/homebrew/bin/jq",
+          "arguments": ["-r", ".ideas | map(\"- **\" + .title + \"** (\" + .category + \"): \" + .description) | join(\"\\n\")"],
+          "stdin": "{{extracted}}",
+          "timeout": 10,
+          "environment": {},
+          "captureStderr": true
+        }
+      }
+    },
+    {
+      "id": "STEP-0007-0000-0000-000000000007",
+      "type": "LLM Generation",
+      "outputKey": "polished",
+      "isEnabled": true,
+      "config": {
+        "llm": {
+          "provider": "gemini",
+          "modelId": "gemini-2.0-flash",
+          "prompt": "Format this into a clean markdown note for my idea garden:\n\nIdeas:\n{{formattedIdeas}}\n\nConnections:\n{{parsed.connections}}\n\nNext Actions:\n{{parsed.nextActions}}\n\nCreate a brief, scannable note with emoji headers. Keep it concise.",
+          "temperature": 0.3,
+          "maxTokens": 1024,
+          "topP": 0.9
+        }
+      }
+    },
+    {
+      "id": "STEP-0008-0000-0000-000000000008",
+      "type": "LLM Generation",
+      "outputKey": "research",
+      "isEnabled": true,
+      "config": {
+        "llm": {
+          "provider": "openai",
+          "modelId": "gpt-5.1",
+          "prompt": "Based on these brainstormed ideas, suggest:\n1. Related concepts worth exploring\n2. Potential connections to other fields\n3. One actionable experiment to test the most promising idea\n\nIdeas:\n{{parsed.ideas}}\n\nBe concise and practical. Focus on sparking further thinking.",
+          "systemPrompt": "You are a creative thinking partner who helps expand ideas with cross-disciplinary insights.",
+          "temperature": 0.7,
+          "maxTokens": 1024,
+          "topP": 0.9
+        }
+      }
+    },
+    {
+      "id": "STEP-0009-0000-0000-000000000009",
+      "type": "Save to File",
+      "outputKey": "savedFile",
+      "isEnabled": true,
+      "config": {
+        "saveFile": {
+          "filename": "{{DATE}}-{{TITLE}}.md",
+          "directory": "@Obsidian/Ideas",
+          "content": "---\ncreated: {{DATE}}\ntags: [braindump, ideas]\n---\n\n# {{TITLE}}\n\n{{polished}}\n\n## 🔬 Research Notes\n{{research}}\n\n---\n*Captured via Talkie*",
+          "appendIfExists": false
+        }
+      }
+    },
+    {
+      "id": "STEP-0010-0000-0000-000000000010",
+      "type": "Notify iPhone",
+      "outputKey": "notified",
+      "isEnabled": true,
+      "config": {
+        "iOSPush": {
+          "title": "💡 Ideas Captured",
+          "body": "{{parsed.ideas.length}} ideas saved to your garden",
+          "sound": true,
+          "includeOutput": false
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "slug": "key-insights",
+  "name": "Key Insights",
+  "description": "Extract 3-5 key takeaways",
+  "icon": "lightbulb",
+  "color": "yellow",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "extract-insights",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "provider": "gemini",
+          "modelId": "gemini-2.0-flash",
+          "prompt": "You are an insight analyst. Extract 3-5 key takeaways from the following voice memo transcript. Format as a JSON array of strings.\n\nTranscript:\n{{TRANSCRIPT}}\n\nReturn ONLY valid JSON in this format:\n[\"Insight 1\", \"Insight 2\", \"Insight 3\"]",
+          "temperature": 0.5,
+          "maxTokens": 1024
+        }
+      }
+    }
+  ]
+}
