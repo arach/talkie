@@ -43,16 +43,67 @@ struct DesignHomeView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("Design System")
-                .font(Theme.current.fontDisplay)
-                .foregroundColor(Theme.current.foreground)
+        ZStack {
+            // Gradient background
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    TalkieTheme.accent.opacity(0.15),
+                    TalkieTheme.accent.opacity(0.05)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .cornerRadius(CornerRadius.lg)
 
-            Text("Self-documenting reference for Talkie's design tokens")
-                .font(Theme.current.fontBody)
-                .foregroundColor(Theme.current.foregroundSecondary)
+            // Content
+            HStack(spacing: Spacing.lg) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(TalkieTheme.accent.opacity(0.2))
+                        .frame(width: 80, height: 80)
+
+                    Image(systemName: "paintbrush.pointed.fill")
+                        .font(.system(size: 36))
+                        .foregroundColor(TalkieTheme.accent)
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Design System")
+                        .font(Theme.current.fontDisplay)
+                        .foregroundColor(Theme.current.foreground)
+
+                    Text("Self-documenting reference for Talkie's design tokens")
+                        .font(Theme.current.fontBody)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    // Metadata badges
+                    HStack(spacing: Spacing.xs) {
+                        badge(icon: "ruler", text: "8pt Grid")
+                        badge(icon: "textformat", text: "6 Type Categories")
+                        badge(icon: "paintpalette", text: "Semantic Colors")
+                    }
+                    .padding(.top, Spacing.xs)
+                }
+
+                Spacer()
+            }
+            .padding(Spacing.xl)
         }
-        .padding(.bottom, Spacing.md)
+    }
+
+    private func badge(icon: String, text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+            Text(text)
+                .font(Theme.current.fontXS)
+        }
+        .foregroundColor(TalkieTheme.accent)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(TalkieTheme.accent.opacity(0.15))
+        .cornerRadius(CornerRadius.sm)
     }
 
     // MARK: - Spacing Section
