@@ -147,9 +147,6 @@ struct AllMemos: View {
                 .cornerRadius(CornerRadius.sm)
 
                 Spacer()
-
-                // Sort controls
-                sortControls
             }
             .padding(Spacing.md)
 
@@ -304,43 +301,114 @@ struct AllMemos: View {
     // MARK: - Memos Table
 
     private var memosTable: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(viewModel.memos) { memo in
-                        MemoRowEnhanced(
-                            memo: memo,
-                            isSelected: selectedMemoIDs.contains(memo.id),
-                            isMultiSelected: selectedMemoIDs.count > 1,
-                            onSelect: { event in
-                                handleSelection(memo: memo, event: event)
-                            }
-                        )
-                        .id(memo.id)
-                        .onAppear {
-                            // Load more when approaching end
-                            if memo.id == viewModel.memos.last?.id {
-                                Task {
-                                    await viewModel.loadNextPage()
+        VStack(spacing: 0) {
+            tableHeader
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(viewModel.memos) { memo in
+                            MemoRowEnhanced(
+                                memo: memo,
+                                isSelected: selectedMemoIDs.contains(memo.id),
+                                isMultiSelected: selectedMemoIDs.count > 1,
+                                onSelect: { event in
+                                    handleSelection(memo: memo, event: event)
+                                }
+                            )
+                            .id(memo.id)
+                            .onAppear {
+                                // Load more when approaching end
+                                if memo.id == viewModel.memos.last?.id {
+                                    Task {
+                                        await viewModel.loadNextPage()
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    // Loading indicator for pagination
-                    if viewModel.isLoading && !viewModel.memos.isEmpty {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                            Text("Loading more...")
-                                .font(.system(size: 11))
-                                .foregroundColor(TalkieTheme.textMuted)
+                        // Loading indicator for pagination
+                        if viewModel.isLoading && !viewModel.memos.isEmpty {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                Text("Loading more...")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(TalkieTheme.textMuted)
+                            }
+                            .padding(.vertical, Spacing.md)
                         }
-                        .padding(.vertical, Spacing.md)
                     }
                 }
             }
         }
+    }
+
+    private var tableHeader: some View {
+        HStack(spacing: 0) {
+            // Checkbox column spacer
+            Color.clear.frame(width: 28)
+
+            // Title
+            Button {
+                Task { await viewModel.changeSortField(.title) }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Title")
+                        .font(.system(size: 11, weight: .semibold))
+                    if viewModel.sortField == .title {
+                        Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundColor(viewModel.sortField == .title ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Duration
+            Button {
+                Task { await viewModel.changeSortField(.duration) }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Duration")
+                        .font(.system(size: 11, weight: .semibold))
+                    if viewModel.sortField == .duration {
+                        Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundColor(viewModel.sortField == .duration ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
+            }
+            .buttonStyle(.plain)
+            .frame(width: 56, alignment: .trailing)
+
+            // Date
+            Button {
+                Task { await viewModel.changeSortField(.timestamp) }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Date")
+                        .font(.system(size: 11, weight: .semibold))
+                    if viewModel.sortField == .timestamp {
+                        Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundColor(viewModel.sortField == .timestamp ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
+            }
+            .buttonStyle(.plain)
+            .frame(width: 80, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(TalkieTheme.surfaceElevated)
+        .overlay(
+            Rectangle()
+                .fill(TalkieTheme.border)
+                .frame(height: 1),
+            alignment: .bottom
+        )
     }
 
     // MARK: - Empty/Loading States
@@ -555,7 +623,7 @@ struct MemoRowEnhanced: View {
             Text(formatDuration(memo.duration))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(TalkieTheme.textMuted)
-                .frame(width: 44, alignment: .trailing)
+                .frame(width: 56, alignment: .trailing)
 
             // Date (plain text, right-aligned)
             Text(RelativeTimeFormatter.format(memo.createdAt))
