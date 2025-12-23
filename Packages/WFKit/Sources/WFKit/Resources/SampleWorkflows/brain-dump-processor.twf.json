@@ -1,0 +1,142 @@
+{
+  "slug": "brain-dump-processor",
+  "name": "Brain Dump Processor",
+  "description": "Capture freeform brainstorms, extract ideas, create next actions, and save to your idea garden",
+  "icon": "brain.head.profile",
+  "color": "purple",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "transcribe",
+      "type": "Transcribe Audio",
+      "config": {
+        "transcribe": {
+          "model": "openai_whisper-small",
+          "overwriteExisting": false,
+          "saveAsVersion": true
+        }
+      }
+    },
+    {
+      "id": "extract-ideas",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "provider": "gemini",
+          "modelId": "gemini-2.0-flash",
+          "prompt": "You are a personal thinking partner. Analyze this voice brainstorm and extract the distinct ideas.\n\nTranscript:\n{{transcribe}}\n\nFor each idea found, categorize it as: project, someday, reference, or actionable.\n\nReturn as JSON:\n{\n  \"ideas\": [{\"title\": \"short title\", \"description\": \"1-2 sentences\", \"category\": \"project|someday|reference|actionable\"}],\n  \"nextActions\": [\"specific next step to take\"],\n  \"connections\": \"any interesting connections between ideas\"\n}",
+          "systemPrompt": "You help people capture and organize their creative thinking. Be concise but insightful.",
+          "temperature": 0.5,
+          "maxTokens": 2048,
+          "topP": 0.9
+        }
+      }
+    },
+    {
+      "id": "parse-json",
+      "type": "Transform Data",
+      "config": {
+        "transform": {
+          "operation": "Extract JSON",
+          "parameters": {
+            "path": "$",
+            "fallback": "{\"ideas\": [], \"nextActions\": []}"
+          }
+        }
+      }
+    },
+    {
+      "id": "check-actions",
+      "type": "Conditional Branch",
+      "config": {
+        "conditional": {
+          "condition": "{{parse-json.nextActions.length}} > 0",
+          "thenSteps": ["create-reminder"],
+          "elseSteps": []
+        }
+      }
+    },
+    {
+      "id": "create-reminder",
+      "type": "Create Reminder",
+      "config": {
+        "appleReminders": {
+          "listName": "Inbox",
+          "title": "{{parse-json.nextActions[0]}}",
+          "notes": "From brainstorm: {{TITLE}}\n\nRelated ideas: {{parse-json.ideas[0].title}}",
+          "dueDate": "{{NOW+1d}}",
+          "priority": 5
+        }
+      }
+    },
+    {
+      "id": "format-ideas",
+      "type": "Run Shell Command",
+      "config": {
+        "shell": {
+          "executable": "/opt/homebrew/bin/jq",
+          "arguments": ["-r", ".ideas | map(\"- **\" + .title + \"** (\" + .category + \"): \" + .description) | join(\"\\n\")"],
+          "stdin": "{{extract-ideas}}",
+          "timeout": 10,
+          "environment": {},
+          "captureStderr": true
+        }
+      }
+    },
+    {
+      "id": "polish-output",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "provider": "gemini",
+          "modelId": "gemini-2.0-flash",
+          "prompt": "Format this into a clean markdown note for my idea garden:\n\nIdeas:\n{{format-ideas}}\n\nConnections:\n{{parse-json.connections}}\n\nNext Actions:\n{{parse-json.nextActions}}\n\nCreate a brief, scannable note with emoji headers. Keep it concise.",
+          "temperature": 0.3,
+          "maxTokens": 1024,
+          "topP": 0.9
+        }
+      }
+    },
+    {
+      "id": "expand-research",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "provider": "openai",
+          "modelId": "gpt-4o",
+          "prompt": "Based on these brainstormed ideas, suggest:\n1. Related concepts worth exploring\n2. Potential connections to other fields\n3. One actionable experiment to test the most promising idea\n\nIdeas:\n{{parse-json.ideas}}\n\nBe concise and practical. Focus on sparking further thinking.",
+          "systemPrompt": "You are a creative thinking partner who helps expand ideas with cross-disciplinary insights.",
+          "temperature": 0.7,
+          "maxTokens": 1024,
+          "topP": 0.9
+        }
+      }
+    },
+    {
+      "id": "save-note",
+      "type": "Save to File",
+      "config": {
+        "saveFile": {
+          "filename": "{{DATE}}-{{TITLE}}.md",
+          "directory": "@Obsidian/Ideas",
+          "content": "---\ncreated: {{DATE}}\ntags: [braindump, ideas]\n---\n\n# {{TITLE}}\n\n{{polish-output}}\n\n## Research Notes\n{{expand-research}}\n\n---\n*Captured via Talkie*",
+          "appendIfExists": false
+        }
+      }
+    },
+    {
+      "id": "notify",
+      "type": "Notify iPhone",
+      "config": {
+        "iOSPush": {
+          "title": "Ideas Captured",
+          "body": "{{parse-json.ideas.length}} ideas saved to your garden",
+          "sound": true,
+          "includeOutput": false
+        }
+      }
+    }
+  ]
+}
