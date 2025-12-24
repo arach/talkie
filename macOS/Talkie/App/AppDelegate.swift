@@ -369,8 +369,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // Capture screenshots at all three sizes
             var screenshotPaths: [String] = []
             if screen.section == .settings, let settingsPage = screen.settingsPage {
-                let results = await SettingsStoryboardGenerator.shared.capturePageAllSizes(settingsPage, to: screenshotDir)
-                screenshotPaths = results.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.key.rawValue): \($0.value.lastPathComponent)" }
+                // Capture each size separately to avoid window reuse issues
+                for size in WindowSize.allCases {
+                    if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, size: size, to: screenshotDir) {
+                        screenshotPaths.append("\(size.rawValue): \(url.lastPathComponent)")
+                    }
+                }
             } else {
                 print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
             }
