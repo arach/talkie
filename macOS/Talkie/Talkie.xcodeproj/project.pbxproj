@@ -1517,7 +1517,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.7.0;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -1603,7 +1603,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.7.0;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -1689,7 +1689,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.7.0;
 				SDKROOT = macosx;
 			};
 			name = Staging;
