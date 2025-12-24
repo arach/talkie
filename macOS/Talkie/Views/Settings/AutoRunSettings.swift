@@ -131,7 +131,7 @@ struct AutoRunSettingsView: View {
                         VStack(alignment: .leading, spacing: Spacing.sm) {
                             HStack(spacing: Spacing.sm) {
                                 Image(systemName: "waveform.badge.mic")
-                                    .font(.system(size: 18))
+                                    .font(Theme.current.fontHeadline)
                                     .foregroundColor(.purple)
                                     .frame(width: 32, height: 32)
                                     .background(Color.purple.opacity(Opacity.medium))
@@ -151,8 +151,8 @@ struct AutoRunSettingsView: View {
                                     .font(.techLabelSmall)
                                     .padding(.horizontal, Spacing.sm)
                                     .padding(.vertical, Spacing.xs)
-                                    .background(Color.green.opacity(Opacity.medium))
-                                    .foregroundColor(.green)
+                                    .background(SemanticColor.success.opacity(Opacity.medium))
+                                    .foregroundColor(SemanticColor.success)
                                     .cornerRadius(CornerRadius.xs)
                             }
                             .padding(Spacing.sm)
@@ -283,7 +283,7 @@ struct AutoRunWorkflowRow: View {
                 if let moveUp = onMoveUp {
                     Button(action: moveUp) {
                         Image(systemName: "chevron.up")
-                            .font(.system(size: 8))
+                            .font(Theme.current.fontXS)
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(Theme.current.foregroundSecondary)
@@ -291,7 +291,7 @@ struct AutoRunWorkflowRow: View {
                 if let moveDown = onMoveDown {
                     Button(action: moveDown) {
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 8))
+                            .font(Theme.current.fontXS)
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(Theme.current.foregroundSecondary)
@@ -301,7 +301,7 @@ struct AutoRunWorkflowRow: View {
 
             // Workflow icon
             Image(systemName: workflow.icon)
-                .font(.system(size: 14))
+                .font(Theme.current.fontMD)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 28, height: 28)
                 .background(workflow.color.color.opacity(Opacity.medium))
@@ -325,8 +325,8 @@ struct AutoRunWorkflowRow: View {
                     .font(.techLabelSmall)
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
-                    .background(Color.green.opacity(Opacity.medium))
-                    .foregroundColor(.green)
+                    .background(SemanticColor.success.opacity(Opacity.medium))
+                    .foregroundColor(SemanticColor.success)
                     .cornerRadius(CornerRadius.xs)
             } else {
                 Text("DISABLED")
@@ -341,7 +341,7 @@ struct AutoRunWorkflowRow: View {
             // Remove button
             Button(action: onDisable) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
+                    .font(Theme.current.fontMD)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
             .buttonStyle(.plain)

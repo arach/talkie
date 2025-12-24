@@ -75,7 +75,7 @@ struct AppearanceSettingsView: View {
                                     }
                                 }
                                 .padding(.horizontal, Spacing.xs)
-                                .padding(.vertical, 3)
+                                .padding(.vertical, Spacing.xxs)
                                 .background(item == "All Memos" ? Color.accentColor.opacity(Opacity.medium) : Color.clear)
                                 .cornerRadius(CornerRadius.xs)
                             }
@@ -131,7 +131,7 @@ struct AppearanceSettingsView: View {
                                             .frame(width: 40, alignment: .trailing)
                                     }
                                     .padding(.horizontal, Spacing.sm)
-                                    .padding(.vertical, 3)
+                                    .padding(.vertical, Spacing.xxs)
                                     .background(i == 0 ? Color.accentColor.opacity(Opacity.medium) : Color.clear)
                                 }
                             }
@@ -161,7 +161,7 @@ struct AppearanceSettingsView: View {
                                         .foregroundColor(isThemeActive(preset) ? Theme.current.foreground : Theme.current.foregroundSecondary)
                                 }
                                 .padding(.horizontal, Spacing.sm)
-                                .padding(.vertical, 5)
+                                .padding(.vertical, Spacing.xs)
                                 .background(isThemeActive(preset) ? Color.accentColor.opacity(Opacity.medium) : Theme.current.backgroundTertiary)
                                 .cornerRadius(CornerRadius.xs)
                                 .overlay(
@@ -296,7 +296,7 @@ struct AppearanceSettingsView: View {
                                     Text("UI Chrome")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                                     HStack(spacing: Spacing.sm) {
                                         // UI Font
@@ -359,7 +359,7 @@ struct AppearanceSettingsView: View {
                                     Text("Content")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                                     HStack(spacing: Spacing.sm) {
                                         // Content Font
@@ -409,7 +409,7 @@ struct AppearanceSettingsView: View {
                                 Text("UI Chrome")
                                     .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
-                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                                 HStack(spacing: Spacing.sm) {
                                     // UI Font
@@ -471,7 +471,7 @@ struct AppearanceSettingsView: View {
                                 Text("Content")
                                     .font(Theme.current.fontXSBold)
                                     .textCase(SettingsManager.shared.uiTextCase)
-                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                                 HStack(spacing: Spacing.sm) {
                                     // Content Font
@@ -526,7 +526,7 @@ struct AppearanceSettingsView: View {
                                     Text("UI Chrome")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                                     Text(settingsManager.uiAllCaps ? "MEMOS · ACTIONS · 12:34 PM" : "Memos · Actions · 12:34 PM")
                                         .font(settingsManager.themedFont(baseSize: 12))
                                         .foregroundColor(Theme.current.foreground)
@@ -539,7 +539,7 @@ struct AppearanceSettingsView: View {
                                     Text("Content")
                                         .font(Theme.current.fontXSBold)
                                         .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                                     Text("The quick brown fox jumps over the lazy dog. This is how your transcripts and notes will appear.")
                                         .font(settingsManager.contentFont(baseSize: 13))
                                         .foregroundColor(Theme.current.foreground)
@@ -709,7 +709,7 @@ struct FontSizeButton: View {
                     .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
             }
             .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, 5)
+            .padding(.vertical, Spacing.xs)
             .background(isSelected ? Color.accentColor.opacity(Opacity.medium) : Theme.current.surface1)
             .cornerRadius(CornerRadius.xs)
             .overlay(
@@ -767,7 +767,7 @@ struct ThemePresetCard: View {
                         if isActive {
                             Text("ACTIVE")
                                 .font(Theme.current.fontXSBold)
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.current.foreground)
                                 .padding(.horizontal, Spacing.xs)
                                 .padding(.vertical, 1)
                                 .background(Color.accentColor)
