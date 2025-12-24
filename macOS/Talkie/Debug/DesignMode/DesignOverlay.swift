@@ -2,8 +2,13 @@
 //  DesignOverlay.swift
 //  Talkie macOS
 //
-//  Global design overlay - Grid and visual decorators
+//  Design Tools overlay - Inspection tools and visual decorators
 //  Appears when Design God Mode is enabled (⌘⇧D)
+//
+//  Pattern aligns with TalkieDebugToolbar for consistency:
+//  - Pages provide designInfo: () -> [String: String] for contextual design data
+//  - Pages provide custom content for page-specific design inspections
+//  - Similar positioning/dismissal interactions as Debug Toolbar
 //
 //  IMPORTANT: This entire file is DEBUG-only. Nothing ships to production.
 //
@@ -13,10 +18,26 @@ import DebugKit
 
 #if DEBUG
 
-struct DesignOverlay: View {
+// MARK: - Design Tools Wrapper (matches TalkieDebugToolbar pattern)
+
+/// Wrapper for Design Tools with page-contextual design information
+/// Usage: DesignToolsOverlay { customContent } designInfo: { ["Spacing": "8pt", ...] }
+struct DesignToolsOverlay<CustomContent: View>: View {
+    let designInfo: () -> [String: String]
+    let customContent: CustomContent
+
     @State private var designMode = DesignModeManager.shared
     @State private var isExpanded = false
     @State private var overlayPosition: DesignOverlayPosition = .bottomTrailing
+
+    /// Initialize with custom content and optional design info
+    init(
+        @ViewBuilder content: @escaping () -> CustomContent,
+        designInfo: @escaping () -> [String: String] = { [:] }
+    ) {
+        self.customContent = content()
+        self.designInfo = designInfo
+    }
 
     var body: some View {
         if designMode.isEnabled {
@@ -78,7 +99,7 @@ struct DesignOverlay: View {
                         Spacer()
                     }
                 }
-                .padding(12)
+                .padding(Spacing.sm)
             }
         }
     }
@@ -264,6 +285,41 @@ struct DesignOverlay: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            // Page Design Context (if provided)
+            let info = designInfo()
+            if !info.isEmpty {
+                Divider()
+                    .background(Color.white.opacity(0.2))
+                    .padding(.vertical, 4)
+
+                Text("PAGE CONTEXT")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(info.keys.sorted(), id: \.self) { key in
+                        HStack(spacing: 4) {
+                            Text(key)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.white.opacity(0.6))
+                            Spacer()
+                            Text(info[key] ?? "-")
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.cyan)
+                        }
+                    }
+                }
+            }
+
+            // Custom page content (if provided)
+            if CustomContent.self != EmptyView.self {
+                Divider()
+                    .background(Color.white.opacity(0.2))
+                    .padding(.vertical, 4)
+
+                customContent
+            }
         }
         .padding(12)
         .background(
@@ -423,6 +479,18 @@ enum DesignOverlayPosition {
         }
     }
 }
+
+// MARK: - Convenience Extensions
+
+extension DesignToolsOverlay where CustomContent == EmptyView {
+    /// Convenience init with no custom content (system-only tools)
+    init() {
+        self.init(content: { EmptyView() }, designInfo: { [:] })
+    }
+}
+
+/// Typealias for consistency with TalkieDebugToolbar pattern
+typealias DesignOverlay = DesignToolsOverlay<EmptyView>
 
 #Preview("Design Overlay") {
     ZStack {
