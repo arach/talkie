@@ -42,7 +42,7 @@ struct QuickOpenSettingsView: View {
                     .background(Theme.current.surface1)
                     .cornerRadius(CornerRadius.sm)
                 } else {
-                    VStack(spacing: 4) {
+                    VStack(spacing: Spacing.xxs) {
                         ForEach(quickOpenService.enabledTargets) { target in
                             QuickOpenTargetRow(
                                 target: target,
@@ -77,7 +77,7 @@ struct QuickOpenSettingsView: View {
                     .background(Theme.current.surface1)
                     .cornerRadius(CornerRadius.sm)
                 } else {
-                    VStack(spacing: 4) {
+                    VStack(spacing: Spacing.xxs) {
                         ForEach(disabledTargets) { target in
                             QuickOpenTargetRow(
                                 target: target,
