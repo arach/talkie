@@ -45,7 +45,7 @@ struct ColorPickerTool: View {
         guard let window = NSApp.keyWindow else { return }
 
         let windowPoint = NSPoint(x: location.x, y: geometry.size.height - location.y)
-        let screenPoint = window.convertPoint(toScreen: NSRect(origin: windowPoint, size: .zero)).origin
+        let screenPoint = window.convertPoint(toScreen: windowPoint)
 
         // Capture pixel color at screen point
         if let color = captureScreenColor(at: screenPoint) {
@@ -154,20 +154,6 @@ private extension NSColor {
         let g = Int(rgb.greenComponent * 255)
         let b = Int(rgb.blueComponent * 255)
         return "\(r), \(g), \(b)"
-    }
-}
-
-// MARK: - Custom Cursor
-
-private extension View {
-    func cursor(_ cursor: NSCursor) -> some View {
-        self.onHover { hovering in
-            if hovering {
-                cursor.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
     }
 }
 

@@ -263,7 +263,7 @@ struct TalkieNavigationView: View {
             } else {
                 // Expanded: ScrollView with sections
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         // Home
                         sidebarButton(
                             section: .home,

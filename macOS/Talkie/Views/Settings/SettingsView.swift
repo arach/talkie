@@ -48,7 +48,7 @@ enum SettingsSection: String, Hashable {
         case "dictation-output", "output": return .dictationOutput
         case "quick-actions", "actions": return .quickActions
         case "quick-open": return .quickOpen
-        case "auto-run", "autorun": return .autoRun
+        case "automations", "auto-run", "autorun": return .automations
         case "ai-providers", "providers", "api": return .aiProviders
         case "transcription", "transcription-models": return .transcriptionModels
         case "llm", "llm-models": return .llmModels
@@ -70,7 +70,7 @@ enum SettingsSection: String, Hashable {
         case .dictationOutput: return "dictation-output"
         case .quickActions: return "quick-actions"
         case .quickOpen: return "quick-open"
-        case .autoRun: return "auto-run"
+        case .automations: return "automations"
         case .aiProviders: return "ai-providers"
         case .transcriptionModels: return "transcription"
         case .llmModels: return "llm"
@@ -102,7 +102,7 @@ struct SettingsView: View {
     private var contentBackground: Color { Theme.current.background }
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: Spacing.xxs) {
             // MARK: - Sidebar
             VStack(spacing: 0) {
                 // Settings Header - with breathing room at top
@@ -110,13 +110,13 @@ struct SettingsView: View {
                     .font(.system(size: 10, weight: .bold, design: .default))
                     .foregroundColor(Theme.current.foreground)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 20)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.top, Spacing.lg)
+                    .padding(.bottom, Spacing.sm)
 
                 // Menu Sections
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 16) {
+                    VStack(spacing: Spacing.md) {
                         // APPEARANCE
                         SettingsSidebarSection(title: "APPEARANCE", isActive: selectedSection == .appearance) {
                             SettingsSidebarItem(
@@ -249,8 +249,8 @@ struct SettingsView: View {
                             #endif
                         }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.bottom, Spacing.sm)
                 }
             }
             .frame(width: 220)
