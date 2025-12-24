@@ -12,10 +12,10 @@ enum SettingsSection: String, Hashable {
     // APPEARANCE
     case appearance
 
-    // MEMOS (Quick Actions, Quick Open, Auto-Run)
+    // MEMOS (Quick Actions, Quick Open, Automations)
     case quickActions
     case quickOpen
-    case autoRun
+    case automations
 
     // DICTATION
     case dictationCapture
@@ -129,7 +129,7 @@ struct SettingsView: View {
                         }
 
                         // MEMOS
-                        SettingsSidebarSection(title: "MEMOS", isActive: selectedSection == .quickActions || selectedSection == .quickOpen || selectedSection == .autoRun) {
+                        SettingsSidebarSection(title: "MEMOS", isActive: selectedSection == .quickActions || selectedSection == .quickOpen || selectedSection == .automations) {
                             SettingsSidebarItem(
                                 icon: "bolt",
                                 title: "QUICK ACTIONS",
@@ -146,10 +146,10 @@ struct SettingsView: View {
                             }
                             SettingsSidebarItem(
                                 icon: "play.circle",
-                                title: "AUTO-RUN",
-                                isSelected: selectedSection == .autoRun
+                                title: "AUTOMATIONS",
+                                isSelected: selectedSection == .automations
                             ) {
-                                selectedSection = .autoRun
+                                selectedSection = .automations
                             }
                         }
 
@@ -305,8 +305,8 @@ struct SettingsView: View {
             QuickActionsSettingsView()
         case .quickOpen:
             QuickOpenSettingsView()
-        case .autoRun:
-            AutoRunSettingsView()
+        case .automations:
+            AutomationsSettingsView()
 
         // AI MODELS
         case .aiProviders:

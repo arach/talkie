@@ -468,7 +468,11 @@ struct RecentMemoRow: View {
             }
         }
         .onTapGesture {
-            // TODO: Navigate to memo detail
+            // Navigate to memo detail
+            NotificationCenter.default.post(
+                name: .init("NavigateToMemoDetail"),
+                object: memo.id
+            )
         }
     }
 

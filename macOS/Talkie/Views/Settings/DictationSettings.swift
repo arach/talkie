@@ -121,6 +121,10 @@ struct DictationCaptureSettingsView: View {
                         .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                     AudioDeviceSelector()
+
+                    // Mic Test
+                    MicTestView()
+                        .padding(.top, 8)
                 }
                 .padding(Spacing.sm)
                 .background(Theme.current.surface1)
