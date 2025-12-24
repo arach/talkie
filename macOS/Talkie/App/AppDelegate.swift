@@ -364,14 +364,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
 
             print("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
-            print("📸 Capturing screenshot...")
+            print("📸 Capturing screenshots (small/medium/large)...")
 
-            // Capture screenshot for this screen only
-            var screenshotPath: String = "N/A (non-settings screen)"
+            // Capture screenshots at all three sizes
+            var screenshotPaths: [String] = []
             if screen.section == .settings, let settingsPage = screen.settingsPage {
-                if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, to: screenshotDir) {
-                    screenshotPath = url.path
-                }
+                let results = await SettingsStoryboardGenerator.shared.capturePageAllSizes(settingsPage, to: screenshotDir)
+                screenshotPaths = results.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.key.rawValue): \($0.value.lastPathComponent)" }
             } else {
                 print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
             }
@@ -382,7 +381,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("\n✅ Audit complete!")
             print("   Grade: \(result.grade) (\(result.overallScore)%)")
             print("   Total Issues: \(result.totalIssues)")
-            print("   Screenshot: \(screenshotPath)")
+            if !screenshotPaths.isEmpty {
+                print("   Screenshots:")
+                for path in screenshotPaths {
+                    print("     - \(path)")
+                }
+            }
 
             exit(0)
         }
