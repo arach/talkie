@@ -144,38 +144,32 @@ struct AppearanceSettingsView: View {
                             .stroke(Theme.current.divider, lineWidth: 0.5)
                     )
 
-                    // Visual separator
+                    // Visual separator - reduced spacing
                     Rectangle()
                         .fill(Theme.current.divider)
                         .frame(height: 0.5)
-                        .padding(.vertical, Spacing.sm)
+                        .padding(.top, Spacing.sm)
+                        .padding(.bottom, Spacing.xs)
 
-                    // Theme controls section
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("THEME")
-                            .font(Theme.current.fontXSBold)
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                    // Theme presets
-                    HStack(spacing: Spacing.xs) {
+                    // Theme presets - bigger, more beautiful
+                    HStack(spacing: Spacing.sm) {
                         ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
                             Button(action: { settingsManager.applyTheme(preset) }) {
-                                HStack(spacing: Spacing.xs) {
-                                    RoundedRectangle(cornerRadius: 3)
+                                VStack(spacing: Spacing.xs) {
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                                         .fill(preset.previewColors.bg)
-                                        .frame(width: 14, height: 14)
+                                        .frame(width: 44, height: 32)
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .stroke(preset.previewColors.accent, lineWidth: 1)
+                                            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                                .stroke(preset.previewColors.accent, lineWidth: 2)
                                         )
                                     Text(preset.displayName)
                                         .font(Theme.current.fontXS)
                                         .foregroundColor(isThemeActive(preset) ? Theme.current.foreground : Theme.current.foregroundSecondary)
                                 }
-                                .padding(.horizontal, Spacing.sm)
-                                .padding(.vertical, Spacing.xs)
+                                .padding(Spacing.sm)
                                 .background(isThemeActive(preset) ? Color.accentColor.opacity(Opacity.medium) : Theme.current.backgroundTertiary)
-                                .cornerRadius(CornerRadius.xs)
+                                .cornerRadius(CornerRadius.sm)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: CornerRadius.xs)
                                         .stroke(isThemeActive(preset) ? Color.accentColor : Color.clear, lineWidth: 1)
@@ -185,34 +179,33 @@ struct AppearanceSettingsView: View {
                         }
                     }
 
-                        // Appearance mode (Light/Dark/System) - inline
-                        HStack(spacing: Spacing.xs) {
-                            Text("Mode:")
-                                .font(Theme.current.fontXS)
+                    // Mode & Accent - elevated card treatment
+                    HStack(spacing: Spacing.sm) {
+                        // Appearance Mode card
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("MODE")
+                                .font(Theme.current.fontXSBold)
                                 .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
-                            ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
-                                Button(action: { settingsManager.appearanceMode = mode }) {
-                                    Text(mode.displayName)
-                                        .font(Theme.current.fontXS)
-                                    .padding(.horizontal, Spacing.sm)
-                                    .padding(.vertical, Spacing.xs)
-                                    .background(settingsManager.appearanceMode == mode ? Color.accentColor.opacity(Opacity.medium) : Theme.current.backgroundTertiary)
-                                    .cornerRadius(CornerRadius.xs)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                            .stroke(settingsManager.appearanceMode == mode ? Color.accentColor : Color.clear, lineWidth: 1)
+                            HStack(spacing: Spacing.sm) {
+                                ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                                    AppearanceModeButton(
+                                        mode: mode,
+                                        isSelected: settingsManager.appearanceMode == mode,
+                                        action: { settingsManager.appearanceMode = mode }
                                     )
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
-                        .padding(.top, Spacing.xs)
+                        .padding(Spacing.sm)
+                        .frame(maxWidth: .infinity)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
 
-                        // Accent Color - compact inline
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("Accent Color:")
-                                .font(Theme.current.fontXS)
+                        // Accent Color card
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("ACCENT")
+                                .font(Theme.current.fontXSBold)
                                 .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
                             HStack(spacing: Spacing.xs) {
@@ -221,7 +214,10 @@ struct AppearanceSettingsView: View {
                                 }
                             }
                         }
-                        .padding(.top, Spacing.sm)
+                        .padding(Spacing.sm)
+                        .frame(maxWidth: .infinity)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
                     }
                 }
                 .padding(Spacing.lg)
