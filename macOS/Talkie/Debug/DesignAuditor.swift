@@ -354,12 +354,21 @@ struct FullAuditReport: Codable {
 class DesignAuditor {
     static let shared = DesignAuditor()
 
-    private let basePath = "/Users/arach/dev/talkie/macOS/Talkie"
+    // Dynamically find the project root by looking for DesignAuditor.swift's location
+    private var basePath: String {
+        // Get the directory containing this file
+        let currentFile = #file
+        let currentFileURL = URL(fileURLWithPath: currentFile)
+        // Navigate up from Debug/DesignAuditor.swift to macOS/Talkie/
+        let talkieDir = currentFileURL.deletingLastPathComponent().deletingLastPathComponent()
+        return talkieDir.path
+    }
 
     // Cache directory for audit results
-    private var cacheDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Talkie/DesignAudits")
+    nonisolated var cacheDirectory: URL {
+        // Use Desktop for easier access during development
+        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
+        return desktop.appendingPathComponent("talkie-audit")
     }
 
     private init() {}
@@ -367,7 +376,7 @@ class DesignAuditor {
     // MARK: - Persistence
 
     /// Get the next run number
-    private func getNextRunNumber() -> Int {
+    nonisolated func getNextRunNumber() -> Int {
         guard FileManager.default.fileExists(atPath: cacheDirectory.path) else {
             return 1
         }
@@ -535,8 +544,8 @@ class DesignAuditor {
 
     // MARK: - Public API
 
-    /// Audit a single screen
-    func audit(screen: AppScreen) -> ScreenAuditResult {
+    /// Audit a single screen - code analysis only
+    private func performCodeAnalysis(screen: AppScreen) -> ScreenAuditResult {
         var result = ScreenAuditResult(screen: screen, timestamp: Date())
 
         for sourceFile in screen.sourceFiles {
@@ -596,7 +605,7 @@ class DesignAuditor {
         // Run static code analysis
         for screen in AppScreen.allCases {
             print("  Auditing \(screen.title)...")
-            let result = audit(screen: screen)
+            let result = performCodeAnalysis(screen: screen)
             results.append(result)
         }
 
@@ -634,11 +643,68 @@ class DesignAuditor {
 
         for screen in section.screens {
             print("  Auditing \(screen.title)...")
-            let result = audit(screen: screen)
+            let result = performCodeAnalysis(screen: screen)
             results.append(result)
         }
 
         return FullAuditReport(timestamp: Date(), screens: results, screenshotDirectory: nil)
+    }
+
+    /// Audit a single screen with optional screenshot capture
+    func audit(screen: AppScreen, withScreenshot: Bool = false, screenshotDirectory: URL? = nil) async -> ScreenAuditResult {
+        print("🔍 Auditing \(screen.title)...")
+        var result = performCodeAnalysis(screen: screen)
+
+        if withScreenshot, let screenshotDir = screenshotDirectory {
+            // Ensure directory exists
+            try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+            
+            // Capture screenshot for this screen
+            await captureScreenshot(for: screen, to: screenshotDir)
+        }
+
+        return result
+    }
+
+    /// Capture screenshot for a single screen
+    func captureScreenshot(for screen: AppScreen, to directory: URL) async {
+        // Find the main Talkie window
+        guard let mainWindow = NSApp.windows.first(where: { $0.title.contains("Talkie") && !$0.title.contains("Settings") }) else {
+            print("⚠️ No main window found for screenshot capture")
+            return
+        }
+
+        mainWindow.makeKeyAndOrderFront(nil)
+
+        // Build debug navigation path for this screen
+        let debugPath = buildDebugPath(for: screen)
+
+        print("📸 Capturing \(screen.title) (talkie://d/\(debugPath))...")
+
+        // Navigate to screen using debug URL system
+        #if DEBUG
+        NotificationCenter.default.post(
+            name: .debugNavigate,
+            object: nil,
+            userInfo: ["path": debugPath]
+        )
+        #endif
+
+        // Wait for navigation + render
+        try? await Task.sleep(for: .milliseconds(500))
+
+        // Capture window
+        if let screenshot = captureWindow(mainWindow) {
+            let filename = "\(screen.rawValue).png"
+            let fileURL = directory.appendingPathComponent(filename)
+
+            if let tiffData = screenshot.tiffRepresentation,
+               let bitmapImage = NSBitmapImageRep(data: tiffData),
+               let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                try? pngData.write(to: fileURL)
+                print("  ✅ Saved: \(filename)")
+            }
+        }
     }
 
     // MARK: - Report Generation
@@ -1719,6 +1785,58 @@ class DesignAuditor {
 
         return html
     }
+
+    // MARK: - Design Critique Documentation
+    
+    /*
+     * DESIGN CRITIQUE PROMPT GUIDE
+     * 
+     * When generating design critiques for audit screenshots, agents should follow this structure:
+     * 
+     * File Location:
+     *   ~/Desktop/talkie-audit/run-XXX/{screen-id}-critique.md
+     *   (e.g., ~/Desktop/talkie-audit/run-047/settings-appearance-critique.md)
+     * 
+     * Screenshot Location:
+     *   ~/Desktop/talkie-audit/run-XXX/screenshots/{screen-id}.png
+     * 
+     * Expected Format:
+     *   ## Overall Impression
+     *   [Brief gut reaction - what stands out immediately]
+     * 
+     *   ## Issues (in priority order)
+     *   1. [Specific issue with suggested fix]
+     *   2. [Specific issue with suggested fix]
+     *   ...
+     * 
+     *   ## What's Working Well
+     *   [Be fair - note what's good too]
+     * 
+     * Focus Areas:
+     *   1. Visual Hierarchy - Does the eye flow naturally? Are important elements prominent?
+     *   2. Spacing & Rhythm - Look for cramped areas, inconsistent gaps, or awkward white space
+     *   3. Information Density - Too dense? Too sparse? Overwhelming or empty?
+     *   4. Balance & Alignment - Are elements properly aligned? Does it feel balanced?
+     *   5. Typography - Font sizes, weights, line heights - what feels off?
+     *   6. Color & Contrast - Any legibility issues? Harsh contrasts or washed-out text?
+     *   7. Component Consistency - Do similar elements look similar?
+     *   8. Practical Issues - Text wrapping, truncation, overflow, cramped hit areas
+     * 
+     * Style Guidelines:
+     *   - Be SPECIFIC and ACTIONABLE
+     *   - Instead of "spacing feels off", say: "Preview sidebar feels cramped - 'All Memos' 
+     *     wrapping suggests need for 15-20px more width"
+     *   - Instead of "too much padding", say: "MODE section has too much visual weight for a 
+     *     simple 3-option choice - reduce padding by ~8px"
+     *   - Keep it concise, opinionated, and useful for iteration
+     *   - Reference the code audit results when relevant (font/color/spacing scores)
+     * 
+     * Example Prompt for Agent:
+     *   "Analyze the screenshot at {screenshot-path} and write a design critique following 
+     *   the format documented in DesignAuditor.swift. Focus on actionable, specific feedback 
+     *   that will help improve the UI. Reference the audit results in {report-path} when 
+     *   relevant."
+     */
 
     // MARK: - Markdown Report Builder
 

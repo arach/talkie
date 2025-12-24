@@ -53,21 +53,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         NSLog("[AppDelegate] isDebugMode = \(isDebugMode)")
 
+        // Register debug commands early (before checking debug mode)
+        registerDebugCommands()
+
         if isDebugMode {
-            NSLog("[AppDelegate] ⚙️ Debug mode - skipping initialization")
-            logger.debug("⚙️ Debug mode detected - running headless, skipping initialization")
-            // Register debug commands and handle them
-            registerDebugCommands()
+            NSLog("[AppDelegate] ⚙️ Debug mode - will run CLI command after initialization")
+            logger.debug("⚙️ Debug mode detected - running CLI command after app setup")
+            // Schedule CLI handler to run after app finishes initializing
             Task { @MainActor in
-                _ = await cliHandler.handleCommandLineArguments()
+                // Wait for app to finish initializing
+                try? await Task.sleep(for: .milliseconds(500))
+                NSLog("[AppDelegate] 🎯 Running CLI handler...")
+                let handled = await self.cliHandler.handleCommandLineArguments()
+                if !handled {
+                    NSLog("[AppDelegate] ❌ No CLI command executed")
+                    exit(1)
+                }
             }
-            return  // Exit early - don't initialize app services
+            // Continue with normal initialization so MainActor works properly
         }
 
-        NSLog("[AppDelegate] ✓ Normal initialization mode")
+        if !isDebugMode {
+            NSLog("[AppDelegate] ✓ Normal app mode")
+        }
 
-        // Normal app initialization (only runs when NOT in debug mode)
-        registerDebugCommands()
+        // App initialization (runs in both normal and debug mode)
+        // Debug mode needs this for MainActor to work properly
 
         // Configure window appearance to match theme before SwiftUI renders
         // This prevents the "flicker" of default colors before theme loads
@@ -318,6 +329,53 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             for screen in report.screens {
                 print("   - \(screen.screen.title): \(screen.grade) (\(screen.overallScore)%)")
             }
+
+            exit(0)
+        }
+
+        cliHandler.register(
+            "audit-screen",
+            description: "Audit a specific screen with screenshot capture (e.g., settings-appearance, settings-dictation-capture)"
+        ) { args in
+            guard let screenId = args.first else {
+                print("❌ No screen ID provided")
+                exit(1)
+            }
+
+            guard let screen = AppScreen(rawValue: screenId) else {
+                print("❌ Invalid screen ID: \(screenId)")
+                print("   Available screens:")
+                for screen in AppScreen.allCases {
+                    print("     - \(screen.rawValue)")
+                }
+                exit(1)
+            }
+
+            let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("talkie-audit")
+            try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+
+            let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+            let auditFolders = existing.filter { $0.hasPrefix("run-") }
+            let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+            let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+            let screenshotDir = runDir.appendingPathComponent("screenshots")
+            try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+
+            print("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
+            print("📸 Capturing screenshot...")
+
+            // Capture screenshot for this screen only (requires MainActor)
+            _ = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotDir)
+
+            print("📊 Analyzing code...")
+            let result = await DesignAuditor.shared.audit(screen: screen, withScreenshot: false)
+
+            print("\n✅ Audit complete!")
+            print("   Grade: \(result.grade) (\(result.overallScore)%)")
+            print("   Total Issues: \(result.totalIssues)")
+            print("   Screenshot: \(screenshotDir.path)/\(screen.rawValue).png")
 
             exit(0)
         }

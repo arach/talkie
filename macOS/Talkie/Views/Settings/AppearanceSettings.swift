@@ -50,7 +50,7 @@ struct AppearanceSettingsView: View {
                     }
                     .padding(.top, Spacing.xs)
 
-                    // Live preview (top) - sidebar + table
+                    // Live preview (top) - sidebar + table - WIDER for better proportions
                     HStack(spacing: 0) {
                         // Mini sidebar
                         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -81,7 +81,7 @@ struct AppearanceSettingsView: View {
                             }
                         }
                         .padding(Spacing.sm)
-                        .frame(width: 130)
+                        .frame(width: 155)
                         .background(Theme.current.backgroundSecondary)
 
                         Rectangle()
@@ -95,7 +95,7 @@ struct AppearanceSettingsView: View {
                                 Text("TIMESTAMP")
                                     .font(Theme.current.fontXSBold)
                                     .foregroundColor(Theme.current.foregroundSecondary)
-                                    .frame(width: 90, alignment: .leading)
+                                    .frame(width: 100, alignment: .leading)
                                 Text("TITLE")
                                     .font(Theme.current.fontXSBold)
                                     .foregroundColor(Theme.current.foregroundSecondary)
@@ -103,7 +103,7 @@ struct AppearanceSettingsView: View {
                                 Text("DUR")
                                     .font(Theme.current.fontXSBold)
                                     .foregroundColor(Theme.current.foregroundSecondary)
-                                    .frame(width: 40, alignment: .trailing)
+                                    .frame(width: 45, alignment: .trailing)
                             }
                             .padding(.horizontal, Spacing.sm)
                             .padding(.vertical, Spacing.xs)
@@ -119,7 +119,7 @@ struct AppearanceSettingsView: View {
                                         Text(["Nov 30, 11:22", "Nov 29, 15:42", "Nov 29, 12:51", "Nov 28, 21:49", "Nov 28, 19:33"][i])
                                             .font(Theme.current.fontSM)
                                             .foregroundColor(Theme.current.foregroundMuted)
-                                            .frame(width: 90, alignment: .leading)
+                                            .frame(width: 100, alignment: .leading)
                                         Text(["Recording 2025-11-30", "Quick memo 11/29", "Recording 11/29", "Quick memo 11/28", "Meeting notes"][i])
                                             .font(Theme.current.fontSM)
                                             .foregroundColor(Theme.current.foreground)
@@ -128,7 +128,7 @@ struct AppearanceSettingsView: View {
                                         Text(["0:09", "0:34", "0:08", "0:31", "1:04"][i])
                                             .font(Theme.current.fontSM)
                                             .foregroundColor(Theme.current.foregroundMuted)
-                                            .frame(width: 40, alignment: .trailing)
+                                            .frame(width: 45, alignment: .trailing)
                                     }
                                     .padding(.horizontal, Spacing.sm)
                                     .padding(.vertical, Spacing.xxs)
@@ -144,14 +144,28 @@ struct AppearanceSettingsView: View {
                             .stroke(Theme.current.divider, lineWidth: 0.5)
                     )
 
-                    // Visual separator - reduced spacing
-                    Rectangle()
-                        .fill(Theme.current.divider)
-                        .frame(height: 0.5)
-                        .padding(.top, Spacing.sm)
-                        .padding(.bottom, Spacing.xs)
+                    // Section divider - tighter spacing
+                    VStack(spacing: 0) {
+                        Spacer()
+                            .frame(height: Spacing.sm)
+                        Rectangle()
+                            .fill(Theme.current.divider.opacity(Opacity.half))
+                            .frame(height: 1)
+                        Spacer()
+                            .frame(height: Spacing.xs)
+                    }
 
-                    // Theme presets - bigger, more beautiful
+                    // Theme presets - in container for clear grouping
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: "paintpalette")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Text("THEMES")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+
                     HStack(spacing: Spacing.sm) {
                         ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
                             Button(action: { settingsManager.applyTheme(preset) }) {
@@ -178,16 +192,26 @@ struct AppearanceSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1.opacity(Opacity.half))
+                    .cornerRadius(CornerRadius.sm)
 
-                    // Mode & Accent - elevated card treatment
-                    HStack(spacing: Spacing.sm) {
-                        // Appearance Mode card
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                    // Section divider - tighter spacing
+                    Rectangle()
+                        .fill(Theme.current.divider.opacity(Opacity.half))
+                        .frame(height: 1)
+                        .padding(.vertical, Spacing.xs)
+
+                    // Mode & Accent - MODE compact, ACCENT gets more space
+                    HStack(spacing: Spacing.md) {
+                        // Appearance Mode - compact inline treatment
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text("MODE")
                                 .font(Theme.current.fontXSBold)
                                 .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
-                            HStack(spacing: Spacing.sm) {
+                            HStack(spacing: Spacing.xs) {
                                 ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
                                     AppearanceModeButton(
                                         mode: mode,
@@ -197,10 +221,6 @@ struct AppearanceSettingsView: View {
                                 }
                             }
                         }
-                        .padding(Spacing.sm)
-                        .frame(maxWidth: .infinity)
-                        .background(Theme.current.surface1)
-                        .cornerRadius(CornerRadius.sm)
 
                         // Accent Color card
                         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -235,13 +255,18 @@ struct AppearanceSettingsView: View {
 
                         if useColumns {
                             // 2-column layout for larger screens
-                            HStack(alignment: .top, spacing: Spacing.sm) {
+                            HStack(alignment: .top, spacing: Spacing.md) {
                                 // UI Chrome: Font + Size together
                                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                                    Text("UI Chrome")
-                                        .font(Theme.current.fontXSBold)
-                                        .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "macwindow")
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
+                                        Text("INTERFACE")
+                                            .font(Theme.current.fontXSBold)
+                                            .textCase(SettingsManager.shared.uiTextCase)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
+                                    }
 
                                     HStack(spacing: Spacing.sm) {
                                         // UI Font
@@ -301,10 +326,15 @@ struct AppearanceSettingsView: View {
 
                                 // Content: Font + Size together
                                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                                    Text("Content")
-                                        .font(Theme.current.fontXSBold)
-                                        .textCase(SettingsManager.shared.uiTextCase)
-                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: "doc.text")
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
+                                        Text("TEXT CONTENT")
+                                            .font(Theme.current.fontXSBold)
+                                            .textCase(SettingsManager.shared.uiTextCase)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
+                                    }
 
                                     HStack(spacing: Spacing.sm) {
                                         // Content Font
@@ -351,10 +381,15 @@ struct AppearanceSettingsView: View {
                             // Single column layout for smaller screens
                             // UI Chrome: Font + Size together
                             VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("UI Chrome")
-                                    .font(Theme.current.fontXSBold)
-                                    .textCase(SettingsManager.shared.uiTextCase)
-                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                HStack(spacing: Spacing.xs) {
+                                    Image(systemName: "macwindow")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                    Text("INTERFACE")
+                                        .font(Theme.current.fontXSBold)
+                                        .textCase(SettingsManager.shared.uiTextCase)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                }
 
                                 HStack(spacing: Spacing.sm) {
                                     // UI Font
@@ -413,10 +448,15 @@ struct AppearanceSettingsView: View {
 
                             // Content: Font + Size together
                             VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("Content")
-                                    .font(Theme.current.fontXSBold)
-                                    .textCase(SettingsManager.shared.uiTextCase)
-                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                HStack(spacing: Spacing.xs) {
+                                    Image(systemName: "doc.text")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                    Text("TEXT CONTENT")
+                                        .font(Theme.current.fontXSBold)
+                                        .textCase(SettingsManager.shared.uiTextCase)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                }
 
                                 HStack(spacing: Spacing.sm) {
                                     // Content Font
