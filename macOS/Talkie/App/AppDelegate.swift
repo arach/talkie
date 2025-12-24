@@ -53,21 +53,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         NSLog("[AppDelegate] isDebugMode = \(isDebugMode)")
 
+        // Register debug commands early (before checking debug mode)
+        registerDebugCommands()
+
         if isDebugMode {
-            NSLog("[AppDelegate] ⚙️ Debug mode - skipping initialization")
-            logger.debug("⚙️ Debug mode detected - running headless, skipping initialization")
-            // Register debug commands and handle them
-            registerDebugCommands()
+            NSLog("[AppDelegate] ⚙️ Debug mode - will run CLI command after initialization")
+            logger.debug("⚙️ Debug mode detected - running CLI command after app setup")
+            // Schedule CLI handler to run after app finishes initializing
             Task { @MainActor in
-                _ = await cliHandler.handleCommandLineArguments()
+                // Wait for app to finish initializing
+                try? await Task.sleep(for: .milliseconds(500))
+                NSLog("[AppDelegate] 🎯 Running CLI handler...")
+                let handled = await self.cliHandler.handleCommandLineArguments()
+                if !handled {
+                    NSLog("[AppDelegate] ❌ No CLI command executed")
+                    exit(1)
+                }
             }
-            return  // Exit early - don't initialize app services
+            // Continue with normal initialization so MainActor works properly
         }
 
-        NSLog("[AppDelegate] ✓ Normal initialization mode")
+        if !isDebugMode {
+            NSLog("[AppDelegate] ✓ Normal app mode")
+        }
 
-        // Normal app initialization (only runs when NOT in debug mode)
-        registerDebugCommands()
+        // App initialization (runs in both normal and debug mode)
+        // Debug mode needs this for MainActor to work properly
 
         // Configure window appearance to match theme before SwiftUI renders
         // This prevents the "flicker" of default colors before theme loads
@@ -106,6 +117,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             andEventID: AEEventID(kAEGetURL)
         )
         logger.info("URL handler registered")
+
+        #if DEBUG
+        // Setup keyboard shortcut for Design God Mode (⌘⇧D)
+        setupDesignModeShortcut()
+        #endif
     }
 
     // MARK: - Debug Commands
@@ -316,6 +332,68 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
             exit(0)
         }
+
+        cliHandler.register(
+            "audit-screen",
+            description: "Audit a specific screen with screenshot capture (e.g., settings-appearance, settings-dictation-capture)"
+        ) { args in
+            guard let screenId = args.first else {
+                print("❌ No screen ID provided")
+                exit(1)
+            }
+
+            guard let screen = AppScreen(rawValue: screenId) else {
+                print("❌ Invalid screen ID: \(screenId)")
+                print("   Available screens:")
+                for screen in AppScreen.allCases {
+                    print("     - \(screen.rawValue)")
+                }
+                exit(1)
+            }
+
+            let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("talkie-audit")
+            try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+
+            let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+            let auditFolders = existing.filter { $0.hasPrefix("run-") }
+            let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+            let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+            let screenshotDir = runDir.appendingPathComponent("screenshots")
+            try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+
+            print("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
+            print("📸 Capturing screenshots (small/medium/large)...")
+
+            // Capture screenshots at all three sizes
+            var screenshotPaths: [String] = []
+            if screen.section == .settings, let settingsPage = screen.settingsPage {
+                // Capture each size separately to avoid window reuse issues
+                for size in WindowSize.allCases {
+                    if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, size: size, to: screenshotDir) {
+                        screenshotPaths.append("\(size.rawValue): \(url.lastPathComponent)")
+                    }
+                }
+            } else {
+                print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
+            }
+
+            print("📊 Analyzing code...")
+            let result = await DesignAuditor.shared.audit(screen: screen, withScreenshot: false)
+
+            print("\n✅ Audit complete!")
+            print("   Grade: \(result.grade) (\(result.overallScore)%)")
+            print("   Total Issues: \(result.totalIssues)")
+            if !screenshotPaths.isEmpty {
+                print("   Screenshots:")
+                for path in screenshotPaths {
+                    print("     - \(path)")
+                }
+            }
+
+            exit(0)
+        }
     }
 
     // MARK: - URL Handling
@@ -418,36 +496,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 NSLog("[AppDelegate] 🔍 Triggering code audit (no screenshots)...")
 
                 // Run entirely on background queue
-                DispatchQueue.global(qos: .userInitiated).async {
-                    autoreleasepool {
-                        // Setup directories
-                        let baseDir = FileManager.default.homeDirectoryForCurrentUser
-                            .appendingPathComponent("Desktop")
-                            .appendingPathComponent("talkie-audit")
-                        try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+                Task.detached {
+                    // Setup directories
+                    let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent("Desktop")
+                        .appendingPathComponent("talkie-audit")
+                    try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
 
-                        let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
-                        let auditFolders = existing.filter { $0.hasPrefix("run-") }
-                        let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
-                        let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
-                        try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+                    let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+                    let auditFolders = existing.filter { $0.hasPrefix("run-") }
+                    let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+                    let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+                    try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-                        NSLog("[AppDelegate] 🔍 Running code audit...")
-                        let report = DesignAuditor.shared.auditAll()
-                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                    NSLog("[AppDelegate] 🔍 Running code audit...")
+                    let report = await DesignAuditor.shared.auditAll()
+                    NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                        NSLog("[AppDelegate] 📝 Generating reports...")
+                    NSLog("[AppDelegate] 📝 Generating reports...")
+                    await MainActor.run {
                         DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                         DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+                    }
 
-                        // Back to main for UI operations
-                        DispatchQueue.main.async {
-                            Task { @MainActor in
-                                await Self.generateAuditIndex(at: baseDir)
-                                NSLog("[AppDelegate] ✅ All done!")
-                                NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
-                            }
-                        }
+                    // Back to main for UI operations
+                    await Self.generateAuditIndex(at: baseDir)
+                    await MainActor.run {
+                        NSLog("[AppDelegate] ✅ All done!")
+                        NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                     }
                 }
                 return true
@@ -485,23 +561,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     try? await Task.sleep(for: .milliseconds(500))
 
                     // Run audit on background queue
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        autoreleasepool {
-                            NSLog("[AppDelegate] 🔍 Running code audit...")
-                            let report = DesignAuditor.shared.auditAll()
-                            NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                    Task.detached {
+                        NSLog("[AppDelegate] 🔍 Running code audit...")
+                        let report = await DesignAuditor.shared.auditAll()
+                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                            NSLog("[AppDelegate] 📝 Generating reports...")
+                        NSLog("[AppDelegate] 📝 Generating reports...")
+                        await MainActor.run {
                             DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                             DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+                        }
 
-                            DispatchQueue.main.async {
-                                Task { @MainActor in
-                                    await Self.generateAuditIndex(at: baseDir)
-                                    NSLog("[AppDelegate] ✅ All done!")
-                                    NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
-                                }
-                            }
+                        await Self.generateAuditIndex(at: baseDir)
+                        await MainActor.run {
+                            NSLog("[AppDelegate] ✅ All done!")
+                            NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                         }
                     }
                 }
@@ -801,4 +875,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         try? html.write(to: baseDir.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
     }
+
+    // MARK: - Design God Mode
+
+    #if DEBUG
+    /// Setup ⌘⇧D keyboard shortcut to toggle Design God Mode
+    /// When enabled, adds design sections to sidebar and enables visual overlays
+    private func setupDesignModeShortcut() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Check for ⌘⇧D (Command+Shift+D)
+            let hasCommand = event.modifierFlags.contains(.command)
+            let hasShift = event.modifierFlags.contains(.shift)
+            let isD = event.charactersIgnoringModifiers?.lowercased() == "d"
+
+            if hasCommand && hasShift && isD {
+                // Toggle Design God Mode
+                DesignModeManager.shared.isEnabled.toggle()
+
+                // Show toast notification
+                let message = DesignModeManager.shared.isEnabled
+                    ? "🎨 Design God Mode: ON"
+                    : "Design God Mode: OFF"
+                self?.showToast(message: message)
+
+                return nil  // Consume event
+            }
+
+            return event  // Pass through
+        }
+
+        logger.info("⌘⇧D keyboard shortcut registered for Design God Mode")
+    }
+
+    /// Show a brief toast notification (simple alert-style for now)
+    private func showToast(message: String) {
+        DispatchQueue.main.async {
+            // For now, use console + optional visual feedback later
+            print(message)
+
+            // Future: Could use NSUserNotification or custom window overlay
+            // For V0, console print is sufficient
+        }
+    }
+    #endif
 }

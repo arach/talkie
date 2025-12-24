@@ -25,6 +25,13 @@ enum NavigationSection: Hashable {
     case allowedCommands
     case settings
     case smartFolder(String)
+
+    #if DEBUG
+    // Design God Mode sections (only visible when DesignModeManager.shared.isEnabled)
+    case designHome       // Design system token reference
+    case designAudit      // Design system compliance audit
+    case designComponents // Component library showcase
+    #endif
 }
 
 struct TalkieNavigationView: View {
@@ -145,7 +152,7 @@ struct TalkieNavigationView: View {
                 windowHeight = newHeight
             }
         }
-        .padding(.top, 8)  // Breathing room for traffic lights
+        .padding(.top, Spacing.sm)  // Breathing room for traffic lights
         .padding(.horizontal, 1)  // Subtle edge spacing
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
@@ -208,6 +215,9 @@ struct TalkieNavigationView: View {
                     "AutoRun": SettingsManager.shared.autoRunWorkflowsEnabled ? "ON" : "OFF"
                 ]
             }
+        }
+        .overlay {
+            DesignOverlay()
         }
         #endif
     }
@@ -330,6 +340,29 @@ struct TalkieNavigationView: View {
                             badge: cachedErrorCount > 0 ? "\(cachedErrorCount)" : nil,
                             badgeColor: .orange
                         )
+
+                        #if DEBUG
+                        // Design God Mode section (only when enabled via ⌘⇧D)
+                        if DesignModeManager.shared.isEnabled {
+                            sidebarSectionHeader("Design")
+                                .padding(.top, Spacing.sm)
+                            sidebarButton(
+                                section: .designHome,
+                                icon: "paintbrush.fill",
+                                title: "Design Home"
+                            )
+                            sidebarButton(
+                                section: .designAudit,
+                                icon: "checkmark.seal.fill",
+                                title: "Audit"
+                            )
+                            sidebarButton(
+                                section: .designComponents,
+                                icon: "square.grid.2x2",
+                                title: "Components"
+                            )
+                        }
+                        #endif
                     }
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, 4)
@@ -348,7 +381,7 @@ struct TalkieNavigationView: View {
                     title: "Settings"
                 )
                 .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, 6)
+                .padding(.vertical, Spacing.xs)
             }
         }
         .background(Theme.current.backgroundSecondary)
@@ -443,6 +476,12 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "AllowedCommands"
         case .settings: return "Settings"
         case .smartFolder(let name): return "SmartFolder.\(name)"
+
+        #if DEBUG
+        case .designHome: return "DesignHome"
+        case .designAudit: return "DesignAudit"
+        case .designComponents: return "DesignComponents"
+        #endif
         }
     }
 
@@ -478,7 +517,7 @@ struct TalkieNavigationView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 28)
         .padding(.horizontal, isSidebarCollapsed ? 0 : 12)
-        .padding(.top, 8) // Clear traffic light buttons
+        .padding(.top, Spacing.sm) // Clear traffic light buttons
     }
 
     /// Interactive chevron button with hover and press feedback (matches TalkieLive)
@@ -569,6 +608,22 @@ struct TalkieNavigationView: View {
             TalkieSection("Settings") {
                 SettingsView()
             }
+
+        #if DEBUG
+        case .designHome:
+            TalkieSection("DesignHome") {
+                DesignHomeView()
+            }
+        case .designAudit:
+            TalkieSection("DesignAudit") {
+                DesignAuditView()
+            }
+        case .designComponents:
+            TalkieSection("DesignComponents") {
+                DesignComponentsView()
+            }
+        #endif
+
         default:
             EmptyView()
         }
@@ -587,6 +642,10 @@ struct TalkieNavigationView: View {
         switch selectedSection {
         case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .settings:
             return true
+        #if DEBUG
+        case .designHome, .designAudit, .designComponents:
+            return true
+        #endif
         default:
             return false
         }
@@ -628,11 +687,11 @@ struct TalkieNavigationView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "text.below.photo")
                         .font(Theme.current.fontDisplay)
-                        .foregroundColor(.secondary.opacity(Opacity.half))
+                        .foregroundColor(Theme.current.foregroundMuted.opacity(Opacity.half))
 
                     Text("SELECT A MEMO")
                         .font(Theme.current.fontBodyBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.current.surface1)
@@ -663,6 +722,13 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "ALLOWED COMMANDS"
         case .settings: return "SETTINGS"
         case .smartFolder(let name): return name.uppercased()
+
+        #if DEBUG
+        case .designHome: return "DESIGN HOME"
+        case .designAudit: return "DESIGN AUDIT"
+        case .designComponents: return "COMPONENTS"
+        #endif
+
         case .none: return "MEMOS"
         }
     }
@@ -732,15 +798,15 @@ struct TalkieNavigationView: View {
             // Search field (moved from sidebar to content column)
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(Theme.current.fontSM)
             }
             .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, 6)
+            .padding(.vertical, Spacing.xs)
             .background(Color(nsColor: .textBackgroundColor).opacity(Opacity.half))
             .cornerRadius(6)
             .padding(.horizontal, 10)
@@ -825,7 +891,7 @@ private struct SidebarButtonContent: View {
                 // Text and badge - always present, opacity animated
                 HStack {
                     Text(title)
-                        .font(.system(size: 12))
+                        .font(Theme.current.fontSM)
                         .foregroundColor(isSelected ? .white : Theme.current.foreground)
                     Spacer()
                     if showSpinner {

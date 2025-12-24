@@ -48,7 +48,7 @@ struct QuickActionsSettingsView: View {
                 if pinnedWorkflows.isEmpty {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "pin.slash")
-                            .font(.system(size: 20))
+                            .font(Theme.current.fontHeadline)
                             .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
 
                         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -99,7 +99,7 @@ struct QuickActionsSettingsView: View {
                 if unpinnedWorkflows.isEmpty {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 20))
+                            .font(Theme.current.fontHeadline)
                             .foregroundColor(SemanticColor.success)
 
                         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -176,7 +176,7 @@ struct QuickActionsSettingsView: View {
                 .foregroundColor(workflow.color.color)
                 .frame(width: 28, height: 28)
                 .background(workflow.color.color.opacity(Opacity.medium))
-                .cornerRadius(Spacing.xs)
+                .cornerRadius(CornerRadius.xs)
 
             // Name and description
             VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -223,7 +223,7 @@ struct QuickActionsSettingsView: View {
                     .foregroundColor(isPinned ? SemanticColor.warning : Theme.current.foregroundSecondary)
                     .frame(width: 28, height: 28)
                     .background(isPinned ? SemanticColor.warning.opacity(Opacity.medium) : Theme.current.surface2)
-                    .cornerRadius(Spacing.xs)
+                    .cornerRadius(CornerRadius.xs)
             }
             .buttonStyle(.plain)
             .help(isPinned ? "Unpin from quick actions" : "Pin to quick actions")

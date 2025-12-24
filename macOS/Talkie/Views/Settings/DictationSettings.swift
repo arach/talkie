@@ -112,7 +112,7 @@ struct DictationCaptureSettingsView: View {
 
                     Image(systemName: "mic.fill")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.accentColor)
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.sm) {

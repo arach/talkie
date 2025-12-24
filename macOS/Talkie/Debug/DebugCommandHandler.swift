@@ -109,7 +109,7 @@ class DebugCommandHandler {
 
         print("📁 Output: \(runDir.path)")
 
-        let report = DesignAuditor.shared.auditAll()
+        let report = await DesignAuditor.shared.auditAll()
 
         print("📊 Grade: \(report.grade) (\(report.overallScore)%)")
         print("   Issues: \(report.totalIssues) total across \(report.screens.count) screens")

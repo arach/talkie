@@ -10,6 +10,21 @@ import SwiftUI
 import DebugKit
 import RegexBuilder
 
+/// Window size for screenshot capture
+enum WindowSize: String, CaseIterable {
+    case small
+    case medium
+    case large
+
+    var size: CGSize {
+        switch self {
+        case .small: return CGSize(width: 700, height: 500)
+        case .medium: return CGSize(width: 900, height: 650)
+        case .large: return CGSize(width: 1100, height: 800)
+        }
+    }
+}
+
 /// Settings pages to capture (subset of SettingsSection with Int raw values for StoryboardGenerator)
 enum SettingsPage: Int, CaseIterable, Hashable {
     case appearance = 0
@@ -220,6 +235,87 @@ class SettingsStoryboardGenerator {
     }
 
     /// Capture individual page screenshots to a directory
+    /// Capture a single settings page at all three sizes
+    func capturePageAllSizes(_ page: SettingsPage, to directory: URL) async -> [WindowSize: URL] {
+        var results: [WindowSize: URL] = [:]
+
+        // Create directory if needed
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        // Create window once and reuse it for all sizes
+        let window = createRenderWindow(size: WindowSize.medium.size)
+        window.title = "Settings — \(page.title)"
+        let view = createView(for: page)
+
+        for size in WindowSize.allCases {
+            print("📸 Capturing \(page.title) (\(size.rawValue))...")
+
+            // Resize window for this capture
+            window.setContentSize(size.size)
+            window.contentView = NSHostingView(rootView: view)
+            window.makeKeyAndOrderFront(nil)
+            window.center()
+
+            // Wait for window to resize and render
+            try? await Task.sleep(for: .milliseconds(600))
+
+            if let screenshot = captureWindow(window) {
+                let pathSegment = page.settingsSection.pathSegment
+                let filename = "settings-\(pathSegment)-\(size.rawValue).png"
+                let fileURL = directory.appendingPathComponent(filename)
+
+                if let tiffData = screenshot.tiffRepresentation,
+                   let bitmapImage = NSBitmapImageRep(data: tiffData),
+                   let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                    try? pngData.write(to: fileURL)
+                    results[size] = fileURL
+                    print("  ✅ Saved: \(filename)")
+                }
+            }
+        }
+
+        window.close()
+        return results
+    }
+
+    /// Capture a single settings page screenshot at a specific size
+    func captureSinglePage(_ page: SettingsPage, size: WindowSize = .medium, to directory: URL) async -> URL? {
+        // Create directory if needed
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        print("📸 Capturing \(page.title) (\(size.rawValue))...")
+
+        // Create isolated view window for rendering
+        let window = createRenderWindow(size: size.size)
+        window.title = "Settings — \(page.title)"
+
+        let view = createView(for: page)
+        window.contentView = NSHostingView(rootView: view)
+        window.makeKeyAndOrderFront(nil)
+
+        // Wait for window to render fully
+        try? await Task.sleep(for: .milliseconds(600))
+
+        var result: URL?
+        if let screenshot = captureWindow(window) {
+            // Use pathSegment for filename: settings-appearance-medium.png
+            let pathSegment = page.settingsSection.pathSegment
+            let filename = "settings-\(pathSegment)-\(size.rawValue).png"
+            let fileURL = directory.appendingPathComponent(filename)
+
+            if let tiffData = screenshot.tiffRepresentation,
+               let bitmapImage = NSBitmapImageRep(data: tiffData),
+               let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                try? pngData.write(to: fileURL)
+                result = fileURL
+                print("  ✅ Saved: \(filename)")
+            }
+        }
+
+        window.close()
+        return result
+    }
+
     func captureAllPages(to directory: URL) async -> [SettingsPage: URL] {
         var results: [SettingsPage: URL] = [:]
 
@@ -584,9 +680,9 @@ class SettingsStoryboardGenerator {
 
     // MARK: - Private
 
-    private func createRenderWindow() -> NSWindow {
+    private func createRenderWindow(size: CGSize = CGSize(width: 900, height: 700)) -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: CGSize(width: 900, height: 700)),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
