@@ -152,7 +152,7 @@ struct TalkieNavigationView: View {
                 windowHeight = newHeight
             }
         }
-        .padding(.top, 8)  // Breathing room for traffic lights
+        .padding(.top, Spacing.sm)  // Breathing room for traffic lights
         .padding(.horizontal, 1)  // Subtle edge spacing
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
@@ -365,7 +365,7 @@ struct TalkieNavigationView: View {
                     title: "Settings"
                 )
                 .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, 6)
+                .padding(.vertical, Spacing.xs)
             }
         }
         .background(Theme.current.backgroundSecondary)
@@ -501,7 +501,7 @@ struct TalkieNavigationView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 28)
         .padding(.horizontal, isSidebarCollapsed ? 0 : 12)
-        .padding(.top, 8) // Clear traffic light buttons
+        .padding(.top, Spacing.sm) // Clear traffic light buttons
     }
 
     /// Interactive chevron button with hover and press feedback (matches TalkieLive)
@@ -671,11 +671,11 @@ struct TalkieNavigationView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "text.below.photo")
                         .font(Theme.current.fontDisplay)
-                        .foregroundColor(.secondary.opacity(Opacity.half))
+                        .foregroundColor(Theme.current.foregroundMuted.opacity(Opacity.half))
 
                     Text("SELECT A MEMO")
                         .font(Theme.current.fontBodyBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.current.surface1)
@@ -782,15 +782,15 @@ struct TalkieNavigationView: View {
             // Search field (moved from sidebar to content column)
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(Theme.current.fontSM)
             }
             .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, 6)
+            .padding(.vertical, Spacing.xs)
             .background(Color(nsColor: .textBackgroundColor).opacity(Opacity.half))
             .cornerRadius(6)
             .padding(.horizontal, 10)
@@ -875,7 +875,7 @@ private struct SidebarButtonContent: View {
                 // Text and badge - always present, opacity animated
                 HStack {
                     Text(title)
-                        .font(.system(size: 12))
+                        .font(Theme.current.fontSM)
                         .foregroundColor(isSelected ? .white : Theme.current.foreground)
                     Spacer()
                     if showSpinner {
