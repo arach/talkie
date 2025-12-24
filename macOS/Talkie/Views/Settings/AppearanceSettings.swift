@@ -144,7 +144,19 @@ struct AppearanceSettingsView: View {
                             .stroke(Theme.current.divider, lineWidth: 0.5)
                     )
 
-                    // Theme selection (bottom)
+                    // Visual separator
+                    Rectangle()
+                        .fill(Theme.current.divider)
+                        .frame(height: 0.5)
+                        .padding(.vertical, Spacing.sm)
+
+                    // Theme controls section
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("THEME")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+
+                    // Theme presets
                     HStack(spacing: Spacing.xs) {
                         ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
                             Button(action: { settingsManager.applyTheme(preset) }) {
@@ -172,112 +184,49 @@ struct AppearanceSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
+
+                        // Appearance mode (Light/Dark/System) - inline
+                        HStack(spacing: Spacing.xs) {
+                            Text("Mode:")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+
+                            ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                                Button(action: { settingsManager.appearanceMode = mode }) {
+                                    Text(mode.displayName)
+                                        .font(Theme.current.fontXS)
+                                    .padding(.horizontal, Spacing.sm)
+                                    .padding(.vertical, Spacing.xs)
+                                    .background(settingsManager.appearanceMode == mode ? Color.accentColor.opacity(Opacity.medium) : Theme.current.backgroundTertiary)
+                                    .cornerRadius(CornerRadius.xs)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                            .stroke(settingsManager.appearanceMode == mode ? Color.accentColor : Color.clear, lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.top, Spacing.xs)
+
+                        // Accent Color - compact inline
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("Accent Color:")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+
+                            HStack(spacing: Spacing.xs) {
+                                ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
+                                    accentColorCircle(colorOption)
+                                }
+                            }
+                        }
+                        .padding(.top, Spacing.sm)
+                    }
                 }
                 .padding(Spacing.lg)
                 .background(Theme.current.surface2)
                 .cornerRadius(CornerRadius.sm)
-
-                // MARK: - Theme Mode + Accent Color (side-by-side on larger screens)
-                GeometryReader { geometry in
-                    let useColumns = geometry.size.width > 700
-
-                    if useColumns {
-                        HStack(alignment: .top, spacing: Spacing.sm) {
-                            // Appearance Mode
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("APPEARANCE")
-                                    .font(Theme.current.fontXSBold)
-                                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                                HStack(spacing: Spacing.sm) {
-                                    ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
-                                        AppearanceModeButton(
-                                            mode: mode,
-                                            isSelected: settingsManager.appearanceMode == mode,
-                                            action: { settingsManager.appearanceMode = mode }
-                                        )
-                                    }
-                                }
-                            }
-                            .padding(Spacing.lg)
-                            .frame(maxWidth: .infinity)
-                            .background(Theme.current.surface2)
-                            .cornerRadius(CornerRadius.sm)
-
-                            // Accent Color
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("ACCENT COLOR")
-                                    .font(Theme.current.fontXSBold)
-                                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                                Text("Used for buttons, selections, and highlights.")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: Spacing.sm)], spacing: Spacing.sm) {
-                                    ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
-                                        AccentColorButton(
-                                            colorOption: colorOption,
-                                            isSelected: settingsManager.accentColor == colorOption,
-                                            action: { settingsManager.accentColor = colorOption }
-                                        )
-                                    }
-                                }
-                            }
-                            .padding(Spacing.lg)
-                            .frame(maxWidth: .infinity)
-                            .background(Theme.current.surface2)
-                            .cornerRadius(CornerRadius.sm)
-                        }
-                    } else {
-                        VStack(spacing: Spacing.sm) {
-                            // Appearance Mode
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("APPEARANCE")
-                                    .font(Theme.current.fontXSBold)
-                                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                                HStack(spacing: Spacing.sm) {
-                                    ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
-                                        AppearanceModeButton(
-                                            mode: mode,
-                                            isSelected: settingsManager.appearanceMode == mode,
-                                            action: { settingsManager.appearanceMode = mode }
-                                        )
-                                    }
-                                }
-                            }
-                            .padding(Spacing.lg)
-                            .background(Theme.current.surface2)
-                            .cornerRadius(CornerRadius.sm)
-
-                            // Accent Color
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("ACCENT COLOR")
-                                    .font(Theme.current.fontXSBold)
-                                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                                Text("Used for buttons, selections, and highlights.")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: Spacing.sm)], spacing: Spacing.sm) {
-                                    ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
-                                        AccentColorButton(
-                                            colorOption: colorOption,
-                                            isSelected: settingsManager.accentColor == colorOption,
-                                            action: { settingsManager.accentColor = colorOption }
-                                        )
-                                    }
-                                }
-                            }
-                            .padding(Spacing.lg)
-                            .background(Theme.current.surface2)
-                            .cornerRadius(CornerRadius.sm)
-                        }
-                    }
-                }
-                .frame(height: 200)
 
                 // MARK: - Typography
                 GeometryReader { geometry in
@@ -574,6 +523,24 @@ struct AppearanceSettingsView: View {
                 .background(settingsManager.resolvedAccentColor.opacity(Opacity.light))
                 .cornerRadius(Spacing.xs)
         }
+    }
+
+    private func accentColorCircle(_ colorOption: AccentColorOption) -> some View {
+        Button(action: { settingsManager.accentColor = colorOption }) {
+            Circle()
+                .fill(colorOption.color ?? .accentColor)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Circle()
+                        .stroke(settingsManager.accentColor == colorOption ? Color.white : Color.clear, lineWidth: 2)
+                )
+                .overlay(
+                    Circle()
+                        .stroke(Theme.current.divider, lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(colorOption.displayName)
     }
 }
 
