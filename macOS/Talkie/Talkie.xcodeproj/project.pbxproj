@@ -168,7 +168,6 @@
 		AC3CA013906723835202D212 /* WorkflowRunModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */; };
 		AD8EF53880975F30AD0EC8CA /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C61F06614F98D34848572E /* OnboardingView.swift */; };
 		AD9D159217AF0A90FEE7D5E0 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 82F176DD5AC8EBE60E6289AF /* README.md */; };
-		B213BC6C556325E528768C8D /* MemoRowView.swift.bak in Resources */ = {isa = PBXBuildFile; fileRef = 9432282ED6D2758AA7A1B7EC /* MemoRowView.swift.bak */; };
 		B2D45FD680D49E959CDF36F1 /* SpeechSynthesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21E7CFB7BA19EE59D1A229FC /* SpeechSynthesisService.swift */; };
 		B33086CC4E3AD8DD1FC5EE13 /* TalkieServiceMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720EC90439850FC3D809A9BC /* TalkieServiceMonitorView.swift */; };
 		B3A26A431CEBB6919CFB877D /* WorkflowSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE0F9BE138BF58E1192F3E9 /* WorkflowSettings.swift */; };
@@ -236,6 +235,10 @@
 		FC33C6A3FA04C2738A9B4D66 /* SoundPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A38CCA838844AFE5ED659DF /* SoundPicker.swift */; };
 		FD32277796EAB1A5DC852878 /* TalkieLiveXPCProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1F0E1D766D3D43030FD6D5 /* TalkieLiveXPCProtocol.swift */; };
 		FF044B3BF457DF5BC460F852 /* MigrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E290B0FBD0158D68EC8450F /* MigrationView.swift */; };
+		C3B068FA65499F3C6B6E21DF /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B8164831ECEC4477534D34 /* Router.swift */; };
+		DDB2C991DA7EFEBCE15FCAE1 /* LiveRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 316C2FDFA04ED5D5552A486C /* LiveRoutes.swift */; };
+		74B9DF993BBD5B322490A51D /* AppRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3AFDD3E1A60EEA5DEF0BF21 /* AppRoutes.swift */; };
+		9E5A82C7D610590A782043F9 /* SystemRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A87EFADFC67C40F1CDD1E53 /* SystemRoutes.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -358,6 +361,10 @@
 		7EB3DC2359B9E712BF820F99 /* QuickOpenService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenService.swift; sourceTree = "<group>"; };
 		81C6B2B2FDE4B63886C1B5C9 /* talkie.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = talkie.xcdatamodel; sourceTree = "<group>"; };
 		81D70D944B76B52D29595E4F /* RoutingMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutingMode.swift; sourceTree = "<group>"; };
+		08B8164831ECEC4477534D34 /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
+		316C2FDFA04ED5D5552A486C /* LiveRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRoutes.swift; sourceTree = "<group>"; };
+		A3AFDD3E1A60EEA5DEF0BF21 /* AppRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoutes.swift; sourceTree = "<group>"; };
+		3A87EFADFC67C40F1CDD1E53 /* SystemRoutes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemRoutes.swift; sourceTree = "<group>"; };
 		82E3468244D3E8795689E730 /* TypographyInspectorTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypographyInspectorTool.swift; sourceTree = "<group>"; };
 		82F176DD5AC8EBE60E6289AF /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		835DE1FE016BEB2E77250F1B /* DesignOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignOverlay.swift; sourceTree = "<group>"; };
@@ -379,7 +386,6 @@
 		936E9217E1D38B321ADE8848 /* AudioDeviceSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceSelector.swift; sourceTree = "<group>"; };
 		938F08F6F9BB5CCABE877A55 /* StatusBarComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarComponents.swift; sourceTree = "<group>"; };
 		93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowConverter.swift; sourceTree = "<group>"; };
-		9432282ED6D2758AA7A1B7EC /* MemoRowView.swift.bak */ = {isa = PBXFileReference; path = MemoRowView.swift.bak; sourceTree = "<group>"; };
 		95F0695BC582E2740F8700BD /* GeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiService.swift; sourceTree = "<group>"; };
 		96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconProvider.swift; sourceTree = "<group>"; };
 		9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
@@ -598,7 +604,6 @@
 			children = (
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				37B249E75E681770AEA53425 /* MemoRowView.swift */,
-				9432282ED6D2758AA7A1B7EC /* MemoRowView.swift.bak */,
 				3F03AE42A0A83903EC8E3B2D /* NavigationView.swift */,
 				35028147CAD1F8AA00F3561D /* PendingActionsView.swift */,
 				5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */,
@@ -1003,6 +1008,10 @@
 				3FE717C09AA01A77D7A5CFA8 /* QuickActionRunner.swift */,
 				7EB3DC2359B9E712BF820F99 /* QuickOpenService.swift */,
 				CA102C795808328B24E8B0C1 /* RecordingController.swift */,
+				08B8164831ECEC4477534D34 /* Router.swift */,
+				A3AFDD3E1A60EEA5DEF0BF21 /* AppRoutes.swift */,
+				316C2FDFA04ED5D5552A486C /* LiveRoutes.swift */,
+				3A87EFADFC67C40F1CDD1E53 /* SystemRoutes.swift */,
 				8F8B366F3350DFDD6C3F359A /* ServiceLifecycleManager.swift */,
 				32BD4DACB0E6B16431F7764C /* SessionLayoutManager.swift */,
 				9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */,
@@ -1101,7 +1110,6 @@
 				105F1CFFCA8FF0A934729073 /* Assets.xcassets in Resources */,
 				71F80A8C9FB89E9AABF7B5E6 /* LLMModelsSettingsView.swift.disabled in Resources */,
 				59B2EC1EB7D88BC8C366D9FD /* LiveHistoryView.swift.disabled in Resources */,
-				B213BC6C556325E528768C8D /* MemoRowView.swift.bak in Resources */,
 				AD9D159217AF0A90FEE7D5E0 /* README.md in Resources */,
 				3A82694060BF7CD29FC9A051 /* Resources in Resources */,
 				35CAD8238CDD26722C281996 /* TalkieSound.swift.disabled in Resources */,
@@ -1265,6 +1273,10 @@
 				D5322C7672EB2F4843DA6AAF /* RelativeTimeTicker.swift in Sources */,
 				C92FBA5D14EAC5682D04C9FC /* RepositoryInstrumentation.swift in Sources */,
 				414905D45E0EEBB7E5576687 /* RoutingMode.swift in Sources */,
+				C3B068FA65499F3C6B6E21DF /* Router.swift in Sources */,
+				74B9DF993BBD5B322490A51D /* AppRoutes.swift in Sources */,
+				DDB2C991DA7EFEBCE15FCAE1 /* LiveRoutes.swift in Sources */,
+				9E5A82C7D610590A782043F9 /* SystemRoutes.swift in Sources */,
 				E81B2C98999842A079B60371 /* RulerTool.swift in Sources */,
 				87AEEDCCEB14E11296DFA2D0 /* STTModelCard.swift in Sources */,
 				BBE4FF180C261F7B35EE151F /* ServiceHealthCard.swift in Sources */,
