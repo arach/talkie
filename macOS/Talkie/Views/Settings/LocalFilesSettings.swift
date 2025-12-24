@@ -32,13 +32,13 @@ struct LocalFilesSettingsView: View {
             // MARK: - Value Proposition
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.green)
+                    .font(Theme.current.fontHeadline)
+                    .foregroundColor(SemanticColor.success)
 
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text("YOUR DATA, YOUR FILES")
                         .font(Theme.current.fontSMBold)
-                        .foregroundColor(.green)
+                        .foregroundColor(SemanticColor.success)
 
                     Text("Local files are stored as plain text (Markdown) and standard audio formats. You can open, edit, backup, or move them freely. No lock-in, full portability.")
                         .font(Theme.current.fontXS)
@@ -46,11 +46,11 @@ struct LocalFilesSettingsView: View {
                 }
             }
             .padding(Spacing.md)
-            .background(Color.green.opacity(Opacity.light))
+            .background(SemanticColor.success.opacity(Opacity.light))
             .cornerRadius(CornerRadius.sm)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .stroke(Color.green.opacity(Opacity.medium), lineWidth: 1)
+                    .stroke(SemanticColor.success.opacity(Opacity.medium), lineWidth: 1)
             )
 
             // MARK: - Transcripts Section
@@ -68,17 +68,17 @@ struct LocalFilesSettingsView: View {
 
                     HStack(spacing: Spacing.xxs) {
                         Circle()
-                            .fill(settingsManager.saveTranscriptsLocally ? Color.green : Color.secondary)
+                            .fill(settingsManager.saveTranscriptsLocally ? SemanticColor.success : Color.secondary)
                             .frame(width: 6, height: 6)
                         Text(settingsManager.saveTranscriptsLocally ? "ENABLED" : "DISABLED")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(settingsManager.saveTranscriptsLocally ? .green : Theme.current.foregroundSecondary)
+                            .font(Theme.current.fontXSMedium)
+                            .foregroundColor(settingsManager.saveTranscriptsLocally ? SemanticColor.success : Theme.current.foregroundSecondary)
                     }
                 }
 
                 HStack(spacing: Spacing.sm) {
                     Image(systemName: "doc.text.fill")
-                        .font(.system(size: 20))
+                        .font(Theme.current.fontHeadline)
                         .foregroundColor(.blue)
                         .frame(width: 28)
 
@@ -114,13 +114,13 @@ struct LocalFilesSettingsView: View {
                 if settingsManager.saveTranscriptsLocally {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("FOLDER PATH")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
                         HStack(spacing: Spacing.sm) {
                             TextField("~/Documents/Talkie/Transcripts", text: $settings.transcriptsFolderPath)
                                 .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(Theme.current.fontSM)
 
                             Button(action: { showingTranscriptsFolderPicker = true }) {
                                 Image(systemName: "folder")
@@ -161,17 +161,17 @@ struct LocalFilesSettingsView: View {
 
                     HStack(spacing: Spacing.xxs) {
                         Circle()
-                            .fill(settingsManager.saveAudioLocally ? Color.green : Color.secondary)
+                            .fill(settingsManager.saveAudioLocally ? SemanticColor.success : Color.secondary)
                             .frame(width: 6, height: 6)
                         Text(settingsManager.saveAudioLocally ? "ENABLED" : "DISABLED")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(settingsManager.saveAudioLocally ? .green : Theme.current.foregroundSecondary)
+                            .font(Theme.current.fontXSMedium)
+                            .foregroundColor(settingsManager.saveAudioLocally ? SemanticColor.success : Theme.current.foregroundSecondary)
                     }
                 }
 
                 HStack(spacing: Spacing.sm) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 20))
+                        .font(Theme.current.fontHeadline)
                         .foregroundColor(.purple)
                         .frame(width: 28)
 
@@ -202,13 +202,13 @@ struct LocalFilesSettingsView: View {
                 if settingsManager.saveAudioLocally {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("FOLDER PATH")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(Theme.current.fontXSBold)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
                         HStack(spacing: Spacing.sm) {
                             TextField("~/Documents/Talkie/Audio", text: $settings.audioFolderPath)
                                 .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(Theme.current.fontSM)
 
                             Button(action: { showingAudioFolderPicker = true }) {
                                 Image(systemName: "folder")
@@ -328,7 +328,7 @@ struct LocalFilesSettingsView: View {
                         if let message = statusMessage {
                             HStack(spacing: Spacing.xs) {
                                 Image(systemName: message.contains("✓") ? "checkmark.circle.fill" : "info.circle.fill")
-                                    .foregroundColor(message.contains("✓") ? .green : .blue)
+                                    .foregroundColor(message.contains("✓") ? SemanticColor.success : .blue)
                                 Text(message)
                                     .font(Theme.current.fontXS)
                             }
@@ -413,7 +413,7 @@ private struct LocalFilesStatCard: View {
                     .font(Theme.current.fontXS)
                     .foregroundColor(color)
                 Text(value)
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .font(Theme.current.fontHeadline)
                     .foregroundColor(color)
             }
             Text(label)

@@ -301,7 +301,7 @@ struct AutoRunWorkflowRow: View {
 
             // Workflow icon
             Image(systemName: workflow.icon)
-                .font(Theme.current.fontMD)
+                .font(Theme.current.fontBody)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 28, height: 28)
                 .background(workflow.color.color.opacity(Opacity.medium))
@@ -341,7 +341,7 @@ struct AutoRunWorkflowRow: View {
             // Remove button
             Button(action: onDisable) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(Theme.current.fontMD)
+                    .font(Theme.current.fontBody)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
             .buttonStyle(.plain)
