@@ -220,6 +220,44 @@ class SettingsStoryboardGenerator {
     }
 
     /// Capture individual page screenshots to a directory
+    /// Capture a single settings page screenshot
+    func captureSinglePage(_ page: SettingsPage, to directory: URL) async -> URL? {
+        // Create directory if needed
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        print("📸 Capturing \(page.title)...")
+
+        // Create isolated view window for rendering
+        let window = createRenderWindow()
+        window.title = "Settings — \(page.title)"
+
+        let view = createView(for: page)
+        window.contentView = NSHostingView(rootView: view)
+        window.makeKeyAndOrderFront(nil)
+
+        // Wait for window to render fully
+        try? await Task.sleep(for: .milliseconds(600))
+
+        var result: URL?
+        if let screenshot = captureWindow(window) {
+            // Use pathSegment for filename consistency: settings-appearance.png, settings-permissions.png
+            let pathSegment = page.settingsSection.pathSegment
+            let filename = "settings-\(pathSegment).png"
+            let fileURL = directory.appendingPathComponent(filename)
+
+            if let tiffData = screenshot.tiffRepresentation,
+               let bitmapImage = NSBitmapImageRep(data: tiffData),
+               let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                try? pngData.write(to: fileURL)
+                result = fileURL
+                print("  ✅ Saved: \(filename)")
+            }
+        }
+
+        window.close()
+        return result
+    }
+
     func captureAllPages(to directory: URL) async -> [SettingsPage: URL] {
         var results: [SettingsPage: URL] = [:]
 

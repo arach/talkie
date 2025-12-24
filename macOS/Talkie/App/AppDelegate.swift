@@ -366,8 +366,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
             print("📸 Capturing screenshot...")
 
-            // Capture screenshot for this screen only (requires MainActor)
-            _ = await SettingsStoryboardGenerator.shared.captureAllPages(to: screenshotDir)
+            // Capture screenshot for this screen only
+            var screenshotPath: String = "N/A (non-settings screen)"
+            if screen.section == .settings, let settingsPage = screen.settingsPage {
+                if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, to: screenshotDir) {
+                    screenshotPath = url.path
+                }
+            } else {
+                print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
+            }
 
             print("📊 Analyzing code...")
             let result = await DesignAuditor.shared.audit(screen: screen, withScreenshot: false)
@@ -375,7 +382,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("\n✅ Audit complete!")
             print("   Grade: \(result.grade) (\(result.overallScore)%)")
             print("   Total Issues: \(result.totalIssues)")
-            print("   Screenshot: \(screenshotDir.path)/\(screen.rawValue).png")
+            print("   Screenshot: \(screenshotPath)")
 
             exit(0)
         }

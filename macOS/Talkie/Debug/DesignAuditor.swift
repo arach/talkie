@@ -95,6 +95,26 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// Convert settings screens to SettingsPage enum (for screenshot capture)
+    var settingsPage: SettingsPage? {
+        switch self {
+        case .settingsAppearance: return .appearance
+        case .settingsDictationCapture: return .dictationCapture
+        case .settingsDictationOutput: return .dictationOutput
+        case .settingsQuickActions: return .quickActions
+        case .settingsQuickOpen: return .quickOpen
+        case .settingsAutoRun: return .autoRun
+        case .settingsAIProviders: return .aiProviders
+        case .settingsTranscription: return .transcriptionModels
+        case .settingsLLM: return .llmModels
+        case .settingsDatabase: return .database
+        case .settingsFiles: return .files
+        case .settingsPermissions: return .permissions
+        case .settingsDebug: return .debugInfo
+        default: return nil
+        }
+    }
+
     var sourceFiles: [String] {
         switch self {
         case .settingsAppearance: return ["Views/Settings/AppearanceSettings.swift"]

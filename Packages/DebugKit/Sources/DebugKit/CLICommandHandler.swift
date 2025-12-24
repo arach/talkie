@@ -29,31 +29,21 @@ public class CLICommandHandler {
     /// Check command line arguments and execute debug command if present
     /// Returns true if a debug command was executed (app should exit)
     public func handleCommandLineArguments() async -> Bool {
-        print("[CLIHandler] 1. Getting command line arguments...")
         let args = CommandLine.arguments
-        print("[CLIHandler] 2. Args count: \(args.count)")
 
         // Look for --debug=<command>
-        print("[CLIHandler] 3. Looking for --debug= argument...")
         guard let debugArg = args.first(where: { $0.hasPrefix("--debug=") }) else {
-            print("[CLIHandler] 4. No debug arg found, returning false")
             return false
         }
 
-        print("[CLIHandler] 5. Found debug arg: \(debugArg)")
         let command = String(debugArg.dropFirst("--debug=".count))
-        print("[CLIHandler] 6. Extracted command: \(command)")
 
         // Get additional arguments (everything after the --debug flag)
-        print("[CLIHandler] 7. Getting additional args...")
         let additionalArgs = args.dropFirst(args.firstIndex(of: debugArg)! + 1)
-        print("[CLIHandler] 8. Additional args: \(Array(additionalArgs))")
 
         print("🐛 Debug command: \(command)")
 
-        print("[CLIHandler] 9. About to execute command...")
         await executeCommand(command, args: Array(additionalArgs))
-        print("[CLIHandler] 10. Command execution returned")
         return true
     }
 
