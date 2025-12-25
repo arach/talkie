@@ -1121,6 +1121,7 @@ private struct PermissionLiveRow: View {
 
 // MARK: - Live Settings Sidebar Resizer Component
 
+/// Native-style resizer divider (mimics NSSplitView behavior)
 private struct LiveSettingsSidebarResizer: View {
     @Binding var width: Double
     let minWidth: Double
@@ -1130,30 +1131,43 @@ private struct LiveSettingsSidebarResizer: View {
     @State private var isDragging = false
 
     var body: some View {
-        Rectangle()
-            .fill(isDragging ? Color.accentColor.opacity(0.5) : (isHovering ? Theme.current.foregroundMuted.opacity(0.3) : Theme.current.divider))
-            .frame(width: 4)
-            .contentShape(Rectangle().inset(by: -4))
-            .onHover { hovering in
-                isHovering = hovering
-                if hovering {
-                    NSCursor.resizeLeftRight.push()
-                } else if !isDragging {
-                    NSCursor.pop()
-                }
+        // Native macOS split view style: 1px divider with expanded hit area
+        ZStack {
+            // Visible 1px divider line
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+
+            // Invisible expanded hit area for easier grabbing (8px wide)
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 8)
+                .contentShape(Rectangle())
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else if !isDragging {
+                NSCursor.pop()
             }
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if !isDragging {
                         isDragging = true
-                        let newWidth = width + value.translation.width
-                        width = min(maxWidth, max(minWidth, newWidth))
                     }
-                    .onEnded { _ in
-                        isDragging = false
+                    let newWidth = width + value.translation.width
+                    width = min(maxWidth, max(minWidth, newWidth))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    if !isHovering {
                         NSCursor.pop()
                     }
-            )
+                }
+        )
     }
 }
 
