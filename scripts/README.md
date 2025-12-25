@@ -77,6 +77,31 @@ python3 scripts/vlm-audit-screens.py         # Latest audit
 python3 scripts/vlm-audit-screens.py --screens "memos-*"
 ```
 
+### VLM Service Management
+
+**`vlm-status.sh`** - Check VLM service status
+- Shows if VLM is running and ready
+- Displays current configuration
+- Shows endpoints and process info
+
+```bash
+./scripts/vlm-status.sh
+```
+
+**VLM Configuration:**
+- **Stable defaults:** `127.0.0.1:12346` (matches agentloop)
+- **Config file:** `.vlmrc` (optional, gitignored)
+- **Environment vars:** `VLM_HOST`, `VLM_PORT`, `VLM_URL`
+
+```bash
+# Customize via environment
+export VLM_HOST=127.0.0.1
+export VLM_PORT=12346
+
+# Or via config file
+source .vlmrc
+```
+
 ### Visual Analysis
 
 **`analyze-ui.py`** - General-purpose screenshot analyzer

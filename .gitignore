@@ -79,3 +79,4 @@ _archive/
 # Releases (built artifacts)
 releases/
 *.pbxproj.backup
+.vlmrc

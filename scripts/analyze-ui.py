@@ -25,6 +25,7 @@ Usage:
 
 import base64
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -36,8 +37,14 @@ except ImportError:
     print("Error: requests module not found. Install with: pip3 install requests")
     sys.exit(1)
 
-VLM_URL = "http://127.0.0.1:12346/v1/chat/completions"
-VLM_HEALTH_URL = "http://127.0.0.1:12346/health"
+# VLM Service Configuration
+# Matches agentloop defaults: ~/dev/agentloop VLM service
+VLM_HOST = os.environ.get("VLM_HOST", "127.0.0.1")
+VLM_PORT = os.environ.get("VLM_PORT", "12346")
+VLM_BASE_URL = os.environ.get("VLM_URL", f"http://{VLM_HOST}:{VLM_PORT}")
+
+VLM_URL = f"{VLM_BASE_URL}/v1/chat/completions"
+VLM_HEALTH_URL = f"{VLM_BASE_URL}/health"
 
 DEFAULT_PROMPT = """Analyze this screenshot of a macOS app in light mode and identify any visual issues.
 
