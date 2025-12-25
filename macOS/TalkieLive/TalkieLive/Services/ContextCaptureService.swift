@@ -68,7 +68,7 @@ struct ContextCaptureOptions {
 
 /// Simple baseline metadata capture result
 struct ContextCaptureResult {
-    let metadata: UtteranceMetadata
+    let metadata: DictationMetadata
 }
 
 /// Rich context snapshot captured at a moment in time
@@ -92,7 +92,7 @@ struct CapturedContext {
     var isClaudeCodeSession: Bool = false
 
     /// Convert to metadata fields
-    func applyTo(_ metadata: inout UtteranceMetadata) {
+    func applyTo(_ metadata: inout DictationMetadata) {
         metadata.activeAppBundleID = appBundleID
         metadata.activeAppName = appName
         metadata.activeWindowTitle = windowTitle
@@ -147,17 +147,17 @@ final class ContextCaptureService {
     /// Capture baseline context synchronously (fast: ~1ms)
     /// Returns app name, bundle ID, and window title - no blocking AX calls
     @MainActor
-    func captureBaseline() -> UtteranceMetadata {
+    func captureBaseline() -> DictationMetadata {
         let options = ContextCaptureOptions.fromSettings()
         guard options.enabled else {
-            return UtteranceMetadata()
+            return DictationMetadata()
         }
         return captureBaselineInternal()
     }
 
     /// Schedule background enrichment that updates the DB record after paste
     /// Fire-and-forget: runs in background and updates the record when complete
-    func scheduleEnrichment(utteranceId: Int64, baseline: UtteranceMetadata) {
+    func scheduleEnrichment(utteranceId: Int64, baseline: DictationMetadata) {
         let options = ContextCaptureOptions(enabled: true, detail: .rich)
         guard options.detail == .rich else { return }
 
@@ -176,8 +176,8 @@ final class ContextCaptureService {
 
     // MARK: - Private Helpers
 
-    private func captureBaselineInternal() -> UtteranceMetadata {
-        var metadata = UtteranceMetadata()
+    private func captureBaselineInternal() -> DictationMetadata {
+        var metadata = DictationMetadata()
 
         guard let frontApp = NSWorkspace.shared.frontmostApplication else {
             logger.debug("No frontmost application")
@@ -198,8 +198,8 @@ final class ContextCaptureService {
     }
 
     /// Capture richer AX context (runs asynchronously)
-    private func captureRichContext(options: ContextCaptureOptions) async -> UtteranceMetadata {
-        var metadata = UtteranceMetadata()
+    private func captureRichContext(options: ContextCaptureOptions) async -> DictationMetadata {
+        var metadata = DictationMetadata()
 
         if !AXIsProcessTrusted() {
             if options.logFailures {
@@ -425,7 +425,7 @@ final class ContextCaptureService {
 
 extension ContextCapture {
     /// Capture baseline context using the new ContextCaptureService
-    @MainActor static func captureRichContext() -> UtteranceMetadata {
+    @MainActor static func captureRichContext() -> DictationMetadata {
         ContextCaptureService.shared.captureBaseline()
     }
 }
