@@ -557,6 +557,10 @@ class DesignAuditor {
     /// Build debug navigation path for a screen
     private func buildDebugPath(for screen: AppScreen) -> String {
         switch screen {
+        // Home/Dashboard
+        case .homeDashboard: return "home/dashboard"
+        case .homeUnified: return "home/unified"
+
         // Settings
         case .settingsAppearance: return "settings/appearance"
         case .settingsDictationCapture: return "settings/dictation-capture"
@@ -580,7 +584,6 @@ class DesignAuditor {
         // Memos
         case .memosAllMemos: return "memos"
         case .memoDetail: return "memos/detail"
-        case .memoEditor: return "memos/editor"
 
         // Onboarding
         case .onboardingWelcome: return "onboarding/welcome"
@@ -589,6 +592,9 @@ class DesignAuditor {
 
         // Navigation
         case .navigationSidebar: return "navigation"
+
+        // Catch-all for any missing cases
+        default: return screen.rawValue
         }
     }
 

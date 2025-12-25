@@ -152,14 +152,15 @@ struct HistoryView: View {
                 self.settingsSection = LiveSettingsSection.transcription
                 self.selectedSection = .settings
             }
-            .onReceive(NotificationCenter.default.publisher(for: .selectDictation)) { notification in
-                if let id = notification.userInfo?["id"] as? Int64 {
-                    self.selectedSection = .history
-                    if let dictation = self.store.dictations.first(where: { $0.liveID == id }) {
-                        self.selectedDictationIDs = [dictation.id]
-                    }
-                }
-            }
+            // TODO: Re-enable once .selectDictation notification is added
+            // .onReceive(NotificationCenter.default.publisher(for: .selectDictation)) { notification in
+            //     if let id = notification.userInfo?["id"] as? Int64 {
+            //         self.selectedSection = .history
+            //         if let dictation = self.store.dictations.first(where: { $0.liveID == id }) {
+            //             self.selectedDictationIDs = [dictation.id]
+            //         }
+            //     }
+            // }
     }
 
     private var baseView: some View {

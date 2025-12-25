@@ -219,7 +219,7 @@ struct TalkieNavigationViewNative: View {
             AllMemos()
         case .liveDashboard:
             HomeView(
-                onSelectUtterance: { _ in selectedSection = .liveRecent },
+                onSelectDictation: { _ in selectedSection = .liveRecent },
                 onSelectApp: { _, _ in selectedSection = .liveRecent }
             )
             .wrapInTalkieSection("LiveDashboard")

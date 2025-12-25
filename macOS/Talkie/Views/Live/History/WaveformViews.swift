@@ -256,7 +256,7 @@ struct WaveformVisualization: View {
 // MARK: - Waveform Card
 
 struct WaveformCard: View {
-    let dictation: Utterance
+    let dictation: Dictation
     private let playback = AudioPlaybackManager.shared
 
     private var isThisPlaying: Bool {

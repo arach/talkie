@@ -600,10 +600,10 @@ struct TalkieNavigationView: View {
             // Live home view with insights, activity, and stats
             TalkieSection("LiveDashboard") {
                 HomeView(
-                    onSelectUtterance: { utterance in
-                        // Navigate to Recent and select this utterance
+                    onSelectDictation: { dictation in
+                        // Navigate to Recent and select this dictation
                         selectedSection = .liveRecent
-                        // TODO: Pass selected utterance to Recent view
+                        // TODO: Pass selected dictation to Recent view
                     },
                     onSelectApp: { appName, _ in
                         // Navigate to Recent filtered by app

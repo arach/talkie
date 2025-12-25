@@ -313,7 +313,10 @@ struct SettingsView: View {
         case .quickOpen:
             QuickOpenSettingsView()
         case .automations:
-            AutoRunSettingsView()
+            // TODO: Re-add AutoRunSettingsView
+            Text("Automations settings coming soon")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.current.surface1)
 
         // AI MODELS
         case .aiProviders:
