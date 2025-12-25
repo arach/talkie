@@ -692,7 +692,8 @@ enum TalkieTheme {
     static let tertiaryBackground = Color(NSColor.underPageBackgroundColor)
 
     private static func currentPalette() -> ThemeColorPalette {
-        return ThemeColorPalette.midnight()
+        let isDarkMode = SettingsManager.shared.appearanceMode == .dark
+        return isDarkMode ? ThemeColorPalette.midnight() : ThemeColorPalette.light()
     }
 
     static var surface: Color { currentPalette().surface }
@@ -738,6 +739,23 @@ struct ThemeColorPalette {
             divider: Color.white.opacity(0.1),
             hover: Color.white.opacity(0.05),
             accent: Color.cyan
+        )
+    }
+
+    static func light() -> ThemeColorPalette {
+        ThemeColorPalette(
+            surface: Color(NSColor(red: 0.98, green: 0.98, blue: 0.99, alpha: 1.0)),
+            surfaceElevated: Color(NSColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)),
+            surfaceCard: Color(NSColor(red: 0.94, green: 0.94, blue: 0.95, alpha: 1.0)),
+            textPrimary: Color.black,
+            textSecondary: Color.black.opacity(0.7),
+            textTertiary: Color.black.opacity(0.5),
+            textMuted: Color.black.opacity(0.3),
+            border: Color.black.opacity(0.1),
+            borderSubtle: Color.black.opacity(0.06),
+            divider: Color.black.opacity(0.1),
+            hover: Color.black.opacity(0.05),
+            accent: Color.blue
         )
     }
 }

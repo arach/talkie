@@ -1,10 +1,19 @@
 #!/bin/bash
-# Smart launcher - finds the DerivedData matching this worktree
+# Smart launcher - builds then finds the DerivedData matching this worktree
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 XCODEPROJ="$PROJECT_ROOT/macOS/Talkie/Talkie.xcodeproj"
 CACHE_FILE="$PROJECT_ROOT/.deriveddata"
+
+# Build first
+echo "Building Talkie..."
+xcodebuild -project "$XCODEPROJ" -scheme Talkie -configuration Debug build 2>&1 | tail -20
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+  echo "Build failed!"
+  exit 1
+fi
+echo "Build succeeded!"
 
 # Try cached path first
 if [ -f "$CACHE_FILE" ]; then

@@ -200,7 +200,7 @@ struct AllMemos: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.04))
+            .background(TalkieTheme.hover)
             .cornerRadius(6)
 
             // Inline filter chips
@@ -231,10 +231,10 @@ struct AllMemos: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, 10)
-        .background(Color.black.opacity(0.3))
+        .background(TalkieTheme.surfaceElevated)
         .overlay(
             Rectangle()
-                .fill(Color.white.opacity(0.06))
+                .fill(TalkieTheme.divider)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -390,7 +390,7 @@ struct AllMemos: View {
                 } label: {
                     Image(systemName: selectAllIcon)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(selectedMemoIDs.isEmpty ? Color.white.opacity(0.2) : .accentColor)
+                        .foregroundColor(selectedMemoIDs.isEmpty ? TalkieTheme.textMuted : .accentColor)
                 }
                 .buttonStyle(.plain)
                 .frame(width: 32)
@@ -422,7 +422,7 @@ struct AllMemos: View {
         .background(TalkieTheme.surface)
         .overlay(
             Rectangle()
-                .fill(Color.white.opacity(0.06))
+                .fill(TalkieTheme.divider)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -460,7 +460,7 @@ struct AllMemos: View {
                         .font(.system(size: 7, weight: .bold))
                 }
             }
-            .foregroundColor(viewModel.sortField == field ? Color.white.opacity(0.9) : Color.white.opacity(0.4))
+            .foregroundColor(viewModel.sortField == field ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
         }
         .buttonStyle(.plain)
     }
@@ -630,7 +630,7 @@ struct AllMemos: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(viewMode == mode ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
                         .frame(width: 24, height: 20)
-                        .background(viewMode == mode ? Color.white.opacity(0.08) : Color.clear)
+                        .background(viewMode == mode ? TalkieTheme.surfaceCard : Color.clear)
                         .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
@@ -638,7 +638,7 @@ struct AllMemos: View {
             }
         }
         .padding(2)
-        .background(Color.white.opacity(0.03))
+        .background(TalkieTheme.hover)
         .cornerRadius(6)
     }
 
@@ -782,8 +782,8 @@ struct MemoRowPreview: View {
     @State private var isHovering = false
 
     private static let selectedBg = Color.accentColor.opacity(0.12)
-    private static let hoverBg = Color.white.opacity(0.03)
-    private static let cardBg = Color.white.opacity(0.02)
+    private static let hoverBg = TalkieTheme.hover
+    private static let cardBg = TalkieTheme.surface
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -807,7 +807,7 @@ struct MemoRowPreview: View {
                     .foregroundColor(TalkieTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.05))
+                    .background(TalkieTheme.hover)
                     .cornerRadius(4)
             }
 
@@ -848,7 +848,7 @@ struct MemoRowPreview: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isSelected ? Color.accentColor.opacity(0.3) : Color.white.opacity(0.04), lineWidth: 1)
+                .strokeBorder(isSelected ? Color.accentColor.opacity(0.3) : TalkieTheme.borderSubtle, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
@@ -879,7 +879,7 @@ struct MemoRowEnhanced: View {
 
     // Pre-computed colors
     private static let selectedBg = Color.accentColor.opacity(0.12)
-    private static let hoverBg = Color.white.opacity(0.03)
+    private static let hoverBg = TalkieTheme.hover
 
     var body: some View {
         Button {
@@ -890,7 +890,7 @@ struct MemoRowEnhanced: View {
                 if isMultiSelected {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 14))
-                        .foregroundColor(isSelected ? .accentColor : Color.white.opacity(0.25))
+                        .foregroundColor(isSelected ? .accentColor : TalkieTheme.textMuted)
                         .frame(width: 32, height: 28)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -926,7 +926,7 @@ struct MemoRowEnhanced: View {
         .onHover { isHovering = $0 }
         .overlay(
             Rectangle()
-                .fill(Color.white.opacity(0.04))
+                .fill(TalkieTheme.borderSubtle)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -956,7 +956,7 @@ struct MemoRowEnhanced: View {
         .foregroundColor(TalkieTheme.textMuted)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(Color.white.opacity(0.04))
+        .background(TalkieTheme.hover)
         .cornerRadius(4)
     }
 

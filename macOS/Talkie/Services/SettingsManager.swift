@@ -530,7 +530,7 @@ class SettingsManager {
     /// Primary background
     var tacticalBackground: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.05) : Color(white: 0.98)
+            return isDarkMode ? Color(white: 0.05) : Color(white: 0.96)
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
@@ -553,7 +553,7 @@ class SettingsManager {
     /// Secondary background (slightly lighter/darker)
     var tacticalBackgroundSecondary: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.08) : Color(white: 0.94)
+            return isDarkMode ? Color(white: 0.08) : Color(white: 0.88)
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.14) : Color(white: 0.94)
@@ -655,7 +655,7 @@ class SettingsManager {
     /// Divider/border color
     var tacticalDivider: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.2) : Color(white: 0.85)
+            return isDarkMode ? Color(white: 0.2) : Color(white: 0.65)
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.22) : Color(white: 0.88)
