@@ -734,6 +734,9 @@ final class LiveController: ObservableObject {
                     // Notify Talkie via XPC
                     TalkieLiveXPCService.shared.notifyDictationAdded()
 
+                    // Refresh pending count to clear queue indicator on successful recording
+                    TranscriptionRetryManager.shared.refreshPendingCount()
+
                     // Schedule enrichment
                     if let baseline = capturedContext {
                         ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
@@ -815,6 +818,9 @@ final class LiveController: ObservableObject {
                     // Notify Talkie via XPC (non-blocking)
                     TalkieLiveXPCService.shared.notifyDictationAdded()
 
+                    // Refresh pending count to clear queue indicator on successful recording
+                    TranscriptionRetryManager.shared.refreshPendingCount()
+
                     // Schedule enrichment
                     if let baseline = capturedContext {
                         ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
@@ -893,6 +899,7 @@ final class LiveController: ObservableObject {
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
                     TalkieLiveXPCService.shared.notifyDictationAdded()
+                    TranscriptionRetryManager.shared.refreshPendingCount()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")
@@ -961,6 +968,7 @@ final class LiveController: ObservableObject {
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
                     TalkieLiveXPCService.shared.notifyDictationAdded()
+                    TranscriptionRetryManager.shared.refreshPendingCount()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")

@@ -183,13 +183,18 @@ final class FloatingPillController: ObservableObject {
         let panelSize = panel.frame.size
         let margin: CGFloat = 8
 
+        // Actual pill content width when collapsed (not the full panel width)
+        let pillContentWidth: CGFloat = 160
+
         switch LiveSettings.shared.pillPosition {
         case .bottomCenter:
-            // Center based on screen midpoint, accounting for panel width
-            // Use floor to avoid sub-pixel positioning issues
-            let centerX = floor(screenFrame.midX - (panelSize.width / 2))
+            // Center based on the actual pill content, not the panel width
+            // Panel is wider (220px) to accommodate expanded states, but we center the content (160px)
+            let contentCenterX = floor(screenFrame.midX - (pillContentWidth / 2))
+            // Offset slightly to account for the panel being wider than content
+            let panelOffset = (panelSize.width - pillContentWidth) / 2
             return NSPoint(
-                x: centerX,
+                x: contentCenterX - panelOffset,
                 y: screenFrame.minY + 6  // Slight offset from bottom for breathing room
             )
         case .bottomLeft:
