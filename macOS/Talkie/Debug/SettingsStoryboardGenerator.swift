@@ -82,7 +82,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         case .dictationOutput: return .dictationOutput
         case .quickActions: return .quickActions
         case .quickOpen: return .quickOpen
-        case .autoRun: return .autoRun
+        case .autoRun: return .automations
         case .aiProviders: return .aiProviders
         case .transcriptionModels: return .transcriptionModels
         case .llmModels: return .llmModels

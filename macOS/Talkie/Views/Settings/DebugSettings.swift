@@ -208,6 +208,9 @@ struct DebugInfoView: View {
             .padding(Spacing.md)
             .background(Theme.current.surface2)
             .cornerRadius(CornerRadius.sm)
+
+            // MARK: - Configuration (JSON)
+            SettingsJSONExportView()
         }
         .onAppear {
             checkiCloudStatus()
@@ -291,6 +294,82 @@ struct DebugInfoView: View {
                     iCloudStatus = "Unknown"
                 }
             }
+        }
+    }
+}
+
+// MARK: - Settings JSON Export View
+
+struct SettingsJSONExportView: View {
+    @Environment(SettingsManager.self) private var settingsManager
+
+    @State private var jsonText: String = ""
+    @State private var showCopiedConfirmation = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.cyan)
+                    .frame(width: 3, height: 14)
+
+                Text("CONFIGURATION")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Spacer()
+
+                Button(action: copyJSON) {
+                    HStack(spacing: 4) {
+                        Image(systemName: showCopiedConfirmation ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 10))
+                        Text(showCopiedConfirmation ? "COPIED" : "COPY")
+                            .font(Theme.current.fontXSBold)
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Text("Current settings as JSON (API keys are masked). Use this to understand your configuration or export for backup.")
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+            ScrollView {
+                Text(jsonText)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(Theme.current.foreground)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.sm)
+            }
+            .frame(height: 300)
+            .background(Theme.current.background)
+            .cornerRadius(CornerRadius.xs)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .strokeBorder(Theme.current.divider, lineWidth: 1)
+            )
+        }
+        .padding(Spacing.md)
+        .background(Theme.current.surface2)
+        .cornerRadius(CornerRadius.sm)
+        .onAppear {
+            refreshJSON()
+        }
+    }
+
+    private func refreshJSON() {
+        jsonText = settingsManager.exportSettingsAsJSON()
+    }
+
+    private func copyJSON() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(jsonText, forType: .string)
+
+        showCopiedConfirmation = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            showCopiedConfirmation = false
         }
     }
 }

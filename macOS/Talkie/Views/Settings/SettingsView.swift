@@ -48,7 +48,7 @@ enum SettingsSection: String, Hashable {
         case "dictation-output", "output": return .dictationOutput
         case "quick-actions", "actions": return .quickActions
         case "quick-open": return .quickOpen
-        case "auto-run", "autorun": return .autoRun
+        case "auto-run", "autorun", "automations": return .automations
         case "ai-providers", "providers", "api": return .aiProviders
         case "transcription", "transcription-models": return .transcriptionModels
         case "llm", "llm-models": return .llmModels
@@ -70,7 +70,7 @@ enum SettingsSection: String, Hashable {
         case .dictationOutput: return "dictation-output"
         case .quickActions: return "quick-actions"
         case .quickOpen: return "quick-open"
-        case .autoRun: return "auto-run"
+        case .automations: return "automations"
         case .aiProviders: return "ai-providers"
         case .transcriptionModels: return "transcription"
         case .llmModels: return "llm"
@@ -306,7 +306,7 @@ struct SettingsView: View {
         case .quickOpen:
             QuickOpenSettingsView()
         case .automations:
-            AutomationsSettingsView()
+            AutoRunSettingsView()
 
         // AI MODELS
         case .aiProviders:
