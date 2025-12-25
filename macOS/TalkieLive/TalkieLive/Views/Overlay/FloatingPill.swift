@@ -539,6 +539,8 @@ struct FloatingPillView: View {
         }
         // Frame must accommodate expanded state + PID for proper hit testing
         .frame(width: showPID ? 210 : 160, height: 30)
+        // Center within the full 220px panel width
+        .frame(width: 220, height: 30)
         .scaleEffect(slideInOpacity == 0 ? 0.8 : 1.0)  // Scale up instead of offset (stays in bounds)
         .opacity(slideInOpacity)
         .animation(.easeInOut(duration: 0.15), value: showPID)
