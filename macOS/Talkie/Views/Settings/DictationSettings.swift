@@ -29,112 +29,128 @@ struct DictationCaptureSettingsView: View {
                 subtitle: "Configure how dictation is triggered, captured, and what feedback you receive."
             )
         } content: {
-            // MARK: - Shortcuts Section
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.orange)
-                        .frame(width: 3, height: 14)
-
-                    Text("SHORTCUTS")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Spacer()
-                }
-
-                VStack(spacing: Spacing.sm) {
-                    // Toggle Hotkey
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Toggle Recording")
-                            .font(Theme.current.fontSMMedium)
-                            .foregroundColor(Theme.current.foreground)
-
-                        Text("Press once to start recording, press again to stop.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                        HotkeyRecorderButton(
-                            hotkey: $live.hotkey,
-                            isRecording: $isRecordingToggle
-                        )
-                    }
-                    .padding(Spacing.sm)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.sm)
-
-                    // Push-to-Talk Hotkey
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        HStack {
-                            Text("Push-to-Talk")
-                                .font(Theme.current.fontSMMedium)
-                                .foregroundColor(Theme.current.foreground)
-
-                            Spacer()
-
-                            Toggle("", isOn: $live.pttEnabled)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                        }
-
-                        Text("Hold down to record, release to stop.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                        if live.pttEnabled {
-                            HotkeyRecorderButton(
-                                hotkey: $live.pttHotkey,
-                                isRecording: $isRecordingPTT
-                            )
-                        }
-                    }
-                    .padding(Spacing.sm)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.sm)
-                }
-            }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
-
-            // MARK: - Audio Input Section
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.blue)
-                        .frame(width: 3, height: 14)
-
-                    Text("AUDIO INPUT")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Spacer()
-
-                    Image(systemName: "mic.fill")
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(.blue)
-                }
-
+            // MARK: - Shortcuts & Audio Input (Two-Column Layout)
+            HStack(alignment: .top, spacing: Spacing.md) {
+                // Left Column: Shortcuts
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Select which microphone to use for recording.")
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.orange)
+                            .frame(width: 3, height: 14)
 
-                    AudioDeviceSelector()
+                        Text("SHORTCUTS")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
-                    // Mic Test
-                    MicTestView()
-                        .padding(.top, 8)
+                        Spacer()
+                    }
+
+                    VStack(spacing: Spacing.xs) {
+                        // Toggle Recording - Compact inline layout
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Toggle Recording")
+                                        .font(Theme.current.fontSMMedium)
+                                        .foregroundColor(Theme.current.foreground)
+
+                                    Text("Press once to start, press again to stop")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                }
+
+                                Spacer()
+
+                                HotkeyRecorderButton(
+                                    hotkey: $live.hotkey,
+                                    isRecording: $isRecordingToggle
+                                )
+                            }
+                        }
+                        .padding(Spacing.sm)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
+
+                        // Push-to-Talk - Right-aligned toggle and shortcut
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Push-to-Talk")
+                                        .font(Theme.current.fontSMMedium)
+                                        .foregroundColor(Theme.current.foreground)
+
+                                    Text("Hold down to record, release to stop")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                }
+
+                                Spacer()
+
+                                Toggle("", isOn: $live.pttEnabled)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                            }
+
+                            if live.pttEnabled {
+                                HStack {
+                                    Spacer()
+                                    HotkeyRecorderButton(
+                                        hotkey: $live.pttHotkey,
+                                        isRecording: $isRecordingPTT
+                                    )
+                                }
+                            }
+                        }
+                        .padding(Spacing.sm)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
+                    }
                 }
                 .padding(Spacing.sm)
-                .background(Theme.current.surface1)
+                .background(Theme.current.surface2)
                 .cornerRadius(CornerRadius.sm)
-            }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+                .frame(maxWidth: .infinity)
 
-            // MARK: - Visual Feedback Section
+                // Right Column: Audio Input
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.blue)
+                            .frame(width: 3, height: 14)
+
+                        Text("AUDIO INPUT")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Spacer()
+
+                        Image(systemName: "mic.fill")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(.accentColor)
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Microphone to use for recording")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+
+                        AudioDeviceSelector()
+
+                        // Mic Test
+                        MicTestView()
+                            .padding(.top, 4)
+                    }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface2)
+                .cornerRadius(CornerRadius.sm)
+                .frame(maxWidth: .infinity)
+            }
+
+            // MARK: - Visual Feedback Section (Prominent, Beautiful)
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
@@ -148,37 +164,136 @@ struct DictationCaptureSettingsView: View {
                     Spacer()
                 }
 
-                VStack(spacing: Spacing.sm) {
-                    StyledToggle(
-                        label: "Show HUD overlay",
-                        isOn: Binding(
-                            get: { live.overlayStyle.showsTopOverlay },
-                            set: { show in
-                                if show {
-                                    live.overlayStyle = .particles
-                                } else {
-                                    live.overlayStyle = .pillOnly
+                // Main layout: Screen LEFT, Settings RIGHT (from Live settings)
+                HStack(alignment: .top, spacing: Spacing.xl) {
+                    // LEFT: Mock screen preview
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("PREVIEW")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Text("Hover to simulate recording")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+
+                        LivePreviewScreen(
+                            overlayStyle: $live.overlayStyle,
+                            hudPosition: $live.overlayPosition,
+                            pillPosition: $live.pillPosition,
+                            showOnAir: $live.showOnAir
+                        )
+                    }
+
+                    // RIGHT: Settings (HUD top, ON AIR middle, Pill bottom)
+                    VStack(alignment: .leading, spacing: 0) {
+                        // HUD Section (top-aligned)
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("HUD")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            StyledToggle(
+                                label: "Show HUD overlay",
+                                isOn: Binding(
+                                    get: { live.overlayStyle.showsTopOverlay },
+                                    set: { show in
+                                        if show {
+                                            live.overlayStyle = .particles
+                                        } else {
+                                            live.overlayStyle = .pillOnly
+                                        }
+                                    }
+                                ),
+                                help: "Animated feedback at top of screen"
+                            )
+
+                            if live.overlayStyle.showsTopOverlay {
+                                VStack(alignment: .leading, spacing: Spacing.sm) {
+                                    LiveStyleSelector(selection: $live.overlayStyle)
+
+                                    // Speed toggle (applies to both particles and waveform)
+                                    HStack(spacing: Spacing.sm) {
+                                        Text("Speed")
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                                        Picker("", selection: Binding(
+                                            get: {
+                                                // particlesCalm = slow, particles = fast
+                                                // waveform = slow, waveformSensitive = fast
+                                                if live.overlayStyle == .particlesCalm || live.overlayStyle == .waveform {
+                                                    return "slow"
+                                                }
+                                                return "fast"
+                                            },
+                                            set: { speed in
+                                                if live.overlayStyle == .particles || live.overlayStyle == .particlesCalm {
+                                                    live.overlayStyle = speed == "slow" ? .particlesCalm : .particles
+                                                } else if live.overlayStyle == .waveform || live.overlayStyle == .waveformSensitive {
+                                                    live.overlayStyle = speed == "slow" ? .waveform : .waveformSensitive
+                                                }
+                                            }
+                                        )) {
+                                            Text("Slow").tag("slow")
+                                            Text("Fast").tag("fast")
+                                        }
+                                        .pickerStyle(.segmented)
+                                        .frame(width: 100)
+                                    }
                                 }
+                                .padding(.leading, Spacing.xxs)
                             }
-                        ),
-                        help: "Animated feedback at top of screen during recording"
-                    )
+                        }
 
-                    StyledToggle(
-                        label: "Expand pill during recording",
-                        isOn: $live.pillExpandsDuringRecording,
-                        help: "Show timer and audio level in the floating pill"
-                    )
+                        Spacer().frame(height: Spacing.md)
 
-                    StyledToggle(
-                        label: "Show ON AIR indicator",
-                        isOn: $live.showOnAir,
-                        help: "Display neon ON AIR sign during recording"
-                    )
+                        // ON AIR (small middle section)
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack(spacing: Spacing.xs) {
+                                Text("ON AIR")
+                                    .font(.system(size: 8, weight: .black))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, Spacing.xxs)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: Spacing.xxs)
+                                            .fill(live.showOnAir ? Color.red : Color.gray.opacity(Opacity.half))
+                                    )
+
+                                Toggle("", isOn: $live.showOnAir)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                                    .controlSize(.mini)
+                            }
+
+                            Text("Neon sign in top-left during recording")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundMuted)
+                        }
+
+                        Spacer()
+
+                        // Pill Section (bottom-aligned)
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("PILL")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            StyledToggle(
+                                label: "Expand during recording",
+                                isOn: $live.pillExpandsDuringRecording,
+                                help: "Show timer and audio level"
+                            )
+
+                            StyledToggle(
+                                label: "Show on all screens",
+                                isOn: $live.pillShowOnAllScreens,
+                                help: "Display on every connected display"
+                            )
+                        }
+                    }
+                    .frame(width: 220)
                 }
-                .padding(Spacing.sm)
-                .background(Theme.current.surface1)
-                .cornerRadius(CornerRadius.sm)
             }
             .padding(Spacing.md)
             .background(Theme.current.surface2)

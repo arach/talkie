@@ -18,14 +18,14 @@ final class XPCServiceWrapper: NSObject, TalkieEngineProtocol {
         AppLogger.shared.info(.xpc, "XPCServiceWrapper initialized with engine")
     }
 
-    func transcribe(audioPath: String, modelId: String, reply: @escaping (String?, String?) -> Void) {
-        AppLogger.shared.info(.xpc, "transcribe called for \(audioPath)")
-        engine.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, reply: reply)
+    func transcribe(audioPath: String, modelId: String, priority: TranscriptionPriority, reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.xpc, "transcribe called for \(audioPath) (priority: \(priority.displayName))")
+        engine.transcribe(audioPath: audioPath, modelId: modelId, priority: priority, reply: reply)
     }
 
-    func transcribe(audioPath: String, modelId: String, externalRefId: String?, reply: @escaping (String?, String?) -> Void) {
-        AppLogger.shared.info(.xpc, "transcribe called for \(audioPath) with refId: \(externalRefId ?? "nil")")
-        engine.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, reply: reply)
+    func transcribe(audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority, reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.xpc, "transcribe called for \(audioPath) with refId: \(externalRefId ?? "nil") (priority: \(priority.displayName))")
+        engine.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority, reply: reply)
     }
 
     func preloadModel(_ modelId: String, reply: @escaping (String?) -> Void) {

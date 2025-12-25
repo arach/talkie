@@ -424,38 +424,40 @@ struct ListViewDebugContent: View {
     private func runDesignAudit() {
         NSLog("[DEBUG] Running design audit (code only, no screenshots)...")
 
-        // Run ENTIRELY on background queue - NO Swift Concurrency
-        DispatchQueue.global(qos: .userInitiated).async {
-            autoreleasepool {
-                // Fixed location: ~/Desktop/talkie-audit/
-                let baseDir = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Desktop")
-                    .appendingPathComponent("talkie-audit")
-                try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+        // Run on background task
+        Task.detached {
+            // Fixed location: ~/Desktop/talkie-audit/
+            let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("talkie-audit")
+            try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
 
-                // Each audit gets a numbered folder
-                let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
-                let auditFolders = existing.filter { $0.hasPrefix("run-") }
-                let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
-                let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
-                try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+            // Each audit gets a numbered folder
+            let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+            let auditFolders = existing.filter { $0.hasPrefix("run-") }
+            let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+            let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+            try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-                NSLog("[DEBUG] Running audit (run-\(String(format: "%03d", nextNum)))...")
-                let report = DesignAuditor.shared.auditAll()
+            NSLog("[DEBUG] Running audit (run-\(String(format: "%03d", nextNum)))...")
+            let report = await DesignAuditor.shared.auditAll()
 
-                NSLog("[DEBUG] Audit results: Grade \(report.grade) (\(report.overallScore)%)")
+            NSLog("[DEBUG] Audit results: Grade \(report.grade) (\(report.overallScore)%)")
 
-                // Generate reports
+            // Generate reports
+            await MainActor.run {
                 DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                 DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+            }
 
-                // Generate index synchronously (no Task!)
+            // Generate index
+            await MainActor.run {
                 self.generateAuditIndexSync(at: baseDir)
+            }
 
-                // Open result on main thread
-                DispatchQueue.main.async {
-                    NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
-                }
+            // Open result on main thread
+            await MainActor.run {
+                NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
             }
         }
     }
@@ -908,10 +910,10 @@ struct EngineProcessesDebugContent: View {
             SystemEventManager.shared.logSync(.system, "Clean Slate", detail: "Restarting \(currentEnv.displayName) helpers")
 
             // Launch Engine for current environment
-            AppLauncher.shared.launchEngine()
+            ServiceManager.shared.launchEngine()
 
             // Launch Live for current environment
-            AppLauncher.shared.launchLive()
+            ServiceManager.shared.launchLive()
 
             // 5. Wait a bit then refresh to show new processes
             try? await Task.sleep(for: .seconds(2))

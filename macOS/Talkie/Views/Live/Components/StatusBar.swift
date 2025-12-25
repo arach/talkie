@@ -19,8 +19,8 @@ import TalkieKit
 
 struct StatusBar: View {
     // Direct service access - use let for @Observable singletons
-    private let liveState = TalkieLiveStateMonitor.shared
-    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let liveState = ServiceManager.shared.live
+    private let serviceMonitor = ServiceManager.shared.engine
     private let events = SystemEventManager.shared
     private let liveSettings = LiveSettings.shared
     private let audioDevices = AudioDeviceManager.shared
@@ -101,7 +101,7 @@ struct StatusBar: View {
                             micDeviceName: microphoneName,
                             audioLevel: 0,  // StatusBar doesn't have audio capture - just shows pill
                             onTap: {
-                                TalkieLiveStateMonitor.shared.toggleRecording()
+                                ServiceManager.shared.live.toggleRecording()
                             }
                         )
                         .contextMenu {

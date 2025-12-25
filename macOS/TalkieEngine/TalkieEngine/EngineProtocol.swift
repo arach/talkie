@@ -7,6 +7,39 @@
 
 import Foundation
 
+/// Task priority levels for transcription (XPC-compatible)
+@objc public enum TranscriptionPriority: Int {
+    case background = 0    // Lowest - maintenance, cleanup
+    case utility = 1       // Long-running tasks
+    case low = 2          // Deferrable work
+    case medium = 3       // Default - balanced priority
+    case userInitiated = 4 // User-facing, should complete quickly
+    case high = 5         // Highest - real-time, interactive (Live dictations)
+
+    /// Convert to Swift TaskPriority
+    public var taskPriority: TaskPriority {
+        switch self {
+        case .background: return .background
+        case .utility: return .utility
+        case .low: return .low
+        case .medium: return .medium
+        case .userInitiated: return .userInitiated
+        case .high: return .high
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .background: return "Background"
+        case .utility: return "Utility"
+        case .low: return "Low"
+        case .medium: return "Medium"
+        case .userInitiated: return "User Initiated"
+        case .high: return "High (Real-time)"
+        }
+    }
+}
+
 /// Mach service names for XPC connection (matches TalkieEnvironment)
 public enum EngineServiceMode: String, CaseIterable {
     case production = "jdi.talkie.engine.xpc"
@@ -81,13 +114,28 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
 @objc public protocol TalkieEngineProtocol {
 
     /// Transcribe audio file to text
+    ///
+    /// Priority Guidelines (caller declares intent based on use case):
+    /// - `.high` - Real-time dictation (TalkieLive) - user is waiting, must feel instant
+    /// - `.userInitiated` - Interactive features (scratch pad) - user-facing but can wait a moment
+    /// - `.medium` - Default/balanced - general purpose transcription
+    /// - `.low` - Batch/async operations - user isn't waiting
+    ///
+    /// Why caller-specified priority matters:
+    /// - Prevents Xcode builds from starving real-time transcription
+    /// - Live dictations get `.high` → always prioritized over background work
+    /// - Batch operations get `.low` → don't compete with interactive work
+    /// - Engine doesn't guess intent - caller knows their use case best
+    ///
     /// - Parameters:
     ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
     ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
+    ///   - priority: Task priority - caller declares scheduling intent (see guidelines above)
     ///   - reply: Callback with transcript or error message
     func transcribe(
         audioPath: String,
         modelId: String,
+        priority: TranscriptionPriority,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 
@@ -96,11 +144,13 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
     ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
     ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
     ///   - externalRefId: Optional client-provided reference ID for correlating with Engine traces
+    ///   - priority: Task priority (.high for Live real-time, .medium default, .low for batch)
     ///   - reply: Callback with transcript or error message
     func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
+        priority: TranscriptionPriority,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 

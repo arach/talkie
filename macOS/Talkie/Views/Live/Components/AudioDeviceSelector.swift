@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "LiveSetting
 
 struct AudioDeviceSelector: View {
     private let audioDevices = AudioDeviceManager.shared
-    private let liveState = TalkieLiveStateMonitor.shared
+    private let liveState = ServiceManager.shared.live
     @State private var isHovered = false
 
     private var selectedDeviceName: String {
@@ -99,7 +99,7 @@ struct AudioDeviceSelector: View {
 // MARK: - Audio Level Meter
 
 struct AudioLevelMeter: View {
-    private let liveState = TalkieLiveStateMonitor.shared
+    private let liveState = ServiceManager.shared.live
 
     private let barCount = 8
     private let barSpacing: CGFloat = 2

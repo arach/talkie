@@ -45,8 +45,8 @@ struct UnifiedDashboard: View {
 
     // Singletons
     private let dictationStore = DictationStore.shared
-    private let liveState = TalkieLiveStateMonitor.shared
-    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let liveState = ServiceManager.shared.live
+    private let serviceMonitor = ServiceManager.shared.engine
     private let syncManager = CloudKitSyncManager.shared
 
     // State

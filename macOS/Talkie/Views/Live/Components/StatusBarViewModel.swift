@@ -36,7 +36,7 @@ final class StatusBarViewModel {
 
     // MARK: - Service References (for direct queries)
 
-    @ObservationIgnored private let liveMonitor: TalkieLiveStateMonitor
+    @ObservationIgnored private let liveMonitor: LiveServiceState
     @ObservationIgnored private let engineClient: EngineClient
     @ObservationIgnored private let syncManager: CloudKitSyncManager
     @ObservationIgnored private let eventManager: SystemEventManager
@@ -48,7 +48,7 @@ final class StatusBarViewModel {
 
     @MainActor
     init(
-        liveMonitor: TalkieLiveStateMonitor = .shared,
+        liveMonitor: LiveServiceState = ServiceManager.shared.live,
         engineClient: EngineClient = .shared,
         syncManager: CloudKitSyncManager = .shared,
         eventManager: SystemEventManager = .shared,

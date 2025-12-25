@@ -20,8 +20,8 @@ struct TalkieHomeView: View {
 
     // Singleton references - use let for @Observable singletons (not @State which breaks observation)
     private let syncManager = CloudKitSyncManager.shared
-    private let liveState = TalkieLiveStateMonitor.shared
-    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let liveState = ServiceManager.shared.live
+    private let serviceMonitor = ServiceManager.shared.engine
     private let eventManager = SystemEventManager.shared
     private let dictationStore = DictationStore.shared
 

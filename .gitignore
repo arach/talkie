@@ -80,6 +80,7 @@ _archive/
 releases/
 *.pbxproj.backup
 .vlmrc
+.deriveddata
 
 # Python
 __pycache__/

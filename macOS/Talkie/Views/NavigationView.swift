@@ -25,6 +25,13 @@ enum NavigationSection: Hashable {
     case allowedCommands
     case settings
     case smartFolder(String)
+
+    #if DEBUG
+    // Design God Mode sections (only visible when DesignModeManager.shared.isEnabled)
+    case designHome       // Design system token reference
+    case designAudit      // Design system compliance audit
+    case designComponents // Component library showcase
+    #endif
 }
 
 struct TalkieNavigationView: View {
@@ -58,9 +65,16 @@ struct TalkieNavigationView: View {
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
 
-    // Sidebar width constants - use fixed values to avoid NavigationSplitView recalculations
-    private let sidebarExpandedWidth: CGFloat = 180
+    // Sidebar width - user-adjustable with smart defaults
+    @AppStorage("navigation.sidebarExpandedWidth") private var sidebarExpandedWidth: Double = 180
     private let sidebarCollapsedWidth: CGFloat = 56
+    private let sidebarMinWidth: Double = 120
+    private let sidebarMaxWidth: Double = 300
+
+    // Content column width - user-adjustable with smart defaults
+    @AppStorage("navigation.contentColumnWidth") private var contentColumnWidth: Double = 300
+    private let contentColumnMinWidth: Double = 240
+    private let contentColumnMaxWidth: Double = 480
 
     private var currentSidebarWidth: CGFloat {
         isSidebarCollapsed ? sidebarCollapsedWidth : sidebarExpandedWidth
@@ -78,19 +92,24 @@ struct TalkieNavigationView: View {
 
     private var mainContent: some View {
         GeometryReader { geometry in
-            HStack(spacing: Spacing.xxs) {
+            HStack(spacing: 0) {
                 // Sidebar - full height
                 sidebarView
                     .frame(width: currentSidebarWidth)
                     .clipped()
 
-                // Divider between sidebar and content
-                Rectangle()
-                    .fill(Theme.current.divider)
-                    .frame(width: 1)
+                // Resizable divider (when sidebar is expanded)
+                if !isSidebarCollapsed {
+                    sidebarResizer
+                } else {
+                    // Static divider when collapsed
+                    Rectangle()
+                        .fill(Theme.current.divider)
+                        .frame(width: 1)
+                }
 
                 // Content area + StatusBar
-                VStack(spacing: Spacing.xxs) {
+                VStack(spacing: 0) {
                     // Main content area
                     ZStack {
                         if isTwoColumnSection {
@@ -98,13 +117,11 @@ struct TalkieNavigationView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             // 3-column: content list + detail
-                            HStack(spacing: Spacing.xxs) {
+                            HStack(spacing: 0) {
                                 contentColumnView
-                                    .frame(width: 300)
+                                    .frame(width: contentColumnWidth)
 
-                                Rectangle()
-                                    .fill(Theme.current.divider)
-                                    .frame(width: 1)
+                                contentColumnResizer
 
                                 detailColumnView
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -145,7 +162,7 @@ struct TalkieNavigationView: View {
                 windowHeight = newHeight
             }
         }
-        .padding(.top, 8)  // Breathing room for traffic lights
+        .padding(.top, Spacing.sm)  // Breathing room for traffic lights
         .padding(.horizontal, 1)  // Subtle edge spacing
         .focusedValue(\.sidebarToggle, SidebarToggleAction(toggle: toggleSidebar))
         .focusedValue(\.settingsNavigation, SettingsNavigationAction(showSettings: { selectedSection = .settings }))
@@ -209,6 +226,9 @@ struct TalkieNavigationView: View {
                 ]
             }
         }
+        .overlay {
+            DesignOverlay()
+        }
         #endif
     }
 
@@ -228,18 +248,35 @@ struct TalkieNavigationView: View {
 
     // Old statusBarView removed - now using unified StatusBar component
 
+    // MARK: - Sidebar Resizer
+
+    private var sidebarResizer: some View {
+        SidebarResizer(
+            width: $sidebarExpandedWidth,
+            minWidth: sidebarMinWidth,
+            maxWidth: sidebarMaxWidth
+        )
+    }
+
+    private var contentColumnResizer: some View {
+        SidebarResizer(
+            width: $contentColumnWidth,
+            minWidth: contentColumnMinWidth,
+            maxWidth: contentColumnMaxWidth
+        )
+    }
+
     // MARK: - Sidebar View (matches TalkieLive structure)
 
-
     private var sidebarView: some View {
-        VStack(spacing: Spacing.xxs) {
+        VStack(spacing: 0) {
             // Header with collapse toggle (matches TalkieLive)
             sidebarHeader
 
             // Navigation content
             if isSidebarCollapsed {
                 // Collapsed: simple VStack, no scroll, natural sizing
-                VStack(spacing: Spacing.xxs) {
+                VStack(spacing: 0) {
                     sidebarButton(section: .home, icon: "house.fill", title: "Home")
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
                     sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
@@ -253,7 +290,7 @@ struct TalkieNavigationView: View {
             } else {
                 // Expanded: ScrollView with sections
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 0) {
                         // Home
                         sidebarButton(
                             section: .home,
@@ -330,6 +367,29 @@ struct TalkieNavigationView: View {
                             badge: cachedErrorCount > 0 ? "\(cachedErrorCount)" : nil,
                             badgeColor: .orange
                         )
+
+                        #if DEBUG
+                        // Design God Mode section (only when enabled via ⌘⇧D)
+                        if DesignModeManager.shared.isEnabled {
+                            sidebarSectionHeader("Design")
+                                .padding(.top, Spacing.sm)
+                            sidebarButton(
+                                section: .designHome,
+                                icon: "paintbrush.fill",
+                                title: "Design Home"
+                            )
+                            sidebarButton(
+                                section: .designAudit,
+                                icon: "checkmark.seal.fill",
+                                title: "Audit"
+                            )
+                            sidebarButton(
+                                section: .designComponents,
+                                icon: "square.grid.2x2",
+                                title: "Components"
+                            )
+                        }
+                        #endif
                     }
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, 4)
@@ -339,7 +399,7 @@ struct TalkieNavigationView: View {
             Spacer(minLength: 0)
 
             // Settings pinned to bottom
-            VStack(spacing: Spacing.xxs) {
+            VStack(spacing: 0) {
                 Divider()
                     .opacity(isSidebarCollapsed ? 0 : Opacity.half)
                 sidebarButton(
@@ -348,7 +408,7 @@ struct TalkieNavigationView: View {
                     title: "Settings"
                 )
                 .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, 6)
+                .padding(.vertical, Spacing.xs)
             }
         }
         .background(Theme.current.backgroundSecondary)
@@ -443,6 +503,12 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "AllowedCommands"
         case .settings: return "Settings"
         case .smartFolder(let name): return "SmartFolder.\(name)"
+
+        #if DEBUG
+        case .designHome: return "DesignHome"
+        case .designAudit: return "DesignAudit"
+        case .designComponents: return "DesignComponents"
+        #endif
         }
     }
 
@@ -478,7 +544,7 @@ struct TalkieNavigationView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 28)
         .padding(.horizontal, isSidebarCollapsed ? 0 : 12)
-        .padding(.top, 8) // Clear traffic light buttons
+        .padding(.top, Spacing.sm) // Clear traffic light buttons
     }
 
     /// Interactive chevron button with hover and press feedback (matches TalkieLive)
@@ -569,6 +635,22 @@ struct TalkieNavigationView: View {
             TalkieSection("Settings") {
                 SettingsView()
             }
+
+        #if DEBUG
+        case .designHome:
+            TalkieSection("DesignHome") {
+                DesignHomeView()
+            }
+        case .designAudit:
+            TalkieSection("DesignAudit") {
+                DesignAuditView()
+            }
+        case .designComponents:
+            TalkieSection("DesignComponents") {
+                DesignComponentsView()
+            }
+        #endif
+
         default:
             EmptyView()
         }
@@ -587,6 +669,10 @@ struct TalkieNavigationView: View {
         switch selectedSection {
         case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .settings:
             return true
+        #if DEBUG
+        case .designHome, .designAudit, .designComponents:
+            return true
+        #endif
         default:
             return false
         }
@@ -628,7 +714,7 @@ struct TalkieNavigationView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "text.below.photo")
                         .font(Theme.current.fontDisplay)
-                        .foregroundColor(.secondary.opacity(Opacity.half))
+                        .foregroundColor(Theme.current.foregroundMuted.opacity(Opacity.half))
 
                     Text("SELECT A MEMO")
                         .font(Theme.current.fontBodyBold)
@@ -663,6 +749,13 @@ struct TalkieNavigationView: View {
         case .allowedCommands: return "ALLOWED COMMANDS"
         case .settings: return "SETTINGS"
         case .smartFolder(let name): return name.uppercased()
+
+        #if DEBUG
+        case .designHome: return "DESIGN HOME"
+        case .designAudit: return "DESIGN AUDIT"
+        case .designComponents: return "COMPONENTS"
+        #endif
+
         case .none: return "MEMOS"
         }
     }
@@ -732,15 +825,15 @@ struct TalkieNavigationView: View {
             // Search field (moved from sidebar to content column)
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(Theme.current.fontSM)
             }
             .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, 6)
+            .padding(.vertical, Spacing.xs)
             .background(Color(nsColor: .textBackgroundColor).opacity(Opacity.half))
             .cornerRadius(6)
             .padding(.horizontal, 10)
@@ -825,7 +918,7 @@ private struct SidebarButtonContent: View {
                 // Text and badge - always present, opacity animated
                 HStack {
                     Text(title)
-                        .font(.system(size: 12))
+                        .font(Theme.current.fontSM)
                         .foregroundColor(isSelected ? .white : Theme.current.foreground)
                     Spacer()
                     if showSpinner {
@@ -870,5 +963,57 @@ private struct SidebarButtonContent: View {
         .onHover { hovering in
             isHovering = hovering
         }
+    }
+}
+
+// MARK: - Sidebar Resizer Component
+
+/// Native-style resizer divider (mimics NSSplitView behavior)
+private struct SidebarResizer: View {
+    @Binding var width: Double
+    let minWidth: Double
+    let maxWidth: Double
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    var body: some View {
+        // Native macOS split view style: 1px divider with expanded hit area
+        ZStack {
+            // Visible 1px divider line
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+
+            // Invisible expanded hit area for easier grabbing (8px wide)
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 8)
+                .contentShape(Rectangle())
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else if !isDragging {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if !isDragging {
+                        isDragging = true
+                    }
+                    let newWidth = width + value.translation.width
+                    width = min(maxWidth, max(minWidth, newWidth))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    if !isHovering {
+                        NSCursor.pop()
+                    }
+                }
+        )
     }
 }

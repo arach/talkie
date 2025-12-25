@@ -10,9 +10,9 @@ import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
-// MARK: - Auto-Run Settings View
+// MARK: - Automations Settings View
 
-struct AutoRunSettingsView: View {
+struct AutomationsSettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     private let workflowManager = WorkflowManager.shared
     @State private var selectedWorkflowId: UUID?
@@ -34,7 +34,7 @@ struct AutoRunSettingsView: View {
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "bolt.circle",
-                title: "AUTO-RUN",
+                title: "AUTOMATIONS",
                 subtitle: "Configure workflows that run automatically when memos sync."
             )
         } content: {
@@ -68,9 +68,9 @@ struct AutoRunSettingsView: View {
                         .frame(width: 32)
 
                     VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text("Enable Auto-Run Workflows")
+                        Text("Enable Automations")
                             .font(Theme.current.fontSMMedium)
-                        Text("Workflows marked as auto-run will execute automatically when new memos sync from your iPhone.")
+                        Text("Workflows marked for automation will execute automatically when new memos sync from your iPhone.")
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
@@ -97,7 +97,7 @@ struct AutoRunSettingsView: View {
                             .fill(Color.purple)
                             .frame(width: 3, height: 14)
 
-                        Text("AUTO-RUN WORKFLOWS")
+                        Text("AUTOMATION WORKFLOWS")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
@@ -131,7 +131,7 @@ struct AutoRunSettingsView: View {
                         VStack(alignment: .leading, spacing: Spacing.sm) {
                             HStack(spacing: Spacing.sm) {
                                 Image(systemName: "waveform.badge.mic")
-                                    .font(.system(size: 18))
+                                    .font(Theme.current.fontHeadline)
                                     .foregroundColor(.purple)
                                     .frame(width: 32, height: 32)
                                     .background(Color.purple.opacity(Opacity.medium))
@@ -151,8 +151,8 @@ struct AutoRunSettingsView: View {
                                     .font(.techLabelSmall)
                                     .padding(.horizontal, Spacing.sm)
                                     .padding(.vertical, Spacing.xs)
-                                    .background(Color.green.opacity(Opacity.medium))
-                                    .foregroundColor(.green)
+                                    .background(SemanticColor.success.opacity(Opacity.medium))
+                                    .foregroundColor(SemanticColor.success)
                                     .cornerRadius(CornerRadius.xs)
                             }
                             .padding(Spacing.sm)
@@ -197,7 +197,7 @@ struct AutoRunSettingsView: View {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         howItWorksRow(number: "1", text: "Record a memo on iPhone")
                         howItWorksRow(number: "2", text: "Memo syncs to Mac via iCloud")
-                        howItWorksRow(number: "3", text: "Auto-run workflows execute in order")
+                        howItWorksRow(number: "3", text: "Automation workflows execute in order")
                         howItWorksRow(number: "4", text: "Workflows with trigger steps gate themselves (e.g., \"Hey Talkie\")")
                         howItWorksRow(number: "5", text: "Universal workflows (like indexers) run on all memos")
                     }
@@ -283,7 +283,7 @@ struct AutoRunWorkflowRow: View {
                 if let moveUp = onMoveUp {
                     Button(action: moveUp) {
                         Image(systemName: "chevron.up")
-                            .font(.system(size: 8))
+                            .font(Theme.current.fontXS)
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(Theme.current.foregroundSecondary)
@@ -291,7 +291,7 @@ struct AutoRunWorkflowRow: View {
                 if let moveDown = onMoveDown {
                     Button(action: moveDown) {
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 8))
+                            .font(Theme.current.fontXS)
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(Theme.current.foregroundSecondary)
@@ -301,7 +301,7 @@ struct AutoRunWorkflowRow: View {
 
             // Workflow icon
             Image(systemName: workflow.icon)
-                .font(.system(size: 14))
+                .font(Theme.current.fontBody)
                 .foregroundColor(workflow.color.color)
                 .frame(width: 28, height: 28)
                 .background(workflow.color.color.opacity(Opacity.medium))
@@ -325,8 +325,8 @@ struct AutoRunWorkflowRow: View {
                     .font(.techLabelSmall)
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
-                    .background(Color.green.opacity(Opacity.medium))
-                    .foregroundColor(.green)
+                    .background(SemanticColor.success.opacity(Opacity.medium))
+                    .foregroundColor(SemanticColor.success)
                     .cornerRadius(CornerRadius.xs)
             } else {
                 Text("DISABLED")
@@ -341,11 +341,11 @@ struct AutoRunWorkflowRow: View {
             // Remove button
             Button(action: onDisable) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
+                    .font(Theme.current.fontBody)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
             .buttonStyle(.plain)
-            .help("Remove from auto-run")
+            .help("Remove from automations")
         }
         .padding(Spacing.sm)
         .background(Theme.current.surface1)

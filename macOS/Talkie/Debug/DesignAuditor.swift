@@ -13,7 +13,7 @@ import AppKit
 // MARK: - Screen Registry
 
 /// All auditable screens in the app, organized by section
-enum AppScreen: String, CaseIterable, Identifiable {
+enum AppScreen: String, CaseIterable, Identifiable, Codable {
     // Home/Dashboard
     case homeDashboard = "home-dashboard"
     case homeUnified = "home-unified"
@@ -130,6 +130,26 @@ enum AppScreen: String, CaseIterable, Identifiable {
             return .onboarding
         case .navigationSidebar:
             return .navigation
+        }
+    }
+
+    /// Convert settings screens to SettingsPage enum (for screenshot capture)
+    var settingsPage: SettingsPage? {
+        switch self {
+        case .settingsAppearance: return .appearance
+        case .settingsDictationCapture: return .dictationCapture
+        case .settingsDictationOutput: return .dictationOutput
+        case .settingsQuickActions: return .quickActions
+        case .settingsQuickOpen: return .quickOpen
+        case .settingsAutomations: return .automations
+        case .settingsAIProviders: return .aiProviders
+        case .settingsTranscription: return .transcriptionModels
+        case .settingsLLM: return .llmModels
+        case .settingsDatabase: return .database
+        case .settingsFiles: return .files
+        case .settingsPermissions: return .permissions
+        case .settingsDebug: return .debugInfo
+        default: return nil
         }
     }
 
@@ -257,7 +277,7 @@ enum ResponsiveSize: String, CaseIterable {
 
 // MARK: - Audit Results
 
-struct ScreenAuditResult {
+struct ScreenAuditResult: Codable {
     let screen: AppScreen
     let timestamp: Date
     var fontUsage: [PatternUsage] = []
@@ -302,11 +322,18 @@ struct ScreenAuditResult {
         default: return "F"
         }
     }
+
+    var totalIssues: Int {
+        fontUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+            + colorUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+            + spacingUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+            + opacityUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
+    }
 }
 
 // MARK: - Issue Categories (Compiler-style)
 
-enum IssueCategory: String, CaseIterable {
+enum IssueCategory: String, CaseIterable, Codable {
     case fontHardcoded = "FONT-001"
     case fontWrongAccessor = "FONT-002"
     case colorHardcoded = "COLOR-001"
@@ -345,8 +372,8 @@ enum IssueCategory: String, CaseIterable {
     }
 }
 
-struct PatternUsage: Identifiable {
-    let id = UUID()
+struct PatternUsage: Identifiable, Codable {
+    let id: UUID
     let pattern: String
     let count: Int
     let isCompliant: Bool
@@ -354,6 +381,7 @@ struct PatternUsage: Identifiable {
     let category: IssueCategory
 
     init(pattern: String, count: Int, isCompliant: Bool, suggestion: String? = nil, category: IssueCategory = .compliant) {
+        self.id = UUID()
         self.pattern = pattern
         self.count = count
         self.isCompliant = isCompliant
@@ -362,9 +390,10 @@ struct PatternUsage: Identifiable {
     }
 }
 
-struct FullAuditReport {
+struct FullAuditReport: Codable {
     let timestamp: Date
     let screens: [ScreenAuditResult]
+    let screenshotDirectory: String?  // Path to screenshots directory
 
     var overallScore: Int {
         guard !screens.isEmpty else { return 0 }
@@ -397,14 +426,198 @@ struct FullAuditReport {
 class DesignAuditor {
     static let shared = DesignAuditor()
 
-    private let basePath = "/Users/arach/dev/talkie/macOS/Talkie"
+    // Dynamically find the project root by looking for DesignAuditor.swift's location
+    private var basePath: String {
+        // Get the directory containing this file
+        let currentFile = #file
+        let currentFileURL = URL(fileURLWithPath: currentFile)
+        // Navigate up from Debug/DesignAuditor.swift to macOS/Talkie/
+        let talkieDir = currentFileURL.deletingLastPathComponent().deletingLastPathComponent()
+        return talkieDir.path
+    }
+
+    // Cache directory for audit results
+    nonisolated var cacheDirectory: URL {
+        // Use Desktop for easier access during development
+        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
+        return desktop.appendingPathComponent("talkie-audit")
+    }
 
     private init() {}
 
+    // MARK: - Persistence
+
+    /// Get the next run number
+    nonisolated func getNextRunNumber() -> Int {
+        guard FileManager.default.fileExists(atPath: cacheDirectory.path) else {
+            return 1
+        }
+
+        let existingRuns = (try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory.path)) ?? []
+        let runNumbers = existingRuns.compactMap { dirname -> Int? in
+            guard dirname.hasPrefix("run-") else { return nil }
+            return Int(dirname.replacingOccurrences(of: "run-", with: ""))
+        }
+
+        return (runNumbers.max() ?? 0) + 1
+    }
+
+    /// Load the latest audit report from disk
+    func loadLatestAudit() -> FullAuditReport? {
+        guard FileManager.default.fileExists(atPath: cacheDirectory.path) else {
+            return nil
+        }
+
+        let existingRuns = (try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory.path)) ?? []
+        let runDirectories = existingRuns.filter { $0.hasPrefix("run-") }
+            .compactMap { dirname -> (String, Int)? in
+                guard let num = Int(dirname.replacingOccurrences(of: "run-", with: "")) else { return nil }
+                return (dirname, num)
+            }
+            .sorted { $0.1 > $1.1 }  // Sort descending
+
+        guard let latestRun = runDirectories.first else {
+            return nil
+        }
+
+        let reportPath = cacheDirectory.appendingPathComponent("\(latestRun.0)/audit.json")
+        guard let data = try? Data(contentsOf: reportPath),
+              let report = try? JSONDecoder().decode(FullAuditReport.self, from: data) else {
+            return nil
+        }
+
+        print("📂 Loaded audit from: \(latestRun.0)")
+        return report
+    }
+
+    /// Save audit report and screenshots to disk
+    private func saveAudit(_ report: FullAuditReport) {
+        let runNumber = getNextRunNumber()
+        let runDirectory = cacheDirectory.appendingPathComponent("run-\(String(format: "%03d", runNumber))")
+
+        do {
+            try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+
+            // Save JSON
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(report)
+            try data.write(to: runDirectory.appendingPathComponent("audit.json"))
+
+            print("✅ Saved audit to: run-\(String(format: "%03d", runNumber))")
+        } catch {
+            print("❌ Failed to save audit: \(error)")
+        }
+    }
+
+    /// Capture screenshots of all screens
+    private func captureScreenshots(to directory: URL) async {
+        // Find the main Talkie window
+        guard let mainWindow = NSApp.windows.first(where: { $0.title.contains("Talkie") && !$0.title.contains("Settings") }) else {
+            print("⚠️ No main window found for screenshot capture")
+            return
+        }
+
+        mainWindow.makeKeyAndOrderFront(nil)
+
+        for screen in AppScreen.allCases {
+            // Build debug navigation path for this screen
+            let debugPath = buildDebugPath(for: screen)
+
+            print("📸 Capturing \(screen.title) (talkie://d/\(debugPath))...")
+
+            // Navigate to screen using debug URL system
+            #if DEBUG
+            NotificationCenter.default.post(
+                name: .debugNavigate,
+                object: nil,
+                userInfo: ["path": debugPath]
+            )
+            #endif
+
+            // Wait for navigation + render
+            try? await Task.sleep(for: .milliseconds(500))
+
+            // Capture window
+            if let screenshot = captureWindow(mainWindow) {
+                let filename = "\(screen.rawValue).png"
+                let fileURL = directory.appendingPathComponent(filename)
+
+                if let tiffData = screenshot.tiffRepresentation,
+                   let bitmapImage = NSBitmapImageRep(data: tiffData),
+                   let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                    try? pngData.write(to: fileURL)
+                    print("  ✅ Saved: \(filename)")
+                }
+            }
+        }
+    }
+
+    /// Build debug navigation path for a screen
+    private func buildDebugPath(for screen: AppScreen) -> String {
+        switch screen {
+        // Settings
+        case .settingsAppearance: return "settings/appearance"
+        case .settingsDictationCapture: return "settings/dictation-capture"
+        case .settingsDictationOutput: return "settings/dictation-output"
+        case .settingsQuickActions: return "settings/quick-actions"
+        case .settingsQuickOpen: return "settings/quick-open"
+        case .settingsAutomations: return "settings/automations"
+        case .settingsAIProviders: return "settings/ai-providers"
+        case .settingsTranscription: return "settings/transcription"
+        case .settingsLLM: return "settings/llm"
+        case .settingsDatabase: return "settings/database"
+        case .settingsFiles: return "settings/files"
+        case .settingsPermissions: return "settings/permissions"
+        case .settingsDebug: return "settings/debug"
+
+        // Live
+        case .liveMain: return "live"
+        case .liveSettings: return "live/settings"
+        case .liveHistory: return "live/history"
+
+        // Memos
+        case .memosAllMemos: return "memos"
+        case .memoDetail: return "memos/detail"
+        case .memoEditor: return "memos/editor"
+
+        // Onboarding
+        case .onboardingWelcome: return "onboarding/welcome"
+        case .onboardingPermissions: return "onboarding/permissions"
+        case .onboardingComplete: return "onboarding/complete"
+
+        // Navigation
+        case .navigationSidebar: return "navigation"
+        }
+    }
+
+    /// Capture a window using CGWindowListCreateImage
+    private func captureWindow(_ window: NSWindow) -> NSImage? {
+        guard let windowNumber = window.windowNumber as? CGWindowID else {
+            return nil
+        }
+
+        // Small delay for rendering
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+
+        // Capture the full window
+        guard let cgImage = CGWindowListCreateImage(
+            .null,
+            .optionIncludingWindow,
+            windowNumber,
+            [.boundsIgnoreFraming]
+        ) else {
+            return nil
+        }
+
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
     // MARK: - Public API
 
-    /// Audit a single screen
-    func audit(screen: AppScreen) -> ScreenAuditResult {
+    /// Audit a single screen - code analysis only
+    private func performCodeAnalysis(screen: AppScreen) -> ScreenAuditResult {
         var result = ScreenAuditResult(screen: screen, timestamp: Date())
 
         for sourceFile in screen.sourceFiles {
@@ -456,19 +669,43 @@ class DesignAuditor {
         return result
     }
 
-    /// Audit all screens
-    func auditAll() -> FullAuditReport {
+    /// Audit all screens with screenshot capture
+    func auditAll() async -> FullAuditReport {
         print("🔍 Starting full design audit...")
         var results: [ScreenAuditResult] = []
 
+        // Run static code analysis
         for screen in AppScreen.allCases {
             print("  Auditing \(screen.title)...")
-            let result = audit(screen: screen)
+            let result = performCodeAnalysis(screen: screen)
             results.append(result)
         }
 
+        // Capture screenshots
+        let runNumber = getNextRunNumber()
+        let runDirectory = cacheDirectory.appendingPathComponent("run-\(String(format: "%03d", runNumber))")
+        let screenshotsDirectory = runDirectory.appendingPathComponent("screenshots")
+
+        do {
+            try FileManager.default.createDirectory(at: screenshotsDirectory, withIntermediateDirectories: true)
+        } catch {
+            print("❌ Failed to create screenshots directory: \(error)")
+        }
+
+        print("📸 Capturing screenshots...")
+        await captureScreenshots(to: screenshotsDirectory)
+
+        let report = FullAuditReport(
+            timestamp: Date(),
+            screens: results,
+            screenshotDirectory: screenshotsDirectory.path
+        )
+
+        // Save to disk
+        saveAudit(report)
+
         print("✅ Audit complete!")
-        return FullAuditReport(timestamp: Date(), screens: results)
+        return report
     }
 
     /// Audit a specific section
@@ -478,11 +715,68 @@ class DesignAuditor {
 
         for screen in section.screens {
             print("  Auditing \(screen.title)...")
-            let result = audit(screen: screen)
+            let result = performCodeAnalysis(screen: screen)
             results.append(result)
         }
 
-        return FullAuditReport(timestamp: Date(), screens: results)
+        return FullAuditReport(timestamp: Date(), screens: results, screenshotDirectory: nil)
+    }
+
+    /// Audit a single screen with optional screenshot capture
+    func audit(screen: AppScreen, withScreenshot: Bool = false, screenshotDirectory: URL? = nil) async -> ScreenAuditResult {
+        print("🔍 Auditing \(screen.title)...")
+        var result = performCodeAnalysis(screen: screen)
+
+        if withScreenshot, let screenshotDir = screenshotDirectory {
+            // Ensure directory exists
+            try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+            
+            // Capture screenshot for this screen
+            await captureScreenshot(for: screen, to: screenshotDir)
+        }
+
+        return result
+    }
+
+    /// Capture screenshot for a single screen
+    func captureScreenshot(for screen: AppScreen, to directory: URL) async {
+        // Find the main Talkie window
+        guard let mainWindow = NSApp.windows.first(where: { $0.title.contains("Talkie") && !$0.title.contains("Settings") }) else {
+            print("⚠️ No main window found for screenshot capture")
+            return
+        }
+
+        mainWindow.makeKeyAndOrderFront(nil)
+
+        // Build debug navigation path for this screen
+        let debugPath = buildDebugPath(for: screen)
+
+        print("📸 Capturing \(screen.title) (talkie://d/\(debugPath))...")
+
+        // Navigate to screen using debug URL system
+        #if DEBUG
+        NotificationCenter.default.post(
+            name: .debugNavigate,
+            object: nil,
+            userInfo: ["path": debugPath]
+        )
+        #endif
+
+        // Wait for navigation + render
+        try? await Task.sleep(for: .milliseconds(500))
+
+        // Capture window
+        if let screenshot = captureWindow(mainWindow) {
+            let filename = "\(screen.rawValue).png"
+            let fileURL = directory.appendingPathComponent(filename)
+
+            if let tiffData = screenshot.tiffRepresentation,
+               let bitmapImage = NSBitmapImageRep(data: tiffData),
+               let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                try? pngData.write(to: fileURL)
+                print("  ✅ Saved: \(filename)")
+            }
+        }
     }
 
     // MARK: - Report Generation
@@ -1563,6 +1857,58 @@ class DesignAuditor {
 
         return html
     }
+
+    // MARK: - Design Critique Documentation
+    
+    /*
+     * DESIGN CRITIQUE PROMPT GUIDE
+     * 
+     * When generating design critiques for audit screenshots, agents should follow this structure:
+     * 
+     * File Location:
+     *   ~/Desktop/talkie-audit/run-XXX/{screen-id}-critique.md
+     *   (e.g., ~/Desktop/talkie-audit/run-047/settings-appearance-critique.md)
+     * 
+     * Screenshot Location:
+     *   ~/Desktop/talkie-audit/run-XXX/screenshots/{screen-id}.png
+     * 
+     * Expected Format:
+     *   ## Overall Impression
+     *   [Brief gut reaction - what stands out immediately]
+     * 
+     *   ## Issues (in priority order)
+     *   1. [Specific issue with suggested fix]
+     *   2. [Specific issue with suggested fix]
+     *   ...
+     * 
+     *   ## What's Working Well
+     *   [Be fair - note what's good too]
+     * 
+     * Focus Areas:
+     *   1. Visual Hierarchy - Does the eye flow naturally? Are important elements prominent?
+     *   2. Spacing & Rhythm - Look for cramped areas, inconsistent gaps, or awkward white space
+     *   3. Information Density - Too dense? Too sparse? Overwhelming or empty?
+     *   4. Balance & Alignment - Are elements properly aligned? Does it feel balanced?
+     *   5. Typography - Font sizes, weights, line heights - what feels off?
+     *   6. Color & Contrast - Any legibility issues? Harsh contrasts or washed-out text?
+     *   7. Component Consistency - Do similar elements look similar?
+     *   8. Practical Issues - Text wrapping, truncation, overflow, cramped hit areas
+     * 
+     * Style Guidelines:
+     *   - Be SPECIFIC and ACTIONABLE
+     *   - Instead of "spacing feels off", say: "Preview sidebar feels cramped - 'All Memos' 
+     *     wrapping suggests need for 15-20px more width"
+     *   - Instead of "too much padding", say: "MODE section has too much visual weight for a 
+     *     simple 3-option choice - reduce padding by ~8px"
+     *   - Keep it concise, opinionated, and useful for iteration
+     *   - Reference the code audit results when relevant (font/color/spacing scores)
+     * 
+     * Example Prompt for Agent:
+     *   "Analyze the screenshot at {screenshot-path} and write a design critique following 
+     *   the format documented in DesignAuditor.swift. Focus on actionable, specific feedback 
+     *   that will help improve the UI. Reference the audit results in {report-path} when 
+     *   relevant."
+     */
 
     // MARK: - Markdown Report Builder
 

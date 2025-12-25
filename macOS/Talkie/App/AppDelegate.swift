@@ -13,6 +13,7 @@ import DebugKit
 import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppDelegate")
+private let signposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
 
 // Free function to capture settings screenshots using subprocess
 @MainActor
@@ -44,6 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private let cliHandler = CLICommandHandler()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let launchState = signposter.beginInterval("App Launch")
         NSLog("[AppDelegate] 🎬 applicationDidFinishLaunching called")
 
         // CRITICAL: Check for debug mode SYNCHRONOUSLY before initialization
@@ -53,51 +55,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         NSLog("[AppDelegate] isDebugMode = \(isDebugMode)")
 
-        if isDebugMode {
-            NSLog("[AppDelegate] ⚙️ Debug mode - skipping initialization")
-            logger.debug("⚙️ Debug mode detected - running headless, skipping initialization")
-            // Register debug commands and handle them
-            registerDebugCommands()
-            Task { @MainActor in
-                _ = await cliHandler.handleCommandLineArguments()
-            }
-            return  // Exit early - don't initialize app services
-        }
-
-        NSLog("[AppDelegate] ✓ Normal initialization mode")
-
-        // Normal app initialization (only runs when NOT in debug mode)
+        // Register debug commands early (before checking debug mode)
+        signposter.emitEvent("Debug Commands")
         registerDebugCommands()
 
-        // Configure window appearance to match theme before SwiftUI renders
-        // This prevents the "flicker" of default colors before theme loads
-        configureWindowAppearance()
-
-        // Set notification delegate to show notifications while app is in foreground
-        UNUserNotificationCenter.current().delegate = self
-
-        // Request local notification permissions for workflow notifications
-        requestNotificationPermissions()
-
-        // Register for remote notifications
-        NSApplication.shared.registerForRemoteNotifications()
-
-        // Set up CloudKit subscription for instant sync
-        setupCloudKitSubscription()
-
-        // Ensure helper apps (TalkieLive, TalkieEngine) are running
-        // This registers them as login items and launches them if needed
-        Task { @MainActor in
-            NSLog("[AppDelegate] 🚀 Starting helper apps...")
-            AppLauncher.shared.ensureHelpersRunning()
-
-            // Connect to TalkieEngine XPC service (has built-in retry logic)
-            NSLog("[AppDelegate] 🔌 Calling EngineClient.shared.connect()...")
-            EngineClient.shared.connect()
-            NSLog("[AppDelegate] ✓ EngineClient.connect() returned")
+        if isDebugMode {
+            NSLog("[AppDelegate] ⚙️ Debug mode - will run CLI command after initialization")
+            logger.debug("⚙️ Debug mode detected - running CLI command after app setup")
+            // Schedule CLI handler to run after app finishes initializing
+            Task { @MainActor in
+                // Wait for app to finish initializing
+                try? await Task.sleep(for: .milliseconds(500))
+                NSLog("[AppDelegate] 🎯 Running CLI handler...")
+                let handled = await self.cliHandler.handleCommandLineArguments()
+                if !handled {
+                    NSLog("[AppDelegate] ❌ No CLI command executed")
+                    exit(1)
+                }
+            }
+            // Continue with normal initialization so MainActor works properly
         }
 
+        if !isDebugMode {
+            NSLog("[AppDelegate] ✓ Normal app mode")
+        }
+
+        // App initialization (runs in both normal and debug mode)
+        // Debug mode needs this for MainActor to work properly
+
+        // Phase 1: Critical - Only what's needed before UI renders
+        StartupCoordinator.shared.initializeCritical()
+
+        // Set notification delegate to show notifications while app is in foreground
+        signposter.emitEvent("Notification Delegate")
+        UNUserNotificationCenter.current().delegate = self
+
+        // Phase 3: Deferred - CloudKit, remote notifications (after UI visible)
+        // These run with 300ms delay to let UI settle first
+        StartupCoordinator.shared.initializeDeferred()
+
+        // Phase 4: Background - Helper apps, XPC connections (lowest priority)
+        // These run with 1s delay after UI is responsive
+        StartupCoordinator.shared.initializeBackground()
+
         // Register URL handler for Apple Events
+        signposter.emitEvent("URL Handler")
         let eventManager = NSAppleEventManager.shared()
         eventManager.setEventHandler(
             self,
@@ -106,6 +108,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             andEventID: AEEventID(kAEGetURL)
         )
         logger.info("URL handler registered")
+
+        signposter.endInterval("App Launch", launchState)
+
+        #if DEBUG
+        // Setup keyboard shortcut for Design God Mode (⌘⇧D)
+        setupDesignModeShortcut()
+        #endif
     }
 
     // MARK: - Debug Commands
@@ -316,6 +325,68 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
             exit(0)
         }
+
+        cliHandler.register(
+            "audit-screen",
+            description: "Audit a specific screen with screenshot capture (e.g., settings-appearance, settings-dictation-capture)"
+        ) { args in
+            guard let screenId = args.first else {
+                print("❌ No screen ID provided")
+                exit(1)
+            }
+
+            guard let screen = AppScreen(rawValue: screenId) else {
+                print("❌ Invalid screen ID: \(screenId)")
+                print("   Available screens:")
+                for screen in AppScreen.allCases {
+                    print("     - \(screen.rawValue)")
+                }
+                exit(1)
+            }
+
+            let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop")
+                .appendingPathComponent("talkie-audit")
+            try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+
+            let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+            let auditFolders = existing.filter { $0.hasPrefix("run-") }
+            let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+            let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+            let screenshotDir = runDir.appendingPathComponent("screenshots")
+            try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+
+            print("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
+            print("📸 Capturing screenshots (small/medium/large)...")
+
+            // Capture screenshots at all three sizes
+            var screenshotPaths: [String] = []
+            if screen.section == .settings, let settingsPage = screen.settingsPage {
+                // Capture each size separately to avoid window reuse issues
+                for size in WindowSize.allCases {
+                    if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, size: size, to: screenshotDir) {
+                        screenshotPaths.append("\(size.rawValue): \(url.lastPathComponent)")
+                    }
+                }
+            } else {
+                print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
+            }
+
+            print("📊 Analyzing code...")
+            let result = await DesignAuditor.shared.audit(screen: screen, withScreenshot: false)
+
+            print("\n✅ Audit complete!")
+            print("   Grade: \(result.grade) (\(result.overallScore)%)")
+            print("   Total Issues: \(result.totalIssues)")
+            if !screenshotPaths.isEmpty {
+                print("   Screenshots:")
+                for path in screenshotPaths {
+                    print("     - \(path)")
+                }
+            }
+
+            exit(0)
+        }
     }
 
     // MARK: - URL Handling
@@ -337,46 +408,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // Handle talkie://live or talkie://live/home - navigate to Live section
-        if url.host == "live" {
-            let path = url.pathComponents.dropFirst().first ?? ""
-            NSLog("[AppDelegate] Navigating to Live section: \(path.isEmpty ? "default" : path)")
-            logger.info("Navigating to Live section: \(path.isEmpty ? "default" : path)")
-            NotificationCenter.default.post(name: .navigateToLive, object: nil)
-        }
-        // Handle talkie://settings/live - navigate directly to full Live settings
-        else if url.host == "settings" {
-            let path = url.pathComponents.dropFirst().first ?? ""
-            NSLog("[AppDelegate] Navigating to Settings section: \(path)")
-            logger.info("Navigating to Settings section: \(path)")
-
-            if path == "live" {
-                // Navigate directly to full Live settings (bypasses main Settings)
-                NotificationCenter.default.post(name: .navigateToLiveSettings, object: nil)
-            } else {
-                // Just open Settings
-                NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+        // Try Router first (handles Live notifications, app shortcuts, system commands)
+        // This is the new unified routing system that replaces XPC for Live communication
+        Task { @MainActor in
+            if Router.shared.route(url) {
+                // Router handled it - done
+                return
             }
-        }
-        // Handle talkie://interstitial/{id}
-        else if url.host == "interstitial",
-           let idString = url.pathComponents.dropFirst().first,
-           let id = Int64(idString) {
-            NSLog("[AppDelegate] Opening interstitial for utterance ID: \(id)")
-            logger.info("Opening interstitial for utterance ID: \(id)")
-            Task { @MainActor in
+
+            // Fallback to legacy handlers for routes not yet migrated to Router
+
+            // Handle talkie://live or talkie://live/home - navigate to Live section
+            if url.host == "live" {
+                let path = url.pathComponents.dropFirst().first ?? ""
+                NSLog("[AppDelegate] Navigating to Live section: \(path.isEmpty ? "default" : path)")
+                logger.info("Navigating to Live section: \(path.isEmpty ? "default" : path)")
+                NotificationCenter.default.post(name: .navigateToLive, object: nil)
+            }
+            // Handle talkie://settings/live - navigate directly to full Live settings
+            else if url.host == "settings" {
+                let path = url.pathComponents.dropFirst().first ?? ""
+                NSLog("[AppDelegate] Navigating to Settings section: \(path)")
+                logger.info("Navigating to Settings section: \(path)")
+
+                if path == "live" {
+                    // Navigate directly to full Live settings (bypasses main Settings)
+                    NotificationCenter.default.post(name: .navigateToLiveSettings, object: nil)
+                } else {
+                    // Just open Settings
+                    NotificationCenter.default.post(name: .navigateToSettings, object: nil)
+                }
+            }
+            // Handle talkie://interstitial/{id}
+            else if url.host == "interstitial",
+               let idString = url.pathComponents.dropFirst().first,
+               let id = Int64(idString) {
+                NSLog("[AppDelegate] Opening interstitial for utterance ID: \(id)")
+                logger.info("Opening interstitial for utterance ID: \(id)")
                 // Hide all main app windows when showing interstitial
                 for window in NSApp.windows where window.title != "" {
                     window.orderOut(nil)
                 }
                 InterstitialManager.shared.show(utteranceId: id)
             }
-        }
-        else if handleDebugURL(url) {
-            // Handled by debug URL handler
-        }
-        else {
-            NSLog("[AppDelegate] URL not handled: scheme=\(url.scheme ?? "nil"), host=\(url.host ?? "nil")")
+            else if self.handleDebugURL(url) {
+                // Handled by debug URL handler
+            }
+            else {
+                NSLog("[AppDelegate] URL not handled: scheme=\(url.scheme ?? "nil"), host=\(url.host ?? "nil")")
+            }
         }
     }
 
@@ -418,36 +498,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 NSLog("[AppDelegate] 🔍 Triggering code audit (no screenshots)...")
 
                 // Run entirely on background queue
-                DispatchQueue.global(qos: .userInitiated).async {
-                    autoreleasepool {
-                        // Setup directories
-                        let baseDir = FileManager.default.homeDirectoryForCurrentUser
-                            .appendingPathComponent("Desktop")
-                            .appendingPathComponent("talkie-audit")
-                        try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+                Task.detached {
+                    // Setup directories
+                    let baseDir = FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent("Desktop")
+                        .appendingPathComponent("talkie-audit")
+                    try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
 
-                        let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
-                        let auditFolders = existing.filter { $0.hasPrefix("run-") }
-                        let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
-                        let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
-                        try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+                    let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
+                    let auditFolders = existing.filter { $0.hasPrefix("run-") }
+                    let nextNum = (auditFolders.compactMap { Int($0.dropFirst(4)) }.max() ?? 0) + 1
+                    let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
+                    try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
 
-                        NSLog("[AppDelegate] 🔍 Running code audit...")
-                        let report = DesignAuditor.shared.auditAll()
-                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                    NSLog("[AppDelegate] 🔍 Running code audit...")
+                    let report = await DesignAuditor.shared.auditAll()
+                    NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                        NSLog("[AppDelegate] 📝 Generating reports...")
+                    NSLog("[AppDelegate] 📝 Generating reports...")
+                    await MainActor.run {
                         DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                         DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+                    }
 
-                        // Back to main for UI operations
-                        DispatchQueue.main.async {
-                            Task { @MainActor in
-                                await Self.generateAuditIndex(at: baseDir)
-                                NSLog("[AppDelegate] ✅ All done!")
-                                NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
-                            }
-                        }
+                    // Back to main for UI operations
+                    await Self.generateAuditIndex(at: baseDir)
+                    await MainActor.run {
+                        NSLog("[AppDelegate] ✅ All done!")
+                        NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                     }
                 }
                 return true
@@ -485,23 +563,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     try? await Task.sleep(for: .milliseconds(500))
 
                     // Run audit on background queue
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        autoreleasepool {
-                            NSLog("[AppDelegate] 🔍 Running code audit...")
-                            let report = DesignAuditor.shared.auditAll()
-                            NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
+                    Task.detached {
+                        NSLog("[AppDelegate] 🔍 Running code audit...")
+                        let report = await DesignAuditor.shared.auditAll()
+                        NSLog("[AppDelegate] ✅ Audit complete: \(report.grade) (\(report.overallScore)%)")
 
-                            NSLog("[AppDelegate] 📝 Generating reports...")
+                        NSLog("[AppDelegate] 📝 Generating reports...")
+                        await MainActor.run {
                             DesignAuditor.shared.generateHTMLReport(from: report, to: runDir.appendingPathComponent("report.html"))
                             DesignAuditor.shared.generateMarkdownReport(from: report, to: runDir.appendingPathComponent("report.md"))
+                        }
 
-                            DispatchQueue.main.async {
-                                Task { @MainActor in
-                                    await Self.generateAuditIndex(at: baseDir)
-                                    NSLog("[AppDelegate] ✅ All done!")
-                                    NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
-                                }
-                            }
+                        await Self.generateAuditIndex(at: baseDir)
+                        await MainActor.run {
+                            NSLog("[AppDelegate] ✅ All done!")
+                            NSWorkspace.shared.open(runDir.appendingPathComponent("report.html"))
                         }
                     }
                 }
@@ -801,4 +877,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         try? html.write(to: baseDir.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
     }
+
+    // MARK: - Design God Mode
+
+    #if DEBUG
+    /// Setup ⌘⇧D keyboard shortcut to toggle Design God Mode
+    /// When enabled, adds design sections to sidebar and enables visual overlays
+    private func setupDesignModeShortcut() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Check for ⌘⇧D (Command+Shift+D)
+            let hasCommand = event.modifierFlags.contains(.command)
+            let hasShift = event.modifierFlags.contains(.shift)
+            let isD = event.charactersIgnoringModifiers?.lowercased() == "d"
+
+            if hasCommand && hasShift && isD {
+                // Toggle Design God Mode
+                DesignModeManager.shared.isEnabled.toggle()
+
+                // Show toast notification
+                let message = DesignModeManager.shared.isEnabled
+                    ? "🎨 Design God Mode: ON"
+                    : "Design God Mode: OFF"
+                self?.showToast(message: message)
+
+                return nil  // Consume event
+            }
+
+            return event  // Pass through
+        }
+
+        logger.info("⌘⇧D keyboard shortcut registered for Design God Mode")
+    }
+
+    /// Show a brief toast notification (simple alert-style for now)
+    private func showToast(message: String) {
+        DispatchQueue.main.async {
+            // For now, use console + optional visual feedback later
+            print(message)
+
+            // Future: Could use NSUserNotification or custom window overlay
+            // For V0, console print is sufficient
+        }
+    }
+    #endif
 }

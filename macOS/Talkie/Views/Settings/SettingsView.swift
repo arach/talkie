@@ -48,7 +48,7 @@ enum SettingsSection: String, Hashable {
         case "dictation-output", "output": return .dictationOutput
         case "quick-actions", "actions": return .quickActions
         case "quick-open": return .quickOpen
-        case "auto-run", "autorun", "automations": return .automations
+        case "automations", "auto-run", "autorun": return .automations
         case "ai-providers", "providers", "api": return .aiProviders
         case "transcription", "transcription-models": return .transcriptionModels
         case "llm", "llm-models": return .llmModels
@@ -92,6 +92,11 @@ struct SettingsView: View {
     @State private var showingSaveConfirmation = false
     @State private var selectedSection: SettingsSection
 
+    // Settings sidebar width - user-adjustable with smart defaults
+    @AppStorage("settings.sidebarWidth") private var sidebarWidth: Double = 220
+    private let sidebarMinWidth: Double = 180
+    private let sidebarMaxWidth: Double = 320
+
     /// Initialize with optional starting section (defaults to .appearance)
     init(initialSection: SettingsSection = .appearance) {
         _selectedSection = State(initialValue: initialSection)
@@ -102,7 +107,7 @@ struct SettingsView: View {
     private var contentBackground: Color { Theme.current.background }
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: Spacing.xxs) {
             // MARK: - Sidebar
             VStack(spacing: 0) {
                 // Settings Header - with breathing room at top
@@ -110,13 +115,13 @@ struct SettingsView: View {
                     .font(.system(size: 10, weight: .bold, design: .default))
                     .foregroundColor(Theme.current.foreground)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 20)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.top, Spacing.lg)
+                    .padding(.bottom, Spacing.sm)
 
                 // Menu Sections
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 16) {
+                    VStack(spacing: Spacing.md) {
                         // APPEARANCE
                         SettingsSidebarSection(title: "APPEARANCE", isActive: selectedSection == .appearance) {
                             SettingsSidebarItem(
@@ -249,17 +254,19 @@ struct SettingsView: View {
                             #endif
                         }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.bottom, Spacing.sm)
                 }
             }
-            .frame(width: 220)
+            .frame(width: sidebarWidth)
             .background(sidebarBackground)
 
-            // Divider
-            Rectangle()
-                .fill(Theme.current.divider)
-                .frame(width: 1)
+            // Resizable divider
+            SettingsSidebarResizer(
+                width: $sidebarWidth,
+                minWidth: sidebarMinWidth,
+                maxWidth: sidebarMaxWidth
+            )
 
             // MARK: - Content Area
             VStack(spacing: 0) {
@@ -402,5 +409,57 @@ struct SettingsSidebarItem: View {
         .onHover { hovering in
             isHovered = hovering
         }
+    }
+}
+
+// MARK: - Settings Sidebar Resizer Component
+
+/// Native-style resizer divider (mimics NSSplitView behavior)
+private struct SettingsSidebarResizer: View {
+    @Binding var width: Double
+    let minWidth: Double
+    let maxWidth: Double
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    var body: some View {
+        // Native macOS split view style: 1px divider with expanded hit area
+        ZStack {
+            // Visible 1px divider line
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+
+            // Invisible expanded hit area for easier grabbing (8px wide)
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 8)
+                .contentShape(Rectangle())
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else if !isDragging {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if !isDragging {
+                        isDragging = true
+                    }
+                    let newWidth = width + value.translation.width
+                    width = min(maxWidth, max(minWidth, newWidth))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    if !isHovering {
+                        NSCursor.pop()
+                    }
+                }
+        )
     }
 }

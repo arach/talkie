@@ -63,7 +63,7 @@ struct DatabaseSettingsView: View {
                             Spacer()
 
                             Text(formatRetention(hours: live.utteranceTTLHours))
-                                .font(Theme.current.fontBodyMedium)
+                                .font(Theme.current.fontSMMedium)
                                 .foregroundColor(Theme.current.foreground)
                         }
 
@@ -114,7 +114,7 @@ struct DatabaseSettingsView: View {
 
                     Spacer()
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xs) {
                         Image(systemName: "infinity")
                             .font(Theme.current.fontXS)
                         Text("PERMANENT")
@@ -125,7 +125,7 @@ struct DatabaseSettingsView: View {
 
                 HStack(spacing: Spacing.sm) {
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 20))
+                        .font(Theme.current.fontHeadline)
                         .foregroundColor(.green.opacity(Opacity.prominent))
 
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -164,7 +164,7 @@ struct DatabaseSettingsView: View {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "clock.badge.xmark")
                             .font(.headlineLarge)
-                            .foregroundColor(.orange)
+                            .foregroundColor(SemanticColor.warning)
                             .frame(width: 24)
 
                         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -197,7 +197,7 @@ struct DatabaseSettingsView: View {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "doc.badge.gearshape")
                             .font(.headlineLarge)
-                            .foregroundColor(.blue)
+                            .foregroundColor(.accentColor)
                             .frame(width: 24)
 
                         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -335,7 +335,7 @@ struct CloudSettingsView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, Spacing.xs)
                             .padding(.vertical, Spacing.xxs)
-                            .background(Color.blue)
+                            .background(Color.accentColor)
                             .cornerRadius(3)
                     }
 
@@ -344,7 +344,7 @@ struct CloudSettingsView: View {
                             .font(.displayMedium)
                             .foregroundColor(.blue.opacity(Opacity.half))
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text("Sync Across Devices")
                                 .font(Theme.current.fontSMMedium)
                                 .foregroundColor(Theme.current.foreground)
@@ -377,7 +377,7 @@ struct CloudSettingsView: View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
                 .font(Theme.current.fontXS)
-                .foregroundColor(.blue)
+                .foregroundColor(.accentColor)
                 .frame(width: 16)
 
             Text(text)

@@ -10,9 +10,8 @@ import SwiftUI
 import TalkieKit
 
 struct DevControlPanelView: View {
-    private let discovery = ProcessDiscovery.shared
+    private let serviceManager = ServiceManager.shared
     @Environment(EngineClient.self) private var engineClient
-    private let liveMonitor = TalkieLiveStateMonitor.shared
 
     @State private var autoRefresh = true
     @State private var refreshTimer: Timer?
@@ -58,7 +57,7 @@ struct DevControlPanelView: View {
                 // TalkieEngine Instances
                 serviceSection(
                     title: "TalkieEngine Instances",
-                    processes: discovery.engineProcesses,
+                    processes: serviceManager.engineProcesses,
                     serviceName: "TalkieEngine",
                     connectedPID: engineClient.status?.pid
                 )
@@ -68,9 +67,9 @@ struct DevControlPanelView: View {
                 // TalkieLive Instances
                 serviceSection(
                     title: "TalkieLive Instances",
-                    processes: discovery.liveProcesses,
+                    processes: serviceManager.liveProcesses,
                     serviceName: "TalkieLive",
-                    connectedPID: liveMonitor.processId ?? discoveredLivePID
+                    connectedPID: serviceManager.live.processId ?? discoveredLivePID
                 )
 
                 Divider()
@@ -91,10 +90,10 @@ struct DevControlPanelView: View {
             }
         }
         .onAppear {
-            discovery.scan()
+            serviceManager.scan()
             startAutoRefresh()
             // Start monitoring to get live connection status and PID
-            liveMonitor.startMonitoring()
+            serviceManager.live.startMonitoring()
         }
         .onDisappear {
             stopAutoRefresh()
@@ -103,20 +102,20 @@ struct DevControlPanelView: View {
 
     // MARK: - Connection Status
 
-    /// Get the PID of the discovered Live process (fallback if liveMonitor.processId is nil)
+    /// Get the PID of the discovered Live process (fallback if serviceManager.live.processId is nil)
     private var discoveredLivePID: Int32? {
         // If there's only one Live process, use it
-        guard !discovery.liveProcesses.isEmpty else { return nil }
+        guard !serviceManager.liveProcesses.isEmpty else { return nil }
 
         // Try to match by environment first
-        if let env = liveMonitor.connectedMode {
-            if let matching = discovery.liveProcesses.first(where: { $0.environment == env }) {
+        if let env = serviceManager.live.connectedMode {
+            if let matching = serviceManager.liveProcesses.first(where: { $0.environment == env }) {
                 return matching.pid
             }
         }
 
         // Otherwise, just use the first one
-        return discovery.liveProcesses.first?.pid
+        return serviceManager.liveProcesses.first?.pid
     }
 
     private var connectionStatusSection: some View {
@@ -137,9 +136,9 @@ struct DevControlPanelView: View {
                 // Live
                 connectionBadge(
                     title: "Live",
-                    isConnected: liveMonitor.isRunning,
-                    environment: liveMonitor.connectedMode,
-                    pid: liveMonitor.processId ?? discoveredLivePID
+                    isConnected: serviceManager.live.isRunning,
+                    environment: serviceManager.live.connectedMode,
+                    pid: serviceManager.live.processId ?? discoveredLivePID
                 )
             }
         }
@@ -348,7 +347,7 @@ struct DevControlPanelView: View {
                     description: "Scan for all running instances",
                     color: .blue
                 ) {
-                    discovery.scan()
+                    serviceManager.scan()
                 }
 
                 // Kill all daemons
@@ -358,8 +357,8 @@ struct DevControlPanelView: View {
                     description: "Stop all launchd-managed instances",
                     color: .orange
                 ) {
-                    let engineKilled = discovery.killAllDaemons(service: "TalkieEngine")
-                    let liveKilled = discovery.killAllDaemons(service: "TalkieLive")
+                    let engineKilled = serviceManager.killAllDaemons(service: "TalkieEngine")
+                    let liveKilled = serviceManager.killAllDaemons(service: "TalkieLive")
                     let total = engineKilled + liveKilled
                     if total > 0 {
                         addLog("Terminated \(total) daemon instance\(total == 1 ? "" : "s") (Engine: \(engineKilled), Live: \(liveKilled))", level: .success)
@@ -375,8 +374,8 @@ struct DevControlPanelView: View {
                     description: "Stop all directly-launched instances",
                     color: .red
                 ) {
-                    let engineKilled = discovery.killAllXcode(service: "TalkieEngine")
-                    let liveKilled = discovery.killAllXcode(service: "TalkieLive")
+                    let engineKilled = serviceManager.killAllXcode(service: "TalkieEngine")
+                    let liveKilled = serviceManager.killAllXcode(service: "TalkieLive")
                     let total = engineKilled + liveKilled
                     if total > 0 {
                         addLog("Terminated \(total) Xcode instance\(total == 1 ? "" : "s") (Engine: \(engineKilled), Live: \(liveKilled))", level: .success)
@@ -456,9 +455,9 @@ struct DevControlPanelView: View {
     private func startAutoRefresh() {
         guard autoRefresh else { return }
         refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak discovery] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
             Task { @MainActor in
-                discovery?.scan()
+                ServiceManager.shared.scan()
             }
         }
     }
@@ -656,14 +655,14 @@ struct DevControlPanelView: View {
     // MARK: - Process Management
 
     private func killProcess(_ process: DiscoveredProcess) {
-        let success = discovery.kill(pid: process.pid)
+        let success = serviceManager.kill(pid: process.pid)
 
         if success {
             addLog("Terminated \(process.name) PID \(process.pid) (\(process.modeDescription))", level: .success)
 
             // Wait a moment for process to fully terminate before rescanning
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                discovery.scan()
+                serviceManager.scan()
             }
         } else {
             addLog("Failed to terminate PID \(process.pid)", level: .error)
@@ -671,7 +670,7 @@ struct DevControlPanelView: View {
     }
 
     private func stopDaemon(_ process: DiscoveredProcess) {
-        let success = discovery.stopDaemon(for: process)
+        let success = serviceManager.stopDaemon(for: process)
 
         if success {
             addLog("Stopped \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
@@ -682,7 +681,7 @@ struct DevControlPanelView: View {
 
     private func restartDaemon(_ process: DiscoveredProcess) {
         // Use launchctl kickstart -k for atomic restart
-        let success = discovery.restartDaemon(for: process)
+        let success = serviceManager.restartDaemon(for: process)
 
         if success {
             addLog("Restarted \(process.name) daemon (\(process.environment?.rawValue ?? "unknown"))", level: .success)
