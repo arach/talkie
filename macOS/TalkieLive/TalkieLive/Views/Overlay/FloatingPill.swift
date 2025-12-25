@@ -135,6 +135,20 @@ final class FloatingPillController: ObservableObject {
         let showOnAllScreens = LiveSettings.shared.pillShowOnAllScreens
         let screens = showOnAllScreens ? NSScreen.screens : [NSScreen.main].compactMap { $0 }
 
+        // Log all screens first
+        pillLogger.debug("[Screens] Total screens: \(screens.count)")
+        for (index, screen) in screens.enumerated() {
+            let frame = screen.frame
+            let visibleFrame = screen.visibleFrame
+            pillLogger.debug("""
+                [Screen \(index)] \(screen.localizedName)
+                  Full frame: x=\(frame.minX), y=\(frame.minY), w=\(frame.width), h=\(frame.height)
+                  Visible frame: x=\(visibleFrame.minX), y=\(visibleFrame.minY), w=\(visibleFrame.width), h=\(visibleFrame.height)
+                  Visible midX: \(visibleFrame.midX)
+                """
+            )
+        }
+
         for screen in screens {
             createPill(on: screen)
         }
@@ -174,6 +188,21 @@ final class FloatingPillController: ObservableObject {
         panel.setFrameOrigin(homePosition)
         homePositions[panel] = homePosition
 
+        // Log the final pill position
+        let contentCenterX = homePosition.x + (panel.frame.width / 2)
+        let expectedContentCenterX = screen.visibleFrame.midX
+        let centerOffset = contentCenterX - expectedContentCenterX
+
+        pillLogger.debug("""
+            [Pill Position] \(screen.localizedName)
+              Panel position: x=\(homePosition.x), y=\(homePosition.y)
+              Panel width: \(panel.frame.width)
+              Panel center X: \(contentCenterX)
+              Screen center X: \(expectedContentCenterX)
+              Offset from screen center: \(centerOffset) px
+            """
+        )
+
         panel.orderFront(nil)
         windows.append(panel)
     }
@@ -193,8 +222,22 @@ final class FloatingPillController: ObservableObject {
             let contentCenterX = floor(screenFrame.midX - (pillContentWidth / 2))
             // Offset slightly to account for the panel being wider than content
             let panelOffset = (panelSize.width - pillContentWidth) / 2
+            let finalX = contentCenterX - panelOffset
+
+            pillLogger.debug("""
+                [Centering] Screen: \(screen.localizedName)
+                  screenFrame.midX: \(screenFrame.midX)
+                  screenFrame.width: \(screenFrame.width)
+                  panelSize.width: \(panelSize.width)
+                  pillContentWidth: \(pillContentWidth)
+                  contentCenterX: \(contentCenterX)
+                  panelOffset: \(panelOffset)
+                  finalX: \(finalX)
+                """
+            )
+
             return NSPoint(
-                x: contentCenterX - panelOffset,
+                x: finalX,
                 y: screenFrame.minY + 6  // Slight offset from bottom for breathing room
             )
         case .bottomLeft:
