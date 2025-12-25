@@ -103,7 +103,7 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
         case .settingsDictationOutput: return .dictationOutput
         case .settingsQuickActions: return .quickActions
         case .settingsQuickOpen: return .quickOpen
-        case .settingsAutoRun: return .autoRun
+        case .settingsAutomations: return .automations
         case .settingsAIProviders: return .aiProviders
         case .settingsTranscription: return .transcriptionModels
         case .settingsLLM: return .llmModels
@@ -511,7 +511,7 @@ class DesignAuditor {
         case .settingsDictationOutput: return "settings/dictation-output"
         case .settingsQuickActions: return "settings/quick-actions"
         case .settingsQuickOpen: return "settings/quick-open"
-        case .settingsAutoRun: return "settings/auto-run"
+        case .settingsAutomations: return "settings/automations"
         case .settingsAIProviders: return "settings/ai-providers"
         case .settingsTranscription: return "settings/transcription"
         case .settingsLLM: return "settings/llm"

@@ -10,9 +10,9 @@ import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
-// MARK: - Auto-Run Settings View
+// MARK: - Automations Settings View
 
-struct AutoRunSettingsView: View {
+struct AutomationsSettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     private let workflowManager = WorkflowManager.shared
     @State private var selectedWorkflowId: UUID?

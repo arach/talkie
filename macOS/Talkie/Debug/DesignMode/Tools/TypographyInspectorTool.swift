@@ -48,7 +48,7 @@ struct TypographyInspectorTool: View {
         guard let window = NSApp.keyWindow else { return }
 
         let windowPoint = NSPoint(x: location.x, y: geometry.size.height - location.y)
-        let screenPoint = window.convertPoint(toScreen: NSRect(origin: windowPoint, size: .zero)).origin
+        let screenPoint = window.convertPoint(toScreen: windowPoint)
 
         // Try to get typography info from the point
         if let info = extractTypographyInfo(at: screenPoint) {
@@ -136,20 +136,6 @@ private struct TypographyInfo {
     let fontWeight: String
     let lineHeight: CGFloat
     let textSample: String
-}
-
-// MARK: - Custom Cursor
-
-private extension View {
-    func cursor(_ cursor: NSCursor) -> some View {
-        self.onHover { hovering in
-            if hovering {
-                cursor.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
-    }
 }
 
 #Preview("Typography Inspector Tool") {

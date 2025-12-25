@@ -27,6 +27,11 @@ struct LiveSettingsView: View {
     @Environment(LiveSettings.self) private var liveSettings: LiveSettings
     @State private var selectedSection: LiveSettingsSection = .general
 
+    // Live settings sidebar width - user-adjustable with smart defaults
+    @AppStorage("liveSettings.sidebarWidth") private var sidebarWidth: Double = 220
+    private let sidebarMinWidth: Double = 180
+    private let sidebarMaxWidth: Double = 320
+
     // Theme-aware colors for light/dark mode
     private var sidebarBackground: Color { Theme.current.backgroundSecondary }
     private var contentBackground: Color { Theme.current.background }
@@ -123,13 +128,15 @@ struct LiveSettingsView: View {
                     .padding(.bottom, 12)
                 }
             }
-            .frame(width: 220)
+            .frame(width: sidebarWidth)
             .background(sidebarBackground)
 
-            // Divider
-            Rectangle()
-                .fill(Theme.current.divider)
-                .frame(width: 1)
+            // Resizable divider
+            LiveSettingsSidebarResizer(
+                width: $sidebarWidth,
+                minWidth: sidebarMinWidth,
+                maxWidth: sidebarMaxWidth
+            )
 
             // MARK: - Content Area
             VStack(spacing: 0) {
@@ -1109,6 +1116,58 @@ private struct PermissionLiveRow: View {
         .background(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
         .cornerRadius(CornerRadius.sm)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Live Settings Sidebar Resizer Component
+
+/// Native-style resizer divider (mimics NSSplitView behavior)
+private struct LiveSettingsSidebarResizer: View {
+    @Binding var width: Double
+    let minWidth: Double
+    let maxWidth: Double
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    var body: some View {
+        // Native macOS split view style: 1px divider with expanded hit area
+        ZStack {
+            // Visible 1px divider line
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+
+            // Invisible expanded hit area for easier grabbing (8px wide)
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 8)
+                .contentShape(Rectangle())
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else if !isDragging {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if !isDragging {
+                        isDragging = true
+                    }
+                    let newWidth = width + value.translation.width
+                    width = min(maxWidth, max(minWidth, newWidth))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    if !isHovering {
+                        NSCursor.pop()
+                    }
+                }
+        )
     }
 }
 

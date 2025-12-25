@@ -155,87 +155,108 @@ struct AppearanceSettingsView: View {
                             .frame(height: Spacing.xs)
                     }
 
-                    // Theme presets - in container for clear grouping
+                    // Themes & Accent - on one line, Mode separate below
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: "paintpalette")
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                            Text("THEMES")
-                                .font(Theme.current.fontXSBold)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                        }
-
-                    HStack(spacing: Spacing.sm) {
-                        ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
-                            Button(action: { settingsManager.applyTheme(preset) }) {
-                                VStack(spacing: Spacing.xs) {
-                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                        .fill(preset.previewColors.bg)
-                                        .frame(width: 44, height: 32)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                                .stroke(preset.previewColors.accent, lineWidth: 2)
-                                        )
-                                    Text(preset.displayName)
+                        HStack(alignment: .top, spacing: Spacing.sm) {
+                            // Themes
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                HStack(spacing: Spacing.xs) {
+                                    Image(systemName: "paintpalette")
                                         .font(Theme.current.fontXS)
-                                        .foregroundColor(isThemeActive(preset) ? Theme.current.foreground : Theme.current.foregroundSecondary)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                    Text("THEMES")
+                                        .font(Theme.current.fontXSBold)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
                                 }
-                                .padding(Spacing.sm)
-                                .background(isThemeActive(preset) ? Color.accentColor.opacity(Opacity.medium) : Theme.current.backgroundTertiary)
-                                .cornerRadius(CornerRadius.sm)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                        .stroke(isThemeActive(preset) ? Color.accentColor : Color.clear, lineWidth: 1)
-                                )
+
+                                HStack(spacing: Spacing.xs) {
+                                    ForEach(ThemePreset.allCases, id: \.rawValue) { preset in
+                                        Button(action: { settingsManager.applyTheme(preset) }) {
+                                            VStack(spacing: Spacing.xs) {
+                                                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                                    .fill(preset.previewColors.bg)
+                                                    .frame(width: 32, height: 24)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                                            .stroke(preset.previewColors.accent, lineWidth: 1.5)
+                                                    )
+                                                Text(preset.displayName)
+                                                    .font(.system(size: 8, weight: .medium))
+                                                    .foregroundColor(isThemeActive(preset) ? Theme.current.foreground : Theme.current.foregroundSecondary)
+                                            }
+                                            .padding(.horizontal, Spacing.xs)
+                                            .padding(.vertical, Spacing.xs)
+                                            .background(isThemeActive(preset) ? Color.accentColor.opacity(Opacity.medium) : Color.clear)
+                                            .cornerRadius(CornerRadius.xs)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                                    .stroke(isThemeActive(preset) ? Color.accentColor : Color.clear, lineWidth: 1)
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
+                            .padding(Spacing.sm)
+                            .background(Theme.current.surface1)
+                            .cornerRadius(CornerRadius.sm)
+
+                            // Accent
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                HStack(spacing: Spacing.xs) {
+                                    Image(systemName: "paintbrush.pointed")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                    Text("ACCENT")
+                                        .font(Theme.current.fontXSBold)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                }
+
+                                HStack(spacing: Spacing.xs) {
+                                    ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
+                                        accentColorCircle(colorOption)
+                                    }
+                                }
+                            }
+                            .padding(Spacing.sm)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Theme.current.surface1)
+                            .cornerRadius(CornerRadius.sm)
                         }
-                    }
-                    }
-                    .padding(Spacing.sm)
-                    .background(Theme.current.surface1.opacity(Opacity.half))
-                    .cornerRadius(CornerRadius.sm)
 
-                    // Section divider - tighter spacing
-                    Rectangle()
-                        .fill(Theme.current.divider.opacity(Opacity.half))
-                        .frame(height: 1)
-                        .padding(.vertical, Spacing.xs)
-
-                    // Mode & Accent - MODE compact, ACCENT gets more space
-                    HStack(spacing: Spacing.md) {
-                        // Appearance Mode - compact inline treatment
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("MODE")
-                                .font(Theme.current.fontXSBold)
-                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                        // Mode - compact horizontal row
+                        HStack(spacing: Spacing.sm) {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: "moon.stars")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                Text("MODE")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
 
                             HStack(spacing: Spacing.xs) {
                                 ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
-                                    AppearanceModeButton(
-                                        mode: mode,
-                                        isSelected: settingsManager.appearanceMode == mode,
-                                        action: { settingsManager.appearanceMode = mode }
-                                    )
+                                    Button(action: { settingsManager.appearanceMode = mode }) {
+                                        Image(systemName: mode.icon)
+                                            .font(.system(size: 14))
+                                            .foregroundColor(settingsManager.appearanceMode == mode ? .accentColor : Theme.current.foregroundSecondary)
+                                            .frame(width: 28, height: 28)
+                                            .background(settingsManager.appearanceMode == mode ? Color.accentColor.opacity(Opacity.medium) : Theme.current.backgroundTertiary)
+                                            .cornerRadius(CornerRadius.xs)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                                    .stroke(settingsManager.appearanceMode == mode ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(mode.displayName)
                                 }
                             }
-                        }
 
-                        // Accent Color card
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            Text("ACCENT")
-                                .font(Theme.current.fontXSBold)
-                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                            HStack(spacing: Spacing.xs) {
-                                ForEach(AccentColorOption.allCases, id: \.rawValue) { colorOption in
-                                    accentColorCircle(colorOption)
-                                }
-                            }
+                            Spacer()
                         }
                         .padding(Spacing.sm)
-                        .frame(maxWidth: .infinity)
                         .background(Theme.current.surface1)
                         .cornerRadius(CornerRadius.sm)
                     }
@@ -702,25 +723,25 @@ struct FontSizeButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: Spacing.xs) {
+            VStack(spacing: Spacing.xs) {
                 Image(systemName: size.icon)
-                    .font(.system(size: size.previewFontSize - 2))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(isSelected ? .accentColor : Theme.current.foregroundSecondary)
+                    .frame(width: 28, height: 28)
+                    .background(isSelected ? Color.accentColor.opacity(Opacity.medium) : Theme.current.surface1)
+                    .cornerRadius(Spacing.xs)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Spacing.xs)
+                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                    )
 
                 Text(size.displayName)
-                    .font(.system(size: size.previewFontSize, weight: isSelected ? .medium : .regular, design: .monospaced))
+                    .font(Theme.current.fontXS)
                     .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
-            .background(isSelected ? Color.accentColor.opacity(Opacity.medium) : Theme.current.surface1)
-            .cornerRadius(CornerRadius.xs)
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .stroke(isSelected ? Color.accentColor : Theme.current.foreground.opacity(Opacity.light), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
+        .frame(minWidth: 50)
     }
 }
 

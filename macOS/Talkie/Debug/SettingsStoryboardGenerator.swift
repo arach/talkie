@@ -32,7 +32,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
     case dictationOutput = 2
     case quickActions = 3
     case quickOpen = 4
-    case autoRun = 5
+    case automations = 5
     case aiProviders = 6
     case transcriptionModels = 7
     case llmModels = 8
@@ -48,7 +48,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         case .dictationOutput: return "Dictation Output"
         case .quickActions: return "Quick Actions"
         case .quickOpen: return "Quick Open"
-        case .autoRun: return "Auto-Run"
+        case .automations: return "Automations"
         case .aiProviders: return "AI Providers"
         case .transcriptionModels: return "Transcription Models"
         case .llmModels: return "LLM Models"
@@ -63,7 +63,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         switch self {
         case .appearance: return "Appearance"
         case .dictationCapture, .dictationOutput: return "Dictation"
-        case .quickActions, .quickOpen, .autoRun: return "Memos"
+        case .quickActions, .quickOpen, .automations: return "Memos"
         case .aiProviders, .transcriptionModels, .llmModels: return "AI Models"
         case .database, .files: return "Storage"
         case .permissions, .debugInfo: return "System"
@@ -78,7 +78,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         case .dictationOutput: return "DictationSettings.swift"
         case .quickActions: return "QuickActionsSettings.swift"
         case .quickOpen: return "QuickOpenSettings.swift"
-        case .autoRun: return "AutoRunSettings.swift"
+        case .automations: return "AutomationsSettings.swift"
         case .aiProviders: return "APISettings.swift"
         case .transcriptionModels: return "TranscriptionModelsSettingsView.swift"
         case .llmModels: return "ModelLibrarySettings.swift"
@@ -97,7 +97,7 @@ enum SettingsPage: Int, CaseIterable, Hashable {
         case .dictationOutput: return .dictationOutput
         case .quickActions: return .quickActions
         case .quickOpen: return .quickOpen
-        case .autoRun: return .autoRun
+        case .automations: return .automations
         case .aiProviders: return .aiProviders
         case .transcriptionModels: return .transcriptionModels
         case .llmModels: return .llmModels
