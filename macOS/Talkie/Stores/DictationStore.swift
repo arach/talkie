@@ -295,6 +295,9 @@ struct ContextCapture {
 final class DictationStore {
     static let shared = DictationStore()
 
+    /// Number of recent dictations to load on first refresh (lazy loading)
+    private static let initialLoadSize = 50
+
     /// Published utterances - now backed by SQLite database
     private(set) var utterances: [Utterance] = []
 
@@ -305,8 +308,7 @@ final class DictationStore {
     private var lastRefreshTimestamp: Date?
 
     private init() {
-        // Load from database on init
-        refresh()
+        // No initial load - lazy load on demand when user navigates to dictation list
     }
 
     // MARK: - Public API
@@ -424,9 +426,9 @@ final class DictationStore {
 
             logger.debug("Incremental refresh: found \(liveUtterances.count) new utterances since \(lastRefresh)")
         } else {
-            // First load: get all utterances
-            liveUtterances = LiveDatabase.all()
-            logger.debug("Full refresh: loaded \(liveUtterances.count) utterances")
+            // First load: only get recent utterances for fast initial render
+            liveUtterances = LiveDatabase.recent(limit: Self.initialLoadSize)
+            logger.debug("Initial load: loaded \(liveUtterances.count) recent utterances (limit: \(Self.initialLoadSize))")
         }
 
         // Update timestamp BEFORE processing to avoid missing utterances in race conditions
@@ -586,15 +588,14 @@ final class DictationStore {
     private var pollingTimer: Timer?
 
     func startMonitoring() {
-        refresh()  // Initial load
+        // Don't load on start - only load when user navigates to dictation list view
 
-        // Two-layer refresh: XPC push (primary) + polling (fallback safety net)
-        // XPC provides real-time updates, polling catches anything missed
+        // Polling fallback for when XPC callbacks miss updates
         pollingTimer?.invalidate()
-        pollingTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             self?.refresh()
         }
-        logger.info("[DictationStore] ℹ️ Started monitoring with XPC + 5s polling fallback")
+        logger.info("[DictationStore] ℹ️ Started monitoring with XPC callbacks + 30s polling fallback")
     }
 
     func stopMonitoring() {

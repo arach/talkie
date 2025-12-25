@@ -109,6 +109,7 @@
 		627FF3DB7474D22BAF62DE93 /* settings-10-files.png in Resources */ = {isa = PBXBuildFile; fileRef = 6DA34B0D980C4E84962D02E4 /* settings-10-files.png */; };
 		642DEC0586D865075007587F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */; };
 		65203124384564E9FF2BE845 /* DesignAuditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75FED0DCD51602D30AD94C8 /* DesignAuditor.swift */; };
+		873C74CB87F2457384EF5CF2 /* StartupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB2981B4B7D43F092E50FB6 /* StartupCoordinator.swift */; };
 		6562B1C0819BB0A465A98458 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32E922E7292E91230F71AD6 /* SettingsView.swift */; };
 		673E5DD45505795431156EAB /* TranscriptFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */; };
 		67A5249D6D764042BF21594F /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 46A4FF7ED5361369A679A309 /* TalkieKit */; };
@@ -400,6 +401,7 @@
 		B77DD31A8614224637F33F74 /* MemosViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemosViewModel.swift; sourceTree = "<group>"; };
 		B848CA51647C728E15DE9B85 /* settings-01-dictation-capture.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "settings-01-dictation-capture.png"; sourceTree = "<group>"; };
 		B85E11D8D3E8BED31169CF0F /* Migrations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Migrations.swift; sourceTree = "<group>"; };
+		5CB2981B4B7D43F092E50FB6 /* StartupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupCoordinator.swift; sourceTree = "<group>"; };
 		BADBB832DB3FA8A73480B2EA /* AutomationsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationsSettings.swift; sourceTree = "<group>"; };
 		BAE4EAB04189037E2A5BE4FC /* ServiceHealthCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealthCard.swift; sourceTree = "<group>"; };
 		BB3F2B424A6A46603EF1A10D /* ExternalDataAuditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDataAuditor.swift; sourceTree = "<group>"; };
@@ -587,6 +589,7 @@
 			children = (
 				C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */,
 				76D097437D3CBB76ADE1BD3B /* BuildInfo.swift */,
+				5CB2981B4B7D43F092E50FB6 /* StartupCoordinator.swift */,
 				41CBA070F3919E79B1D5E26F /* DataLayerIntegration.swift */,
 				D47F699EAAD626CBC739B841 /* TalkieApp.swift */,
 			);
@@ -1146,6 +1149,7 @@
 				9785CE4C35A139A47910218C /* AppEnvironment.swift in Sources */,
 				0A5465C557AF3307FD4069BF /* AppIconProvider.swift in Sources */,
 				D689A347A6FB464B7282220F /* AppLauncher.swift in Sources */,
+				873C74CB87F2457384EF5CF2 /* StartupCoordinator.swift in Sources */,
 				2C894B7C30919117AF8B77C5 /* AppearanceSettings.swift in Sources */,
 				8FED1C4B243431C4FBF841C1 /* AppleSpeechService.swift in Sources */,
 				1F6920FD9181DDDACE2A4A53 /* AudioDeviceManager.swift in Sources */,
