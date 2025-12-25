@@ -53,6 +53,12 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                         .allowsHitTesting(false)
                 }
 
+                // Spacing decorator (shows spacing between sections and elements)
+                // TODO: Re-enable once SpacingDecoratorOverlay is added to Xcode project
+                // if designMode.showSpacing {
+                //     SpacingDecoratorOverlay()
+                // }
+
                 // Advanced layout tools (independent overlays)
                 // TODO: Fix Swift compilation issue - tools not visible to DesignOverlay
                 // if designMode.showCenterGuides {
