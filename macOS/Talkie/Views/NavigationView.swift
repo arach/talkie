@@ -65,9 +65,16 @@ struct TalkieNavigationView: View {
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
 
-    // Sidebar width constants - use fixed values to avoid NavigationSplitView recalculations
-    private let sidebarExpandedWidth: CGFloat = 180
+    // Sidebar width - user-adjustable with smart defaults
+    @AppStorage("navigation.sidebarExpandedWidth") private var sidebarExpandedWidth: Double = 180
     private let sidebarCollapsedWidth: CGFloat = 56
+    private let sidebarMinWidth: Double = 120
+    private let sidebarMaxWidth: Double = 300
+
+    // Content column width - user-adjustable with smart defaults
+    @AppStorage("navigation.contentColumnWidth") private var contentColumnWidth: Double = 300
+    private let contentColumnMinWidth: Double = 240
+    private let contentColumnMaxWidth: Double = 480
 
     private var currentSidebarWidth: CGFloat {
         isSidebarCollapsed ? sidebarCollapsedWidth : sidebarExpandedWidth
@@ -85,19 +92,24 @@ struct TalkieNavigationView: View {
 
     private var mainContent: some View {
         GeometryReader { geometry in
-            HStack(spacing: Spacing.xxs) {
+            HStack(spacing: 0) {
                 // Sidebar - full height
                 sidebarView
                     .frame(width: currentSidebarWidth)
                     .clipped()
 
-                // Divider between sidebar and content
-                Rectangle()
-                    .fill(Theme.current.divider)
-                    .frame(width: 1)
+                // Resizable divider (when sidebar is expanded)
+                if !isSidebarCollapsed {
+                    sidebarResizer
+                } else {
+                    // Static divider when collapsed
+                    Rectangle()
+                        .fill(Theme.current.divider)
+                        .frame(width: 1)
+                }
 
                 // Content area + StatusBar
-                VStack(spacing: Spacing.xxs) {
+                VStack(spacing: 0) {
                     // Main content area
                     ZStack {
                         if isTwoColumnSection {
@@ -105,13 +117,11 @@ struct TalkieNavigationView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             // 3-column: content list + detail
-                            HStack(spacing: Spacing.xxs) {
+                            HStack(spacing: 0) {
                                 contentColumnView
-                                    .frame(width: 300)
+                                    .frame(width: contentColumnWidth)
 
-                                Rectangle()
-                                    .fill(Theme.current.divider)
-                                    .frame(width: 1)
+                                contentColumnResizer
 
                                 detailColumnView
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -238,18 +248,35 @@ struct TalkieNavigationView: View {
 
     // Old statusBarView removed - now using unified StatusBar component
 
+    // MARK: - Sidebar Resizer
+
+    private var sidebarResizer: some View {
+        SidebarResizer(
+            width: $sidebarExpandedWidth,
+            minWidth: sidebarMinWidth,
+            maxWidth: sidebarMaxWidth
+        )
+    }
+
+    private var contentColumnResizer: some View {
+        SidebarResizer(
+            width: $contentColumnWidth,
+            minWidth: contentColumnMinWidth,
+            maxWidth: contentColumnMaxWidth
+        )
+    }
+
     // MARK: - Sidebar View (matches TalkieLive structure)
 
-
     private var sidebarView: some View {
-        VStack(spacing: Spacing.xxs) {
+        VStack(spacing: 0) {
             // Header with collapse toggle (matches TalkieLive)
             sidebarHeader
 
             // Navigation content
             if isSidebarCollapsed {
                 // Collapsed: simple VStack, no scroll, natural sizing
-                VStack(spacing: Spacing.xxs) {
+                VStack(spacing: 0) {
                     sidebarButton(section: .home, icon: "house.fill", title: "Home")
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
                     sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
@@ -263,7 +290,7 @@ struct TalkieNavigationView: View {
             } else {
                 // Expanded: ScrollView with sections
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    VStack(alignment: .leading, spacing: 0) {
                         // Home
                         sidebarButton(
                             section: .home,
@@ -372,7 +399,7 @@ struct TalkieNavigationView: View {
             Spacer(minLength: 0)
 
             // Settings pinned to bottom
-            VStack(spacing: Spacing.xxs) {
+            VStack(spacing: 0) {
                 Divider()
                     .opacity(isSidebarCollapsed ? 0 : Opacity.half)
                 sidebarButton(
@@ -936,5 +963,57 @@ private struct SidebarButtonContent: View {
         .onHover { hovering in
             isHovering = hovering
         }
+    }
+}
+
+// MARK: - Sidebar Resizer Component
+
+/// Native-style resizer divider (mimics NSSplitView behavior)
+private struct SidebarResizer: View {
+    @Binding var width: Double
+    let minWidth: Double
+    let maxWidth: Double
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    var body: some View {
+        // Native macOS split view style: 1px divider with expanded hit area
+        ZStack {
+            // Visible 1px divider line
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+
+            // Invisible expanded hit area for easier grabbing (8px wide)
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 8)
+                .contentShape(Rectangle())
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else if !isDragging {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if !isDragging {
+                        isDragging = true
+                    }
+                    let newWidth = width + value.translation.width
+                    width = min(maxWidth, max(minWidth, newWidth))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    if !isHovering {
+                        NSCursor.pop()
+                    }
+                }
+        )
     }
 }
