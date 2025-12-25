@@ -53,6 +53,9 @@ final class FloatingPillController: ObservableObject {
     private var lastAudioLevelUpdate: Date = .distantPast
 
     private init() {
+        // Log initial engine state
+        pillLogger.debug("[Init] Initial engine connectionState=\(EngineClient.shared.connectionState.rawValue)")
+
         // Listen for screen configuration changes
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -94,8 +97,11 @@ final class FloatingPillController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 // Connected includes wrong build (still functional, just a warning)
-                self?.isEngineConnected = (state == .connected || state == .connectedWrongBuild)
+                let isConnected = (state == .connected || state == .connectedWrongBuild)
+                self?.isEngineConnected = isConnected
                 self?.isWrongEngineBuild = (state == .connectedWrongBuild)
+
+                pillLogger.debug("[Engine State] connectionState=\(state.rawValue), isEngineConnected=\(isConnected)")
             }
             .store(in: &settingsCancellables)
 
