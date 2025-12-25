@@ -128,7 +128,7 @@ private struct ProgressModeContent: View {
                         ZStack(alignment: .leading) {
                             // Background track
                             Rectangle()
-                                .fill(Color.white.opacity(0.1))
+                                .fill(TalkieTheme.divider)
 
                             // Progress fill
                             Rectangle()

@@ -26,7 +26,7 @@ struct AuditResultsView: View {
 
                     Text("Generated: \(results.timestamp.formatted())")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
 
                 Spacer()
@@ -91,7 +91,7 @@ struct AuditResultsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("RECOMMENDED ACTIONS")
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             if deleteResult != nil {
                 // Show success message
@@ -176,7 +176,7 @@ struct AuditResultsView: View {
 
                 Text(description)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Button(action: action) {
@@ -216,7 +216,7 @@ struct AuditResultsView: View {
 
                 Text(description)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -297,7 +297,7 @@ struct AuditResultsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             Text(value)
                 .font(.system(.title3, design: .monospaced))
@@ -326,7 +326,7 @@ struct AuditResultsView: View {
                     .font(.headline)
                 Text(explanation)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -387,7 +387,7 @@ struct AuditResultsView: View {
                     ForEach(Array(files).sorted(), id: \.self) { filename in
                         Text(filename)
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                             .padding(.vertical, 2)
                             .padding(.horizontal, 8)
                     }
@@ -412,7 +412,7 @@ private struct AuditInfoRow: View {
             HStack(spacing: 4) {
                 Text(label)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 if let help = helpText {
                     Image(systemName: "questionmark.circle")

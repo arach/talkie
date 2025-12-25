@@ -313,7 +313,7 @@ struct SettingsView: View {
         case .quickOpen:
             QuickOpenSettingsView()
         case .automations:
-            AutomationsSettingsView()
+            AutoRunSettingsView()
 
         // AI MODELS
         case .aiProviders:

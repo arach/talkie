@@ -31,7 +31,7 @@ struct WorkflowsView: View {
 
                     Text("WORKFLOW LIBRARY")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -49,7 +49,7 @@ struct WorkflowsView: View {
                         HStack {
                             Text("+ \(workflowManager.workflows.count - 5) more workflows")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                             Spacer()
                         }
                         .padding(8)
@@ -69,7 +69,7 @@ struct WorkflowsView: View {
 
                     Text("WORKFLOW BUILDER")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -90,7 +90,7 @@ struct WorkflowsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Visual Workflow Editor")
                             .font(Theme.current.fontSMMedium)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Theme.current.foreground)
 
                         Text("Create custom workflows with a drag-and-drop interface. Chain together transcription, AI processing, file actions, and more.")
                             .font(Theme.current.fontXS)
@@ -125,7 +125,7 @@ struct WorkflowsView: View {
 
                 Text("Workflows currently run automatically or from Quick Actions. See Auto-Run and Quick Actions settings to configure.")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
             .padding(12)
             .background(Color.orange.opacity(0.1))
@@ -152,7 +152,7 @@ private struct WorkflowPreviewRow: View {
                     .font(Theme.current.fontSMMedium)
                 Text("\(workflow.steps.count) step(s)")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             Spacer()
@@ -160,7 +160,7 @@ private struct WorkflowPreviewRow: View {
             if !workflow.isEnabled {
                 Text("DISABLED")
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.secondary.opacity(0.2))
@@ -199,7 +199,7 @@ private struct WorkflowFeatureRow: View {
 
             Text(text)
                 .font(Theme.current.fontXS)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 }
@@ -223,7 +223,7 @@ struct ActivityLogView: View {
 
                     Text("RECENT ACTIVITY")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -244,7 +244,7 @@ struct ActivityLogView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Execution History")
                             .font(Theme.current.fontSMMedium)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Theme.current.foreground)
 
                         Text("Track when workflows run, view results, and debug any issues. See which memos triggered which workflows.")
                             .font(Theme.current.fontXS)
@@ -288,7 +288,7 @@ private struct ActivityFeatureRow: View {
 
             Text(text)
                 .font(Theme.current.fontXS)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 }
@@ -317,7 +317,7 @@ struct AllowedCommandsView: View {
 
                     Text("ADD COMMAND")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
@@ -359,7 +359,7 @@ struct AllowedCommandsView: View {
 
                     Text("Enter the full path to the executable (e.g., /Users/you/.bun/bin/claude)")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .padding(12)
                 .background(Theme.current.surface1)
@@ -378,7 +378,7 @@ struct AllowedCommandsView: View {
 
                     Text("YOUR CUSTOM COMMANDS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -398,10 +398,10 @@ struct AllowedCommandsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("No custom commands added")
                                 .font(Theme.current.fontSMMedium)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Theme.current.foreground)
                             Text("Add executable paths above to allow them in Shell workflow steps.")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                     }
                     .padding(12)
@@ -418,7 +418,7 @@ struct AllowedCommandsView: View {
 
                                 Text(path)
                                     .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(Theme.current.foreground)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
 
@@ -451,7 +451,7 @@ struct AllowedCommandsView: View {
 
                     Text("BUILT-IN COMMANDS")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -465,7 +465,7 @@ struct AllowedCommandsView: View {
                         ForEach(ShellStepConfig.defaultAllowedExecutables.sorted(), id: \.self) { path in
                             Text(path)
                                 .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -495,7 +495,7 @@ struct AllowedCommandsView: View {
 
                 Text("Only add commands you trust. Shell steps can execute arbitrary code with access to your file system.")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
             .padding(12)
             .background(Color.orange.opacity(0.1))

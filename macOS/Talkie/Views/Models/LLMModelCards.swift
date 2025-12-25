@@ -53,10 +53,10 @@ struct ProviderCard<Content: View>: View {
                     ForEach(models, id: \.self) { model in
                         HStack(spacing: 6) {
                             Text("•")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                             Text(model)
                                 .font(SettingsManager.shared.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                     }
                 }
@@ -91,12 +91,12 @@ struct ModelRow: View {
                 HStack(spacing: 8) {
                     Text(model.size)
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     if let sizeGB = model.sizeInGB {
                         Text("~\(String(format: "%.1f", sizeGB))GB")
                             .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
                     if model.isInstalled {
@@ -120,7 +120,7 @@ struct ModelRow: View {
                         .frame(width: 80)
                     Text("\(Int(downloadProgress * 100))%")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
             } else if model.isInstalled {
                 Button(action: onDelete) {
@@ -559,12 +559,12 @@ struct CompactProviderCard: View {
                 HStack {
                     Text("CONFIGURE")
                         .font(settings.monoSM)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                     Spacer()
                     Button(action: onCancel) {
                         Image(systemName: "xmark")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -581,7 +581,7 @@ struct CompactProviderCard: View {
                 Button(action: onSave) {
                     Text("SAVE")
                         .font(settings.monoSM)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .background(Color.primary.opacity(settings.specDividerOpacity))

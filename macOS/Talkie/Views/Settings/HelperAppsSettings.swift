@@ -65,7 +65,7 @@ struct HelperAppsSettingsView: View {
                         Text("REFRESH STATUS")
                             .font(Theme.current.fontXSMedium)
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.1))
@@ -84,7 +84,7 @@ struct HelperAppsSettingsView: View {
                         Text("OPEN LOGIN ITEMS")
                             .font(Theme.current.fontXSMedium)
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.1))
@@ -97,11 +97,11 @@ struct HelperAppsSettingsView: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "info.circle")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text("Helper apps run in the background to provide voice capture and AI processing. They automatically start when you log in.")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(10)
@@ -156,11 +156,11 @@ private struct HelperAppRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(Theme.current.fontSMMedium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 Text(description)
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 // Technical info (PID, Environment)
                 HStack(spacing: 8) {
@@ -227,7 +227,7 @@ private struct HelperAppRow: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(Theme.current.fontSM)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 28, height: 28)
                     .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
                     .cornerRadius(6)

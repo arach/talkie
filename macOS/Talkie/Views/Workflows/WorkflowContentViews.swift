@@ -46,13 +46,13 @@ struct WorkflowsContentView: View {
                             .font(Theme.current.fontSMBold)
                         Text("\(workflowManager.workflows.count) total")
                             .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     Spacer()
                     Button(action: createNewWorkflow) {
                         Image(systemName: "plus")
                             .font(SettingsManager.shared.fontBody)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Theme.current.foreground)
                             .frame(width: 24, height: 24)
                             .background(Theme.current.surfaceSelected)
                             .cornerRadius(4)
@@ -114,7 +114,7 @@ struct WorkflowsContentView: View {
                             Text("NEW WORKFLOW")
                                 .font(Theme.current.fontXSBold)
                         }
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Theme.current.surfaceSelected)
@@ -240,14 +240,14 @@ struct WorkflowMemoSelectorSheet: View {
                             .foregroundColor(workflow.color.color)
                         Text(workflow.name)
                             .font(SettingsManager.shared.fontBody)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                 }
                 Spacer()
                 Button(action: onCancel) {
                     Image(systemName: "xmark.circle.fill")
                         .font(SettingsManager.shared.fontHeadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -257,7 +257,7 @@ struct WorkflowMemoSelectorSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
@@ -267,7 +267,7 @@ struct WorkflowMemoSelectorSheet: View {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(SettingsManager.shared.fontSM)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -288,7 +288,7 @@ struct WorkflowMemoSelectorSheet: View {
 
                     Text("No Transcribed Memos")
                         .font(Theme.current.fontBodyMedium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Record and transcribe a voice memo first")
                         .font(SettingsManager.shared.fontSM)
@@ -303,7 +303,7 @@ struct WorkflowMemoSelectorSheet: View {
 
                     Text("No matching memos")
                         .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -329,7 +329,7 @@ struct WorkflowMemoSelectorSheet: View {
             HStack {
                 Text("\(filteredMemos.count) memo\(filteredMemos.count == 1 ? "" : "s")")
                     .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
@@ -399,7 +399,7 @@ struct WorkflowCard: View {
 
                     Text(description)
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     if isExecuting {
                         HStack(spacing: 4) {
@@ -407,7 +407,7 @@ struct WorkflowCard: View {
                                 .scaleEffect(0.5)
                             Text("RUNNING...")
                                 .font(Theme.current.fontXSMedium)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                     }
                 }
@@ -491,7 +491,7 @@ struct MemoSelectorSheet: View {
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(SettingsManager.shared.fontHeadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -521,7 +521,7 @@ struct MemoSelectorSheet: View {
                                     if let date = memo.createdAt {
                                         Text(date, style: .relative)
                                             .font(SettingsManager.shared.fontXS)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
                                     }
                                 }
 
@@ -529,7 +529,7 @@ struct MemoSelectorSheet: View {
 
                                 Image(systemName: "chevron.right")
                                     .font(SettingsManager.shared.fontSM)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                             }
                             .padding(12)
                             .background(Theme.current.surface1)

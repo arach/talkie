@@ -29,7 +29,7 @@ struct MemosSettingsView: View {
 
                     Text("DISPLAY")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
@@ -47,7 +47,7 @@ struct MemosSettingsView: View {
                                 .font(Theme.current.fontSMMedium)
                             Text("How memos are sorted by default")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()
@@ -77,7 +77,7 @@ struct MemosSettingsView: View {
                                 .font(Theme.current.fontSMMedium)
                             Text("Show \"2 hours ago\" instead of exact times")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()
@@ -104,7 +104,7 @@ struct MemosSettingsView: View {
 
                     Text("TRANSCRIPTION")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
@@ -122,7 +122,7 @@ struct MemosSettingsView: View {
                                 .font(Theme.current.fontSMMedium)
                             Text("Display unprocessed transcript alongside cleaned version")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()
@@ -147,7 +147,7 @@ struct MemosSettingsView: View {
                                 .font(Theme.current.fontSMMedium)
                             Text("Show precise timing for each word (when available)")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()
@@ -174,7 +174,7 @@ struct MemosSettingsView: View {
 
                     Text("LIST BEHAVIOR")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
@@ -192,7 +192,7 @@ struct MemosSettingsView: View {
                                 .font(Theme.current.fontSMMedium)
                             Text("Ask for confirmation when deleting memos")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()
@@ -217,7 +217,7 @@ struct MemosSettingsView: View {
                                 .font(Theme.current.fontSMMedium)
                             Text("Automatically select the newest memo when syncing")
                                 .font(Theme.current.fontXS)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
 
                         Spacer()

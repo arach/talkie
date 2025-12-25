@@ -152,7 +152,7 @@ struct SyncHistoryView: View {
                     if let lastSync = syncManager.lastSyncDate {
                         Text("Last synced \(formatRelativeTime(lastSync))")
                             .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                 }
 
@@ -165,7 +165,7 @@ struct SyncHistoryView: View {
                             .frame(width: 14, height: 14)
                         Text("Syncing...")
                             .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                 }
 
@@ -185,10 +185,10 @@ struct SyncHistoryView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "clock.arrow.circlepath")
                                 .font(.system(size: 48))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                             Text("No sync history yet")
                                 .font(.system(size: 14))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.top, 80)
@@ -230,7 +230,7 @@ struct SyncEventRow: View {
                     // Expand/collapse chevron
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .frame(width: 12)
 
                     // Status icon
@@ -245,7 +245,7 @@ struct SyncEventRow: View {
                             .font(.system(size: 12, weight: .medium))
                         Text(formatDate(event.timestamp))
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .frame(width: 100, alignment: .leading)
 
@@ -257,10 +257,10 @@ struct SyncEventRow: View {
 
                             if let duration = event.duration {
                                 Text("•")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                                 Text(String(format: "%.1fs", duration))
                                     .font(.system(size: 11))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                             }
                         }
 
@@ -342,7 +342,7 @@ struct SyncRecordDetailRow: View {
             if let modDate = detail.modificationDate {
                 Text(formatShortDate(modDate))
                     .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
         }
         .padding(.vertical, 4)

@@ -79,4 +79,14 @@ _archive/
 # Releases (built artifacts)
 releases/
 *.pbxproj.backup
+.vlmrc
 .deriveddata
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+uv.lock
+.pytest_cache/

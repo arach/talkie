@@ -25,11 +25,11 @@ struct PendingActionsView: View {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(settings.fontSM)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text("ACTIONS")
                     .font(.techLabel)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
@@ -115,7 +115,7 @@ struct PendingActionsView: View {
 
                             Text("No actions yet")
                                 .font(settings.fontBody)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
 
                             Text("Workflows will appear here while running")
                                 .font(settings.fontSM)
@@ -144,7 +144,7 @@ struct PendingActionsView: View {
                         Text("Clear History")
                             .font(settings.fontXS)
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Spacing.sm)
                 }
@@ -244,7 +244,7 @@ private struct SectionHeader: View {
 
             Text(title)
                 .font(.techLabelSmall)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             Spacer()
         }
@@ -292,13 +292,13 @@ struct PendingActionRow: View {
                 // Workflow name
                 Text(action.workflowName)
                     .font(Theme.current.fontBodyMedium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
                     .lineLimit(1)
 
                 // Memo title
                 Text(action.memoTitle)
                     .font(settings.fontSM)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .lineLimit(1)
 
                 // Current step or progress
@@ -324,7 +324,7 @@ struct PendingActionRow: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(formatElapsed(elapsed))
                     .font(.monoXSmall)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 // Progress bar (if multi-step)
                 if action.totalSteps > 1 {
@@ -399,7 +399,7 @@ struct RecentActionRow: View {
                     // Memo title
                     Text(action.memoTitle)
                         .font(settings.fontSM)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineLimit(1)
 
                     // Time ago
@@ -414,7 +414,7 @@ struct RecentActionRow: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(formatDuration(action.duration))
                         .font(.monoXSmall)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     if isFailed && onRetry != nil {
                         TalkieButtonSync("RetryAction.\(action.workflowName)", section: "PendingActions") {

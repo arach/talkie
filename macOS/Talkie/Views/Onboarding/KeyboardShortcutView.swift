@@ -30,10 +30,10 @@ struct KeyCapView: View {
             .frame(width: 12, height: 12)
             .background(
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.white.opacity(0.15))
+                    .fill(TalkieTheme.surfaceCard)
                     .overlay(
                         RoundedRectangle(cornerRadius: 2)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                            .stroke(TalkieTheme.border, lineWidth: 0.5)
                     )
             )
     }

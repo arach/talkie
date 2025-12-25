@@ -530,7 +530,7 @@ class SettingsManager {
     /// Primary background
     var tacticalBackground: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.05) : Color(white: 0.98)
+            return isDarkMode ? Color(white: 0.05) : Color(white: 0.96)
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
@@ -553,7 +553,7 @@ class SettingsManager {
     /// Secondary background (slightly lighter/darker)
     var tacticalBackgroundSecondary: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.08) : Color(white: 0.94)
+            return isDarkMode ? Color(white: 0.08) : Color(white: 0.88)
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.14) : Color(white: 0.94)
@@ -655,7 +655,7 @@ class SettingsManager {
     /// Divider/border color
     var tacticalDivider: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.2) : Color(white: 0.85)
+            return isDarkMode ? Color(white: 0.2) : Color(white: 0.65)
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.22) : Color(white: 0.88)
@@ -1540,6 +1540,81 @@ class SettingsManager {
     var hasValidApiKey: Bool {
         ensureInitialized()
         return !geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: - JSON Export
+    /// Export current settings as JSON (excluding sensitive data like API keys)
+    func exportSettingsAsJSON() -> String {
+        ensureInitialized()
+
+        var settings: [String: Any] = [:]
+
+        // Appearance
+        settings["appearance"] = [
+            "mode": appearanceMode.rawValue,
+            "accentColor": accentColor.rawValue,
+            "fontStyle": fontStyle.rawValue,
+            "fontSize": fontSize.rawValue
+        ]
+
+        // Dictation
+        settings["dictation"] = [
+            "liveTranscriptionModelId": liveTranscriptionModelId
+        ]
+
+        // Local Files
+        settings["localStorage"] = [
+            "saveTranscriptsLocally": saveTranscriptsLocally,
+            "transcriptsFolderPath": transcriptsFolderPath,
+            "saveAudioLocally": saveAudioLocally,
+            "audioFolderPath": audioFolderPath
+        ]
+
+        // Automations
+        settings["automations"] = [
+            "autoRunWorkflowsEnabled": autoRunWorkflowsEnabled
+        ]
+
+        // Sync
+        settings["sync"] = [
+            "syncOnLaunch": syncOnLaunch,
+            "syncIntervalMinutes": syncIntervalMinutes,
+            "minimumSyncInterval": minimumSyncInterval
+        ]
+
+        // AI Models (masked keys)
+        settings["aiModels"] = [
+            "selectedModel": selectedModel,
+            "openaiApiKey": maskApiKey(openaiApiKey),
+            "anthropicApiKey": maskApiKey(anthropicApiKey),
+            "groqApiKey": maskApiKey(groqApiKey),
+            "geminiApiKey": maskApiKey(geminiApiKey)
+        ]
+
+        // Convert to JSON
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
+            return String(data: jsonData, encoding: .utf8) ?? "{}"
+        } catch {
+            logger.error("Failed to serialize settings to JSON: \(error.localizedDescription)")
+            return "{\"error\": \"Failed to serialize settings\"}"
+        }
+    }
+
+    /// Mask API key for display (show last 4 characters)
+    private func maskApiKey(_ key: String?) -> String {
+        guard let key = key, !key.isEmpty else {
+            return "[not set]"
+        }
+
+        // Show prefix + last 4 chars for OpenAI/Anthropic style keys
+        if key.count > 8 {
+            let prefix = key.prefix(3) // "sk-" or "ant"
+            let suffix = key.suffix(4)
+            return "\(prefix)...\(suffix)"
+        }
+
+        return "[hidden]"
     }
 }
 

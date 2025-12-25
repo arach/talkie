@@ -60,11 +60,11 @@ struct AIResultsContentView: View {
                         Text("ACTIVITY LOG")
                             .font(Theme.current.fontBodyBold)
                     }
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                     Text("All workflow runs across your memos")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
@@ -81,7 +81,7 @@ struct AIResultsContentView: View {
 
                         Text("NO RESULTS YET")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Run workflows on your memos")
                             .font(SettingsManager.shared.fontXS)
@@ -126,7 +126,7 @@ struct AIResultsContentView: View {
                         .foregroundColor(.secondary.opacity(0.3))
                     Text("SELECT A RUN")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                     Text("Choose a workflow run to view details")
                         .font(SettingsManager.shared.fontXS)
                         .foregroundColor(.secondary.opacity(0.5))
@@ -156,18 +156,18 @@ struct AIMemoHeaderView: View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
                 .font(SettingsManager.shared.fontSM)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             Text(memo.title ?? "Untitled")
                 .font(Theme.current.fontSMBold)
-                .foregroundColor(.primary)
+                .foregroundColor(Theme.current.foreground)
                 .lineLimit(1)
 
             Spacer()
 
             Text("\(runCount)")
                 .font(Theme.current.fontXSBold)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Theme.current.surfaceAlternate)
@@ -295,7 +295,7 @@ struct AIRunDetailView: View {
                             if let model = modelId {
                                 Text(model)
                                     .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(Theme.current.surfaceAlternate)
@@ -319,7 +319,7 @@ struct AIRunDetailView: View {
                     Button(action: onDelete) {
                         Image(systemName: "trash")
                             .font(SettingsManager.shared.fontBody)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -347,11 +347,11 @@ struct AIRunDetailView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("OUTPUT")
                                     .font(Theme.current.fontXSBold)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
                                 Text(output)
                                     .font(SettingsManager.shared.fontBody)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(Theme.current.foreground)
                                     .textSelection(.enabled)
                                     .lineSpacing(3)
                                     .padding(12)
@@ -414,18 +414,18 @@ struct AIStepCard: View {
 
                 Image(systemName: step.stepIcon)
                     .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text(step.stepType.uppercased())
                     .font(Theme.current.fontXSBold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 Spacer()
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Text(showInput ? "HIDE INPUT" : "SHOW INPUT")
                         .font(Theme.current.fontXSMedium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(Color.secondary.opacity(0.08))
@@ -442,7 +442,7 @@ struct AIStepCard: View {
 
                     Text(step.input)
                         .font(SettingsManager.shared.fontSM)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineSpacing(2)
                         .lineLimit(10)
                         .padding(10)
@@ -465,7 +465,7 @@ struct AIStepCard: View {
 
                 Text(step.output)
                     .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
                     .textSelection(.enabled)
                     .lineSpacing(3)
                     .padding(10)
@@ -502,11 +502,11 @@ struct ActivityLogContentView: View {
                         Text("ACTIVITY LOG")
                             .font(Theme.current.fontTitleBold)
                     }
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                     Text("View workflow execution history and results.")
                         .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
 
                 Divider()

@@ -508,7 +508,7 @@ enum ActivityLevel: Int {
 
     var color: Color {
         switch self {
-        case .none: return Color(white: 0.1)
+        case .none: return TalkieTheme.divider
         case .low: return Color.green.opacity(0.3)
         case .medium: return Color.green.opacity(0.5)
         case .high: return Color.green.opacity(0.7)

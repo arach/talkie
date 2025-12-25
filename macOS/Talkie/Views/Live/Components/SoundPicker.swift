@@ -142,7 +142,7 @@ struct SoundChip: View {
                 } else {
                     Image(systemName: isPlaying ? "speaker.wave.3.fill" : "speaker.wave.2")
                         .font(.labelSmall)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .symbolEffect(.variableColor.iterative, isActive: isPlaying)
                 }
 

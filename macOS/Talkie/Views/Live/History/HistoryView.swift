@@ -219,7 +219,7 @@ struct HistoryView: View {
     private var dropZoneOverlay: some View {
         ZStack {
             // Dim background
-            Color.black.opacity(0.6)
+            TalkieTheme.textSecondary
 
             // Drop zone indicator
             VStack(spacing: Spacing.md) {
@@ -246,8 +246,8 @@ struct HistoryView: View {
             .padding(Spacing.xxl)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.lg)
-                    .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
-                    .background(RoundedRectangle(cornerRadius: CornerRadius.lg).fill(Color.white.opacity(0.1)))
+                    .stroke(TalkieTheme.textTertiary, style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
+                    .background(RoundedRectangle(cornerRadius: CornerRadius.lg).fill(TalkieTheme.divider))
             )
         }
         .animation(.easeInOut(duration: 0.2), value: isDropTargeted)

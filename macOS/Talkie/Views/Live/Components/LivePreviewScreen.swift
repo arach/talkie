@@ -27,7 +27,7 @@ struct LivePreviewScreen: View {
         ZStack {
             // Screen background
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(Color.black.opacity(0.9))
+                .fill(TalkieTheme.textPrimary)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
                         .stroke(TalkieTheme.border, lineWidth: 1)
@@ -171,7 +171,7 @@ private struct PositionDot: View {
             ZStack {
                 // Outer circle (always visible)
                 Circle()
-                    .stroke(isSelected ? Color.cyan : Color.white.opacity(0.4), lineWidth: 1.5)
+                    .stroke(isSelected ? Color.cyan : TalkieTheme.textTertiary, lineWidth: 1.5)
                     .frame(width: size, height: size)
 
                 // Inner fill (selected state)
@@ -244,7 +244,7 @@ private struct AnimatedMiniPill: View {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(Color.black.opacity(0.7))
+                        .fill(TalkieTheme.textSecondary)
                         .overlay(
                             Capsule()
                                 .stroke(Color.red.opacity(0.3), lineWidth: 0.5)
@@ -253,11 +253,11 @@ private struct AnimatedMiniPill: View {
             } else {
                 // Idle state: flat wide capsule
                 Capsule()
-                    .fill(Color.white.opacity(0.2))
+                    .fill(TalkieTheme.border)
                     .frame(width: 24, height: 6)
                     .overlay(
                         Capsule()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(TalkieTheme.divider, lineWidth: 0.5)
                     )
             }
         }
@@ -423,5 +423,5 @@ private struct StylePill: View {
         LiveStyleSelector(selection: .constant(.particles))
     }
     .padding(40)
-    .background(Color(white: 0.1))
+    .background(TalkieTheme.divider)
 }

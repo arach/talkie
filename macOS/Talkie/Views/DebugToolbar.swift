@@ -157,7 +157,7 @@ struct DebugSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             content()
         }
@@ -205,13 +205,13 @@ struct DebugStateTable: View {
                 HStack {
                     Text(key)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
                     Text(info[key] ?? "-")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
@@ -702,7 +702,7 @@ struct EngineProcessesDebugContent: View {
                 HStack {
                     Text("Environment:")
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text(currentEnv.badge)
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -720,7 +720,7 @@ struct EngineProcessesDebugContent: View {
                 HStack {
                     Text("Found \(processes.count) process(es)")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -736,7 +736,7 @@ struct EngineProcessesDebugContent: View {
                 if processes.isEmpty {
                     Text("No TalkieEngine or TalkieLive processes running")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .padding(.vertical, 8)
                 } else {
                     ForEach(processes) { process in
@@ -795,11 +795,11 @@ struct EngineProcessesDebugContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(process.name)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 Text(verbatim: "PID: \(String(format: "%d", process.pid))")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             Spacer()
@@ -1073,7 +1073,7 @@ struct ManagedObjectInspector: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             VStack(spacing: 0) {
                 content()
@@ -1088,7 +1088,7 @@ struct ManagedObjectInspector: View {
             HStack(spacing: 4) {
                 Text(label)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                 if let type = typeHint {
                     Text(type)
                         .font(.system(size: 9, design: .monospaced))
@@ -1121,7 +1121,7 @@ struct ManagedObjectInspector: View {
                 HStack {
                     Text(name)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
@@ -1158,7 +1158,7 @@ struct ManagedObjectInspector: View {
 
             Text(displayName(for: object))
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.primary)
+                .foregroundColor(Theme.current.foreground)
                 .lineLimit(1)
 
             Spacer()
@@ -1414,7 +1414,7 @@ struct AudioPaddingTestView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("TEST AUDIO FILE")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         HStack(spacing: 8) {
                             Button("Select Audio File...") {
@@ -1436,7 +1436,7 @@ struct AudioPaddingTestView: View {
                         if !selectedAudioPath.isEmpty {
                             Text(selectedAudioPath)
                                 .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
@@ -1474,7 +1474,7 @@ struct AudioPaddingTestView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("TEST RESULTS")
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                                 .padding(.horizontal)
 
                             ForEach(testResults) { result in
@@ -1487,7 +1487,7 @@ struct AudioPaddingTestView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("PADDING STRATEGIES")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         ForEach(AudioPaddingStrategy.allCases) { strategy in
                             HStack(alignment: .top, spacing: 8) {
@@ -1498,7 +1498,7 @@ struct AudioPaddingTestView: View {
 
                                 Text(strategy.description)
                                     .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                             }
                             .padding(.vertical, 4)
                         }
@@ -1522,7 +1522,7 @@ struct AudioPaddingTestView: View {
             HStack {
                 Text(result.strategy.rawValue)
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 Spacer()
 
@@ -1535,7 +1535,7 @@ struct AudioPaddingTestView: View {
                 } else {
                     Text(String(format: "%.2fs", result.duration))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
             }
 
@@ -1546,7 +1546,7 @@ struct AudioPaddingTestView: View {
             } else if !result.transcript.isEmpty {
                 Text(result.transcript)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
                     .textSelection(.enabled)
                     .padding(8)
                     .background(Theme.current.surface1)

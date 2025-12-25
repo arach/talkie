@@ -84,5 +84,5 @@ struct LiveSettingsSummary: View {
     LiveSettingsSummary()
         .environment(LiveSettings.shared)
         .padding(20)
-        .background(Color(white: 0.1))
+        .background(TalkieTheme.divider)
 }
