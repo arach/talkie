@@ -259,8 +259,4 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
         elapsedTime = elapsed
     }
 
-    /// Update audio level from URL notification (e.g., talkie://recording/level?v=0.5)
-    func updateAudioLevel(_ level: Float) {
-        audioLevel = level
-    }
 }

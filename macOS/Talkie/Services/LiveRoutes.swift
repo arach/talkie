@@ -50,16 +50,6 @@ final class LiveRoutes: RouteGroup {
         },
 
         Route(
-            path: "recording/level",
-            description: "Audio level update for visualization",
-            isInternal: true
-        ) { _, params in
-            if let valueStr = params["v"], let value = Float(valueStr) {
-                TalkieLiveStateMonitor.shared.updateAudioLevel(value)
-            }
-        },
-
-        Route(
             path: "recording/cancelled",
             description: "Recording was cancelled/aborted",
             isInternal: true
