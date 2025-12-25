@@ -10,7 +10,7 @@
 import SwiftUI
 
 struct TalkieServiceMonitorView: View {
-    private let monitor = TalkieServiceMonitor.shared
+    private let monitor = ServiceManager.shared.engine
     private let settings = SettingsManager.shared
 
     @State private var showLogs = true
@@ -401,7 +401,7 @@ struct TalkieServiceLogRow: View {
 
 /// A compact badge for showing Talkie Service status in other views
 struct TalkieServiceStatusBadge: View {
-    private let monitor = TalkieServiceMonitor.shared
+    private let monitor = ServiceManager.shared.engine
 
     var body: some View {
         HStack(spacing: 4) {

@@ -9,9 +9,7 @@ import SwiftUI
 import TalkieKit
 
 struct HelperAppsSettingsView: View {
-    private let appLauncher = AppLauncher.shared
-    private let engineMonitor = TalkieServiceMonitor.shared
-    private let liveMonitor = TalkieLiveStateMonitor.shared
+    private let serviceManager = ServiceManager.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -26,14 +24,14 @@ struct HelperAppsSettingsView: View {
                 HelperAppRow(
                     name: "Transcription Engine",
                     description: "Transcription and AI processing service",
-                    bundleId: AppLauncher.engineBundleId,
-                    status: appLauncher.engineStatus,
-                    processId: engineMonitor.processId,
+                    bundleId: ServiceManager.engineBundleId,
+                    status: serviceManager.engineStatus,
+                    processId: serviceManager.engine.processId,
                     environment: EngineClient.shared.connectedMode?.environment,
-                    onLaunch: { appLauncher.launchEngine() },
-                    onTerminate: { appLauncher.terminateEngine() },
-                    onRegister: { appLauncher.registerEngine() },
-                    onUnregister: { appLauncher.unregisterEngine() }
+                    onLaunch: { serviceManager.launchEngine() },
+                    onTerminate: { serviceManager.terminateEngine() },
+                    onRegister: { serviceManager.registerEngine() },
+                    onUnregister: { serviceManager.unregisterEngine() }
                 )
 
                 Divider()
@@ -42,14 +40,14 @@ struct HelperAppsSettingsView: View {
                 HelperAppRow(
                     name: "Live",
                     description: "Voice capture and quick paste feature",
-                    bundleId: AppLauncher.liveBundleId,
-                    status: appLauncher.liveStatus,
-                    processId: liveMonitor.processId,
-                    environment: liveMonitor.connectedMode,
-                    onLaunch: { appLauncher.launchLive() },
-                    onTerminate: { appLauncher.terminateLive() },
-                    onRegister: { appLauncher.registerLive() },
-                    onUnregister: { appLauncher.unregisterLive() }
+                    bundleId: ServiceManager.liveBundleId,
+                    status: serviceManager.liveStatus,
+                    processId: serviceManager.live.processId,
+                    environment: serviceManager.live.connectedMode,
+                    onLaunch: { serviceManager.launchLive() },
+                    onTerminate: { serviceManager.terminateLive() },
+                    onRegister: { serviceManager.registerLive() },
+                    onUnregister: { serviceManager.unregisterLive() }
                 )
             }
 
@@ -59,7 +57,7 @@ struct HelperAppsSettingsView: View {
             // Actions
             HStack {
                 Button(action: {
-                    appLauncher.refreshStatus()
+                    serviceManager.refreshStatus()
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.clockwise")
@@ -78,7 +76,7 @@ struct HelperAppsSettingsView: View {
                 Spacer()
 
                 Button(action: {
-                    appLauncher.openLoginItemsSettings()
+                    serviceManager.openLoginItemsSettings()
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "gear")
@@ -112,7 +110,7 @@ struct HelperAppsSettingsView: View {
         }
         .onAppear {
             // Start monitoring to get PID and connection status
-            liveMonitor.startMonitoring()
+            serviceManager.live.startMonitoring()
         }
     }
 }
@@ -123,7 +121,7 @@ private struct HelperAppRow: View {
     let name: String
     let description: String
     let bundleId: String
-    let status: AppLauncher.HelperStatus
+    let status: ServiceManager.HelperStatus
     let processId: pid_t?
     let environment: TalkieEnvironment?
     let onLaunch: () -> Void

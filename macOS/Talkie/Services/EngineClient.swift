@@ -2,7 +2,11 @@
 //  EngineClient.swift
 //  Talkie
 //
-//  XPC client to connect to TalkieEngine for transcription
+//  XPC client for TalkieEngine transcription.
+//  Handles transcription requests, model management, and downloads.
+//
+//  Connection state is managed by ServiceManager.shared.engine
+//  This client focuses purely on XPC operations.
 //
 
 import Foundation
@@ -12,88 +16,24 @@ import os
 import TalkieKit
 import Observation
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Engine")
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "EngineClient")
 
-/// Engine service modes for XPC connection (aligned with TalkieEnvironment)
-public enum EngineServiceMode: String, CaseIterable, Identifiable {
-    case production = "jdi.talkie.engine.xpc"
-    case staging = "jdi.talkie.engine.xpc.staging"
-    case dev = "jdi.talkie.engine.xpc.dev"
+// MARK: - Backwards Compatibility
 
-    public var id: String { rawValue }
+/// Alias for backwards compatibility
+public typealias ModelInfo = EngineModelInfo
 
-    public var displayName: String {
-        switch self {
-        case .production: return "Production"
-        case .staging: return "Staging"
-        case .dev: return "Dev"
-        }
-    }
+/// Alias for backwards compatibility - use TalkieEnvironment directly
+public typealias EngineServiceMode = TalkieEnvironment
 
-    public var shortName: String {
-        switch self {
-        case .production: return "PROD"
-        case .staging: return "STAGE"
-        case .dev: return "DEV"
-        }
-    }
-
-    /// Initialize from TalkieEnvironment
-    public init(from environment: TalkieEnvironment) {
-        switch environment {
-        case .production:
-            self = .production
-        case .staging:
-            self = .staging
-        case .dev:
-            self = .dev
-        }
-    }
-
-    /// Convert to TalkieEnvironment
-    public var environment: TalkieEnvironment {
-        switch self {
-        case .production: return .production
-        case .staging: return .staging
-        case .dev: return .dev
-        }
-    }
+extension TalkieEnvironment {
+    /// For backwards compatibility with EngineServiceMode
+    public var environment: TalkieEnvironment { self }
 }
 
-/// XPC protocol for TalkieEngine (must match TalkieEngine's protocol)
-@objc protocol TalkieEngineProtocol {
-    func transcribe(
-        audioPath: String,
-        modelId: String,
-        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
-    )
+// MARK: - Engine Status Types
 
-    func preloadModel(
-        _ modelId: String,
-        reply: @escaping (_ error: String?) -> Void
-    )
-
-    func unloadModel(reply: @escaping () -> Void)
-
-    func getStatus(reply: @escaping (_ statusJSON: Data?) -> Void)
-
-    func ping(reply: @escaping (_ pong: Bool) -> Void)
-
-    // MARK: - Model Download Management
-
-    func downloadModel(
-        _ modelId: String,
-        reply: @escaping (_ error: String?) -> Void
-    )
-
-    func getDownloadProgress(reply: @escaping (_ progressJSON: Data?) -> Void)
-
-    func cancelDownload(reply: @escaping () -> Void)
-
-    func getAvailableModels(reply: @escaping (_ modelsJSON: Data?) -> Void)
-}
-
-/// Engine status (matches TalkieEngine's EngineStatus)
+/// Engine status from TalkieEngine
 public struct EngineStatus: Codable, Sendable {
     public let pid: Int32?
     public let isDebugBuild: Bool?
@@ -103,10 +43,10 @@ public struct EngineStatus: Codable, Sendable {
     public let downloadedModels: [String]
 }
 
-/// Download progress (matches TalkieEngine's DownloadProgress)
+/// Download progress from TalkieEngine
 public struct DownloadProgress: Codable, Sendable {
     public let modelId: String
-    public let progress: Double  // 0.0 to 1.0
+    public let progress: Double
     public let downloadedBytes: Int64
     public let totalBytes: Int64?
     public let isDownloading: Bool
@@ -132,11 +72,19 @@ public struct DownloadProgress: Codable, Sendable {
     }
 }
 
-/// Model info for display (matches TalkieEngine's ModelInfo)
-public struct ModelInfo: Codable, Sendable, Identifiable {
-    public let id: String           // Full ID including family prefix
-    public let family: String       // Model family ("whisper" or "parakeet")
-    public let modelId: String      // Model ID without family prefix
+/// Connection state for UI display
+public enum EngineConnectionState: String {
+    case disconnected = "Disconnected"
+    case connecting = "Connecting..."
+    case connected = "Connected"
+    case error = "Error"
+}
+
+/// Model info from TalkieEngine
+public struct EngineModelInfo: Codable, Sendable, Identifiable {
+    public let id: String
+    public let family: String
+    public let modelId: String
     public let displayName: String
     public let sizeDescription: String
     public let description: String
@@ -151,22 +99,16 @@ public struct ModelInfo: Codable, Sendable, Identifiable {
         return ("whisper", fullId)
     }
 
-    /// Format model ID for display with family name (e.g., "Parakeet v3" instead of "parakeet:v3")
     public static func formatModelName(_ fullId: String) -> String {
         let (family, id) = parseModelId(fullId)
 
-        // Convert family to display name
         let familyDisplayName: String
         switch family.lowercased() {
-        case "whisper":
-            familyDisplayName = "Whisper"
-        case "parakeet":
-            familyDisplayName = "Parakeet"
-        default:
-            familyDisplayName = family.capitalized
+        case "whisper": familyDisplayName = "Whisper"
+        case "parakeet": familyDisplayName = "Parakeet"
+        default: familyDisplayName = family.capitalized
         }
 
-        // Clean up the model ID
         let cleanId = id
             .replacingOccurrences(of: "openai_whisper-", with: "")
             .replacingOccurrences(of: "distil-whisper_distil-", with: "distil-")
@@ -175,138 +117,100 @@ public struct ModelInfo: Codable, Sendable, Identifiable {
     }
 }
 
-/// Connection state for UI display
-public enum EngineConnectionState: String {
-    case disconnected = "Disconnected"
-    case connecting = "Connecting..."
-    case connected = "Connected"
-    case error = "Error"
-}
+// MARK: - Engine Client
 
-/// Client for communicating with TalkieEngine XPC service
 @MainActor
 @Observable
 public final class EngineClient {
     public static let shared = EngineClient()
 
-    // MARK: - Published State
-    public var connectionState: EngineConnectionState = .disconnected
-    public var status: EngineStatus?
-    public var lastError: String?
-
-    // MARK: - Session Stats
-    public private(set) var connectedAt: Date?
-    public private(set) var transcriptionCount: Int = 0
-    public private(set) var lastTranscriptionAt: Date?
-
-    // MARK: - Model Management State
-    public var availableModels: [ModelInfo] = []
+    // ─── Model Management ───
+    public var availableModels: [EngineModelInfo] = []
     public var downloadProgress: DownloadProgress?
     public var isDownloading: Bool = false
 
-    /// Computed property for backwards compatibility
-    public var isConnected: Bool { connectionState == .connected }
+    // ─── Session Stats ───
+    public private(set) var transcriptionCount: Int = 0
+    public private(set) var lastTranscriptionAt: Date?
 
-    // XPC service manager with environment-aware connection
+    // ─── Status (for backwards compatibility) ───
+    public private(set) var status: EngineStatus?
+    public var connectionState: EngineConnectionState {
+        if xpcManager.isConnected { return .connected }
+        if xpcManager.connectionState == .connecting { return .connecting }
+        return .disconnected
+    }
+
+    // ─── Private ───
     @ObservationIgnored
     private let xpcManager: XPCServiceManager<TalkieEngineProtocol>
 
-    /// The mode we're currently connected to (for UI display)
-    public var connectedMode: EngineServiceMode? {
-        xpcManager.connectedMode.map { EngineServiceMode(from: $0) }
+    /// Connected environment (nil if not connected)
+    public var connectedMode: TalkieEnvironment? {
+        xpcManager.connectedMode
+    }
+
+    /// Whether XPC is connected
+    public var isConnected: Bool {
+        xpcManager.isConnected
     }
 
     private init() {
-        // Initialize XPC manager with environment-aware service names
-        self.xpcManager = XPCServiceManager<TalkieEngineProtocol>(
+        xpcManager = XPCServiceManager<TalkieEngineProtocol>(
             serviceNameProvider: { env in env.engineXPCService },
-            interfaceProvider: {
-                NSXPCInterface(with: TalkieEngineProtocol.self)
-            }
+            interfaceProvider: { NSXPCInterface(with: TalkieEngineProtocol.self) }
         )
-
-        logger.info("[Engine] Client initialized")
+        logger.info("[EngineClient] Initialized")
     }
 
-    // MARK: - Connection Management
+    // MARK: - Connection
 
-    /// Connect to engine based on current environment
+    /// Connect to TalkieEngine
     public func connect() {
         guard !xpcManager.isConnected else {
-            NSLog("[EngineClient] ⚠️ Already connected, skipping")
+            logger.info("[EngineClient] Already connected")
             return
         }
 
-        let environment = TalkieEnvironment.current
-        NSLog("[EngineClient] 🔌 Connecting to \(environment.displayName) engine")
-        logger.info("[Engine] Connecting to \(environment.displayName) engine")
-
-        connectionState = .connecting
+        logger.info("[EngineClient] Connecting...")
 
         Task {
-            // Attempt initial connection
             await xpcManager.connect()
 
-            // Poll for connection success (max 3 seconds)
+            // Poll for connection (max 3 seconds)
             var attempts = 0
-            let maxAttempts = 30 // 30 * 100ms = 3 seconds
-
-            while attempts < maxAttempts {
+            while attempts < 30 {
                 if xpcManager.isConnected {
-                    // Connection succeeded, verify with ping
                     await verifyConnection()
                     return
                 }
-
-                // Wait 100ms before checking again
                 try? await Task.sleep(for: .milliseconds(100))
                 attempts += 1
             }
 
-            // Timeout - connection failed
-            connectionState = .error
-            lastError = "Failed to connect to engine (timeout after 3s)"
-            logger.error("[Engine] ❌ Failed to connect after \(attempts) attempts")
+            logger.error("[EngineClient] Connection timeout")
         }
     }
 
-    /// Verify connection by sending ping
     private func verifyConnection() async {
-        guard let proxy = xpcManager.remoteObjectProxy() else {
-            connectionState = .error
-            lastError = "No proxy available"
-            return
-        }
+        guard let proxy = xpcManager.remoteObjectProxy() else { return }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             proxy.ping { [weak self] pong in
-                Task { @MainActor [weak self] in
-                    guard let self = self else {
-                        continuation.resume()
-                        return
-                    }
-
+                Task { @MainActor in
                     if pong {
-                        self.connectionState = .connected
-                        self.connectedAt = Date()
-                        self.lastError = nil
+                        logger.info("[EngineClient] Connected to \(self?.connectedMode?.displayName ?? "unknown")")
 
-                        if let mode = self.connectedMode {
-                            NSLog("[EngineClient] ✓ Connected to \(mode.displayName)")
-                            logger.info("[Engine] ✓ Connected to \(mode.displayName)")
-                        }
+                        // Update ServiceManager
+                        ServiceManager.shared.engine.updateConnectionState(
+                            connected: true,
+                            environment: self?.connectedMode
+                        )
 
-                        // Refresh status and fetch models
-                        self.refreshStatus()
-                        Task {
-                            await self.fetchAvailableModels()
-                        }
-                    } else {
-                        self.connectionState = .error
-                        self.lastError = "Engine ping failed"
-                        self.xpcManager.disconnect()
+                        // Fetch initial data
+                        self?.refreshStatus()
+                        Task { await self?.fetchAvailableModels() }
                     }
-
                     continuation.resume()
                 }
             }
@@ -315,47 +219,20 @@ public final class EngineClient {
 
     public func disconnect() {
         xpcManager.disconnect()
-        connectionState = .disconnected
-        connectedAt = nil
-        status = nil
-    }
-
-    public func reconnect() {
-        disconnect()
-        connect()
+        ServiceManager.shared.engine.updateConnectionState(connected: false, environment: nil)
     }
 
     public func ensureConnected() async -> Bool {
-        if xpcManager.isConnected {
-            return true
-        }
+        if xpcManager.isConnected { return true }
 
         connect()
 
-        // Wait for connection to complete (max 5 seconds)
-        let startTime = Date()
-        while Date().timeIntervalSince(startTime) < 5.0 {
-            switch connectionState {
-            case .connected:
-                return true
-            case .error:
-                return false
-            default:
-                try? await Task.sleep(for: .milliseconds(100)) // 0.1 seconds
-            }
+        let start = Date()
+        while Date().timeIntervalSince(start) < 5.0 {
+            if xpcManager.isConnected { return true }
+            try? await Task.sleep(for: .milliseconds(100))
         }
-
-        // Timeout
         return false
-    }
-
-    private func handleDisconnection(reason: String) {
-        NSLog("[EngineClient] ⚠️ Disconnected: \(reason)")
-        logger.warning("[Engine] Disconnected: \(reason)")
-
-        connectionState = .disconnected
-        status = nil
-        lastError = reason
     }
 
     // MARK: - Transcription
@@ -363,12 +240,10 @@ public final class EngineClient {
     /// Transcribe audio data
     public func transcribe(audioData: Data, modelId: String = "whisper:openai_whisper-small") async throws -> String {
         guard await ensureConnected() else {
-            throw NSError(domain: "EngineClient", code: -1, userInfo: [
-                NSLocalizedDescriptionKey: "Engine not connected"
-            ])
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
         }
 
-        // Write audio data to temp file (on background thread to avoid blocking main actor)
         let audioPath = try await Task.detached {
             let tempDir = FileManager.default.temporaryDirectory
             let path = tempDir.appendingPathComponent("\(UUID().uuidString).wav")
@@ -377,9 +252,7 @@ public final class EngineClient {
         }.value
 
         defer {
-            Task.detached {
-                try? FileManager.default.removeItem(atPath: audioPath)
-            }
+            Task.detached { try? FileManager.default.removeItem(atPath: audioPath) }
         }
 
         return try await transcribe(audioPath: audioPath, modelId: modelId)
@@ -388,37 +261,29 @@ public final class EngineClient {
     /// Transcribe audio file
     public func transcribe(audioPath: String, modelId: String = "whisper:openai_whisper-small") async throws -> String {
         guard let proxy = xpcManager.remoteObjectProxy() else {
-            throw NSError(domain: "EngineClient", code: -1, userInfo: [
-                NSLocalizedDescriptionKey: "Engine proxy not available"
-            ])
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine proxy not available"])
         }
 
-        logger.info("[Engine] Transcribing \(audioPath) with \(modelId)")
+        logger.info("[EngineClient] Transcribing \(audioPath)")
 
         return try await withCheckedThrowingContinuation { continuation in
             proxy.transcribe(audioPath: audioPath, modelId: modelId) { [weak self] transcript, error in
-                Task { @MainActor [weak self] in
+                Task { @MainActor in
                     self?.transcriptionCount += 1
                     self?.lastTranscriptionAt = Date()
                     self?.refreshStatus()
 
                     if let error = error {
-                        logger.error("[Engine] Transcription error: \(error)")
-                        continuation.resume(throwing: NSError(
-                            domain: "EngineClient",
-                            code: -2,
-                            userInfo: [NSLocalizedDescriptionKey: error]
-                        ))
+                        logger.error("[EngineClient] Transcription error: \(error)")
+                        continuation.resume(throwing: NSError(domain: "EngineClient", code: -2,
+                                                              userInfo: [NSLocalizedDescriptionKey: error]))
                     } else if let transcript = transcript {
-                        logger.info("[Engine] ✓ Transcription complete (\(transcript.count) chars)")
+                        logger.info("[EngineClient] Transcribed \(transcript.count) chars")
                         continuation.resume(returning: transcript)
                     } else {
-                        logger.error("[Engine] Transcription returned nil")
-                        continuation.resume(throwing: NSError(
-                            domain: "EngineClient",
-                            code: -3,
-                            userInfo: [NSLocalizedDescriptionKey: "Transcription returned nil"]
-                        ))
+                        continuation.resume(throwing: NSError(domain: "EngineClient", code: -3,
+                                                              userInfo: [NSLocalizedDescriptionKey: "Nil result"]))
                     }
                 }
             }
@@ -429,72 +294,48 @@ public final class EngineClient {
 
     public func preloadModel(_ modelId: String) async throws {
         guard let proxy = xpcManager.remoteObjectProxy() else {
-            throw NSError(domain: "EngineClient", code: -1, userInfo: [
-                NSLocalizedDescriptionKey: "Engine not connected"
-            ])
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
         }
 
-        logger.info("[Engine] Preloading model: \(modelId)")
+        logger.info("[EngineClient] Preloading \(modelId)")
 
         return try await withCheckedThrowingContinuation { continuation in
             proxy.preloadModel(modelId) { error in
-                Task { @MainActor in
-                    if let error = error {
-                        logger.error("[Engine] Preload error: \(error)")
-                        continuation.resume(throwing: NSError(
-                            domain: "EngineClient",
-                            code: -4,
-                            userInfo: [NSLocalizedDescriptionKey: error]
-                        ))
-                    } else {
-                        logger.info("[Engine] ✓ Model preloaded")
-                        continuation.resume()
-                    }
-                }
-            }
-        }
-    }
-
-    public func unloadModel() async {
-        guard let proxy = xpcManager.remoteObjectProxy() else {
-            logger.warning("[Engine] Cannot unload - not connected")
-            return
-        }
-
-        logger.info("[Engine] Unloading model")
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            proxy.unloadModel {
-                Task { @MainActor in
-                    logger.info("[Engine] ✓ Model unloaded")
+                if let error = error {
+                    logger.error("[EngineClient] Preload error: \(error)")
+                    continuation.resume(throwing: NSError(domain: "EngineClient", code: -4,
+                                                          userInfo: [NSLocalizedDescriptionKey: error]))
+                } else {
+                    logger.info("[EngineClient] Model preloaded")
                     continuation.resume()
                 }
             }
         }
     }
 
-    public func fetchAvailableModels() async {
-        guard let proxy = xpcManager.remoteObjectProxy() else {
-            logger.warning("[Engine] Cannot fetch models - not connected")
-            return
+    public func unloadModel() async {
+        guard let proxy = xpcManager.remoteObjectProxy() else { return }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            proxy.unloadModel {
+                logger.info("[EngineClient] Model unloaded")
+                continuation.resume()
+            }
         }
+    }
+
+    public func fetchAvailableModels() async {
+        guard let proxy = xpcManager.remoteObjectProxy() else { return }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             proxy.getAvailableModels { [weak self] modelsJSON in
-                Task { @MainActor [weak self] in
-                    guard let self = self else {
-                        continuation.resume()
-                        return
-                    }
-
+                Task { @MainActor in
                     if let data = modelsJSON,
-                       let models = try? JSONDecoder().decode([ModelInfo].self, from: data) {
-                        self.availableModels = models
-                        logger.info("[Engine] ✓ Fetched \(models.count) models")
-                    } else {
-                        logger.warning("[Engine] Failed to decode models")
+                       let models = try? JSONDecoder().decode([EngineModelInfo].self, from: data) {
+                        self?.availableModels = models
+                        logger.info("[EngineClient] Fetched \(models.count) models")
                     }
-
                     continuation.resume()
                 }
             }
@@ -503,28 +344,24 @@ public final class EngineClient {
 
     public func downloadModel(_ modelId: String) async throws {
         guard let proxy = xpcManager.remoteObjectProxy() else {
-            throw NSError(domain: "EngineClient", code: -1, userInfo: [
-                NSLocalizedDescriptionKey: "Engine not connected"
-            ])
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
         }
 
-        logger.info("[Engine] Downloading model: \(modelId)")
+        logger.info("[EngineClient] Downloading \(modelId)")
         isDownloading = true
 
         return try await withCheckedThrowingContinuation { continuation in
             proxy.downloadModel(modelId) { [weak self] error in
-                Task { @MainActor [weak self] in
+                Task { @MainActor in
                     self?.isDownloading = false
 
                     if let error = error {
-                        logger.error("[Engine] Download error: \(error)")
-                        continuation.resume(throwing: NSError(
-                            domain: "EngineClient",
-                            code: -5,
-                            userInfo: [NSLocalizedDescriptionKey: error]
-                        ))
+                        logger.error("[EngineClient] Download error: \(error)")
+                        continuation.resume(throwing: NSError(domain: "EngineClient", code: -5,
+                                                              userInfo: [NSLocalizedDescriptionKey: error]))
                     } else {
-                        logger.info("[Engine] ✓ Download complete")
+                        logger.info("[EngineClient] Download complete")
                         await self?.fetchAvailableModels()
                         continuation.resume()
                     }
@@ -537,7 +374,7 @@ public final class EngineClient {
         guard let proxy = xpcManager.remoteObjectProxy() else { return }
 
         proxy.getDownloadProgress { [weak self] progressJSON in
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 if let data = progressJSON,
                    let progress = try? JSONDecoder().decode(DownloadProgress.self, from: data) {
                     self?.downloadProgress = progress
@@ -548,19 +385,12 @@ public final class EngineClient {
     }
 
     public func cancelDownload() async {
-        guard let proxy = xpcManager.remoteObjectProxy() else {
-            logger.warning("[Engine] Cannot cancel - not connected")
-            return
-        }
-
-        logger.info("[Engine] Cancelling download")
+        guard let proxy = xpcManager.remoteObjectProxy() else { return }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             proxy.cancelDownload {
-                Task { @MainActor in
-                    logger.info("[Engine] ✓ Download cancelled")
-                    continuation.resume()
-                }
+                logger.info("[EngineClient] Download cancelled")
+                continuation.resume()
             }
         }
     }
@@ -571,10 +401,17 @@ public final class EngineClient {
         guard let proxy = xpcManager.remoteObjectProxy() else { return }
 
         proxy.getStatus { [weak self] statusJSON in
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 if let data = statusJSON,
                    let status = try? JSONDecoder().decode(EngineStatus.self, from: data) {
+                    // Store locally for backwards compatibility
                     self?.status = status
+
+                    // Update ServiceManager with status info
+                    ServiceManager.shared.engine.updateStatus(
+                        loadedModel: status.loadedModelId,
+                        transcribing: status.isTranscribing
+                    )
                 }
             }
         }

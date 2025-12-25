@@ -910,10 +910,10 @@ struct EngineProcessesDebugContent: View {
             SystemEventManager.shared.logSync(.system, "Clean Slate", detail: "Restarting \(currentEnv.displayName) helpers")
 
             // Launch Engine for current environment
-            AppLauncher.shared.launchEngine()
+            ServiceManager.shared.launchEngine()
 
             // Launch Live for current environment
-            AppLauncher.shared.launchLive()
+            ServiceManager.shared.launchLive()
 
             // 5. Wait a bit then refresh to show new processes
             try? await Task.sleep(for: .seconds(2))

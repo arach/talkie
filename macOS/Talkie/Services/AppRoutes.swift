@@ -24,7 +24,7 @@ final class AppRoutes: RouteGroup {
             description: "Start a new recording",
             isInternal: false
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.toggleRecording()
+            ServiceManager.shared.live.toggleRecording()
         },
 
         Route(
@@ -32,7 +32,7 @@ final class AppRoutes: RouteGroup {
             description: "Stop current recording",
             isInternal: false
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.toggleRecording()
+            ServiceManager.shared.live.toggleRecording()
         },
 
         Route(
@@ -40,7 +40,7 @@ final class AppRoutes: RouteGroup {
             description: "Toggle recording state",
             isInternal: false
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.toggleRecording()
+            ServiceManager.shared.live.toggleRecording()
         },
 
         // MARK: - Quick Actions
@@ -51,8 +51,8 @@ final class AppRoutes: RouteGroup {
             isInternal: false
         ) { _, _ in
             // Only start if not already recording
-            if !TalkieLiveStateMonitor.shared.isRecording {
-                TalkieLiveStateMonitor.shared.toggleRecording()
+            if !ServiceManager.shared.live.isRecording {
+                ServiceManager.shared.live.toggleRecording()
             }
         },
     ]

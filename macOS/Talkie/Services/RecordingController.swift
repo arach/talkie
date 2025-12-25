@@ -36,7 +36,7 @@ final class RecordingController {
     /// Start recording
     func startRecording() {
         // Check if engine is available
-        guard TalkieServiceMonitor.shared.state == .running else {
+        guard ServiceManager.shared.engine.state == .running else {
             // Show one-time toast: "TalkieEngine needed. [Launch Now] [Cancel]"
             NotificationCenter.default.post(name: .showEngineRequiredToast, object: nil)
             return

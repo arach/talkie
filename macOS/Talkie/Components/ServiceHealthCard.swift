@@ -96,7 +96,7 @@ struct ServiceHealthCard: View {
 // MARK: - Live Recording Health Card
 
 struct LiveRecordingHealthCard: View {
-    private let liveState = TalkieLiveStateMonitor.shared
+    private let liveState = ServiceManager.shared.live
 
     var body: some View {
         ServiceHealthCard(
@@ -134,7 +134,7 @@ struct LiveRecordingHealthCard: View {
 // MARK: - Engine Health Card
 
 struct EngineHealthCard: View {
-    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let serviceMonitor = ServiceManager.shared.engine
     @Environment(LiveSettings.self) private var liveSettings
 
     private var modelName: String {

@@ -100,7 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // This registers them as login items and launches them if needed
         Task { @MainActor in
             NSLog("[AppDelegate] 🚀 Starting helper apps...")
-            AppLauncher.shared.ensureHelpersRunning()
+            ServiceManager.shared.ensureHelpersRunning()
 
             // Connect to TalkieEngine XPC service (has built-in retry logic)
             NSLog("[AppDelegate] 🔌 Calling EngineClient.shared.connect()...")
