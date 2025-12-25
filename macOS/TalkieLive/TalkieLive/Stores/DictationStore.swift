@@ -2,7 +2,7 @@
 //  DictationStore.swift
 //  TalkieLive
 //
-//  Local storage for utterances with TTL
+//  Local storage for dictations with TTL
 //
 
 import Foundation
@@ -11,9 +11,9 @@ import os.log
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "DictationStore")
 
-// MARK: - Utterance Metadata
+// MARK: - Dictation Metadata
 
-struct UtteranceMetadata: Codable, Hashable {
+struct DictationMetadata: Codable, Hashable {
     // Start context: where was the user when recording STARTED?
     var activeAppBundleID: String?
     var activeAppName: String?
@@ -125,7 +125,7 @@ struct UtteranceMetadata: Codable, Hashable {
     }
 
     /// Merge missing values from another metadata instance without overwriting existing fields
-    func mergingMissing(from other: UtteranceMetadata) -> UtteranceMetadata {
+    func mergingMissing(from other: DictationMetadata) -> DictationMetadata {
         var merged = self
         if merged.activeAppBundleID == nil { merged.activeAppBundleID = other.activeAppBundleID }
         if merged.activeAppName == nil { merged.activeAppName = other.activeAppName }
@@ -171,7 +171,7 @@ struct Utterance: Identifiable, Codable, Hashable {
     var text: String
     let timestamp: Date
     let durationSeconds: Double?
-    var metadata: UtteranceMetadata
+    var metadata: DictationMetadata
 
     /// Database ID (from LiveDictation) - used for linking to database records
     var liveID: Int64?
@@ -185,7 +185,7 @@ struct Utterance: Identifiable, Codable, Hashable {
         text.count
     }
 
-    init(text: String, durationSeconds: Double? = nil, metadata: UtteranceMetadata = UtteranceMetadata()) {
+    init(text: String, durationSeconds: Double? = nil, metadata: DictationMetadata = DictationMetadata()) {
         self.id = UUID()
         self.text = text
         self.timestamp = Date()
@@ -195,7 +195,7 @@ struct Utterance: Identifiable, Codable, Hashable {
     }
 
     /// Initialize from database record
-    init(text: String, durationSeconds: Double?, metadata: UtteranceMetadata, timestamp: Date, liveID: Int64?) {
+    init(text: String, durationSeconds: Double?, metadata: DictationMetadata, timestamp: Date, liveID: Int64?) {
         self.id = UUID()
         self.text = text
         self.timestamp = timestamp
@@ -228,12 +228,12 @@ struct ContextCapture {
 
     /// Capture start context (frontmost app when recording begins)
     /// Now uses ContextCaptureService for baseline capture
-    @MainActor static func captureCurrentContext() -> UtteranceMetadata {
+    @MainActor static func captureCurrentContext() -> DictationMetadata {
         ContextCaptureService.shared.captureBaseline()
     }
 
     /// Fill in end context on existing metadata (when recording stops)
-    static func fillEndContext(in metadata: inout UtteranceMetadata) {
+    static func fillEndContext(in metadata: inout DictationMetadata) {
         // Get frontmost app info
         if let frontApp = NSWorkspace.shared.frontmostApplication {
             metadata.endAppBundleID = frontApp.bundleIdentifier
@@ -309,7 +309,7 @@ final class DictationStore {
     // MARK: - Public API
 
     /// Add a new utterance (stores to SQLite database)
-    func add(_ text: String, durationSeconds: Double? = nil, metadata: UtteranceMetadata = UtteranceMetadata()) {
+    func add(_ text: String, durationSeconds: Double? = nil, metadata: DictationMetadata = DictationMetadata()) {
         // Build rich context metadata dictionary
         var metadataDict: [String: String] = [:]
         if let url = metadata.documentURL { metadataDict["documentURL"] = url }
@@ -414,9 +414,9 @@ final class DictationStore {
         }
     }
 
-    /// Build UtteranceMetadata from LiveDictation, including rich context from metadata dict
-    private func buildMetadata(from live: LiveDictation) -> UtteranceMetadata {
-        var metadata = UtteranceMetadata(
+    /// Build DictationMetadata from LiveDictation, including rich context from metadata dict
+    private func buildMetadata(from live: LiveDictation) -> DictationMetadata {
+        var metadata = DictationMetadata(
             activeAppBundleID: live.appBundleID,
             activeAppName: live.appName,
             activeWindowTitle: live.windowTitle,

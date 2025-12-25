@@ -409,13 +409,13 @@ struct ListViewDebugContent: View {
         NSLog("[DEBUG] Testing interstitial panel directly")
         SystemEventManager.shared.logSync(.system, "Testing interstitial panel")
 
-        // Test with a fake utterance ID - the panel should show an error if not found
+        // Test with a fake dictation ID - the panel should show an error if not found
         // or work if there's a matching record in the Live database
         Task { @MainActor in
             // TODO: Update this to work with new Utterance model
             NSLog("[DEBUG] Interstitial test temporarily disabled")
             SystemEventManager.shared.logSync(.system, "Interstitial test", detail: "Temporarily disabled")
-            // InterstitialManager.shared.show(utteranceId: 999)
+            // InterstitialManager.shared.show(dictationId: 999)
         }
     }
 

@@ -156,7 +156,7 @@ struct TalkieApp: App {
            let idString = url.pathComponents.dropFirst().first,
            let id = Int64(idString) {
             Task { @MainActor in
-                InterstitialManager.shared.show(utteranceId: id)
+                InterstitialManager.shared.show(dictationId: id)
             }
         }
     }

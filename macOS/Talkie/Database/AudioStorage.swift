@@ -2,7 +2,7 @@
 //  AudioStorage.swift
 //  TalkieLive
 //
-//  Manages persistent audio file storage for utterances
+//  Manages persistent audio file storage for dictations
 //
 
 import Foundation
@@ -191,7 +191,7 @@ enum AudioStorage {
         logger.info("Deleted all audio files")
     }
 
-    /// Delete orphaned audio files (not referenced by any utterance)
+    /// Delete orphaned audio files (not referenced by any dictation)
     static func pruneOrphanedFiles(referencedFilenames: Set<String>) {
         let fm = FileManager.default
         guard let contents = try? fm.contentsOfDirectory(at: audioDirectory, includingPropertiesForKeys: nil) else {

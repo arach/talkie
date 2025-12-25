@@ -11,21 +11,21 @@ import SwiftUI
 struct DictationListView: View {
     // Use let for singletons - we subscribe to remote data, we don't own it
     private let store = DictationStore.shared
-    @State private var selectedUtteranceIDs: Set<Utterance.ID> = []
+    @State private var selectedDictationIDs: Set<Dictation.ID> = []
     @State private var searchText = ""
-    @State private var retranscribingIDs: Set<Utterance.ID> = []
-    @State private var lastClickedID: Utterance.ID?
+    @State private var retranscribingIDs: Set<Dictation.ID> = []
+    @State private var lastClickedID: Dictation.ID?
 
-    private var filteredUtterances: [Utterance] {
+    private var filteredDictations: [Dictation] {
         guard !searchText.isEmpty else {
-            return store.utterances
+            return store.dictations
         }
-        return store.utterances.filter { $0.text.localizedCaseInsensitiveContains(searchText) }
+        return store.dictations.filter { $0.text.localizedCaseInsensitiveContains(searchText) }
     }
 
-    private var selectedUtterance: Utterance? {
-        guard selectedUtteranceIDs.count == 1, let firstID = selectedUtteranceIDs.first else { return nil }
-        return filteredUtterances.first { $0.id == firstID }
+    private var selectedDictation: Dictation? {
+        guard selectedDictationIDs.count == 1, let firstID = selectedDictationIDs.first else { return nil }
+        return filteredDictations.first { $0.id == firstID }
     }
 
     var body: some View {
@@ -47,33 +47,33 @@ struct DictationListView: View {
 
     // MARK: - Selection Handling
 
-    private func handleSelection(utterance: Utterance, event: NSEvent?) {
-        let id = utterance.id
+    private func handleSelection(dictation: Dictation, event: NSEvent?) {
+        let id = dictation.id
 
         if let event = event {
             if event.modifierFlags.contains(.command) {
                 // Cmd+click: Toggle selection
-                if selectedUtteranceIDs.contains(id) {
-                    selectedUtteranceIDs.remove(id)
+                if selectedDictationIDs.contains(id) {
+                    selectedDictationIDs.remove(id)
                 } else {
-                    selectedUtteranceIDs.insert(id)
+                    selectedDictationIDs.insert(id)
                 }
             } else if event.modifierFlags.contains(.shift), let lastID = lastClickedID {
                 // Shift+click: Range selection
-                if let lastIndex = filteredUtterances.firstIndex(where: { $0.id == lastID }),
-                   let currentIndex = filteredUtterances.firstIndex(where: { $0.id == id }) {
+                if let lastIndex = filteredDictations.firstIndex(where: { $0.id == lastID }),
+                   let currentIndex = filteredDictations.firstIndex(where: { $0.id == id }) {
                     let range = min(lastIndex, currentIndex)...max(lastIndex, currentIndex)
                     for i in range {
-                        selectedUtteranceIDs.insert(filteredUtterances[i].id)
+                        selectedDictationIDs.insert(filteredDictations[i].id)
                     }
                 }
             } else {
                 // Regular click: Single selection
-                selectedUtteranceIDs = [id]
+                selectedDictationIDs = [id]
             }
         } else {
             // No event (keyboard nav): Single selection
-            selectedUtteranceIDs = [id]
+            selectedDictationIDs = [id]
         }
 
         lastClickedID = id
@@ -85,25 +85,25 @@ struct DictationListView: View {
             headerView
 
             // Dictation list
-            if filteredUtterances.isEmpty {
+            if filteredDictations.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(filteredUtterances) { utterance in
+                        ForEach(filteredDictations) { dictation in
                             DictationRowEnhanced(
-                                utterance: utterance,
-                                isSelected: selectedUtteranceIDs.contains(utterance.id),
-                                isMultiSelected: selectedUtteranceIDs.count > 1,
+                                dictation: dictation,
+                                isSelected: selectedDictationIDs.contains(dictation.id),
+                                isMultiSelected: selectedDictationIDs.count > 1,
                                 onSelect: { event in
-                                    handleSelection(utterance: utterance, event: event)
+                                    handleSelection(dictation: dictation, event: event)
                                 }
                             )
-                            .id(utterance.id)
+                            .id(dictation.id)
                             .contextMenu {
                                 Button {
                                     NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(utterance.text, forType: .string)
+                                    NSPasteboard.general.setString(dictation.text, forType: .string)
                                 } label: {
                                     Label("Copy", systemImage: "doc.on.doc")
                                 }
@@ -111,21 +111,21 @@ struct DictationListView: View {
                                 Divider()
 
                                 Button {
-                                    promoteToMemo(utterance)
+                                    promoteToMemo(dictation)
                                 } label: {
                                     Label("Promote to Memo", systemImage: "arrow.up.doc")
                                 }
 
-                                if utterance.metadata.audioFilename != nil {
+                                if dictation.metadata.audioFilename != nil {
                                     Menu {
                                         Button("whisper-small (Fast)") {
-                                            retranscribe(utterance, with: "whisper:openai_whisper-small")
+                                            retranscribe(dictation, with: "whisper:openai_whisper-small")
                                         }
                                         Button("whisper-medium") {
-                                            retranscribe(utterance, with: "whisper:openai_whisper-medium")
+                                            retranscribe(dictation, with: "whisper:openai_whisper-medium")
                                         }
                                         Button("whisper-large-v3 (Best)") {
-                                            retranscribe(utterance, with: "whisper:openai_whisper-large-v3")
+                                            retranscribe(dictation, with: "whisper:openai_whisper-large-v3")
                                         }
                                     } label: {
                                         Label("Retranscribe", systemImage: "waveform.badge.magnifyingglass")
@@ -133,7 +133,7 @@ struct DictationListView: View {
                                 }
 
                                 Button {
-                                    let text = utterance.text
+                                    let text = dictation.text
                                     let picker = NSSharingServicePicker(items: [text])
                                     if let window = NSApp.keyWindow, let contentView = window.contentView {
                                         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
@@ -146,8 +146,8 @@ struct DictationListView: View {
 
                                 Button(role: .destructive) {
                                     withAnimation {
-                                        selectedUtteranceIDs.remove(utterance.id)
-                                        store.delete(utterance)
+                                        selectedDictationIDs.remove(dictation.id)
+                                        store.delete(dictation)
                                     }
                                 } label: {
                                     Label("Delete", systemImage: "trash")
@@ -198,7 +198,7 @@ struct DictationListView: View {
                 Spacer()
 
                 // Count
-                Text("\(filteredUtterances.count) dictations")
+                Text("\(filteredDictations.count) dictations")
                     .font(Theme.current.fontSM)
                     .foregroundColor(TalkieTheme.textMuted)
             }
@@ -215,15 +215,15 @@ struct DictationListView: View {
 
     private var footerView: some View {
         HStack {
-            if selectedUtteranceIDs.count > 1 {
-                Text("\(selectedUtteranceIDs.count) selected")
+            if selectedDictationIDs.count > 1 {
+                Text("\(selectedDictationIDs.count) selected")
                     .font(Theme.current.fontSMMedium)
                     .foregroundColor(.accentColor)
 
                 Spacer()
 
                 Button {
-                    selectedUtteranceIDs.removeAll()
+                    selectedDictationIDs.removeAll()
                 } label: {
                     Label("Clear", systemImage: "xmark.circle")
                         .font(Theme.current.fontSM)
@@ -231,7 +231,7 @@ struct DictationListView: View {
                 .buttonStyle(.plain)
                 .foregroundColor(TalkieTheme.textMuted)
             } else {
-                Text("\(filteredUtterances.count) dictations")
+                Text("\(filteredDictations.count) dictations")
                     .font(Theme.current.fontSM)
                     .foregroundColor(TalkieTheme.textMuted)
                 Spacer()
@@ -249,14 +249,14 @@ struct DictationListView: View {
 
     private var detailColumn: some View {
         Group {
-            if selectedUtteranceIDs.count > 1 {
+            if selectedDictationIDs.count > 1 {
                 // Multi-select state
                 VStack(spacing: Spacing.sm) {
                     Image(systemName: "square.stack.3d.up")
                         .font(.system(size: 48))
                         .foregroundColor(.accentColor.opacity(Opacity.half))
 
-                    Text("\(selectedUtteranceIDs.count) DICTATIONS SELECTED")
+                    Text("\(selectedDictationIDs.count) DICTATIONS SELECTED")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(Theme.current.foregroundSecondary)
 
@@ -266,7 +266,7 @@ struct DictationListView: View {
 
                     HStack(spacing: Spacing.sm) {
                         Button {
-                            selectedUtteranceIDs.removeAll()
+                            selectedDictationIDs.removeAll()
                         } label: {
                             Label("Clear Selection", systemImage: "xmark")
                         }
@@ -276,8 +276,8 @@ struct DictationListView: View {
                     .padding(.top, 8)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let utterance = selectedUtterance {
-                UtteranceDetailView(utterance: utterance)
+            } else if let dictation = selectedDictation {
+                DictationDetailView(dictation: dictation)
             } else {
                 emptyDetailState
             }
@@ -322,48 +322,48 @@ struct DictationListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func promoteToMemo(_ utterance: Utterance) {
+    private func promoteToMemo(_ dictation: Dictation) {
         let context = PersistenceController.shared.container.viewContext
 
-        // Create new VoiceMemo with deep copy of utterance metadata
+        // Create new VoiceMemo with deep copy of dictation metadata
         let memo = VoiceMemo(context: context)
         memo.id = UUID()
 
         // Basic content
-        memo.title = String(utterance.text.prefix(100)) // Use first 100 chars as title
-        memo.transcription = utterance.text
-        memo.createdAt = utterance.timestamp
+        memo.title = String(dictation.text.prefix(100)) // Use first 100 chars as title
+        memo.transcription = dictation.text
+        memo.createdAt = dictation.timestamp
         memo.lastModified = Date()
-        memo.duration = utterance.durationSeconds ?? 0
-        memo.sortOrder = Int32(-utterance.timestamp.timeIntervalSince1970)
+        memo.duration = dictation.durationSeconds ?? 0
+        memo.sortOrder = Int32(-dictation.timestamp.timeIntervalSince1970)
 
         // Origin tracking
         memo.originDeviceId = "live" // Mark as coming from Live dictation
 
         // Context metadata - store in notes field
         var contextNotes: [String] = []
-        if let appName = utterance.metadata.activeAppName {
+        if let appName = dictation.metadata.activeAppName {
             contextNotes.append("📱 App: \(appName)")
         }
-        if let windowTitle = utterance.metadata.activeWindowTitle {
+        if let windowTitle = dictation.metadata.activeWindowTitle {
             contextNotes.append("🪟 Window: \(windowTitle)")
         }
-        if let browserURL = utterance.metadata.browserURL {
+        if let browserURL = dictation.metadata.browserURL {
             contextNotes.append("🌐 URL: \(browserURL)")
-        } else if let documentURL = utterance.metadata.documentURL {
+        } else if let documentURL = dictation.metadata.documentURL {
             contextNotes.append("📄 Document: \(documentURL)")
         }
-        if let terminalDir = utterance.metadata.terminalWorkingDir {
+        if let terminalDir = dictation.metadata.terminalWorkingDir {
             contextNotes.append("💻 Working Dir: \(terminalDir)")
         }
 
         // Performance metrics
-        if let totalMs = utterance.metadata.perfEndToEndMs {
+        if let totalMs = dictation.metadata.perfEndToEndMs {
             contextNotes.append("⏱ Latency: \(totalMs)ms")
         }
 
         // Transcription metadata
-        if let model = utterance.metadata.transcriptionModel {
+        if let model = dictation.metadata.transcriptionModel {
             contextNotes.append("🤖 Model: \(model)")
         }
 
@@ -374,13 +374,13 @@ struct DictationListView: View {
             \(contextNotes.joined(separator: "\n"))
 
             ---
-            Original timestamp: \(utterance.timestamp.formatted())
+            Original timestamp: \(dictation.timestamp.formatted())
             """
         }
 
         // Copy audio file if it exists
-        if let audioFilename = utterance.metadata.audioFilename,
-           let sourceURL = utterance.metadata.audioURL,
+        if let audioFilename = dictation.metadata.audioFilename,
+           let sourceURL = dictation.metadata.audioURL,
            FileManager.default.fileExists(atPath: sourceURL.path) {
 
             // Create destination path in Talkie's storage
@@ -406,10 +406,10 @@ struct DictationListView: View {
         // Save to CoreData
         do {
             try context.save()
-            print("[DictationListView] Promoted utterance to memo with metadata: \(memo.title ?? "")")
+            print("[DictationListView] Promoted dictation to memo with metadata: \(memo.title ?? "")")
 
             // Mark as promoted in Live database (updates promotionStatus and talkieMemoID)
-            if let liveID = utterance.liveID, let memoID = memo.id?.uuidString {
+            if let liveID = dictation.liveID, let memoID = memo.id?.uuidString {
                 LiveDatabase.markAsMemo(id: liveID, talkieMemoID: memoID)
                 print("[DictationListView] Marked Live #\(liveID) as promoted to memo \(memoID)")
             }
@@ -421,36 +421,36 @@ struct DictationListView: View {
         }
     }
 
-    private func retranscribe(_ utterance: Utterance, with modelId: String) {
-        guard let audioFilename = utterance.metadata.audioFilename else {
+    private func retranscribe(_ dictation: Dictation, with modelId: String) {
+        guard let audioFilename = dictation.metadata.audioFilename else {
             print("[DictationListView] Cannot retranscribe: no audio file")
             return
         }
 
         // Construct full audio path
         let audioPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("TalkieLive/Utterances")
+            .appendingPathComponent("TalkieLive/Dictations")
             .appendingPathComponent(audioFilename)
             .path
 
-        retranscribingIDs.insert(utterance.id)
+        retranscribingIDs.insert(dictation.id)
 
         Task {
             do {
                 let engineClient = EngineClient.shared
                 let newText = try await engineClient.transcribe(audioPath: audioPath, modelId: modelId)
 
-                // Update utterance text
+                // Update dictation text
                 await MainActor.run {
-                    store.updateText(for: utterance.id, newText: newText)
-                    retranscribingIDs.remove(utterance.id)
+                    store.updateText(for: dictation.id, newText: newText)
+                    retranscribingIDs.remove(dictation.id)
                 }
 
-                print("[DictationListView] Successfully retranscribed utterance with \(modelId)")
+                print("[DictationListView] Successfully retranscribed dictation with \(modelId)")
             } catch {
                 print("[DictationListView] Failed to retranscribe: \(error.localizedDescription)")
                 _ = await MainActor.run {
-                    retranscribingIDs.remove(utterance.id)
+                    retranscribingIDs.remove(dictation.id)
                 }
             }
         }
@@ -460,7 +460,7 @@ struct DictationListView: View {
 // MARK: - Enhanced Dictation Row (Harmonized with MemoRowEnhanced)
 
 struct DictationRowEnhanced: View {
-    let utterance: Utterance
+    let dictation: Dictation
     let isSelected: Bool
     let isMultiSelected: Bool
     let onSelect: (NSEvent?) -> Void
@@ -469,7 +469,7 @@ struct DictationRowEnhanced: View {
 
     /// First ~60 chars of transcript as "title"
     private var displayTitle: String {
-        let text = utterance.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = dictation.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.count <= 60 {
             return text
         }
@@ -482,7 +482,7 @@ struct DictationRowEnhanced: View {
 
     /// Rest of transcript as preview
     private var previewText: String? {
-        let text = utterance.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = dictation.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.count > 60 else { return nil }
         let remaining = String(text.dropFirst(60)).trimmingCharacters(in: .whitespacesAndNewlines)
         if remaining.count <= 80 {
@@ -512,7 +512,7 @@ struct DictationRowEnhanced: View {
                     Spacer()
 
                     // Relative time (minutes only, then actual time after 1h)
-                    Text(formatTimeAgo(utterance.timestamp))
+                    Text(formatTimeAgo(dictation.timestamp))
                         .font(Theme.current.fontSM)
                         .foregroundColor(TalkieTheme.textMuted)
                 }
@@ -530,7 +530,7 @@ struct DictationRowEnhanced: View {
                     }
 
                     // Duration badge
-                    if let duration = utterance.durationSeconds {
+                    if let duration = dictation.durationSeconds {
                         durationBadge(duration)
                     }
                 }
@@ -563,7 +563,7 @@ struct DictationRowEnhanced: View {
                 .fill(iconColor.opacity(Opacity.medium))
                 .frame(width: 36, height: 36)
 
-            if let bundleID = utterance.metadata.activeAppBundleID {
+            if let bundleID = dictation.metadata.activeAppBundleID {
                 AppIconView(bundleIdentifier: bundleID, size: 28)
             } else {
                 Image(systemName: "waveform.circle.fill")

@@ -741,10 +741,10 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
         }
     }
 
-    nonisolated public func utteranceWasAdded() {
+    nonisolated public func dictationWasAdded() {
         DispatchQueue.main.async {
             DictationStore.shared.refresh()
-            logger.info("[Live] Utterance added, refreshed store")
+            logger.info("[Live] Dictation added, refreshed store")
         }
     }
 

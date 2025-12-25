@@ -256,15 +256,15 @@ struct WaveformVisualization: View {
 // MARK: - Waveform Card
 
 struct WaveformCard: View {
-    let utterance: Utterance
+    let dictation: Utterance
     private let playback = AudioPlaybackManager.shared
 
     private var isThisPlaying: Bool {
-        playback.currentAudioID == utterance.id.uuidString && playback.isPlaying
+        playback.currentAudioID == dictation.id.uuidString && playback.isPlaying
     }
 
     private var isThisLoaded: Bool {
-        playback.currentAudioID == utterance.id.uuidString
+        playback.currentAudioID == dictation.id.uuidString
     }
 
     private var displayProgress: Double {
@@ -276,7 +276,7 @@ struct WaveformCard: View {
     }
 
     private var hasAudio: Bool {
-        utterance.metadata.hasAudio
+        dictation.metadata.hasAudio
     }
 
     var body: some View {
@@ -299,7 +299,7 @@ struct WaveformCard: View {
                         .foregroundColor(TalkieTheme.textMuted)
                 }
 
-                if let duration = utterance.durationSeconds {
+                if let duration = dictation.durationSeconds {
                     Text(formatDuration(duration))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(TalkieTheme.textTertiary)
@@ -357,13 +357,13 @@ struct WaveformCard: View {
                 .frame(height: 4)
 
                 // Time display
-                Text("\(formatDuration(displayCurrentTime)) / \(formatDuration(utterance.durationSeconds ?? 0))")
+                Text("\(formatDuration(displayCurrentTime)) / \(formatDuration(dictation.durationSeconds ?? 0))")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(TalkieTheme.textMuted)
             }
 
             // File info row
-            if let audioURL = utterance.metadata.audioURL {
+            if let audioURL = dictation.metadata.audioURL {
                 HStack(spacing: 4) {
                     Image(systemName: "doc.fill")
                         .font(.system(size: 8))
@@ -398,13 +398,13 @@ struct WaveformCard: View {
     }
 
     private func togglePlayback() {
-        guard let url = utterance.metadata.audioURL else { return }
-        playback.togglePlayPause(url: url, id: utterance.id.uuidString)
+        guard let url = dictation.metadata.audioURL else { return }
+        playback.togglePlayPause(url: url, id: dictation.id.uuidString)
     }
 
     /// Seek to a position - loads audio first if not already loaded
     private func seekToPosition(_ progress: Double) {
-        guard let url = utterance.metadata.audioURL else {
+        guard let url = dictation.metadata.audioURL else {
             print("⚠️ seekToPosition: No audio URL")
             return
         }
@@ -414,7 +414,7 @@ struct WaveformCard: View {
         // If audio isn't loaded yet, load it first then seek
         if !isThisLoaded {
             print("📂 Loading audio first...")
-            playback.play(url: url, id: utterance.id.uuidString)
+            playback.play(url: url, id: dictation.id.uuidString)
             playback.pause()  // Load but don't auto-play
         }
         playback.seek(to: progress)

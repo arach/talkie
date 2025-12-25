@@ -2,7 +2,7 @@
 //  LiveDatabase.swift
 //  TalkieLive
 //
-//  SQLite database for Live utterances using GRDB.
+//  SQLite database for Live dictations using GRDB.
 //  Single source of truth for all TalkieLive persistence.
 //
 
@@ -199,7 +199,7 @@ enum LiveDatabase {
 // MARK: - CRUD Operations
 
 extension LiveDatabase {
-    /// Store utterance and return its ID (for fire-and-forget enrichment)
+    /// Store dictation and return its ID (for fire-and-forget enrichment)
     @discardableResult
     static func store(_ utterance: LiveDictation) -> Int64? {
         do {
@@ -208,7 +208,7 @@ extension LiveDatabase {
                 try mutable.insert(db)
                 // Use lastInsertedRowID as fallback if didInsert didn't populate id
                 let insertedId = mutable.id ?? db.lastInsertedRowID
-                NSLog("[LiveDatabase] Stored utterance with ID: \(insertedId)")
+                NSLog("[LiveDatabase] Stored dictation with ID: \(insertedId)")
                 return insertedId
             }
         } catch {
@@ -218,8 +218,8 @@ extension LiveDatabase {
         }
     }
 
-    /// Update metadata fields for an existing utterance (used by fire-and-forget enrichment)
-    static func updateMetadata(id: Int64, metadata: UtteranceMetadata) {
+    /// Update metadata fields for an existing dictation (used by fire-and-forget enrichment)
+    static func updateMetadata(id: Int64, metadata: DictationMetadata) {
         do {
             try shared.write { db in
                 // Build JSON from enriched fields
@@ -237,7 +237,7 @@ extension LiveDatabase {
                     arguments: [metadataJSON, id]
                 )
             }
-            logger.debug("[LiveDatabase] Updated metadata for utterance \(id)")
+            logger.debug("[LiveDatabase] Updated metadata for dictation \(id)")
         } catch {
             logger.error("[LiveDatabase] updateMetadata error: \(error)")
         }
@@ -266,7 +266,7 @@ extension LiveDatabase {
         }) ?? []
     }
 
-    /// Fetch utterances with ID greater than specified (for incremental updates)
+    /// Fetch dictations with ID greater than specified (for incremental updates)
     /// Uses INTEGER PRIMARY KEY for optimal performance - O(log n) seek + O(k) scan
     static func since(id: Int64) -> [LiveDictation] {
         (try? shared.read { db in
@@ -326,7 +326,7 @@ extension LiveDatabase {
         let cutoff = Date().addingTimeInterval(-Double(hours) * 60 * 60)
         let cutoffTS = cutoff.timeIntervalSince1970
 
-        // Get audio filenames for utterances that will be deleted
+        // Get audio filenames for dictations that will be deleted
         let audioFilenames: [String] = (try? shared.read { db in
             try String.fetchAll(
                 db,
@@ -598,7 +598,7 @@ extension LiveDatabase {
         }
     }
 
-    /// Update utterance text (for retranscription)
+    /// Update dictation text (for retranscription)
     static func updateText(for id: Int64, newText: String) {
         try? shared.write { db in
             try db.execute(

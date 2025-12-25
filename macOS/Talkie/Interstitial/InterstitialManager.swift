@@ -27,7 +27,7 @@ final class InterstitialManager {
     private var localEventMonitor: Any?
 
     var isVisible: Bool = false
-    var currentUtteranceId: Int64?
+    var currentDictationId: Int64?
     var editedText: String = ""
     var isPolishing: Bool = false
     var polishError: String?
@@ -147,10 +147,10 @@ final class InterstitialManager {
 
     // MARK: - Show/Dismiss
 
-    func show(utteranceId: Int64) {
-        NSLog("[Interstitial] show() called with utteranceId: \(utteranceId)")
+    func show(dictationId: Int64) {
+        NSLog("[Interstitial] show() called with dictationId: \(dictationId)")
         logger.info("=== INTERSTITIAL SHOW REQUEST ===")
-        logger.info("Utterance ID: \(utteranceId)")
+        logger.info("Dictation ID: \(dictationId)")
 
         // If already showing, dismiss first
         if panel != nil {
@@ -158,26 +158,26 @@ final class InterstitialManager {
             dismiss()
         }
 
-        // Fetch utterance from DictationStore/LiveDatabase
+        // Fetch dictation from DictationStore/LiveDatabase
         NSLog("[Interstitial] Refreshing DictationStore...")
         DictationStore.shared.refresh()
 
-        NSLog("[Interstitial] DictationStore has \(DictationStore.shared.utterances.count) utterances")
+        NSLog("[Interstitial] DictationStore has \(DictationStore.shared.dictations.count) dictations")
         NSLog("[Interstitial] Database path: \(LiveDatabase.databaseURL.path)")
 
-        guard let utterance = LiveDatabase.fetch(id: utteranceId) else {
-            NSLog("[Interstitial] ERROR: Utterance \(utteranceId) not found in shared database")
-            logger.error("Utterance \(utteranceId) not found in shared database. Database has \(DictationStore.shared.utterances.count) utterances.")
+        guard let dictation = LiveDatabase.fetch(id: dictationId) else {
+            NSLog("[Interstitial] ERROR: Dictation \(dictationId) not found in shared database")
+            logger.error("Dictation \(dictationId) not found in shared database. Database has \(DictationStore.shared.dictations.count) dictations.")
             return
         }
 
-        NSLog("[Interstitial] Found utterance: \"\(utterance.text.prefix(50))...\"")
+        NSLog("[Interstitial] Found dictation: \"\(dictation.text.prefix(50))...\"")
 
-        currentUtteranceId = utteranceId
-        originalText = utterance.text
-        editedText = utterance.text
+        currentDictationId = dictationId
+        originalText = dictation.text
+        editedText = dictation.text
 
-        logger.info("Showing interstitial for utterance \(utteranceId): \"\(utterance.text.prefix(40))...\"")
+        logger.info("Showing interstitial for dictation \(dictationId): \"\(dictation.text.prefix(40))...\"")
 
         createAndShowPanel()
         NSLog("[Interstitial] Panel created and shown")
@@ -251,7 +251,7 @@ final class InterstitialManager {
         panel?.orderOut(nil)
         panel = nil
         isVisible = false
-        currentUtteranceId = nil
+        currentDictationId = nil
         editedText = ""
         originalText = ""
         prePolishText = ""
@@ -512,14 +512,14 @@ final class InterstitialManager {
     // MARK: - Open in Talkie (Promote to Memo)
 
     func openInTalkie() {
-        guard let utteranceId = currentUtteranceId else {
+        guard let dictationId = currentDictationId else {
             dismiss()
             return
         }
 
-        // TODO: Create VoiceMemo in Core Data from the utterance
+        // TODO: Create VoiceMemo in Core Data from the dictation
         // For now, just activate Talkie and dismiss
-        logger.info("Opening utterance \(utteranceId) in Talkie (promotion not yet implemented)")
+        logger.info("Opening dictation \(dictationId) in Talkie (promotion not yet implemented)")
 
         dismiss()
 

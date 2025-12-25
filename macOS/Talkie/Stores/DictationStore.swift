@@ -2,7 +2,7 @@
 //  DictationStore.swift
 //  TalkieLive
 //
-//  Local storage for utterances with TTL
+//  Local storage for dictations with TTL
 //
 
 import Foundation
@@ -11,9 +11,9 @@ import os.log
 
 private let logger = Logger(subsystem: "jdi.talkie.live", category: "DictationStore")
 
-// MARK: - Utterance Metadata
+// MARK: - Dictation Metadata
 
-struct UtteranceMetadata: Codable, Hashable {
+struct DictationMetadata: Codable, Hashable {
     // Start context: where was the user when recording STARTED?
     var activeAppBundleID: String?
     var activeAppName: String?
@@ -125,7 +125,7 @@ struct UtteranceMetadata: Codable, Hashable {
     }
 
     /// Merge missing values from another metadata instance without overwriting existing fields
-    func mergingMissing(from other: UtteranceMetadata) -> UtteranceMetadata {
+    func mergingMissing(from other: DictationMetadata) -> DictationMetadata {
         var merged = self
         if merged.activeAppBundleID == nil { merged.activeAppBundleID = other.activeAppBundleID }
         if merged.activeAppName == nil { merged.activeAppName = other.activeAppName }
@@ -164,14 +164,14 @@ struct UtteranceMetadata: Codable, Hashable {
     }
 }
 
-// MARK: - Utterance
+// MARK: - Dictation
 
-struct Utterance: Identifiable, Codable, Hashable {
+struct Dictation: Identifiable, Codable, Hashable {
     let id: UUID
     var text: String
     let timestamp: Date
     let durationSeconds: Double?
-    var metadata: UtteranceMetadata
+    var metadata: DictationMetadata
 
     /// Database ID (from LiveDictation) - used for linking to database records
     var liveID: Int64?
@@ -185,7 +185,7 @@ struct Utterance: Identifiable, Codable, Hashable {
         text.count
     }
 
-    init(text: String, durationSeconds: Double? = nil, metadata: UtteranceMetadata = UtteranceMetadata()) {
+    init(text: String, durationSeconds: Double? = nil, metadata: DictationMetadata = DictationMetadata()) {
         self.id = UUID()
         self.text = text
         self.timestamp = Date()
@@ -195,7 +195,7 @@ struct Utterance: Identifiable, Codable, Hashable {
     }
 
     /// Initialize from database record
-    init(text: String, durationSeconds: Double?, metadata: UtteranceMetadata, timestamp: Date, liveID: Int64?) {
+    init(text: String, durationSeconds: Double?, metadata: DictationMetadata, timestamp: Date, liveID: Int64?) {
         self.id = UUID()
         self.text = text
         self.timestamp = timestamp
@@ -208,7 +208,7 @@ struct Utterance: Identifiable, Codable, Hashable {
         hasher.combine(id)
     }
 
-    static func == (lhs: Utterance, rhs: Utterance) -> Bool {
+    static func == (lhs: Dictation, rhs: Dictation) -> Bool {
         lhs.id == rhs.id
     }
 }
@@ -228,12 +228,12 @@ struct ContextCapture {
 
     /// Capture start context (frontmost app when recording begins)
     /// Now uses ContextCaptureService for baseline capture
-    @MainActor static func captureCurrentContext() -> UtteranceMetadata {
+    @MainActor static func captureCurrentContext() -> DictationMetadata {
         ContextCaptureService.shared.captureBaseline()
     }
 
     /// Fill in end context on existing metadata (when recording stops)
-    static func fillEndContext(in metadata: inout UtteranceMetadata) {
+    static func fillEndContext(in metadata: inout DictationMetadata) {
         // Get frontmost app info
         if let frontApp = NSWorkspace.shared.frontmostApplication {
             metadata.endAppBundleID = frontApp.bundleIdentifier
@@ -298,8 +298,8 @@ final class DictationStore {
     /// Number of recent dictations to load on first refresh (lazy loading)
     private static let initialLoadSize = 50
 
-    /// Published utterances - now backed by SQLite database
-    private(set) var utterances: [Utterance] = []
+    /// Published dictations - now backed by SQLite database
+    private(set) var dictations: [Dictation] = []
 
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48
@@ -313,8 +313,8 @@ final class DictationStore {
 
     // MARK: - Public API
 
-    /// Add a new utterance (stores to SQLite database)
-    func add(_ text: String, durationSeconds: Double? = nil, metadata: UtteranceMetadata = UtteranceMetadata()) {
+    /// Add a new dictation (stores to SQLite database)
+    func add(_ text: String, durationSeconds: Double? = nil, metadata: DictationMetadata = DictationMetadata()) {
         // Build rich context metadata dictionary
         var metadataDict: [String: String] = [:]
         if let url = metadata.documentURL { metadataDict["documentURL"] = url }
@@ -328,7 +328,7 @@ final class DictationStore {
         if let post = metadata.perfPostMs { metadataDict["perfPostMs"] = String(post) }
 
         // Convert to LiveDictation for database storage
-        let liveUtterance = LiveDictation(
+        let liveDictation = LiveDictation(
             text: text,
             mode: metadata.routingMode ?? "typing",
             appBundleID: metadata.activeAppBundleID,
@@ -345,32 +345,32 @@ final class DictationStore {
             transcriptionStatus: .success
         )
 
-        LiveDatabase.store(liveUtterance)
-        logger.info("Added utterance: \(text.prefix(50))... from \(metadata.activeAppName ?? "unknown")")
+        LiveDatabase.store(liveDictation)
+        logger.info("Added dictation: \(text.prefix(50))... from \(metadata.activeAppName ?? "unknown")")
 
-        // Refresh to get the new utterance with its ID
+        // Refresh to get the new dictation with its ID
         refresh()
     }
 
     /// Add a LiveDictation directly (for new recordings)
-    func addLive(_ liveUtterance: LiveDictation) {
-        LiveDatabase.store(liveUtterance)
-        logger.info("Added live utterance: \(liveUtterance.text.prefix(50))...")
+    func addLive(_ liveDictation: LiveDictation) {
+        LiveDatabase.store(liveDictation)
+        logger.info("Added live dictation: \(liveDictation.text.prefix(50))...")
         refresh()
     }
 
-    /// Update an existing utterance
-    func update(_ utterance: Utterance) {
+    /// Update an existing dictation
+    func update(_ dictation: Dictation) {
         // For now, just refresh - updates go through LiveDatabase directly
         refresh()
     }
 
-    /// Update utterance text (for retranscription)
+    /// Update dictation text (for retranscription)
     func updateText(for id: UUID, newText: String) {
-        // Find the utterance to get its liveID
-        guard let utterance = utterances.first(where: { $0.id == id }),
-              let liveID = utterance.liveID else {
-            logger.warning("Cannot update text: utterance not found or has no liveID")
+        // Find the dictation to get its liveID
+        guard let dictation = dictations.first(where: { $0.id == id }),
+              let liveID = dictation.liveID else {
+            logger.warning("Cannot update text: dictation not found or has no liveID")
             return
         }
 
@@ -378,34 +378,34 @@ final class DictationStore {
         refresh()
     }
 
-    /// Delete an utterance
-    func delete(_ utterance: Utterance) {
+    /// Delete an dictation
+    func delete(_ dictation: Dictation) {
         // Use liveID if available, otherwise match by timestamp
-        if let liveID = utterance.liveID,
+        if let liveID = dictation.liveID,
            let live = LiveDatabase.fetch(id: liveID) {
             LiveDatabase.delete(live)
-            logger.info("Deleted utterance by ID: \(utterance.text.prefix(30))...")
+            logger.info("Deleted dictation by ID: \(dictation.text.prefix(30))...")
         } else {
             // Fallback: match by timestamp
-            let liveUtterances = LiveDatabase.all()
-            if let live = liveUtterances.first(where: { $0.createdAt == utterance.timestamp }) {
+            let liveDictations = LiveDatabase.all()
+            if let live = liveDictations.first(where: { $0.createdAt == dictation.timestamp }) {
                 LiveDatabase.delete(live)
-                logger.info("Deleted utterance by timestamp: \(utterance.text.prefix(30))...")
+                logger.info("Deleted dictation by timestamp: \(dictation.text.prefix(30))...")
             }
         }
 
         // Immediately remove from local array (don't wait for incremental refresh)
-        utterances.removeAll { $0.id == utterance.id }
+        dictations.removeAll { $0.id == dictation.id }
     }
 
-    /// Clear all utterances
+    /// Clear all dictations
     func clear() {
         LiveDatabase.deleteAll()
-        logger.info("Cleared all utterances")
+        logger.info("Cleared all dictations")
         refresh()
     }
 
-    /// Prune expired utterances
+    /// Prune expired dictations
     func pruneExpired() {
         LiveDatabase.prune(olderThanHours: ttlHours)
         refresh()
@@ -413,39 +413,39 @@ final class DictationStore {
 
     /// Refresh from database (incremental when possible)
     func refresh() {
-        let liveUtterances: [LiveDictation]
+        let liveDictations: [LiveDictation]
 
-        // Incremental fetch: only get new utterances with ID > lastSeenID
+        // Incremental fetch: only get new dictations with ID > lastSeenID
         if lastSeenID > 0 {
-            liveUtterances = LiveDatabase.since(id: lastSeenID)
+            liveDictations = LiveDatabase.since(id: lastSeenID)
 
-            if liveUtterances.isEmpty {
-                // No new utterances - skip expensive processing (silent - this is the common case)
+            if liveDictations.isEmpty {
+                // No new dictations - skip expensive processing (silent - this is the common case)
                 return
             }
 
-            logger.info("Incremental refresh: found \(liveUtterances.count) new utterances since ID \(self.lastSeenID)")
+            logger.info("Incremental refresh: found \(liveDictations.count) new dictations since ID \(self.lastSeenID)")
         } else {
-            // First load: only get recent utterances for fast initial render
-            liveUtterances = LiveDatabase.recent(limit: Self.initialLoadSize)
-            logger.debug("Initial load: loaded \(liveUtterances.count) recent utterances (limit: \(Self.initialLoadSize))")
+            // First load: only get recent dictations for fast initial render
+            liveDictations = LiveDatabase.recent(limit: Self.initialLoadSize)
+            logger.debug("Initial load: loaded \(liveDictations.count) recent dictations (limit: \(Self.initialLoadSize))")
         }
 
         // Update high water mark to highest ID seen
-        if let maxID = liveUtterances.compactMap(\.id).max() {
+        if let maxID = liveDictations.compactMap(\.id).max() {
             lastSeenID = max(lastSeenID, maxID)
         }
 
-        // Build map of existing utterances by liveID to preserve UUIDs and selection state
-        var existingByLiveID: [Int64: Utterance] = [:]
-        for utterance in utterances {
-            if let liveID = utterance.liveID {
-                existingByLiveID[liveID] = utterance
+        // Build map of existing dictations by liveID to preserve UUIDs and selection state
+        var existingByLiveID: [Int64: Dictation] = [:]
+        for dictation in dictations {
+            if let liveID = dictation.liveID {
+                existingByLiveID[liveID] = dictation
             }
         }
 
-        // Convert new LiveDictations to Utterances
-        let newUtterances = liveUtterances.compactMap { live -> Utterance? in
+        // Convert new LiveDictations to Dictations
+        let newUtterances = liveDictations.compactMap { live -> Dictation? in
             if let liveID = live.id, let existing = existingByLiveID[liveID] {
                 // Check if data has changed
                 let newMetadata = buildMetadata(from: live)
@@ -463,8 +463,8 @@ final class DictationStore {
                 return updated
             }
 
-            // New utterance
-            return Utterance(
+            // New dictation
+            return Dictation(
                 text: live.text,
                 durationSeconds: live.durationSeconds,
                 metadata: buildMetadata(from: live),
@@ -473,30 +473,30 @@ final class DictationStore {
             )
         }
 
-        // Merge new utterances with existing ones (prepend new, keep sorted by timestamp desc)
+        // Merge new dictations with existing ones (prepend new, keep sorted by timestamp desc)
         if lastSeenID > 0 && !newUtterances.isEmpty {
-            // Get liveIDs of the newly fetched utterances
+            // Get liveIDs of the newly fetched dictations
             let fetchedLiveIDs = Set(newUtterances.compactMap { $0.liveID })
 
-            // Remove any existing utterances that were re-fetched (to avoid duplicates)
-            let remainingExisting = utterances.filter { utterance in
-                guard let liveID = utterance.liveID else { return true }
+            // Remove any existing dictations that were re-fetched (to avoid duplicates)
+            let remainingExisting = dictations.filter { dictation in
+                guard let liveID = dictation.liveID else { return true }
                 return !fetchedLiveIDs.contains(liveID)
             }
 
             // Merge and sort
-            utterances = (newUtterances + remainingExisting).sorted { $0.timestamp > $1.timestamp }
-            logger.info("Added \(newUtterances.count) new utterances (total: \(self.utterances.count))")
+            dictations = (newUtterances + remainingExisting).sorted { $0.timestamp > $1.timestamp }
+            logger.info("Added \(newUtterances.count) new dictations (total: \(self.dictations.count))")
         } else if lastSeenID == 0 {
             // Full refresh: replace entire array
-            utterances = newUtterances
-            logger.debug("Loaded \(self.utterances.count) utterances from database")
+            dictations = newUtterances
+            logger.debug("Loaded \(self.dictations.count) dictations from database")
         }
     }
 
-    /// Build UtteranceMetadata from LiveDictation, including rich context from metadata dict
-    private func buildMetadata(from live: LiveDictation) -> UtteranceMetadata {
-        var metadata = UtteranceMetadata(
+    /// Build DictationMetadata from LiveDictation, including rich context from metadata dict
+    private func buildMetadata(from live: LiveDictation) -> DictationMetadata {
+        var metadata = DictationMetadata(
             activeAppBundleID: live.appBundleID,
             activeAppName: live.appName,
             activeWindowTitle: live.windowTitle,
@@ -556,11 +556,11 @@ final class DictationStore {
         LiveDatabase.count()
     }
 
-    /// Search utterances
-    func search(_ query: String) -> [Utterance] {
+    /// Search dictations
+    func search(_ query: String) -> [Dictation] {
         let results = LiveDatabase.search(query)
         return results.map { live in
-            Utterance(
+            Dictation(
                 text: live.text,
                 durationSeconds: live.durationSeconds,
                 metadata: buildMetadata(from: live),
@@ -572,11 +572,11 @@ final class DictationStore {
 
     // MARK: - Filtering (for NavigationView compatibility)
 
-    var promotableUtterances: [Utterance] {
-        utterances.filter { utterance in
-            // An utterance is promotable if it has live data that could be promoted
-            // For now, just return utterances with liveID
-            utterance.liveID != nil
+    var promotableUtterances: [Dictation] {
+        dictations.filter { dictation in
+            // An dictation is promotable if it has live data that could be promoted
+            // For now, just return dictations with liveID
+            dictation.liveID != nil
         }
     }
 
