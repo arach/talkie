@@ -2,8 +2,12 @@
 //  TalkieLiveStateMonitor.swift
 //  Talkie
 //
-//  Monitors TalkieLive's recording state via XPC service for real-time sync.
-//  Allows Talkie to display accurate recording state in StatusBar.
+//  Monitors TalkieLive's recording state for real-time sync.
+//  Supports both URL-based notifications (preferred) and XPC (legacy).
+//
+//  URL notifications are simpler and avoid XPC complexity:
+//    talkie://recording/started  →  updateFromNotification(.listening)
+//    talkie://transcribing       →  updateFromNotification(.transcribing)
 //
 
 import Foundation
@@ -237,4 +241,22 @@ final class TalkieLiveStateMonitor: NSObject, TalkieLiveStateObserverProtocol {
         case .routing: return "Routing"
         }
     }
+
+    // MARK: - URL Notification Updates (preferred over XPC)
+
+    /// Update state from URL notification (e.g., talkie://recording/started)
+    /// This is the preferred method - simpler than XPC, no connection management.
+    func updateFromNotification(state newState: LiveState, elapsedTime elapsed: TimeInterval = 0) {
+        // Mark process as detected since we're receiving notifications
+        isProcessDetected = true
+
+        if newState != state {
+            state = newState
+            isRecording = (newState == .listening || newState == .transcribing)
+            NSLog("[Live] State (via notification): \(newState.rawValue)")
+        }
+
+        elapsedTime = elapsed
+    }
+
 }
