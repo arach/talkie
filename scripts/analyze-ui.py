@@ -38,9 +38,9 @@ except ImportError:
     sys.exit(1)
 
 # VLM Service Configuration
-# Supports both DNS names (agentloop.dev) and IP addresses (127.0.0.1)
+# Supports both DNS names (talkie-vlm.local) and IP addresses (127.0.0.1)
 # Run ./scripts/setup-vlm-dns.sh to configure local DNS
-VLM_HOST = os.environ.get("VLM_HOST", "agentloop.dev")
+VLM_HOST = os.environ.get("VLM_HOST", "talkie-vlm.local")
 VLM_PORT = os.environ.get("VLM_PORT", "12346")
 VLM_BASE_URL = os.environ.get("VLM_URL", f"http://{VLM_HOST}:{VLM_PORT}")
 

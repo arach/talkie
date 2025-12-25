@@ -6,7 +6,7 @@ if [ -f .vlmrc ]; then
     source .vlmrc > /dev/null 2>&1
 fi
 
-VLM_HOST=${VLM_HOST:-agentloop.dev}
+VLM_HOST=${VLM_HOST:-talkie-vlm.local}
 VLM_PORT=${VLM_PORT:-12346}
 VLM_URL="http://${VLM_HOST}:${VLM_PORT}"
 

@@ -3,7 +3,7 @@
 
 set -e
 
-HOSTNAME="agentloop.dev"
+HOSTNAME="talkie-vlm.local"
 IP="127.0.0.1"
 HOSTS_FILE="/etc/hosts"
 
