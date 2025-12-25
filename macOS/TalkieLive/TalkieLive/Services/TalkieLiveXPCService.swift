@@ -2,12 +2,14 @@
 //  TalkieLiveXPCService.swift
 //  TalkieLive
 //
-//  XPC service that broadcasts TalkieLive's recording state to Talkie
+//  XPC service that broadcasts TalkieLive's recording state to Talkie.
+//  Also sends URL notifications for decoupled state sync.
 //
 
 import Foundation
 import AppKit
 import Combine
+import TalkieKit
 
 @MainActor
 final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
@@ -80,7 +82,7 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
     }
 
     private func broadcastStateChange(state: String, elapsedTime: TimeInterval) {
-        // Notify all connected observers immediately
+        // Notify all connected observers immediately (XPC)
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
                 NSLog("[TalkieLiveXPC] ⚠️ Error sending state to observer: \(error)")
@@ -90,15 +92,29 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
             observer.stateDidChange(state: state, elapsedTime: elapsedTime)
         }
 
-        // Only log when state actually changes (not on every elapsed time update)
+        // Only log and send URL when state actually changes
         if state != lastLoggedState {
             NSLog("[TalkieLiveXPC] ✓ State changed to '\(state)' (broadcasting to \(observers.count) observers)")
             lastLoggedState = state
+
+            // Send URL notification to Talkie (decoupled, no connection required)
+            switch state {
+            case "listening":
+                TalkieNotifier.shared.recordingStarted()
+            case "idle":
+                TalkieNotifier.shared.recordingStopped()
+            case "transcribing":
+                TalkieNotifier.shared.transcribing()
+            case "routing":
+                TalkieNotifier.shared.routing()
+            default:
+                break
+            }
         }
     }
 
     private func broadcastUtteranceAdded() {
-        // Notify all connected observers
+        // Notify all connected observers (XPC)
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
                 NSLog("[TalkieLiveXPC] ⚠️ Error sending utterance notification to observer: \(error)")
@@ -106,6 +122,9 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
 
             observer.utteranceWasAdded()
         }
+
+        // Also send URL notification
+        TalkieNotifier.shared.dictationAdded()
 
         NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new utterance")
     }
