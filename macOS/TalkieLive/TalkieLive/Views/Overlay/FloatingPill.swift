@@ -24,6 +24,7 @@ final class FloatingPillController: ObservableObject {
     private var mouseMonitor: Any?
     private var magneticTimer: Timer?
     private var timerUpdateTimer: Timer?  // Separate 1Hz timer for elapsed time display
+    private var healthCheckTimer: Timer?  // Periodic health check to heal from failed states
     private var recordingStartTime: Date?
     private var processingStartTime: Date?
     private var settingsCancellables = Set<AnyCancellable>()
@@ -169,6 +170,9 @@ final class FloatingPillController: ObservableObject {
 
         // Start magnetic tracking
         startMagneticTracking()
+
+        // Start periodic health checks (every 5 seconds)
+        startHealthChecks()
     }
 
     private func createPill(on screen: NSScreen) {
@@ -393,6 +397,7 @@ final class FloatingPillController: ObservableObject {
     func hide() {
         isVisible = false
         stopMagneticTracking()
+        stopHealthChecks()
 
         for window in windows {
             window.orderOut(nil)
@@ -428,6 +433,10 @@ final class FloatingPillController: ObservableObject {
             elapsedTime = 0
             processingStartTime = nil
             processingTime = 0
+
+            // Heal from failed state: Refresh engine connection status when returning to idle
+            // This ensures we don't stay in offline state after completing a recording
+            refreshEngineState()
         }
 
         // Start/stop timer updates based on state transitions
@@ -440,6 +449,36 @@ final class FloatingPillController: ObservableObject {
             // Transition to inactive state - stop timer updates
             stopTimerUpdates()
         }
+    }
+
+    /// Refresh engine connection state (call when we might have healed from a failed state)
+    private func refreshEngineState() {
+        let currentState = EngineClient.shared.connectionState
+        let newIsConnected = (currentState == .connected || currentState == .connectedWrongBuild)
+
+        if newIsConnected != self.isEngineConnected {
+            pillLogger.debug("[Health Check] Engine state refreshed: \(currentState.rawValue), was: \(self.isEngineConnected), now: \(newIsConnected)")
+            self.isEngineConnected = newIsConnected
+            self.isWrongEngineBuild = (currentState == .connectedWrongBuild)
+        }
+    }
+
+    // MARK: - Periodic Health Checks
+
+    private func startHealthChecks() {
+        stopHealthChecks()
+
+        // Check engine health every 5 seconds to heal from transient failures
+        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshEngineState()
+            }
+        }
+    }
+
+    private func stopHealthChecks() {
+        healthCheckTimer?.invalidate()
+        healthCheckTimer = nil
     }
 
     // Simple callback - just report the tap with current state and modifiers
