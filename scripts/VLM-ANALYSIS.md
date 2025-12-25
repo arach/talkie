@@ -2,21 +2,63 @@
 
 Automated visual analysis of Talkie UI using local vision-language models.
 
-## Quick Start
+## Two-Step Workflow
+
+### Step 1: Run Design Audit
+Captures screenshots and generates baseline code analysis report.
 
 ```bash
-# 1. Run design audit (captures screenshots)
+# Build and run audit (all screens)
 ./scripts/run.sh --build
 Talkie.app/Contents/MacOS/Talkie --debug=audit
 
-# 2. Start VLM service (one-time setup)
-./scripts/setup-vlm-analysis.sh
-
-# 3. Analyze all screenshots with VLM
-python3 scripts/vlm-audit-screens.py
+# Output: ~/Desktop/talkie-audit/run-XXX/
+#   - report.html (baseline report)
+#   - screenshots/ (all screen captures)
 ```
 
+### Step 2: Add VLM Visual Analysis (Async)
+After audit completes, run VLM analysis to inject visual feedback into report.
+
+```bash
+# Start VLM service (one-time setup)
+./scripts/setup-vlm-analysis.sh
+
+# Add VLM analysis to latest audit
+python3 scripts/audit-add-vlm.py
+
+# Output: ~/Desktop/talkie-audit/run-XXX/
+#   - report-with-vlm.html (enhanced with visual analysis)
+#   - vlm-summary.txt (VLM-only summary)
+#   - vlm-results.json (structured results)
+```
+
+This opens the enhanced report automatically in your browser.
+
 ## Tools
+
+### `audit-add-vlm.py` ⭐ - Inject VLM into audit reports
+
+**Primary workflow tool** - Adds visual analysis to existing design audit reports.
+
+```bash
+# Add VLM to latest audit
+python3 scripts/audit-add-vlm.py
+
+# Specific audit run
+python3 scripts/audit-add-vlm.py ~/Desktop/talkie-audit/run-042
+
+# Custom prompt
+python3 scripts/audit-add-vlm.py --prompt "Check accessibility"
+
+# Specific screens
+python3 scripts/audit-add-vlm.py --screens "settings-*,memos-*"
+```
+
+**Output:**
+- `report-with-vlm.html` - Original report enhanced with VLM feedback
+- `vlm-summary.txt` - Text summary of all visual issues
+- `vlm-results.json` - Structured JSON results
 
 ### `analyze-ui.py` - General-purpose screenshot analysis
 
