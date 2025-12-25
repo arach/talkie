@@ -304,8 +304,8 @@ final class DictationStore {
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48
 
-    /// Track last refresh to enable incremental fetching
-    private var lastRefreshTimestamp: Date?
+    /// High water mark: highest ID we've processed (for incremental sync)
+    private var lastSeenID: Int64 = 0
 
     private init() {
         // No initial load - lazy load on demand when user navigates to dictation list
@@ -415,24 +415,26 @@ final class DictationStore {
     func refresh() {
         let liveUtterances: [LiveDictation]
 
-        // Incremental fetch: only get new utterances since last refresh
-        if let lastRefresh = lastRefreshTimestamp {
-            liveUtterances = LiveDatabase.since(timestamp: lastRefresh)
+        // Incremental fetch: only get new utterances with ID > lastSeenID
+        if lastSeenID > 0 {
+            liveUtterances = LiveDatabase.since(id: lastSeenID)
 
             if liveUtterances.isEmpty {
-                // No new utterances - skip expensive processing
+                // No new utterances - skip expensive processing (silent - this is the common case)
                 return
             }
 
-            logger.debug("Incremental refresh: found \(liveUtterances.count) new utterances since \(lastRefresh)")
+            logger.info("Incremental refresh: found \(liveUtterances.count) new utterances since ID \(lastSeenID)")
         } else {
             // First load: only get recent utterances for fast initial render
             liveUtterances = LiveDatabase.recent(limit: Self.initialLoadSize)
             logger.debug("Initial load: loaded \(liveUtterances.count) recent utterances (limit: \(Self.initialLoadSize))")
         }
 
-        // Update timestamp BEFORE processing to avoid missing utterances in race conditions
-        lastRefreshTimestamp = Date()
+        // Update high water mark to highest ID seen
+        if let maxID = liveUtterances.compactMap(\.id).max() {
+            lastSeenID = max(lastSeenID, maxID)
+        }
 
         // Build map of existing utterances by liveID to preserve UUIDs and selection state
         var existingByLiveID: [Int64: Utterance] = [:]
@@ -472,7 +474,7 @@ final class DictationStore {
         }
 
         // Merge new utterances with existing ones (prepend new, keep sorted by timestamp desc)
-        if lastRefreshTimestamp != nil && !newUtterances.isEmpty {
+        if lastSeenID > 0 && !newUtterances.isEmpty {
             // Get liveIDs of the newly fetched utterances
             let fetchedLiveIDs = Set(newUtterances.compactMap { $0.liveID })
 
@@ -484,8 +486,8 @@ final class DictationStore {
 
             // Merge and sort
             utterances = (newUtterances + remainingExisting).sorted { $0.timestamp > $1.timestamp }
-            logger.debug("Added \(newUtterances.count) new utterances (total: \(self.utterances.count))")
-        } else if lastRefreshTimestamp == nil {
+            logger.info("Added \(newUtterances.count) new utterances (total: \(self.utterances.count))")
+        } else if lastSeenID == 0 {
             // Full refresh: replace entire array
             utterances = newUtterances
             logger.debug("Loaded \(self.utterances.count) utterances from database")
