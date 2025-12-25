@@ -6,12 +6,25 @@ if [ -f .vlmrc ]; then
     source .vlmrc > /dev/null 2>&1
 fi
 
-VLM_HOST=${VLM_HOST:-127.0.0.1}
+VLM_HOST=${VLM_HOST:-agentloop.dev}
 VLM_PORT=${VLM_PORT:-12346}
 VLM_URL="http://${VLM_HOST}:${VLM_PORT}"
 
+# Fall back to IP if DNS not configured
+if ! ping -c 1 -W 1 "$VLM_HOST" > /dev/null 2>&1; then
+    VLM_HOST="127.0.0.1"
+    VLM_URL="http://${VLM_HOST}:${VLM_PORT}"
+    DNS_WARNING="⚠️  DNS not configured - using IP address"
+fi
+
 echo "🔍 VLM Service Status"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ -n "$DNS_WARNING" ]; then
+    echo "$DNS_WARNING"
+    echo "Run: ./scripts/setup-vlm-dns.sh to configure local DNS"
+    echo ""
+fi
 
 # Check if service is running
 if curl -s "${VLM_URL}/health" > /dev/null 2>&1; then
