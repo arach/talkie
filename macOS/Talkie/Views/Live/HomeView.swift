@@ -34,7 +34,7 @@ struct HomeView: View {
 
     // Computed properties for adaptive display
     private var hasMemos: Bool { !memosViewModel.memos.isEmpty }
-    private var hasDictations: Bool { !store.utterances.isEmpty }
+    private var hasDictations: Bool { !store.dictations.isEmpty }
     private var hasActivity: Bool { hasMemos || hasDictations }
 
     var body: some View {
@@ -78,7 +78,7 @@ struct HomeView: View {
 
                             if hasDictations {
                                 RecentActivityCard(
-                                    utterances: Array(store.utterances.prefix(5)),
+                                    dictations: Array(store.dictations.prefix(5)),
                                     onSelectUtterance: onSelectUtterance
                                 )
                                 .frame(width: GridLayout.width(slots: hasMemos ? 2 : 4, in: containerWidth))
@@ -140,19 +140,19 @@ struct HomeView: View {
             loadActivityData()
             await memosViewModel.loadMemos()
         }
-        .onChange(of: store.utterances.count) { _, _ in
+        .onChange(of: store.dictations.count) { _, _ in
             loadActivityData()
         }
     }
 
     private func loadActivityData() {
-        let utterances = store.utterances
+        let dictations = store.dictations
         let calendar = Calendar.current
 
         // Calculate unique days with activity
         var uniqueDays = Set<Date>()
         var earliestDate: Date?
-        for u in utterances {
+        for u in dictations {
             let day = calendar.startOfDay(for: u.timestamp)
             uniqueDays.insert(day)
             if earliestDate == nil || day < earliestDate! {
@@ -162,31 +162,31 @@ struct HomeView: View {
 
         // Calculate stats
         stats = HomeStats(
-            totalRecordings: utterances.count,
-            totalWords: utterances.map { $0.wordCount }.reduce(0, +),
-            totalDuration: utterances.compactMap { $0.durationSeconds }.reduce(0, +),
-            todayCount: utterances.filter { calendar.isDateInToday($0.timestamp) }.count,
-            weekCount: utterances.filter {
+            totalRecordings: dictations.count,
+            totalWords: dictations.map { $0.wordCount }.reduce(0, +),
+            totalDuration: dictations.compactMap { $0.durationSeconds }.reduce(0, +),
+            todayCount: dictations.filter { calendar.isDateInToday($0.timestamp) }.count,
+            weekCount: dictations.filter {
                 guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) else { return false }
                 return $0.timestamp >= weekAgo
             }.count,
-            streak: calculateStreak(utterances),
-            topApps: calculateTopApps(utterances),
-            insight: generateInsight(utterances),
+            streak: calculateStreak(dictations),
+            topApps: calculateTopApps(dictations),
+            insight: generateInsight(dictations),
             daysWithActivity: uniqueDays.count,
             firstActivityDate: earliestDate
         )
 
         // Build activity data for full year (allows switching between views)
-        activityData = buildActivityData(from: utterances, weeks: 52)
+        activityData = buildActivityData(from: dictations, weeks: 52)
     }
 
-    private func generateInsight(_ utterances: [Utterance]) -> Insight? {
-        guard !utterances.isEmpty else { return nil }
+    private func generateInsight(_ dictations: [Utterance]) -> Insight? {
+        guard !dictations.isEmpty else { return nil }
 
         let calendar = Calendar.current
         let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        let recentUtterances = utterances.filter { $0.timestamp >= weekAgo }
+        let recentUtterances = dictations.filter { $0.timestamp >= weekAgo }
 
         guard !recentUtterances.isEmpty else {
             return Insight(
@@ -269,7 +269,7 @@ struct HomeView: View {
         }
 
         // Streak-based insights
-        let streak = calculateStreak(utterances)
+        let streak = calculateStreak(dictations)
         if streak >= 7 {
             return Insight(
                 iconName: "flame.fill",
@@ -321,11 +321,11 @@ struct HomeView: View {
         )
     }
 
-    private func calculateTopApps(_ utterances: [Utterance]) -> [(name: String, bundleID: String?, count: Int)] {
+    private func calculateTopApps(_ dictations: [Utterance]) -> [(name: String, bundleID: String?, count: Int)] {
         // Track both counts and bundle IDs
         var appData: [String: (bundleID: String?, count: Int)] = [:]
 
-        for u in utterances {
+        for u in dictations {
             if let appName = u.metadata.activeAppName, !appName.isEmpty {
                 let existing = appData[appName]
                 let bundleID = existing?.bundleID ?? u.metadata.activeAppBundleID
@@ -340,14 +340,14 @@ struct HomeView: View {
             .map { (name: $0.key, bundleID: $0.value.bundleID, count: $0.value.count) }
     }
 
-    private func calculateStreak(_ utterances: [Utterance]) -> Int {
+    private func calculateStreak(_ dictations: [Utterance]) -> Int {
         let calendar = Calendar.current
         var streak = 0
         var checkDate = calendar.startOfDay(for: Date())
 
         // Group by day
         var byDay: [Date: [Utterance]] = [:]
-        for u in utterances {
+        for u in dictations {
             let day = calendar.startOfDay(for: u.timestamp)
             byDay[day, default: []].append(u)
         }
@@ -362,13 +362,13 @@ struct HomeView: View {
         return streak
     }
 
-    private func buildActivityData(from utterances: [Utterance], weeks: Int) -> [DayActivity] {
+    private func buildActivityData(from dictations: [Utterance], weeks: Int) -> [DayActivity] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
 
-        // Group utterances by day
+        // Group dictations by day
         var byDay: [Date: [Utterance]] = [:]
-        for u in utterances {
+        for u in dictations {
             let day = calendar.startOfDay(for: u.timestamp)
             byDay[day, default: []].append(u)
         }
@@ -1609,7 +1609,7 @@ struct TopAppRow: View {
 // MARK: - Recent Activity Card
 
 struct RecentActivityCard: View {
-    let utterances: [Utterance]
+    let dictations: [Utterance]
     var onSelectUtterance: ((Utterance) -> Void)?
 
     var body: some View {
@@ -1622,12 +1622,12 @@ struct RecentActivityCard: View {
 
                 Spacer()
 
-                Text("\(utterances.count) latest")
+                Text("\(dictations.count) latest")
                     .font(.system(size: 10))
                     .foregroundColor(TalkieTheme.textMuted)
             }
 
-            if utterances.isEmpty {
+            if dictations.isEmpty {
                 HStack {
                     Spacer()
                     VStack(spacing: 8) {
@@ -1643,8 +1643,8 @@ struct RecentActivityCard: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    ForEach(utterances) { utterance in
-                        RecentActivityRow(utterance: utterance, onSelect: onSelectUtterance)
+                    ForEach(dictations) { dictation in
+                        RecentActivityRow(dictation: dictation, onSelect: onSelectUtterance)
                     }
                 }
             }
@@ -1662,7 +1662,7 @@ struct RecentActivityCard: View {
 }
 
 struct RecentActivityRow: View {
-    let utterance: Utterance
+    let dictation: Utterance
     var onSelect: ((Utterance) -> Void)?
     @Environment(LiveSettings.self) private var settings
 
@@ -1670,12 +1670,12 @@ struct RecentActivityRow: View {
 
     /// Status: success (has text), failure (empty/error)
     private var isSuccess: Bool {
-        !utterance.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !dictation.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
         Button(action: {
-            onSelect?(utterance)
+            onSelect?(dictation)
         }) {
             HStack(spacing: 8) {
                 // 1. Status indicator (like rank # in Top Apps)
@@ -1685,7 +1685,7 @@ struct RecentActivityRow: View {
                     .frame(width: 12)
 
                 // 2. App icon (like app icon in Top Apps)
-                if let bundleID = utterance.metadata.activeAppBundleID {
+                if let bundleID = dictation.metadata.activeAppBundleID {
                     AppIconView(bundleIdentifier: bundleID, size: 20)
                         .frame(width: 20, height: 20)
                 } else {
@@ -1696,7 +1696,7 @@ struct RecentActivityRow: View {
                 }
 
                 // 3. Text preview (like app name in Top Apps) - scales with fontSize setting
-                Text(utterance.text.isEmpty ? "No transcription" : String(utterance.text.prefix(50)) + (utterance.text.count > 50 ? "..." : ""))
+                Text(dictation.text.isEmpty ? "No transcription" : String(dictation.text.prefix(50)) + (dictation.text.count > 50 ? "..." : ""))
                     .font(settings.fontSize.smFont)
                     .foregroundColor(isHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
                     .lineLimit(1)
@@ -1704,7 +1704,7 @@ struct RecentActivityRow: View {
                 Spacer()
 
                 // 4. Time ago (like count in Top Apps)
-                RelativeTimeLabel(date: utterance.timestamp, formatter: timeAgo)
+                RelativeTimeLabel(date: dictation.timestamp, formatter: timeAgo)
                     .font(.system(size: settings.fontSize.sm, weight: .medium, design: .rounded))
                     .foregroundColor(TalkieTheme.textTertiary)
 
@@ -1731,7 +1731,7 @@ struct RecentActivityRow: View {
         .contextMenu {
             Button {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(utterance.text, forType: .string)
+                NSPasteboard.general.setString(dictation.text, forType: .string)
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }
@@ -1740,7 +1740,7 @@ struct RecentActivityRow: View {
 
             Button(role: .destructive) {
                 withAnimation {
-                    DictationStore.shared.delete(utterance)
+                    DictationStore.shared.delete(dictation)
                 }
             } label: {
                 Label("Delete", systemImage: "trash")

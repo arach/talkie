@@ -2,7 +2,7 @@
 //  LiveDictation.swift
 //  TalkieLive
 //
-//  GRDB record for utterances
+//  GRDB record for dictations
 //
 
 import Foundation
@@ -131,7 +131,7 @@ enum QuickActionKind: String, Codable, CaseIterable {
     }
 }
 
-// MARK: - Live Utterance Model
+// MARK: - Live Dictation Model
 
 struct LiveDictation: Identifiable, Hashable {
     var id: Int64?

@@ -2,7 +2,7 @@
 //  LiveDatabase.swift
 //  TalkieLive
 //
-//  SQLite database for Live utterances using GRDB.
+//  SQLite database for Live dictations using GRDB.
 //  Single source of truth for all TalkieLive persistence.
 //
 
@@ -194,7 +194,7 @@ extension LiveDatabase {
     }
 
     /// Update metadata fields for an existing utterance (used by fire-and-forget enrichment)
-    static func updateMetadata(id: Int64, metadata: UtteranceMetadata) {
+    static func updateMetadata(id: Int64, metadata: DictationMetadata) {
         do {
             try shared.write { db in
                 // Build JSON from enriched fields

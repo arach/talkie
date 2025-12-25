@@ -76,9 +76,9 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
         broadcastStateChange(state: state, elapsedTime: elapsedTime)
     }
 
-    /// Notify observers that a new utterance was added
-    func notifyUtteranceAdded() {
-        broadcastUtteranceAdded()
+    /// Notify observers that a new dictation was added
+    func notifyDictationAdded() {
+        broadcastDictationAdded()
     }
 
     private func broadcastStateChange(state: String, elapsedTime: TimeInterval) {
@@ -113,20 +113,20 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
         }
     }
 
-    private func broadcastUtteranceAdded() {
+    private func broadcastDictationAdded() {
         // Notify all connected observers (XPC)
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
-                NSLog("[TalkieLiveXPC] ⚠️ Error sending utterance notification to observer: \(error)")
+                NSLog("[TalkieLiveXPC] ⚠️ Error sending dictation notification to observer: \(error)")
             }) as? TalkieLiveStateObserverProtocol else { continue }
 
-            observer.utteranceWasAdded()
+            observer.dictationWasAdded()
         }
 
         // Also send URL notification
         TalkieNotifier.shared.dictationAdded()
 
-        NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new utterance")
+        NSLog("[TalkieLiveXPC] ✓ Notified \(observers.count) observers about new dictation")
     }
 
     private func broadcastAudioLevel(_ level: Float) {

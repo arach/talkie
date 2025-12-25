@@ -29,7 +29,7 @@ struct UnifiedActivityItem: Identifiable {
 
     // Original references
     var memo: VoiceMemo?
-    var utterance: Utterance?
+    var dictation: Utterance?
 }
 
 // MARK: - Unified Dashboard
@@ -105,7 +105,7 @@ struct UnifiedDashboard: View {
             serviceState = serviceMonitor.state
             pendingRetryCount = LiveDatabase.countNeedsRetry()
         }
-        .onChange(of: dictationStore.utterances.count) { _, _ in
+        .onChange(of: dictationStore.dictations.count) { _, _ in
             loadData()
             pendingRetryCount = LiveDatabase.countNeedsRetry()
         }
@@ -173,7 +173,7 @@ struct UnifiedDashboard: View {
             // Total Dictations
             CompactStatCard(
                 icon: "waveform",
-                value: formatNumber(dictationStore.utterances.count),
+                value: formatNumber(dictationStore.dictations.count),
                 label: "Dictations",
                 detail: "Quick captures",
                 color: .purple
@@ -292,17 +292,17 @@ struct UnifiedDashboard: View {
 
                 Spacer()
 
-                Text("\(min(dictationStore.utterances.count, 8)) latest")
+                Text("\(min(dictationStore.dictations.count, 8)) latest")
                     .font(.system(size: 11))
                     .foregroundColor(Theme.current.foregroundMuted)
             }
 
             VStack(spacing: 0) {
-                if dictationStore.utterances.isEmpty {
+                if dictationStore.dictations.isEmpty {
                     emptyDictationState
                 } else {
-                    ForEach(Array(dictationStore.utterances.prefix(8))) { utterance in
-                        DictationActivityRow(utterance: utterance)
+                    ForEach(Array(dictationStore.dictations.prefix(8))) { dictation in
+                        DictationActivityRow(dictation: dictation)
                     }
                 }
             }
@@ -570,23 +570,23 @@ struct UnifiedDashboard: View {
                 appBundleID: nil,
                 isSuccess: true,
                 memo: memo,
-                utterance: nil
+                dictation: nil
             ))
         }
 
         // Add dictations
-        for utterance in dictationStore.utterances {
+        for dictation in dictationStore.dictations {
             items.append(UnifiedActivityItem(
-                id: utterance.id.uuidString,
+                id: dictation.id.uuidString,
                 type: .dictation,
-                title: utterance.metadata.activeAppName ?? "Dictation",
-                preview: utterance.text.isEmpty ? nil : String(utterance.text.prefix(100)),
-                date: utterance.timestamp,
-                appName: utterance.metadata.activeAppName,
-                appBundleID: utterance.metadata.activeAppBundleID,
-                isSuccess: !utterance.text.isEmpty,
+                title: dictation.metadata.activeAppName ?? "Dictation",
+                preview: dictation.text.isEmpty ? nil : String(dictation.text.prefix(100)),
+                date: dictation.timestamp,
+                appName: dictation.metadata.activeAppName,
+                appBundleID: dictation.metadata.activeAppBundleID,
+                isSuccess: !dictation.text.isEmpty,
                 memo: nil,
-                utterance: utterance
+                dictation: dictation
             ))
         }
 
@@ -599,11 +599,11 @@ struct UnifiedDashboard: View {
             return calendar.isDateInToday(createdAt)
         }.count
 
-        todayDictations = dictationStore.utterances.filter {
+        todayDictations = dictationStore.dictations.filter {
             calendar.isDateInToday($0.timestamp)
         }.count
 
-        totalWords = dictationStore.utterances.reduce(0) { $0 + $1.wordCount }
+        totalWords = dictationStore.dictations.reduce(0) { $0 + $1.wordCount }
             + allMemos.reduce(0) { $0 + ($1.transcription?.split(separator: " ").count ?? 0) }
 
         // Calculate streak
@@ -627,8 +627,8 @@ struct UnifiedDashboard: View {
             }
         }
 
-        for utterance in dictationStore.utterances {
-            activityDates.insert(calendar.startOfDay(for: utterance.timestamp))
+        for dictation in dictationStore.dictations {
+            activityDates.insert(calendar.startOfDay(for: dictation.timestamp))
         }
 
         // Count consecutive days
@@ -656,8 +656,8 @@ struct UnifiedDashboard: View {
             }
         }
 
-        for utterance in dictationStore.utterances {
-            let day = calendar.startOfDay(for: utterance.timestamp)
+        for dictation in dictationStore.dictations {
+            let day = calendar.startOfDay(for: dictation.timestamp)
             countByDay[day, default: 0] += 1
         }
 
@@ -787,12 +787,12 @@ struct MemoActivityRow: View {
 // MARK: - Dictation Activity Row
 
 struct DictationActivityRow: View {
-    let utterance: Utterance
+    let dictation: Utterance
 
     @State private var isHovered = false
 
     private var isSuccess: Bool {
-        !utterance.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !dictation.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -803,7 +803,7 @@ struct DictationActivityRow: View {
                 .frame(width: 6, height: 6)
 
             // App icon
-            if let bundleID = utterance.metadata.activeAppBundleID {
+            if let bundleID = dictation.metadata.activeAppBundleID {
                 AppIconView(bundleIdentifier: bundleID, size: 18)
                     .frame(width: 18, height: 18)
             } else {
@@ -814,7 +814,7 @@ struct DictationActivityRow: View {
             }
 
             // Text preview
-            Text(utterance.text.isEmpty ? "No transcription" : String(utterance.text.prefix(60)))
+            Text(dictation.text.isEmpty ? "No transcription" : String(dictation.text.prefix(60)))
                 .font(.system(size: 12))
                 .foregroundColor(Theme.current.foreground)
                 .lineLimit(1)
@@ -822,7 +822,7 @@ struct DictationActivityRow: View {
             Spacer()
 
             // Time ago
-            Text(timeAgo(from: utterance.timestamp))
+            Text(timeAgo(from: dictation.timestamp))
                 .font(.system(size: 11))
                 .foregroundColor(Theme.current.foregroundMuted)
 

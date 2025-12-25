@@ -267,7 +267,7 @@ enum FontSize: String, CaseIterable, Codable, CustomStringConvertible {
 
 // MARK: - Context Preference
 
-/// Which app context is considered "primary" for utterances
+/// Which app context is considered "primary" for dictations
 enum PrimaryContextSource: String, CaseIterable, Codable {
     case startApp = "startApp"
     case endApp = "endApp"
@@ -487,7 +487,7 @@ final class LiveSettings {
         set { SettingsManager.shared.accentColor = newValue }
     }
 
-    /// Which context (start or end app) is primary for utterances
+    /// Which context (start or end app) is primary for dictations
     var primaryContextSource: PrimaryContextSource {
         didSet { save() }
     }

@@ -443,13 +443,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             else if url.host == "interstitial",
                let idString = url.pathComponents.dropFirst().first,
                let id = Int64(idString) {
-                NSLog("[AppDelegate] Opening interstitial for utterance ID: \(id)")
-                logger.info("Opening interstitial for utterance ID: \(id)")
+                NSLog("[AppDelegate] Opening interstitial for dictation ID: \(id)")
+                logger.info("Opening interstitial for dictation ID: \(id)")
                 // Hide all main app windows when showing interstitial
                 for window in NSApp.windows where window.title != "" {
                     window.orderOut(nil)
                 }
-                InterstitialManager.shared.show(utteranceId: id)
+                InterstitialManager.shared.show(dictationId: id)
             }
             else if self.handleDebugURL(url) {
                 // Handled by debug URL handler

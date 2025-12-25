@@ -2,7 +2,7 @@
 //  HistoryView.swift
 //  TalkieLive
 //
-//  Main window showing utterance history - matches macOS Talkie style
+//  Main window showing dictation history - matches macOS Talkie style
 //
 
 import SwiftUI
@@ -61,7 +61,7 @@ struct HistoryView: View {
     @Environment(LiveSettings.self) private var settings
 
     @State private var selectedSection: LiveNavigationSection? = .home
-    @State private var selectedUtteranceIDs: Set<Utterance.ID> = []  // Multi-select support
+    @State private var selectedDictationIDs: Set<Dictation.ID> = []  // Multi-select support
     @State private var settingsSection: LiveSettingsSection? = nil  // Deep link to specific settings section
     @State private var searchText = ""
     @State private var isSidebarCollapsed: Bool = false
@@ -74,15 +74,15 @@ struct HistoryView: View {
     @State private var dropMessage: String?
     @State private var isTranscribingDrop = false
 
-    private var filteredUtterances: [Utterance] {
-        var result = store.utterances
+    private var filteredDictations: [Dictation] {
+        var result = store.dictations
 
         // Apply section-based filters (Queue, Today)
         switch selectedSection {
         case .queue:
             // Items created in Talkie view that haven't been pasted yet
-            result = result.filter { utterance in
-                guard let liveID = utterance.liveID,
+            result = result.filter { dictation in
+                guard let liveID = dictation.liveID,
                       let live = LiveDatabase.fetch(id: liveID) else { return false }
                 return live.createdInTalkieView && live.pasteTimestamp == nil
             }
@@ -108,15 +108,15 @@ struct HistoryView: View {
         return result
     }
 
-    /// Selected utterances for batch operations
-    private var selectedUtterances: [Utterance] {
-        filteredUtterances.filter { selectedUtteranceIDs.contains($0.id) }
+    /// Selected dictations for batch operations
+    private var selectedDictations: [Dictation] {
+        filteredDictations.filter { selectedDictationIDs.contains($0.id) }
     }
 
-    /// Single selected utterance for detail view (uses first selected if multi)
-    private var selectedUtterance: Utterance? {
-        guard let firstID = selectedUtteranceIDs.first else { return nil }
-        return filteredUtterances.first { $0.id == firstID }
+    /// Single selected dictation for detail view (uses first selected if multi)
+    private var selectedDictation: Dictation? {
+        guard let firstID = selectedDictationIDs.first else { return nil }
+        return filteredDictations.first { $0.id == firstID }
     }
 
     /// Sections that need full-width (no detail column)
@@ -152,11 +152,11 @@ struct HistoryView: View {
                 self.settingsSection = LiveSettingsSection.transcription
                 self.selectedSection = .settings
             }
-            .onReceive(NotificationCenter.default.publisher(for: .selectUtterance)) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: .selectDictation)) { notification in
                 if let id = notification.userInfo?["id"] as? Int64 {
                     self.selectedSection = .history
-                    if let utterance = self.store.utterances.first(where: { $0.liveID == id }) {
-                        self.selectedUtteranceIDs = [utterance.id]
+                    if let dictation = self.store.dictations.first(where: { $0.liveID == id }) {
+                        self.selectedDictationIDs = [dictation.id]
                     }
                 }
             }
@@ -429,8 +429,8 @@ struct HistoryView: View {
         dropMessage = "Transcribing \(detailStr)..."
         AppLogger.shared.log(.transcription, "Transcribing dropped file", detail: "\(originalFilename) (\(detailStr))")
 
-        // Create pending utterance first (so we have audio saved even if transcription fails)
-        let pendingUtterance = LiveDictation(
+        // Create pending dictation first (so we have audio saved even if transcription fails)
+        let pendingDictation = LiveDictation(
             text: "[Transcription pending...]",
             mode: "dropped",
             appBundleID: "dropped.file",
@@ -445,10 +445,10 @@ struct HistoryView: View {
             createdInTalkieView: true,
             pasteTimestamp: nil
         )
-        LiveDatabase.store(pendingUtterance)
+        LiveDatabase.store(pendingDictation)
         store.refresh()
 
-        // Get the ID of the just-stored utterance
+        // Get the ID of the just-stored dictation
         let storedId = LiveDatabase.all().first { $0.audioFilename == storedFilename }?.id
 
         do {
@@ -474,11 +474,11 @@ struct HistoryView: View {
             let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", Double(transcriptionMs) / 1000.0)
             AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr)")
 
-            // Refresh and select the new utterance
+            // Refresh and select the new dictation
             store.refresh()
             selectedSection = .history
-            if let newUtterance = store.utterances.first(where: { $0.metadata.audioFilename == storedFilename }) {
-                selectedUtteranceIDs = [newUtterance.id]
+            if let newDictation = store.dictations.first(where: { $0.metadata.audioFilename == storedFilename }) {
+                selectedDictationIDs = [newDictation.id]
             }
 
             SoundManager.shared.playPasted()
@@ -542,7 +542,7 @@ struct HistoryView: View {
                         isCollapsed: isSidebarCollapsed,
                         icon: "waveform",
                         title: "Recent",
-                        badge: store.utterances.count > 0 ? "\(store.utterances.count)" : nil
+                        badge: store.dictations.count > 0 ? "\(store.dictations.count)" : nil
                     ) {
                         selectedSection = .history
                     }
@@ -561,7 +561,7 @@ struct HistoryView: View {
                     }
 
                     // Today
-                    let todayCount = store.utterances.filter { Calendar.current.isDateInToday($0.timestamp) }.count
+                    let todayCount = store.dictations.filter { Calendar.current.isDateInToday($0.timestamp) }.count
                     SidebarNavItem(
                         isSelected: selectedSection == .today,
                         isCollapsed: isSidebarCollapsed,
@@ -689,16 +689,16 @@ struct HistoryView: View {
         switch selectedSection {
         case .home:
             HomeView(
-                onSelectUtterance: { utterance in
-                    // Navigate to history and select this utterance
+                onSelectDictation: { dictation in
+                    // Navigate to history and select this dictation
                     selectedSection = .history
-                    selectedUtteranceIDs = [utterance.id]
+                    selectedDictationIDs = [dictation.id]
                 },
                 onSelectApp: { appName, _ in
                     // Navigate to history filtered by this app
                     appFilter = appName
                     selectedSection = .history
-                    selectedUtteranceIDs = []
+                    selectedDictationIDs = []
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -755,20 +755,20 @@ struct HistoryView: View {
                 .frame(height: 0.5)
 
             // Multi-select toolbar
-            if selectedUtteranceIDs.count > 1 {
+            if selectedDictationIDs.count > 1 {
                 multiSelectToolbar
             }
 
-            if filteredUtterances.isEmpty {
+            if filteredDictations.isEmpty {
                 emptyHistoryState
             } else {
-                List(filteredUtterances, selection: $selectedUtteranceIDs) { utterance in
-                    UtteranceRowView(utterance: utterance)
-                        .tag(utterance.id)
+                List(filteredDictations, selection: $selectedDictationIDs) { dictation in
+                    DictationRowView(dictation: dictation)
+                        .tag(dictation.id)
                         .contextMenu {
                             Button {
                                 NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(utterance.text, forType: .string)
+                                NSPasteboard.general.setString(dictation.text, forType: .string)
                             } label: {
                                 Label("Copy", systemImage: "doc.on.doc")
                             }
@@ -788,7 +788,7 @@ struct HistoryView: View {
                             }
 
                             Button {
-                                let text = utterance.text
+                                let text = dictation.text
                                 let picker = NSSharingServicePicker(items: [text])
                                 if let window = NSApp.keyWindow, let contentView = window.contentView {
                                     picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
@@ -801,8 +801,8 @@ struct HistoryView: View {
 
                             Button(role: .destructive) {
                                 withAnimation {
-                                    selectedUtteranceIDs.remove(utterance.id)
-                                    store.delete(utterance)
+                                    selectedDictationIDs.remove(dictation.id)
+                                    store.delete(dictation)
                                 }
                             } label: {
                                 Label("Delete", systemImage: "trash")
@@ -811,8 +811,8 @@ struct HistoryView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 withAnimation {
-                                    selectedUtteranceIDs.remove(utterance.id)
-                                    store.delete(utterance)
+                                    selectedDictationIDs.remove(dictation.id)
+                                    store.delete(dictation)
                                 }
                             } label: {
                                 Label("Delete", systemImage: "trash")
@@ -830,13 +830,13 @@ struct HistoryView: View {
                 .frame(height: 0.5)
 
             HStack {
-                Text("\(store.utterances.count) \(store.utterances.count == 1 ? "recording" : "recordings")")
+                Text("\(store.dictations.count) \(store.dictations.count == 1 ? "recording" : "recordings")")
                     .font(Design.fontXS)
                     .foregroundColor(TalkieTheme.textMuted)
 
                 Spacer()
 
-                if !store.utterances.isEmpty {
+                if !store.dictations.isEmpty {
                     Button("Clear All") {
                         store.clear()
                     }
@@ -887,7 +887,7 @@ struct HistoryView: View {
         HStack(spacing: Spacing.sm) {
             // Selection count with subtle badge
             HStack(spacing: Spacing.xs) {
-                Text("\(selectedUtteranceIDs.count)")
+                Text("\(selectedDictationIDs.count)")
                     .font(Design.fontXSBold)
                     .foregroundColor(.white)
                     .frame(minWidth: 18, minHeight: 18)
@@ -904,7 +904,7 @@ struct HistoryView: View {
             // Cancel - text only
             Button {
                 withAnimation(.easeOut(duration: 0.15)) {
-                    selectedUtteranceIDs.removeAll()
+                    selectedDictationIDs.removeAll()
                 }
             } label: {
                 Text("Cancel")
@@ -918,10 +918,10 @@ struct HistoryView: View {
             // Delete - red button
             Button {
                 withAnimation(.easeOut(duration: 0.2)) {
-                    for utterance in selectedUtterances {
-                        store.delete(utterance)
+                    for dictation in selectedDictations {
+                        store.delete(dictation)
                     }
-                    selectedUtteranceIDs.removeAll()
+                    selectedDictationIDs.removeAll()
                 }
             } label: {
                 HStack(spacing: Spacing.xs) {
@@ -953,8 +953,8 @@ struct HistoryView: View {
             settingsDetailPlaceholder
         } else if selectedSection == .logs {
             consoleDetailPlaceholder
-        } else if let utterance = selectedUtterance {
-            UtteranceDetailView(utterance: utterance)
+        } else if let dictation = selectedDictation {
+            DictationDetailView(dictation: dictation)
         } else {
             emptyDetailState
         }
@@ -1000,23 +1000,23 @@ struct HistoryView: View {
     }
 }
 
-// MARK: - Utterance Row
+// MARK: - Dictation Row
 
-struct UtteranceRowView: View {
-    let utterance: Utterance
+struct DictationRowView: View {
+    let dictation: Dictation
     @Environment(LiveSettings.self) private var settings
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             // Preview text - scales with fontSize setting
-            Text(utterance.text)
+            Text(dictation.text)
                 .font(settings.fontSize.bodyFont)
                 .foregroundColor(TalkieTheme.textPrimary)
                 .lineLimit(2)
 
             // Metadata - scales with fontSize setting
             HStack(spacing: Spacing.xs) {
-                if let duration = utterance.durationSeconds {
+                if let duration = dictation.durationSeconds {
                     Text(formatDuration(duration))
                         .font(settings.fontSize.xsFont)
 
@@ -1025,16 +1025,16 @@ struct UtteranceRowView: View {
                         .foregroundColor(TalkieTheme.textMuted)
                 }
 
-                Text(formatDate(utterance.timestamp))
+                Text(formatDate(dictation.timestamp))
                     .font(settings.fontSize.xsFont)
 
-                if let appName = utterance.metadata.activeAppName {
+                if let appName = dictation.metadata.activeAppName {
                     Text("·")
                         .font(settings.fontSize.xsFont)
                         .foregroundColor(TalkieTheme.textMuted)
 
                     HStack(spacing: Spacing.xs) {
-                        if let bundleID = utterance.metadata.activeAppBundleID {
+                        if let bundleID = dictation.metadata.activeAppBundleID {
                             AppIconView(bundleIdentifier: bundleID, size: 12)
                                 .frame(width: 12, height: 12)
                         }
@@ -1077,10 +1077,10 @@ struct UtteranceRowView: View {
     }
 }
 
-// MARK: - Utterance Detail
+// MARK: - Dictation Detail
 
-struct UtteranceDetailView: View {
-    let utterance: Utterance
+struct DictationDetailView: View {
+    let dictation: Dictation
     @State private var copied = false
     @State private var showJSON = false
 
@@ -1090,7 +1090,7 @@ struct UtteranceDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     // Header: Date + actions
-                    MinimalHeader(utterance: utterance)
+                    MinimalHeader(dictation: dictation)
 
                     // Text/JSON toggle at top right
                     HStack {
@@ -1114,18 +1114,18 @@ struct UtteranceDetailView: View {
 
                     // Combined transcript + stats container
                     TranscriptContainer(
-                        utterance: utterance,
+                        dictation: dictation,
                         showJSON: $showJSON
                     )
 
                     // Info cards row
-                    MinimalInfoCards(utterance: utterance)
+                    MinimalInfoCards(dictation: dictation)
 
                     // Audio asset
-                    MinimalAudioCard(utterance: utterance)
+                    MinimalAudioCard(dictation: dictation)
 
                     // Actions section
-                    ActionsSection(utterance: utterance)
+                    ActionsSection(dictation: dictation)
                 }
                 .padding(Spacing.lg)
             }
@@ -1136,7 +1136,7 @@ struct UtteranceDetailView: View {
     private func copyCurrentContent() {
         // Copy JSON when JSON view is active; otherwise copy plain text
         if showJSON {
-            let json = JSONContentView(utterance: utterance).renderedString()
+            let json = JSONContentView(dictation: dictation).renderedString()
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(json, forType: .string)
         } else {
@@ -1151,7 +1151,7 @@ struct UtteranceDetailView: View {
 
     private func copyPlainText() {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(utterance.text, forType: .string)
+        NSPasteboard.general.setString(dictation.text, forType: .string)
     }
 
     private func pasteText() {
@@ -1171,18 +1171,18 @@ struct UtteranceDetailView: View {
 // MARK: - Minimal Detail Components
 
 private struct MinimalHeader: View {
-    let utterance: Utterance
+    let dictation: Dictation
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(alignment: .center) {
                 // Date + time badge
                 HStack(spacing: Spacing.sm) {
-                    Text(formatDate(utterance.timestamp))
+                    Text(formatDate(dictation.timestamp))
                         .font(Design.fontTitle)
                         .foregroundColor(.white)
 
-                    Text(formatTime(utterance.timestamp))
+                    Text(formatTime(dictation.timestamp))
                         .font(Design.fontSMMedium)
                         .foregroundColor(TalkieTheme.textTertiary)
                         .padding(.horizontal, Spacing.sm)
@@ -1202,7 +1202,7 @@ private struct MinimalHeader: View {
             }
 
             // ID row
-            Text("ID: T-\(utterance.id.uuidString.prefix(5).uppercased())")
+            Text("ID: T-\(dictation.id.uuidString.prefix(5).uppercased())")
                 .font(Design.fontXS)
                 .foregroundColor(TalkieTheme.textMuted)
         }
@@ -1318,7 +1318,7 @@ private struct ToggleSegment: View {
 // MARK: - Combined Transcript Container (Stats + Text in one bordered container)
 
 private struct TranscriptContainer: View {
-    let utterance: Utterance
+    let dictation: Dictation
     @Binding var showJSON: Bool
     @Environment(LiveSettings.self) private var settings
 
@@ -1329,7 +1329,7 @@ private struct TranscriptContainer: View {
 
     private var tokenEstimate: Int {
         // Rough estimate: ~4 chars per token
-        utterance.characterCount / 4
+        dictation.characterCount / 4
     }
 
     var body: some View {
@@ -1343,9 +1343,9 @@ private struct TranscriptContainer: View {
 
                 // Text content
                 if showJSON {
-                    JSONContentView(utterance: utterance)
+                    JSONContentView(dictation: dictation)
                 } else {
-                    Text(utterance.text)
+                    Text(dictation.text)
                         .font(settings.fontSize.detailFont)
                         .foregroundColor(Self.textPrimary)
                         .lineSpacing(Spacing.xs)
@@ -1358,8 +1358,8 @@ private struct TranscriptContainer: View {
             // Bottom bar: Stats left, Tokens right
             HStack(alignment: .center) {
                 HStack(spacing: Spacing.md) {
-                    StatPill(label: "WORDS", value: "\(utterance.wordCount)")
-                    StatPill(label: "CHARS", value: "\(utterance.characterCount)")
+                    StatPill(label: "WORDS", value: "\(dictation.wordCount)")
+                    StatPill(label: "CHARS", value: "\(dictation.characterCount)")
                 }
 
                 Spacer()
@@ -1401,21 +1401,21 @@ private struct StatPill: View {
 }
 
 private struct JSONContentView: View {
-    let utterance: Utterance
+    let dictation: Dictation
 
     /// Render the JSON content as a string for copying
     func renderedString() -> String {
-        let m = utterance.metadata
+        let m = dictation.metadata
         var lines: [String] = []
         lines.append("{")
-        appendLine(&lines, key: "id", value: "\"\(utterance.id.uuidString)\"")
-        appendLine(&lines, key: "liveID", value: utterance.liveID.map { String($0) } ?? "null")
-        appendLine(&lines, key: "timestamp", value: "\"\(ISO8601DateFormatter().string(from: utterance.timestamp))\"")
-        appendLine(&lines, key: "text", value: "\"\(escapeJSON(utterance.text))\"")
+        appendLine(&lines, key: "id", value: "\"\(dictation.id.uuidString)\"")
+        appendLine(&lines, key: "liveID", value: dictation.liveID.map { String($0) } ?? "null")
+        appendLine(&lines, key: "timestamp", value: "\"\(ISO8601DateFormatter().string(from: dictation.timestamp))\"")
+        appendLine(&lines, key: "text", value: "\"\(escapeJSON(dictation.text))\"")
 
-        appendLine(&lines, key: "words", value: "\(utterance.wordCount)")
-        appendLine(&lines, key: "chars", value: "\(utterance.characterCount)")
-        if let duration = utterance.durationSeconds {
+        appendLine(&lines, key: "words", value: "\(dictation.wordCount)")
+        appendLine(&lines, key: "chars", value: "\(dictation.characterCount)")
+        if let duration = dictation.durationSeconds {
             appendLine(&lines, key: "durationSeconds", value: String(format: "%.2f", duration))
         }
 
@@ -1479,23 +1479,23 @@ private struct JSONContentView: View {
 }
 
 private struct MinimalInfoCards: View {
-    let utterance: Utterance
+    let dictation: Dictation
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
             // Input source - purple (with app icon)
-            if let appName = utterance.metadata.activeAppName {
+            if let appName = dictation.metadata.activeAppName {
                 InfoCard(
                     label: "INPUT SOURCE",
                     icon: "chevron.left.forwardslash.chevron.right",
                     value: appName,
                     iconColor: .purple,
-                    appBundleID: utterance.metadata.activeAppBundleID
+                    appBundleID: dictation.metadata.activeAppBundleID
                 )
             }
 
             // Model config - blue
-            if let model = utterance.metadata.transcriptionModel {
+            if let model = dictation.metadata.transcriptionModel {
                 InfoCard(
                     label: "MODEL CONFIG",
                     icon: "cpu",
@@ -1505,7 +1505,7 @@ private struct MinimalInfoCards: View {
             }
 
             // Duration - orange
-            if let duration = utterance.durationSeconds {
+            if let duration = dictation.durationSeconds {
                 InfoCard(
                     label: "DURATION",
                     icon: "clock",
@@ -1515,7 +1515,7 @@ private struct MinimalInfoCards: View {
             }
 
             // Performance breakdown
-            PerformanceCard(utterance: utterance)
+            PerformanceCard(dictation: dictation)
         }
     }
 
@@ -1585,18 +1585,18 @@ private struct InfoCard: View {
 }
 
 private struct PerformanceCard: View {
-    let utterance: Utterance
+    let dictation: Dictation
     @State private var isHovered = false
     @State private var showPopover = false
     @State private var showCopied = false
 
     // End-to-End: total perceived latency (stop recording → delivered)
-    private var endToEndMs: Int? { utterance.metadata.perfEndToEndMs ?? utterance.metadata.perfEngineMs }
+    private var endToEndMs: Int? { dictation.metadata.perfEndToEndMs ?? dictation.metadata.perfEngineMs }
     // Engine: transcription time in TalkieEngine
-    private var engineMs: Int? { utterance.metadata.perfEngineMs }
+    private var engineMs: Int? { dictation.metadata.perfEngineMs }
     // App: everything TalkieLive does (file save, context, routing, paste)
     private var appMs: Int? {
-        if let stored = utterance.metadata.perfInAppMs { return stored }
+        if let stored = dictation.metadata.perfInAppMs { return stored }
         if let total = endToEndMs, let engine = engineMs { return max(0, total - engine) }
         return nil
     }
@@ -1692,7 +1692,7 @@ private struct PerformanceCard: View {
                 .buttonStyle(.plain)
 
                 // View in Engine button (only if sessionID exists)
-                if let sessionID = utterance.metadata.sessionID {
+                if let sessionID = dictation.metadata.sessionID {
                     Button(action: { openEngineTrace(sessionID) }) {
                         HStack(spacing: Spacing.xs) {
                             Image(systemName: "engine.combustion")
@@ -1737,16 +1737,16 @@ private struct PerformanceCard: View {
         var lines: [String] = []
         lines.append("Performance Diagnostics")
         lines.append("=======================")
-        lines.append("Utterance ID: \(utterance.id)")
-        lines.append("Created: \(utterance.timestamp)")
+        lines.append("Dictation ID: \(dictation.id)")
+        lines.append("Created: \(dictation.timestamp)")
         if let total = endToEndMs { lines.append("End-to-End: \(total)ms") }
         if let engine = engineMs { lines.append("Engine: \(engine)ms") }
         if let app = appMs { lines.append("App: \(app)ms") }
-        if let model = utterance.metadata.transcriptionModel { lines.append("Model: \(model)") }
-        if let duration = utterance.durationSeconds { lines.append("Audio Duration: \(String(format: "%.2f", duration))s") }
-        if let app = utterance.metadata.activeAppName { lines.append("Input App: \(app)") }
-        lines.append("Word Count: \(utterance.wordCount)")
-        lines.append("Char Count: \(utterance.text.count)")
+        if let model = dictation.metadata.transcriptionModel { lines.append("Model: \(model)") }
+        if let duration = dictation.durationSeconds { lines.append("Audio Duration: \(String(format: "%.2f", duration))s") }
+        if let app = dictation.metadata.activeAppName { lines.append("Input App: \(app)") }
+        lines.append("Word Count: \(dictation.wordCount)")
+        lines.append("Char Count: \(dictation.text.count)")
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
@@ -1808,7 +1808,7 @@ private struct PerfChip: View {
     }
 }
 private struct MinimalAudioCard: View {
-    let utterance: Utterance
+    let dictation: Dictation
     private let playback = AudioPlaybackManager.shared
     @State private var isHovering = false
     @State private var isPlayButtonHovered = false
@@ -1828,11 +1828,11 @@ private struct MinimalAudioCard: View {
     }
 
     private var isThisPlaying: Bool {
-        playback.currentAudioID == utterance.id.uuidString && playback.isPlaying
+        playback.currentAudioID == dictation.id.uuidString && playback.isPlaying
     }
 
     private var isThisLoaded: Bool {
-        playback.currentAudioID == utterance.id.uuidString
+        playback.currentAudioID == dictation.id.uuidString
     }
 
     private var displayProgress: Double {
@@ -1844,16 +1844,16 @@ private struct MinimalAudioCard: View {
     }
 
     private var totalDuration: TimeInterval {
-        utterance.durationSeconds ?? 0
+        dictation.durationSeconds ?? 0
     }
 
     private var hasAudio: Bool {
-        utterance.metadata.hasAudio
+        dictation.metadata.hasAudio
     }
 
     /// Short ID for display (last 8 chars of filename before extension)
     private var shortFileId: String {
-        guard let url = utterance.metadata.audioURL else { return "—" }
+        guard let url = dictation.metadata.audioURL else { return "—" }
         let filename = url.deletingPathExtension().lastPathComponent
         if filename.count > 8 {
             return String(filename.suffix(8))
@@ -1862,11 +1862,11 @@ private struct MinimalAudioCard: View {
     }
 
     private var fullFilename: String {
-        utterance.metadata.audioURL?.deletingPathExtension().lastPathComponent ?? "No audio"
+        dictation.metadata.audioURL?.deletingPathExtension().lastPathComponent ?? "No audio"
     }
 
     private var fileSize: String {
-        guard let url = utterance.metadata.audioURL,
+        guard let url = dictation.metadata.audioURL,
               let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let size = attrs[.size] as? Int64 else {
             return ""
@@ -2031,13 +2031,13 @@ private struct MinimalAudioCard: View {
     }
 
     private func togglePlayback() {
-        guard let url = utterance.metadata.audioURL else { return }
-        playback.togglePlayPause(url: url, id: utterance.id.uuidString)
+        guard let url = dictation.metadata.audioURL else { return }
+        playback.togglePlayPause(url: url, id: dictation.id.uuidString)
     }
 
     /// Seek to a position - loads audio first if not already loaded
     private func seekToPosition(_ progress: Double) {
-        guard let url = utterance.metadata.audioURL else {
+        guard let url = dictation.metadata.audioURL else {
             print("⚠️ seekToPosition: No audio URL")
             return
         }
@@ -2047,7 +2047,7 @@ private struct MinimalAudioCard: View {
         // If audio isn't loaded yet, load it first then seek
         if !isThisLoaded {
             print("📂 Loading audio first...")
-            playback.play(url: url, id: utterance.id.uuidString)
+            playback.play(url: url, id: dictation.id.uuidString)
             playback.pause()  // Load but don't auto-play
         }
         playback.seek(to: progress)
@@ -2055,7 +2055,7 @@ private struct MinimalAudioCard: View {
     }
 
     private func revealInFinder() {
-        guard let url = utterance.metadata.audioURL else { return }
+        guard let url = dictation.metadata.audioURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
@@ -2067,7 +2067,7 @@ private struct MinimalAudioCard: View {
 }
 
 private struct ActionsSection: View {
-    let utterance: Utterance
+    let dictation: Dictation
 
     // Grid columns adapt to available width
     private let columns = [
@@ -2169,14 +2169,14 @@ private struct ActionCard: View {
 // MARK: - Transcription Info Card (Context + Metadata)
 
 private struct TranscriptionInfoCard: View {
-    let utterance: Utterance
+    let dictation: Dictation
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             // Row 1: Source context
             HStack(spacing: Spacing.lg) {
                 // Source app
-                if let appName = utterance.metadata.activeAppName {
+                if let appName = dictation.metadata.activeAppName {
                     InfoPill(
                         icon: "app.fill",
                         label: "Source",
@@ -2186,7 +2186,7 @@ private struct TranscriptionInfoCard: View {
                 }
 
                 // Window
-                if let windowTitle = utterance.metadata.activeWindowTitle, !windowTitle.isEmpty {
+                if let windowTitle = dictation.metadata.activeWindowTitle, !windowTitle.isEmpty {
                     InfoPill(
                         icon: "macwindow",
                         label: "Window",
@@ -2202,7 +2202,7 @@ private struct TranscriptionInfoCard: View {
             if hasRichContext {
                 HStack(spacing: Spacing.lg) {
                     // Browser URL
-                    if let url = utterance.metadata.browserURL ?? utterance.metadata.documentURL {
+                    if let url = dictation.metadata.browserURL ?? dictation.metadata.documentURL {
                         InfoPill(
                             icon: url.hasPrefix("http") ? "globe" : "doc.text",
                             label: url.hasPrefix("http") ? "URL" : "Document",
@@ -2212,7 +2212,7 @@ private struct TranscriptionInfoCard: View {
                     }
 
                     // Focused element type
-                    if let role = utterance.metadata.focusedElementRole {
+                    if let role = dictation.metadata.focusedElementRole {
                         InfoPill(
                             icon: focusedRoleIcon(role),
                             label: "Focus",
@@ -2222,7 +2222,7 @@ private struct TranscriptionInfoCard: View {
                     }
 
                     // Terminal working directory
-                    if let dir = utterance.metadata.terminalWorkingDir {
+                    if let dir = dictation.metadata.terminalWorkingDir {
                         InfoPill(
                             icon: "folder",
                             label: "Directory",
@@ -2243,7 +2243,7 @@ private struct TranscriptionInfoCard: View {
             // Row 2: Transcription metadata
             HStack(spacing: Spacing.lg) {
                 // Model
-                if let model = utterance.metadata.transcriptionModel {
+                if let model = dictation.metadata.transcriptionModel {
                     InfoPill(
                         icon: "cpu",
                         label: "Model",
@@ -2253,7 +2253,7 @@ private struct TranscriptionInfoCard: View {
                 }
 
                 // Duration
-                if let duration = utterance.durationSeconds {
+                if let duration = dictation.durationSeconds {
                     InfoPill(
                         icon: "clock",
                         label: "Duration",
@@ -2263,7 +2263,7 @@ private struct TranscriptionInfoCard: View {
                 }
 
                 // Transcription time
-                if let transcriptionMs = utterance.metadata.perfEngineMs {
+                if let transcriptionMs = dictation.metadata.perfEngineMs {
                     InfoPill(
                         icon: "bolt",
                         label: "Engine",
@@ -2272,7 +2272,7 @@ private struct TranscriptionInfoCard: View {
                     )
                 }
 
-                if let totalMs = utterance.metadata.perfEndToEndMs {
+                if let totalMs = dictation.metadata.perfEndToEndMs {
                     InfoPill(
                         icon: "timer",
                         label: "End-to-End",
@@ -2281,7 +2281,7 @@ private struct TranscriptionInfoCard: View {
                     )
                 }
 
-                if let appMs = utterance.metadata.perfInAppMs {
+                if let appMs = dictation.metadata.perfInAppMs {
                     InfoPill(
                         icon: "app",
                         label: "App",
@@ -2291,7 +2291,7 @@ private struct TranscriptionInfoCard: View {
                 }
 
                 // Routing
-                if let routingMode = utterance.metadata.routingMode {
+                if let routingMode = dictation.metadata.routingMode {
                     InfoPill(
                         icon: routingMode == "paste" ? "doc.on.clipboard" : "clipboard",
                         label: "Routing",
@@ -2334,10 +2334,10 @@ private struct TranscriptionInfoCard: View {
     // MARK: - Rich Context Helpers
 
     private var hasRichContext: Bool {
-        utterance.metadata.browserURL != nil ||
-        utterance.metadata.documentURL != nil ||
-        utterance.metadata.focusedElementRole != nil ||
-        utterance.metadata.terminalWorkingDir != nil
+        dictation.metadata.browserURL != nil ||
+        dictation.metadata.documentURL != nil ||
+        dictation.metadata.focusedElementRole != nil ||
+        dictation.metadata.terminalWorkingDir != nil
     }
 
     private func formatURL(_ url: String) -> String {
@@ -2485,7 +2485,7 @@ private struct TranscriptCard: View {
 // MARK: - Stats Card
 
 private struct StatsCard: View {
-    let utterance: Utterance
+    let dictation: Dictation
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -2504,20 +2504,20 @@ private struct StatsCard: View {
                 GridItem(.flexible())
             ], spacing: Spacing.sm) {
                 StatBox(
-                    value: "\(utterance.wordCount)",
+                    value: "\(dictation.wordCount)",
                     label: "Words",
                     icon: "text.word.spacing",
                     color: .blue
                 )
 
                 StatBox(
-                    value: "\(utterance.characterCount)",
+                    value: "\(dictation.characterCount)",
                     label: "Characters",
                     icon: "character.cursor.ibeam",
                     color: .purple
                 )
 
-                if let duration = utterance.durationSeconds {
+                if let duration = dictation.durationSeconds {
                     StatBox(
                         value: formatDuration(duration),
                         label: "Duration",
@@ -2526,7 +2526,7 @@ private struct StatsCard: View {
                     )
                 }
 
-                if let totalMs = utterance.metadata.perfEndToEndMs {
+                if let totalMs = dictation.metadata.perfEndToEndMs {
                     StatBox(
                         value: formatTranscriptionTime(totalMs),
                         label: "End-to-End",
@@ -2535,7 +2535,7 @@ private struct StatsCard: View {
                     )
                 }
 
-                if let appMs = utterance.metadata.perfInAppMs {
+                if let appMs = dictation.metadata.perfInAppMs {
                     StatBox(
                         value: formatTranscriptionTime(appMs),
                         label: "App",
@@ -2544,7 +2544,7 @@ private struct StatsCard: View {
                     )
                 }
 
-                if let transcriptionMs = utterance.metadata.perfEngineMs {
+                if let transcriptionMs = dictation.metadata.perfEngineMs {
                     StatBox(
                         value: formatTranscriptionTime(transcriptionMs),
                         label: "Engine",
@@ -2555,11 +2555,11 @@ private struct StatsCard: View {
             }
 
             // Additional stats row
-            if utterance.metadata.transcriptionModel != nil || utterance.metadata.routingMode != nil {
+            if dictation.metadata.transcriptionModel != nil || dictation.metadata.routingMode != nil {
                 Divider().background(TalkieTheme.surfaceElevated)
 
                 HStack(spacing: Spacing.lg) {
-                    if let model = utterance.metadata.transcriptionModel {
+                    if let model = dictation.metadata.transcriptionModel {
                         HStack(spacing: Spacing.xs) {
                             Image(systemName: "cpu")
                                 .font(Design.fontXS)
@@ -2573,7 +2573,7 @@ private struct StatsCard: View {
                         }
                     }
 
-                    if let routingMode = utterance.metadata.routingMode {
+                    if let routingMode = dictation.metadata.routingMode {
                         HStack(spacing: Spacing.xs) {
                             Image(systemName: "arrow.right.circle")
                                 .font(Design.fontXS)
@@ -2653,29 +2653,29 @@ private struct StatBox: View {
 // MARK: - Quick Actions Card (replaces Smart Actions)
 
 private struct SmartActionsCard: View {
-    let utterance: Utterance
+    let dictation: Dictation
     @State private var hoveredAction: QuickActionKind? = nil
     @State private var actionFeedback: QuickActionKind? = nil
 
-    // Map Utterance to LiveDictation for database operations
-    private var liveUtterance: LiveDictation? {
+    // Map Dictation to LiveDictation for database operations
+    private var liveDictation: LiveDictation? {
         // Use direct ID lookup if available
-        guard let liveID = utterance.liveID else {
-            // Fallback to fuzzy match for legacy utterances
+        guard let liveID = dictation.liveID else {
+            // Fallback to fuzzy match for legacy dictations
             return LiveDatabase.recent(limit: 50).first { live in
-                live.text == utterance.text &&
-                abs(live.createdAt.timeIntervalSince(utterance.timestamp)) < 5
+                live.text == dictation.text &&
+                abs(live.createdAt.timeIntervalSince(dictation.timestamp)) < 5
             }
         }
         return LiveDatabase.fetch(id: liveID)
     }
 
     private var promotionStatus: PromotionStatus {
-        liveUtterance?.promotionStatus ?? .none
+        liveDictation?.promotionStatus ?? .none
     }
 
     private var canPromote: Bool {
-        liveUtterance?.canPromote ?? true
+        liveDictation?.canPromote ?? true
     }
 
     var body: some View {
@@ -2725,7 +2725,7 @@ private struct SmartActionsCard: View {
             }
 
             // Secondary actions (overflow)
-            if canPromote || utterance.metadata.hasAudio {
+            if canPromote || dictation.metadata.hasAudio {
                 Divider().background(TalkieTheme.surface)
 
                 LazyVGrid(columns: [
@@ -2741,7 +2741,7 @@ private struct SmartActionsCard: View {
                         onTap: { executeAction(.typeAgain) }
                     )
 
-                    if utterance.metadata.hasAudio {
+                    if dictation.metadata.hasAudio {
                         QuickActionButton(
                             action: .retryTranscription,
                             isHovered: hoveredAction == .retryTranscription,
@@ -2813,18 +2813,18 @@ private struct SmartActionsCard: View {
     private func executeAction(_ action: QuickActionKind) {
         NSLog("[HistoryView] executeAction called: \(action.displayName)")
 
-        guard let live = liveUtterance else {
-            NSLog("[HistoryView] No liveUtterance found for utterance ID: \(utterance.id), liveID: \(utterance.liveID?.description ?? "nil")")
-            // Fallback for legacy utterances without LiveDictation
+        guard let live = liveDictation else {
+            NSLog("[HistoryView] No liveDictation found for dictation ID: \(dictation.id), liveID: \(dictation.liveID?.description ?? "nil")")
+            // Fallback for legacy dictations without LiveDictation
             if action == .copyToClipboard {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(utterance.text, forType: .string)
+                NSPasteboard.general.setString(dictation.text, forType: .string)
                 showFeedback(for: action)
             }
             return
         }
 
-        NSLog("[HistoryView] Found liveUtterance with ID: \(live.id?.description ?? "nil")")
+        NSLog("[HistoryView] Found liveDictation with ID: \(live.id?.description ?? "nil")")
 
         // Show feedback
         showFeedback(for: action)

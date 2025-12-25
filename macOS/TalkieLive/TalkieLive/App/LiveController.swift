@@ -19,7 +19,7 @@ final class LiveController: ObservableObject {
 
     // Metadata captured at recording start
     private var recordingStartTime: Date?
-    private var capturedContext: UtteranceMetadata?  // Baseline only - enrichment happens after paste
+    private var capturedContext: DictationMetadata?  // Baseline only - enrichment happens after paste
     private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
     private var routeToInterstitial: Bool = false  // Shift or Shift+S: route to Talkie Core interstitial instead of paste
     private var saveAsMemo: Bool = false  // Shift+A: auto-promote to memo after transcription
@@ -240,7 +240,7 @@ final class LiveController: ObservableObject {
                 pasteTimestamp: nil
             )
             LiveDatabase.store(utterance)
-            TalkieLiveXPCService.shared.notifyUtteranceAdded()
+            TalkieLiveXPCService.shared.notifyDictationAdded()
             AppLogger.shared.log(.database, "Pushed to queue", detail: "Audio saved for retry")
             SoundManager.shared.playPasted()  // Confirmation sound
         }
@@ -492,7 +492,7 @@ final class LiveController: ObservableObject {
                 pasteTimestamp: nil
             )
             LiveDatabase.store(utterance)
-            TalkieLiveXPCService.shared.notifyUtteranceAdded()
+            TalkieLiveXPCService.shared.notifyDictationAdded()
             AppLogger.shared.log(.database, "Auto-recovery: queued", detail: "Audio saved for retry")
         }
 
@@ -652,7 +652,7 @@ final class LiveController: ObservableObject {
 
             // Use baseline metadata immediately - don't block on enrichment
             // Enrichment runs async and can update the record later if needed
-            var metadata = capturedContext ?? UtteranceMetadata()
+            var metadata = capturedContext ?? DictationMetadata()
             logTiming("Using baseline metadata (no enrichment wait)")
             metadata.transcriptionModel = settings.selectedModelId
             metadata.perfEngineMs = transcriptionMs
@@ -732,7 +732,7 @@ final class LiveController: ObservableObject {
                     logTiming("Database stored")
 
                     // Notify Talkie via XPC
-                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
+                    TalkieLiveXPCService.shared.notifyDictationAdded()
 
                     // Schedule enrichment
                     if let baseline = capturedContext {
@@ -813,7 +813,7 @@ final class LiveController: ObservableObject {
                     logTiming("Database stored")
 
                     // Notify Talkie via XPC (non-blocking)
-                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
+                    TalkieLiveXPCService.shared.notifyDictationAdded()
 
                     // Schedule enrichment
                     if let baseline = capturedContext {
@@ -892,7 +892,7 @@ final class LiveController: ObservableObject {
                     pasteTimestamp: nil  // Not pasted yet → queued
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
-                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
+                    TalkieLiveXPCService.shared.notifyDictationAdded()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")
@@ -960,7 +960,7 @@ final class LiveController: ObservableObject {
                     pasteTimestamp: Date()  // Already pasted
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
-                    TalkieLiveXPCService.shared.notifyUtteranceAdded()
+                    TalkieLiveXPCService.shared.notifyDictationAdded()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")
@@ -1013,7 +1013,7 @@ final class LiveController: ObservableObject {
                 pasteTimestamp: nil
             )
             LiveDatabase.store(utterance)
-            TalkieLiveXPCService.shared.notifyUtteranceAdded()
+            TalkieLiveXPCService.shared.notifyDictationAdded()
 
             AppLogger.shared.log(.database, "Failed record stored", detail: "Will retry when engine available")
 
@@ -1039,7 +1039,7 @@ final class LiveController: ObservableObject {
     // MARK: - Metadata Helpers
 
     /// Build metadata dictionary with rich context for database storage
-    private func buildMetadataDict(from metadata: UtteranceMetadata) -> [String: String]? {
+    private func buildMetadataDict(from metadata: DictationMetadata) -> [String: String]? {
         var dict: [String: String] = [:]
         if let url = metadata.documentURL { dict["documentURL"] = url }
         if let url = metadata.browserURL { dict["browserURL"] = url }

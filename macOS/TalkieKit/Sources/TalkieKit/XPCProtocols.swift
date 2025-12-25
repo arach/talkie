@@ -42,8 +42,8 @@ public var kTalkieEngineXPCServiceName: String {
     /// Called when TalkieLive's state changes
     func stateDidChange(state: String, elapsedTime: TimeInterval)
 
-    /// Called when TalkieLive adds a new utterance to the database
-    func utteranceWasAdded()
+    /// Called when TalkieLive adds a new dictation to the database
+    func dictationWasAdded()
 
     /// Called when audio level changes (throttled to ~2Hz)
     func audioLevelDidChange(level: Float)
