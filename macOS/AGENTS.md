@@ -293,6 +293,60 @@ xcodebuild -scheme Talkie -configuration Release build
 ./scripts/create-app-icon.sh icon.png
 ```
 
+### Build, Sign, Notarize & Release
+
+**Location**: `Installer/build.sh` (656-line comprehensive script)
+
+```bash
+# Full installer (3 separate apps)
+./Installer/build.sh --version {{VERSION}}
+
+# Unified bundle (helpers embedded in Talkie.app/LoginItems)
+./Installer/build.sh unified --version {{VERSION}}
+
+# Specific installers
+./Installer/build.sh core --version {{VERSION}}   # Engine + Core only
+./Installer/build.sh live --version {{VERSION}}   # Engine + Live only
+./Installer/build.sh all --version {{VERSION}}    # All installers
+
+# Fast iteration (skip clean build, reuse exports)
+SKIP_CLEAN=1 ./Installer/build.sh --version {{VERSION}}
+
+# Skip notarization (for local testing)
+SKIP_NOTARIZE=1 ./Installer/build.sh --version {{VERSION}}
+
+# Interactive release (pre-flight checks + confirmation)
+./Installer/release.sh {{VERSION}}
+```
+
+**Process**:
+1. Verify signing identities (Developer ID App + Installer)
+2. Build all 3 apps (Release, arm64, signed)
+3. Create component packages (.pkg)
+4. Sign distribution packages (productsign)
+5. Notarize (xcrun notarytool with "notarytool" profile)
+6. Staple ticket (xcrun stapler)
+7. Archive to `Installer/releases/{{VERSION}}/`
+
+**Output**:
+- `Talkie-for-Mac.pkg` - Full installer (3 apps)
+- `Talkie-Unified.pkg` - Single bundle with helpers embedded
+- `Talkie-Core.pkg` - Engine + Core only
+- `Talkie-Live.pkg` - Engine + Live only
+
+**Key Features**:
+- Proper iCloud signing (archive → export workflow)
+- Incremental builds (SKIP_CLEAN=1 reuses exports)
+- LaunchAgent installation (/Library/LaunchAgents/)
+- Gatekeeper verification
+
+**Setup notarization**:
+```bash
+xcrun notarytool store-credentials "notarytool" \
+  --apple-id {{YOUR_APPLE_ID}} \
+  --team-id {{TEAMID}}
+```
+
 ---
 
 ## DEBUG-Only Toolbars (⌘⇧D)
@@ -518,6 +572,9 @@ TalkieDebugToolbar {
 | Run Engine | `./macOS/TalkieEngine/run.sh` |
 | Run WFKit demo | `cd Packages/WFKit && swift run Workflow` |
 | Test DebugKit changes | Make changes in `/Packages/DebugKit/`, build Talkie |
+| Build release installer | `./Installer/build.sh --version {{VERSION}}` |
+| Build unified bundle | `./Installer/build.sh unified --version {{VERSION}}` |
+| Interactive release | `./Installer/release.sh {{VERSION}}` |
 | Sync Xcode project | `./scripts/sync-xcode-files.py` |
 | Profile startup | Instruments → os_signpost → filter "jdi.talkie.performance" |
 | View Engine logs | `tail -f ~/Library/Logs/TalkieEngine/TalkieEngine.log` |
