@@ -80,3 +80,12 @@ _archive/
 releases/
 *.pbxproj.backup
 .vlmrc
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+uv.lock
+.pytest_cache/

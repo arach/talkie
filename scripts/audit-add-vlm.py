@@ -216,14 +216,22 @@ def inject_vlm_into_html(html_path: Path, vlm_results: Dict[str, dict], output_p
 
         issues = parsed["issues"]
 
-        # Build VLM section HTML
+        # Count issues by severity
+        high_count = sum(1 for i in issues if i.get("severity", "").lower() == "high")
+        medium_count = sum(1 for i in issues if i.get("severity", "").lower() == "medium")
+        low_count = sum(1 for i in issues if i.get("severity", "").lower() == "low")
+
+        # Build VLM section HTML (matching compiler output structure)
         vlm_html = f"""
-        <div class="vlm-section">
-            <div class="vlm-header">
-                <span>🤖 Visual Analysis</span>
-                <span class="vlm-badge">VLM</span>
-            </div>
-        """
+            <div class="dossier-issues" style="margin-bottom: 20px;">
+                <h3>Visual Analysis</h3>
+                <div class="compiler-output">
+                    <div class="compiler-summary">
+                        <span class="error-count" style="background: #fee2e2; color: #991b1b;">{high_count} high severity</span>
+                        <span class="warning-count" style="background: #fef3c7; color: #92400e;">{medium_count} medium</span>
+                        <span style="background: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600;">{low_count} low</span>
+                    </div>
+"""
 
         if issues:
             for issue in issues:
@@ -232,37 +240,57 @@ def inject_vlm_into_html(html_path: Path, vlm_results: Dict[str, dict], output_p
                 severity = issue.get("severity", "Unknown").lower()
                 suggestion = issue.get("suggestion", "")
 
-                severity_class = f"severity-{severity}" if severity in ["high", "medium", "low"] else ""
+                severity_color = {
+                    "high": "#991b1b",
+                    "medium": "#92400e",
+                    "low": "#1e40af"
+                }.get(severity, "#6b7280")
+
+                severity_bg = {
+                    "high": "#fee2e2",
+                    "medium": "#fef3c7",
+                    "low": "#dbeafe"
+                }.get(severity, "#f3f4f6")
 
                 vlm_html += f"""
-            <div class="vlm-issue {severity_class}">
-                <div class="vlm-issue-header">
-                    <div class="vlm-issue-location">{location}</div>
-                    <div class="vlm-issue-severity {severity_class}">{severity}</div>
-                </div>
-                <div class="vlm-issue-description">{description}</div>
-                {"<div class='vlm-issue-fix'><strong>Fix:</strong> " + suggestion + "</div>" if suggestion else ""}
-            </div>
-                """
+                    <div class="issue-category">
+                        <div class="category-header">
+                            <span class="category-code" style="background: {severity_bg}; color: {severity_color};">VLM-{severity.upper()}</span>
+                            <span class="category-title">{location}</span>
+                        </div>
+                        <div class="category-issues">
+                            <div class="compiler-line">
+                                <code class="line-pattern">{description}</code>
+                                {f'<span class="line-fix">→ {suggestion}</span>' if suggestion else ''}
+                            </div>
+                        </div>
+                    </div>
+"""
         else:
             vlm_html += """
-            <div class="vlm-no-issues">
-                ✅ No visual issues detected
+                    <div style="padding: 20px; text-align: center; color: #059669; font-weight: 500;">
+                        ✅ No visual issues detected
+                    </div>
+"""
+
+        vlm_html += """
+                </div>
             </div>
-            """
+"""
 
-        vlm_html += "\n        </div>"
+        # Find the dossier for this screen and inject VLM section BEFORE compiler output
+        dossier_pattern = f'<div class="dossier" id="dossier-{filename}">'
+        dossier_match = re.search(re.escape(dossier_pattern), html)
 
-        # Find the screenshot section and inject VLM analysis after it
-        # Look for pattern like <h3>settings-appearance</h3>
-        pattern = f'<h3[^>]*>{filename}</h3>'
-        match = re.search(pattern, html, re.IGNORECASE)
+        if dossier_match:
+            # Find the first occurrence of <div class="dossier-issues"> after this dossier
+            search_start = dossier_match.end()
+            issues_pattern = '<div class="dossier-issues">'
+            issues_pos = html.find(issues_pattern, search_start)
 
-        if match:
-            # Find the end of this screen's section (next <h3> or end of content)
-            insert_pos = html.find("</div>", match.end())
-            if insert_pos > 0:
-                html = html[:insert_pos] + vlm_html + "\n" + html[insert_pos:]
+            if issues_pos > 0:
+                # Insert VLM section before the compiler output section
+                html = html[:issues_pos] + vlm_html + html[issues_pos:]
 
     # Update title
     html = html.replace("<title>Design Audit Report</title>", "<title>Design Audit Report (with VLM)</title>")

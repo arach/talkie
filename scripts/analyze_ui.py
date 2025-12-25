@@ -157,9 +157,18 @@ def analyze_image_with_vlm(image_path: Path, prompt: str) -> dict:
             "raw_response": result
         }
     except requests.exceptions.RequestException as e:
+        error_details = str(e)
+        try:
+            # Try to extract error details from response body
+            if hasattr(e, 'response') and e.response is not None:
+                error_json = e.response.json()
+                if "error" in error_json:
+                    error_details = f"{str(e)} - {error_json['error']}"
+        except:
+            pass
         return {
             "success": False,
-            "error": str(e)
+            "error": error_details
         }
 
 def capture_screenshot(output_path: Path) -> bool:
@@ -178,6 +187,20 @@ def capture_screenshot(output_path: Path) -> bool:
 
 def parse_json_from_response(analysis: str) -> Optional[dict]:
     """Try to extract JSON from the VLM response."""
+    # Handle GenerationResult wrapper: GenerationResult(text='...', ...)
+    if analysis.startswith("GenerationResult(text="):
+        try:
+            # Extract the text value from GenerationResult
+            start = analysis.find("text='") + 6
+            end = analysis.find("', token=")
+            if start > 5 and end > start:
+                json_str = analysis[start:end]
+                # Unescape the string
+                json_str = json_str.replace('\\"', '"').replace('\\n', '\n')
+                return json.loads(json_str)
+        except (ValueError, json.JSONDecodeError):
+            pass
+
     # Look for JSON code block
     if "```json" in analysis:
         start = analysis.find("```json") + 7
