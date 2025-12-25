@@ -29,110 +29,126 @@ struct DictationCaptureSettingsView: View {
                 subtitle: "Configure how dictation is triggered, captured, and what feedback you receive."
             )
         } content: {
-            // MARK: - Shortcuts Section
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.orange)
-                        .frame(width: 3, height: 14)
-
-                    Text("SHORTCUTS")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Spacer()
-                }
-
-                VStack(spacing: Spacing.sm) {
-                    // Toggle Hotkey
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Toggle Recording")
-                            .font(Theme.current.fontSMMedium)
-                            .foregroundColor(Theme.current.foreground)
-
-                        Text("Press once to start recording, press again to stop.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                        HotkeyRecorderButton(
-                            hotkey: $live.hotkey,
-                            isRecording: $isRecordingToggle
-                        )
-                    }
-                    .padding(Spacing.sm)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.sm)
-
-                    // Push-to-Talk Hotkey
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        HStack {
-                            Text("Push-to-Talk")
-                                .font(Theme.current.fontSMMedium)
-                                .foregroundColor(Theme.current.foreground)
-
-                            Spacer()
-
-                            Toggle("", isOn: $live.pttEnabled)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                        }
-
-                        Text("Hold down to record, release to stop.")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-
-                        if live.pttEnabled {
-                            HotkeyRecorderButton(
-                                hotkey: $live.pttHotkey,
-                                isRecording: $isRecordingPTT
-                            )
-                        }
-                    }
-                    .padding(Spacing.sm)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.sm)
-                }
-            }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
-
-            // MARK: - Audio Input Section
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.blue)
-                        .frame(width: 3, height: 14)
-
-                    Text("AUDIO INPUT")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Spacer()
-
-                    Image(systemName: "mic.fill")
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(.accentColor)
-                }
-
+            // MARK: - Shortcuts & Audio Input (Two-Column Layout)
+            HStack(alignment: .top, spacing: Spacing.md) {
+                // Left Column: Shortcuts
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Select which microphone to use for recording.")
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.orange)
+                            .frame(width: 3, height: 14)
 
-                    AudioDeviceSelector()
+                        Text("SHORTCUTS")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
-                    // Mic Test
-                    MicTestView()
-                        .padding(.top, 8)
+                        Spacer()
+                    }
+
+                    VStack(spacing: Spacing.xs) {
+                        // Toggle Recording - Compact inline layout
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Toggle Recording")
+                                        .font(Theme.current.fontSMMedium)
+                                        .foregroundColor(Theme.current.foreground)
+
+                                    Text("Press once to start, press again to stop")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                }
+
+                                Spacer()
+
+                                HotkeyRecorderButton(
+                                    hotkey: $live.hotkey,
+                                    isRecording: $isRecordingToggle
+                                )
+                            }
+                        }
+                        .padding(Spacing.sm)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
+
+                        // Push-to-Talk - Right-aligned toggle and shortcut
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Push-to-Talk")
+                                        .font(Theme.current.fontSMMedium)
+                                        .foregroundColor(Theme.current.foreground)
+
+                                    Text("Hold down to record, release to stop")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                }
+
+                                Spacer()
+
+                                Toggle("", isOn: $live.pttEnabled)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                            }
+
+                            if live.pttEnabled {
+                                HStack {
+                                    Spacer()
+                                    HotkeyRecorderButton(
+                                        hotkey: $live.pttHotkey,
+                                        isRecording: $isRecordingPTT
+                                    )
+                                }
+                            }
+                        }
+                        .padding(Spacing.sm)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
+                    }
                 }
                 .padding(Spacing.sm)
-                .background(Theme.current.surface1)
+                .background(Theme.current.surface2)
                 .cornerRadius(CornerRadius.sm)
+                .frame(maxWidth: .infinity)
+
+                // Right Column: Audio Input
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.blue)
+                            .frame(width: 3, height: 14)
+
+                        Text("AUDIO INPUT")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Spacer()
+
+                        Image(systemName: "mic.fill")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(.accentColor)
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Microphone to use for recording")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+
+                        AudioDeviceSelector()
+
+                        // Mic Test
+                        MicTestView()
+                            .padding(.top, 4)
+                    }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface2)
+                .cornerRadius(CornerRadius.sm)
+                .frame(maxWidth: .infinity)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
 
             // MARK: - Visual Feedback Section
             VStack(alignment: .leading, spacing: Spacing.sm) {
