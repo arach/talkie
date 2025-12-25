@@ -53,8 +53,11 @@ final class FloatingPillController: ObservableObject {
     private var lastAudioLevelUpdate: Date = .distantPast
 
     private init() {
-        // Log initial engine state
-        pillLogger.debug("[Init] Initial engine connectionState=\(EngineClient.shared.connectionState.rawValue)")
+        // Initialize from current engine state (important: engine may already be connected)
+        let initialState = EngineClient.shared.connectionState
+        isEngineConnected = (initialState == .connected || initialState == .connectedWrongBuild)
+        isWrongEngineBuild = (initialState == .connectedWrongBuild)
+        pillLogger.debug("[Init] Initial engine connectionState=\(initialState.rawValue), isEngineConnected=\(self.isEngineConnected)")
 
         // Listen for screen configuration changes
         NotificationCenter.default.addObserver(
@@ -105,7 +108,8 @@ final class FloatingPillController: ObservableObject {
             }
             .store(in: &settingsCancellables)
 
-        // Observe pending queue count
+        // Initialize and observe pending queue count
+        pendingQueueCount = TranscriptionRetryManager.shared.pendingCount
         TranscriptionRetryManager.shared.$pendingCount
             .receive(on: DispatchQueue.main)
             .sink { [weak self] count in
