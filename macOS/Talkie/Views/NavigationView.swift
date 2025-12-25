@@ -65,9 +65,16 @@ struct TalkieNavigationView: View {
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
 
-    // Sidebar width constants - use fixed values to avoid NavigationSplitView recalculations
-    private let sidebarExpandedWidth: CGFloat = 180
+    // Sidebar width - user-adjustable with smart defaults
+    @AppStorage("navigation.sidebarExpandedWidth") private var sidebarExpandedWidth: Double = 180
     private let sidebarCollapsedWidth: CGFloat = 56
+    private let sidebarMinWidth: Double = 120
+    private let sidebarMaxWidth: Double = 300
+
+    // Content column width - user-adjustable with smart defaults
+    @AppStorage("navigation.contentColumnWidth") private var contentColumnWidth: Double = 300
+    private let contentColumnMinWidth: Double = 240
+    private let contentColumnMaxWidth: Double = 480
 
     private var currentSidebarWidth: CGFloat {
         isSidebarCollapsed ? sidebarCollapsedWidth : sidebarExpandedWidth
@@ -85,16 +92,21 @@ struct TalkieNavigationView: View {
 
     private var mainContent: some View {
         GeometryReader { geometry in
-            HStack(spacing: Spacing.xxs) {
+            HStack(spacing: 0) {
                 // Sidebar - full height
                 sidebarView
                     .frame(width: currentSidebarWidth)
                     .clipped()
 
-                // Divider between sidebar and content
-                Rectangle()
-                    .fill(Theme.current.divider)
-                    .frame(width: 1)
+                // Resizable divider (when sidebar is expanded)
+                if !isSidebarCollapsed {
+                    sidebarResizer
+                } else {
+                    // Static divider when collapsed
+                    Rectangle()
+                        .fill(Theme.current.divider)
+                        .frame(width: 1)
+                }
 
                 // Content area + StatusBar
                 VStack(spacing: Spacing.xxs) {
@@ -107,11 +119,9 @@ struct TalkieNavigationView: View {
                             // 3-column: content list + detail
                             HStack(spacing: Spacing.xxs) {
                                 contentColumnView
-                                    .frame(width: 300)
+                                    .frame(width: contentColumnWidth)
 
-                                Rectangle()
-                                    .fill(Theme.current.divider)
-                                    .frame(width: 1)
+                                contentColumnResizer
 
                                 detailColumnView
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -238,8 +248,25 @@ struct TalkieNavigationView: View {
 
     // Old statusBarView removed - now using unified StatusBar component
 
-    // MARK: - Sidebar View (matches TalkieLive structure)
+    // MARK: - Sidebar Resizer
 
+    private var sidebarResizer: some View {
+        SidebarResizer(
+            width: $sidebarExpandedWidth,
+            minWidth: sidebarMinWidth,
+            maxWidth: sidebarMaxWidth
+        )
+    }
+
+    private var contentColumnResizer: some View {
+        SidebarResizer(
+            width: $contentColumnWidth,
+            minWidth: contentColumnMinWidth,
+            maxWidth: contentColumnMaxWidth
+        )
+    }
+
+    // MARK: - Sidebar View (matches TalkieLive structure)
 
     private var sidebarView: some View {
         VStack(spacing: Spacing.xxs) {
@@ -936,5 +963,43 @@ private struct SidebarButtonContent: View {
         .onHover { hovering in
             isHovering = hovering
         }
+    }
+}
+
+// MARK: - Sidebar Resizer Component
+
+private struct SidebarResizer: View {
+    @Binding var width: Double
+    let minWidth: Double
+    let maxWidth: Double
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    var body: some View {
+        Rectangle()
+            .fill(isDragging ? Color.accentColor.opacity(0.5) : (isHovering ? Theme.current.foregroundMuted.opacity(0.3) : Theme.current.divider))
+            .frame(width: 4)
+            .contentShape(Rectangle().inset(by: -4))
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else if !isDragging {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        let newWidth = width + value.translation.width
+                        width = min(maxWidth, max(minWidth, newWidth))
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        NSCursor.pop()
+                    }
+            )
     }
 }
