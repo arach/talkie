@@ -160,7 +160,7 @@ final class StartupCoordinator {
             // Helper apps can start after everything else
             signposter.emitEvent("Helper Apps")
             logger.info("  → Helper apps")
-            AppLauncher.shared.ensureHelpersRunning()
+            ServiceManager.shared.ensureHelpersRunning()
 
             // XPC connection after UI is ready
             signposter.emitEvent("Engine XPC")

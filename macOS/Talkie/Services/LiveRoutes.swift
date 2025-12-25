@@ -32,7 +32,7 @@ final class LiveRoutes: RouteGroup {
             description: "Live started recording - update state",
             isInternal: true
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.updateFromNotification(
+            ServiceManager.shared.live.updateFromNotification(
                 state: .listening,
                 elapsedTime: 0
             )
@@ -43,7 +43,7 @@ final class LiveRoutes: RouteGroup {
             description: "Live stopped recording - return to idle",
             isInternal: true
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.updateFromNotification(
+            ServiceManager.shared.live.updateFromNotification(
                 state: .idle,
                 elapsedTime: 0
             )
@@ -54,7 +54,7 @@ final class LiveRoutes: RouteGroup {
             description: "Recording was cancelled/aborted",
             isInternal: true
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.updateFromNotification(
+            ServiceManager.shared.live.updateFromNotification(
                 state: .idle,
                 elapsedTime: 0
             )
@@ -67,7 +67,7 @@ final class LiveRoutes: RouteGroup {
             description: "Transcription in progress",
             isInternal: true
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.updateFromNotification(
+            ServiceManager.shared.live.updateFromNotification(
                 state: .transcribing,
                 elapsedTime: 0
             )
@@ -78,7 +78,7 @@ final class LiveRoutes: RouteGroup {
             description: "Output routing in progress (pasting, etc.)",
             isInternal: true
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.updateFromNotification(
+            ServiceManager.shared.live.updateFromNotification(
                 state: .routing,
                 elapsedTime: 0
             )
@@ -122,7 +122,7 @@ final class LiveRoutes: RouteGroup {
             description: "TalkieLive is ready and running",
             isInternal: true
         ) { _, _ in
-            TalkieLiveStateMonitor.shared.refreshProcessId()
+            ServiceManager.shared.live.refreshProcessId()
             NSLog("[LiveRoutes] Live service ready")
         },
 

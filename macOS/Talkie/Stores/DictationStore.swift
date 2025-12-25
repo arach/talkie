@@ -424,7 +424,7 @@ final class DictationStore {
                 return
             }
 
-            logger.info("Incremental refresh: found \(liveUtterances.count) new utterances since ID \(lastSeenID)")
+            logger.info("Incremental refresh: found \(liveUtterances.count) new utterances since ID \(self.lastSeenID)")
         } else {
             // First load: only get recent utterances for fast initial render
             liveUtterances = LiveDatabase.recent(limit: Self.initialLoadSize)

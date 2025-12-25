@@ -61,7 +61,7 @@ struct StatusIcon: View {
 // MARK: - Live Status Icon
 
 struct LiveStatusIcon: View {
-    private let liveState = TalkieLiveStateMonitor.shared
+    private let liveState = ServiceManager.shared.live
 
     private var statusColor: Color {
         if !liveState.isRunning { return TalkieTheme.textMuted }
@@ -110,7 +110,7 @@ struct LiveStatusIcon: View {
 // MARK: - Simple Engine Icon
 
 struct SimpleEngineIcon: View {
-    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let serviceMonitor = ServiceManager.shared.engine
     @State private var isHovered = false
 
     private var statusColor: Color {
@@ -148,7 +148,7 @@ struct SimpleEngineIcon: View {
 // MARK: - Engine Status Icon
 
 struct EngineStatusIcon: View {
-    private let serviceMonitor = TalkieServiceMonitor.shared
+    private let serviceMonitor = ServiceManager.shared.engine
     private let layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
     @State private var showPID = false

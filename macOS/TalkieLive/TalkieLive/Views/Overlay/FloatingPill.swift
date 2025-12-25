@@ -150,9 +150,8 @@ final class FloatingPillController: ObservableObject {
     private func createPill(on screen: NSScreen) {
         let pillView = FloatingPillView()
         let hostingView = NSHostingView(rootView: pillView.environmentObject(self))
-        // Frame must be large enough to accommodate expanded state for proper hit testing
-        // Expanded pill shows text like "✨ → Edit", timer, etc. - needs ~150px width
-        hostingView.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
+        // Frame must be large enough to accommodate expanded state (210 when showing PID)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 220, height: 30)
 
         let panel = NSPanel(
             contentRect: hostingView.frame,
@@ -432,7 +431,6 @@ struct FloatingPillView: View {
     @State private var showPID = false
     @State private var pidCopied = false
     @State private var tapFeedbackScale: CGFloat = 1.0
-    @State private var slideInOffset: CGSize = .zero
     @State private var slideInOpacity: Double = 0
 
     // Expansion threshold - only expand when very close (proximity > 0.7) or hovered
@@ -493,24 +491,12 @@ struct FloatingPillView: View {
         }
         // Frame must accommodate expanded state + PID for proper hit testing
         .frame(width: showPID ? 210 : 160, height: 30)
-        .offset(slideInOffset)
+        .scaleEffect(slideInOpacity == 0 ? 0.8 : 1.0)  // Scale up instead of offset (stays in bounds)
         .opacity(slideInOpacity)
         .animation(.easeInOut(duration: 0.15), value: showPID)
         .onAppear {
-            // Initial slide-in animation based on position
-            let position = LiveSettings.shared.pillPosition
-            switch position {
-            case .bottomCenter:
-                // Slide in from bottom
-                slideInOffset = CGSize(width: 0, height: -30)
-            case .bottomLeft, .bottomRight, .topCenter:
-                // Slide in from right
-                slideInOffset = CGSize(width: 50, height: 0)
-            }
-
-            // Animate to visible position
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                slideInOffset = .zero
+            // Animate in with scale + opacity (no offset to avoid out-of-bounds warnings)
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                 slideInOpacity = 1.0
             }
         }
