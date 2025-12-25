@@ -266,12 +266,13 @@ extension LiveDatabase {
         }) ?? []
     }
 
-    /// Fetch utterances created after a specific timestamp (for incremental updates)
-    static func since(timestamp: Date) -> [LiveDictation] {
+    /// Fetch utterances with ID greater than specified (for incremental updates)
+    /// Uses INTEGER PRIMARY KEY for optimal performance - O(log n) seek + O(k) scan
+    static func since(id: Int64) -> [LiveDictation] {
         (try? shared.read { db in
             try LiveDictation
-                .filter(LiveDictation.Columns.createdAt > timestamp.timeIntervalSinceReferenceDate)
-                .order(LiveDictation.Columns.createdAt.desc)
+                .filter(LiveDictation.Columns.id > id)
+                .order(LiveDictation.Columns.id.asc)  // Sequential order for processing
                 .fetchAll(db)
         }) ?? []
     }

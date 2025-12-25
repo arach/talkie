@@ -13,6 +13,7 @@ import DebugKit
 import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppDelegate")
+private let signposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
 
 // Free function to capture settings screenshots using subprocess
 @MainActor
@@ -44,6 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private let cliHandler = CLICommandHandler()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let launchState = signposter.beginInterval("App Launch")
         NSLog("[AppDelegate] 🎬 applicationDidFinishLaunching called")
 
         // CRITICAL: Check for debug mode SYNCHRONOUSLY before initialization
@@ -54,6 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NSLog("[AppDelegate] isDebugMode = \(isDebugMode)")
 
         // Register debug commands early (before checking debug mode)
+        signposter.emitEvent("Debug Commands")
         registerDebugCommands()
 
         if isDebugMode {
@@ -80,35 +83,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // App initialization (runs in both normal and debug mode)
         // Debug mode needs this for MainActor to work properly
 
-        // Configure window appearance to match theme before SwiftUI renders
-        // This prevents the "flicker" of default colors before theme loads
-        configureWindowAppearance()
+        // Phase 1: Critical - Only what's needed before UI renders
+        StartupCoordinator.shared.initializeCritical()
 
         // Set notification delegate to show notifications while app is in foreground
+        signposter.emitEvent("Notification Delegate")
         UNUserNotificationCenter.current().delegate = self
 
-        // Request local notification permissions for workflow notifications
-        requestNotificationPermissions()
+        // Phase 3: Deferred - CloudKit, remote notifications (after UI visible)
+        // These run with 300ms delay to let UI settle first
+        StartupCoordinator.shared.initializeDeferred()
 
-        // Register for remote notifications
-        NSApplication.shared.registerForRemoteNotifications()
-
-        // Set up CloudKit subscription for instant sync
-        setupCloudKitSubscription()
-
-        // Ensure helper apps (TalkieLive, TalkieEngine) are running
-        // This registers them as login items and launches them if needed
-        Task { @MainActor in
-            NSLog("[AppDelegate] 🚀 Starting helper apps...")
-            ServiceManager.shared.ensureHelpersRunning()
-
-            // Connect to TalkieEngine XPC service (has built-in retry logic)
-            NSLog("[AppDelegate] 🔌 Calling EngineClient.shared.connect()...")
-            EngineClient.shared.connect()
-            NSLog("[AppDelegate] ✓ EngineClient.connect() returned")
-        }
+        // Phase 4: Background - Helper apps, XPC connections (lowest priority)
+        // These run with 1s delay after UI is responsive
+        StartupCoordinator.shared.initializeBackground()
 
         // Register URL handler for Apple Events
+        signposter.emitEvent("URL Handler")
         let eventManager = NSAppleEventManager.shared()
         eventManager.setEventHandler(
             self,
@@ -117,6 +108,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             andEventID: AEEventID(kAEGetURL)
         )
         logger.info("URL handler registered")
+
+        signposter.endInterval("App Launch", launchState)
 
         #if DEBUG
         // Setup keyboard shortcut for Design God Mode (⌘⇧D)

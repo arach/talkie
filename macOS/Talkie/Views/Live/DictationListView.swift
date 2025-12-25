@@ -38,8 +38,10 @@ struct DictationListView: View {
             detailColumn
                 .frame(minWidth: 350)
         }
-        .onAppear {
-            store.refresh()  // Fresh data on view appear
+        .task {
+            // Load last 50 dictations in background when navigating to page
+            // Non-blocking - page renders immediately, data loads async
+            store.refresh()
         }
     }
 
