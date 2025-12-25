@@ -107,7 +107,7 @@ struct MemoTableFullView: View {
         ZStack {
             // Backdrop - tap to dismiss
             if selectedMemo != nil && showInspector {
-                Color.black.opacity(0.3)
+                TalkieTheme.textMuted
                     .ignoresSafeArea()
                     .onTapGesture {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -187,7 +187,7 @@ struct MemoTableFullView: View {
 
                         Text("NO MEMOS YET")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Record your first voice memo on iOS")
                             .font(SettingsManager.shared.fontXS)
@@ -249,7 +249,7 @@ struct MemoTableFullView: View {
                                 Text("·")
                                 Text("\(remainingCount) remaining")
                                     .font(SettingsManager.shared.fontXS)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                             }
                             .foregroundColor(.accentColor)
                             .frame(maxWidth: .infinity)
@@ -636,7 +636,7 @@ struct MemoInspectorEmptyState: View {
                 VStack(spacing: 6) {
                     Text("No Memo Selected")
                         .font(Theme.current.fontSMBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Click on a memo to view details")
                         .font(Theme.current.fontXS)

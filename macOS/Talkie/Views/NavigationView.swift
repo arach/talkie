@@ -632,7 +632,7 @@ struct TalkieNavigationView: View {
 
                     Text("SELECT A MEMO")
                         .font(Theme.current.fontBodyBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.current.surface1)
@@ -733,7 +733,7 @@ struct TalkieNavigationView: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)

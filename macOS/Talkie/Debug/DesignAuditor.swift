@@ -14,6 +14,10 @@ import AppKit
 
 /// All auditable screens in the app, organized by section
 enum AppScreen: String, CaseIterable, Identifiable {
+    // Home/Dashboard
+    case homeDashboard = "home-dashboard"
+    case homeUnified = "home-unified"
+
     // Settings
     case settingsAppearance = "settings-appearance"
     case settingsDictationCapture = "settings-dictation-capture"
@@ -37,7 +41,22 @@ enum AppScreen: String, CaseIterable, Identifiable {
     // Memos
     case memosAllMemos = "memos-all"
     case memoDetail = "memo-detail"
-    case memoEditor = "memo-editor"
+
+    // Workflows
+    case workflowsMain = "workflows-main"
+
+    // Models
+    case modelsContent = "models-content"
+
+    // Activity & Monitoring
+    case activityLog = "activity-log"
+    case serviceMonitor = "service-monitor"
+    case systemLogs = "system-logs"
+    case syncHistory = "sync-history"
+
+    // Results & Actions
+    case aiResults = "ai-results"
+    case pendingActions = "pending-actions"
 
     // Onboarding
     case onboardingWelcome = "onboarding-welcome"
@@ -51,6 +70,8 @@ enum AppScreen: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .homeDashboard: return "Home Dashboard"
+        case .homeUnified: return "Unified Dashboard"
         case .settingsAppearance: return "Appearance"
         case .settingsDictationCapture: return "Dictation Capture"
         case .settingsDictationOutput: return "Dictation Output"
@@ -69,7 +90,14 @@ enum AppScreen: String, CaseIterable, Identifiable {
         case .liveHistory: return "Live History"
         case .memosAllMemos: return "All Memos"
         case .memoDetail: return "Memo Detail"
-        case .memoEditor: return "Memo Editor"
+        case .workflowsMain: return "Workflows"
+        case .modelsContent: return "Models"
+        case .activityLog: return "Activity Log"
+        case .serviceMonitor: return "Service Monitor"
+        case .systemLogs: return "System Logs"
+        case .syncHistory: return "Sync History"
+        case .aiResults: return "AI Results"
+        case .pendingActions: return "Pending Actions"
         case .onboardingWelcome: return "Onboarding Welcome"
         case .onboardingPermissions: return "Onboarding Permissions"
         case .onboardingComplete: return "Onboarding Complete"
@@ -79,6 +107,8 @@ enum AppScreen: String, CaseIterable, Identifiable {
 
     var section: ScreenSection {
         switch self {
+        case .homeDashboard, .homeUnified:
+            return .home
         case .settingsAppearance, .settingsDictationCapture, .settingsDictationOutput,
              .settingsQuickActions, .settingsQuickOpen, .settingsAutomations,
              .settingsAIProviders, .settingsTranscription, .settingsLLM,
@@ -86,8 +116,16 @@ enum AppScreen: String, CaseIterable, Identifiable {
             return .settings
         case .liveMain, .liveSettings, .liveHistory:
             return .live
-        case .memosAllMemos, .memoDetail, .memoEditor:
+        case .memosAllMemos, .memoDetail:
             return .memos
+        case .workflowsMain:
+            return .workflows
+        case .modelsContent:
+            return .models
+        case .activityLog, .serviceMonitor, .systemLogs, .syncHistory:
+            return .monitoring
+        case .aiResults, .pendingActions:
+            return .results
         case .onboardingWelcome, .onboardingPermissions, .onboardingComplete:
             return .onboarding
         case .navigationSidebar:
@@ -97,6 +135,8 @@ enum AppScreen: String, CaseIterable, Identifiable {
 
     var sourceFiles: [String] {
         switch self {
+        case .homeDashboard: return ["Views/TalkieHomeView.swift"]
+        case .homeUnified: return ["Views/UnifiedDashboard.swift"]
         case .settingsAppearance: return ["Views/Settings/AppearanceSettings.swift"]
         case .settingsDictationCapture, .settingsDictationOutput: return ["Views/Settings/DictationSettings.swift"]
         case .settingsQuickActions: return ["Views/Settings/QuickActionsSettings.swift"]
@@ -112,9 +152,16 @@ enum AppScreen: String, CaseIterable, Identifiable {
         case .liveMain: return ["Views/Live/DictationListView.swift"]
         case .liveSettings: return ["Views/Live/LiveSettingsView.swift", "Views/Live/Components/LivePreviewScreen.swift"]
         case .liveHistory: return ["Views/Live/History/HistoryView.swift"]
-        case .memosAllMemos: return ["Views/MemosList/AllMemosView.swift"]
+        case .memosAllMemos: return ["Views/Memos/AllMemos.swift"]
         case .memoDetail: return ["Views/MemoDetail/MemoDetailView.swift", "Views/MemoDetail/MemoDetailComponents.swift"]
-        case .memoEditor: return ["Views/MemoDetail/MemoEditorView.swift"]
+        case .workflowsMain: return ["Views/Workflows/WorkflowContentViews.swift", "Views/Workflows/WorkflowColumnViews.swift"]
+        case .modelsContent: return ["Views/Models/ModelsContentView.swift"]
+        case .activityLog: return ["Views/Activity/ActivityLogViews.swift"]
+        case .serviceMonitor: return ["Views/TalkieServiceMonitorView.swift"]
+        case .systemLogs: return ["Views/SystemLogsView.swift"]
+        case .syncHistory: return ["Views/SyncHistoryView.swift"]
+        case .aiResults: return ["Views/AIResults/AIResultsViews.swift"]
+        case .pendingActions: return ["Views/PendingActionsView.swift"]
         case .onboardingWelcome, .onboardingPermissions, .onboardingComplete: return ["Views/Onboarding/OnboardingView.swift"]
         case .navigationSidebar: return ["Views/NavigationView.swift"]
         }
@@ -122,9 +169,14 @@ enum AppScreen: String, CaseIterable, Identifiable {
 }
 
 enum ScreenSection: String, CaseIterable {
+    case home = "Home"
     case settings = "Settings"
     case live = "Live"
     case memos = "Memos"
+    case workflows = "Workflows"
+    case models = "Models"
+    case monitoring = "Monitoring"
+    case results = "Results"
     case onboarding = "Onboarding"
     case navigation = "Navigation"
 

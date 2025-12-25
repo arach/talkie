@@ -423,7 +423,7 @@ struct ModelsContentView: View {
                     .foregroundColor(.orange)
                 Text("MLX requires Apple Silicon")
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -507,7 +507,7 @@ struct ModelsContentView: View {
                     .foregroundColor(.orange)
                 Text("STT requires Apple Silicon")
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -554,7 +554,7 @@ struct ModelsContentView: View {
                         .foregroundColor(.orange)
                     Text("Local STT requires Apple Silicon (M1/M2/M3)")
                         .font(settingsManager.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)

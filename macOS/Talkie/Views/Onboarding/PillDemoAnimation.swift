@@ -73,14 +73,14 @@ struct PillDemoAnimation: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(
                     LinearGradient(
-                        colors: [Color.black.opacity(0.5), Color.black.opacity(0.75)],
+                        colors: [TalkieTheme.textTertiary, TalkieTheme.textSecondary],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(TalkieTheme.divider, lineWidth: 1)
                 )
                 .clipped()  // Clip content to viewport
 
@@ -143,7 +143,7 @@ struct PillDemoAnimation: View {
                                 Text("REC")
                                     .font(.system(size: 9, weight: .semibold))
                                     .tracking(1)
-                                    .foregroundColor(Color.white.opacity(0.5))
+                                    .foregroundColor(TalkieTheme.textTertiary)
                             }
                         }
                         .frame(height: 18)  // Fixed height to prevent jumping
@@ -151,10 +151,10 @@ struct PillDemoAnimation: View {
                         .padding(.vertical, 5)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(isRecordingExpanded ? Color.red.opacity(0.2) : Color.white.opacity(0.12))
+                                .fill(isRecordingExpanded ? Color.red.opacity(0.2) : TalkieTheme.divider)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 4)
-                                        .stroke(isRecordingExpanded ? Color.red.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.5)
+                                        .stroke(isRecordingExpanded ? Color.red.opacity(0.3) : TalkieTheme.surfaceCard, lineWidth: 0.5)
                                 )
                         )
                         .transition(.scale.combined(with: .opacity))
@@ -165,7 +165,7 @@ struct PillDemoAnimation: View {
                             .transition(.scale.combined(with: .opacity))
                     } else {
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(0.25))
+                            .fill(TalkieTheme.textMuted)
                             .frame(width: 24, height: 2)
                             .transition(.scale.combined(with: .opacity))
                     }

@@ -1,19 +1,29 @@
 #!/bin/bash
-# Smart launcher - builds then finds the DerivedData matching this worktree
+# Smart launcher - finds and launches the DerivedData build for this worktree
+# Usage: ./run.sh [--build]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 XCODEPROJ="$PROJECT_ROOT/macOS/Talkie/Talkie.xcodeproj"
 CACHE_FILE="$PROJECT_ROOT/.deriveddata"
 
-# Build first
-echo "Building Talkie..."
-xcodebuild -project "$XCODEPROJ" -scheme Talkie -configuration Debug build 2>&1 | tail -20
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
-  echo "Build failed!"
-  exit 1
+# Parse arguments
+DO_BUILD=false
+if [[ "$1" == "--build" ]]; then
+  DO_BUILD=true
 fi
-echo "Build succeeded!"
+
+# Optional build step
+if [ "$DO_BUILD" = true ]; then
+  echo "Building Talkie..."
+  xcodebuild -project "$XCODEPROJ" -scheme Talkie -configuration Debug build 2>&1 | tail -20
+  if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    echo "Build failed!"
+    exit 1
+  fi
+  echo "✓ Build succeeded!"
+  echo ""
+fi
 
 # Try cached path first
 if [ -f "$CACHE_FILE" ]; then
@@ -22,7 +32,9 @@ if [ -f "$CACHE_FILE" ]; then
   if [ -d "$APP" ]; then
     # Kill only THIS worktree's Talkie (not others)
     pkill -f "$APP/Contents/MacOS/Talkie" 2>/dev/null && sleep 0.3
-    echo "Launching: $APP"
+    echo "🚀 Launching Talkie"
+    echo "   App: $APP"
+    echo "   Binary: $APP/Contents/MacOS/Talkie"
     open "$APP"
     exit 0
   else
@@ -44,7 +56,9 @@ for dir in ~/Library/Developer/Xcode/DerivedData/Talkie-*/; do
       APP="$dir/Build/Products/Debug/Talkie.app"
       if [ -d "$APP" ]; then
         pkill -f "$APP/Contents/MacOS/Talkie" 2>/dev/null && sleep 0.3
-        echo "Launching: $APP"
+        echo "🚀 Launching Talkie"
+        echo "   App: $APP"
+        echo "   Binary: $APP/Contents/MacOS/Talkie"
         open "$APP"
         exit 0
       else

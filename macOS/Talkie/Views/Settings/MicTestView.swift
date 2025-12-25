@@ -41,7 +41,7 @@ struct MicTestView: View {
                 Text("MIC TEST")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(1)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
@@ -49,7 +49,7 @@ struct MicTestView: View {
                     Button(action: reset) {
                         Text("Reset")
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -116,11 +116,11 @@ struct MicTestView: View {
         VStack(spacing: 12) {
             Image(systemName: "mic.circle")
                 .font(.system(size: 36))
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             Text(currentPrompt)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundColor(Theme.current.foreground)
 
             Button(action: startRecording) {
                 HStack(spacing: 6) {
@@ -200,13 +200,13 @@ struct MicTestView: View {
 
                 Text("Sounds good!")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
             }
 
             // Duration
             Text(formatTime(recordingDuration))
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
 
             // Playback progress
             if recorder.isPlaying {

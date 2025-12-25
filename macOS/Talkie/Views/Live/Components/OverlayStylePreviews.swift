@@ -26,10 +26,10 @@ struct WavyParticlesPreview: View {
         ZStack {
             // Darker background with subtle border
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(Color.black.opacity(0.5))
+                .fill(TalkieTheme.textTertiary)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                        .strokeBorder(TalkieTheme.divider, lineWidth: 1)
                 )
 
             TimelineView(.animation(minimumInterval: 0.033)) { timeline in
@@ -93,10 +93,10 @@ struct WaveformBarsPreview: View {
         ZStack {
             // Darker background with subtle border
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(Color.black.opacity(0.5))
+                .fill(TalkieTheme.textTertiary)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                        .strokeBorder(TalkieTheme.divider, lineWidth: 1)
                 )
 
             TimelineView(.animation(minimumInterval: 0.033)) { timeline in
@@ -146,19 +146,19 @@ struct PillOnlyPreview: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(Color.black.opacity(0.5))
+                .fill(TalkieTheme.textTertiary)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.xs)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                        .strokeBorder(TalkieTheme.divider, lineWidth: 1)
                 )
 
             VStack(spacing: 2) {
                 Image(systemName: "minus")
                     .font(.labelMedium)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                 Text("No overlay")
                     .font(.labelSmall)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
         }
         .onAppear {

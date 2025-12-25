@@ -370,17 +370,17 @@ private struct SimplePillDemo: View {
                         Text("REC")
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(1)
-                            .foregroundColor(Color.white.opacity(0.5))
+                            .foregroundColor(TalkieTheme.textTertiary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.12))
+                            .fill(TalkieTheme.divider)
                     )
                 } else {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.white.opacity(0.25))
+                        .fill(TalkieTheme.textMuted)
                         .frame(width: 24, height: 2)
                 }
             }

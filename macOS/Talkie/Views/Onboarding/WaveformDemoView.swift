@@ -25,10 +25,10 @@ struct WaveformDemoView: View {
         .padding(.vertical, 3)
         .background(
             Capsule()
-                .fill(Color.black.opacity(0.4))
+                .fill(TalkieTheme.textTertiary)
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .stroke(TalkieTheme.divider, lineWidth: 0.5)
                 )
         )
     }

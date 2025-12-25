@@ -41,7 +41,7 @@ struct AudioDeviceSelector: View {
                             Text(device.name)
                             if device.isDefault {
                                 Text("(System Default)")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
                             }
                             if device.id == audioDevices.selectedDeviceID {
                                 Spacer()
@@ -54,17 +54,17 @@ struct AudioDeviceSelector: View {
                 HStack(spacing: Spacing.xs) {
                     Image(systemName: "mic")
                         .font(.labelMedium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text(selectedDeviceName)
                         .font(.labelMedium)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.techLabelSmall)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, Spacing.xs)
@@ -85,7 +85,7 @@ struct AudioDeviceSelector: View {
             } else {
                 Text("Enable Live Mode to see levels")
                     .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 80, height: 32)
             }
         }

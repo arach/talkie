@@ -667,7 +667,7 @@ struct AllMemos: View {
                     VStack(spacing: 6) {
                         Text("\(selectedMemoIDs.count) Memos Selected")
                             .font(Theme.current.fontSMBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("⌘-click to toggle, ⇧-click for range")
                             .font(Theme.current.fontXS)
@@ -713,7 +713,7 @@ struct AllMemos: View {
                     VStack(spacing: 6) {
                         Text("No Memo Selected")
                             .font(Theme.current.fontSMBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Click on a memo to view details")
                             .font(Theme.current.fontXS)
@@ -792,7 +792,7 @@ struct MemoRowPreview: View {
                 // Selection indicator
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(isSelected ? .accentColor : Color.white.opacity(0.2))
+                    .foregroundColor(isSelected ? .accentColor : TalkieTheme.border)
 
                 Text(memo.displayTitle)
                     .font(.system(size: 14, weight: .semibold))

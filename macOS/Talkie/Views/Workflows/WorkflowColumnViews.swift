@@ -28,13 +28,13 @@ struct WorkflowListColumn: View {
                         .font(Theme.current.fontSMBold)
                     Text("\(workflowManager.workflows.count) total")
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 Spacer()
                 Button(action: createNewWorkflow) {
                     Image(systemName: "plus")
                         .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                         .frame(width: 24, height: 24)
                         .background(Theme.current.surfaceSelected)
                         .cornerRadius(4)
@@ -138,7 +138,7 @@ struct WorkflowDetailColumn: View {
                             Text("NEW WORKFLOW")
                                 .font(Theme.current.fontXSBold)
                         }
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Theme.current.surfaceSelected)

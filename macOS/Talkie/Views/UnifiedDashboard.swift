@@ -683,7 +683,7 @@ struct UnifiedDashboard: View {
 
     private func activityColor(for level: Int) -> Color {
         switch level {
-        case 0: return Color(white: 0.15)
+        case 0: return TalkieTheme.surfaceCard
         case 1: return Color.green.opacity(0.3)
         case 2: return Color.green.opacity(0.5)
         case 3: return Color.green.opacity(0.7)

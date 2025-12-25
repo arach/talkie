@@ -35,7 +35,7 @@ struct ShortcutHint: View {
                 .fill(TalkieTheme.surfaceCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                        .strokeBorder(TalkieTheme.borderSubtle, lineWidth: 1)
                 )
                 .offset(y: -1)  // Background moves with content
         )

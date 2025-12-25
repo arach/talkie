@@ -91,15 +91,15 @@ struct ActivityLogFullView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                         .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
 
                     Text("Actions")
                         .font(Theme.current.fontTitleMedium)
-                        .foregroundColor(.primary)
+                        .foregroundColor(Theme.current.foreground)
 
                     Text("\(allRuns.count) events")
                         .font(SettingsManager.shared.fontBody)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
@@ -118,7 +118,7 @@ struct ActivityLogFullView: View {
 
                         Text("NO ACTIVITY YET")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Run workflows on your memos")
                             .font(SettingsManager.shared.fontXS)
@@ -132,14 +132,14 @@ struct ActivityLogFullView: View {
                         TableColumn("Timestamp", value: \.timestamp) { row in
                             Text(formatTimestamp(row.timestamp))
                                 .font(SettingsManager.shared.fontSM)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                         }
                         .width(min: 100, ideal: 150, max: 200)
 
                         TableColumn("Workflow", value: \.workflowName) { row in
                             Text(row.workflowName)
                                 .font(Theme.current.fontBodyBold)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Theme.current.foreground)
                                 .lineLimit(1)
                         }
                         .width(min: 80, ideal: 140, max: 250)
@@ -147,7 +147,7 @@ struct ActivityLogFullView: View {
                         TableColumn("Memo", value: \.memoTitle) { row in
                             Text(row.memoTitle)
                                 .font(SettingsManager.shared.fontSM)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Theme.current.foregroundSecondary)
                                 .lineLimit(1)
                         }
                         .width(min: 80, ideal: 180, max: 300)
@@ -161,7 +161,7 @@ struct ActivityLogFullView: View {
                                 if let ms = row.durationMs {
                                     Text(formatDurationMs(ms))
                                         .font(.monoSmall)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
                                 } else {
                                     Text("--")
                                         .font(.monoSmall)
@@ -200,7 +200,7 @@ struct ActivityLogFullView: View {
 
                         Text("SELECT AN ACTION")
                             .font(Theme.current.fontXSBold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Click a row to see details")
                             .font(SettingsManager.shared.fontXS)
@@ -294,7 +294,7 @@ struct ActivityInspectorPanel: View {
                     HStack(spacing: 6) {
                         Text(formatFullDate(runDate))
                             .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         if let runId = run.id {
                             Text(runId.uuidString.prefix(8).uppercased())
@@ -327,14 +327,14 @@ struct ActivityInspectorPanel: View {
                 if let model = modelId {
                     Text(model)
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Theme.current.surfaceAlternate)
                         .cornerRadius(3)
                 }
             }
-            .foregroundColor(.secondary)
+            .foregroundColor(Theme.current.foregroundSecondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(Theme.current.surface2)
@@ -350,11 +350,11 @@ struct ActivityInspectorPanel: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("OUTPUT")
                                     .font(Theme.current.fontXSBold)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
                                 Text(output)
                                     .font(SettingsManager.shared.fontSM)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(Theme.current.foreground)
                                     .textSelection(.enabled)
                                     .lineSpacing(2)
                                     .padding(10)
@@ -427,18 +427,18 @@ struct InspectorStepCard: View {
 
                 Image(systemName: step.stepIcon)
                     .font(SettingsManager.shared.fontXS)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text(step.stepType.uppercased())
                     .font(Theme.current.fontXSBold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 Spacer()
 
                 Button(action: { withAnimation { showInput.toggle() } }) {
                     Image(systemName: showInput ? "chevron.up" : "chevron.down")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -451,7 +451,7 @@ struct InspectorStepCard: View {
 
                     Text(step.input)
                         .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
                         .lineSpacing(1)
                         .lineLimit(6)
                         .padding(8)
@@ -474,7 +474,7 @@ struct InspectorStepCard: View {
 
                 Text(step.output)
                     .font(SettingsManager.shared.fontSM)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
                     .textSelection(.enabled)
                     .lineSpacing(2)
                     .padding(8)

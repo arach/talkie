@@ -68,7 +68,7 @@ struct TalkieServiceMonitorView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("TALKIE SERVICE")
                     .font(.techLabel)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Theme.current.foreground)
 
                 Text(monitor.state.rawValue)
                     .font(.techLabelSmall)
@@ -85,7 +85,7 @@ struct TalkieServiceMonitorView: View {
                     Text("Quick Open")
                         .font(.system(size: 11, weight: .medium))
                 }
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Theme.current.surface1.opacity(0.5))
@@ -175,7 +175,7 @@ struct TalkieServiceMonitorView: View {
                     .font(settings.fontXS)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.secondary)
+            .foregroundColor(Theme.current.foregroundSecondary)
             .help(showLogs ? "Hide logs" : "Show logs")
         }
     }
@@ -255,11 +255,11 @@ struct TalkieServiceMonitorView: View {
         VStack(alignment: .center, spacing: 2) {
             Text(value)
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                .foregroundColor(.primary)
+                .foregroundColor(Theme.current.foreground)
 
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
     }
 
@@ -271,20 +271,20 @@ struct TalkieServiceMonitorView: View {
             HStack {
                 Text("LOGS")
                     .font(.techLabelSmall)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
                 Text("\(monitor.logs.count)")
                     .font(.monoXSmall)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Button(action: { monitor.clearLogs() }) {
                     Image(systemName: "trash")
                         .font(settings.fontXS)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
                 .help("Clear logs")
             }
             .padding(.horizontal, Spacing.md)
@@ -300,7 +300,7 @@ struct TalkieServiceMonitorView: View {
 
                     Text("No logs yet")
                         .font(settings.fontSM)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     if monitor.state != .running {
                         Text("Start Talkie Service to see logs")
@@ -370,7 +370,7 @@ struct TalkieServiceLogRow: View {
                 // Category
                 Text(entry.category)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .lineLimit(1)
 
                 // Message
@@ -411,7 +411,7 @@ struct TalkieServiceStatusBadge: View {
 
             Text("Service")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundColor(Theme.current.foregroundSecondary)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
