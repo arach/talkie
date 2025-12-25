@@ -226,9 +226,10 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     nonisolated func transcribe(
         audioPath: String,
         modelId: String,
+        priority: TranscriptionPriority,
         reply: @escaping (String?, String?) -> Void
     ) {
-        Task { @MainActor in
+        Task(priority: priority.taskPriority) { @MainActor in
             await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, reply: reply)
         }
     }
@@ -237,9 +238,10 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         audioPath: String,
         modelId: String,
         externalRefId: String?,
+        priority: TranscriptionPriority,
         reply: @escaping (String?, String?) -> Void
     ) {
-        Task { @MainActor in
+        Task(priority: priority.taskPriority) { @MainActor in
             await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, reply: reply)
         }
     }

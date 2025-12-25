@@ -7,6 +7,9 @@
 
 import SwiftUI
 import AppKit
+import os
+
+private let signposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
 
 // MARK: - Sidebar Toggle Action
 
@@ -185,20 +188,8 @@ struct MigrationGateView: View {
                     }
             } else {
                 // Show main app
+                // Database initialization and CloudKit sync are handled by StartupCoordinator
                 TalkieNavigationView()
-                    .task {
-                        // Initialize GRDB on first launch after migration (runs on background thread)
-                        do {
-                            try await DatabaseManager.shared.initialize()
-                            print("✅ GRDB database initialized")
-
-                            // Start CloudKit sync
-                            CloudKitSyncEngine.shared.startPeriodicSync()
-                            print("✅ CloudKit sync started")
-                        } catch {
-                            print("❌ Failed to initialize GRDB: \(error)")
-                        }
-                    }
             }
         }
         .task {
@@ -213,20 +204,19 @@ struct MigrationGateView: View {
 
     private func checkMigrationStatus() {
         Task { @MainActor in
+            let uiState = signposter.beginInterval("UI First Render")
             print("\n🚀 [App Startup] Initializing Talkie...")
 
-            // Initialize GRDB first (runs on background thread to avoid blocking UI)
-            let dbStartTime = Date()
-            do {
-                try await DatabaseManager.shared.initialize()
-                let elapsed = Date().timeIntervalSince(dbStartTime)
-                print("✅ [App Startup] GRDB database initialized in \(Int(elapsed * 1000))ms")
-            } catch {
-                print("❌ [App Startup] Failed to initialize GRDB: \(error)")
+            // Phase 2: Initialize database (async, prevents duplicates)
+            let success = await StartupCoordinator.shared.initializeDatabase()
+
+            if !success {
+                print("❌ [App Startup] Failed to initialize GRDB")
                 // Continue anyway - migration will show error if it fails
             }
 
             // Check migration status
+            signposter.emitEvent("Check Migration")
             let migrationComplete = UserDefaults.standard.bool(forKey: "grdb_migration_complete")
             needsMigration = !migrationComplete
             checkComplete = true
@@ -234,18 +224,11 @@ struct MigrationGateView: View {
             if needsMigration {
                 print("⚠️ [App Startup] Migration required - showing MigrationView")
             } else {
-                print("✅ [App Startup] Migration already complete - loading main app")
-
-                // Check memo count
-                let repository = GRDBRepository()
-                if let count = try? await repository.countMemos(searchQuery: nil, filters: []) {
-                    print("📊 [App Startup] Found \(count) memos in GRDB")
-                }
-
-                // Start CloudKit sync after successful migration
-                CloudKitSyncEngine.shared.startPeriodicSync()
-                print("✅ [App Startup] CloudKit sync started\n")
+                print("✅ [App Startup] Migration already complete - loading main app\n")
+                // CloudKit sync and other services are handled by StartupCoordinator.initializeDeferred()
             }
+
+            signposter.endInterval("UI First Render", uiState)
         }
     }
 }

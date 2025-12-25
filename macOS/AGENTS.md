@@ -1,308 +1,588 @@
-# AGENTS.md — macOS
-
-macOS-specific instructions. See root `/AGENTS.md` for shared conventions.
+# Talkie macOS - Getting Started
+**TLDR: Don't read a million files. Read this first.**
 
 ---
 
-## Overview
+## The 3 Apps (Process Model)
 
-SwiftUI desktop app that receives voice memos from iOS via CloudKit, runs transcription locally, and executes AI-powered workflows.
+Talkie is **3 separate macOS apps** that work together:
 
-## Build
+### 1. **TalkieLive** - Always-On Voice Recorder
+**What**: Menu bar app that captures voice in real-time
+**Runs**: Independently, can be active when Talkie (main) is closed
+**Does**:
+- Detects voice, records audio
+- Sends to TalkieEngine for transcription
+- Pastes text or saves to queue
+- Saves all dictations to shared database
 
-```bash
-open Talkie.xcodeproj
+**Location**: `macOS/TalkieLive/`
+**Runs via**: `./macOS/TalkieLive/run.sh`
 
-# Build
-xcodebuild -scheme Talkie -destination 'platform=macOS' build
+### 2. **TalkieEngine** - ML Inference XPC Service
+**What**: Background XPC service that runs Whisper/Parakeet models
+**Runs**: Launched by TalkieLive or Talkie (main) on-demand
+**Does**:
+- Transcribes audio files → text
+- WhisperKit (CoreML) or Parakeet (NVIDIA) models
+- Isolated process (crashes don't kill main apps)
+- Caller-specified priority (`.high` for real-time, `.low` for batch)
 
-# Test
-xcodebuild -scheme Talkie -destination 'platform=macOS' test
+**Location**: `macOS/TalkieEngine/`
+**Runs via**: `./macOS/TalkieEngine/run.sh`
+**Protocol**: `EngineProtocol.swift` - see `TranscriptionPriority` for priority system
 
-# Archive
-xcodebuild -scheme Talkie -configuration Release archive
+### 3. **Talkie** - Main UI & Workflow Engine
+**What**: SwiftUI app for managing memos and running AI workflows
+**Runs**: User launches, can close while TalkieLive keeps running
+**Does**:
+- Display Live dictations (from shared database)
+- Manage voice memos (via CloudKit sync from iOS)
+- Run workflows (transcribe → summarize → extract tasks, etc.)
+- Settings, model management, debugging tools
+
+**Location**: `macOS/Talkie/`
+**Runs via**: `./macOS/Talkie/run.sh` or `open Talkie.xcodeproj`
+
+---
+
+## How They Communicate
+
 ```
+TalkieLive                    TalkieEngine                 Talkie (main)
+    │                              │                            │
+    │  XPC: transcribe(priority)   │                            │
+    │─────────────────────────────→│                            │
+    │                              │ Inference (.high/.low)     │
+    │←─────────────────────────────│                            │
+    │  Reply: transcript           │                            │
+    │                              │                            │
+    │  Save to DB                  │                            │
+    ↓                              │                            │
+~/Library/Application Support/Talkie/live.sqlite                │
+    │                              │                            │
+    │                              │        XPC callback        │
+    │──────────────────────────────┼───────────────────────────→│
+    │  (if Talkie running)         │    utteranceWasAdded()     │
+    │                              │                            │
+    │                              │      30s polling (fallback)│
+    │←─────────────────────────────┼────────────────────────────│
+    │                              │      refresh dictations    │
+```
+
+**Key Points**:
+- **Shared Database**: All dictations stored in `~/Library/Application Support/Talkie/live.sqlite`
+- **XPC for Real-Time**: State updates, transcription requests, callbacks
+- **Polling as Fallback**: 30-second timer catches missed XPC callbacks
+- **Priority System**: Caller declares `.high` (Live), `.userInitiated` (scratch pad), `.low` (batch)
+
+---
 
 ## Project Structure
 
+### TalkieLive (`macOS/TalkieLive/`)
+```
+TalkieLive/
+├── App/
+│   ├── TalkieLiveApp.swift           # SwiftUI app entry
+│   ├── AppDelegate.swift             # Menu bar, hotkeys
+│   └── LiveController.swift          # Recording state machine
+├── Database/
+│   ├── LiveDatabase.swift            # GRDB shared database
+│   └── AudioStorage.swift            # Audio file management
+├── Services/
+│   ├── TalkieLiveXPCService.swift    # Broadcasts state to Talkie
+│   ├── AudioLevelMonitor.swift       # Voice detection
+│   └── ContextCaptureService.swift   # Captures app/window context
+└── Views/
+    └── Overlay/                      # Floating UI when recording
+```
+
+**Key Files**:
+- `LiveController.swift:731` - Where dictations are saved + XPC broadcast
+- `TalkieLiveXPCService.swift` - State broadcasting to Talkie
+- `LiveDatabase.swift` - Shared database access
+
+### TalkieEngine (`macOS/TalkieEngine/`)
+```
+TalkieEngine/
+├── EngineProtocol.swift              # XPC protocol (TranscriptionPriority enum)
+├── EngineService.swift               # WhisperKit + Parakeet inference
+├── XPCServiceWrapper.swift           # XPC server implementation
+└── Views/
+    └── EngineStatusView.swift        # Debug UI for engine
+```
+
+**Key Files**:
+- `EngineProtocol.swift` - See `TranscriptionPriority` enum + docs
+- `EngineService.swift:226` - Priority → Task priority conversion
+- Priority levels: `.high` > `.userInitiated` > `.medium` > `.low` > `.utility` > `.background`
+
+### Talkie (`macOS/Talkie/`)
 ```
 Talkie/
 ├── App/
-│   ├── TalkieApp.swift
-│   └── AppDelegate.swift
+│   ├── TalkieApp.swift               # SwiftUI app entry
+│   ├── AppDelegate.swift             # Push notifications, URL handlers
+│   └── StartupCoordinator.swift      # Phased initialization (performance)
 ├── Models/
-│   ├── Persistence.swift
-│   ├── talkie.xcdatamodeld/     # Core Data model
-│   └── VoiceMemo+Transcripts.swift
+│   ├── Persistence.swift             # Core Data stack
+│   └── talkie.xcdatamodeld/          # Core Data model (memos, workflows)
 ├── Views/
-│   ├── NavigationView.swift     # Sidebar navigation
-│   ├── VoiceMemoListView.swift
-│   ├── WorkflowListView.swift
-│   ├── SystemConsoleView.swift  # Debug logs
-│   └── DebugToolbar.swift
+│   ├── NavigationView.swift          # Main sidebar navigation
+│   ├── Live/                         # Live dictations UI
+│   ├── MemoDetail/                   # Voice memo detail view
+│   ├── Settings/                     # Settings screens
+│   └── DebugToolbar.swift            # Debug overlay (⌘⇧D in DEBUG)
 ├── Services/
-│   ├── CloudKitSyncManager.swift
-│   ├── TranscriptFileManager.swift
-│   ├── SettingsManager.swift
-│   ├── WhisperService.swift     # Local transcription
-│   ├── ParakeetService.swift    # NVIDIA Parakeet
-│   └── LLM/
-│       ├── LLMProvider.swift    # Protocol
-│       ├── LLMProviderRegistry.swift
-│       ├── OpenAIProvider.swift
-│       ├── AnthropicProvider.swift
-│       ├── GeminiProvider.swift
-│       ├── GroqProvider.swift
-│       └── MLXProvider.swift    # Local models
+│   ├── TalkieLiveStateMonitor.swift  # Receives XPC from TalkieLive
+│   ├── EngineClient.swift            # Calls TalkieEngine
+│   ├── CloudKitSyncManager.swift     # iOS → macOS sync
+│   ├── SettingsManager.swift         # App settings
+│   └── Router.swift                  # URL routing (talkie://...)
+├── Stores/
+│   └── DictationStore.swift          # Live dictations data (lazy loading)
+├── Database/
+│   └── LiveDatabase.swift            # Read from shared DB
 ├── Workflow/
-│   ├── WorkflowDefinition.swift # TWF schema
-│   ├── WorkflowExecutor.swift   # Step execution
-│   ├── AutoRunProcessor.swift   # Auto-run on sync
-│   └── Steps/                   # Step implementations
+│   ├── WorkflowDefinition.swift      # TWF schema
+│   ├── WorkflowExecutor.swift        # Step execution
+│   └── Steps/                        # Step implementations
+├── Debug/
+│   ├── DesignMode/                   # Design Tools (⌘⇧D)
+│   └── DebugCommandHandler.swift     # CLI debug commands
 └── Resources/
-    ├── StarterWorkflows/        # Bundled TWF files
-    │   ├── TWF_GENERATION_PROMPT.md
-    │   ├── quick-summary.twf.json
-    │   ├── hey-talkie.twf.json
-    │   └── ...
-    └── LLMConfig.json           # Provider/model config
+    └── StarterWorkflows/             # Bundled .twf.json files
 ```
 
-## Key Services
-
-### CloudKitSyncManager
-
-Handles delta sync from iOS:
-
-```swift
-class CloudKitSyncManager {
-    let syncInterval: TimeInterval = 60  // Foreground
-    let backgroundInterval: TimeInterval = 120
-
-    func fetchChanges() async {
-        // Token-based delta sync
-        // Triggers AutoRunProcessor on new memos
-    }
-}
-```
-
-### Transcription Services
-
-Multiple engines available:
-
-| Service | Model | Notes |
-|---------|-------|-------|
-| `WhisperService` | WhisperKit (CoreML) | Local, models in `~/Library/Application Support/Talkie/WhisperModels/` |
-| `ParakeetService` | NVIDIA Parakeet | Local |
-| `AppleSpeechService` | Apple Speech | Free, on-device |
-
-```swift
-protocol TranscriptionService {
-    var engineId: String { get }
-    func transcribe(audioURL: URL) async throws -> TranscriptionResult
-}
-```
-
-### LLM Providers
-
-Protocol-based provider system:
-
-```swift
-protocol LLMProvider {
-    var providerId: String { get }
-    func generate(prompt: String, options: LLMOptions) async throws -> String
-    func generateStream(prompt: String, options: LLMOptions) -> AsyncThrowingStream<String, Error>
-}
-```
-
-Providers: OpenAI, Anthropic, Gemini, Groq, MLX (local)
-
-Cost tiers for automatic routing:
-- `fast` → gemini-2.0-flash
-- `balanced` → claude-sonnet
-- `quality` → claude-opus
-
-### Workflow Executor
-
-Executes TWF workflows step-by-step:
-
-```swift
-@MainActor @Observable
-final class WorkflowExecutor {
-    var isRunning = false
-    var currentStep: WorkflowStep?
-
-    func execute(_ workflow: Workflow, context: WorkflowContext) async throws -> WorkflowRun {
-        for step in workflow.steps {
-            currentStep = step
-            let output = try await executeStep(step, context: context)
-            context.outputs[step.id] = output
-        }
-        return WorkflowRun(...)
-    }
-}
-```
-
-### AutoRunProcessor
-
-Triggers workflows when new memos sync:
-
-```swift
-class AutoRunProcessor {
-    func processPendingMemos() async {
-        // Phase 1: Transcription workflows
-        // Phase 2: Post-transcription workflows (summary, tasks, etc.)
-    }
-}
-```
-
-## Workflow Development
-
-### Adding a New Step Type
-
-1. Add case to `WorkflowStepType` enum in `WorkflowDefinition.swift`
-2. Create config struct (e.g., `NewStepConfig: Codable`)
-3. Add execution logic in `WorkflowExecutor.executeStep()`
-4. Update `TWF_GENERATION_PROMPT.md` with examples
-
-### Variable Resolution
-
-```swift
-// In prompts: {{TRANSCRIPT}}, {{TITLE}}, {{step-id}}, {{step-id.field}}
-func resolveVariables(_ template: String, context: WorkflowContext) -> String
-```
-
-### Testing Workflows
-
-```bash
-# Create test workflow in ~/Documents/Workflows/test.twf.json
-# Run via UI or trigger with test memo
-```
-
-## Data Flow
-
-```
-iOS Recording
-     │
-     ▼ CloudKit
-macOS Sync (CloudKitSyncManager)
-     │
-     ▼ New memo detected
-AutoRunProcessor
-     │
-     ├─▶ Phase 1: Transcribe (WhisperService)
-     │        │
-     │        ▼ TranscriptVersion created
-     │
-     └─▶ Phase 2: Post-transcription workflows
-              │
-              ▼ WorkflowRun saved
-         UI updates
-```
-
-## Local Storage
-
-| Path | Content |
-|------|---------|
-| `~/Documents/Workflows/` | User TWF files |
-| `~/Documents/Transcripts/` | Optional Markdown export |
-| `~/Library/Application Support/Talkie/WhisperModels/` | Downloaded models |
-| Core Data | `~/Library/Containers/.../Data/Library/Application Support/` |
+**Key Files**:
+- `StartupCoordinator.swift` - Phased app initialization (performance optimizations)
+- `DictationStore.swift` - Lazy loading (50 recent, not all 3K), 30s polling
+- `TalkieLiveStateMonitor.swift:172` - XPC callback handler `utteranceWasAdded()`
+- `EngineClient.swift` - How Talkie calls TalkieEngine (set priority here)
+- `Router.swift` - URL scheme routing (`talkie://...`)
 
 ---
 
-## TalkieLive Data Architecture
+## Shared Packages (Monorepo)
 
-### Shared Database (Single Source of Truth)
+Talkie uses **3 local Swift packages** developed in the monorepo:
 
-TalkieLive stores all utterances in a SQLite database shared via App Group:
+### 1. **TalkieKit** - Shared Components (3 Apps)
+**Location**: `macOS/TalkieKit/` *(not in `/Packages/`)*
+**Purpose**: Shared components used across Talkie, TalkieLive, and TalkieEngine
 
+**Features**:
+- **Console** - System console viewer (`ConsoleView.swift`)
+- **AudioPlayer** - Seekable waveform player (`AudioPlaybackManager.swift`)
+- **SharedSettings** - Cross-app settings sync
+- **TalkieEnvironment** - Environment detection (dev/staging/prod)
+- **UI Components** - LivePill status indicator
+
+**Used by**: All 3 apps (Talkie, TalkieLive, TalkieEngine)
+
+**Why separate from `/Packages/`**: App-specific shared code, tightly coupled to Talkie's architecture
+
+### 2. **DebugKit** - Debugging Toolkit
+**Location**: `/Packages/DebugKit/`
+**Purpose**: Comprehensive debugging components for macOS SwiftUI apps
+
+**Features**:
+- **DebugToolbar** - Floating debug toolbar with actions/controls
+- **DebugShelf** - Sliding shelf for step-based flows (onboarding)
+- **LayoutGrid** - Visual grid overlay showing layout zones
+- **StoryboardGenerator** - Multi-screen screenshot compositor
+- **CLICommandHandler** - Generic `--debug=<command>` headless system
+
+**Used by**: Talkie (main app), WFKit (workflow editor)
+
+**Example**:
+```bash
+# Generate storyboard with layout grid overlay
+Talkie.app/Contents/MacOS/Talkie --debug=onboarding-storyboard ~/Desktop/out.png
 ```
-~/Library/Group Containers/group.com.jdi.talkie/TalkieLive/PastLives.sqlite
+
+### 3. **WFKit** - Visual Workflow Editor
+**Location**: `/Packages/WFKit/`
+**Purpose**: Canvas-based node editor component library
+
+**Features**:
+- Canvas-based node editor with pan/zoom
+- Visual node connections (Bezier curves)
+- Node property inspector
+- Multiple layout modes (freeform, vertical)
+- JSON export/import
+- Minimap overview
+- Built-in debug toolbar (via DebugKit)
+
+**Used by**: Talkie (workflow visualization - planned v1: read-only viewer)
+
+**Demo App**:
+```bash
+cd Packages/WFKit
+swift run Workflow  # Standalone demo
 ```
 
-**Access Pattern:**
-- **TalkieLive** → Read/Write (creates utterances on transcription)
-- **Talkie.app** → Read-only (displays Live history in sidebar)
-- **TalkieEngine** → No direct access (XPC service for transcription only)
+**Dependency Chain**:
+```
+Talkie, TalkieLive, TalkieEngine
+  ├─→ TalkieKit (shared components)
+  └─→ DebugKit (debug tools)
 
-### Database Schema: `live_utterance`
+Talkie (only)
+  └─→ WFKit
+        └─→ DebugKit
+```
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | INTEGER | Primary key (auto-increment) |
-| `createdAt` | DOUBLE | Unix timestamp |
-| `text` | TEXT | Transcribed text |
-| `mode` | TEXT | `paste`, `clipboard`, `queued`, `failed` |
-| `appBundleID` | TEXT | Source app bundle ID |
-| `appName` | TEXT | Source app display name |
-| `windowTitle` | TEXT | Active window title |
-| `durationSeconds` | DOUBLE | Recording duration |
-| `wordCount` | INTEGER | Word count |
-| `whisperModel` | TEXT | Model used (e.g., `parakeet:v3`) |
-| `transcriptionMs` | INTEGER | Transcription time in ms |
-| `metadata` | TEXT | JSON blob with rich context (see below) |
-| `audioFilename` | TEXT | Audio file name (stored separately) |
-| `transcriptionStatus` | TEXT | `success`, `failed`, `pending` |
-| `promotionStatus` | TEXT | `none`, `memo`, `command`, `ignored` |
-| `createdInTalkieView` | INTEGER | Boolean: created in TalkieLive UI |
-| `pasteTimestamp` | DOUBLE | When pasted (null = queued) |
+### Why Monorepo?
 
-### Rich Context Metadata (JSON)
+These packages are:
+- ✅ **Developed for Talkie** - Built alongside Talkie features
+- ✅ **Modular** - Structured as proper SPM packages
+- ✅ **Fast iteration** - No context switching between repos
+- ✅ **Potentially publishable** - DebugKit/WFKit could extract to separate repos later
 
-The `metadata` column stores rich context captured via Accessibility API:
+**Referenced by**: Relative paths in `Package.swift` (`.package(path: "../DebugKit")`)
 
-```json
-{
-  "documentURL": "file:///path/to/file.swift",
-  "browserURL": "https://example.com/page",
-  "focusedElementRole": "AXTextArea",
-  "focusedElementValue": "// code snippet...",
-  "terminalWorkingDir": "~/dev/project"
+**Development**: Make changes in package source, test immediately in apps - no commits needed
+
+**See**: `/Packages/README.md` for DebugKit/WFKit workflow
+
+---
+
+## Essential Scripts
+
+### Build & Run
+```bash
+# Run each app individually (from repo root)
+./macOS/Talkie/run.sh              # Main UI
+./macOS/TalkieLive/run.sh          # Menu bar recorder
+./macOS/TalkieEngine/run.sh        # Inference service
+
+# Or run all 3 together
+./macOS/run.sh                     # Launches all apps
+
+# Build release
+cd macOS/Talkie
+xcodebuild -scheme Talkie -configuration Release build
+```
+
+### Development Tools
+```bash
+# Keep Xcode project in sync with file system
+./scripts/sync-xcode-files.py      # Add missing .swift files to project
+./scripts/sync-xcode-files.py --check  # Preview changes
+./scripts/sync-xcode-files.py --diff   # Show diff
+
+# Find latest build output
+./scripts/find-build.sh            # Locates DerivedData build
+
+# Profile Engine
+./macOS/TalkieEngine/profile-engine.sh  # Instruments profiling
+```
+
+### Common Workflows
+```bash
+# Debug mode with CLI command
+./macOS/Talkie/run.sh --debug=settings-screenshots ~/Desktop/screenshots
+
+# Install debug Engine (for testing)
+./scripts/install-debug-engine.sh
+
+# Create app icon
+./scripts/create-app-icon.sh icon.png
+```
+
+### Build, Sign, Notarize & Release
+
+**Location**: `Installer/build.sh` (656-line comprehensive script)
+
+```bash
+# Full installer (3 separate apps)
+./Installer/build.sh --version {{VERSION}}
+
+# Unified bundle (helpers embedded in Talkie.app/LoginItems)
+./Installer/build.sh unified --version {{VERSION}}
+
+# Specific installers
+./Installer/build.sh core --version {{VERSION}}   # Engine + Core only
+./Installer/build.sh live --version {{VERSION}}   # Engine + Live only
+./Installer/build.sh all --version {{VERSION}}    # All installers
+
+# Fast iteration (skip clean build, reuse exports)
+SKIP_CLEAN=1 ./Installer/build.sh --version {{VERSION}}
+
+# Skip notarization (for local testing)
+SKIP_NOTARIZE=1 ./Installer/build.sh --version {{VERSION}}
+
+# Interactive release (pre-flight checks + confirmation)
+./Installer/release.sh {{VERSION}}
+```
+
+**Process**:
+1. Verify signing identities (Developer ID App + Installer)
+2. Build all 3 apps (Release, arm64, signed)
+3. Create component packages (.pkg)
+4. Sign distribution packages (productsign)
+5. Notarize (xcrun notarytool with "notarytool" profile)
+6. Staple ticket (xcrun stapler)
+7. Archive to `Installer/releases/{{VERSION}}/`
+
+**Output**:
+- `Talkie-for-Mac.pkg` - Full installer (3 apps)
+- `Talkie-Unified.pkg` - Single bundle with helpers embedded
+- `Talkie-Core.pkg` - Engine + Core only
+- `Talkie-Live.pkg` - Engine + Live only
+
+**Key Features**:
+- Proper iCloud signing (archive → export workflow)
+- Incremental builds (SKIP_CLEAN=1 reuses exports)
+- LaunchAgent installation (/Library/LaunchAgents/)
+- Gatekeeper verification
+
+**Setup notarization**:
+```bash
+xcrun notarytool store-credentials "notarytool" \
+  --apple-id {{YOUR_APPLE_ID}} \
+  --team-id {{TEAMID}}
+```
+
+---
+
+## DEBUG-Only Toolbars (⌘⇧D)
+
+### 1. Debug Toolbar (Red Ant Icon)
+**Activation**: Automatically appears in DEBUG builds
+**Location**: `Views/DebugToolbar.swift`
+**Features**:
+- Quick actions (force sync, clear caches, test workflows)
+- System console viewer
+- Copy debug info to clipboard
+- App state inspection
+
+**How to Use**:
+```swift
+// In any view:
+TalkieDebugToolbar {
+    // Your custom debug content
+    Text("Custom debug info")
+} debugInfo: {
+    ["Key": "Value", "State": "Active"]
 }
 ```
 
-Captured at recording start time using `ContextCaptureService` (no screen recording required).
+### 2. Design Tools (Grid/Ruler Icon)
+**Activation**: Press **⌘⇧D** to toggle Design God Mode
+**Location**: `Debug/DesignMode/`
+**Features**:
+- Layout grid overlay (8pt baseline grid)
+- Spacing decorator (shows padding/margins)
+- Design system compliance audit
+- Color/typography inspection
 
-### Audio Storage
+**Files**:
+- `DesignModeManager.swift` - Global enable/disable
+- `DesignOverlay.swift` - Main overlay UI
+- `SpacingDecoratorOverlay.swift` - Visual spacing hints
+- `Tools/DesignAuditor.swift` - Design system compliance checking
 
-Audio files stored separately:
+**How to Use**:
+- Press **⌘⇧D** anywhere in app → toggles Design Mode
+- Click toolbar to show/hide grid, spacing, bounds
+- Audit button shows design token compliance report
 
+---
+
+## Common Tasks
+
+### Fix a Bug in Live Dictations
+
+1. **Where to Look**:
+   - Recording issues → `TalkieLive/App/LiveController.swift`
+   - Transcription issues → `TalkieEngine/EngineService.swift`
+   - UI display issues → `Talkie/Views/Live/DictationListView.swift`
+   - Database issues → `LiveDatabase.swift` (either TalkieLive or Talkie)
+
+2. **Debug Tools**:
+   - TalkieLive logs: `~/Library/Logs/TalkieLive/TalkieLive.log`
+   - Engine logs: `~/Library/Logs/TalkieEngine/TalkieEngine.log`
+   - Database: `sqlite3 ~/Library/Application\ Support/Talkie/live.sqlite`
+   - XPC connection: `log show --predicate 'subsystem == "jdi.talkie.core"' --last 5m`
+
+3. **Common Issues**:
+   - **Slow transcription during builds** → Check priority (should be `.high` in TalkieLive)
+   - **Dictations not updating** → Check XPC connection (`TalkieLiveStateMonitor.isXPCConnected`)
+   - **Database empty** → Check path (moved from Group Containers to Application Support)
+
+### Add a New Workflow Step
+
+1. **Define Step Type**: `Talkie/Workflow/WorkflowDefinition.swift`
+   ```swift
+   enum WorkflowStepType: String, Codable {
+       case myNewStep = "my-new-step"
+   }
+   ```
+
+2. **Add Config Struct**:
+   ```swift
+   struct MyNewStepConfig: Codable {
+       var parameter: String
+   }
+   ```
+
+3. **Implement Execution**: `Talkie/Workflow/WorkflowExecutor.swift`
+   ```swift
+   case .myNewStep:
+       let config = try step.decodeConfig(MyNewStepConfig.self)
+       return try await executeMyNewStep(config, context: context)
+   ```
+
+4. **Create Step File**: `Talkie/Workflow/Steps/MyNewStep.swift`
+
+5. **Update Docs**: `Resources/StarterWorkflows/TWF_GENERATION_PROMPT.md`
+
+### Debug Startup Performance
+
+1. **Use Instruments**:
+   ```bash
+   # Build and profile
+   xcodebuild -scheme Talkie -configuration Release build
+   # Open in Instruments → "os_signpost" template
+   # Filter by subsystem: "jdi.talkie.performance"
+   ```
+
+2. **Key Signposts**:
+   - `App Launch` - Overall app initialization
+   - `Phase 1: Critical` - Window appearance (~50ms target)
+   - `Phase 2: Database` - GRDB init
+   - `UI First Render` - SwiftUI render time
+
+3. **Files to Check**:
+   - `StartupCoordinator.swift` - Phased initialization logic
+   - `AppDelegate.swift` - Has signpost instrumentation
+   - `TalkieApp.swift` - SwiftUI lifecycle
+
+### Add Files to Xcode Project
+
+```bash
+# After adding/moving .swift files:
+./scripts/sync-xcode-files.py --check    # Preview what will be added
+./scripts/sync-xcode-files.py            # Add missing files to project
+
+# The script:
+# - Finds .swift files not in project.pbxproj
+# - Adds them to correct PBXGroup (preserves folder structure)
+# - Creates backup before changes
 ```
-~/Library/Group Containers/group.com.jdi.talkie/TalkieLive/Audio/
-└── {uuid}.m4a
-```
 
-### Code Locations
+---
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| Database | `TalkieLive/Database/PastLivesDatabase.swift` | GRDB wrapper |
-| Model | `TalkieLive/Database/LiveUtterance.swift` | Data model |
-| Context Capture | `TalkieLive/ContextCaptureService.swift` | Accessibility API |
-| Talkie Read | `Talkie/Services/LiveDataStore.swift` | Read-only access |
-| Talkie Model | `Talkie/Models/LiveUtterance.swift` | Read-only mirror |
+## Data Storage
 
-### Migration
+| Path | What | Access |
+|------|------|--------|
+| `~/Library/Application Support/Talkie/live.sqlite` | Live dictations database | TalkieLive (RW), Talkie (RW) |
+| `~/Library/Application Support/Talkie/Audio/` | Audio files (uuid.m4a) | TalkieLive (RW), Talkie (R) |
+| `~/Library/Application Support/Talkie/WhisperModels/` | Downloaded ML models | TalkieEngine |
+| `~/Documents/Workflows/` | User TWF files | Talkie |
+| `~/Documents/Transcripts/` | Optional Markdown export | Talkie |
+| Core Data | Voice memos (from iOS) | Talkie only |
 
-Legacy JSON storage (`utterances.json`) is automatically migrated on first launch. Migrated files renamed to `.migrated.json`.
+---
 
-## Debugging
+## Architecture Principles
 
-- **System Console**: View in-app at `NavigationView` → System Console
-- **Debug Toolbar**: Toggle features, force sync, clear caches
-- **Logs**: `log show --predicate 'subsystem == "jdi.talkie-os-mac"' --last 5m`
+### Performance
+- **Lazy loading**: Don't load data until user navigates to it
+- **Phased startup**: Critical path first, defer everything else
+- **Priority-aware**: Real-time work gets `.high`, batch gets `.low`
+- **Polling as fallback**: XPC is primary, polling catches failures
 
-## Design Guidelines
+### Communication
+- **XPC for real-time**: State updates, callbacks, interactive requests
+- **Database for async**: Persistence, works when apps are closed
+- **No tight coupling**: TalkieLive can run without Talkie
 
-### Icons
-- **Avoid emojis in UI** — Use SF Symbols instead for a consistent, professional look
-- SF Symbols adapt to dark mode, accessibility settings, and system weight
-- Emojis are acceptable in user-generated content (e.g., workflow names) but not in app chrome
+### Code Patterns
+- **Observable singletons**: `@Observable final class MyService { static let shared }`
+- **Selective caching in views**: Cache only properties you display, use `.onReceive()`
+- **MainActor isolation**: XPC services use `@MainActor` for thread safety
+- **Fail-safe XPC**: Broadcast to N observers, silently ignore if none connected
 
-## Notes
+### Design System (See `DESIGN_SYSTEM_REVIEW.md`)
+- **No emojis in UI** - SF Symbols only (emojis OK in user content)
+- **Design tokens**: Use `Theme.current.*` not hardcoded values
+- **Spacing**: Use `Spacing.sm/md/lg` not raw numbers
+- **Debug compliance**: Press ⌘⇧D → Audit button
 
-- macOS receives memos, iOS creates them
-- Transcription runs locally (no cloud ASR)
-- Workflows are macOS-only (iOS displays results after sync back)
-- LLM API keys stored in Keychain via `SettingsManager`
+---
+
+## User Preferences
+
+- **No emojis in app UI** - Use SF Symbols for icons/buttons
+- **Design system compliance** - Use tokens, not hardcoded values
+- **Performance obsessed** - Instrument everything, minimize blocking work
+- **Clean commits** - No "Generated with Claude Code" footers (see `CLAUDE.md`)
+- **Pnpm preferred** - For Node.js projects (check for `pnpm-lock.yaml` first)
+- **Gitmoji in commits** - Add emoji prefixes (✨ features, 🐛 bugs, ⚡️ performance)
+
+---
+
+## Key Documentation
+
+- **This file** (`macOS/AGENTS.md`) - Start here
+- `macOS/Talkie/ARCHITECTURE_REVIEW.md` - SwiftUI performance patterns
+- `macOS/Talkie/DESIGN_SYSTEM_REVIEW.md` - Design tokens, compliance
+- `macOS/TalkieEngine/EngineProtocol.swift` - Priority system (see comments)
+- `macOS/Talkie/CLAUDE.md` - Build commands, project-specific conventions
+- `/CLAUDE.md` (repo root) - Workspace-wide conventions
+
+---
+
+## Quick Reference
+
+### "Where do I find...?"
+
+| What | Where |
+|------|-------|
+| Recording logic | `TalkieLive/App/LiveController.swift` |
+| Transcription | `TalkieEngine/EngineService.swift` |
+| Priority system | `TalkieEngine/EngineProtocol.swift` (see `TranscriptionPriority`) |
+| Live dictations UI | `Talkie/Views/Live/DictationListView.swift` |
+| Dictation data store | `Talkie/Stores/DictationStore.swift` |
+| Shared database | `LiveDatabase.swift` (in both TalkieLive and Talkie) |
+| XPC callbacks | `Talkie/Services/TalkieLiveStateMonitor.swift` |
+| Engine client | `Talkie/Services/EngineClient.swift` |
+| Startup phases | `Talkie/App/StartupCoordinator.swift` |
+| Workflow executor | `Talkie/Workflow/WorkflowExecutor.swift` |
+| Debug toolbar | `Talkie/Views/DebugToolbar.swift` (uses `/Packages/DebugKit/`) |
+| Design tools | `Talkie/Debug/DesignMode/` |
+| Settings | `Talkie/Services/SettingsManager.swift` |
+| CloudKit sync | `Talkie/Services/CloudKitSyncManager.swift` |
+| TalkieKit package | `macOS/TalkieKit/` (shared components for 3 apps) |
+| DebugKit package | `/Packages/DebugKit/` (debug components) |
+| WFKit package | `/Packages/WFKit/` (workflow editor library) |
+
+### "How do I...?"
+
+| Task | Command/File |
+|------|--------------|
+| Run Talkie | `./macOS/Talkie/run.sh` |
+| Run TalkieLive | `./macOS/TalkieLive/run.sh` |
+| Run Engine | `./macOS/TalkieEngine/run.sh` |
+| Run WFKit demo | `cd Packages/WFKit && swift run Workflow` |
+| Test DebugKit changes | Make changes in `/Packages/DebugKit/`, build Talkie |
+| Build release installer | `./Installer/build.sh --version {{VERSION}}` |
+| Build unified bundle | `./Installer/build.sh unified --version {{VERSION}}` |
+| Interactive release | `./Installer/release.sh {{VERSION}}` |
+| Sync Xcode project | `./scripts/sync-xcode-files.py` |
+| Profile startup | Instruments → os_signpost → filter "jdi.talkie.performance" |
+| View Engine logs | `tail -f ~/Library/Logs/TalkieEngine/TalkieEngine.log` |
+| Toggle Design Mode | Press ⌘⇧D |
+| Check DB | `sqlite3 ~/Library/Application\ Support/Talkie/live.sqlite` |
+| Find build output | `./scripts/find-build.sh` |
+
+---
+
+**Last Updated**: 2025-12-25
+**Major Topics**: 3-app process model, priority system, lazy loading, toolbars, packages (TalkieKit, DebugKit, WFKit)
