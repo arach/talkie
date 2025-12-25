@@ -109,7 +109,7 @@ struct TalkieNavigationView: View {
                 }
 
                 // Content area + StatusBar
-                VStack(spacing: Spacing.xxs) {
+                VStack(spacing: 0) {
                     // Main content area
                     ZStack {
                         if isTwoColumnSection {
@@ -117,7 +117,7 @@ struct TalkieNavigationView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             // 3-column: content list + detail
-                            HStack(spacing: Spacing.xxs) {
+                            HStack(spacing: 0) {
                                 contentColumnView
                                     .frame(width: contentColumnWidth)
 
@@ -269,14 +269,14 @@ struct TalkieNavigationView: View {
     // MARK: - Sidebar View (matches TalkieLive structure)
 
     private var sidebarView: some View {
-        VStack(spacing: Spacing.xxs) {
+        VStack(spacing: 0) {
             // Header with collapse toggle (matches TalkieLive)
             sidebarHeader
 
             // Navigation content
             if isSidebarCollapsed {
                 // Collapsed: simple VStack, no scroll, natural sizing
-                VStack(spacing: Spacing.xxs) {
+                VStack(spacing: 0) {
                     sidebarButton(section: .home, icon: "house.fill", title: "Home")
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
                     sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
@@ -290,7 +290,7 @@ struct TalkieNavigationView: View {
             } else {
                 // Expanded: ScrollView with sections
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    VStack(alignment: .leading, spacing: 0) {
                         // Home
                         sidebarButton(
                             section: .home,
@@ -399,7 +399,7 @@ struct TalkieNavigationView: View {
             Spacer(minLength: 0)
 
             // Settings pinned to bottom
-            VStack(spacing: Spacing.xxs) {
+            VStack(spacing: 0) {
                 Divider()
                     .opacity(isSidebarCollapsed ? 0 : Opacity.half)
                 sidebarButton(
