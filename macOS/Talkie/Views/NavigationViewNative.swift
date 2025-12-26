@@ -127,6 +127,12 @@ struct TalkieNavigationViewNative: View {
                 }
             }
         }
+        .onChange(of: selectedSection) { oldValue, newValue in
+            // When switching to 3-column sections, ensure all columns are visible
+            if let newValue = newValue, !usesTwoColumns {
+                columnVisibility = .all
+            }
+        }
         .setupNotificationObservers(
             selectedSection: $selectedSection,
             previousSection: $previousSection,
