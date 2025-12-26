@@ -525,10 +525,10 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Sticky header area
+            // Sticky header area - aligned with sidebar TALKIE title
             header
                 .padding(.horizontal, Spacing.lg)
-                .padding(.top, Spacing.lg)
+                .padding(.top, 8)  // Match sidebar TALKIE header vertical alignment
                 .padding(.bottom, Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .background(Theme.current.background)

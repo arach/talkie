@@ -457,7 +457,8 @@ struct HistoryView: View {
             let startTime = Date()
             let text = try await EngineClient.shared.transcribe(
                 audioPath: storedURL.path,
-                modelId: settings.selectedModelId
+                modelId: settings.selectedModelId,
+                priority: .userInitiated  // User just finished recording
             )
             let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
 

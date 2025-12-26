@@ -51,12 +51,66 @@ public var kTalkieEngineXPCServiceName: String {
 
 // MARK: - TalkieEngine XPC Protocol
 
+/// Task priority for transcription requests
+@objc public enum TranscriptionPriority: Int, Sendable {
+    case background = 0       // Lowest - maintenance, cleanup
+    case utility = 1          // Long-running tasks
+    case low = 2             // Deferrable work
+    case medium = 3          // Default - balanced priority
+    case userInitiated = 4   // User-facing, should complete quickly
+    case high = 5            // Highest - real-time, interactive (Live dictations)
+
+    /// Convert to Swift TaskPriority
+    public var taskPriority: TaskPriority {
+        switch self {
+        case .background: return .background
+        case .utility: return .utility
+        case .low: return .low
+        case .medium: return .medium
+        case .userInitiated: return .userInitiated
+        case .high: return .high
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .background: return "Background"
+        case .utility: return "Utility"
+        case .low: return "Low"
+        case .medium: return "Medium"
+        case .userInitiated: return "User Initiated"
+        case .high: return "High (Real-time)"
+        }
+    }
+}
+
 /// Protocol for TalkieEngine's XPC service (Talkie/Live → Engine)
 @objc public protocol TalkieEngineProtocol {
     /// Transcribe audio file to text
+    /// - Parameters:
+    ///   - audioPath: Path to audio file
+    ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small")
+    ///   - priority: Task priority - `.high` for real-time (Live), `.medium` for interactive, `.low` for batch
+    ///   - reply: Callback with transcript or error
     func transcribe(
         audioPath: String,
         modelId: String,
+        priority: TranscriptionPriority,
+        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
+    )
+
+    /// Transcribe audio file with external reference ID for tracing
+    /// - Parameters:
+    ///   - audioPath: Path to audio file
+    ///   - modelId: Model identifier
+    ///   - externalRefId: Client-provided reference ID for correlation
+    ///   - priority: Task priority
+    ///   - reply: Callback with transcript or error
+    func transcribe(
+        audioPath: String,
+        modelId: String,
+        externalRefId: String?,
+        priority: TranscriptionPriority,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 
@@ -74,6 +128,9 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Ping to verify connection
     func ping(reply: @escaping (_ pong: Bool) -> Void)
+
+    /// Request graceful shutdown
+    func requestShutdown(waitForCompletion: Bool, reply: @escaping (_ accepted: Bool) -> Void)
 
     /// Start downloading a model
     func downloadModel(

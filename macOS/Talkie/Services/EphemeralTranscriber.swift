@@ -137,7 +137,8 @@ public final class EphemeralTranscriber {
             // Use EngineClient to transcribe
             let transcript = try await EngineClient.shared.transcribe(
                 audioPath: fileURL.path,
-                modelId: "parakeet:v3"  // Use fast model for voice instructions
+                modelId: "parakeet:v3",  // Use fast model for voice instructions
+                priority: .high          // Real-time voice instructions - highest priority
             )
             logger.info("Transcribed: \(transcript.prefix(50))...")
             return transcript
