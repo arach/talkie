@@ -164,6 +164,7 @@ struct AppearanceSettingsView: View {
                         }
                         .background(Theme.current.backgroundSecondary)
                     }
+                    .frame(maxWidth: .infinity)  // Prevent preview from pushing layout
                     .cornerRadius(Spacing.xs)
                     .overlay(
                         RoundedRectangle(cornerRadius: Spacing.xs)

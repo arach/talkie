@@ -20,7 +20,7 @@ struct SettingsSidebarColumn: View {
                 .foregroundColor(Theme.current.foreground)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Spacing.md)
-                .padding(.top, Spacing.lg)
+                .padding(.top, 8)  // Match main navigation TALKIE header
                 .padding(.bottom, Spacing.sm)
 
             // Menu Sections
@@ -174,6 +174,7 @@ struct SettingsContentColumn: View {
 
     var body: some View {
         contentView
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
