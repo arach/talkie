@@ -13,6 +13,48 @@ import os
 
 private let pillLogger = Logger(subsystem: "jdi.talkie.live", category: "FloatingPill")
 
+// MARK: - NSScreen Extension (Safe Display Access)
+
+extension NSScreen {
+    /// Check if this screen is valid (not in a transitional/disconnected state)
+    var isValid: Bool {
+        // Check if we can get a valid display ID
+        guard let displayID = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return false
+        }
+
+        // Check if frame is valid (non-zero)
+        let screenFrame = frame
+        guard screenFrame.width > 0 && screenFrame.height > 0 else {
+            return false
+        }
+
+        // Check if this display is actually active
+        // CGDisplayIsActive returns false for disconnected/sleeping displays
+        return CGDisplayIsActive(displayID) != 0
+    }
+
+    /// Safe access to screen name that handles invalid display identifiers gracefully
+    var safeDisplayName: String {
+        guard let displayID = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return "Display"
+        }
+
+        // Only access localizedName if the display is valid
+        // This prevents "invalid display identifier" errors for transitional screens
+        guard isValid else {
+            return "Display \(displayID) (inactive)"
+        }
+
+        let name = self.localizedName
+        if name.isEmpty || name == "Display" {
+            return "Display \(displayID)"
+        }
+
+        return name
+    }
+}
+
 // MARK: - Floating Pill Controller
 
 @MainActor
@@ -144,15 +186,19 @@ final class FloatingPillController: ObservableObject {
 
         // Create pills based on settings
         let showOnAllScreens = LiveSettings.shared.pillShowOnAllScreens
-        let screens = showOnAllScreens ? NSScreen.screens : [NSScreen.main].compactMap { $0 }
+        let allScreens = showOnAllScreens ? NSScreen.screens : [NSScreen.main].compactMap { $0 }
 
-        // Log all screens first
-        pillLogger.debug("[Screens] Total screens: \(screens.count)")
-        for (index, screen) in screens.enumerated() {
+        // Filter out invalid/transitional screens to avoid display identifier errors
+        let validScreens = allScreens.filter { $0.isValid }
+
+        pillLogger.debug("[Screens] Total: \(allScreens.count), Valid: \(validScreens.count)")
+
+        // Log all valid screens
+        for (index, screen) in validScreens.enumerated() {
             let frame = screen.frame
             let visibleFrame = screen.visibleFrame
             pillLogger.debug("""
-                [Screen \(index)] \(screen.localizedName)
+                [Screen \(index)] \(screen.safeDisplayName)
                   Full frame: x=\(frame.minX), y=\(frame.minY), w=\(frame.width), h=\(frame.height)
                   Visible frame: x=\(visibleFrame.minX), y=\(visibleFrame.minY), w=\(visibleFrame.width), h=\(visibleFrame.height)
                   Visible midX: \(visibleFrame.midX)
@@ -160,7 +206,8 @@ final class FloatingPillController: ObservableObject {
             )
         }
 
-        for screen in screens {
+        // Only create pills on valid screens
+        for screen in validScreens {
             createPill(on: screen)
         }
 
@@ -208,7 +255,7 @@ final class FloatingPillController: ObservableObject {
         let centerOffset = contentCenterX - expectedContentCenterX
 
         pillLogger.debug("""
-            [Pill Position] \(screen.localizedName)
+            [Pill Position] \(screen.safeDisplayName)
               Panel position: x=\(homePosition.x), y=\(homePosition.y)
               Panel width: \(panel.frame.width)
               Panel center X: \(contentCenterX)
@@ -239,7 +286,7 @@ final class FloatingPillController: ObservableObject {
             let finalX = contentCenterX - panelOffset
 
             pillLogger.debug("""
-                [Centering] Screen: \(screen.localizedName)
+                [Centering] Screen: \(screen.safeDisplayName)
                   screenFrame.midX: \(screenFrame.midX)
                   screenFrame.width: \(screenFrame.width)
                   panelSize.width: \(panelSize.width)

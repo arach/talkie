@@ -80,6 +80,12 @@ struct TalkieNavigationViewNative: View {
     // Column visibility (NavigationSplitView manages this for us)
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
+    // Optional initializer for screenshot capture with specific navigation state
+    init(initialSection: NavigationSection? = .home, initialSettingsSection: SettingsSection = .appearance) {
+        _selectedSection = State(initialValue: initialSection)
+        _selectedSettingsSection = State(initialValue: initialSettingsSection)
+    }
+
     private func toggleSidebar() {
         NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
@@ -103,16 +109,16 @@ struct TalkieNavigationViewNative: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebarView
                         .navigationSplitViewColumnWidth(
-                            min: 160,
-                            ideal: 220,
-                            max: 320
+                            min: 140,
+                            ideal: 200,
+                            max: 280
                         )
                 } content: {
                     contentView
                         .navigationSplitViewColumnWidth(
-                            min: 280,
-                            ideal: 320,
-                            max: 480
+                            min: 180,
+                            ideal: 220,
+                            max: 320
                         )
                 } detail: {
                     detailView

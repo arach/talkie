@@ -64,8 +64,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             logger.debug("⚙️ Debug mode detected - running CLI command after app setup")
             // Schedule CLI handler to run after app finishes initializing
             Task { @MainActor in
-                // Wait for app to finish initializing
-                try? await Task.sleep(for: .milliseconds(500))
+                // Wait for app to finish initializing and GPU to be ready
+                try? await Task.sleep(for: .milliseconds(2000))
                 NSLog("[AppDelegate] 🎯 Running CLI handler...")
                 let handled = await self.cliHandler.handleCommandLineArguments()
                 if !handled {
@@ -330,10 +330,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "audit-screen",
             description: "Audit a specific screen with screenshot capture (e.g., settings-appearance, settings-dictation-capture)"
         ) { args in
+            NSLog("[audit-screen] Handler started")
             guard let screenId = args.first else {
                 print("❌ No screen ID provided")
                 exit(1)
             }
+            NSLog("[audit-screen] screenId: %@", screenId)
 
             guard let screen = AppScreen(rawValue: screenId) else {
                 print("❌ Invalid screen ID: \(screenId)")
@@ -343,11 +345,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
                 exit(1)
             }
+            NSLog("[audit-screen] screen: %@", screen.rawValue)
 
             let baseDir = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Desktop")
                 .appendingPathComponent("talkie-audit")
             try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
+            NSLog("[audit-screen] baseDir: %@", baseDir.path)
 
             let existing = (try? FileManager.default.contentsOfDirectory(atPath: baseDir.path)) ?? []
             let auditFolders = existing.filter { $0.hasPrefix("run-") }
@@ -355,6 +359,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             let runDir = baseDir.appendingPathComponent(String(format: "run-%03d", nextNum))
             let screenshotDir = runDir.appendingPathComponent("screenshots")
             try? FileManager.default.createDirectory(at: screenshotDir, withIntermediateDirectories: true)
+            NSLog("[audit-screen] runDir: %@", runDir.path)
 
             print("🔍 Auditing \(screen.title) (run-\(String(format: "%03d", nextNum)))...")
             print("📸 Capturing screenshots (small/medium/large)...")
@@ -362,29 +367,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // Capture screenshots at all three sizes
             var screenshotPaths: [String] = []
             if screen.section == .settings, let settingsPage = screen.settingsPage {
+                NSLog("[audit-screen] Capturing settings page: %@", settingsPage.title)
                 // Capture each size separately to avoid window reuse issues
-                for size in WindowSize.allCases {
-                    if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, size: size, to: screenshotDir) {
-                        screenshotPaths.append("\(size.rawValue): \(url.lastPathComponent)")
-                    }
+                // Only capture medium size for now to avoid multi-capture crash
+                let size = WindowSize.medium
+                NSLog("[audit-screen] Capturing size: %@ (thread: %@)", size.rawValue, Thread.current.description)
+                NSLog("[audit-screen] About to call captureSinglePage...")
+
+                if let url = await SettingsStoryboardGenerator.shared.captureSinglePage(settingsPage, size: size, to: screenshotDir) {
+                    screenshotPaths.append("\(size.rawValue): \(url.lastPathComponent)")
+                    NSLog("[audit-screen] Captured: %@", url.lastPathComponent)
+                } else {
+                    NSLog("[audit-screen] Capture returned nil for size: %@", size.rawValue)
                 }
+                NSLog("[audit-screen] Done capturing screenshots")
             } else {
                 print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
             }
 
-            print("📊 Analyzing code...")
-            let result = await DesignAuditor.shared.audit(screen: screen, withScreenshot: false)
+            // TEMPORARILY SKIP AUDIT - crashes on async context switch
+            // NSLog("[audit-screen] About to analyze code...")
+            // print("📊 Analyzing code...")
+            // NSLog("[audit-screen] Calling DesignAuditor.shared.audit...")
+            // let result = await DesignAuditor.shared.audit(screen: screen, withScreenshot: false)
+            // NSLog("[audit-screen] Audit complete!")
 
-            print("\n✅ Audit complete!")
-            print("   Grade: \(result.grade) (\(result.overallScore)%)")
-            print("   Total Issues: \(result.totalIssues)")
+            print("\n✅ Screenshot capture complete!")
             if !screenshotPaths.isEmpty {
                 print("   Screenshots:")
                 for path in screenshotPaths {
                     print("     - \(path)")
                 }
             }
+            print("   Output: \(runDir.path)")
 
+            NSLog("[audit-screen] Exiting with code 0")
             exit(0)
         }
     }

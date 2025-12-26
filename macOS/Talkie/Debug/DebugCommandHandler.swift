@@ -18,17 +18,23 @@ class DebugCommandHandler {
     /// Check command line arguments and execute debug command if present
     /// Returns true if a debug command was executed (app should exit)
     func handleCommandLineArguments() async -> Bool {
+        print("🔍 handleCommandLineArguments START")
         let args = CommandLine.arguments
+        print("🔍 Got args: \(args.count) items")
 
         // Look for --debug=<command>
         guard let debugArg = args.first(where: { $0.hasPrefix("--debug=") }) else {
+            print("🔍 No debug arg found")
             return false
         }
+        print("🔍 Found debug arg: \(debugArg)")
 
         let command = String(debugArg.dropFirst("--debug=".count))
+        print("🔍 Parsing command: \(command)")
 
         // Get additional arguments (everything after the --debug flag)
         let additionalArgs = args.dropFirst(args.firstIndex(of: debugArg)! + 1)
+        print("🔍 Additional args: \(Array(additionalArgs))")
 
         print("🐛 Debug command: \(command)")
 

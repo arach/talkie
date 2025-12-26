@@ -730,8 +730,11 @@ class DesignAuditor {
 
     /// Audit a single screen with optional screenshot capture
     func audit(screen: AppScreen, withScreenshot: Bool = false, screenshotDirectory: URL? = nil) async -> ScreenAuditResult {
+        NSLog("[DesignAuditor.audit] START: %@", screen.title)
         print("🔍 Auditing \(screen.title)...")
+        NSLog("[DesignAuditor.audit] Calling performCodeAnalysis...")
         var result = performCodeAnalysis(screen: screen)
+        NSLog("[DesignAuditor.audit] performCodeAnalysis complete")
 
         if withScreenshot, let screenshotDir = screenshotDirectory {
             // Ensure directory exists

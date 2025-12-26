@@ -545,7 +545,7 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.current.background)
     }
 }
