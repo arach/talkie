@@ -80,6 +80,10 @@ struct TalkieNavigationViewNative: View {
     // Column visibility (NavigationSplitView manages this for us)
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
+    private func toggleSidebar() {
+        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+    }
+
     var body: some View {
         Group {
             if usesTwoColumns {
@@ -116,7 +120,13 @@ struct TalkieNavigationViewNative: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .toolbarBackground(.hidden, for: .windowToolbar)  // Hide title bar divider
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: toggleSidebar) {
+                    Label("Toggle Sidebar", systemImage: "sidebar.left")
+                }
+            }
+        }
         .setupNotificationObservers(
             selectedSection: $selectedSection,
             previousSection: $previousSection,
