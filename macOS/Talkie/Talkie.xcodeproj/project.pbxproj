@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		71E29F6A55F3433BB8F2E10E /* SettingsColumns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB852D48AF24EF4B94CCA9D /* SettingsColumns.swift */; };
 		3A7377899CBD449E8E390011 /* NavigationViewNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249F529E13A14AE49193B9EB /* NavigationViewNative.swift */; };
 		029BCD3547E44642878366EC /* SpacingDecoratorOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41971D6E29CF4DF0A9BEC8CE /* SpacingDecoratorOverlay.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
@@ -239,6 +240,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5EB852D48AF24EF4B94CCA9D /* SettingsColumns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsColumns.swift; sourceTree = "<group>"; };
 		249F529E13A14AE49193B9EB /* NavigationViewNative.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationViewNative.swift; sourceTree = "<group>"; };
 		41971D6E29CF4DF0A9BEC8CE /* SpacingDecoratorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacingDecoratorOverlay.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
@@ -764,6 +766,7 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				5EB852D48AF24EF4B94CCA9D /* SettingsColumns.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
@@ -1136,6 +1139,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				71E29F6A55F3433BB8F2E10E /* SettingsColumns.swift in Sources */,
 				3A7377899CBD449E8E390011 /* NavigationViewNative.swift in Sources */,
 				029BCD3547E44642878366EC /* SpacingDecoratorOverlay.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,

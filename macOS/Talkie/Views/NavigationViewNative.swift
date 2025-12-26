@@ -70,6 +70,7 @@ struct TalkieNavigationViewNative: View {
     @State private var selectedMemo: VoiceMemo?
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?
+    @State private var selectedSettingsSection: SettingsSection = .appearance
     @State private var searchText = ""
 
     // Cached counts for badge display
@@ -191,7 +192,7 @@ struct TalkieNavigationViewNative: View {
                 }
 
                 NavigationLink(value: NavigationSection.liveSettings) {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("Live Settings", systemImage: "gearshape")
                 }
             }
 
@@ -221,13 +222,6 @@ struct TalkieNavigationViewNative: View {
                 }
             }
 
-            // Settings (bottom section)
-            Section {
-                NavigationLink(value: NavigationSection.settings) {
-                    Label("Settings", systemImage: "gearshape")
-                }
-            }
-
             #if DEBUG
             if DesignModeManager.shared.isEnabled {
                 Section("DESIGN") {
@@ -245,6 +239,21 @@ struct TalkieNavigationViewNative: View {
             #endif
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                Divider()
+
+                List(selection: $selectedSection) {
+                    NavigationLink(value: NavigationSection.settings) {
+                        Label("Settings", systemImage: "gear")
+                    }
+                }
+                .listStyle(.sidebar)
+                .frame(height: 44)
+                .scrollDisabled(true)
+            }
+            .background(Theme.current.backgroundSecondary)
+        }
     }
 
     // MARK: - Content (Middle Column)
@@ -258,8 +267,7 @@ struct TalkieNavigationViewNative: View {
                 editingWorkflow: $editingWorkflow
             )
         case .settings:
-            // Settings uses its own internal layout (sidebar + content)
-            SettingsView()
+            SettingsSidebarColumn(selectedSection: $selectedSettingsSection)
         default:
             Text("Content Column")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -307,12 +315,9 @@ struct TalkieNavigationViewNative: View {
                     PendingActionsView()
                         .wrapInTalkieSection("PendingActions")
 
-                // Three-column sections (settings handled in contentView + detailView)
+                // Three-column sections
                 case .settings:
-                    // Settings content is shown via SettingsView's own layout
-                    // which includes both the subsection sidebar and the actual content
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    SettingsContentColumn(selectedSection: $selectedSettingsSection)
 
                 // Debug sections
                 #if DEBUG
