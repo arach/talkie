@@ -37,22 +37,7 @@ enum NavigationSection: Hashable {
     case allowedCommands
     case smartFolder(String)
 
-    // Settings subsections
-    case settingsAppearance
-    case settingsQuickActions
-    case settingsQuickOpen
-    case settingsAutomations
-    case settingsDictationCapture
-    case settingsDictationOutput
-    case settingsAIProviders
-    case settingsTranscription
-    case settingsLLM
-    case settingsDatabase
-    case settingsFiles
-    case settingsCloud
-    case settingsPermissions
-    case settingsDebug
-    case settingsDevControl
+    case settings       // Settings with 3-column layout (sidebar + subsections + content)
 
     #if DEBUG
     // Design God Mode sections (only visible when DesignModeManager.shared.isEnabled)
@@ -145,19 +130,14 @@ struct TalkieNavigationViewNative: View {
         switch selectedSection {
         case .home, .models, .allowedCommands, .aiResults, .allMemos,
              .liveDashboard, .liveRecent, .liveSettings, .systemConsole,
-             .pendingActions,
-             .settingsAppearance, .settingsQuickActions, .settingsQuickOpen,
-             .settingsAutomations, .settingsDictationCapture, .settingsDictationOutput,
-             .settingsAIProviders, .settingsTranscription, .settingsLLM,
-             .settingsDatabase, .settingsFiles, .settingsCloud,
-             .settingsPermissions, .settingsDebug, .settingsDevControl:
+             .pendingActions:
             return true
         #if DEBUG
         case .designHome, .designAudit, .designComponents:
             return true
         #endif
         default:
-            return false
+            return false  // workflows and settings use 3-column layout
         }
     }
 
@@ -241,69 +221,11 @@ struct TalkieNavigationViewNative: View {
                 }
             }
 
-            // Settings
-            Section("SETTINGS") {
-                NavigationLink(value: NavigationSection.settingsAppearance) {
-                    Label("Appearance", systemImage: "moon.stars")
+            // Settings (bottom section)
+            Section {
+                NavigationLink(value: NavigationSection.settings) {
+                    Label("Settings", systemImage: "gearshape")
                 }
-
-                NavigationLink(value: NavigationSection.settingsQuickActions) {
-                    Label("Quick Actions", systemImage: "bolt")
-                }
-
-                NavigationLink(value: NavigationSection.settingsQuickOpen) {
-                    Label("Quick Open", systemImage: "arrow.up.forward.app")
-                }
-
-                NavigationLink(value: NavigationSection.settingsAutomations) {
-                    Label("Automations", systemImage: "play.circle")
-                }
-
-                NavigationLink(value: NavigationSection.settingsDictationCapture) {
-                    Label("Dictation Capture", systemImage: "mic.fill")
-                }
-
-                NavigationLink(value: NavigationSection.settingsDictationOutput) {
-                    Label("Dictation Output", systemImage: "arrow.right.doc.on.clipboard")
-                }
-
-                NavigationLink(value: NavigationSection.settingsAIProviders) {
-                    Label("API Keys", systemImage: "key")
-                }
-
-                NavigationLink(value: NavigationSection.settingsTranscription) {
-                    Label("Transcription Models", systemImage: "waveform")
-                }
-
-                NavigationLink(value: NavigationSection.settingsLLM) {
-                    Label("LLM Models", systemImage: "brain")
-                }
-
-                NavigationLink(value: NavigationSection.settingsDatabase) {
-                    Label("Database", systemImage: "cylinder")
-                }
-
-                NavigationLink(value: NavigationSection.settingsFiles) {
-                    Label("Files", systemImage: "folder")
-                }
-
-                NavigationLink(value: NavigationSection.settingsCloud) {
-                    Label("Cloud", systemImage: "cloud")
-                }
-
-                NavigationLink(value: NavigationSection.settingsPermissions) {
-                    Label("Permissions", systemImage: "lock.shield")
-                }
-
-                NavigationLink(value: NavigationSection.settingsDebug) {
-                    Label("Debug Info", systemImage: "ladybug")
-                }
-
-                #if DEBUG
-                NavigationLink(value: NavigationSection.settingsDevControl) {
-                    Label("Dev Control", systemImage: "hammer.fill")
-                }
-                #endif
             }
 
             #if DEBUG
@@ -335,6 +257,9 @@ struct TalkieNavigationViewNative: View {
                 selectedWorkflowID: $selectedWorkflowID,
                 editingWorkflow: $editingWorkflow
             )
+        case .settings:
+            // Settings uses its own internal layout (sidebar + content)
+            SettingsView()
         default:
             Text("Content Column")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -382,43 +307,12 @@ struct TalkieNavigationViewNative: View {
                     PendingActionsView()
                         .wrapInTalkieSection("PendingActions")
 
-                // Settings subsections
-                case .settingsAppearance:
-                    AppearanceSettingsView()
-                case .settingsQuickActions:
-                    QuickActionsSettingsView()
-                case .settingsQuickOpen:
-                    QuickOpenSettingsView()
-                case .settingsAutomations:
-                    Text("Automations settings coming soon")
+                // Three-column sections (settings handled in contentView + detailView)
+                case .settings:
+                    // Settings content is shown via SettingsView's own layout
+                    // which includes both the subsection sidebar and the actual content
+                    Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Theme.current.surface1)
-                case .settingsDictationCapture:
-                    DictationCaptureSettingsView()
-                case .settingsDictationOutput:
-                    DictationOutputSettingsView()
-                case .settingsAIProviders:
-                    APISettingsView()
-                case .settingsTranscription:
-                    TranscriptionModelsSettingsView()
-                case .settingsLLM:
-                    ModelLibraryView()
-                case .settingsDatabase:
-                    DatabaseSettingsView()
-                case .settingsFiles:
-                    LocalFilesSettingsView()
-                case .settingsCloud:
-                    CloudSettingsView()
-                case .settingsPermissions:
-                    PermissionsSettingsView()
-                case .settingsDebug:
-                    DebugInfoView()
-                case .settingsDevControl:
-                    #if DEBUG
-                    DevControlPanelView()
-                    #else
-                    Text("Dev Control Panel is only available in DEBUG builds")
-                    #endif
 
                 // Debug sections
                 #if DEBUG
@@ -485,7 +379,7 @@ extension View {
                 selectedSection.wrappedValue = .liveDashboard
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToSettings)) { _ in
-                selectedSection.wrappedValue = .settingsAppearance
+                selectedSection.wrappedValue = .settings
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToLiveSettings)) { _ in
                 selectedSection.wrappedValue = .liveSettings
