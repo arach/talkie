@@ -343,13 +343,21 @@ struct HomeView: View {
     private func calculateStreak(_ dictations: [Dictation]) -> Int {
         let calendar = Calendar.current
         var streak = 0
-        var checkDate = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: Date())
 
         // Group by day
         var byDay: [Date: [Dictation]] = [:]
         for u in dictations {
             let day = calendar.startOfDay(for: u.timestamp)
             byDay[day, default: []].append(u)
+        }
+
+        // Start from today, but if no activity today, start from yesterday
+        // This way streaks aren't broken just because you haven't recorded yet today
+        var checkDate = today
+        if byDay[today] == nil {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return 0 }
+            checkDate = yesterday
         }
 
         // Count consecutive days

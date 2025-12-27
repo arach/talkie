@@ -21,4 +21,7 @@
          location = "group:Talkie OS.xcodeproj">
       </FileRef>
    </Group>
+   <FileRef
+      location = "group:File.txt">
+   </FileRef>
 </Workspace>

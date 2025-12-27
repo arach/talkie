@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>TalkieLive needs access to your microphone to capture and transcribe your voice recordings.</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.7.3</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -35,5 +35,9 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TalkieLive needs access to your microphone to capture and transcribe your voice recordings.</string>
 </dict>
 </plist>

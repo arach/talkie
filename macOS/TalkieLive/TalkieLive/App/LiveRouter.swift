@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import ApplicationServices  // For AXIsProcessTrusted
 import Carbon.HIToolbox
 import os.log
 
@@ -80,8 +81,18 @@ struct TranscriptRouter: LiveRouter {
     }
 
     private func simulatePaste() {
-        let src = CGEventSource(stateID: .combinedSessionState)
-        guard let src else { return }
+        // Check Accessibility permission first
+        let hasAccessibility = AXIsProcessTrusted()
+        if !hasAccessibility {
+            logger.error("❌ Accessibility permission NOT granted - cannot paste")
+            logger.error("   Grant Accessibility permission to TalkieLive in System Settings")
+            return
+        }
+
+        guard let src = CGEventSource(stateID: .combinedSessionState) else {
+            logger.error("❌ Failed to create CGEventSource - cannot paste")
+            return
+        }
 
         // Post all events as a batch
         let events: [(UInt16, Bool)] = [
@@ -91,12 +102,17 @@ struct TranscriptRouter: LiveRouter {
             (0x37, false)   // ⌘ up
         ]
 
+        var eventsPosted = 0
         for (key, down) in events {
-            let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down)
-            evt?.flags = down && key == 0x09 ? .maskCommand : []
-            evt?.post(tap: .cghidEventTap)
+            if let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) {
+                evt.flags = down && key == 0x09 ? .maskCommand : []
+                evt.post(tap: .cghidEventTap)
+                eventsPosted += 1
+            } else {
+                logger.warning("Failed to create CGEvent for key=\(key) down=\(down)")
+            }
         }
 
-        logger.info("Pasted")
+        logger.info("Pasted (\(eventsPosted)/4 events posted)")
     }
 }

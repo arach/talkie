@@ -41,6 +41,7 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
     // Memos
     case memosAllMemos = "memos-all"
     case memoDetail = "memo-detail"
+    case memoEditor = "memo-editor"
 
     // Workflows
     case workflowsMain = "workflows-main"
@@ -90,6 +91,7 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
         case .liveHistory: return "Live History"
         case .memosAllMemos: return "All Memos"
         case .memoDetail: return "Memo Detail"
+        case .memoEditor: return "Memo Editor"
         case .workflowsMain: return "Workflows"
         case .modelsContent: return "Models"
         case .activityLog: return "Activity Log"
@@ -116,7 +118,7 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
             return .settings
         case .liveMain, .liveSettings, .liveHistory:
             return .live
-        case .memosAllMemos, .memoDetail:
+        case .memosAllMemos, .memoDetail, .memoEditor:
             return .memos
         case .workflowsMain:
             return .workflows
@@ -174,6 +176,7 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
         case .liveHistory: return ["Views/Live/History/HistoryView.swift"]
         case .memosAllMemos: return ["Views/Memos/AllMemos.swift"]
         case .memoDetail: return ["Views/MemoDetail/MemoDetailView.swift", "Views/MemoDetail/MemoDetailComponents.swift"]
+        case .memoEditor: return ["Views/MemoDetail/MemoDetailView.swift"]
         case .workflowsMain: return ["Views/Workflows/WorkflowContentViews.swift", "Views/Workflows/WorkflowColumnViews.swift"]
         case .modelsContent: return ["Views/Models/ModelsContentView.swift"]
         case .activityLog: return ["Views/Activity/ActivityLogViews.swift"]
@@ -584,6 +587,22 @@ class DesignAuditor {
         // Memos
         case .memosAllMemos: return "memos"
         case .memoDetail: return "memos/detail"
+
+        // Workflows
+        case .workflowsMain: return "workflows"
+
+        // Models
+        case .modelsContent: return "models"
+
+        // Monitoring
+        case .activityLog: return "activity"
+        case .serviceMonitor: return "services"
+        case .systemLogs: return "logs"
+        case .syncHistory: return "sync"
+
+        // Results
+        case .aiResults: return "ai-results"
+        case .pendingActions: return "pending"
 
         // Onboarding
         case .onboardingWelcome: return "onboarding/welcome"

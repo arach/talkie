@@ -6,8 +6,10 @@
 //
 
 import SwiftUI
+import AppKit
 import AVFoundation
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Permissions")
 
@@ -58,9 +60,16 @@ enum PermissionStatus {
 class PermissionsManager {
     static let shared = PermissionsManager()
 
+    // Talkie's own permissions
     var microphoneStatus: PermissionStatus = .unknown
     var accessibilityStatus: PermissionStatus = .unknown
     var automationStatus: PermissionStatus = .unknown
+
+    // TalkieLive's permissions (queried via XPC)
+    var liveMicrophoneStatus: PermissionStatus = .unknown
+    var liveAccessibilityStatus: PermissionStatus = .unknown
+    var liveScreenRecordingStatus: PermissionStatus = .unknown
+    var isLiveConnected: Bool = false
 
     private init() {
         // Don't check permissions eagerly - let views call refreshAllPermissions() on appear
@@ -71,6 +80,7 @@ class PermissionsManager {
         checkMicrophonePermission()
         checkAccessibilityPermission()
         checkAutomationPermission()
+        checkLivePermissions()
     }
 
     // MARK: - Microphone
@@ -141,6 +151,63 @@ class PermissionsManager {
         }
     }
 
+    // MARK: - TalkieLive Permissions (via XPC)
+
+    func checkLivePermissions() {
+        // Query TalkieLive's permissions via XPC
+        let serviceManager = ServiceManager.shared
+
+        // Only check if Live is running and connected
+        guard serviceManager.live.isXPCConnected else {
+            isLiveConnected = false
+            liveMicrophoneStatus = .unknown
+            liveAccessibilityStatus = .unknown
+            liveScreenRecordingStatus = .unknown
+            return
+        }
+
+        isLiveConnected = true
+
+        // Get the XPC proxy and query permissions
+        // We use ServiceManager's XPC connection to call getPermissions
+        Task {
+            await queryLivePermissionsViaXPC()
+        }
+    }
+
+    private func queryLivePermissionsViaXPC() async {
+        // Create a temporary XPC connection to query permissions
+        let serviceName = TalkieEnvironment.current.liveXPCService
+        let connection = NSXPCConnection(machServiceName: serviceName, options: [])
+        connection.remoteObjectInterface = NSXPCInterface(with: TalkieLiveXPCServiceProtocol.self)
+        connection.resume()
+
+        defer { connection.invalidate() }
+
+        guard let proxy = connection.remoteObjectProxyWithErrorHandler({ error in
+            logger.error("Failed to get Live permissions: \(error.localizedDescription)")
+        }) as? TalkieLiveXPCServiceProtocol else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            proxy.getPermissions { [weak self] mic, accessibility, screenRecording in
+                Task { @MainActor in
+                    self?.liveMicrophoneStatus = mic ? .granted : .denied
+                    self?.liveAccessibilityStatus = accessibility ? .granted : .denied
+                    self?.liveScreenRecordingStatus = screenRecording ? .granted : .denied
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    func openScreenRecordingSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     // MARK: - Open System Settings
 
     func openMicrophoneSettings() {
@@ -179,6 +246,21 @@ struct PermissionsSettingsView: View {
             permissionsManager.accessibilityStatus == .granted,
             permissionsManager.automationStatus == .granted
         ].filter { $0 }.count
+    }
+
+    private var liveGrantedCount: Int {
+        [
+            permissionsManager.liveMicrophoneStatus == .granted,
+            permissionsManager.liveAccessibilityStatus == .granted,
+            permissionsManager.liveScreenRecordingStatus == .granted
+        ].filter { $0 }.count
+    }
+
+    private var livePermissionsColor: Color {
+        if !permissionsManager.isLiveConnected {
+            return Theme.current.foregroundMuted
+        }
+        return liveGrantedCount == 3 ? SemanticColor.success : SemanticColor.warning
     }
 
     var body: some View {
@@ -250,6 +332,101 @@ struct PermissionsSettingsView: View {
                             permissionsManager.openAutomationSettings()
                         }
                     )
+                }
+            }
+            .padding(Spacing.md)
+            .background(Theme.current.surface2)
+            .cornerRadius(CornerRadius.sm)
+
+            // MARK: - TalkieLive Permissions Section
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(livePermissionsColor)
+                        .frame(width: 3, height: 14)
+
+                    Text("TALKIE LIVE PERMISSIONS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Spacer()
+
+                    if permissionsManager.isLiveConnected {
+                        HStack(spacing: Spacing.xxs) {
+                            Circle()
+                                .fill(livePermissionsColor)
+                                .frame(width: 6, height: 6)
+                            Text("\(liveGrantedCount)/3 GRANTED")
+                                .font(.techLabelSmall)
+                                .foregroundColor(livePermissionsColor)
+                        }
+                    } else {
+                        HStack(spacing: Spacing.xxs) {
+                            Circle()
+                                .fill(Theme.current.foregroundMuted)
+                                .frame(width: 6, height: 6)
+                            Text("NOT CONNECTED")
+                                .font(.techLabelSmall)
+                                .foregroundColor(Theme.current.foregroundMuted)
+                        }
+                    }
+                }
+
+                if permissionsManager.isLiveConnected {
+                    VStack(spacing: Spacing.sm) {
+                        // Live Microphone
+                        PermissionRow(
+                            icon: "mic.fill",
+                            name: "Microphone (Live)",
+                            description: "Required for live dictation",
+                            status: permissionsManager.liveMicrophoneStatus,
+                            onRequest: {
+                                permissionsManager.openMicrophoneSettings()
+                            }
+                        )
+
+                        // Live Accessibility (for autopaste)
+                        PermissionRow(
+                            icon: "accessibility",
+                            name: "Accessibility (Live)",
+                            description: "Required for autopaste - paste transcribed text automatically",
+                            status: permissionsManager.liveAccessibilityStatus,
+                            onRequest: {
+                                permissionsManager.openAccessibilitySettings()
+                            }
+                        )
+
+                        // Live Screen Recording
+                        PermissionRow(
+                            icon: "rectangle.dashed.badge.record",
+                            name: "Screen Recording (Live)",
+                            description: "Required for screen context features",
+                            status: permissionsManager.liveScreenRecordingStatus,
+                            onRequest: {
+                                permissionsManager.openScreenRecordingSettings()
+                            }
+                        )
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(SemanticColor.warning)
+                        Text("TalkieLive is not running. Start it to check permissions.")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                        Spacer()
+                        Button("Launch Live") {
+                            ServiceManager.shared.launchLive()
+                            // Refresh after a delay to pick up the new connection
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                permissionsManager.refreshAllPermissions()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
             .padding(Spacing.md)

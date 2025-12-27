@@ -404,6 +404,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             NSLog("[audit-screen] Exiting with code 0")
             exit(0)
         }
+
+        cliHandler.register(
+            "clear-pending",
+            description: "Clear all pending and recent actions from the queue"
+        ) { _ in
+            await MainActor.run {
+                PendingActionsManager.shared.cancelAll()
+                PendingActionsManager.shared.clearAllRecentActions()
+            }
+            print("✅ Cleared all pending and recent actions")
+            exit(0)
+        }
     }
 
     // MARK: - URL Handling

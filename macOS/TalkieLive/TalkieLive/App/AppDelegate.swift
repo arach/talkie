@@ -17,12 +17,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: RecordingOverlayController { RecordingOverlayController.shared }
     private var floatingPill: FloatingPillController { FloatingPillController.shared }
 
+    // Settings windows
+    private var permissionsWindow: NSWindow?
+    private var settingsWindow: NSWindow?
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu bar app - keep running when windows are closed
         return false
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Fratricide prevention: if another instance is already running, quit
+        if let bundleID = Bundle.main.bundleIdentifier {
+            let runningApps = NSWorkspace.shared.runningApplications.filter {
+                $0.bundleIdentifier == bundleID && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+            }
+            if !runningApps.isEmpty {
+                print("⚠️ Another TalkieLive (\(bundleID)) is already running - exiting to prevent fratricide")
+                NSApp.terminate(nil)
+                return
+            }
+        }
+
         // Essential sync init (settings needed for appearance)
         BootSequence.shared.initEssentials()
 
@@ -43,6 +59,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Start XPC service for inter-app communication with Talkie
         TalkieLiveXPCService.shared.startService()
+
+        // Listen for permissions window notification from FloatingPill
+        NotificationCenter.default.addObserver(
+            forName: .showPermissionsWindow,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.showPermissions()
+        }
 
         // Create core pipeline
         let audio = MicrophoneCapture()
@@ -140,6 +165,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        let permissionsItem = NSMenuItem(title: "Permissions...", action: #selector(showPermissions), keyEquivalent: "")
+        permissionsItem.target = self
+        // Add warning indicator if permissions are missing
+        if !PermissionManager.shared.allRequiredGranted {
+            permissionsItem.title = "⚠️ Permissions..."
+        }
+        menu.addItem(permissionsItem)
 
         let onboardingItem = NSMenuItem(title: "Show Onboarding...", action: #selector(showOnboarding), keyEquivalent: "")
         onboardingItem.target = self
@@ -423,44 +456,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showSettings() {
-        // Open environment-appropriate Talkie app with Live settings
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true  // Bring to front
-
-        // Determine Talkie app path based on current environment
-        let environment = TalkieEnvironment.current
-        let talkiePath: String
-        switch environment {
-        case .production:
-            talkiePath = "/Applications/Talkie.app"
-        case .staging:
-            talkiePath = NSHomeDirectory() + "/Applications/Talkie-Staging.app"
-        case .dev:
-            // For dev builds, try to find Talkie in standard dev locations
-            let devPaths = [
-                NSHomeDirectory() + "/dev/talkie/build/Debug/Talkie.app",
-                NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData/Talkie-*/Build/Products/Debug/Talkie.app"
-            ]
-            talkiePath = devPaths.first { FileManager.default.fileExists(atPath: $0) } ?? "/Applications/Talkie.app"
+        // If window already exists, bring it to front
+        if let window = settingsWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
         }
 
-        NSWorkspace.shared.openApplication(
-            at: URL(fileURLWithPath: talkiePath),
-            configuration: configuration
-        ) { app, error in
-            if let error = error {
-                AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
-                return
-            }
+        // Create focused settings window (Capture + Output + Permissions)
+        let contentView = QuickSettingsView()
+            .frame(minWidth: 500, minHeight: 450)
+            .background(TalkieTheme.background)
 
-            // After opening Talkie, navigate to Settings using environment-appropriate URL scheme
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                let urlString = "\(environment.talkieURLScheme)://settings/live"
-                if let url = URL(string: urlString) {
-                    NSWorkspace.shared.open(url)
-                }
-            }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 550, height: 500),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "TalkieLive Settings"
+        window.contentView = NSHostingView(rootView: contentView)
+        window.center()
+        window.isReleasedWhenClosed = false
+
+        // Store reference
+        settingsWindow = window
+
+        // Show window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func showPermissions() {
+        // If window already exists, bring it to front
+        if let window = permissionsWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
         }
+
+        // Create permissions window with SwiftUI content
+        let contentView = PermissionsSettingsSection()
+            .frame(minWidth: 450, minHeight: 500)
+            .background(TalkieTheme.background)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 500),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "TalkieLive Permissions"
+        window.contentView = NSHostingView(rootView: contentView)
+        window.center()
+        window.isReleasedWhenClosed = false
+
+        // Store reference
+        permissionsWindow = window
+
+        // Show window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func updateIcon(for state: LiveState) {
