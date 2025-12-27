@@ -560,8 +560,8 @@ class DesignAuditor {
     /// Build debug navigation path for a screen
     private func buildDebugPath(for screen: AppScreen) -> String {
         switch screen {
-        // Home
-        case .homeDashboard: return "home"
+        // Home/Dashboard
+        case .homeDashboard: return "home/dashboard"
         case .homeUnified: return "home/unified"
 
         // Settings
@@ -587,7 +587,6 @@ class DesignAuditor {
         // Memos
         case .memosAllMemos: return "memos"
         case .memoDetail: return "memos/detail"
-        case .memoEditor: return "memos/editor"
 
         // Workflows
         case .workflowsMain: return "workflows"
@@ -612,6 +611,9 @@ class DesignAuditor {
 
         // Navigation
         case .navigationSidebar: return "navigation"
+
+        // Catch-all for any missing cases
+        default: return screen.rawValue
         }
     }
 
@@ -747,8 +749,11 @@ class DesignAuditor {
 
     /// Audit a single screen with optional screenshot capture
     func audit(screen: AppScreen, withScreenshot: Bool = false, screenshotDirectory: URL? = nil) async -> ScreenAuditResult {
+        NSLog("[DesignAuditor.audit] START: %@", screen.title)
         print("🔍 Auditing \(screen.title)...")
+        NSLog("[DesignAuditor.audit] Calling performCodeAnalysis...")
         var result = performCodeAnalysis(screen: screen)
+        NSLog("[DesignAuditor.audit] performCodeAnalysis complete")
 
         if withScreenshot, let screenshotDir = screenshotDirectory {
             // Ensure directory exists

@@ -154,7 +154,10 @@ final class RecordingController {
 
         do {
             // Use Talkie's EngineClient to transcribe
-            let text = try await EngineClient.shared.transcribe(audioPath: audioURL.path)
+            let text = try await EngineClient.shared.transcribe(
+                audioPath: audioURL.path,
+                priority: .userInitiated  // Scratch pad recording - user is waiting
+            )
 
             // Update transcript
             await MainActor.run {

@@ -652,10 +652,10 @@ final class LiveController: ObservableObject {
         // Generate external reference ID for Engine trace correlation (short 8-char hex)
         let externalRefId = String(UUID().uuidString.prefix(8)).lowercased()
 
-        // End file save, begin XPC transcription request
+        // End file save, begin engine transcription
         trace?.end(fileSizeStr)
         trace?.externalRefId = externalRefId  // For Engine correlation
-        trace?.begin("xpc_request")
+        trace?.begin("engine")
 
         do {
             // Pass the permanent audio path - engine reads directly, never modifies
@@ -665,7 +665,7 @@ final class LiveController: ObservableObject {
             logTiming("Engine returned")
             let engineEnd = Date()
 
-            // End XPC request step
+            // End engine step
             let transcriptionMs = Int(engineEnd.timeIntervalSince(engineStart) * 1000)
             trace?.end("\(transcriptionMs)ms")
             let transcriptionSec = Double(transcriptionMs) / 1000.0
@@ -766,6 +766,9 @@ final class LiveController: ObservableObject {
                     // Notify Talkie via XPC
                     TalkieLiveXPCService.shared.notifyDictationAdded()
 
+                    // Refresh pending count to clear queue indicator on successful recording
+                    TranscriptionRetryManager.shared.refreshPendingCount()
+
                     // Schedule enrichment
                     if let baseline = capturedContext {
                         ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
@@ -848,6 +851,9 @@ final class LiveController: ObservableObject {
                     // Notify Talkie via XPC (non-blocking)
                     TalkieLiveXPCService.shared.notifyDictationAdded()
 
+                    // Refresh pending count to clear queue indicator on successful recording
+                    TranscriptionRetryManager.shared.refreshPendingCount()
+
                     // Schedule enrichment
                     if let baseline = capturedContext {
                         ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
@@ -927,6 +933,7 @@ final class LiveController: ObservableObject {
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
                     TalkieLiveXPCService.shared.notifyDictationAdded()
+                    TranscriptionRetryManager.shared.refreshPendingCount()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")
@@ -995,6 +1002,7 @@ final class LiveController: ObservableObject {
                 )
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
                     TalkieLiveXPCService.shared.notifyDictationAdded()
+                    TranscriptionRetryManager.shared.refreshPendingCount()
                     ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
                 }
                 logTiming("Database stored")

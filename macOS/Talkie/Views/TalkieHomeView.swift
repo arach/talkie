@@ -27,7 +27,7 @@ struct TalkieHomeView: View {
 
     // Cached state - only updates when specific properties change
     @State private var recentMemos: [VoiceMemo] = []
-    @State private var recentDictations: [Utterance] = []
+    @State private var recentDictations: [Dictation] = []
     @State private var isLiveRunning: Bool = false
     @State private var serviceState: TalkieServiceState = .unknown
     @State private var isSyncing: Bool = false

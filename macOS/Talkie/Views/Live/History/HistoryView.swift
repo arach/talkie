@@ -152,14 +152,15 @@ struct HistoryView: View {
                 self.settingsSection = LiveSettingsSection.transcription
                 self.selectedSection = .settings
             }
-            .onReceive(NotificationCenter.default.publisher(for: .selectDictation)) { notification in
-                if let id = notification.userInfo?["id"] as? Int64 {
-                    self.selectedSection = .history
-                    if let dictation = self.store.dictations.first(where: { $0.liveID == id }) {
-                        self.selectedDictationIDs = [dictation.id]
-                    }
-                }
-            }
+            // TODO: Re-enable once .selectDictation notification is added
+            // .onReceive(NotificationCenter.default.publisher(for: .selectDictation)) { notification in
+            //     if let id = notification.userInfo?["id"] as? Int64 {
+            //         self.selectedSection = .history
+            //         if let dictation = self.store.dictations.first(where: { $0.liveID == id }) {
+            //             self.selectedDictationIDs = [dictation.id]
+            //         }
+            //     }
+            // }
     }
 
     private var baseView: some View {
@@ -456,7 +457,8 @@ struct HistoryView: View {
             let startTime = Date()
             let text = try await EngineClient.shared.transcribe(
                 audioPath: storedURL.path,
-                modelId: settings.selectedModelId
+                modelId: settings.selectedModelId,
+                priority: .userInitiated  // User just finished recording
             )
             let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
@@ -689,7 +691,7 @@ struct HistoryView: View {
         switch selectedSection {
         case .home:
             HomeView(
-                onSelectUtterance: { dictation in
+                onSelectDictation: { dictation in
                     // Navigate to history and select this dictation
                     selectedSection = .history
                     selectedDictationIDs = [dictation.id]

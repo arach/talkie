@@ -438,7 +438,11 @@ struct DictationListView: View {
         Task {
             do {
                 let engineClient = EngineClient.shared
-                let newText = try await engineClient.transcribe(audioPath: audioPath, modelId: modelId)
+                let newText = try await engineClient.transcribe(
+                    audioPath: audioPath,
+                    modelId: modelId,
+                    priority: .userInitiated  // User clicked re-transcribe button
+                )
 
                 // Update dictation text
                 await MainActor.run {

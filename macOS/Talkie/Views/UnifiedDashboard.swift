@@ -29,7 +29,7 @@ struct UnifiedActivityItem: Identifiable {
 
     // Original references
     var memo: VoiceMemo?
-    var dictation: Utterance?
+    var dictation: Dictation?
 }
 
 // MARK: - Unified Dashboard
@@ -787,7 +787,7 @@ struct MemoActivityRow: View {
 // MARK: - Dictation Activity Row
 
 struct DictationActivityRow: View {
-    let dictation: Utterance
+    let dictation: Dictation
 
     @State private var isHovered = false
 

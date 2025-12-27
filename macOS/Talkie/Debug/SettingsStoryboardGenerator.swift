@@ -9,6 +9,7 @@
 import SwiftUI
 import DebugKit
 import RegexBuilder
+import CoreData
 
 /// Window size for screenshot capture
 enum WindowSize: String, CaseIterable {
@@ -18,9 +19,9 @@ enum WindowSize: String, CaseIterable {
 
     var size: CGSize {
         switch self {
-        case .small: return CGSize(width: 700, height: 500)
-        case .medium: return CGSize(width: 900, height: 650)
-        case .large: return CGSize(width: 1100, height: 800)
+        case .small: return CGSize(width: 1000, height: 700)   // Increased for 3-column layout
+        case .medium: return CGSize(width: 1200, height: 800)  // Increased for 3-column layout
+        case .large: return CGSize(width: 1400, height: 900)   // Increased for 3-column layout
         }
     }
 }
@@ -280,24 +281,35 @@ class SettingsStoryboardGenerator {
 
     /// Capture a single settings page screenshot at a specific size
     func captureSinglePage(_ page: SettingsPage, size: WindowSize = .medium, to directory: URL) async -> URL? {
+        NSLog("[captureSinglePage] START: page=%@, size=%@", page.title, size.rawValue)
+
         // Create directory if needed
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        NSLog("[captureSinglePage] Directory ready")
 
         print("📸 Capturing \(page.title) (\(size.rawValue))...")
 
         // Create isolated view window for rendering
+        NSLog("[captureSinglePage] Creating window...")
         let window = createRenderWindow(size: size.size)
+        NSLog("[captureSinglePage] Window created")
         window.title = "Settings — \(page.title)"
 
+        NSLog("[captureSinglePage] Creating view...")
         let view = createView(for: page)
+        NSLog("[captureSinglePage] View created, setting as content...")
         window.contentView = NSHostingView(rootView: view)
+        NSLog("[captureSinglePage] Content set, showing window...")
         window.makeKeyAndOrderFront(nil)
+        NSLog("[captureSinglePage] Window shown, waiting for render...")
 
         // Wait for window to render fully
         try? await Task.sleep(for: .milliseconds(600))
+        NSLog("[captureSinglePage] Wait complete, capturing...")
 
         var result: URL?
         if let screenshot = captureWindow(window) {
+            NSLog("[captureSinglePage] Screenshot captured")
             // Use pathSegment for filename: settings-appearance-medium.png
             let pathSegment = page.settingsSection.pathSegment
             let filename = "settings-\(pathSegment)-\(size.rawValue).png"
@@ -309,10 +321,15 @@ class SettingsStoryboardGenerator {
                 try? pngData.write(to: fileURL)
                 result = fileURL
                 print("  ✅ Saved: \(filename)")
+                NSLog("[captureSinglePage] Saved: %@", filename)
             }
+        } else {
+            NSLog("[captureSinglePage] Screenshot capture FAILED")
         }
 
+        NSLog("[captureSinglePage] Closing window...")
         window.close()
+        NSLog("[captureSinglePage] END")
         return result
     }
 
@@ -736,7 +753,8 @@ class SettingsStoryboardGenerator {
     }
 
     private func createView(for page: SettingsPage) -> AnyView {
-        // Use the REAL SettingsView with the section selected
+        // Use SettingsView for now - shows 2-column settings layout
+        // TODO: Add 3-column capture with full navigation
         let section = page.settingsSection
 
         let view = SettingsView(initialSection: section)
@@ -796,4 +814,3 @@ class SettingsStoryboardGenerator {
         return AnyView(view)
     }
 }
-

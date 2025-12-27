@@ -8,6 +8,7 @@
 import Foundation
 import os
 import Observation
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "WhisperService")
 
@@ -111,7 +112,15 @@ class WhisperService {
     // MARK: - Transcription
 
     /// Transcribe audio data to text via TalkieEngine XPC
-    func transcribe(audioData: Data, model: WhisperModel = .small) async throws -> String {
+    /// - Parameters:
+    ///   - audioData: Audio data to transcribe
+    ///   - model: Whisper model to use
+    ///   - priority: Task priority (default: .medium)
+    func transcribe(
+        audioData: Data,
+        model: WhisperModel = .small,
+        priority: TranscriptionPriority = .medium
+    ) async throws -> String {
         isTranscribing = true
         lastError = nil
 
@@ -128,12 +137,16 @@ class WhisperService {
             throw WhisperError.engineNotAvailable
         }
 
-        logger.info("[Engine] Transcribing \(audioData.count / 1024)KB via TalkieEngine")
+        logger.info("[Engine] Transcribing \(audioData.count / 1024)KB via TalkieEngine (priority: \(priority.displayName))")
         await SystemEventManager.shared.log(.transcribe, "Using TalkieEngine", detail: model.displayName)
 
         do {
             // Use family prefix format expected by TalkieEngine (e.g., "whisper:openai_whisper-small")
-            let transcript = try await engine.transcribe(audioData: audioData, modelId: "whisper:\(model.rawValue)")
+            let transcript = try await engine.transcribe(
+                audioData: audioData,
+                modelId: "whisper:\(model.rawValue)",
+                priority: priority
+            )
             logger.info("[Engine] Transcription complete: \(transcript.prefix(100))...")
             await SystemEventManager.shared.log(.transcribe, "Transcription complete", detail: "\(transcript.count) chars")
             return transcript

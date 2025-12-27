@@ -238,7 +238,15 @@ public final class EngineClient {
     // MARK: - Transcription
 
     /// Transcribe audio data
-    public func transcribe(audioData: Data, modelId: String = "whisper:openai_whisper-small") async throws -> String {
+    /// - Parameters:
+    ///   - audioData: Audio data to transcribe
+    ///   - modelId: Model to use (default: small whisper)
+    ///   - priority: Task priority - `.high` for real-time, `.medium` for interactive, `.low` for batch (default: .medium)
+    public func transcribe(
+        audioData: Data,
+        modelId: String = "whisper:openai_whisper-small",
+        priority: TranscriptionPriority = .medium
+    ) async throws -> String {
         guard await ensureConnected() else {
             throw NSError(domain: "EngineClient", code: -1,
                          userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
@@ -255,20 +263,28 @@ public final class EngineClient {
             Task.detached { try? FileManager.default.removeItem(atPath: audioPath) }
         }
 
-        return try await transcribe(audioPath: audioPath, modelId: modelId)
+        return try await transcribe(audioPath: audioPath, modelId: modelId, priority: priority)
     }
 
     /// Transcribe audio file
-    public func transcribe(audioPath: String, modelId: String = "whisper:openai_whisper-small") async throws -> String {
+    /// - Parameters:
+    ///   - audioPath: Path to audio file
+    ///   - modelId: Model to use (default: small whisper)
+    ///   - priority: Task priority - `.high` for real-time (Live), `.medium` for interactive, `.low` for batch (default: .medium)
+    public func transcribe(
+        audioPath: String,
+        modelId: String = "whisper:openai_whisper-small",
+        priority: TranscriptionPriority = .medium
+    ) async throws -> String {
         guard let proxy = xpcManager.remoteObjectProxy() else {
             throw NSError(domain: "EngineClient", code: -1,
                          userInfo: [NSLocalizedDescriptionKey: "Engine proxy not available"])
         }
 
-        logger.info("[EngineClient] Transcribing \(audioPath)")
+        logger.info("[EngineClient] Transcribing \(audioPath) (priority: \(priority.displayName))")
 
         return try await withCheckedThrowingContinuation { continuation in
-            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil) { [weak self] transcript, error in
+            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, priority: priority) { [weak self] transcript, error in
                 Task { @MainActor in
                     self?.transcriptionCount += 1
                     self?.lastTranscriptionAt = Date()

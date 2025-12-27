@@ -386,12 +386,12 @@ struct SettingsSidebarItem: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 9))
-                .foregroundColor(isSelected ? (SettingsManager.shared.appearanceMode == .dark ? .white : .white) : Theme.current.foregroundMuted)
+                .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundMuted)
                 .frame(width: 14)
 
             Text(title)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isSelected ? (SettingsManager.shared.appearanceMode == .dark ? .white : .white) : Theme.current.foregroundSecondary)
+                .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
 
             Spacer(minLength: 0)
         }
@@ -400,7 +400,7 @@ struct SettingsSidebarItem: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor : (isHovered ? Theme.current.backgroundTertiary : Color.clear))
+                .fill(isSelected ? Theme.current.backgroundTertiary : (isHovered ? Theme.current.backgroundTertiary.opacity(0.5) : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture {

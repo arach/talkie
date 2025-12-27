@@ -510,7 +510,11 @@ struct MemoDetailView: View {
         Task {
             do {
                 let engineClient = EngineClient.shared
-                let transcript = try await engineClient.transcribe(audioData: audioData, modelId: modelId)
+                let transcript = try await engineClient.transcribe(
+                    audioData: audioData,
+                    modelId: modelId,
+                    priority: .userInitiated  // User clicked re-transcribe button
+                )
 
                 // Save new transcript
                 await MainActor.run {

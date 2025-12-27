@@ -127,7 +127,7 @@ struct AppearanceSettingsView: View {
                 }
                 .padding(Spacing.sm)
                 .frame(minWidth: 100, maxWidth: 160)
-                .background(Color.black)
+                .background(Theme.current.backgroundSecondary)
 
                 Rectangle()
                     .fill(Theme.current.divider)
@@ -151,7 +151,7 @@ struct AppearanceSettingsView: View {
                     }
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
-                    .background(Color.black)
+                    .background(Theme.current.backgroundSecondary)
 
                     // Sample rows
                     ForEach(0..<3) { i in
@@ -179,7 +179,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                 }
-                .background(Color.black)
+                .background(Theme.current.backgroundSecondary)
             }
             .cornerRadius(Spacing.xs)
             .overlay(

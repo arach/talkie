@@ -209,7 +209,9 @@ struct MigrationGateView: View {
             } else {
                 // Show main app
                 // Database initialization and CloudKit sync are handled by StartupCoordinator
-                TalkieNavigationView()
+                // IMPORTANT: Use TalkieNavigationViewNative (native NavigationSplitView)
+                // DO NOT switch back to custom navigation implementations
+                TalkieNavigationViewNative()
             }
         }
         .task {

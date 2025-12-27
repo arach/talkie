@@ -20,7 +20,7 @@ struct HomeView: View {
     #endif
 
     // Navigation callbacks
-    var onSelectUtterance: ((Utterance) -> Void)?
+    var onSelectDictation: ((Dictation) -> Void)?
     var onSelectApp: ((String, String?) -> Void)?  // (appName, bundleID)
     var onSelectMemo: ((MemoModel) -> Void)?
 
@@ -79,7 +79,7 @@ struct HomeView: View {
                             if hasDictations {
                                 RecentActivityCard(
                                     dictations: Array(store.dictations.prefix(5)),
-                                    onSelectUtterance: onSelectUtterance
+                                    onSelectDictation: onSelectDictation
                                 )
                                 .frame(width: GridLayout.width(slots: hasMemos ? 2 : 4, in: containerWidth))
                             }
@@ -181,14 +181,14 @@ struct HomeView: View {
         activityData = buildActivityData(from: dictations, weeks: 52)
     }
 
-    private func generateInsight(_ dictations: [Utterance]) -> Insight? {
+    private func generateInsight(_ dictations: [Dictation]) -> Insight? {
         guard !dictations.isEmpty else { return nil }
 
         let calendar = Calendar.current
         let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        let recentUtterances = dictations.filter { $0.timestamp >= weekAgo }
+        let recentDictations = dictations.filter { $0.timestamp >= weekAgo }
 
-        guard !recentUtterances.isEmpty else {
+        guard !recentDictations.isEmpty else {
             return Insight(
                 iconName: "hand.wave",
                 iconColor: .green,
@@ -210,7 +210,7 @@ struct HomeView: View {
         var writingCount = 0
         var browserCount = 0
 
-        for u in recentUtterances {
+        for u in recentDictations {
             if let app = u.metadata.activeAppName {
                 if devApps.contains(app) { devCount += 1 }
                 else if socialApps.contains(app) { socialCount += 1 }
@@ -290,7 +290,7 @@ struct HomeView: View {
 
         // Time-based insights
         let hour = calendar.component(.hour, from: Date())
-        let todayCount = recentUtterances.filter { calendar.isDateInToday($0.timestamp) }.count
+        let todayCount = recentDictations.filter { calendar.isDateInToday($0.timestamp) }.count
 
         // "Productive morning" - before noon with good activity
         if hour < 12 && todayCount >= 8 {
@@ -317,11 +317,11 @@ struct HomeView: View {
             iconName: "sparkles",
             iconColor: .cyan,
             message: "Keep going!",
-            detail: "\(recentUtterances.count) actions this week. You're getting things done!"
+            detail: "\(recentDictations.count) actions this week. You're getting things done!"
         )
     }
 
-    private func calculateTopApps(_ dictations: [Utterance]) -> [(name: String, bundleID: String?, count: Int)] {
+    private func calculateTopApps(_ dictations: [Dictation]) -> [(name: String, bundleID: String?, count: Int)] {
         // Track both counts and bundle IDs
         var appData: [String: (bundleID: String?, count: Int)] = [:]
 
@@ -340,13 +340,13 @@ struct HomeView: View {
             .map { (name: $0.key, bundleID: $0.value.bundleID, count: $0.value.count) }
     }
 
-    private func calculateStreak(_ dictations: [Utterance]) -> Int {
+    private func calculateStreak(_ dictations: [Dictation]) -> Int {
         let calendar = Calendar.current
         var streak = 0
         let today = calendar.startOfDay(for: Date())
 
         // Group by day
-        var byDay: [Date: [Utterance]] = [:]
+        var byDay: [Date: [Dictation]] = [:]
         for u in dictations {
             let day = calendar.startOfDay(for: u.timestamp)
             byDay[day, default: []].append(u)
@@ -370,12 +370,12 @@ struct HomeView: View {
         return streak
     }
 
-    private func buildActivityData(from dictations: [Utterance], weeks: Int) -> [DayActivity] {
+    private func buildActivityData(from dictations: [Dictation], weeks: Int) -> [DayActivity] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
 
         // Group dictations by day
-        var byDay: [Date: [Utterance]] = [:]
+        var byDay: [Date: [Dictation]] = [:]
         for u in dictations {
             let day = calendar.startOfDay(for: u.timestamp)
             byDay[day, default: []].append(u)
@@ -1617,8 +1617,8 @@ struct TopAppRow: View {
 // MARK: - Recent Activity Card
 
 struct RecentActivityCard: View {
-    let dictations: [Utterance]
-    var onSelectUtterance: ((Utterance) -> Void)?
+    let dictations: [Dictation]
+    var onSelectDictation: ((Dictation) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1652,7 +1652,7 @@ struct RecentActivityCard: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(dictations) { dictation in
-                        RecentActivityRow(dictation: dictation, onSelect: onSelectUtterance)
+                        RecentActivityRow(dictation: dictation, onSelect: onSelectDictation)
                     }
                 }
             }
@@ -1670,8 +1670,8 @@ struct RecentActivityCard: View {
 }
 
 struct RecentActivityRow: View {
-    let dictation: Utterance
-    var onSelect: ((Utterance) -> Void)?
+    let dictation: Dictation
+    var onSelect: ((Dictation) -> Void)?
     @Environment(LiveSettings.self) private var settings
 
     @State private var isHovered = false

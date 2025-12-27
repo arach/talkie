@@ -49,9 +49,16 @@ enum LiveDatabase {
 
             var migrator = DatabaseMigrator()
 
-            // Single clean schema for utterances table
+            // v1: Create main table (fresh installs get "dictations", legacy migration renames in v4)
             migrator.registerMigration("v1_utterances") { db in
-                try db.create(table: "utterances") { t in
+                // Fresh install: create "dictations" directly, skip v4 rename
+                // Legacy: this migration already ran and created "utterances", v4 will rename it
+                let hasUtterances = try db.tableExists("utterances")
+                let hasDictations = try db.tableExists("dictations")
+
+                if !hasUtterances && !hasDictations {
+                    // Fresh install - create with correct name from the start
+                    try db.create(table: "dictations") { t in
                     t.autoIncrementedPrimaryKey("id")
                     t.column("createdAt", .double).notNull()
                     t.column("text", .text).notNull()
@@ -89,7 +96,9 @@ enum LiveDatabase {
                     // Flexible metadata (JSON blob)
                     t.column("sessionID", .text)
                     t.column("metadata", .text)
+                    }
                 }
+                // Else: table already exists (migration already ran or renamed), skip
             }
 
             // v2: Rename whisperModel → transcriptionModel (now supports Parakeet, etc.)
@@ -107,37 +116,45 @@ enum LiveDatabase {
 
             // v3: Add indexes for common queries (major performance improvement)
             migrator.registerMigration("v3_add_indexes") { db in
+                // Detect table name (fresh installs have "dictations", legacy have "utterances" before v4)
+                let tableName = try db.tableExists("dictations") ? "dictations" : "utterances"
+                let indexPrefix = tableName == "dictations" ? "idx_dictations" : "idx_utterances"
+
                 // Index for ORDER BY createdAt DESC (used in almost every query)
                 try db.create(
-                    index: "idx_utterances_createdAt",
-                    on: "utterances",
-                    columns: ["createdAt"]
+                    index: "\(indexPrefix)_createdAt",
+                    on: tableName,
+                    columns: ["createdAt"],
+                    ifNotExists: true
                 )
 
                 // Composite index for queue picker (fetchQueued, countQueued)
                 // Covers: createdInTalkieView = 1 AND pasteTimestamp IS NULL AND promotionStatus = 'none'
                 try db.create(
-                    index: "idx_utterances_queue",
-                    on: "utterances",
-                    columns: ["createdInTalkieView", "promotionStatus", "pasteTimestamp"]
+                    index: "\(indexPrefix)_queue",
+                    on: tableName,
+                    columns: ["createdInTalkieView", "promotionStatus", "pasteTimestamp"],
+                    ifNotExists: true
                 )
 
                 // Index for retry queries (fetchNeedsRetry, countNeedsRetry)
                 // Covers: transcriptionStatus IN ('failed', 'pending') AND audioFilename IS NOT NULL
                 try db.create(
-                    index: "idx_utterances_retry",
-                    on: "utterances",
-                    columns: ["transcriptionStatus", "audioFilename"]
+                    index: "\(indexPrefix)_retry",
+                    on: tableName,
+                    columns: ["transcriptionStatus", "audioFilename"],
+                    ifNotExists: true
                 )
 
                 // Index for app-based filtering (byApp)
                 try db.create(
-                    index: "idx_utterances_appBundleID",
-                    on: "utterances",
-                    columns: ["appBundleID"]
+                    index: "\(indexPrefix)_appBundleID",
+                    on: tableName,
+                    columns: ["appBundleID"],
+                    ifNotExists: true
                 )
 
-                logger.info("[LiveDatabase] Created performance indexes")
+                logger.info("[LiveDatabase] Created performance indexes on \(tableName)")
             }
 
             // v4: Rename table utterances → dictations (terminology clarification)
