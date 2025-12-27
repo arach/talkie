@@ -26,6 +26,9 @@ final class LiveController: ObservableObject {
     private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
     private var traceID: String?
 
+    /// Performance trace for the current dictation flow (hotkey → paste)
+    private var trace: LiveTranscriptionTrace?
+
     // Transcription task - stored so we can cancel it
     private var transcriptionTask: Task<Void, Never>?
     private var pendingAudioFilename: String?  // For saving on cancel
@@ -124,6 +127,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace = nil
 
         // Transition to idle via error event
         stateMachine.transition(.error(errorMsg))
@@ -206,6 +210,7 @@ final class LiveController: ObservableObject {
                 self.startApp = nil
                 self.pendingAudioFilename = nil
                 self.traceID = nil
+                self.trace = nil
                 self.isCancelled = false
                 self.stateMachine.transition(.forceReset)
             }
@@ -250,6 +255,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace = nil
 
         // Cancel back to idle
         stateMachine.transition(.cancel)
@@ -286,6 +292,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace = nil
         routeToInterstitial = false
         createdInTalkieView = false
 
@@ -339,6 +346,11 @@ final class LiveController: ObservableObject {
         routeToInterstitial = false
         saveAsMemo = false
 
+        // Start performance trace for this dictation flow
+        trace = LiveTranscriptionTrace()
+        trace?.mark("hotkey_pressed")
+        trace?.begin("context_capture")
+
         // Capture baseline context FIRST to get the REAL target app
         // before any potential TalkieLive activation
         capturedContext = ContextCaptureService.shared.captureBaseline()
@@ -368,6 +380,10 @@ final class LiveController: ObservableObject {
         let windowTitle = capturedContext?.activeWindowTitle ?? ""
         let queueNote = createdInTalkieView ? " [will queue]" : ""
         AppLogger.shared.log(.system, "Context captured", detail: "\(appName) — \(windowTitle.prefix(30))\(queueNote)")
+
+        // End context capture, begin recording phase
+        trace?.end(appName)
+        trace?.begin("recording")
 
         // Play start sound
         SoundManager.shared.playStart()
@@ -505,6 +521,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace = nil
         isCancelled = false
         routeToInterstitial = false
         createdInTalkieView = false
@@ -536,6 +553,10 @@ final class LiveController: ObservableObject {
         let pipelineStart = Date()  // Track end-to-end timing
         let settings = LiveSettings.shared
 
+        // End recording phase, begin file save
+        trace?.end()
+        trace?.begin("file_save")
+
         // Helper to log timing milestones
         func logTiming(_ step: String) {
             let ms = Int(Date().timeIntervalSince(pipelineStart) * 1000)
@@ -550,6 +571,8 @@ final class LiveController: ObservableObject {
         let tempURL = URL(fileURLWithPath: tempAudioPath)
         guard let audioFilename = AudioStorage.copyToStorage(tempURL) else {
             AppLogger.shared.log(.error, "Audio save failed", detail: "Could not copy temp file to storage")
+            trace?.end("failed")
+            trace = nil
             stateMachine.transition(.error("Audio save failed"))
             return
         }
@@ -629,6 +652,11 @@ final class LiveController: ObservableObject {
         // Generate external reference ID for Engine trace correlation (short 8-char hex)
         let externalRefId = String(UUID().uuidString.prefix(8)).lowercased()
 
+        // End file save, begin XPC transcription request
+        trace?.end(fileSizeStr)
+        trace?.externalRefId = externalRefId  // For Engine correlation
+        trace?.begin("xpc_request")
+
         do {
             // Pass the permanent audio path - engine reads directly, never modifies
             logTiming("Sending to engine")
@@ -637,7 +665,9 @@ final class LiveController: ObservableObject {
             logTiming("Engine returned")
             let engineEnd = Date()
 
+            // End XPC request step
             let transcriptionMs = Int(engineEnd.timeIntervalSince(engineStart) * 1000)
+            trace?.end("\(transcriptionMs)ms")
             let transcriptionSec = Double(transcriptionMs) / 1000.0
             let wordCount = result.text.split(separator: " ").count
             // preMs already calculated above (time from stop-recording to engine-submit)
@@ -675,6 +705,7 @@ final class LiveController: ObservableObject {
                 startApp = nil
                 pendingAudioFilename = nil
                 traceID = nil
+                trace = nil
                 isCancelled = false
 
                 // Complete the flow (user cancelled)
@@ -684,6 +715,7 @@ final class LiveController: ObservableObject {
 
             // Transition to routing state
             stateMachine.transition(.beginRouting)
+            trace?.begin("routing")
             logTiming("State → routing")
 
             // Track milestone
@@ -761,6 +793,7 @@ final class LiveController: ObservableObject {
                 startApp = nil
                 pendingAudioFilename = nil
                 traceID = nil
+                trace = nil
 
                 // Complete the flow
                 stateMachine.transition(.complete)
@@ -842,6 +875,7 @@ final class LiveController: ObservableObject {
                 startApp = nil
                 pendingAudioFilename = nil
                 traceID = nil
+                trace = nil
 
                 // Complete the flow (interstitial routing done)
                 stateMachine.transition(.complete)
@@ -990,6 +1024,12 @@ final class LiveController: ObservableObject {
             // Final success log
             AppLogger.shared.log(.system, "Pipeline complete", detail: "Ready for next recording")
 
+            // Complete trace and log summary
+            trace?.end()
+            if let trace = trace {
+                AppLogger.shared.log(.performance, "Trace complete", detail: trace.summary)
+            }
+
             // Track final milestone
             ProcessingMilestones.shared.markSuccess()
             logTiming("Pipeline complete")
@@ -1031,6 +1071,7 @@ final class LiveController: ObservableObject {
             createdInTalkieView = false
             pendingAudioFilename = nil
             traceID = nil
+            trace = nil
             stateMachine.transition(.error(error.localizedDescription))
             return
         }
@@ -1041,6 +1082,7 @@ final class LiveController: ObservableObject {
         createdInTalkieView = false
         pendingAudioFilename = nil
         traceID = nil
+        trace = nil
         stateMachine.transition(.complete)
     }
 

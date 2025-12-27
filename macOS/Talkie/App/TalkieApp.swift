@@ -123,6 +123,11 @@ struct TalkieApp: App {
                     showPerformanceMonitor()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+
+                Button("E2E Trace Viewer…") {
+                    showE2ETraceViewer()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
             }
         }
     }
@@ -138,6 +143,21 @@ struct TalkieApp: App {
         )
         window.contentView = NSHostingView(rootView: PerformanceDebugView())
         window.title = "Performance Monitor"
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - E2E Trace Viewer
+
+    private func showE2ETraceViewer() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 600),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = NSHostingView(rootView: E2ETraceView())
+        window.title = "End-to-End Trace Viewer"
         window.center()
         window.makeKeyAndOrderFront(nil)
     }

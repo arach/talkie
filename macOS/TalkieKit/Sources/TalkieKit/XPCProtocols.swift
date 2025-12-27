@@ -35,6 +35,11 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Toggle recording (start if idle, stop if listening)
     func toggleRecording(reply: @escaping (_ success: Bool) -> Void)
+
+    /// Get TalkieLive's permission status
+    /// - Parameters:
+    ///   - reply: Callback with microphone granted, accessibility granted, screen recording granted
+    func getPermissions(reply: @escaping (_ microphone: Bool, _ accessibility: Bool, _ screenRecording: Bool) -> Void)
 }
 
 /// Protocol for Talkie to receive callbacks from TalkieLive (Live → Talkie events)
@@ -103,7 +108,7 @@ public var kTalkieEngineXPCServiceName: String {
     /// - Parameters:
     ///   - audioPath: Path to audio file
     ///   - modelId: Model identifier
-    ///   - externalRefId: Client-provided reference ID for correlation
+    ///   - externalRefId: Client-provided reference ID for cross-app correlation (e.g., "a1b2c3d4")
     ///   - priority: Task priority
     ///   - reply: Callback with transcript or error
     func transcribe(
