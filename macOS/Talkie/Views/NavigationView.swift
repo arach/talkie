@@ -11,6 +11,7 @@ import CoreData
 enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
     case allMemos  // All Memos view (GRDB-based with pagination and filters)
+    case scratchPad     // Text editing scratch pad with LLM polish
     case liveDashboard  // Live home/insights view
     case liveRecent     // Live utterance list
     case liveSettings   // Live settings (now visible in sidebar)
@@ -190,6 +191,9 @@ struct TalkieNavigationView: View {
         .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToAllMemos"))) { _ in
             selectedSection = .allMemos
         }
+        .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToLiveRecent"))) { _ in
+            selectedSection = .liveRecent
+        }
         .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToMemoDetail"))) { notification in
             // Navigate to AllMemos and select the specific memo
             selectedSection = .allMemos
@@ -278,6 +282,7 @@ struct TalkieNavigationView: View {
                 // Collapsed: simple VStack, no scroll, natural sizing
                 VStack(spacing: 0) {
                     sidebarButton(section: .home, icon: "house.fill", title: "Home")
+                    sidebarButton(section: .scratchPad, icon: "pencil.and.outline", title: "Scratch Pad")
                     sidebarButton(section: .allMemos, icon: "square.stack", title: "All Memos", badge: allMemos.count > 0 ? "\(allMemos.count)" : nil, badgeColor: .secondary)
                     sidebarButton(section: .liveDashboard, icon: "chart.xyaxis.line", title: "Live", badge: liveDataStore.needsActionCount > 0 ? "\(liveDataStore.needsActionCount)" : nil, badgeColor: .cyan)
                     sidebarButton(section: .aiResults, icon: "chart.line.uptrend.xyaxis", title: "Actions")
@@ -296,6 +301,13 @@ struct TalkieNavigationView: View {
                             section: .home,
                             icon: "house.fill",
                             title: "Home"
+                        )
+
+                        // Scratch Pad - quick text editing with AI
+                        sidebarButton(
+                            section: .scratchPad,
+                            icon: "pencil.and.outline",
+                            title: "Scratch Pad"
                         )
 
                         // Memos section
@@ -488,6 +500,7 @@ struct TalkieNavigationView: View {
     private func sectionName(_ section: NavigationSection) -> String {
         switch section {
         case .home: return "Home"
+        case .scratchPad: return "ScratchPad"
         case .allMemos: return "AllMemos"
         case .liveDashboard: return "LiveDashboard"
         case .liveRecent: return "LiveRecent"
@@ -581,6 +594,10 @@ struct TalkieNavigationView: View {
         switch selectedSection {
         case .home:
             UnifiedDashboard()  // New unified view (was TalkieHomeView)
+        case .scratchPad:
+            TalkieSection("ScratchPad") {
+                ScratchPadView()
+            }
         case .models:
             TalkieSection("Models") {
                 ModelsContentView()
@@ -667,7 +684,7 @@ struct TalkieNavigationView: View {
     /// vs 3-column layout (sidebar + list + detail)
     private var isTwoColumnSection: Bool {
         switch selectedSection {
-        case .home, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .settings:
+        case .home, .scratchPad, .models, .allowedCommands, .aiResults, .allMemos, .liveDashboard, .liveRecent, .liveSettings, .systemConsole, .pendingActions, .settings:
             return true
         #if DEBUG
         case .designHome, .designAudit, .designComponents:
@@ -734,6 +751,7 @@ struct TalkieNavigationView: View {
     private var sectionTitle: String {
         switch selectedSection {
         case .home: return "HOME"
+        case .scratchPad: return "SCRATCH PAD"
         case .allMemos: return "ALL MEMOS"
         case .liveDashboard: return "LIVE DASHBOARD"
         case .liveRecent: return "LIVE RECENT"

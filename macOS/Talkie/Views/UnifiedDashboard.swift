@@ -755,6 +755,13 @@ struct MemoActivityRow: View {
                 isHovered = hovering
             }
         }
+        .onTapGesture {
+            // Navigate to memo detail
+            NotificationCenter.default.post(
+                name: .init("NavigateToMemoDetail"),
+                object: memo.id
+            )
+        }
     }
 
     private func formatDuration(_ seconds: Double) -> String {
@@ -842,6 +849,13 @@ struct DictationActivityRow: View {
             withAnimation(.easeOut(duration: 0.1)) {
                 isHovered = hovering
             }
+        }
+        .onTapGesture {
+            // Navigate to Live Recent (dictations list)
+            NotificationCenter.default.post(
+                name: .init("NavigateToLiveRecent"),
+                object: dictation.id
+            )
         }
     }
 

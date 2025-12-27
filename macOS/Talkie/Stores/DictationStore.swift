@@ -166,6 +166,9 @@ struct DictationMetadata: Codable, Hashable {
 
 // MARK: - Dictation
 
+/// Legacy alias for code still using Utterance terminology
+typealias Utterance = Dictation
+
 struct Dictation: Identifiable, Codable, Hashable {
     let id: UUID
     var text: String

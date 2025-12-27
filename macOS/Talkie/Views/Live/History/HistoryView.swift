@@ -689,10 +689,10 @@ struct HistoryView: View {
         switch selectedSection {
         case .home:
             HomeView(
-                onSelectDictation: { dictation in
+                onSelectUtterance: { utterance in
                     // Navigate to history and select this dictation
                     selectedSection = .history
-                    selectedDictationIDs = [dictation.id]
+                    selectedDictationIDs = [utterance.id]
                 },
                 onSelectApp: { appName, _ in
                     // Navigate to history filtered by this app
