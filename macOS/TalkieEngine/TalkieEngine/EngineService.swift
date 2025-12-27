@@ -11,6 +11,7 @@ import FluidAudio
 import AVFoundation
 import Cocoa
 import OSLog
+import TalkieKit
 
 // MARK: - AppLogger
 
@@ -27,34 +28,23 @@ enum EventType: String {
     case performance = "performance"
 }
 
-/// Unified logging that prints to console without privacy redaction
-/// Interface matches TalkieLive's AppLogger for eventual consolidation
+/// Unified logging that prints to console and writes to file for cross-app viewing
+/// Uses TalkieKit's TalkieLogFileWriter for unified log format
 final class AppLogger {
     static let shared = AppLogger()
     private let subsystem = "jdi.talkie.engine"
-    private let logFileURL: URL?
-    private let logQueue = DispatchQueue(label: "com.jdi.talkieengine.logging", qos: .utility)
 
-    private init() {
-        // Set up log file in ~/Library/Logs/TalkieEngine/
-        let logsDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Logs")
-            .appendingPathComponent("TalkieEngine")
+    /// File writer for cross-app log viewing in Talkie
+    private let fileWriter = TalkieLogFileWriter(source: .talkieEngine)
 
-        if let logsDir = logsDir {
-            try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
-            logFileURL = logsDir.appendingPathComponent("TalkieEngine.log")
-        } else {
-            logFileURL = nil
-        }
-    }
+    private init() {}
 
-    /// Log a message - prints to console and file with no privacy redaction
-    /// Matches TalkieLive AppLogger interface, with optional file/line tracking
+    /// Log a message - prints to console and writes to file for Talkie viewing
+    /// Warnings and errors use critical mode (immediate flush), everything else is buffered
     func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info, file: String = #file, line: Int = #line) {
         let fullMessage = detail != nil ? "\(message): \(detail!)" : message
 
-        // Format log line with file/line info
+        // Format log line with file/line info for console
         let timestamp = Date().formatted(.dateTime.hour().minute().second().secondFraction(.fractional(2)))
         let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
         let levelStr = switch level {
@@ -68,29 +58,40 @@ final class AppLogger {
         let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) ← \(filename):\(line)"
 
         // Log to console (visible in Xcode debugger and Console.app)
-        // NSLog creates autoreleased objects, so wrap it in autoreleasepool if we're not on the main run loop yet
         autoreleasepool {
             NSLog("%@", logLine)
         }
 
-        // Write to log file asynchronously
-        guard let logFileURL = logFileURL else { return }
-        logQueue.async {
-            autoreleasepool {
-                if let data = logLine.data(using: .utf8) {
-                    if FileManager.default.fileExists(atPath: logFileURL.path) {
-                        // Append to existing file
-                        if let fileHandle = try? FileHandle(forWritingTo: logFileURL) {
-                            fileHandle.seekToEndOfFile()
-                            fileHandle.write(data)
-                            try? fileHandle.close()
-                        }
-                    } else {
-                        // Create new file
-                        try? data.write(to: logFileURL)
-                    }
-                }
-            }
+        // Write to file for cross-app viewing in Talkie
+        // Warnings and errors use critical mode (immediate flush) with file:line context
+        let logType = mapEventType(category)
+        let isCritical = level == .notice || level == .error || level == .fault
+        let writeMode: LogWriteMode = isCritical ? .critical : .bestEffort
+
+        // Add file:line context to warnings and errors for debugging
+        let fileDetail: String?
+        if isCritical {
+            let baseDetail = detail ?? ""
+            fileDetail = baseDetail.isEmpty ? "[\(filename):\(line)]" : "\(baseDetail) [\(filename):\(line)]"
+        } else {
+            fileDetail = detail
+        }
+
+        fileWriter.log(logType, message, detail: fileDetail, mode: writeMode)
+    }
+
+    /// Map local EventType to TalkieKit's LogEventType
+    private func mapEventType(_ type: EventType) -> LogEventType {
+        switch type {
+        case .system: return .system
+        case .audio: return .record
+        case .transcription: return .transcribe
+        case .database: return .system
+        case .file: return .system
+        case .error: return .error
+        case .xpc: return .system
+        case .model: return .system
+        case .performance: return .system
         }
     }
 
@@ -223,25 +224,15 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     // MARK: - TalkieEngineProtocol
 
-    nonisolated func transcribe(
-        audioPath: String,
-        modelId: String,
-        priority: TranscriptionPriority,
-        reply: @escaping (String?, String?) -> Void
-    ) {
-        Task(priority: priority.taskPriority) { @MainActor in
-            await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, reply: reply)
-        }
-    }
-
+    /// Transcribe audio with external reference ID for cross-app trace correlation
     nonisolated func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
-        priority: TranscriptionPriority,
         reply: @escaping (String?, String?) -> Void
     ) {
-        Task(priority: priority.taskPriority) { @MainActor in
+        // Use high priority for all XPC transcription requests (real-time dictation)
+        Task(priority: .high) { @MainActor in
             await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, reply: reply)
         }
     }

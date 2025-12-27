@@ -19,6 +19,17 @@ private let xpcSignpostLog = OSLog(subsystem: "jdi.talkie.live", category: .poin
 /// Log level for dev logging
 private enum LogLevel { case debug, info, warning, error }
 
+/// Priority for transcription requests
+public enum TranscriptionPriority: String {
+    case high       // Real-time dictation (TalkieLive)
+    case normal     // Background transcription
+    case low        // Batch processing / queue retry
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+}
+
 /// Dev-friendly console logging with OS_LOG level support
 /// In DEBUG: prints to console + os_log at .debug level (visible without filter)
 /// In RELEASE: only logs to os_log at appropriate level
@@ -83,38 +94,8 @@ public enum EngineServiceMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// XPC protocol for TalkieEngine (must match TalkieEngine's protocol)
-@objc protocol TalkieEngineProtocol {
-    func transcribe(
-        audioPath: String,
-        modelId: String,
-        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
-    )
-
-    func transcribe(
-        audioPath: String,
-        modelId: String,
-        externalRefId: String?,
-        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
-    )
-
-    func preloadModel(
-        _ modelId: String,
-        reply: @escaping (_ error: String?) -> Void
-    )
-
-    func unloadModel(reply: @escaping () -> Void)
-
-    func getStatus(reply: @escaping (_ statusJSON: Data?) -> Void)
-
-    func ping(reply: @escaping (_ pong: Bool) -> Void)
-
-    // Download management
-    func downloadModel(_ modelId: String, reply: @escaping (_ error: String?) -> Void)
-    func getDownloadProgress(reply: @escaping (_ progressJSON: Data?) -> Void)
-    func cancelDownload(reply: @escaping () -> Void)
-    func getAvailableModels(reply: @escaping (_ modelsJSON: Data?) -> Void)
-}
+// NOTE: TalkieEngineProtocol is imported from TalkieKit
+// Do NOT duplicate it here - use TalkieKit.TalkieEngineProtocol
 
 /// Engine status (matches TalkieEngine's EngineStatus)
 public struct EngineStatus: Codable, Sendable {
@@ -381,9 +362,10 @@ public final class EngineClient: ObservableObject {
             Task { @MainActor in
                 if !completed {
                     completed = true
+                    logger.warning("[Engine] XPC invalidated during connect to \(serviceName)")
                     completion(false)
                 } else {
-                    self?.handleDisconnection(reason: "Connection invalidated")
+                    self?.handleDisconnection(reason: "XPC invalidated (\(serviceName))")
                 }
             }
         }
@@ -391,10 +373,12 @@ public final class EngineClient: ObservableObject {
         conn.resume()
 
         // Test with ping
-        let proxy = conn.remoteObjectProxyWithErrorHandler { _ in
+        let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
             Task { @MainActor in
                 if !completed {
                     completed = true
+                    logger.warning("[Engine] XPC error connecting to \(serviceName): \(error.localizedDescription)")
+                    self?.lastError = error.localizedDescription
                     conn.invalidate()
                     completion(false)
                 }
@@ -423,7 +407,7 @@ public final class EngineClient: ObservableObject {
                     // Set up real disconnection handler now
                     conn.interruptionHandler = { [weak self] in
                         Task { @MainActor in
-                            self?.handleDisconnection(reason: "Connection interrupted")
+                            self?.handleDisconnection(reason: "XPC interrupted (\(serviceName)) - engine may have crashed or been killed")
                         }
                     }
 
@@ -464,7 +448,9 @@ public final class EngineClient: ObservableObject {
 
         if wasConnected {
             let sessionDuration = connectedAt.map { formatDuration(since: $0) } ?? "unknown"
-            logger.info("[Engine] Disconnected from \(wasMode?.shortName ?? "?") after \(sessionDuration)")
+            logger.warning("[Engine] ⚠️ Disconnected from \(wasMode?.shortName ?? "?"): \(reason) (session: \(sessionDuration))")
+        } else {
+            logger.warning("[Engine] ⚠️ Connection failed: \(reason)")
         }
 
         connectedAt = nil
@@ -567,23 +553,24 @@ public final class EngineClient: ObservableObject {
     ///   - audioPath: Path to audio file (client owns the file, engine reads directly)
     ///   - modelId: Model to use for transcription
     ///   - externalRefId: Optional reference ID for correlating with Engine traces (deep link support)
-    public func transcribe(audioPath: String, modelId: String = "parakeet:v3", externalRefId: String? = nil) async throws -> String {
+    ///   - priority: Task priority (defaults to .high for real-time TalkieLive transcription)
+    public func transcribe(audioPath: String, modelId: String = "parakeet:v3", externalRefId: String? = nil, priority: TranscriptionPriority = .high) async throws -> String {
         guard let proxy = engineProxy else {
             // Try to connect first
             let connected = await ensureConnected()
             guard connected, let proxy = engineProxy else {
                 throw EngineClientError.notConnected
             }
-            return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId)
+            return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority)
         }
 
-        return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId)
+        return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority)
     }
 
     /// Transcribe with automatic retry for "Already transcribing" errors
     /// This handles the case where engine is busy loading a model (can take 60+ seconds)
     /// or processing another transcription
-    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?) async throws -> String {
+    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority) async throws -> String {
         let maxAttempts = 30  // 30 attempts × 2s = 60s max wait
         let retryDelay: UInt64 = 2_000_000_000  // 2 seconds
 
@@ -591,7 +578,7 @@ public final class EngineClient: ObservableObject {
 
         for attempt in 1...maxAttempts {
             do {
-                return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId)
+                return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority)
             } catch let error as EngineClientError {
                 // Check if it's "Already transcribing" - wait and retry
                 if case .transcriptionFailed(let message) = error, message.contains("Already transcribing") {
@@ -610,9 +597,9 @@ public final class EngineClient: ObservableObject {
         throw lastError ?? EngineClientError.transcriptionFailed("Engine busy timeout")
     }
 
-    private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?) async throws -> String {
+    private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority) async throws -> String {
         let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
-        logger.info("[Engine] Transcribing '\(fileName)' with model '\(modelId)'")
+        logger.info("[Engine] Transcribing '\(fileName)' with model '\(modelId)' priority=\(priority.displayName)")
 
         let startTime = Date()
         let timeoutSeconds: Double = 120 // 2 minute timeout for long audio files
@@ -651,7 +638,7 @@ public final class EngineClient: ObservableObject {
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
 
-            // Make XPC call
+            // Make XPC call (priority is for local tracking only, not passed to engine)
             proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId) { [weak self] transcript, error in
                 // Cancel timeout since we got a response
                 timeoutWork.cancel()

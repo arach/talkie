@@ -531,6 +531,7 @@ enum EventType: String {
     case file = "file"
     case error = "error"
     case ui = "ui"
+    case performance = "performance"
 
     var color: Color {
         switch self {
@@ -541,6 +542,7 @@ enum EventType: String {
         case .file: return .purple
         case .error: return .red
         case .ui: return .green
+        case .performance: return .yellow
         }
     }
 
@@ -553,6 +555,7 @@ enum EventType: String {
         case .file: return "doc"
         case .error: return "exclamationmark.triangle"
         case .ui: return "rectangle.3.group"
+        case .performance: return "gauge.with.dots.needle.bottom.50percent"
         }
     }
 
@@ -566,6 +569,7 @@ enum EventType: String {
         case .file: return "FILE"
         case .error: return "ERR"
         case .ui: return "UI"
+        case .performance: return "PERF"
         }
     }
 }
