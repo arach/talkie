@@ -261,20 +261,16 @@ struct TalkieNavigationViewNative: View {
             #endif
         }
         .listStyle(.sidebar)
+        .animation(.easeInOut(duration: 0.15), value: selectedSection)
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 0) {
-                Divider()
-
-                List(selection: $selectedSection) {
-                    NavigationLink(value: NavigationSection.settings) {
-                        Label("Settings", systemImage: "gear")
-                    }
+            List(selection: $selectedSection) {
+                NavigationLink(value: NavigationSection.settings) {
+                    Label("Settings", systemImage: "gear")
                 }
-                .listStyle(.sidebar)
-                .frame(height: 44)
-                .scrollDisabled(true)
             }
-            .background(Theme.current.backgroundSecondary)
+            .listStyle(.sidebar)
+            .frame(height: 36)
+            .scrollDisabled(true)
         }
     }
 

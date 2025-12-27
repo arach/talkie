@@ -79,7 +79,7 @@ struct StatusBar: View {
                 .frame(height: 1)
 
             HStack(spacing: Spacing.sm) {
-                // LEFT SIDE - ON AIR indicator or Sync status
+                // LEFT SIDE - ON AIR indicator or Sync status (fixed width to prevent center shift)
                 Group {
                     if liveState.state == .listening && liveSettings.showOnAir {
                         OnAirIndicator()
@@ -89,6 +89,7 @@ struct StatusBar: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
                 }
+                .frame(width: 60, alignment: .leading)
 
                 Spacer()
 
