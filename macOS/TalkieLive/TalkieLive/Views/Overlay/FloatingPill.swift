@@ -13,6 +13,48 @@ import os
 
 private let pillLogger = Logger(subsystem: "jdi.talkie.live", category: "FloatingPill")
 
+// MARK: - NSScreen Extension (Safe Display Access)
+
+extension NSScreen {
+    /// Check if this screen is valid (not in a transitional/disconnected state)
+    var isValid: Bool {
+        // Check if we can get a valid display ID
+        guard let displayID = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return false
+        }
+
+        // Check if frame is valid (non-zero)
+        let screenFrame = frame
+        guard screenFrame.width > 0 && screenFrame.height > 0 else {
+            return false
+        }
+
+        // Check if this display is actually active
+        // CGDisplayIsActive returns false for disconnected/sleeping displays
+        return CGDisplayIsActive(displayID) != 0
+    }
+
+    /// Safe access to screen name that handles invalid display identifiers gracefully
+    var safeDisplayName: String {
+        guard let displayID = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return "Display"
+        }
+
+        // Only access localizedName if the display is valid
+        // This prevents "invalid display identifier" errors for transitional screens
+        guard isValid else {
+            return "Display \(displayID) (inactive)"
+        }
+
+        let name = self.localizedName
+        if name.isEmpty || name == "Display" {
+            return "Display \(displayID)"
+        }
+
+        return name
+    }
+}
+
 // MARK: - Floating Pill Controller
 
 @MainActor
@@ -133,9 +175,15 @@ final class FloatingPillController: ObservableObject {
 
         // Create pills based on settings
         let showOnAllScreens = LiveSettings.shared.pillShowOnAllScreens
-        let screens = showOnAllScreens ? NSScreen.screens : [NSScreen.main].compactMap { $0 }
+        let allScreens = showOnAllScreens ? NSScreen.screens : [NSScreen.main].compactMap { $0 }
 
-        for screen in screens {
+        // Filter out invalid/transitional screens to avoid display identifier errors
+        let validScreens = allScreens.filter { $0.isValid }
+
+        pillLogger.debug("[Screens] Total: \(allScreens.count), Valid: \(validScreens.count)")
+
+        // Only create pills on valid screens
+        for screen in validScreens {
             createPill(on: screen)
         }
 
