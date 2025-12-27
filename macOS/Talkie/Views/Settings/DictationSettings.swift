@@ -30,148 +30,6 @@ struct DictationCaptureSettingsView: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                // MARK: - Visual Feedback with Preview
-                VStack(alignment: .leading, spacing: Spacing.md) {  // 12pt between header and content
-                    Text("VISUAL FEEDBACK")
-                        .font(Theme.current.fontXSBold)  // 10pt bold - section header pattern
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    // Main layout: Preview LEFT, Settings RIGHT
-                    HStack(alignment: .top, spacing: Spacing.xl) {
-                        // LEFT: Mock screen preview
-                        VStack(alignment: .leading, spacing: Spacing.xs) {  // 4pt tight grouping
-                            Text("PREVIEW")
-                                .font(Theme.current.fontXSBold)  // 10pt bold
-                                .foregroundColor(Theme.current.foregroundSecondary)
-
-                            Text("Hover to simulate recording")
-                                .font(Theme.current.fontXS)  // 10pt regular
-                                .foregroundColor(Theme.current.foregroundMuted)
-
-                            LivePreviewScreen(
-                                overlayStyle: $live.overlayStyle,
-                                hudPosition: $live.overlayPosition,
-                                pillPosition: $live.pillPosition,
-                                showOnAir: $live.showOnAir
-                            )
-                        }
-
-                        // RIGHT: Settings (HUD top, ON AIR middle, Pill bottom)
-                        VStack(alignment: .leading, spacing: 0) {
-                            // HUD Section
-                            VStack(alignment: .leading, spacing: Spacing.sm) {  // 8pt - standard component spacing
-                                Text("HUD")
-                                    .font(Theme.current.fontXSBold)  // 10pt bold
-                                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                                StyledToggle(
-                                    label: "Show HUD overlay",
-                                    isOn: Binding(
-                                        get: { live.overlayStyle.showsTopOverlay },
-                                        set: { show in
-                                            if show {
-                                                live.overlayStyle = .particles
-                                            } else {
-                                                live.overlayStyle = .pillOnly
-                                            }
-                                        }
-                                    ),
-                                    help: "Animated feedback at top of screen"
-                                )
-
-                                if live.overlayStyle.showsTopOverlay {
-                                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                                        LiveStyleSelector(selection: $live.overlayStyle)
-
-                                        // Speed toggle
-                                        HStack(spacing: Spacing.sm) {
-                                            Text("Speed")
-                                                .font(Theme.current.fontXS)
-                                                .foregroundColor(Theme.current.foregroundSecondary)
-
-                                            Picker("", selection: Binding(
-                                                get: {
-                                                    if live.overlayStyle == .particlesCalm || live.overlayStyle == .waveform {
-                                                        return "slow"
-                                                    }
-                                                    return "fast"
-                                                },
-                                                set: { speed in
-                                                    if live.overlayStyle == .particles || live.overlayStyle == .particlesCalm {
-                                                        live.overlayStyle = speed == "slow" ? .particlesCalm : .particles
-                                                    } else if live.overlayStyle == .waveform || live.overlayStyle == .waveformSensitive {
-                                                        live.overlayStyle = speed == "slow" ? .waveform : .waveformSensitive
-                                                    }
-                                                }
-                                            )) {
-                                                Text("Slow").tag("slow")
-                                                Text("Fast").tag("fast")
-                                            }
-                                            .pickerStyle(.segmented)
-                                            .frame(width: 100)
-                                        }
-                                    }
-                                    .padding(.leading, Spacing.xxs)
-                                }
-                            }
-
-                            Spacer().frame(height: Spacing.md)
-
-                            // ON AIR Section
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                HStack(spacing: Spacing.xs) {
-                                    Text("ON AIR")
-                                        .font(.system(size: 8, weight: .black))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, Spacing.xxs)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: Spacing.xxs)
-                                                .fill(live.showOnAir ? Color.red : Color.gray.opacity(Opacity.half))
-                                        )
-
-                                    Toggle("", isOn: $live.showOnAir)
-                                        .toggleStyle(.switch)
-                                        .labelsHidden()
-                                        .controlSize(.mini)
-                                }
-
-                                Text("Neon sign in top-left during recording")
-                                    .font(Theme.current.fontXS)
-                                    .foregroundColor(Theme.current.foregroundMuted)
-                            }
-
-                            Spacer()
-
-                            // Pill Section
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("PILL")
-                                    .font(Theme.current.fontXSBold)
-                                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                                StyledToggle(
-                                    label: "Expand during recording",
-                                    isOn: $live.pillExpandsDuringRecording,
-                                    help: "Show timer and audio level"
-                                )
-
-                                StyledToggle(
-                                    label: "Show on all screens",
-                                    isOn: $live.pillShowOnAllScreens,
-                                    help: "Display on every connected display"
-                                )
-                            }
-                        }
-                        .frame(width: 220)
-                    }
-
-                    // Settings summary
-                    LiveSettingsSummary()
-                }
-
-                Divider()
-                    .opacity(Opacity.medium)
-
                 // MARK: - Shortcuts Section
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("SHORTCUTS")
@@ -294,6 +152,148 @@ struct DictationCaptureSettingsView: View {
                         case .paste: return $live.pastedSound
                         }
                     }())
+                }
+
+                Divider()
+                    .opacity(Opacity.medium)
+
+                // MARK: - Visual Feedback with Preview
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text("VISUAL FEEDBACK")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    // Main layout: Preview LEFT, Settings RIGHT
+                    HStack(alignment: .top, spacing: Spacing.xl) {
+                        // LEFT: Mock screen preview
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("PREVIEW")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            Text("Hover to simulate recording")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundMuted)
+
+                            LivePreviewScreen(
+                                overlayStyle: $live.overlayStyle,
+                                hudPosition: $live.overlayPosition,
+                                pillPosition: $live.pillPosition,
+                                showOnAir: $live.showOnAir
+                            )
+                        }
+
+                        // RIGHT: Settings (HUD top, ON AIR lower, Pill bottom)
+                        VStack(alignment: .leading, spacing: 0) {
+                            // HUD Section
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("HUD")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                                StyledToggle(
+                                    label: "Show HUD overlay",
+                                    isOn: Binding(
+                                        get: { live.overlayStyle.showsTopOverlay },
+                                        set: { show in
+                                            if show {
+                                                live.overlayStyle = .particles
+                                            } else {
+                                                live.overlayStyle = .pillOnly
+                                            }
+                                        }
+                                    ),
+                                    help: "Animated feedback at top of screen"
+                                )
+
+                                if live.overlayStyle.showsTopOverlay {
+                                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                                        LiveStyleSelector(selection: $live.overlayStyle)
+
+                                        // Speed toggle
+                                        HStack(spacing: Spacing.sm) {
+                                            Text("Speed")
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                                            Picker("", selection: Binding(
+                                                get: {
+                                                    if live.overlayStyle == .particlesCalm || live.overlayStyle == .waveform {
+                                                        return "slow"
+                                                    }
+                                                    return "fast"
+                                                },
+                                                set: { speed in
+                                                    if live.overlayStyle == .particles || live.overlayStyle == .particlesCalm {
+                                                        live.overlayStyle = speed == "slow" ? .particlesCalm : .particles
+                                                    } else if live.overlayStyle == .waveform || live.overlayStyle == .waveformSensitive {
+                                                        live.overlayStyle = speed == "slow" ? .waveform : .waveformSensitive
+                                                    }
+                                                }
+                                            )) {
+                                                Text("Slow").tag("slow")
+                                                Text("Fast").tag("fast")
+                                            }
+                                            .pickerStyle(.segmented)
+                                            .frame(width: 100)
+                                        }
+                                    }
+                                    .padding(.leading, Spacing.xxs)
+                                }
+                            }
+
+                            Spacer().frame(height: Spacing.xl)
+
+                            // ON AIR Section
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                HStack(spacing: Spacing.xs) {
+                                    Text("ON AIR")
+                                        .font(.system(size: 8, weight: .black))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, Spacing.xxs)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: Spacing.xxs)
+                                                .fill(live.showOnAir ? Color.red : Color.gray.opacity(Opacity.half))
+                                        )
+
+                                    Toggle("", isOn: $live.showOnAir)
+                                        .toggleStyle(.switch)
+                                        .labelsHidden()
+                                        .controlSize(.mini)
+                                }
+
+                                Text("Neon sign in top-left during recording")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundMuted)
+                            }
+
+                            Spacer()
+
+                            // Pill Section
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("PILL")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                                StyledToggle(
+                                    label: "Expand during recording",
+                                    isOn: $live.pillExpandsDuringRecording,
+                                    help: "Show timer and audio level"
+                                )
+
+                                StyledToggle(
+                                    label: "Show on all screens",
+                                    isOn: $live.pillShowOnAllScreens,
+                                    help: "Display on every connected display"
+                                )
+                            }
+                        }
+                        .frame(width: 220)
+                    }
+
+                    // Settings summary
+                    LiveSettingsSummary()
                 }
 
                 Divider()

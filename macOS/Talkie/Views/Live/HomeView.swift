@@ -162,7 +162,7 @@ struct HomeView: View {
 
         // Calculate stats
         stats = HomeStats(
-            totalRecordings: dictations.count,
+            totalRecordings: store.count,  // Use database count, not fetched array
             totalWords: dictations.map { $0.wordCount }.reduce(0, +),
             totalDuration: dictations.compactMap { $0.durationSeconds }.reduce(0, +),
             todayCount: dictations.filter { calendar.isDateInToday($0.timestamp) }.count,
