@@ -27,7 +27,7 @@ struct LivePreviewScreen: View {
         ZStack {
             // Screen background
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(TalkieTheme.textPrimary)
+                .fill(Color.black.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
                         .stroke(TalkieTheme.border, lineWidth: 1)
@@ -71,6 +71,12 @@ struct LivePreviewScreen: View {
 
     private var topArea: some View {
         VStack(spacing: 6) {
+            // Label for HUD position
+            Text("HUD POSITION")
+                .font(.system(size: 7, weight: .medium))
+                .foregroundColor(.white.opacity(0.3))
+                .tracking(0.5)
+
             // HUD position dots + style preview in a row
             HStack(alignment: .top) {
                 PositionDot(
@@ -152,6 +158,12 @@ struct LivePreviewScreen: View {
                 )
             }
             .padding(.horizontal, 12)
+
+            // Label for Pill position
+            Text("PILL POSITION")
+                .font(.system(size: 7, weight: .medium))
+                .foregroundColor(.white.opacity(0.3))
+                .tracking(0.5)
         }
     }
 }
@@ -163,33 +175,71 @@ private struct PositionDot: View {
     let action: () -> Void
 
     @State private var isHovered = false
+    @State private var pulsePhase: CGFloat = 0
 
-    private let size: CGFloat = 12
+    private let size: CGFloat = 16
+    private let hitSize: CGFloat = 28
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Outer circle (always visible)
+                // Larger hit area (invisible)
                 Circle()
-                    .stroke(isSelected ? Color.cyan : TalkieTheme.textTertiary, lineWidth: 1.5)
+                    .fill(Color.clear)
+                    .frame(width: hitSize, height: hitSize)
+
+                // Pulse ring on hover
+                if isHovered && !isSelected {
+                    Circle()
+                        .stroke(Color.cyan.opacity(0.3), lineWidth: 2)
+                        .frame(width: size + 6, height: size + 6)
+                        .scaleEffect(1.0 + pulsePhase * 0.2)
+                        .opacity(1.0 - pulsePhase * 0.5)
+                }
+
+                // Outer circle
+                Circle()
+                    .stroke(
+                        isSelected ? Color.cyan : (isHovered ? Color.cyan.opacity(0.8) : Color.white.opacity(0.4)),
+                        lineWidth: isHovered ? 2 : 1.5
+                    )
                     .frame(width: size, height: size)
 
-                // Inner fill (selected state)
+                // Inner fill (selected or hovered state)
+                Circle()
+                    .fill(isSelected ? Color.cyan : (isHovered ? Color.cyan.opacity(0.3) : Color.clear))
+                    .frame(width: size - 4, height: size - 4)
+
+                // Plus icon on hover (indicates "click to place here")
+                if isHovered && !isSelected {
+                    Image(systemName: "plus")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.cyan)
+                }
+
+                // Checkmark when selected
                 if isSelected {
-                    Circle()
-                        .fill(Color.cyan)
-                        .frame(width: size - 4, height: size - 4)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.black)
                 }
             }
-            .scaleEffect(isHovered ? 1.3 : 1.0)
+            .scaleEffect(isHovered ? 1.15 : 1.0)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
+            if hovering {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    pulsePhase = 1
+                }
+            } else {
+                pulsePhase = 0
+            }
         }
-        .help(isSelected ? "Selected" : "Click to select")
+        .help(isSelected ? "Current position" : "Click to move here")
     }
 }
 
@@ -244,7 +294,7 @@ private struct AnimatedMiniPill: View {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(TalkieTheme.textSecondary)
+                        .fill(Color.black.opacity(0.7))
                         .overlay(
                             Capsule()
                                 .stroke(Color.red.opacity(0.3), lineWidth: 0.5)
@@ -253,11 +303,11 @@ private struct AnimatedMiniPill: View {
             } else {
                 // Idle state: flat wide capsule
                 Capsule()
-                    .fill(TalkieTheme.border)
+                    .fill(Color.white.opacity(0.2))
                     .frame(width: 24, height: 6)
                     .overlay(
                         Capsule()
-                            .stroke(TalkieTheme.divider, lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                     )
             }
         }
@@ -423,5 +473,5 @@ private struct StylePill: View {
         LiveStyleSelector(selection: .constant(.particles))
     }
     .padding(40)
-    .background(TalkieTheme.divider)
+    .background(Color(white: 0.1))
 }

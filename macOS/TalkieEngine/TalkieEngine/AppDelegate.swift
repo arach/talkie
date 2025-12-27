@@ -18,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLogger.shared.info(.system, "TalkieEngine app delegate ready")
+        // Signal handling is set up in main.swift before run loop starts
 
         // Ensure we have window server access (needed when launched by launchd)
         NSApp.setActivationPolicy(.accessory)
@@ -63,8 +64,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        AppLogger.shared.info(.system, "TalkieEngine shutting down")
-        EngineStatusManager.shared.log(.info, "AppDelegate", "Shutting down...")
+        NSLog("[TalkieEngine] 🛑 applicationWillTerminate - beginning graceful shutdown")
+        AppLogger.shared.info(.system, "TalkieEngine shutting down gracefully")
+        EngineStatusManager.shared.log(.info, "AppDelegate", "Shutting down gracefully...")
+
+        // Suspend XPC listener to stop accepting new connections
+        xpcListener?.suspend()
+
+        // Invalidate XPC listener to close existing connections gracefully
+        xpcListener?.invalidate()
+
+        // Give in-flight XPC calls time to complete
+        Thread.sleep(forTimeInterval: 0.2)
+
+        NSLog("[TalkieEngine] ✅ Shutdown complete")
+        AppLogger.shared.info(.system, "TalkieEngine shutdown complete")
     }
 
     // MARK: - URL Handling

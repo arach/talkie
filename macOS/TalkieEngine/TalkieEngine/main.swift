@@ -10,6 +10,30 @@ import os
 import Darwin
 
 
+// MARK: - Signal Handling
+
+/// Handle SIGTERM gracefully instead of crashing
+func setupSignalHandling() {
+    // Create a dispatch source for SIGTERM
+    signal(SIGTERM, SIG_IGN)  // Ignore default handler
+
+    let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+    source.setEventHandler {
+        NSLog("[TalkieEngine] Received SIGTERM, shutting down gracefully...")
+
+        // Give a brief moment for any in-flight work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+    source.resume()
+
+    // Keep reference to prevent deallocation
+    _signalSource = source
+}
+
+private var _signalSource: DispatchSourceSignal?
+
 // MARK: - Single Instance Enforcement (Honor System)
 
 /// Find and handle any existing TalkieEngine processes
@@ -169,6 +193,9 @@ var listenerDelegate: EngineListenerDelegate!
 
 // Wrap the entire startup in autoreleasepool since NSApplicationMain isn't active yet
 autoreleasepool {
+    // Set up signal handling first so SIGTERM doesn't crash the debugger
+    setupSignalHandling()
+
     AppLogger.shared.info(.system, "TalkieEngine starting (PID: \(ProcessInfo.processInfo.processIdentifier), mode: \(isDaemonMode ? "daemon" : "debug"))...")
 
     // Determine XPC service name based on bundle ID and launch mode
