@@ -198,6 +198,14 @@ final class TranscriptionTrace {
     var elapsedSeconds: Double {
         Double(elapsedMs) / 1000.0
     }
+
+    /// Summary string for logging - matches LiveTranscriptionTrace format for E2E correlation
+    /// Format: "[traceId] Xms total: step1=Xms, step2=Xms, ..."
+    var summary: String {
+        let traceId = externalRefId ?? jobId.uuidString.prefix(8).lowercased()
+        let stepSummary = steps.map { "\($0.name)=\($0.durationMs)ms" }.joined(separator: ", ")
+        return "[\(traceId)] \(elapsedMs)ms total: \(stepSummary)"
+    }
 }
 
 // MARK: - Transcription Metric
@@ -280,6 +288,12 @@ class EngineStatusManager: ObservableObject {
     @Published var currentModel: String?
     @Published var totalTranscriptions = 0
     @Published var uptime: TimeInterval = 0
+
+    // Error tracking - shows recent errors prominently
+    @Published var lastError: EngineLogEntry?
+    @Published var recentErrors: [EngineLogEntry] = []
+    @Published var errorCount: Int = 0
+    private let maxRecentErrors = 10
 
     // Launch mode info (set from main.swift)
     @Published var launchMode: EngineServiceMode = .dev
@@ -443,6 +457,29 @@ class EngineStatusManager: ObservableObject {
         if logs.count > maxLogs {
             logs = Array(logs.prefix(maxLogs))
         }
+
+        // Track errors separately for prominent display
+        if level == .error {
+            lastError = entry
+            errorCount += 1
+            recentErrors.insert(entry, at: 0)
+            if recentErrors.count > maxRecentErrors {
+                recentErrors = Array(recentErrors.prefix(maxRecentErrors))
+            }
+        }
+    }
+
+    /// Clear the last error (user dismissed it)
+    func dismissLastError() {
+        lastError = nil
+    }
+
+    /// Clear all errors
+    func clearErrors() {
+        lastError = nil
+        recentErrors.removeAll()
+        errorCount = 0
+        log(.info, "Console", "Errors cleared")
     }
 
     func clearLogs() {
@@ -751,6 +788,11 @@ struct EngineStatusView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Error banner (shown when there's a recent error)
+            if let lastError = statusManager.lastError {
+                errorBanner(lastError)
+            }
+
             // Header with status
             headerView
 
@@ -813,6 +855,44 @@ struct EngineStatusView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Error Banner
+
+    private func errorBanner(_ error: EngineLogEntry) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Error: \(error.category)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text(error.message)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Text(error.timestamp, format: .dateTime.hour().minute().second())
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.7))
+
+            Button(action: { statusManager.dismissLastError() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.red.opacity(0.85))
     }
 
     // MARK: - Header
@@ -885,6 +965,12 @@ struct EngineStatusView: View {
         HStack(spacing: 20) {
             statItem(icon: "clock", label: "UPTIME", value: statusManager.formattedUptime)
             statItem(icon: "waveform", label: "TRANSCRIPTIONS", value: "\(statusManager.totalTranscriptions)")
+
+            // Show error count if there are errors
+            if statusManager.errorCount > 0 {
+                errorStatItem(count: statusManager.errorCount)
+            }
+
             statItem(icon: "cpu", label: "MODEL", value: statusManager.currentModel ?? "None")
             statItem(icon: "number", label: "PID", value: "\(ProcessInfo.processInfo.processIdentifier)")
             statItem(icon: statusManager.isDaemonMode ? "server.rack" : "hammer",
@@ -926,6 +1012,27 @@ struct EngineStatusView: View {
                     .lineLimit(1)
             }
         }
+    }
+
+    private func errorStatItem(count: Int) -> some View {
+        Button(action: { statusManager.clearErrors() }) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.red)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("ERRORS")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.red.opacity(0.8))
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.red)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Click to clear errors")
     }
 
     // MARK: - Tab Bar
