@@ -140,10 +140,6 @@ public struct LivePill: View {
         // Show warning if engine isn't connected OR mic isn't available
         let hasIssue = !isEngineConnected || micDeviceName == nil
         if hasIssue {
-            // Debug: log why we're showing offline
-            #if DEBUG
-            print("[LivePill] Offline state - engineConnected: \(isEngineConnected), mic: \(micDeviceName ?? "nil")")
-            #endif
             return .offline
         }
 
@@ -187,6 +183,20 @@ public struct LivePill: View {
         }
         .onDisappear {
             stopModifierMonitor()
+        }
+        .onChange(of: isEngineConnected) { _, connected in
+            if !connected {
+                print("[LivePill] ⚠️ Engine disconnected - mic: \(micDeviceName ?? "nil")")
+            } else {
+                print("[LivePill] ✓ Engine connected")
+            }
+        }
+        .onChange(of: micDeviceName) { oldMic, newMic in
+            if oldMic != nil && newMic == nil {
+                print("[LivePill] ⚠️ Microphone lost")
+            } else if oldMic == nil && newMic != nil {
+                print("[LivePill] ✓ Microphone available: \(newMic!)")
+            }
         }
     }
 

@@ -284,7 +284,7 @@ public final class EngineClient {
         logger.info("[EngineClient] Transcribing \(audioPath) (priority: \(priority.displayName))")
 
         return try await withCheckedThrowingContinuation { continuation in
-            proxy.transcribe(audioPath: audioPath, modelId: modelId, priority: priority) { [weak self] transcript, error in
+            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, priority: priority) { [weak self] transcript, error in
                 Task { @MainActor in
                     self?.transcriptionCount += 1
                     self?.lastTranscriptionAt = Date()
