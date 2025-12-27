@@ -19,16 +19,7 @@ private let xpcSignpostLog = OSLog(subsystem: "jdi.talkie.live", category: .poin
 /// Log level for dev logging
 private enum LogLevel { case debug, info, warning, error }
 
-/// Priority for transcription requests
-public enum TranscriptionPriority: String {
-    case high       // Real-time dictation (TalkieLive)
-    case normal     // Background transcription
-    case low        // Batch processing / queue retry
-
-    var displayName: String {
-        rawValue.capitalized
-    }
-}
+// TranscriptionPriority is now defined in TalkieKit
 
 /// Dev-friendly console logging with OS_LOG level support
 /// In DEBUG: prints to console + os_log at .debug level (visible without filter)
@@ -638,8 +629,8 @@ public final class EngineClient: ObservableObject {
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
 
-            // Make XPC call (priority is for local tracking only, not passed to engine)
-            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId) { [weak self] transcript, error in
+            // Make XPC call with priority
+            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority) { [weak self] transcript, error in
                 // Cancel timeout since we got a response
                 timeoutWork.cancel()
 
