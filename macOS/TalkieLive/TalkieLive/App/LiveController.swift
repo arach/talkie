@@ -652,10 +652,10 @@ final class LiveController: ObservableObject {
         // Generate external reference ID for Engine trace correlation (short 8-char hex)
         let externalRefId = String(UUID().uuidString.prefix(8)).lowercased()
 
-        // End file save, begin XPC transcription request
+        // End file save, begin engine transcription
         trace?.end(fileSizeStr)
         trace?.externalRefId = externalRefId  // For Engine correlation
-        trace?.begin("xpc_request")
+        trace?.begin("engine")
 
         do {
             // Pass the permanent audio path - engine reads directly, never modifies
@@ -665,7 +665,7 @@ final class LiveController: ObservableObject {
             logTiming("Engine returned")
             let engineEnd = Date()
 
-            // End XPC request step
+            // End engine step
             let transcriptionMs = Int(engineEnd.timeIntervalSince(engineStart) * 1000)
             trace?.end("\(transcriptionMs)ms")
             let transcriptionSec = Double(transcriptionMs) / 1000.0

@@ -311,6 +311,9 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
             trace.mark("complete")
 
+            // Log trace summary for E2E trace viewer correlation
+            AppLogger.shared.log(.performance, "Trace complete", detail: trace.summary)
+
             totalTranscriptions += 1
             let elapsed = trace.elapsedSeconds
             let elapsedMs = trace.elapsedMs
