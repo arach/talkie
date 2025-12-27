@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CAE720D854E94882BBB0F89E /* E2ETraceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E5221611BB46AAB83B36C7 /* E2ETraceView.swift */; };
+		20E7F1EDCD354067819381F2 /* SpacingDecoratorOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3637100564F4690936D10AB /* SpacingDecoratorOverlay.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
 		00EA0C1AD74762B2D0083D75 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BD343AFFEE244146750E16 /* FormControls.swift */; };
@@ -238,6 +240,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F4E5221611BB46AAB83B36C7 /* E2ETraceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2ETraceView.swift; sourceTree = "<group>"; };
+		B3637100564F4690936D10AB /* SpacingDecoratorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacingDecoratorOverlay.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
@@ -483,6 +487,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		DCFDA7E856114F9C8D4FFD7B /* Debug */ = {
+			isa = PBXGroup;
+			children = (
+				F4E5221611BB46AAB83B36C7 /* E2ETraceView.swift */,
+			);
+			path = Debug;
+			sourceTree = "<group>";
+		};
 		07EC6608E6DA26A94F36034F /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -595,6 +607,7 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				DCFDA7E856114F9C8D4FFD7B /* Debug */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				37B249E75E681770AEA53425 /* MemoRowView.swift */,
 				3F03AE42A0A83903EC8E3B2D /* NavigationView.swift */,
@@ -622,6 +635,7 @@
 		679396B7934755CD0141AE6D /* DesignMode */ = {
 			isa = PBXGroup;
 			children = (
+				B3637100564F4690936D10AB /* SpacingDecoratorOverlay.swift */,
 				8E6CFD97E88CDAC0A29D5CC2 /* DesignModeManager.swift */,
 				835DE1FE016BEB2E77250F1B /* DesignOverlay.swift */,
 				6D67F82EC91560F5D7130E4C /* Tools */,
@@ -1133,6 +1147,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CAE720D854E94882BBB0F89E /* E2ETraceView.swift in Sources */,
+				20E7F1EDCD354067819381F2 /* SpacingDecoratorOverlay.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
 				1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */,
@@ -1424,7 +1440,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.7.3;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -1510,7 +1526,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.7.3;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -1596,7 +1612,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.7.3;
 				SDKROOT = macosx;
 			};
 			name = Staging;

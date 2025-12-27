@@ -12,10 +12,15 @@ struct LiveModePitchView: View {
     let onNext: () -> Void
     @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(LiveSettings.self) private var liveSettings
     @State private var animationPhase: Int = 0
 
     private var colors: OnboardingColors {
         OnboardingColors.forScheme(colorScheme)
+    }
+
+    private var hotkeyDisplay: String {
+        liveSettings.hotkey.displayString
     }
 
     var body: some View {
@@ -65,7 +70,7 @@ struct LiveModePitchView: View {
                             colors: colors,
                             icon: "bolt.fill",
                             title: "Global Hotkey",
-                            description: "Summon from any app with ⌥⌘L",
+                            description: "Summon from any app with \(hotkeyDisplay)",
                             isEnabled: manager.enableLiveMode
                         )
                     }

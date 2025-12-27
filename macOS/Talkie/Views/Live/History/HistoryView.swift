@@ -689,7 +689,7 @@ struct HistoryView: View {
         switch selectedSection {
         case .home:
             HomeView(
-                onSelectDictation: { dictation in
+                onSelectUtterance: { dictation in
                     // Navigate to history and select this dictation
                     selectedSection = .history
                     selectedDictationIDs = [dictation.id]

@@ -130,27 +130,12 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
     /// - Parameters:
     ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
     ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
-    ///   - priority: Task priority - caller declares scheduling intent (see guidelines above)
-    ///   - reply: Callback with transcript or error message
-    func transcribe(
-        audioPath: String,
-        modelId: String,
-        priority: TranscriptionPriority,
-        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
-    )
-
-    /// Transcribe audio file to text with external reference ID for tracing
-    /// - Parameters:
-    ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
-    ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
-    ///   - externalRefId: Optional client-provided reference ID for correlating with Engine traces
-    ///   - priority: Task priority (.high for Live real-time, .medium default, .low for batch)
+    ///   - externalRefId: Optional trace ID for cross-app correlation (e.g., "a1b2c3d4")
     ///   - reply: Callback with transcript or error message
     func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
-        priority: TranscriptionPriority,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 

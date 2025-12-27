@@ -13,9 +13,14 @@ struct CompleteView: View {
     let onComplete: () -> Void
     @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(LiveSettings.self) private var liveSettings
     @State private var scale: CGFloat = 0.5
     @State private var rotation: Double = 0
     @State private var showCelebration = false
+
+    private var hotkeyDisplay: String {
+        liveSettings.hotkey.displayString
+    }
 
     private var colors: OnboardingColors {
         OnboardingColors.forScheme(colorScheme)
@@ -135,7 +140,7 @@ struct CompleteView: View {
                     .tracking(1)
                     .foregroundColor(colors.textTertiary)
 
-                Text("Try using ⌥⌘L to start your first recording")
+                Text("Try using \(hotkeyDisplay) to start your first recording")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(colors.textPrimary)
                     .multilineTextAlignment(.center)
@@ -157,7 +162,7 @@ struct CompleteView: View {
 
             // Celebration (if triggered)
             if showCelebration {
-                CelebrationView(colors: colors)
+                CelebrationView(colors: colors, hotkeyDisplay: hotkeyDisplay)
                     .transition(.scale.combined(with: .opacity))
             }
 
@@ -166,7 +171,7 @@ struct CompleteView: View {
                 LiveTipRow(
                     colors: colors,
                     icon: "command.circle.fill",
-                    title: "Press ⌥⌘L anywhere to start recording",
+                    title: "Press \(hotkeyDisplay) anywhere to start recording",
                     subtitle: "Works in any app, even full-screen"
                 )
 
@@ -402,6 +407,7 @@ private struct SimplePillDemo: View {
 
 private struct CelebrationView: View {
     let colors: OnboardingColors
+    let hotkeyDisplay: String
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
@@ -414,7 +420,7 @@ private struct CelebrationView: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(colors.accent)
 
-            Text("Try using ⌥⌘L in any app now")
+            Text("Try using \(hotkeyDisplay) in any app now")
                 .font(.system(size: 11))
                 .foregroundColor(colors.textSecondary)
         }

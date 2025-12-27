@@ -136,7 +136,13 @@ public struct LivePill: View {
     private var visualState: VisualState {
         if isWarmingUp { return .warmingUp }
         if showSuccess { return .success }
-        if !isEngineConnected { return .offline }
+
+        // Show warning if engine isn't connected OR mic isn't available
+        let hasIssue = !isEngineConnected || micDeviceName == nil
+        if hasIssue {
+            return .offline
+        }
+
         switch state {
         case .idle: return .idle(hasPending: pendingQueueCount > 0)
         case .listening: return .listening(interstitialHint: isHovered && isShiftHeld)
@@ -178,18 +184,28 @@ public struct LivePill: View {
         .onDisappear {
             stopModifierMonitor()
         }
+        .onChange(of: isEngineConnected) { _, connected in
+            if !connected {
+                print("[LivePill] ⚠️ Engine disconnected - mic: \(micDeviceName ?? "nil")")
+            } else {
+                print("[LivePill] ✓ Engine connected")
+            }
+        }
+        .onChange(of: micDeviceName) { oldMic, newMic in
+            if oldMic != nil && newMic == nil {
+                print("[LivePill] ⚠️ Microphone lost")
+            } else if oldMic == nil && newMic != nil {
+                print("[LivePill] ✓ Microphone available: \(newMic!)")
+            }
+        }
     }
 
     // MARK: - Sliver Content (Collapsed)
 
     private var sliverContent: some View {
         HStack(spacing: 4) {
-            // Warning indicator for offline/queue
+            // Warning indicator for offline only
             if case .offline = visualState {
-                Circle()
-                    .fill(SemanticColor.warning)
-                    .frame(width: 4, height: 4)
-            } else if case .idle(let hasPending) = visualState, hasPending {
                 Circle()
                     .fill(SemanticColor.warning)
                     .frame(width: 4, height: 4)
@@ -197,20 +213,6 @@ public struct LivePill: View {
 
             // Main sliver bar with optional pulse
             sliverBar
-
-            // Queue badge - clickable to retry/clear
-            if case .idle(let hasPending) = visualState, hasPending {
-                Button(action: { onQueueTap?() }) {
-                    Text("\(pendingQueueCount)")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(SemanticColor.warning))
-                }
-                .buttonStyle(.plain)
-                .help("Click to retry failed transcriptions")
-            }
         }
         .frame(height: 18)
         .padding(.horizontal, 6)
@@ -310,7 +312,9 @@ public struct LivePill: View {
             .foregroundColor(SemanticColor.success)
 
         case .offline:
-            Text("Offline")
+            // Show specific issue: mic or engine
+            let message = micDeviceName == nil ? "No Mic" : "Offline"
+            Text(message)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(SemanticColor.warning)
 

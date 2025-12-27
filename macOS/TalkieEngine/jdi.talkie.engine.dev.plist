@@ -6,7 +6,8 @@
     <string>jdi.talkie.engine.dev</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/arach/Library/Developer/Xcode/DerivedData/TalkieEngine-ehzficuijkrlribwzymnhyricrnu/Build/Products/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
+        <!-- Stable path - copy builds here instead of volatile DerivedData -->
+        <string>/Users/arach/Library/Developer/Talkie/Debug/TalkieEngine.app/Contents/MacOS/TalkieEngine</string>
         <string>--daemon</string>
     </array>
     <key>MachServices</key>

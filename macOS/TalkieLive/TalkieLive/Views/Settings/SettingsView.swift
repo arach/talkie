@@ -8,6 +8,7 @@
 import SwiftUI
 import AppKit
 import Carbon.HIToolbox
+import TalkieKit
 
 // MARK: - Embedded Settings View (for main app navigation)
 
@@ -3346,10 +3347,358 @@ struct AboutInfoRow: View {
     }
 }
 
+// MARK: - Quick Settings View (Focused: Capture + Output + Permissions)
+
+enum QuickSettingsTab: String, CaseIterable {
+    case audio
+    case feedback
+    case output
+    case permissions
+    case connections
+
+    var title: String {
+        switch self {
+        case .audio: return "Audio"
+        case .feedback: return "Feedback"
+        case .output: return "Output"
+        case .permissions: return "Permissions"
+        case .connections: return "Connections"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .audio: return "mic.fill"
+        case .feedback: return "rectangle.inset.topright.filled"
+        case .output: return "arrow.right.doc.on.clipboard"
+        case .permissions: return "lock.shield.fill"
+        case .connections: return "network"
+        }
+    }
+}
+
+struct QuickSettingsView: View {
+    @State private var selectedTab: QuickSettingsTab = .audio
+    @StateObject private var permissionManager = PermissionManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Tab bar
+            HStack(spacing: 0) {
+                ForEach(QuickSettingsTab.allCases, id: \.self) { tab in
+                    QuickSettingsTabButton(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        showWarning: tab == .permissions && !permissionManager.allRequiredGranted
+                    ) {
+                        selectedTab = tab
+                    }
+                }
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.top, Spacing.md)
+
+            Rectangle()
+                .fill(TalkieTheme.divider)
+                .frame(height: 0.5)
+                .padding(.top, Spacing.sm)
+
+            // Content
+            ScrollView {
+                switch selectedTab {
+                case .audio:
+                    AudioSettingsSection()
+                case .feedback:
+                    OverlaySettingsSection()
+                case .output:
+                    OutputSettingsSection()
+                case .permissions:
+                    PermissionsSettingsSection()
+                case .connections:
+                    ConnectionsSettingsSection()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(TalkieTheme.background)
+    }
+}
+
+struct QuickSettingsTabButton: View {
+    let tab: QuickSettingsTab
+    let isSelected: Bool
+    var showWarning: Bool = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 12))
+
+                Text(tab.title)
+                    .font(.system(size: 12, weight: .medium))
+
+                if showWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                }
+            }
+            .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(isSelected ? TalkieTheme.accent : (isHovered ? TalkieTheme.surfaceElevated : Color.clear))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Connections Settings Section
+
+struct ConnectionsSettingsSection: View {
+    @State private var engineStatus: EngineConnectionStatus = .unknown
+    @State private var talkieConnected = false
+    @State private var isRefreshing = false
+
+    private let myPID = ProcessInfo.processInfo.processIdentifier
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            // Header
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack {
+                    Image(systemName: "network")
+                        .font(.system(size: 20))
+                        .foregroundColor(TalkieTheme.accent)
+
+                    Text("CONNECTIONS")
+                        .font(.techLabel)
+                        .tracking(Tracking.wide)
+                        .foregroundColor(TalkieTheme.textPrimary)
+
+                    Spacer()
+
+                    Button(action: refresh) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .medium))
+                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                            .animation(isRefreshing ? .linear(duration: 0.5) : .default, value: isRefreshing)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(TalkieTheme.textSecondary)
+                }
+
+                Text("XPC service connections to Talkie ecosystem")
+                    .font(.system(size: 12))
+                    .foregroundColor(TalkieTheme.textSecondary)
+            }
+
+            // This Process
+            ConnectionCard(
+                title: "TalkieLive",
+                subtitle: "This process",
+                icon: "app.fill",
+                status: .connected,
+                pid: myPID,
+                serviceName: nil
+            )
+
+            // TalkieEngine Connection
+            ConnectionCard(
+                title: "TalkieEngine",
+                subtitle: "Transcription service",
+                icon: "waveform",
+                status: engineStatus,
+                pid: engineStatus.pid,
+                serviceName: TalkieEnvironment.current.engineXPCService
+            )
+
+            // Talkie Connection (observers)
+            ConnectionCard(
+                title: "Talkie",
+                subtitle: "Main app (observing us)",
+                icon: "app.badge.checkmark",
+                status: talkieConnected ? .connected : .disconnected,
+                pid: nil,
+                serviceName: TalkieEnvironment.current.liveXPCService
+            )
+
+            // Environment Info
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("ENVIRONMENT")
+                    .font(.techLabelSmall)
+                    .tracking(Tracking.wide)
+                    .foregroundColor(TalkieTheme.textTertiary)
+
+                HStack {
+                    Text("Mode:")
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textSecondary)
+                    Text(TalkieEnvironment.current.rawValue.uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(TalkieTheme.accent)
+
+                    Spacer()
+
+                    if let bundleID = Bundle.main.bundleIdentifier {
+                        Text(bundleID)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(TalkieTheme.textTertiary)
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(Spacing.sm)
+                .background(TalkieTheme.surfaceElevated)
+                .cornerRadius(CornerRadius.sm)
+            }
+        }
+        .padding(Spacing.lg)
+        .onAppear { refresh() }
+    }
+
+    private func refresh() {
+        isRefreshing = true
+
+        // Check Engine connection
+        Task {
+            let client = EngineClient.shared
+            let connected = await client.ensureConnected()
+
+            await MainActor.run {
+                if connected {
+                    // Try to get PID from engine status
+                    engineStatus = .connected
+                } else {
+                    engineStatus = .disconnected
+                }
+
+                // Check if Talkie is observing us
+                talkieConnected = TalkieLiveXPCService.shared.isTalkieConnected
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isRefreshing = false
+                }
+            }
+        }
+    }
+}
+
+enum EngineConnectionStatus {
+    case unknown
+    case connected
+    case disconnected
+
+    var pid: Int32? { nil }  // TODO: Get from engine status
+}
+
+struct ConnectionCard: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let status: EngineConnectionStatus
+    var pid: Int32?
+    var serviceName: String?
+
+    private var statusColor: Color {
+        switch status {
+        case .connected: return .green
+        case .disconnected: return .red
+        case .unknown: return .orange
+        }
+    }
+
+    private var statusText: String {
+        switch status {
+        case .connected: return "Connected"
+        case .disconnected: return "Disconnected"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            // Icon
+            ZStack {
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(statusColor.opacity(0.15))
+                    .frame(width: 40, height: 40)
+
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(statusColor)
+            }
+
+            // Info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(TalkieTheme.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundColor(TalkieTheme.textSecondary)
+
+                if let serviceName = serviceName {
+                    Text(serviceName)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+            }
+
+            Spacer()
+
+            // Status + PID
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 8, height: 8)
+                    Text(statusText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(statusColor)
+                }
+
+                if let pid = pid {
+                    Text("PID \(pid)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
+            }
+        }
+        .padding(Spacing.md)
+        .background(TalkieTheme.surface)
+        .cornerRadius(CornerRadius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .strokeBorder(statusColor.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
 // MARK: - Preview
 
 #Preview {
     SettingsView()
         .frame(width: 650, height: 500)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Quick Settings") {
+    QuickSettingsView()
+        .frame(width: 550, height: 500)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Connections") {
+    ConnectionsSettingsSection()
+        .frame(width: 500, height: 500)
+        .background(TalkieTheme.background)
         .preferredColorScheme(.dark)
 }

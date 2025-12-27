@@ -48,6 +48,8 @@ packages:
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio.git
     version: 0.7.11
+  TalkieKit:
+    path: ../TalkieKit
 
 targets:
   TalkieEngine:
@@ -66,3 +68,4 @@ targets:
     dependencies:
       - package: WhisperKit
       - package: FluidAudio
+      - package: TalkieKit

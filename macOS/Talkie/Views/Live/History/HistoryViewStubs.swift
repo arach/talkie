@@ -81,5 +81,6 @@ extension Notification.Name {
     static let switchToSettingsAudio = Notification.Name("switchToSettingsAudio")
     static let switchToSettingsEngine = Notification.Name("switchToSettingsEngine")
     static let selectUtterance = Notification.Name("selectUtterance")
+    static let selectDictation = Notification.Name("selectDictation")  // Alias for selectUtterance
     static let navigateToLive = Notification.Name("navigateToLive")
 }

@@ -2,12 +2,13 @@
 //  LogViewer.swift
 //  TalkieLive
 //
-//  Unified logging: writes to os.log + in-memory for real-time viewing
-//  For full history, use Console.app
+//  Unified logging: writes to os.log + in-memory + file for cross-app viewing
+//  Logs visible in Talkie's SystemLogsView
 //
 
 import SwiftUI
 import OSLog
+import TalkieKit
 
 // MARK: - Log Entry
 
@@ -45,6 +46,9 @@ final class AppLogger: ObservableObject {
 
     private var loggers: [String: Logger] = [:]
 
+    /// File writer for cross-app log viewing in Talkie
+    private let fileWriter = TalkieLogFileWriter(source: .talkieLive)
+
     private init() {}
 
     private func logger(for category: String) -> Logger {
@@ -56,12 +60,14 @@ final class AppLogger: ObservableObject {
         return new
     }
 
-    /// Log a message - logs to console (visible in Xcode debugger) AND keeps in-memory copy
-    func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info) {
+    /// Log a message - logs to console, in-memory, AND file for cross-app viewing
+    /// Warnings and errors use critical mode (immediate flush) with file:line context
+    func log(_ category: EventType, _ message: String, detail: String? = nil, level: OSLogEntryLog.Level = .info, file: String = #file, line: Int = #line) {
         let fullMessage = detail != nil ? "\(message): \(detail!)" : message
 
         // Log to console (visible in Xcode debugger and Console.app)
         let timestamp = Date().formatted(.dateTime.hour().minute().second().secondFraction(.fractional(2)))
+        let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
         let levelStr = switch level {
         case .debug: "[DEBUG]"
         case .info: "[INFO]"
@@ -70,8 +76,25 @@ final class AppLogger: ObservableObject {
         case .fault: "[FAULT]"
         default: "[LOG]"
         }
-        let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage)"
+        let logLine = "[\(timestamp)] \(levelStr) [\(category.rawValue)] \(fullMessage) ← \(filename):\(line)"
         NSLog("%@", logLine)
+
+        // Write to file for cross-app viewing in Talkie
+        // Warnings and errors use critical mode (immediate flush) with file:line context
+        let logType = mapEventType(category)
+        let isCritical = level == .notice || level == .error || level == .fault
+        let writeMode: LogWriteMode = isCritical ? .critical : .bestEffort
+
+        // Add file:line context to warnings and errors for debugging
+        let fileDetail: String?
+        if isCritical {
+            let baseDetail = detail ?? ""
+            fileDetail = baseDetail.isEmpty ? "[\(filename):\(line)]" : "\(baseDetail) [\(filename):\(line)]"
+        } else {
+            fileDetail = detail
+        }
+
+        fileWriter.log(logType, message, detail: fileDetail, mode: writeMode)
 
         // Keep in-memory copy (newest first)
         let entry = LogEntry(
@@ -87,12 +110,19 @@ final class AppLogger: ObservableObject {
         if entries.count > maxEntries {
             entries = Array(entries.prefix(maxEntries))
         }
+    }
 
-        // Notify Performance Monitor about errors/faults during active action
-        if level == .error || level == .fault {
-            // Note: TalkieLive doesn't have PerformanceMonitor, so this is for when
-            // we share AppLogger between Talkie and TalkieLive
-            // For now, this is a no-op in TalkieLive
+    /// Map local EventType to TalkieKit's LogEventType
+    private func mapEventType(_ type: EventType) -> LogEventType {
+        switch type {
+        case .system: return .system
+        case .audio: return .record
+        case .transcription: return .transcribe
+        case .database: return .system
+        case .file: return .system
+        case .error: return .error
+        case .ui: return .system
+        case .performance: return .system  // Performance logs use system category
         }
     }
 
