@@ -8,6 +8,8 @@
 
 import Foundation
 import AppKit
+import ApplicationServices  // For AXIsProcessTrusted
+import AVFoundation         // For AVCaptureDevice
 import Combine
 import TalkieKit
 
@@ -177,6 +179,32 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
             NSLog("[TalkieLiveXPC] ✓ Toggle completed")
             reply(true)
         }
+    }
+
+    nonisolated func getPermissions(reply: @escaping (Bool, Bool, Bool) -> Void) {
+        Task { @MainActor in
+            // Check microphone permission
+            let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+            let hasMicrophone = micStatus == .authorized
+
+            // Check accessibility permission (required for autopaste)
+            let hasAccessibility = AXIsProcessTrusted()
+
+            // Check screen recording permission
+            let hasScreenRecording = checkScreenRecordingPermission()
+
+            NSLog("[TalkieLiveXPC] Permissions: mic=\(hasMicrophone), accessibility=\(hasAccessibility), screenRecording=\(hasScreenRecording)")
+            reply(hasMicrophone, hasAccessibility, hasScreenRecording)
+        }
+    }
+
+    private func checkScreenRecordingPermission() -> Bool {
+        // Screen recording permission check - try to get window info
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        // If we can see window owner names, we have permission
+        return windowList.contains { $0[kCGWindowOwnerName as String] != nil }
     }
 
     func addObserverConnection(_ connection: NSXPCConnection) {

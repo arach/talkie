@@ -246,6 +246,8 @@ final class OnboardingManager {
                 }
             }
         }
+        // Ensure timer runs even when UI is tracking
+        RunLoop.main.add(microphoneCheckTimer!, forMode: .common)
     }
 
     private func stopMicrophonePolling() {
@@ -324,6 +326,8 @@ final class OnboardingManager {
                 }
             }
         }
+        // Ensure timer runs even when UI is tracking
+        RunLoop.main.add(screenRecordingCheckTimer!, forMode: .common)
     }
 
     private func stopScreenRecordingPolling() {
@@ -341,6 +345,8 @@ final class OnboardingManager {
                 }
             }
         }
+        // Ensure timer runs even when UI is tracking
+        RunLoop.main.add(accessibilityCheckTimer!, forMode: .common)
     }
 
     private func stopAccessibilityPolling() {

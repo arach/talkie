@@ -10,6 +10,7 @@
 		04FA816DA64246EDAD5A6356 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 930497E959A78E2E572D7F9B /* WhisperKit */; };
 		12DD200A43D294C5523EE021 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB26F22F9D507243DB479766 /* AppDelegate.swift */; };
 		1E8ACC6E34F3FE16FF2D9F95 /* EngineListenerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */; };
+		2119A2337BC58ADD91CF1729 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47A405AC76859296760FD6A8 /* TalkieKit */; };
 		22DFC96B3C270049F4000C39 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E3464C72C240A7FFD4A74 /* Log.swift */; };
 		2EE2C5A649FB1DE1A536887B /* XPCServiceWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */; };
 		5BCD674D514E3D3F8B67D35D /* EngineStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA001B38FC283CCB38519E75 /* EngineStatusView.swift */; };
@@ -25,6 +26,7 @@
 		2F4E3464C72C240A7FFD4A74 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		309C8ED6550F5436C180F21E /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		3345200BF5B8343E77A15413 /* EngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineService.swift; sourceTree = "<group>"; };
+		36F7AC1B86BDE8432BC75569 /* TalkieKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TalkieKit; path = ../TalkieKit; sourceTree = SOURCE_ROOT; };
 		4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineProtocol.swift; sourceTree = "<group>"; };
 		8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineListenerDelegate.swift; sourceTree = "<group>"; };
 		A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPCServiceWrapper.swift; sourceTree = "<group>"; };
@@ -40,6 +42,7 @@
 			files = (
 				04FA816DA64246EDAD5A6356 /* WhisperKit in Frameworks */,
 				944FD700E91ADF4B5DF57D27 /* FluidAudio in Frameworks */,
+				2119A2337BC58ADD91CF1729 /* TalkieKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -54,9 +57,18 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		C23B8FE8CEF00E072EC1A5B2 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				36F7AC1B86BDE8432BC75569 /* TalkieKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		CB95BE4375EE9C1CD8073A5E = {
 			isa = PBXGroup;
 			children = (
+				C23B8FE8CEF00E072EC1A5B2 /* Packages */,
 				D9C01A083B04BE1B82451546 /* TalkieEngine */,
 				CD3FA8D6B179540DACCAE229 /* Products */,
 			);
@@ -105,6 +117,7 @@
 			packageProductDependencies = (
 				930497E959A78E2E572D7F9B /* WhisperKit */,
 				4F9A5A884A559C70D9E9BCD9 /* FluidAudio */,
+				47A405AC76859296760FD6A8 /* TalkieKit */,
 			);
 			productName = TalkieEngine;
 			productReference = 2A4E812D358408E68A034368 /* TalkieEngine.app */;
@@ -138,6 +151,7 @@
 			packageReferences = (
 				A1E266B590A061516AA843D2 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 				FF2ED19578BD9F627F92241F /* XCRemoteSwiftPackageReference "WhisperKit" */,
+				F3ACD3A5601FCDAF0F384C37 /* XCLocalSwiftPackageReference "../TalkieKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
@@ -436,6 +450,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		F3ACD3A5601FCDAF0F384C37 /* XCLocalSwiftPackageReference "../TalkieKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../TalkieKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		A1E266B590A061516AA843D2 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -456,6 +477,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		47A405AC76859296760FD6A8 /* TalkieKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TalkieKit;
+		};
 		4F9A5A884A559C70D9E9BCD9 /* FluidAudio */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A1E266B590A061516AA843D2 /* XCRemoteSwiftPackageReference "FluidAudio" */;

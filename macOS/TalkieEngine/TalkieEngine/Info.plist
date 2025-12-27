@@ -15,9 +15,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.6.1</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>1.7.3</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -29,15 +27,15 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
-
-	<!-- Usage Descriptions: Explain what the background service does -->
 	<key>NSHumanReadableCopyright</key>
 	<string>TalkieEngine is a background transcription service that processes audio files using on-device AI models (Whisper and Parakeet).</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 </dict>
 </plist>

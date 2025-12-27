@@ -5,20 +5,24 @@ set -e
 # Builds all components with proper signing and notarization
 #
 # Usage:
-#   ./build.sh                           # Build full installer (all 3 apps separate)
-#   ./build.sh --version 1.6.2           # Build with specific version
-#   ./build.sh unified --version 1.6.2   # Build unified bundle with version
-#   ./build.sh core                      # Build Talkie-Core installer (Engine + Core)
-#   ./build.sh live                      # Build Talkie-Live installer (Engine + Live)
-#   ./build.sh all                       # Build all installers
+#   ./build.sh --version 1.7.3           # Build full installer with version
+#   ./build.sh --version 1.7.3 unified   # Build unified bundle
+#   ./build.sh --version 1.7.3 core      # Build Talkie-Core installer (Engine + Core)
+#   ./build.sh --version 1.7.3 live      # Build Talkie-Live installer (Engine + Live)
+#   ./build.sh --version 1.7.3 all       # Build all installers
 #
 # Options:
-#   --version VERSION       # Set version (required)
+#   --version VERSION       # Set version (required) - updates source files automatically
 #
 # Environment variables:
-#   VERSION=1.6.2           # Alternative way to set version
+#   VERSION=1.7.3           # Alternative way to set version
 #   SKIP_NOTARIZE=1         # Skip notarization (for testing)
 #   SKIP_CLEAN=1            # Skip clean build (incremental, much faster)
+#
+# The script automatically updates version in:
+#   - macOS/Talkie/Talkie.xcodeproj/project.pbxproj (MARKETING_VERSION)
+#   - macOS/TalkieLive/TalkieLive/Info.plist (CFBundleShortVersionString)
+#   - macOS/TalkieEngine/TalkieEngine/Info.plist (CFBundleShortVersionString)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -50,10 +54,39 @@ done
 # Require version
 if [ -z "$VERSION" ]; then
     echo "❌ VERSION not specified"
-    echo "   Usage: ./build.sh --version 1.6.2 [target]"
-    echo "   Or:    VERSION=1.6.2 ./build.sh [target]"
+    echo "   Usage: ./build.sh --version 1.7.3 [target]"
+    echo "   Or:    VERSION=1.7.3 ./build.sh [target]"
     exit 1
 fi
+
+# ═══════════════════════════════════════════════════════════
+# UPDATE VERSION IN SOURCE FILES
+# Updates Info.plist and project.pbxproj files to match VERSION
+# ═══════════════════════════════════════════════════════════
+update_version_in_sources() {
+    echo "📝 Updating version to $VERSION in source files..."
+
+    # Update Talkie project.pbxproj (MARKETING_VERSION)
+    sed -i '' "s/MARKETING_VERSION = [0-9]*\.[0-9]*\.[0-9]*;/MARKETING_VERSION = $VERSION;/g" \
+        "$ROOT_DIR/macOS/Talkie/Talkie.xcodeproj/project.pbxproj"
+
+    # Update TalkieLive Info.plist using PlistBuddy
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" \
+        "$ROOT_DIR/macOS/TalkieLive/TalkieLive/Info.plist"
+
+    # Update TalkieEngine Info.plist using PlistBuddy
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" \
+        "$ROOT_DIR/macOS/TalkieEngine/TalkieEngine/Info.plist"
+
+    # Verify updates
+    echo "  Talkie:       $(grep -m1 'MARKETING_VERSION' "$ROOT_DIR/macOS/Talkie/Talkie.xcodeproj/project.pbxproj" | grep -o '[0-9]*\.[0-9]*\.[0-9]*')"
+    echo "  TalkieLive:   $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT_DIR/macOS/TalkieLive/TalkieLive/Info.plist")"
+    echo "  TalkieEngine: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT_DIR/macOS/TalkieEngine/TalkieEngine/Info.plist")"
+    echo "✅ Version updated in source files"
+}
+
+# Update version in source files before building
+update_version_in_sources
 
 # Signing identities
 DEVELOPER_ID_APP="Developer ID Application: Arach Tchoupani (2U83JFPW66)"
@@ -183,6 +216,7 @@ xcodebuild -project TalkieEngine.xcodeproj \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR/TalkieEngine" \
     -arch arm64 \
+    MARKETING_VERSION="$VERSION" \
     $BUILD_ACTION 2>&1 | grep -E "(error:|warning:|BUILD)" || true
 
 ENGINE_APP="$BUILD_DIR/TalkieEngine/Build/Products/Release/TalkieEngine.app"
@@ -240,6 +274,7 @@ xcodebuild -project TalkieLive.xcodeproj \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR/TalkieLive" \
     -arch arm64 \
+    MARKETING_VERSION="$VERSION" \
     $BUILD_ACTION 2>&1 | grep -E "(error:|warning:|BUILD)" || true
 
 LIVE_APP="$BUILD_DIR/TalkieLive/Build/Products/Release/TalkieLive.app"
@@ -285,6 +320,7 @@ else
         -configuration Release \
         -archivePath "$CORE_ARCHIVE" \
         -arch arm64 \
+        MARKETING_VERSION="$VERSION" \
         archive 2>&1 | grep -E "(error:|warning:|ARCHIVE)" || true
 
     if [ ! -d "$CORE_ARCHIVE" ]; then
@@ -348,6 +384,7 @@ if [ "$TARGET" = "unified" ] || [ "$TARGET" = "all" ]; then
             -configuration Release \
             -archivePath "$UNIFIED_ARCHIVE" \
             -destination "generic/platform=macOS" \
+            MARKETING_VERSION="$VERSION" \
             archive 2>&1 | grep -E "(error:|warning:|ARCHIVE|Signing)" || true
 
         if [ ! -d "$UNIFIED_ARCHIVE" ]; then

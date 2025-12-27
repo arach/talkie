@@ -167,6 +167,12 @@ final class StartupCoordinator {
             logger.info("  → Engine XPC connection")
             EngineClient.shared.connect()
 
+            // Start service monitoring (Live + Engine status awareness)
+            // Uses 30s interval - aware but not aggressive
+            signposter.emitEvent("Service Monitor")
+            logger.info("  → Service status monitoring")
+            ServiceManager.shared.startMonitoring(interval: 30.0)
+
             logger.info("✅ Background initialization complete")
             signposter.endInterval("Phase 4: Background", state)
         }

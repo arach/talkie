@@ -25,5 +25,9 @@
 	<!-- Allow network access for API calls and services -->
 	<key>com.apple.security.network.client</key>
 	<true/>
+
+	<!-- Microphone access for voice memo recording -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
 </dict>
 </plist>

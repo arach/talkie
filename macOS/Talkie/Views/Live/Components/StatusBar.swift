@@ -36,6 +36,11 @@ struct StatusBar: View {
     @State private var pidCopied = false
     @State private var controlPressed = false
 
+    // App version for display
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
     // Computed properties (replaces ViewModel aggregation)
     private var microphoneName: String {
         if let device = audioDevices.inputDevices.first(where: { $0.id == liveSettings.selectedMicrophoneID }) {
@@ -183,6 +188,11 @@ struct StatusBar: View {
                         infoCount: infoCount,
                         showPopover: $showConsolePopover
                     )
+
+                    // Version badge - always visible
+                    Text("v\(appVersion)")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(TalkieTheme.textMuted)
 
                     // DEV badge (debug builds only, shows on CTRL press)
                     #if DEBUG
