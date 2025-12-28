@@ -34,7 +34,7 @@ struct HomeView: View {
 
     // Computed properties for adaptive display
     private var hasMemos: Bool { !memosViewModel.memos.isEmpty }
-    private var hasDictations: Bool { !store.dictations.isEmpty }
+    private var hasDictations: Bool { !store.dictations.isEmpty || store.cachedCount > 0 }
     private var hasActivity: Bool { hasMemos || hasDictations }
 
     var body: some View {
@@ -137,6 +137,7 @@ struct HomeView: View {
         }
         .background(TalkieTheme.surface)
         .task {
+            store.refresh()  // Ensure dictations are loaded from database
             loadActivityData()
             await memosViewModel.loadMemos()
         }
@@ -162,7 +163,7 @@ struct HomeView: View {
 
         // Calculate stats
         stats = HomeStats(
-            totalRecordings: store.count,  // Use database count, not fetched array
+            totalRecordings: store.cachedCount,  // Use cached count for instant load
             totalWords: dictations.map { $0.wordCount }.reduce(0, +),
             totalDuration: dictations.compactMap { $0.durationSeconds }.reduce(0, +),
             todayCount: dictations.filter { calendar.isDateInToday($0.timestamp) }.count,

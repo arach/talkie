@@ -276,31 +276,74 @@ public final class EngineClient {
         modelId: String = "whisper:openai_whisper-small",
         priority: TranscriptionPriority = .medium
     ) async throws -> String {
-        guard let proxy = xpcManager.remoteObjectProxy() else {
+        guard await ensureConnected() else {
             throw NSError(domain: "EngineClient", code: -1,
-                         userInfo: [NSLocalizedDescriptionKey: "Engine proxy not available"])
+                         userInfo: [NSLocalizedDescriptionKey: "TalkieEngine not connected"])
         }
 
         logger.info("[EngineClient] Transcribing \(audioPath) (priority: \(priority.displayName))")
 
+        let timeoutSeconds: Double = 120
+
         return try await withCheckedThrowingContinuation { continuation in
+            // Track if we've already resumed to prevent double-resume or leaks
+            var hasResumed = false
+            let lock = NSLock()
+
+            func resumeOnce(with result: Result<String, Error>) {
+                lock.lock()
+                defer { lock.unlock() }
+                guard !hasResumed else { return }
+                hasResumed = true
+
+                switch result {
+                case .success(let value):
+                    continuation.resume(returning: value)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            // Get proxy with error handler that can resume the continuation
+            guard let proxy = xpcManager.remoteObjectProxy(errorHandler: { error in
+                logger.error("[EngineClient] XPC error: \(error.localizedDescription)")
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -4,
+                                                  userInfo: [NSLocalizedDescriptionKey: "XPC failed: \(error.localizedDescription)"])))
+            }) else {
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -1,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Engine proxy not available"])))
+                return
+            }
+
+            // Start timeout timer
+            let timeoutWork = DispatchWorkItem {
+                logger.error("[EngineClient] Transcription timeout after \(Int(timeoutSeconds))s")
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -5,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Timeout after \(Int(timeoutSeconds))s"])))
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
+
+            // Make XPC call
             proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, priority: priority) { [weak self] transcript, error in
+                // Cancel timeout since we got a response
+                timeoutWork.cancel()
+
                 Task { @MainActor in
                     self?.transcriptionCount += 1
                     self?.lastTranscriptionAt = Date()
                     self?.refreshStatus()
+                }
 
-                    if let error = error {
-                        logger.error("[EngineClient] Transcription error: \(error)")
-                        continuation.resume(throwing: NSError(domain: "EngineClient", code: -2,
-                                                              userInfo: [NSLocalizedDescriptionKey: error]))
-                    } else if let transcript = transcript {
-                        logger.info("[EngineClient] Transcribed \(transcript.count) chars")
-                        continuation.resume(returning: transcript)
-                    } else {
-                        continuation.resume(throwing: NSError(domain: "EngineClient", code: -3,
-                                                              userInfo: [NSLocalizedDescriptionKey: "Nil result"]))
-                    }
+                if let error = error {
+                    logger.error("[EngineClient] Transcription error: \(error)")
+                    resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -2,
+                                                      userInfo: [NSLocalizedDescriptionKey: error])))
+                } else if let transcript = transcript {
+                    logger.info("[EngineClient] Transcribed \(transcript.count) chars")
+                    resumeOnce(with: .success(transcript))
+                } else {
+                    resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -3,
+                                                      userInfo: [NSLocalizedDescriptionKey: "Nil result"])))
                 }
             }
         }

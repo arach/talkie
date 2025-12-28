@@ -16,17 +16,20 @@ private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
 /// Signpost log for XPC round-trip profiling in Instruments
 private let xpcSignpostLog = OSLog(subsystem: "jdi.talkie.live", category: .pointsOfInterest)
 
+/// Shared file writer for cross-app log viewing in Talkie
+private let logFileWriter = TalkieLogFileWriter(source: .talkieLive)
+
 /// Log level for dev logging
 private enum LogLevel { case debug, info, warning, error }
 
 // TranscriptionPriority is now defined in TalkieKit
 
 /// Dev-friendly console logging with OS_LOG level support
-/// In DEBUG: prints to console + os_log at .debug level (visible without filter)
-/// In RELEASE: only logs to os_log at appropriate level
+/// Also writes to shared log file for viewing in Talkie's SystemLogsView
 private func devLog(_ message: String, level: LogLevel = .info, file: String = #file, line: Int = #line) {
-    #if DEBUG
     let filename = (file as NSString).lastPathComponent
+
+    #if DEBUG
     let timestamp = ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withTime, .withColonSeparatorInTime])
     let levelIcon = switch level {
         case .debug: "🔍"
@@ -35,10 +38,8 @@ private func devLog(_ message: String, level: LogLevel = .info, file: String = #
         case .error: "❌"
     }
     print("[\(timestamp)] \(levelIcon) [Engine] \(message)  ← \(filename):\(line)")
-    // Also log to os_log at debug level so it appears in Console.app without filtering
     logger.debug("\(message)")
     #else
-    // In release, use appropriate log level
     switch level {
     case .debug: logger.debug("\(message)")
     case .info: logger.info("\(message)")
@@ -46,6 +47,12 @@ private func devLog(_ message: String, level: LogLevel = .info, file: String = #
     case .error: logger.error("\(message)")
     }
     #endif
+
+    // Write to shared log file (warnings/errors are critical for immediate flush)
+    let logType: LogEventType = level == .error ? .error : .system
+    let writeMode: LogWriteMode = (level == .warning || level == .error) ? .critical : .bestEffort
+    let detail = level == .error ? "[\(filename):\(line)]" : nil
+    logFileWriter.log(logType, message, detail: detail, mode: writeMode)
 }
 
 /// Engine service modes for XPC connection (aligned with TalkieEnvironment)
@@ -320,7 +327,7 @@ public final class EngineClient: ObservableObject {
             } else {
                 self.connectionState = .error
                 self.lastError = "No engines available"
-                logger.warning("[Engine] All connection attempts failed")
+                devLog("All connection attempts failed - no engines available", level: .error)
             }
         }
     }
@@ -343,6 +350,8 @@ public final class EngineClient: ObservableObject {
     private func tryConnect(to mode: EngineServiceMode, completion: @escaping (Bool) -> Void) {
         let serviceName = mode.rawValue
 
+        devLog("Attempting XPC connection to \(serviceName)...")
+
         let conn = NSXPCConnection(machServiceName: serviceName)
         conn.remoteObjectInterface = NSXPCInterface(with: TalkieEngineProtocol.self)
 
@@ -353,7 +362,7 @@ public final class EngineClient: ObservableObject {
             Task { @MainActor in
                 if !completed {
                     completed = true
-                    logger.warning("[Engine] XPC invalidated during connect to \(serviceName)")
+                    devLog("XPC connection invalidated before ping completed (\(serviceName))", level: .warning)
                     completion(false)
                 } else {
                     self?.handleDisconnection(reason: "XPC invalidated (\(serviceName))")
@@ -593,7 +602,12 @@ public final class EngineClient: ObservableObject {
         logger.info("[Engine] Transcribing '\(fileName)' with model '\(modelId)' priority=\(priority.displayName)")
 
         let startTime = Date()
-        let timeoutSeconds: Double = 120 // 2 minute timeout for long audio files
+        // Timeout based on priority - real-time should fail fast and retry
+        let timeoutSeconds: Double = switch priority {
+        case .high, .userInitiated: 2.0    // Live transcription - fail fast, queue for retry
+        case .medium: 10.0                  // Interactive - reasonable wait
+        case .low, .utility, .background: 120.0  // Batch - can wait
+        }
 
         // Start XPC round-trip signpost for Instruments profiling
         let signpostID = OSSignpostID(log: xpcSignpostLog)
@@ -668,29 +682,53 @@ public final class EngineClient: ObservableObject {
 
     /// Preload a model for fast transcription
     public func preloadModel(_ modelId: String) async throws {
-        logger.info("[Engine] Preloading model '\(modelId)'...")
-
-        guard let proxy = engineProxy else {
-            logger.error("[Engine] Cannot preload - not connected")
-            throw EngineClientError.notConnected
-        }
+        devLog("Preloading model '\(modelId)'...")
 
         let startTime = Date()
+        let timeoutSeconds: Double = 120
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var hasResumed = false
+            let lock = NSLock()
+
+            func resumeOnce(with result: Result<Void, Error>) {
+                lock.lock()
+                defer { lock.unlock() }
+                guard !hasResumed else { return }
+                hasResumed = true
+                switch result {
+                case .success: continuation.resume()
+                case .failure(let error): continuation.resume(throwing: error)
+                }
+            }
+
+            guard let proxy = connection?.remoteObjectProxyWithErrorHandler({ error in
+                devLog("XPC error during preload: \(error.localizedDescription)", level: .error)
+                resumeOnce(with: .failure(EngineClientError.preloadFailed("XPC failed: \(error.localizedDescription)")))
+            }) as? TalkieEngineProtocol else {
+                resumeOnce(with: .failure(EngineClientError.notConnected))
+                return
+            }
+
+            let timeoutWork = DispatchWorkItem {
+                devLog("Preload timeout after \(Int(timeoutSeconds))s", level: .error)
+                resumeOnce(with: .failure(EngineClientError.preloadFailed("Timeout")))
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
+
             proxy.preloadModel(modelId) { error in
+                timeoutWork.cancel()
                 let elapsed = Date().timeIntervalSince(startTime)
                 if let error = error {
-                    logger.error("[Engine] Model preload failed after \(String(format: "%.1f", elapsed))s: \(error)")
-                    continuation.resume(throwing: EngineClientError.preloadFailed(error))
+                    devLog("Model preload failed after \(String(format: "%.1f", elapsed))s: \(error)", level: .error)
+                    resumeOnce(with: .failure(EngineClientError.preloadFailed(error)))
                 } else {
-                    logger.info("[Engine] ✓ Model '\(modelId)' preloaded in \(String(format: "%.1f", elapsed))s")
-                    continuation.resume()
+                    devLog("✓ Model '\(modelId)' preloaded in \(String(format: "%.1f", elapsed))s")
+                    resumeOnce(with: .success(()))
                 }
             }
         }
 
-        // Refresh status after preload
         refreshStatus()
     }
 

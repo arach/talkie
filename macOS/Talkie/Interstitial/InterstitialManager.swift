@@ -185,6 +185,7 @@ final class InterstitialManager {
 
     private func createAndShowPanel() {
         let view = InterstitialEditorView(manager: self)
+            .environment(SettingsManager.shared)
         let hostingView = NSHostingView(rootView: view)
 
         let width: CGFloat = 580
@@ -509,27 +510,64 @@ final class InterstitialManager {
         logger.info("Rejected polish changes, reverted to pre-polish text")
     }
 
-    // MARK: - Open in Talkie (Promote to Memo)
+    // MARK: - Save as Memo (Promote to Memo)
+
+    func saveAsMemo() async {
+        guard !editedText.isEmpty else { return }
+
+        // Create a new memo from the interstitial text
+        let memo = MemoModel(
+            id: UUID(),
+            createdAt: Date(),
+            lastModified: Date(),
+            title: extractTitle(from: editedText),
+            duration: 0,  // No audio (or could link to dictation audio later)
+            sortOrder: 0,
+            transcription: editedText,
+            notes: nil,
+            summary: nil,
+            tasks: nil,
+            reminders: nil,
+            audioFilePath: nil,
+            waveformData: nil,
+            isTranscribing: false,
+            isProcessingSummary: false,
+            isProcessingTasks: false,
+            isProcessingReminders: false,
+            autoProcessed: false,
+            originDeviceId: "interstitial-\(currentDictationId ?? 0)",
+            macReceivedAt: Date(),
+            cloudSyncedAt: nil,
+            pendingWorkflowIds: nil
+        )
+
+        do {
+            let repository = GRDBRepository()
+            try await repository.saveMemo(memo)
+            logger.info("Saved interstitial as memo: \(memo.id)")
+            dismiss()
+
+            // Activate Talkie's main window
+            NSApp.activate(ignoringOtherApps: true)
+        } catch {
+            polishError = "Failed to save: \(error.localizedDescription)"
+            logger.error("Failed to save memo: \(error.localizedDescription)")
+        }
+    }
 
     func openInTalkie() {
-        guard let dictationId = currentDictationId else {
-            dismiss()
-            return
+        Task {
+            await saveAsMemo()
         }
+    }
 
-        // TODO: Create VoiceMemo in Core Data from the dictation
-        // For now, just activate Talkie and dismiss
-        logger.info("Opening dictation \(dictationId) in Talkie (promotion not yet implemented)")
-
-        dismiss()
-
-        // Activate Talkie's main window
-        NSApp.activate(ignoringOtherApps: true)
-        for window in NSApp.windows {
-            if !window.title.isEmpty || window.identifier?.rawValue.contains("main") == true {
-                window.makeKeyAndOrderFront(nil)
-                break
-            }
+    /// Extract a title from the first line or first few words
+    private func extractTitle(from text: String) -> String {
+        let firstLine = text.split(separator: "\n").first.map(String.init) ?? text
+        let words = firstLine.split(separator: " ").prefix(8).joined(separator: " ")
+        if words.count > 50 {
+            return String(words.prefix(47)) + "..."
         }
+        return words
     }
 }

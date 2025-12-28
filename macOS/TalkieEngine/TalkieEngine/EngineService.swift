@@ -132,7 +132,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     private var currentParakeetModelId: String?
 
     // MARK: - Shared State
-    private var isTranscribing = false
+    private var activeTranscriptions = 0
+    private var isTranscribing: Bool { activeTranscriptions > 0 }
     private var isWarmingUp = false
     private var isShuttingDown = false
     private var downloadedWhisperModels: Set<String> = []
@@ -224,15 +225,26 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     // MARK: - TalkieEngineProtocol
 
-    /// Transcribe audio with external reference ID for cross-app trace correlation
+    /// Transcribe audio with external reference ID for cross-app trace correlation (defaults to high priority)
     nonisolated func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
         reply: @escaping (String?, String?) -> Void
     ) {
-        // Use high priority for all XPC transcription requests (real-time dictation)
-        Task(priority: .high) { @MainActor in
+        // Default to high priority for backwards compatibility
+        transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: .high, reply: reply)
+    }
+
+    /// Transcribe audio with explicit priority control
+    nonisolated func transcribe(
+        audioPath: String,
+        modelId: String,
+        externalRefId: String?,
+        priority: TranscriptionPriority,
+        reply: @escaping (String?, String?) -> Void
+    ) {
+        Task(priority: priority.taskPriority) { @MainActor in
             await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, reply: reply)
         }
     }
@@ -246,12 +258,6 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         guard !isShuttingDown else {
             EngineStatusManager.shared.log(.warning, "Transcribe", "Rejected - engine is shutting down")
             reply(nil, "Engine is shutting down, please retry")
-            return
-        }
-
-        guard !isTranscribing else {
-            EngineStatusManager.shared.log(.warning, "Transcribe", "Rejected - already transcribing")
-            reply(nil, "Already transcribing")
             return
         }
 
@@ -287,11 +293,11 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         trace.end("\(fileSize) bytes • exists:\(existsMs)ms attrs:\(attrMs)ms")
 
-        isTranscribing = true
-        EngineStatusManager.shared.isTranscribing = true
+        activeTranscriptions += 1
+        EngineStatusManager.shared.isTranscribing = isTranscribing
         defer {
-            isTranscribing = false
-            EngineStatusManager.shared.isTranscribing = false
+            activeTranscriptions -= 1
+            EngineStatusManager.shared.isTranscribing = isTranscribing
         }
 
         let (family, actualModelId) = parseModelId(modelId)

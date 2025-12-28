@@ -22,6 +22,7 @@ import CoreData
 
 enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
+    case scratchPad     // Quick text editing with voice dictation and AI polish
     case allMemos       // All Memos view (GRDB-based with pagination and filters)
     case liveDashboard  // Live home/insights view
     case liveRecent     // Live utterance list
@@ -90,6 +91,10 @@ struct TalkieNavigationViewNative: View {
         NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
 
+    // Consistent sidebar width - same for 2-column and 3-column layouts
+    private static let sidebarWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (160, 200, 280)
+    private static let contentColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (180, 220, 320)
+
     var body: some View {
         Group {
             if usesTwoColumns {
@@ -97,9 +102,9 @@ struct TalkieNavigationViewNative: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebarView
                         .navigationSplitViewColumnWidth(
-                            min: 160,
-                            ideal: 220,
-                            max: 320
+                            min: Self.sidebarWidth.min,
+                            ideal: Self.sidebarWidth.ideal,
+                            max: Self.sidebarWidth.max
                         )
                 } detail: {
                     detailView
@@ -109,16 +114,16 @@ struct TalkieNavigationViewNative: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebarView
                         .navigationSplitViewColumnWidth(
-                            min: 140,
-                            ideal: 200,
-                            max: 280
+                            min: Self.sidebarWidth.min,
+                            ideal: Self.sidebarWidth.ideal,
+                            max: Self.sidebarWidth.max
                         )
                 } content: {
                     contentView
                         .navigationSplitViewColumnWidth(
-                            min: 180,
-                            ideal: 220,
-                            max: 320
+                            min: Self.contentColumnWidth.min,
+                            ideal: Self.contentColumnWidth.ideal,
+                            max: Self.contentColumnWidth.max
                         )
                 } detail: {
                     detailView
@@ -151,7 +156,7 @@ struct TalkieNavigationViewNative: View {
 
     private var usesTwoColumns: Bool {
         switch selectedSection {
-        case .home, .models, .allowedCommands, .aiResults, .allMemos,
+        case .home, .scratchPad, .models, .allowedCommands, .aiResults, .allMemos,
              .liveDashboard, .liveRecent, .liveSettings, .systemConsole,
              .pendingActions:
             return true
@@ -182,6 +187,10 @@ struct TalkieNavigationViewNative: View {
             // Home (no section header)
             NavigationLink(value: NavigationSection.home) {
                 Label("Home", systemImage: "house.fill")
+            }
+
+            NavigationLink(value: NavigationSection.scratchPad) {
+                Label("Scratch Pad", systemImage: "note.text")
             }
 
             // Memos
@@ -304,6 +313,9 @@ struct TalkieNavigationViewNative: View {
                 // Two-column sections
                 case .home:
                     UnifiedDashboard()
+                case .scratchPad:
+                    ScratchPadView()
+                        .wrapInTalkieSection("ScratchPad")
                 case .models:
                     ModelsContentView()
                         .wrapInTalkieSection("Models")

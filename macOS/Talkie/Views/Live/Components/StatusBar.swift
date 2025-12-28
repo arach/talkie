@@ -78,34 +78,20 @@ struct StatusBar: View {
                 .fill(TalkieTheme.borderSubtle)
                 .frame(height: 1)
 
-            HStack(spacing: Spacing.sm) {
-                // LEFT SIDE - ON AIR indicator or Sync status (fixed width to prevent center shift)
-                Group {
-                    if liveState.state == .listening && liveSettings.showOnAir {
-                        OnAirIndicator()
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    } else {
-                        SyncStatusIcon()
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    }
-                }
-                .frame(width: 60, alignment: .leading)
-
-                Spacer()
-
-                // CENTER - Live dictation pill or offline indicator
+            ZStack {
+                // CENTER - Absolutely centered LivePill (rendered first, behind edges)
                 HStack(spacing: 8) {
                     if liveState.isRunning {
                         LivePill(
                             state: liveState.state,
                             isWarmingUp: false,
                             showSuccess: showSuccess,
-                            recordingDuration: liveState.elapsedTime,  // Use Live's elapsed time directly
-                            processingDuration: 0,  // Simplified - not tracking separately
+                            recordingDuration: liveState.elapsedTime,
+                            processingDuration: 0,
                             isEngineConnected: serviceMonitor.state == .running,
                             pendingQueueCount: 0,
                             micDeviceName: microphoneName,
-                            audioLevel: 0,  // StatusBar doesn't have audio capture - just shows pill
+                            audioLevel: 0,
                             onTap: {
                                 ServiceManager.shared.live.toggleRecording()
                             }
@@ -115,7 +101,7 @@ struct StatusBar: View {
                                 restartTalkieLive()
                             }
                         }
-                        .onTapGesture(count: 1) { }  // Consume single tap
+                        .onTapGesture(count: 1) { }
                         .simultaneousGesture(
                             TapGesture().modifiers(.control)
                                 .onEnded { _ in
@@ -152,57 +138,67 @@ struct StatusBar: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
 
-                Spacer()
-
-                // RIGHT SIDE - Engine status + Logs + DEV badge
-                HStack(spacing: 6) {
-                    if serviceMonitor.state == .running {
-                        EngineStatusIcon()
-                    } else {
-                        // Show engine state for non-running states
-                        HStack(spacing: 4) {
-                            Image(systemName: serviceMonitor.state == .stopped ? "exclamationmark.triangle.fill" : "exclamationmark.circle")
-                                .font(.system(size: 9))
-                                .foregroundColor(serviceMonitor.state == .stopped ? SemanticColor.warning : TalkieTheme.textMuted)
-                            Text(serviceMonitor.state == .stopped ? "Engine Offline" : "Engine \(serviceMonitor.state.rawValue)")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(TalkieTheme.textMuted)
+                // LEFT/RIGHT edges overlay
+                HStack(spacing: Spacing.sm) {
+                    // LEFT SIDE - ON AIR indicator or Sync status (natural size)
+                    Group {
+                        if liveState.state == .listening && liveSettings.showOnAir {
+                            OnAirIndicator()
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        } else {
+                            SyncStatusIcon()
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background((serviceMonitor.state == .stopped ? SemanticColor.warning : Color.gray).opacity(0.1))
-                        .cornerRadius(4)
-                        .help("TalkieEngine: \(serviceMonitor.state.rawValue). Click to launch.")
-                        .onTapGesture {
-                            Task {
-                                if serviceMonitor.state != .running {
-                                    await serviceMonitor.launch()
+                    }
+
+                    Spacer()
+
+                    // RIGHT SIDE - Engine status + Logs + DEV badge
+                    HStack(spacing: 6) {
+                        if serviceMonitor.state == .running {
+                            EngineStatusIcon()
+                        } else {
+                            HStack(spacing: 4) {
+                                Image(systemName: serviceMonitor.state == .stopped ? "exclamationmark.triangle.fill" : "exclamationmark.circle")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(serviceMonitor.state == .stopped ? SemanticColor.warning : TalkieTheme.textMuted)
+                                Text(serviceMonitor.state == .stopped ? "Engine Offline" : "Engine \(serviceMonitor.state.rawValue)")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(TalkieTheme.textMuted)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .background((serviceMonitor.state == .stopped ? SemanticColor.warning : Color.gray).opacity(0.1))
+                            .cornerRadius(4)
+                            .help("TalkieEngine: \(serviceMonitor.state.rawValue). Click to launch.")
+                            .onTapGesture {
+                                Task {
+                                    if serviceMonitor.state != .running {
+                                        await serviceMonitor.launch()
+                                    }
                                 }
                             }
                         }
+
+                        ConsoleButton(
+                            errorCount: errorCount,
+                            warningCount: warningCount,
+                            infoCount: infoCount,
+                            showPopover: $showConsolePopover
+                        )
+
+                        Text("v\(appVersion)")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(TalkieTheme.textMuted)
+
+                        #if DEBUG
+                        if controlPressed {
+                            Divider()
+                                .frame(height: 12)
+                            DevBadgeButton(showConsole: $showConsolePopover)
+                        }
+                        #endif
                     }
-
-                    // Console button
-                    ConsoleButton(
-                        errorCount: errorCount,
-                        warningCount: warningCount,
-                        infoCount: infoCount,
-                        showPopover: $showConsolePopover
-                    )
-
-                    // Version badge - always visible
-                    Text("v\(appVersion)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(TalkieTheme.textMuted)
-
-                    // DEV badge (debug builds only, shows on CTRL press)
-                    #if DEBUG
-                    if controlPressed {
-                        Divider()
-                            .frame(height: 12)
-                        DevBadgeButton(showConsole: $showConsolePopover)
-                    }
-                    #endif
                 }
             }
             .padding(.horizontal, Spacing.md)
