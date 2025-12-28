@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleShortVersionString</key>
-	<string>1.7.6</string>
+	<string>1.7.8</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
