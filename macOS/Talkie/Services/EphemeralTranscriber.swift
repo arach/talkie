@@ -134,7 +134,7 @@ public final class EphemeralTranscriber {
         }
 
         do {
-            // Use EngineClient to transcribe
+            // Use EngineClient to transcribe (it handles connection internally)
             let transcript = try await EngineClient.shared.transcribe(
                 audioPath: fileURL.path,
                 modelId: "parakeet:v3",  // Use fast model for voice instructions

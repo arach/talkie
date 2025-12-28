@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9746859B29F7452C92B551C9 /* TextPolishEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62B6EB2CB28C4C8BBB0AC34A /* TextPolishEditor.swift */; };
+		495F19ABD6CD4502B3C456BE /* ScratchPadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F47B9937B36441E891A52D6B /* ScratchPadView.swift */; };
 		CAE720D854E94882BBB0F89E /* E2ETraceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E5221611BB46AAB83B36C7 /* E2ETraceView.swift */; };
 		20E7F1EDCD354067819381F2 /* SpacingDecoratorOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3637100564F4690936D10AB /* SpacingDecoratorOverlay.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
@@ -243,6 +245,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		62B6EB2CB28C4C8BBB0AC34A /* TextPolishEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextPolishEditor.swift; sourceTree = "<group>"; };
+		F47B9937B36441E891A52D6B /* ScratchPadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchPadView.swift; sourceTree = "<group>"; };
 		F4E5221611BB46AAB83B36C7 /* E2ETraceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2ETraceView.swift; sourceTree = "<group>"; };
 		B3637100564F4690936D10AB /* SpacingDecoratorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacingDecoratorOverlay.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
@@ -613,6 +617,7 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				F47B9937B36441E891A52D6B /* ScratchPadView.swift */,
 				DCFDA7E856114F9C8D4FFD7B /* Debug */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				37B249E75E681770AEA53425 /* MemoRowView.swift */,
@@ -873,6 +878,7 @@
 		BA3B8C877A78851E0E5DA184 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				62B6EB2CB28C4C8BBB0AC34A /* TextPolishEditor.swift */,
 				85BD343AFFEE244146750E16 /* FormControls.swift */,
 				0548E348F68DC718F12DC401 /* OnAirIndicator.swift */,
 				D288BDB498C7462158DA3BD8 /* RelativeTimeLabel.swift */,
@@ -1157,6 +1163,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9746859B29F7452C92B551C9 /* TextPolishEditor.swift in Sources */,
+				495F19ABD6CD4502B3C456BE /* ScratchPadView.swift in Sources */,
 				CAE720D854E94882BBB0F89E /* E2ETraceView.swift in Sources */,
 				20E7F1EDCD354067819381F2 /* SpacingDecoratorOverlay.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,

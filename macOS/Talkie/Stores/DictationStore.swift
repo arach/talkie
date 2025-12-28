@@ -304,6 +304,13 @@ final class DictationStore {
     /// Published dictations - now backed by SQLite database
     private(set) var dictations: [Dictation] = []
 
+    /// Cached count - persisted to UserDefaults for instant load, synced on mutations
+    private(set) var cachedCount: Int {
+        didSet {
+            UserDefaults.standard.set(cachedCount, forKey: "dictationCount")
+        }
+    }
+
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48
 
@@ -311,7 +318,8 @@ final class DictationStore {
     private var lastSeenID: Int64 = 0
 
     private init() {
-        // No initial load - lazy load on demand when user navigates to dictation list
+        // Instant load from UserDefaults - no DB query
+        cachedCount = UserDefaults.standard.integer(forKey: "dictationCount")
     }
 
     // MARK: - Public API
@@ -399,6 +407,7 @@ final class DictationStore {
 
         // Immediately remove from local array (don't wait for incremental refresh)
         dictations.removeAll { $0.id == dictation.id }
+        cachedCount = max(0, cachedCount - 1)
     }
 
     /// Clear all dictations
@@ -495,6 +504,9 @@ final class DictationStore {
             dictations = newUtterances
             logger.debug("Loaded \(self.dictations.count) dictations from database")
         }
+
+        // Sync cached count with database (handles adds, deletes, prunes)
+        cachedCount = LiveDatabase.count()
     }
 
     /// Build DictationMetadata from LiveDictation, including rich context from metadata dict
@@ -552,11 +564,6 @@ final class DictationStore {
         }
 
         return metadata
-    }
-
-    /// Get total count
-    var count: Int {
-        LiveDatabase.count()
     }
 
     /// Search dictations
