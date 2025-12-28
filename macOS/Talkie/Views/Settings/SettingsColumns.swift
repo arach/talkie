@@ -131,7 +131,14 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // SYSTEM
-                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                        SettingsSidebarItem(
+                            icon: "app.connected.to.app.below.fill",
+                            title: "HELPERS",
+                            isSelected: selectedSection == .helpers
+                        ) {
+                            selectedSection = .helpers
+                        }
                         SettingsSidebarItem(
                             icon: "lock.shield",
                             title: "PERMISSIONS",
@@ -217,6 +224,8 @@ struct SettingsContentColumn: View {
             CloudSettingsView()
 
         // SYSTEM
+        case .helpers:
+            HelperAppsSettingsView()
         case .permissions:
             PermissionsSettingsView()
         case .debugInfo:

@@ -973,9 +973,15 @@ struct EngineStatusView: View {
 
             statItem(icon: "cpu", label: "MODEL", value: statusManager.currentModel ?? "None")
             statItem(icon: "number", label: "PID", value: "\(ProcessInfo.processInfo.processIdentifier)")
-            statItem(icon: statusManager.isDaemonMode ? "server.rack" : "hammer",
+
+            // Version from bundle
+            if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+                statItem(icon: "tag", label: "VERSION", value: version)
+            }
+
+            statItem(icon: statusManager.isDaemonMode ? "server.rack" : "play.circle",
                     label: "LAUNCH",
-                    value: statusManager.isDaemonMode ? "DAEMON" : "XCODE")
+                    value: statusManager.isDaemonMode ? "DAEMON" : "DIRECT")
 
             #if DEBUG
             // Process stats (dev only)
@@ -1015,24 +1021,27 @@ struct EngineStatusView: View {
     }
 
     private func errorStatItem(count: Int) -> some View {
-        Button(action: { statusManager.clearErrors() }) {
+        // Use muted amber instead of aggressive red
+        let warningColor = Color(red: 0.9, green: 0.7, blue: 0.3)
+
+        return Button(action: { statusManager.clearErrors() }) {
             HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
+                Image(systemName: "exclamationmark.circle")
                     .font(.system(size: 10))
-                    .foregroundColor(.red)
+                    .foregroundColor(warningColor.opacity(0.8))
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("ERRORS")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundColor(.red.opacity(0.8))
+                    Text("ISSUES")
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .foregroundColor(warningColor.opacity(0.6))
                     Text("\(count)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.red)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(warningColor.opacity(0.8))
                 }
             }
         }
         .buttonStyle(.plain)
-        .help("Click to clear errors")
+        .help("Click to dismiss")
     }
 
     // MARK: - Tab Bar

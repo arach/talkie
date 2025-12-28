@@ -32,6 +32,7 @@ enum SettingsSection: String, Hashable {
     case cloud               // Sync (future)
 
     // SYSTEM
+    case helpers             // Background services (TalkieLive, TalkieEngine)
     case permissions
     case debugInfo
     case devControl          // Dev control panel (DEBUG only)
@@ -55,6 +56,7 @@ enum SettingsSection: String, Hashable {
         case "database", "db": return .database
         case "files": return .files
         case "cloud", "sync": return .cloud
+        case "helpers": return .helpers
         case "permissions": return .permissions
         case "debug", "debug-info": return .debugInfo
         case "dev", "dev-control": return .devControl
@@ -77,6 +79,7 @@ enum SettingsSection: String, Hashable {
         case .database: return "database"
         case .files: return "files"
         case .cloud: return "cloud"
+        case .helpers: return "helpers"
         case .permissions: return "permissions"
         case .debugInfo: return "debug"
         case .devControl: return "dev"
@@ -227,7 +230,14 @@ struct SettingsView: View {
                         }
 
                         // SYSTEM
-                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                        SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                            SettingsSidebarItem(
+                                icon: "app.connected.to.app.below.fill",
+                                title: "HELPERS",
+                                isSelected: selectedSection == .helpers
+                            ) {
+                                selectedSection = .helpers
+                            }
                             SettingsSidebarItem(
                                 icon: "lock.shield",
                                 title: "PERMISSIONS",
@@ -332,6 +342,8 @@ struct SettingsView: View {
             CloudSettingsView()
 
         // SYSTEM
+        case .helpers:
+            HelperAppsSettingsView()
         case .permissions:
             PermissionsSettingsView()
         case .debugInfo:
