@@ -451,3 +451,29 @@ git commit -m "♻️ Refactor to async/await"
 - [ ] Tests pass
 - [ ] No hardcoded strings (use Localizable.strings)
 - [ ] No secrets in code
+- [ ] No hardcoded file paths (see below)
+
+---
+
+## Never Hardcode Paths
+
+**Do NOT hardcode file system paths like `/Applications/Talkie.app` or DerivedData paths.**
+
+```swift
+// ❌ Wrong
+let appPath = "/Applications/Talkie.app"
+let debugPath = "\(NSHomeDirectory())/Library/Developer/Xcode/DerivedData/.../Talkie.app"
+
+// ✅ Correct - URL scheme (macOS finds registered handler)
+NSWorkspace.shared.open(URL(string: "talkie://live/recent")!)
+
+// ✅ Correct - Bundle identifier lookup
+if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "jdi.talkie") {
+    NSWorkspace.shared.openApplication(at: appURL, configuration: config)
+}
+
+// ✅ Correct - Environment detection
+let env = TalkieEnvironment.current  // .production, .staging, .dev
+```
+
+This ensures dev, staging, and production builds work correctly without code changes.

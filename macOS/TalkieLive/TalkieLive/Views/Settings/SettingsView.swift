@@ -2794,10 +2794,13 @@ struct StorageSettingsSection: View {
                     HStack {
                         Button(action: refreshStats) {
                             HStack(spacing: 4) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 9))
-                                    .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                                    .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                                if isRefreshing {
+                                    BrailleSpinner(speed: 0.08)
+                                        .font(.system(size: 9))
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 9))
+                                }
                                 Text("Refresh")
                                     .font(.system(size: 9))
                             }
@@ -3378,8 +3381,14 @@ enum QuickSettingsTab: String, CaseIterable {
 }
 
 struct QuickSettingsView: View {
+    var initialTab: QuickSettingsTab = .audio
     @State private var selectedTab: QuickSettingsTab = .audio
     @StateObject private var permissionManager = PermissionManager.shared
+
+    init(initialTab: QuickSettingsTab = .audio) {
+        self.initialTab = initialTab
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3486,10 +3495,13 @@ struct ConnectionsSettingsSection: View {
                     Spacer()
 
                     Button(action: refresh) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .medium))
-                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                            .animation(isRefreshing ? .linear(duration: 0.5) : .default, value: isRefreshing)
+                        if isRefreshing {
+                            BrailleSpinner()
+                                .font(.system(size: 12, weight: .medium))
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 12, weight: .medium))
+                        }
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(TalkieTheme.textSecondary)

@@ -117,6 +117,13 @@ struct AllMemos: View {
                 loadVoiceMemo(id: memoID)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .init("SelectMemo"))) { notification in
+            // Handle navigation from dashboard
+            if let memoID = notification.object as? UUID {
+                selectedMemoIDs = [memoID]
+                loadVoiceMemo(id: memoID)
+            }
+        }
     }
 
     // MARK: - List Pane

@@ -291,8 +291,10 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
         let (family, actualModelId) = parseModelId(modelId)
         let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
+        let refStr = externalRefId.map { "[\($0)] " } ?? ""
+        let fileSizeKB = String(format: "%.0f KB", Double(fileSize) / 1024)
         AppLogger.shared.info(.transcription, "Transcribing \(fileName) with \(family):\(actualModelId)")
-        EngineStatusManager.shared.log(.info, "Transcribe", "Starting \(fileName) with \(family):\(actualModelId)")
+        EngineStatusManager.shared.log(.info, "Request", "\(refStr)→ \(fileName) (\(fileSizeKB)) • \(family):\(actualModelId)")
 
         trace.mark("start", metadata: "\(family):\(actualModelId)")
 
@@ -315,7 +317,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             let wordCount = result.transcript.split(separator: " ").count
             AppLogger.shared.info(.transcription, "Transcribed #\(self.totalTranscriptions): \(result.transcript.prefix(50))...")
             let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
-            EngineStatusManager.shared.log(.info, "Transcribe", "✓ #\(totalTranscriptions) in \(timeStr) (\(wordCount) words)")
+            EngineStatusManager.shared.log(.info, "Complete", "\(refStr)✓ #\(totalTranscriptions) in \(timeStr) (\(wordCount) words)")
             EngineStatusManager.shared.totalTranscriptions = totalTranscriptions
 
             // Record metric with full trace
@@ -337,7 +339,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             let elapsedMs = trace.elapsedMs
             let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
             AppLogger.shared.error(.transcription, "Transcription failed: \(error.localizedDescription)")
-            EngineStatusManager.shared.log(.error, "Transcribe", "✗ Failed after \(timeStr): \(error.localizedDescription)")
+            EngineStatusManager.shared.log(.error, "Error", "\(refStr)✗ \(fileName) failed after \(timeStr): \(error.localizedDescription)")
             reply(nil, error.localizedDescription)
         }
     }

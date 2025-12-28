@@ -133,21 +133,34 @@ public struct LivePill: View {
     }
 
     // IMPROVEMENT #4: Single derived visual state
+    // Be optimistic - only show warnings for ACTIVE problems, not stale state
     private var visualState: VisualState {
         if isWarmingUp { return .warmingUp }
         if showSuccess { return .success }
 
-        // Show warning if engine isn't connected OR mic isn't available
-        let hasIssue = !isEngineConnected || micDeviceName == nil
-        if hasIssue {
-            return .offline
-        }
-
         switch state {
-        case .idle: return .idle(hasPending: pendingQueueCount > 0)
-        case .listening: return .listening(interstitialHint: isHovered && isShiftHeld)
-        case .transcribing: return .transcribing
-        case .routing: return .routing
+        case .idle:
+            // Idle: Don't show offline for passive connection issues
+            // Only show mic warning if there's truly no mic (user should know)
+            // But don't be aggressive about stale engine connection state
+            return .idle(hasPending: pendingQueueCount > 0)
+
+        case .listening:
+            // Actively recording: Only warn if mic is unavailable (active problem)
+            if micDeviceName == nil {
+                return .offline
+            }
+            return .listening(interstitialHint: isHovered && isShiftHeld)
+
+        case .transcribing:
+            // Actively transcribing: Only warn if engine is disconnected (active problem)
+            if !isEngineConnected {
+                return .offline
+            }
+            return .transcribing
+
+        case .routing:
+            return .routing
         }
     }
 

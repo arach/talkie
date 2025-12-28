@@ -377,7 +377,7 @@ final class DictationStore {
     }
 
     /// Update dictation text (for retranscription)
-    func updateText(for id: UUID, newText: String) {
+    func updateText(for id: UUID, newText: String, modelId: String? = nil) {
         // Find the dictation to get its liveID
         guard let dictation = dictations.first(where: { $0.id == id }),
               let liveID = dictation.liveID else {
@@ -385,7 +385,7 @@ final class DictationStore {
             return
         }
 
-        LiveDatabase.updateText(for: liveID, newText: newText)
+        LiveDatabase.updateText(for: liveID, newText: newText, modelId: modelId)
         refresh()
     }
 

@@ -8,6 +8,7 @@
 import SwiftUI
 import AVFoundation
 import AppKit
+import ApplicationServices
 
 // MARK: - Permission Types
 
@@ -137,8 +138,13 @@ class PermissionManager: ObservableObject {
     }
 
     func openSettings(for permission: PermissionType) {
-        guard let url = permission.settingsURL else { return }
-        NSWorkspace.shared.open(url)
+        if permission == .accessibility {
+            // Use system prompt - shows dialog and opens Settings with app pre-highlighted
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+        } else if let url = permission.settingsURL {
+            NSWorkspace.shared.open(url)
+        }
 
         // Start polling to detect when permission is granted
         startPolling()
@@ -241,14 +247,17 @@ struct PermissionsSettingsSection: View {
                 Button(action: {
                     isRefreshing = true
                     permissionManager.refreshAll()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         isRefreshing = false
                     }
                 }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12, weight: .medium))
-                        .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                        .animation(isRefreshing ? .linear(duration: 0.5) : .default, value: isRefreshing)
+                    if isRefreshing {
+                        BrailleSpinner()
+                            .font(.system(size: 12, weight: .medium))
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .medium))
+                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(TalkieTheme.textSecondary)
@@ -394,6 +403,7 @@ struct PermissionSettingsRow: View {
                     Text(permission.title)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(TalkieTheme.textPrimary)
+                        .lineLimit(1)
 
                     if permission.isRequired {
                         Text("Required")
@@ -404,38 +414,32 @@ struct PermissionSettingsRow: View {
                             .background(Color.orange.opacity(0.15))
                             .cornerRadius(3)
                     }
+
+                    Spacer()
+
+                    // Status badge (moved inline with title)
+                    HStack(spacing: 4) {
+                        Image(systemName: status.icon)
+                            .font(.system(size: 10))
+                        Text(status.label)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(status.color)
                 }
 
                 Text(permission.description)
                     .font(.system(size: 11))
                     .foregroundColor(TalkieTheme.textSecondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
 
             Spacer()
 
-            // Status badge
-            HStack(spacing: 4) {
-                Image(systemName: status.icon)
-                    .font(.system(size: 10))
-                Text(status.label)
-                    .font(.system(size: 10, weight: .medium))
-            }
-            .foregroundColor(status.color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(status.color.opacity(0.1))
-            .cornerRadius(CornerRadius.sm)
-
             // Action button
             Button(action: onRequest) {
-                Text(status == .granted ? "Open Settings" : "Grant")
+                Text("Open Settings")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(status == .granted ? TalkieTheme.textSecondary : .white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(status == .granted ? TalkieTheme.surfaceElevated : TalkieTheme.accent)
-                    .cornerRadius(CornerRadius.sm)
+                    .foregroundColor(TalkieTheme.textSecondary)
             }
             .buttonStyle(.plain)
         }

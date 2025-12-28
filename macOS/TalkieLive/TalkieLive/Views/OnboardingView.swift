@@ -95,10 +95,10 @@ final class OnboardingManager: ObservableObject {
     }
 
     func openAccessibilitySettings() {
-        // Open System Settings to Accessibility > Privacy
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+        // Use system prompt - shows dialog and opens Settings with app pre-highlighted
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+
         // Start polling for permission grant
         startAccessibilityPolling()
     }

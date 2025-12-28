@@ -266,7 +266,13 @@ struct UnifiedDashboard: View {
                     emptyMemoState
                 } else {
                     ForEach(Array(allMemos.prefix(8))) { memo in
-                        MemoActivityRow(memo: memo)
+                        MemoActivityRow(memo: memo) {
+                            // Navigate to All Memos with this memo selected
+                            NotificationCenter.default.post(
+                                name: .init("NavigateToMemo"),
+                                object: memo.id
+                            )
+                        }
                     }
                 }
             }
@@ -302,7 +308,13 @@ struct UnifiedDashboard: View {
                     emptyDictationState
                 } else {
                     ForEach(Array(dictationStore.dictations.prefix(8))) { dictation in
-                        DictationActivityRow(dictation: dictation)
+                        DictationActivityRow(dictation: dictation) {
+                            // Navigate to Live Recent with this dictation selected
+                            NotificationCenter.default.post(
+                                name: .init("NavigateToDictation"),
+                                object: dictation.id
+                            )
+                        }
                     }
                 }
             }
@@ -705,10 +717,12 @@ struct UnifiedDashboard: View {
 
 struct MemoActivityRow: View {
     let memo: VoiceMemo
+    var onSelect: (() -> Void)?
 
     @State private var isHovered = false
 
     var body: some View {
+        Button(action: { onSelect?() }) {
         HStack(spacing: 10) {
             // Provenance icon (where it came from) - neutral color, icon is enough
             Image(systemName: memo.source.icon)
@@ -750,6 +764,8 @@ struct MemoActivityRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
         )
+        }
+        .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.1)) {
                 isHovered = hovering
@@ -788,6 +804,7 @@ struct MemoActivityRow: View {
 
 struct DictationActivityRow: View {
     let dictation: Dictation
+    var onSelect: (() -> Void)?
 
     @State private var isHovered = false
 
@@ -796,6 +813,7 @@ struct DictationActivityRow: View {
     }
 
     var body: some View {
+        Button(action: { onSelect?() }) {
         HStack(spacing: 10) {
             // Status dot
             Circle()
@@ -838,6 +856,8 @@ struct DictationActivityRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
         )
+        }
+        .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.1)) {
                 isHovered = hovering

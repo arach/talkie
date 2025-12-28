@@ -616,20 +616,43 @@ extension LiveDatabase {
     }
 
     /// Update dictation text (for retranscription)
-    static func updateText(for id: Int64, newText: String) {
-        try? shared.write { db in
-            try db.execute(
-                sql: """
-                    UPDATE dictations
-                    SET text = ?, wordCount = ?
-                    WHERE id = ?
-                    """,
-                arguments: [
-                    newText,
-                    newText.split(separator: " ").count,
-                    id
-                ]
-            )
+    static func updateText(for id: Int64, newText: String, modelId: String? = nil) {
+        do {
+            try shared.write { db in
+                if let modelId = modelId {
+                    // Update text and model
+                    try db.execute(
+                        sql: """
+                            UPDATE dictations
+                            SET text = ?, wordCount = ?, transcriptionModel = ?, transcriptionStatus = 'success'
+                            WHERE id = ?
+                            """,
+                        arguments: [
+                            newText,
+                            newText.split(separator: " ").count,
+                            modelId,
+                            id
+                        ]
+                    )
+                } else {
+                    // Update text only
+                    try db.execute(
+                        sql: """
+                            UPDATE dictations
+                            SET text = ?, wordCount = ?
+                            WHERE id = ?
+                            """,
+                        arguments: [
+                            newText,
+                            newText.split(separator: " ").count,
+                            id
+                        ]
+                    )
+                }
+            }
+            logger.info("Updated dictation \(id) text (\(newText.count) chars)")
+        } catch {
+            logger.error("Failed to update dictation \(id): \(error.localizedDescription)")
         }
     }
 }

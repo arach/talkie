@@ -2,6 +2,16 @@
 
 Voice-first productivity suite for macOS.
 
+## ⚠️ CRITICAL: Never Kill Production Apps
+
+**The user actively uses Talkie, TalkieLive, and TalkieEngine for live dictation.**
+
+- **NEVER** run `pkill Talkie`, `pkill TalkieLive`, or `pkill TalkieEngine`
+- **NEVER** kill apps in `/Applications/` - user may be mid-recording
+- **OK** to kill debug builds in DerivedData if specifically testing
+- When testing, launch debug builds alongside production - don't replace them
+- If you need to restart an app, ASK the user first
+
 ## Projects
 
 - **macOS/Talkie** - Main macOS app (SwiftUI)

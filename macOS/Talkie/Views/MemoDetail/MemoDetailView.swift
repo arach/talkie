@@ -1060,14 +1060,24 @@ private struct MemoDetailTranscriptContextMenu: View {
 
         if memo.audioData != nil {
             Menu("Retranscribe") {
-                Button("whisper-small (Fast)") {
-                    onRetranscribe("whisper:openai_whisper-small")
+                Section("Parakeet (Recommended)") {
+                    Button("Parakeet v3 (Fast, 25 languages)") {
+                        onRetranscribe("parakeet:v3")
+                    }
+                    Button("Parakeet v2 (English, most accurate)") {
+                        onRetranscribe("parakeet:v2")
+                    }
                 }
-                Button("whisper-medium") {
-                    onRetranscribe("whisper:openai_whisper-medium")
-                }
-                Button("whisper-large-v3 (Best)") {
-                    onRetranscribe("whisper:openai_whisper-large-v3")
+
+                Divider()
+
+                Section("Whisper") {
+                    Button("whisper-small (Fast)") {
+                        onRetranscribe("whisper:openai_whisper-small")
+                    }
+                    Button("whisper-large-v3 (Best)") {
+                        onRetranscribe("whisper:openai_whisper-large-v3")
+                    }
                 }
             }
         }

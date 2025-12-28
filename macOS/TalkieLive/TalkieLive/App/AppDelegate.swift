@@ -5,20 +5,20 @@ import Carbon.HIToolbox
 import Combine
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var liveController: LiveController!
     private let hotKeyManager = HotKeyManager()  // Toggle mode hotkey
     private let pttHotKeyManager = HotKeyManager(signature: "TLPT", hotkeyID: 3)  // Push-to-talk hotkey
     private let queuePickerHotKeyManager = HotKeyManager(signature: "TLQP", hotkeyID: 2)
+    private let pasteLastHotKeyManager = HotKeyManager(signature: "TLPL", hotkeyID: 4)  // Paste last dictation
     private var cancellables = Set<AnyCancellable>()
 
     // Lazy UI controllers - initialized during boot sequence
     private var overlayController: RecordingOverlayController { RecordingOverlayController.shared }
     private var floatingPill: FloatingPillController { FloatingPillController.shared }
 
-    // Settings windows
-    private var permissionsWindow: NSWindow?
+    // Settings window (consolidated - includes permissions tab)
     private var settingsWindow: NSWindow?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -141,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupMenu() {
         let menu = NSMenu()
+        menu.delegate = self
 
         let recordItem = NSMenuItem(title: "Start Recording", action: #selector(toggleListeningFromMenu), keyEquivalent: "")
         recordItem.target = self
@@ -152,6 +153,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyItem.keyEquivalentModifierMask = [.option, .command]
         historyItem.target = self
         menu.addItem(historyItem)
+
+        // Recent dictations submenu
+        let recentItem = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
+        let recentSubmenu = NSMenu()
+        recentItem.submenu = recentSubmenu
+        menu.addItem(recentItem)
+
+        // Paste last with global hotkey
+        let pasteLastItem = NSMenuItem(title: "Paste Last", action: #selector(pasteLastDictation), keyEquivalent: "v")
+        pasteLastItem.keyEquivalentModifierMask = [.control, .command]
+        pasteLastItem.target = self
+        menu.addItem(pasteLastItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -422,26 +435,120 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showHistory() {
-        // Open Talkie app and navigate to Live section
+        // Open Talkie app via URL scheme - macOS will find the registered handler
+        // This works for both debug builds (if run recently) and production
+        guard let url = URL(string: "talkie://live/recent") else { return }
+
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true  // Bring to front
+        configuration.activates = true
 
-        NSWorkspace.shared.openApplication(
-            at: URL(fileURLWithPath: "/Applications/Talkie.app"),
-            configuration: configuration
-        ) { app, error in
+        NSWorkspace.shared.open(url, configuration: configuration) { app, error in
             if let error = error {
-                AppLogger.shared.log(.error, "Failed to launch Talkie", detail: error.localizedDescription)
-                return
-            }
+                AppLogger.shared.log(.error, "Failed to open Talkie", detail: error.localizedDescription)
 
-            // After opening Talkie, navigate to Live section via URL scheme
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if let url = URL(string: "talkie://live") {
-                    NSWorkspace.shared.open(url)
+                // Fallback: try to find app by bundle identifier
+                let bundleID = "jdi.talkie"
+                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                    NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
                 }
             }
         }
+    }
+
+    // MARK: - Recent Dictations
+
+    @objc private func pasteLastDictation() {
+        Task { @MainActor in
+            let store = DictationStore.shared
+            guard let last = store.utterances.first else {
+                AppLogger.shared.log(.system, "No recent dictations to paste")
+                return
+            }
+
+            // Copy to clipboard
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(last.text, forType: .string)
+
+            // Simulate paste (Cmd+V)
+            simulatePaste()
+
+            AppLogger.shared.log(.system, "Pasted last dictation: \(last.text.prefix(30))...")
+        }
+    }
+
+    @objc private func copyRecentDictation(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+
+        AppLogger.shared.log(.system, "Copied dictation to clipboard: \(text.prefix(30))...")
+    }
+
+    // MARK: - NSMenuDelegate
+
+    nonisolated func menuWillOpen(_ menu: NSMenu) {
+        Task { @MainActor in
+            self.updateRecentMenu()
+        }
+    }
+
+    private func updateRecentMenu() {
+        guard let menu = statusItem.menu,
+              let recentItem = menu.items.first(where: { $0.title == "Recent" }),
+              let submenu = recentItem.submenu else { return }
+
+        submenu.removeAllItems()
+
+        Task { @MainActor in
+            let store = DictationStore.shared
+            let recent = Array(store.utterances.prefix(5))
+
+            if recent.isEmpty {
+                let emptyItem = NSMenuItem(title: "No recent dictations", action: nil, keyEquivalent: "")
+                emptyItem.isEnabled = false
+                submenu.addItem(emptyItem)
+            } else {
+                for (index, utterance) in recent.enumerated() {
+                    // Truncate text for display
+                    let displayText = utterance.text.prefix(40) + (utterance.text.count > 40 ? "..." : "")
+                    let timeAgo = utterance.timestamp.timeAgoShort
+
+                    let item = NSMenuItem(
+                        title: "\(displayText)",
+                        action: #selector(copyRecentDictation(_:)),
+                        keyEquivalent: index < 3 ? "\(index + 1)" : ""
+                    )
+                    if index < 3 {
+                        item.keyEquivalentModifierMask = [.control, .option]
+                    }
+                    item.target = self
+                    item.representedObject = utterance.text
+                    item.toolTip = "\(timeAgo) • Click to copy"
+                    submenu.addItem(item)
+                }
+
+                submenu.addItem(NSMenuItem.separator())
+                let showAllItem = NSMenuItem(title: "Show All History...", action: #selector(showHistory), keyEquivalent: "")
+                showAllItem.target = self
+                submenu.addItem(showAllItem)
+            }
+        }
+    }
+
+    private func simulatePaste() {
+        // Use CGEvent to simulate Cmd+V
+        let source = CGEventSource(stateID: .hidSystemState)
+
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) // V key
+        keyDown?.flags = .maskCommand
+        keyDown?.post(tap: .cghidEventTap)
+
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        keyUp?.flags = .maskCommand
+        keyUp?.post(tap: .cghidEventTap)
     }
 
     @objc private func toggleFloatingPill(_ sender: NSMenuItem) {
@@ -488,31 +595,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showPermissions() {
-        // If window already exists, bring it to front
-        if let window = permissionsWindow {
+        // If settings window exists, bring it to front (permissions is a tab within settings)
+        if let window = settingsWindow {
+            // Update content to show permissions tab
+            let contentView = QuickSettingsView(initialTab: .permissions)
+                .frame(minWidth: 500, minHeight: 450)
+                .background(TalkieTheme.background)
+            window.contentView = NSHostingView(rootView: contentView)
+            window.title = "TalkieLive Settings"
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
-        // Create permissions window with SwiftUI content
-        let contentView = PermissionsSettingsSection()
-            .frame(minWidth: 450, minHeight: 500)
+        // Create settings window with permissions tab selected
+        let contentView = QuickSettingsView(initialTab: .permissions)
+            .frame(minWidth: 500, minHeight: 450)
             .background(TalkieTheme.background)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 550, height: 500),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "TalkieLive Permissions"
+        window.title = "TalkieLive Settings"
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
         window.isReleasedWhenClosed = false
 
-        // Store reference
-        permissionsWindow = window
+        // Store in settings window (consolidate into one window)
+        settingsWindow = window
 
         // Show window
         window.makeKeyAndOrderFront(nil)
@@ -584,6 +697,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppLogger.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
         } catch {
             AppLogger.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
+        }
+    }
+}
+
+// MARK: - Date Extension
+
+extension Date {
+    var timeAgoShort: String {
+        let interval = -self.timeIntervalSinceNow
+
+        if interval < 60 {
+            return "now"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)m"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours)h"
+        } else if interval < 604800 {
+            let days = Int(interval / 86400)
+            return "\(days)d"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: self)
         }
     }
 }

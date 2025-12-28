@@ -88,7 +88,7 @@ struct StatusBar: View {
                             showSuccess: showSuccess,
                             recordingDuration: liveState.elapsedTime,
                             processingDuration: 0,
-                            isEngineConnected: serviceMonitor.state == .running,
+                            isEngineConnected: serviceMonitor.isConnected,
                             pendingQueueCount: 0,
                             micDeviceName: microphoneName,
                             audioLevel: 0,

@@ -113,9 +113,41 @@ final class MicrophoneCapture: LiveAudioCapture {
     private var onChunk: ((String) -> Void)?  // Callback receives file path
     private var isCapturing = false
     private var fileCreated = false
+    private var bufferCount = 0  // Track buffer count for debugging
 
     /// Callback for capture failure - called on main thread
     var onCaptureError: ((String) -> Void)?
+
+    init() {
+        // Monitor audio engine configuration changes (can cause silent failures)
+        NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self, self.isCapturing else { return }
+            logger.error("⚠️ Audio engine configuration changed mid-recording! Buffers: \(self.bufferCount)")
+            AppLogger.shared.log(.error, "Audio engine reconfigured", detail: "Recording may be affected. Buffers captured: \(self.bufferCount)")
+
+            // Try to recover by restarting the engine
+            if !self.engine.isRunning {
+                logger.warning("Engine stopped - attempting restart")
+                do {
+                    try self.engine.start()
+                    logger.info("Engine restarted successfully")
+                } catch {
+                    logger.error("Failed to restart engine: \(error.localizedDescription)")
+                    Task { @MainActor in
+                        self.onCaptureError?("Audio engine stopped unexpectedly")
+                    }
+                }
+            }
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
 
     func startCapture(onChunk: @escaping (String) -> Void) {
         guard !isCapturing else {
@@ -125,6 +157,7 @@ final class MicrophoneCapture: LiveAudioCapture {
 
         self.onChunk = onChunk
         self.fileCreated = false
+        self.bufferCount = 0
 
         // Set the selected input device before accessing inputNode
         setInputDevice()
@@ -156,8 +189,10 @@ final class MicrophoneCapture: LiveAudioCapture {
             // Write to file
             do {
                 try audioFile.write(from: buffer)
+                self.bufferCount += 1
             } catch {
                 logger.error("Failed to write audio buffer: \(error.localizedDescription)")
+                AppLogger.shared.log(.error, "Audio write failed", detail: "Buffer \(self.bufferCount): \(error.localizedDescription)")
             }
 
             // Calculate RMS level for visualization and silence detection
@@ -263,10 +298,19 @@ final class MicrophoneCapture: LiveAudioCapture {
             logger.warning("No temp file URL - file may not have been created")
         }
 
+        let capturedBuffers = bufferCount
         tempFileURL = nil
         onChunk = nil
         fileCreated = false
-        logger.info("Microphone capture stopped")
+        bufferCount = 0
+        logger.info("Microphone capture stopped - \(capturedBuffers) buffers captured")
+
+        // Log warning if suspiciously few buffers (likely a problem)
+        if capturedBuffers < 10 {
+            Task { @MainActor in
+                AppLogger.shared.log(.audio, "⚠️ Very short recording", detail: "Only \(capturedBuffers) audio buffers captured")
+            }
+        }
     }
 
     /// Set the input device on the audio engine's input node

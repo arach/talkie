@@ -222,9 +222,11 @@ struct TalkieNavigationViewNative: View {
                     }
                 }
 
-                NavigationLink(value: NavigationSection.liveSettings) {
-                    Label("Live Settings", systemImage: "gearshape")
-                }
+                // HIDDEN: Live Settings moved to Settings tab
+                // Uncomment to restore in sidebar:
+                // NavigationLink(value: NavigationSection.liveSettings) {
+                //     Label("Live Settings", systemImage: "gearshape")
+                // }
             }
 
             // Activity
@@ -413,6 +415,9 @@ extension View {
             .onReceive(NotificationCenter.default.publisher(for: .navigateToLive)) { _ in
                 selectedSection.wrappedValue = .liveDashboard
             }
+            .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToLiveRecent"))) { _ in
+                selectedSection.wrappedValue = .liveRecent
+            }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToSettings)) { _ in
                 selectedSection.wrappedValue = .settings
             }
@@ -421,6 +426,26 @@ extension View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToAllMemos"))) { _ in
                 selectedSection.wrappedValue = .allMemos
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToMemo"))) { notification in
+                // Navigate to All Memos - the memo ID is in notification.object
+                selectedSection.wrappedValue = .allMemos
+                // Post follow-up to select the memo in the list
+                if let memoID = notification.object as? UUID {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: .init("SelectMemo"), object: memoID)
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToDictation"))) { notification in
+                // Navigate to Live Recent - the dictation ID is in notification.object
+                selectedSection.wrappedValue = .liveRecent
+                // Post follow-up to select the dictation in the list
+                if let dictationID = notification.object as? UUID {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: .init("SelectDictation"), object: dictationID)
+                    }
+                }
             }
     }
 }

@@ -635,12 +635,9 @@ public final class EngineClient: ObservableObject {
         logger.info("[Engine] Transcribing '\(fileName)' with model '\(modelId)' priority=\(priority.displayName)")
 
         let startTime = Date()
-        // Timeout based on priority - real-time should fail fast and retry
-        let timeoutSeconds: Double = switch priority {
-        case .high, .userInitiated: 2.0    // Live transcription - fail fast, queue for retry
-        case .medium: 10.0                  // Interactive - reasonable wait
-        case .low, .utility, .background: 120.0  // Batch - can wait
-        }
+        // Use generous timeout - transcription should complete, not timeout
+        // Long audio files can take time, and the user is waiting
+        let timeoutSeconds: Double = 120.0
 
         // Start XPC round-trip signpost for Instruments profiling
         let signpostID = OSSignpostID(log: xpcSignpostLog)

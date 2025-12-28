@@ -459,12 +459,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
             // Fallback to legacy handlers for routes not yet migrated to Router
 
-            // Handle talkie://live or talkie://live/home - navigate to Live section
+            // Handle talkie://live, talkie://live/home, talkie://live/recent
             if url.host == "live" {
                 let path = url.pathComponents.dropFirst().first ?? ""
                 NSLog("[AppDelegate] Navigating to Live section: \(path.isEmpty ? "default" : path)")
                 logger.info("Navigating to Live section: \(path.isEmpty ? "default" : path)")
-                NotificationCenter.default.post(name: .navigateToLive, object: nil)
+
+                if path == "recent" || path == "history" {
+                    // Navigate to Live Recent (history)
+                    NotificationCenter.default.post(name: .init("NavigateToLiveRecent"), object: nil)
+                } else {
+                    // Navigate to Live Dashboard
+                    NotificationCenter.default.post(name: .navigateToLive, object: nil)
+                }
             }
             // Handle talkie://settings/live - navigate directly to full Live settings
             else if url.host == "settings" {

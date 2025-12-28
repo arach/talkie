@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// List view for all Live dictations (harmonized with AllMemos design)
 struct DictationListView: View {
@@ -15,6 +16,11 @@ struct DictationListView: View {
     @State private var searchText = ""
     @State private var retranscribingIDs: Set<Dictation.ID> = []
     @State private var lastClickedID: Dictation.ID?
+
+    // Drop zone state
+    @State private var isDropTargeted = false
+    @State private var dropMessage: String?
+    @State private var isTranscribingDrop = false
 
     private var filteredDictations: [Dictation] {
         guard !searchText.isEmpty else {
@@ -42,6 +48,192 @@ struct DictationListView: View {
             // Load last 50 dictations in background when navigating to page
             // Non-blocking - page renders immediately, data loads async
             store.refresh()
+        }
+        .onDrop(of: [UTType.audio, UTType.fileURL], isTargeted: $isDropTargeted) { providers in
+            handleAudioDrop(providers)
+        }
+        .overlay {
+            if isDropTargeted || isTranscribingDrop {
+                dropZoneOverlay
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .init("SelectDictation"))) { notification in
+            if let dictationID = notification.object as? UUID {
+                selectedDictationIDs = [dictationID]
+            }
+        }
+    }
+
+    // MARK: - Drop Zone
+
+    /// Supported audio file extensions for drop
+    private static let supportedAudioExtensions = Set(["m4a", "mp3", "wav", "aac", "flac", "ogg", "mp4", "caf"])
+
+    /// Visual overlay when dragging audio files
+    private var dropZoneOverlay: some View {
+        ZStack {
+            // Dim background
+            TalkieTheme.textSecondary
+                .opacity(0.85)
+
+            // Center content
+            VStack(spacing: Spacing.md) {
+                if isTranscribingDrop {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                    Text(dropMessage ?? "Transcribing...")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                } else {
+                    Image(systemName: "waveform.badge.plus")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white)
+                    Text("Drop audio file to transcribe")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("m4a, mp3, wav, aac, flac, ogg, mp4, caf")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.2), value: isDropTargeted)
+    }
+
+    /// Handle dropped audio files
+    private func handleAudioDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        // Check for supported audio types
+        let validTypes = [
+            UTType.audio.identifier,
+            UTType.mpeg4Audio.identifier,
+            UTType.mp3.identifier,
+            UTType.wav.identifier,
+            "public.aac-audio",
+            "org.xiph.flac",
+            "public.mpeg-4",
+            UTType.fileURL.identifier
+        ]
+
+        for typeId in validTypes {
+            if provider.hasItemConformingToTypeIdentifier(typeId) {
+                isTranscribingDrop = true
+                dropMessage = "Reading file..."
+
+                provider.loadFileRepresentation(forTypeIdentifier: typeId) { url, error in
+                    guard let url = url else {
+                        Task { @MainActor in
+                            showDropError("Could not read file")
+                        }
+                        return
+                    }
+
+                    // Verify it's an audio file
+                    let ext = url.pathExtension.lowercased()
+                    guard Self.supportedAudioExtensions.contains(ext) else {
+                        Task { @MainActor in
+                            showDropError("Unsupported format: .\(ext)")
+                        }
+                        return
+                    }
+
+                    // Copy to temporary location (provider's file may be deleted)
+                    let tempDir = FileManager.default.temporaryDirectory
+                    let tempURL = tempDir.appendingPathComponent(UUID().uuidString + "." + ext)
+
+                    do {
+                        try FileManager.default.copyItem(at: url, to: tempURL)
+
+                        // Process in background
+                        Task { @MainActor in
+                            await processDroppedAudio(tempURL: tempURL, originalFilename: url.lastPathComponent)
+                        }
+                    } catch {
+                        Task { @MainActor in
+                            showDropError("Failed to copy file")
+                        }
+                    }
+                }
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// Process a dropped audio file
+    private func processDroppedAudio(tempURL: URL, originalFilename: String) async {
+        AppLogger.shared.log(.file, "Audio file dropped", detail: originalFilename)
+
+        // Get file size
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int64) ?? 0
+        let fileSizeStr = ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
+
+        dropMessage = "Transcribing \(fileSizeStr)..."
+        AppLogger.shared.log(.transcription, "Transcribing dropped file", detail: "\(originalFilename) (\(fileSizeStr))")
+
+        do {
+            // Copy to AudioStorage for permanent storage
+            guard let storedFilename = AudioStorage.copyToStorage(tempURL) else {
+                showDropError("Failed to save audio file")
+                return
+            }
+            let storedURL = AudioStorage.url(for: storedFilename)
+
+            // Transcribe using default model
+            let engineClient = EngineClient.shared
+            let text = try await engineClient.transcribe(
+                audioPath: storedURL.path,
+                modelId: "parakeet:v3",
+                priority: .userInitiated
+            )
+
+            // Create new dictation entry
+            let liveDictation = LiveDictation(
+                text: text,
+                mode: "dropped",
+                appBundleID: "dropped.file",
+                appName: "File Drop",
+                windowTitle: originalFilename,
+                durationSeconds: nil,
+                transcriptionModel: "parakeet:v3",
+                audioFilename: storedFilename,
+                transcriptionStatus: .success
+            )
+
+            // Save to database
+            LiveDatabase.store(liveDictation)
+
+            // Refresh store to show new entry
+            store.refresh()
+
+            SoundManager.shared.playPasted()
+            isTranscribingDrop = false
+            dropMessage = nil
+
+        } catch {
+            AppLogger.shared.log(.error, "Transcription failed", detail: error.localizedDescription)
+            showDropError("Transcription failed")
+        }
+
+        // Cleanup temp file
+        try? FileManager.default.removeItem(at: tempURL)
+    }
+
+    /// Show a drop error message briefly
+    private func showDropError(_ message: String) {
+        dropMessage = message
+        AppLogger.shared.log(.error, "Drop failed", detail: message)
+        SoundManager.shared.playFinish()
+
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            isTranscribingDrop = false
+            dropMessage = nil
         }
     }
 
@@ -118,14 +310,24 @@ struct DictationListView: View {
 
                                 if dictation.metadata.audioFilename != nil {
                                     Menu {
-                                        Button("whisper-small (Fast)") {
-                                            retranscribe(dictation, with: "whisper:openai_whisper-small")
+                                        Section("Parakeet (Recommended)") {
+                                            Button("Parakeet v3 (Fast, 25 languages)") {
+                                                retranscribe(dictation, with: "parakeet:v3")
+                                            }
+                                            Button("Parakeet v2 (English, most accurate)") {
+                                                retranscribe(dictation, with: "parakeet:v2")
+                                            }
                                         }
-                                        Button("whisper-medium") {
-                                            retranscribe(dictation, with: "whisper:openai_whisper-medium")
-                                        }
-                                        Button("whisper-large-v3 (Best)") {
-                                            retranscribe(dictation, with: "whisper:openai_whisper-large-v3")
+
+                                        Divider()
+
+                                        Section("Whisper") {
+                                            Button("whisper-small (Fast)") {
+                                                retranscribe(dictation, with: "whisper:openai_whisper-small")
+                                            }
+                                            Button("whisper-large-v3 (Best)") {
+                                                retranscribe(dictation, with: "whisper:openai_whisper-large-v3")
+                                            }
                                         }
                                     } label: {
                                         Label("Retranscribe", systemImage: "waveform.badge.magnifyingglass")
@@ -427,9 +629,8 @@ struct DictationListView: View {
             return
         }
 
-        // Construct full audio path
-        let audioPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("TalkieLive/Dictations")
+        // Construct full audio path using shared AudioStorage location
+        let audioPath = AudioStorage.audioDirectory
             .appendingPathComponent(audioFilename)
             .path
 
@@ -444,9 +645,9 @@ struct DictationListView: View {
                     priority: .userInitiated  // User clicked re-transcribe button
                 )
 
-                // Update dictation text
+                // Update dictation text and model
                 await MainActor.run {
-                    store.updateText(for: dictation.id, newText: newText)
+                    store.updateText(for: dictation.id, newText: newText, modelId: modelId)
                     retranscribingIDs.remove(dictation.id)
                 }
 
