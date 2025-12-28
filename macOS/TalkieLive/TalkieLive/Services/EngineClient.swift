@@ -26,7 +26,7 @@ private enum LogLevel { case debug, info, warning, error }
 
 /// Dev-friendly console logging with OS_LOG level support
 /// Also writes to shared log file for viewing in Talkie's SystemLogsView
-private func devLog(_ message: String, level: LogLevel = .info, file: String = #file, line: Int = #line) {
+private func devLog(_ message: String, detail: String? = nil, level: LogLevel = .info, file: String = #file, line: Int = #line) {
     let filename = (file as NSString).lastPathComponent
 
     #if DEBUG
@@ -37,7 +37,12 @@ private func devLog(_ message: String, level: LogLevel = .info, file: String = #
         case .warning: "⚠️"
         case .error: "❌"
     }
-    print("[\(timestamp)] \(levelIcon) [Engine] \(message)  ← \(filename):\(line)")
+    var logLine = "[\(timestamp)] \(levelIcon) [Engine] \(message)"
+    if let detail = detail {
+        logLine += " — \(detail)"
+    }
+    logLine += "  ← \(filename):\(line)"
+    print(logLine)
     logger.debug("\(message)")
     #else
     switch level {
@@ -51,8 +56,31 @@ private func devLog(_ message: String, level: LogLevel = .info, file: String = #
     // Write to shared log file (warnings/errors are critical for immediate flush)
     let logType: LogEventType = level == .error ? .error : .system
     let writeMode: LogWriteMode = (level == .warning || level == .error) ? .critical : .bestEffort
-    let detail = level == .error ? "[\(filename):\(line)]" : nil
-    logFileWriter.log(logType, message, detail: detail, mode: writeMode)
+
+    // Build detail with file:line for errors/warnings
+    var fullDetail = detail
+    if level == .error || level == .warning {
+        let locationInfo = "[\(filename):\(line)]"
+        if let existingDetail = fullDetail {
+            fullDetail = "\(existingDetail) \(locationInfo)"
+        } else {
+            fullDetail = locationInfo
+        }
+    }
+    logFileWriter.log(logType, message, detail: fullDetail, mode: writeMode)
+}
+
+/// Log an XPC error with full details for debugging
+private func logXPCError(_ error: Error, context: String, file: String = #file, line: Int = #line) {
+    let nsError = error as NSError
+    let detail = """
+        Context: \(context)
+        Domain: \(nsError.domain)
+        Code: \(nsError.code)
+        Description: \(error.localizedDescription)
+        Recovery: Try restarting TalkieEngine (⌘Q then relaunch)
+        """
+    devLog("XPC Error: \(context)", detail: detail, level: .error, file: file, line: line)
 }
 
 /// Engine service modes for XPC connection (aligned with TalkieEnvironment)
@@ -362,7 +390,9 @@ public final class EngineClient: ObservableObject {
             Task { @MainActor in
                 if !completed {
                     completed = true
-                    devLog("XPC connection invalidated before ping completed (\(serviceName))", level: .warning)
+                    devLog("XPC connection invalidated before ping completed",
+                           detail: "Service: \(serviceName). Engine may not be running or has a version mismatch.",
+                           level: .warning)
                     completion(false)
                 } else {
                     self?.handleDisconnection(reason: "XPC invalidated (\(serviceName))")
@@ -377,7 +407,7 @@ public final class EngineClient: ObservableObject {
             Task { @MainActor in
                 if !completed {
                     completed = true
-                    logger.warning("[Engine] XPC error connecting to \(serviceName): \(error.localizedDescription)")
+                    logXPCError(error, context: "Connecting to \(serviceName)")
                     self?.lastError = error.localizedDescription
                     conn.invalidate()
                     completion(false)
@@ -407,6 +437,9 @@ public final class EngineClient: ObservableObject {
                     // Set up real disconnection handler now
                     conn.interruptionHandler = { [weak self] in
                         Task { @MainActor in
+                            devLog("XPC connection interrupted",
+                                   detail: "Service: \(serviceName). Engine may have crashed, been killed, or there's an interface version mismatch. Check if TalkieEngine is running.",
+                                   level: .error)
                             self?.handleDisconnection(reason: "XPC interrupted (\(serviceName)) - engine may have crashed or been killed")
                         }
                     }
@@ -703,7 +736,7 @@ public final class EngineClient: ObservableObject {
             }
 
             guard let proxy = connection?.remoteObjectProxyWithErrorHandler({ error in
-                devLog("XPC error during preload: \(error.localizedDescription)", level: .error)
+                logXPCError(error, context: "preloadModel(\(modelId))")
                 resumeOnce(with: .failure(EngineClientError.preloadFailed("XPC failed: \(error.localizedDescription)")))
             }) as? TalkieEngineProtocol else {
                 resumeOnce(with: .failure(EngineClientError.notConnected))

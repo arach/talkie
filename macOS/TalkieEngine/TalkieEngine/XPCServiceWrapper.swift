@@ -18,15 +18,9 @@ final class XPCServiceWrapper: NSObject, TalkieEngineProtocol {
         AppLogger.shared.info(.xpc, "XPCServiceWrapper initialized with engine")
     }
 
-    func transcribe(audioPath: String, modelId: String, externalRefId: String?, reply: @escaping (String?, String?) -> Void) {
-        let refStr = externalRefId ?? "nil"
-        AppLogger.shared.info(.xpc, "transcribe called for \(audioPath) with refId: \(refStr)")
-        engine.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, reply: reply)
-    }
-
     func transcribe(audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority, reply: @escaping (String?, String?) -> Void) {
         let refStr = externalRefId ?? "nil"
-        AppLogger.shared.info(.xpc, "transcribe(priority:\(priority.displayName)) called for \(audioPath) with refId: \(refStr)")
+        AppLogger.shared.info(.xpc, "transcribe(priority:\(priority.displayName)) for \(audioPath) refId:\(refStr)")
         engine.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority, reply: reply)
     }
 

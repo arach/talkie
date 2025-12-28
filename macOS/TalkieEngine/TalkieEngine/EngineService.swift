@@ -225,18 +225,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     // MARK: - TalkieEngineProtocol
 
-    /// Transcribe audio with external reference ID for cross-app trace correlation (defaults to high priority)
-    nonisolated func transcribe(
-        audioPath: String,
-        modelId: String,
-        externalRefId: String?,
-        reply: @escaping (String?, String?) -> Void
-    ) {
-        // Default to high priority for backwards compatibility
-        transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: .high, reply: reply)
-    }
-
-    /// Transcribe audio with explicit priority control
+    /// Transcribe audio with priority control
     nonisolated func transcribe(
         audioPath: String,
         modelId: String,

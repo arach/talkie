@@ -91,25 +91,18 @@ public var kTalkieEngineXPCServiceName: String {
 
 /// Protocol for TalkieEngine's XPC service (Talkie/Live → Engine)
 @objc public protocol TalkieEngineProtocol {
-    /// Transcribe audio file to text (uses .medium priority internally)
+    /// Transcribe audio file to text with priority control
+    ///
+    /// Priority Guidelines:
+    /// - `.high` - Real-time dictation (TalkieLive) - user is waiting
+    /// - `.medium` - Interactive features (scratch pad) - user-facing but can wait
+    /// - `.low` - Batch/async operations - user isn't waiting
+    ///
     /// - Parameters:
     ///   - audioPath: Path to audio file
-    ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small")
-    ///   - externalRefId: Optional trace ID for cross-app correlation (e.g., "a1b2c3d4")
-    ///   - reply: Callback with transcript or error
-    func transcribe(
-        audioPath: String,
-        modelId: String,
-        externalRefId: String?,
-        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
-    )
-
-    /// Transcribe audio file with explicit priority
-    /// - Parameters:
-    ///   - audioPath: Path to audio file
-    ///   - modelId: Model identifier
+    ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
     ///   - externalRefId: Optional trace ID for cross-app correlation
-    ///   - priority: Task priority - `.high` for real-time (Live), `.medium` for interactive, `.low` for batch
+    ///   - priority: Task priority for scheduling
     ///   - reply: Callback with transcript or error
     func transcribe(
         audioPath: String,

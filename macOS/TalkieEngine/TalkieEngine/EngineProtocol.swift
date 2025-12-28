@@ -113,29 +113,24 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
 /// XPC protocol for TalkieEngine transcription service
 @objc public protocol TalkieEngineProtocol {
 
-    /// Transcribe audio file to text
+    /// Transcribe audio file to text with priority control
     ///
-    /// Priority Guidelines (caller declares intent based on use case):
-    /// - `.high` - Real-time dictation (TalkieLive) - user is waiting, must feel instant
-    /// - `.userInitiated` - Interactive features (scratch pad) - user-facing but can wait a moment
-    /// - `.medium` - Default/balanced - general purpose transcription
+    /// Priority Guidelines:
+    /// - `.high` - Real-time dictation (TalkieLive) - user is waiting
+    /// - `.medium` - Interactive features (scratch pad) - user-facing but can wait
     /// - `.low` - Batch/async operations - user isn't waiting
-    ///
-    /// Why caller-specified priority matters:
-    /// - Prevents Xcode builds from starving real-time transcription
-    /// - Live dictations get `.high` → always prioritized over background work
-    /// - Batch operations get `.low` → don't compete with interactive work
-    /// - Engine doesn't guess intent - caller knows their use case best
     ///
     /// - Parameters:
     ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
     ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
-    ///   - externalRefId: Optional trace ID for cross-app correlation (e.g., "a1b2c3d4")
+    ///   - externalRefId: Optional trace ID for cross-app correlation
+    ///   - priority: Task priority for scheduling
     ///   - reply: Callback with transcript or error message
     func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
+        priority: TranscriptionPriority,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 

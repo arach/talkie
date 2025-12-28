@@ -419,6 +419,8 @@ struct SystemLogsView: View {
     @State private var filterSource: SystemEventSource? = nil
     @State private var filterType: SystemEventType? = nil
     @State private var searchQuery = ""
+    @State private var selectedEventId: UUID? = nil
+    @State private var showCopiedFeedback = false
 
     /// Optional callback to pop the console into the main window
     var onPopOut: (() -> Void)? = nil
@@ -503,6 +505,23 @@ struct SystemLogsView: View {
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(subtleGreen.opacity(0.8))
             }
+
+            // Copy All button
+            Button(action: copyAllLogs) {
+                HStack(spacing: 3) {
+                    Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 9))
+                    Text(showCopiedFeedback ? "COPIED" : "COPY ALL")
+                        .font(SettingsManager.shared.fontXS)
+                }
+                .foregroundColor(showCopiedFeedback ? subtleGreen : Theme.current.foregroundMuted)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Theme.current.surface1)
+                .cornerRadius(2)
+            }
+            .buttonStyle(.plain)
+            .help("Copy all visible logs to clipboard (⌘C)")
 
             // Clear button
             Button(action: { eventManager.clear() }) {
@@ -751,59 +770,175 @@ struct SystemLogsView: View {
         let url = LogFileManager.shared.logsDirectoryPath()
         NSWorkspace.shared.open(url)
     }
+
+    private func copyAllLogs() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+
+        let text = filteredEvents.reversed().map { event in
+            var line = "[\(formatter.string(from: event.timestamp))] [\(event.source.rawValue)] [\(event.type.rawValue)] \(event.message)"
+            if let detail = event.detail {
+                line += " — \(detail)"
+            }
+            return line
+        }.joined(separator: "\n")
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+
+        // Show feedback
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showCopiedFeedback = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showCopiedFeedback = false
+            }
+        }
+    }
+
+    private func copyEvent(_ event: SystemEvent) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+
+        var text = "[\(formatter.string(from: event.timestamp))] [\(event.source.rawValue)] [\(event.type.rawValue)] \(event.message)"
+        if let detail = event.detail {
+            text += "\n  Detail: \(detail)"
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
 }
 
 // MARK: - Console Event Row
 
 struct ConsoleEventRow: View {
     let event: SystemEvent
+    var onCopy: ((SystemEvent) -> Void)? = nil
 
     @State private var isHovering = false
+    @State private var isExpanded = false
+    @State private var showCopied = false
 
     private var bgColor: Color { Theme.current.background }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            // Timestamp (compact)
-            Text(formatTime(event.timestamp))
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .foregroundColor(Theme.current.foregroundMuted)
-                .frame(width: 52, alignment: .leading)
+        VStack(alignment: .leading, spacing: 0) {
+            // Main row
+            HStack(alignment: .top, spacing: 6) {
+                // Timestamp (compact)
+                Text(formatTime(event.timestamp))
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .frame(width: 52, alignment: .leading)
 
-            // Source indicator (icon)
-            Image(systemName: event.source.icon)
-                .font(.system(size: 8))
-                .foregroundColor(event.source.color)
-                .frame(width: 14, alignment: .center)
-                .help(event.source.rawValue)
+                // Source indicator (icon)
+                Image(systemName: event.source.icon)
+                    .font(.system(size: 8))
+                    .foregroundColor(event.source.color)
+                    .frame(width: 14, alignment: .center)
+                    .help(event.source.rawValue)
 
-            // Type badge (compact)
-            Text(event.type.rawValue)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(event.type.color)
-                .frame(width: 60, alignment: .leading)
+                // Type badge (compact)
+                Text(event.type.rawValue)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(event.type.color)
+                    .frame(width: 60, alignment: .leading)
 
-            // Message (takes remaining space)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(event.message)
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundColor(Theme.current.foreground)
-                    .lineLimit(2)
+                // Message (takes remaining space)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(event.message)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundColor(Theme.current.foreground)
+                        .lineLimit(isExpanded ? nil : 2)
 
-                if let detail = event.detail {
-                    Text(detail)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(Theme.current.foregroundMuted)
-                        .lineLimit(1)
+                    if let detail = event.detail, !isExpanded {
+                        Text(detail)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(Theme.current.foregroundMuted)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                // Copy button on hover
+                if isHovering {
+                    Button(action: copyToClipboard) {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 9))
+                            .foregroundColor(showCopied ? Color(red: 0.4, green: 0.8, blue: 0.4) : Theme.current.foregroundMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy to clipboard")
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 3)
 
-            Spacer(minLength: 0)
+            // Expanded detail view
+            if isExpanded, let detail = event.detail {
+                VStack(alignment: .leading, spacing: 4) {
+                    Divider()
+                        .background(Theme.current.divider)
+                    Text("Detail:")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Theme.current.foregroundMuted)
+                    Text(detail)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(Theme.current.foreground)
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
+                .padding(.leading, 52 + 14 + 60 + 18) // Align with message
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 3)
-        .background(isHovering ? Theme.current.backgroundSecondary : Color.clear)
+        .background(isHovering || isExpanded ? Theme.current.backgroundSecondary : Color.clear)
         .onHover { hovering in isHovering = hovering }
+        .onTapGesture {
+            if event.detail != nil {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isExpanded.toggle()
+                }
+            }
+        }
+        .contextMenu {
+            Button("Copy Log Entry") {
+                copyToClipboard()
+            }
+            if event.detail != nil {
+                Button(isExpanded ? "Collapse Detail" : "Expand Detail") {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isExpanded.toggle()
+                    }
+                }
+            }
+        }
+    }
+
+    private func copyToClipboard() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+
+        var text = "[\(formatter.string(from: event.timestamp))] [\(event.source.rawValue)] [\(event.type.rawValue)] \(event.message)"
+        if let detail = event.detail {
+            text += "\n  Detail: \(detail)"
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+
+        // Show feedback
+        withAnimation(.easeInOut(duration: 0.15)) {
+            showCopied = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                showCopied = false
+            }
+        }
     }
 
     private func formatTime(_ date: Date) -> String {

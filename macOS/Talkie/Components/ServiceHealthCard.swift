@@ -137,30 +137,93 @@ struct EngineHealthCard: View {
     private let serviceMonitor = ServiceManager.shared.engine
     @Environment(LiveSettings.self) private var liveSettings
 
+    /// Last error from TalkieLive logs (read from log file)
+    @State private var recentError: String? = nil
+    @State private var showErrorPopover = false
+
     private var modelName: String {
         ModelInfo.formatModelName(liveSettings.selectedModelId)
     }
 
     var body: some View {
-        ServiceHealthCard(
-            icon: "cpu",
-            title: "AI Transcription",
-            isHealthy: serviceMonitor.state == .running,
-            statusText: statusText,
-            detailText: detailText,
-            action: serviceMonitor.state == .running ? nil : {
-                Task { await serviceMonitor.launch() }
-            },
-            actionLabel: "Start Engine"
-        )
+        VStack(spacing: 0) {
+            ServiceHealthCard(
+                icon: "cpu",
+                title: "AI Transcription",
+                isHealthy: serviceMonitor.state == .running && recentError == nil,
+                statusText: statusText,
+                detailText: detailText,
+                action: serviceMonitor.state == .running ? nil : {
+                    Task { await serviceMonitor.launch() }
+                },
+                actionLabel: "Start Engine"
+            )
+
+            // Show recent error if any
+            if let error = recentError {
+                Button(action: { showErrorPopover.toggle() }) {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(SemanticColor.warning)
+                        Text("Recent Error")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(SemanticColor.warning)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8))
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.xs)
+                    .background(SemanticColor.warning.opacity(0.1))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showErrorPopover, arrowEdge: .trailing) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack {
+                            Text("Recent XPC Error")
+                                .font(Theme.current.fontSMBold)
+                            Spacer()
+                            Button(action: copyError) {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 11))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Copy error to clipboard")
+                        }
+                        Text(error)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(Theme.current.foreground)
+                            .textSelection(.enabled)
+
+                        Divider()
+
+                        Text("Try: Restart TalkieEngine (⌘Q then relaunch)")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Button("Dismiss Error") {
+                            recentError = nil
+                            showErrorPopover = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                    .padding()
+                    .frame(width: 350)
+                }
+            }
+        }
         .onAppear {
             serviceMonitor.startMonitoring()
+            checkForRecentErrors()
         }
     }
 
     private var statusText: String {
         switch serviceMonitor.state {
-        case .running: return "Ready"
+        case .running: return recentError != nil ? "Warning" : "Ready"
         case .stopped: return "Offline"
         case .launching: return "Starting..."
         case .terminating: return "Stopping..."
@@ -171,6 +234,9 @@ struct EngineHealthCard: View {
     private var detailText: String {
         switch serviceMonitor.state {
         case .running:
+            if recentError != nil {
+                return "TalkieEngine is running but encountered an error."
+            }
             return "TalkieEngine is running with \(modelName) model."
         case .stopped:
             return "TalkieEngine is not running. Transcription features are unavailable."
@@ -180,6 +246,34 @@ struct EngineHealthCard: View {
             return "TalkieEngine is shutting down..."
         case .unknown:
             return "TalkieEngine state is unknown."
+        }
+    }
+
+    private func copyError() {
+        guard let error = recentError else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(error, forType: .string)
+    }
+
+    /// Check TalkieLive logs for recent XPC errors
+    private func checkForRecentErrors() {
+        // Load recent errors from TalkieLive logs
+        let events = LogFileManager.shared.loadTodayEventsFrom(sources: [.talkieLive], limit: 50)
+        let cutoff = Date().addingTimeInterval(-300) // Last 5 minutes
+
+        // Find XPC-related errors
+        let xpcErrors = events.filter { event in
+            event.type == .error &&
+            event.timestamp > cutoff &&
+            (event.message.contains("XPC") || event.detail?.contains("XPC") == true)
+        }
+
+        if let latestError = xpcErrors.first {
+            var errorText = latestError.message
+            if let detail = latestError.detail {
+                errorText += "\n\n\(detail)"
+            }
+            recentError = errorText
         }
     }
 }
