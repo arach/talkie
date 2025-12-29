@@ -57,8 +57,44 @@
     "openai": {
       "id": "openai",
       "name": "OpenAI",
-      "defaultModel": "gpt-5.2",
-      "models": []
+      "defaultModel": "gpt-5.2-chat-latest",
+      "models": [
+        {
+          "id": "gpt-5.2",
+          "displayName": "GPT-5.2 Thinking",
+          "description": "Flagship reasoning model, 400k context"
+        },
+        {
+          "id": "gpt-5.2-chat-latest",
+          "displayName": "GPT-5.2 Instant",
+          "description": "Fast and conversational"
+        },
+        {
+          "id": "gpt-5.2-pro",
+          "displayName": "GPT-5.2 Pro",
+          "description": "Extended reasoning with xhigh effort"
+        },
+        {
+          "id": "gpt-5.1",
+          "displayName": "GPT-5.1 Thinking",
+          "description": "Advanced reasoning, adaptive"
+        },
+        {
+          "id": "gpt-5.1-chat-latest",
+          "displayName": "GPT-5.1 Instant",
+          "description": "Most-used model, warm and intelligent"
+        },
+        {
+          "id": "gpt-5-mini",
+          "displayName": "GPT-5 Mini",
+          "description": "Compact and efficient"
+        },
+        {
+          "id": "o4-mini",
+          "displayName": "o4 Mini",
+          "description": "Fast reasoning for math and coding"
+        }
+      ]
     },
     "groq": {
       "id": "groq",

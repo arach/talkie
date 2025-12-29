@@ -111,7 +111,7 @@ targets:
         product: MLXLMCommon
     settings:
       base:
-        MARKETING_VERSION: "1.7.1"
+        MARKETING_VERSION: "1.7.8"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""

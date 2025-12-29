@@ -18,8 +18,8 @@ class OpenAIProvider: LLMProvider {
     private let modelsKey = "OpenAI_CachedModels"
     private let lastFetchKey = "OpenAI_LastFetchTime"
 
-    // Cache timeout: 90 days (refresh quarterly as user suggested)
-    private let cacheTimeout: TimeInterval = 90 * 24 * 3600
+    // Cache timeout: 6 months
+    private let cacheTimeout: TimeInterval = 180 * 24 * 3600
 
     var models: [LLMModel] {
         get async throws {

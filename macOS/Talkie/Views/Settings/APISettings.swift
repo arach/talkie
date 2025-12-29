@@ -17,6 +17,8 @@ struct APISettingsView: View {
     @State private var editingKeyInput: String = ""
     @State private var revealedKeys: Set<String> = []
     @State private var fetchedKeys: [String: String] = [:]  // Cache fetched keys
+    @State private var isRefreshingModels = false
+    @State private var modelCounts: [String: Int] = [:]  // Provider -> model count
 
     var body: some View {
         @Bindable var settings = settingsManager
@@ -57,6 +59,29 @@ struct APISettingsView: View {
                             .font(.techLabelSmall)
                             .foregroundColor(configuredCount > 0 ? .green : .orange)
                     }
+
+                    // Refresh models button
+                    Button {
+                        Task {
+                            await refreshAllModels()
+                        }
+                    } label: {
+                        HStack(spacing: Spacing.xxs) {
+                            if isRefreshingModels {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 12, height: 12)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(Theme.current.fontXS)
+                            }
+                            Text("Refresh Models")
+                                .font(.techLabelSmall)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isRefreshingModels)
+                    .help("Fetch latest models from all configured providers")
                 }
 
                 VStack(spacing: Spacing.sm) {
@@ -84,6 +109,8 @@ struct APISettingsView: View {
                             fetchedKeys["openai"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
+                            // Refresh models after saving key
+                            Task { await refreshAllModels() }
                         },
                         onCancel: {
                             editingProvider = nil
@@ -132,6 +159,7 @@ struct APISettingsView: View {
                             fetchedKeys["anthropic"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
+                            Task { await refreshAllModels() }
                         },
                         onCancel: {
                             editingProvider = nil
@@ -175,6 +203,7 @@ struct APISettingsView: View {
                             settingsManager.saveSettings()
                             editingProvider = nil
                             editingKeyInput = ""
+                            Task { await refreshAllModels() }
                         },
                         onCancel: {
                             editingProvider = nil
@@ -217,6 +246,7 @@ struct APISettingsView: View {
                             fetchedKeys["groq"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
+                            Task { await refreshAllModels() }
                         },
                         onCancel: {
                             editingProvider = nil
@@ -348,6 +378,22 @@ struct APISettingsView: View {
         case .capable:
             return "Uses Claude Sonnet or GPT-4o. Best quality for complex reasoning."
         }
+    }
+
+    // MARK: - Model Refresh
+
+    private func refreshAllModels() async {
+        isRefreshingModels = true
+        defer { isRefreshingModels = false }
+
+        await LLMProviderRegistry.shared.refreshModels()
+
+        // Update model counts for display
+        let models = LLMProviderRegistry.shared.allModels
+        modelCounts = Dictionary(grouping: models, by: { $0.provider ?? "unknown" })
+            .mapValues { $0.count }
+
+        logger.info("Refreshed models: \(models.count) total")
     }
 }
 
