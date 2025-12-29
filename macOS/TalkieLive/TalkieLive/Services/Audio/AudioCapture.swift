@@ -312,9 +312,16 @@ final class MicrophoneCapture: LiveAudioCapture {
     /// Set the input device on the audio engine's input node
     private func setInputDevice() {
         // Read directly from UserDefaults to avoid MainActor isolation
-        let selectedID = UInt32(UserDefaults.standard.integer(forKey: "selectedMicrophoneID"))
-        guard selectedID != 0 else {
+        let savedID = UInt32(UserDefaults.standard.integer(forKey: "selectedMicrophoneID"))
+        guard savedID != 0 else {
             log.info("Using system default microphone")
+            return
+        }
+
+        // Validate device still exists before trying to use it
+        // This prevents errors when Bluetooth headsets disconnect
+        guard isAudioDeviceAvailable(savedID) else {
+            log.warning("Selected microphone no longer available", detail: "deviceID=\(savedID), falling back to default")
             return
         }
 
@@ -328,7 +335,7 @@ final class MicrophoneCapture: LiveAudioCapture {
         }
 
         // Set the input device
-        var deviceID = selectedID
+        var deviceID = savedID
         let status = AudioUnitSetProperty(
             audioUnit,
             kAudioOutputUnitProperty_CurrentDevice,
@@ -339,9 +346,64 @@ final class MicrophoneCapture: LiveAudioCapture {
         )
 
         if status == noErr {
-            log.info("Set input device", detail: "deviceID=\(selectedID)")
+            log.info("Set input device", detail: "deviceID=\(savedID)")
         } else {
             log.warning("Failed to set input device", detail: "status=\(status)")
         }
+    }
+
+    /// Check if an audio device ID is available AND has input capability
+    private func isAudioDeviceAvailable(_ deviceID: AudioDeviceID) -> Bool {
+        // First check if device exists at all
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize
+        )
+
+        guard status == noErr else { return false }
+
+        let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+
+        status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &deviceIDs
+        )
+
+        guard status == noErr else { return false }
+        guard deviceIDs.contains(deviceID) else { return false }
+
+        // Now check if this device has input streams (is actually a microphone)
+        var inputPropertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreams,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var inputStreamSize: UInt32 = 0
+        status = AudioObjectGetPropertyDataSize(
+            deviceID,
+            &inputPropertyAddress,
+            0,
+            nil,
+            &inputStreamSize
+        )
+
+        // Device must have at least one input stream
+        return status == noErr && inputStreamSize > 0
     }
 }
