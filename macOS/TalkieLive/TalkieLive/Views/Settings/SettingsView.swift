@@ -3741,6 +3741,9 @@ struct ConnectionsSettingsSection: View {
         }
         .padding(Spacing.lg)
         .onAppear { refresh() }
+        .onReceive(TalkieLiveXPCService.shared.$isTalkieConnected) { connected in
+            talkieConnected = connected
+        }
     }
 
     private func refresh() {
