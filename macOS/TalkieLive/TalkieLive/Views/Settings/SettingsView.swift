@@ -3353,6 +3353,7 @@ struct AboutInfoRow: View {
 // MARK: - Quick Settings View (Focused: Capture + Output + Permissions)
 
 enum QuickSettingsTab: String, CaseIterable {
+    case shortcuts
     case audio
     case feedback
     case output
@@ -3361,6 +3362,7 @@ enum QuickSettingsTab: String, CaseIterable {
 
     var title: String {
         switch self {
+        case .shortcuts: return "Shortcuts"
         case .audio: return "Audio"
         case .feedback: return "Feedback"
         case .output: return "Output"
@@ -3371,6 +3373,7 @@ enum QuickSettingsTab: String, CaseIterable {
 
     var icon: String {
         switch self {
+        case .shortcuts: return "command"
         case .audio: return "mic.fill"
         case .feedback: return "rectangle.inset.topright.filled"
         case .output: return "arrow.right.doc.on.clipboard"
@@ -3381,40 +3384,44 @@ enum QuickSettingsTab: String, CaseIterable {
 }
 
 struct QuickSettingsView: View {
-    var initialTab: QuickSettingsTab = .audio
-    @State private var selectedTab: QuickSettingsTab = .audio
+    var initialTab: QuickSettingsTab = .shortcuts
+    @State private var selectedTab: QuickSettingsTab = .shortcuts
     @StateObject private var permissionManager = PermissionManager.shared
 
-    init(initialTab: QuickSettingsTab = .audio) {
+    init(initialTab: QuickSettingsTab = .shortcuts) {
         self.initialTab = initialTab
         _selectedTab = State(initialValue: initialTab)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Tab bar
-            HStack(spacing: 0) {
+            // Glass tab bar
+            HStack(spacing: 4) {
                 ForEach(QuickSettingsTab.allCases, id: \.self) { tab in
                     QuickSettingsTabButton(
                         tab: tab,
                         isSelected: selectedTab == tab,
                         showWarning: tab == .permissions && !permissionManager.allRequiredGranted
                     ) {
-                        selectedTab = tab
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedTab = tab
+                        }
                     }
                 }
             }
-            .padding(.horizontal, Spacing.md)
-            .padding(.top, Spacing.md)
-
-            Rectangle()
-                .fill(TalkieTheme.divider)
-                .frame(height: 0.5)
-                .padding(.top, Spacing.sm)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.top, Spacing.sm)
+            .padding(.bottom, Spacing.xs)
+            .background(
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+            )
 
             // Content
             ScrollView {
                 switch selectedTab {
+                case .shortcuts:
+                    ShortcutsQuickSection()
                 case .audio:
                     AudioSettingsSection()
                 case .feedback:
@@ -3429,7 +3436,7 @@ struct QuickSettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(TalkieTheme.background)
+        .background(.ultraThinMaterial)
     }
 }
 
@@ -3443,29 +3450,190 @@ struct QuickSettingsTabButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 12))
-
-                Text(tab.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 10))
 
                 if showWarning {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.system(size: 8))
                         .foregroundColor(.orange)
                 }
             }
             .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(isSelected ? TalkieTheme.accent : (isHovered ? TalkieTheme.surfaceElevated : Color.clear))
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(isSelected ? TalkieTheme.accent : (isHovered ? Color.white.opacity(0.1) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .stroke(isSelected ? Color.clear : (isHovered ? Color.white.opacity(0.1) : Color.clear), lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .help(tab.title)
+    }
+}
+
+// MARK: - Shortcuts Quick Section
+
+struct ShortcutsQuickSection: View {
+    @ObservedObject private var settings = LiveSettings.shared
+    @State private var isRecordingToggle = false
+    @State private var isRecordingPTT = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            // Header
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack {
+                    Image(systemName: "command")
+                        .font(.system(size: 20))
+                        .foregroundColor(TalkieTheme.accent)
+
+                    Text("SHORTCUTS")
+                        .font(.techLabel)
+                        .tracking(Tracking.wide)
+                        .foregroundColor(TalkieTheme.textPrimary)
+                }
+
+                Text("Global keyboard shortcuts")
+                    .font(.system(size: 12))
+                    .foregroundColor(TalkieTheme.textSecondary)
+            }
+
+            // Toggle Recording
+            GlassCard {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Toggle Recording")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(TalkieTheme.textPrimary)
+                        Text("Press to start/stop")
+                            .font(.system(size: 10))
+                            .foregroundColor(TalkieTheme.textTertiary)
+                    }
+
+                    Spacer()
+
+                    HotkeyRecorderButton(
+                        hotkey: $settings.hotkey,
+                        isRecording: $isRecordingToggle,
+                        showReset: false
+                    )
+                }
+
+                if isRecordingToggle {
+                    Text("Press any key with ⌘, ⌥, ⌃, or ⇧")
+                        .font(.system(size: 10))
+                        .foregroundColor(.accentColor.opacity(0.8))
+                        .padding(.top, Spacing.xs)
+                }
+            }
+
+            // Push-to-Talk
+            GlassCard {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Push-to-Talk")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(TalkieTheme.textPrimary)
+                            Text("Hold to record")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: $settings.pttEnabled)
+                            .toggleStyle(.switch)
+                            .tint(.accentColor)
+                            .labelsHidden()
+                            .scaleEffect(0.8)
+                    }
+
+                    if settings.pttEnabled {
+                        Divider()
+                            .background(Color.white.opacity(0.1))
+
+                        HStack {
+                            Text("PTT Shortcut")
+                                .font(.system(size: 11))
+                                .foregroundColor(TalkieTheme.textSecondary)
+
+                            Spacer()
+
+                            HotkeyRecorderButton(
+                                hotkey: $settings.pttHotkey,
+                                isRecording: $isRecordingPTT,
+                                showReset: false
+                            )
+                        }
+
+                        if isRecordingPTT {
+                            Text("Press any key with ⌘, ⌥, ⌃, or ⇧")
+                                .font(.system(size: 10))
+                                .foregroundColor(.accentColor.opacity(0.8))
+                        }
+                    }
+                }
+                .onChange(of: settings.pttEnabled) { _, _ in
+                    NotificationCenter.default.post(name: .hotkeyDidChange, object: nil)
+                }
+            }
+
+            // Queue Paste (read-only display)
+            GlassCard {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Paste from Queue")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(TalkieTheme.textPrimary)
+                        Text("Select queued transcription")
+                            .font(.system(size: 10))
+                            .foregroundColor(TalkieTheme.textTertiary)
+                    }
+
+                    Spacer()
+
+                    Text("⌥⌘V")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.accentColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                .fill(Color.accentColor.opacity(0.15))
+                        )
+                }
+            }
+        }
+        .padding(Spacing.lg)
+    }
+}
+
+// MARK: - Glass Card Component
+
+struct GlassCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .padding(Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+        )
     }
 }
 
