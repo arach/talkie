@@ -14,7 +14,7 @@ import Combine
 import TalkieKit
 
 @MainActor
-final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol {
+final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, ObservableObject {
     static let shared = TalkieLiveXPCService()
 
     private var listener: NSXPCListener?

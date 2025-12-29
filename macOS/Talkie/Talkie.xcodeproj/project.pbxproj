@@ -185,6 +185,7 @@
 		B7D95DED5D1CAA8F6D84FD77 /* settings-02-dictation-output.png in Resources */ = {isa = PBXBuildFile; fileRef = F4D4E2DB27710F96580E45D2 /* settings-02-dictation-output.png */; };
 		B93B60C64B35A0BB5C82BB98 /* WFKit in Frameworks */ = {isa = PBXBuildFile; productRef = F5624562F960D8515AA5C876 /* WFKit */; };
 		B958F0F459BA2D5DEDA1E03F /* CoreDataMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F46419180036AC6D6D88ACD /* CoreDataMigration.swift */; };
+		B9877F872126B5A227443A9A /* DictationOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59CF938061D1386424841288 /* DictationOnboardingView.swift */; };
 		BA79B560FADD6CA64F126193 /* ExternalDataAuditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3F2B424A6A46603EF1A10D /* ExternalDataAuditor.swift */; };
 		BB2616B0993300F4C54E9E0B /* talkie.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 4F1A26DD0EB35BB47991023F /* talkie.xcdatamodeld */; };
 		BBE4FF180C261F7B35EE151F /* ServiceHealthCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE4EAB04189037E2A5BE4FC /* ServiceHealthCard.swift */; };
@@ -320,6 +321,7 @@
 		55ED3C1ECEB6EE9A165E043E /* ModelInstallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelInstallView.swift; sourceTree = "<group>"; };
 		5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
 		579BF76B5B95DA96C1465E94 /* KeyboardShortcutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutView.swift; sourceTree = "<group>"; };
+		59CF938061D1386424841288 /* DictationOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationOnboardingView.swift; sourceTree = "<group>"; };
 		5D404AB52987BB60556CF6DE /* PerformanceInstrumentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInstrumentation.swift; sourceTree = "<group>"; };
 		5D84377B406BB0FA904DC067 /* DevControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevControlPanel.swift; sourceTree = "<group>"; };
 		5D8DAE62024FE459C3BCE83E /* LiveHistoryView.swift.disabled */ = {isa = PBXFileReference; path = LiveHistoryView.swift.disabled; sourceTree = "<group>"; };
@@ -750,6 +752,7 @@
 			isa = PBXGroup;
 			children = (
 				142040CCF534A9338AEAA0B0 /* DictationListView.swift */,
+				59CF938061D1386424841288 /* DictationOnboardingView.swift */,
 				25DB7E4762BA599C3AAC78DC /* HomeView.swift */,
 				5D8DAE62024FE459C3BCE83E /* LiveHistoryView.swift.disabled */,
 				4AC4F78FDA2905958A76DC5B /* LiveSettingsView.swift */,
@@ -1202,6 +1205,7 @@
 				C71513A0A6EF966DD60FF8C7 /* DesignSystem.swift in Sources */,
 				DF37AF68D85F44E8E5C6E275 /* DevControlPanel.swift in Sources */,
 				A5A8DFE70439E59C5953F2C7 /* DictationListView.swift in Sources */,
+				B9877F872126B5A227443A9A /* DictationOnboardingView.swift in Sources */,
 				623A3D11088359C70039DD45 /* DictationPill.swift in Sources */,
 				8F51E3250C779E1FEC061EBF /* DictationSettings.swift in Sources */,
 				EB07E6CF3B8B3C203310187F /* DictationStore.swift in Sources */,

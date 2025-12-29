@@ -7,9 +7,9 @@
 //
 
 import Foundation
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "Boot")
+private let log = Log(.system)
 
 /// Boot phases for service initialization
 enum BootPhase: String, CaseIterable {
@@ -57,9 +57,7 @@ final class BootSequence {
     /// Called from AppDelegate.applicationDidFinishLaunching
     func execute() async {
         bootStartTime = Date()
-        logger.info("╔══════════════════════════════════════════════════╗")
-        logger.info("║           TALKIE LIVE BOOT SEQUENCE              ║")
-        logger.info("╚══════════════════════════════════════════════════╝")
+        log.info("TALKIE LIVE BOOT SEQUENCE starting...", critical: true)
 
         // Phase 1: Config
         await executePhase(.config) {
@@ -91,23 +89,18 @@ final class BootSequence {
         isComplete = true
 
         let duration = bootStartTime.map { Date().timeIntervalSince($0) } ?? 0
-        logger.info("╔══════════════════════════════════════════════════╗")
-        logger.info("║  ✓ BOOT COMPLETE in \(String(format: "%.2f", duration))s")
-        logger.info("║  Services: \(self.initializedServices.count)")
-        logger.info("╚══════════════════════════════════════════════════╝")
-
-        AppLogger.shared.log(.system, "Boot complete", detail: String(format: "%.2fs, %d services", duration, initializedServices.count))
+        log.info("BOOT COMPLETE in \(String(format: "%.2f", duration))s (\(self.initializedServices.count) services)", critical: true)
     }
 
     private func executePhase(_ phase: BootPhase, action: () async -> Void) async {
         currentPhase = phase
         let phaseStart = Date()
-        logger.info("┌─ \(phase.rawValue) phase starting...")
+        log.debug("\(phase.rawValue) phase starting...")
 
         await action()
 
         let duration = Date().timeIntervalSince(phaseStart)
-        logger.info("└─ \(phase.rawValue) complete (\(String(format: "%.0f", duration * 1000))ms)")
+        log.debug("\(phase.rawValue) complete (\(String(format: "%.0f", duration * 1000))ms)")
     }
 
     // MARK: - Phase Implementations
@@ -148,7 +141,7 @@ final class BootSequence {
         try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
 
         let status = client.isConnected ? "connected" : "connecting..."
-        logger.info("   Engine status: \(status)")
+        log.debug("Engine status: \(status)")
     }
 
     private func initServices() {
@@ -193,7 +186,7 @@ final class BootSequence {
 
     private func record(_ service: String) {
         initializedServices.append(service)
-        logger.debug("   ✓ \(service)")
+        log.debug("Initialized: \(service)")
     }
 }
 
