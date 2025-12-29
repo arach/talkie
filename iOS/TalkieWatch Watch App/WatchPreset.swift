@@ -25,7 +25,7 @@ struct WatchPreset: Identifiable, Equatable {
         WatchPreset(
             id: "thought",
             name: "Thought",
-            icon: "brain.head.profile",
+            icon: "note.text",
             color: .purple,
             workflowId: "thought"
         ),

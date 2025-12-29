@@ -270,3 +270,51 @@ public extension TalkieLogger {
         shared.log(level: .error, category: category, message: error.localizedDescription, detail: nil, error: nil, file: file, line: line)
     }
 }
+
+// MARK: - Log (Per-File Logger)
+
+/// Lightweight per-file logger with fixed category
+///
+/// Usage:
+/// ```swift
+/// // At top of file
+/// private let log = Log(.database)
+///
+/// // Throughout file
+/// log.info("Connected")
+/// log.error("Store failed", error: error)
+/// log.debug("Query took \(ms)ms")
+/// ```
+public struct Log: Sendable {
+    private let category: LogCategory
+
+    public init(_ category: LogCategory) {
+        self.category = category
+    }
+
+    // MARK: - Logging Methods
+
+    public func debug(_ message: String, detail: String? = nil, file: String = #file, line: Int = #line) {
+        TalkieLogger.debug(category, message, detail: detail, file: file, line: line)
+    }
+
+    public func info(_ message: String, detail: String? = nil, file: String = #file, line: Int = #line) {
+        TalkieLogger.info(category, message, detail: detail, file: file, line: line)
+    }
+
+    public func warning(_ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
+        TalkieLogger.warning(category, message, detail: detail, error: error, file: file, line: line)
+    }
+
+    public func error(_ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
+        TalkieLogger.error(category, message, detail: detail, error: error, file: file, line: line)
+    }
+
+    public func error(_ error: Error, file: String = #file, line: Int = #line) {
+        TalkieLogger.error(category, error.localizedDescription, file: file, line: line)
+    }
+
+    public func fault(_ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
+        TalkieLogger.fault(category, message, detail: detail, error: error, file: file, line: line)
+    }
+}

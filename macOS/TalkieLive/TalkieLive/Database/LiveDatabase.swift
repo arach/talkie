@@ -10,6 +10,8 @@ import Foundation
 import GRDB
 import TalkieKit
 
+private let log = Log(.database)
+
 enum LiveDatabase {
     /// Database filename
     static let dbFilename = "live.sqlite"
@@ -28,12 +30,12 @@ enum LiveDatabase {
             let folderURL = appSupport.appendingPathComponent(folderName, isDirectory: true)
             try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
             let dbURL = folderURL.appendingPathComponent(dbFilename)
-            TalkieLogger.info(.database,"[LiveDatabase] Using shared database path: \(dbURL.path)")
+            log.info("[LiveDatabase] Using shared database path: \(dbURL.path)")
             return dbURL
         }
 
         // Fallback to temp directory (should never happen on macOS)
-        TalkieLogger.error(.database,"[LiveDatabase] Application Support unavailable, using temp directory")
+        log.error("[LiveDatabase] Application Support unavailable, using temp directory")
         let tempURL = fm.temporaryDirectory.appendingPathComponent(folderName, isDirectory: true)
         try? fm.createDirectory(at: tempURL, withIntermediateDirectories: true)
         return tempURL.appendingPathComponent(dbFilename)
@@ -48,7 +50,7 @@ enum LiveDatabase {
             try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
 
             let dbQueue = try DatabaseQueue(path: databaseURL.path)
-            TalkieLogger.info(.database,"[LiveDatabase] Opened database at: \(databaseURL.path)")
+            log.info("[LiveDatabase] Opened database at: \(databaseURL.path)")
 
             var migrator = DatabaseMigrator()
 
@@ -140,7 +142,7 @@ enum LiveDatabase {
                     columns: ["appBundleID"]
                 )
 
-                TalkieLogger.info(.database,"[LiveDatabase] Created performance indexes")
+                log.info("[LiveDatabase] Created performance indexes")
             }
 
             // v4: Rename table utterances → dictations (terminology clarification)
@@ -159,7 +161,7 @@ enum LiveDatabase {
                 try db.create(index: "idx_dictations_retry", on: "dictations", columns: ["transcriptionStatus", "audioFilename"])
                 try db.create(index: "idx_dictations_appBundleID", on: "dictations", columns: ["appBundleID"])
 
-                TalkieLogger.info(.database,"[LiveDatabase] Renamed table: utterances → dictations")
+                log.info("[LiveDatabase] Renamed table: utterances → dictations")
             }
 
             try migrator.migrate(dbQueue)
@@ -171,8 +173,8 @@ enum LiveDatabase {
         } catch {
             // Log error and fall back to in-memory database to prevent crash
             // User will lose persistence but app remains functional
-            TalkieLogger.error(.database,"[LiveDatabase] Failed to initialize database: \(error.localizedDescription)")
-            TalkieLogger.error(.database,"[LiveDatabase] Falling back to in-memory database - data will not persist!")
+            log.error("[LiveDatabase] Failed to initialize database: \(error.localizedDescription)")
+            log.error("[LiveDatabase] Falling back to in-memory database - data will not persist!")
 
             // Create in-memory database as fallback
             do {
@@ -209,7 +211,7 @@ enum LiveDatabase {
                 return memoryDb
             } catch {
                 // If even in-memory fails, we have a serious problem - but still don't crash
-                TalkieLogger.fault(.database,"[LiveDatabase] In-memory database also failed: \(error.localizedDescription)")
+                log.fault("[LiveDatabase] In-memory database also failed: \(error.localizedDescription)")
                 return try! DatabaseQueue() // Last resort: empty in-memory DB
             }
         }
@@ -228,11 +230,11 @@ extension LiveDatabase {
                 try mutable.insert(db)
                 // Use lastInsertedRowID as fallback if didInsert didn't populate id
                 let insertedId = mutable.id ?? db.lastInsertedRowID
-                TalkieLogger.debug(.database, "Stored dictation", detail: "ID: \(insertedId)")
+                log.debug( "Stored dictation", detail: "ID: \(insertedId)")
                 return insertedId
             }
         } catch {
-            TalkieLogger.error(.database, "Store failed", error: error)
+            log.error( "Store failed", error: error)
             return nil
         }
     }
@@ -256,9 +258,9 @@ extension LiveDatabase {
                     arguments: [metadataJSON, id]
                 )
             }
-            TalkieLogger.debug(.database,"[LiveDatabase] Updated metadata for utterance \(id)")
+            log.debug("[LiveDatabase] Updated metadata for utterance \(id)")
         } catch {
-            TalkieLogger.error(.database,"[LiveDatabase] updateMetadata error: \(error)")
+            log.error("[LiveDatabase] updateMetadata error: \(error)")
         }
     }
 
@@ -275,16 +277,16 @@ extension LiveDatabase {
                     .order(LiveDictation.Columns.createdAt.desc)
                     .fetchAll(db)
             }
-            TalkieLogger.info(.database,"[LiveDatabase] all() - fetched \(results.count) dictations from database")
+            log.info("[LiveDatabase] all() - fetched \(results.count) dictations from database")
             if !results.isEmpty {
-                TalkieLogger.info(.database,"   First 3:")
+                log.info("   First 3:")
                 for (i, d) in results.prefix(3).enumerated() {
-                    TalkieLogger.info(.database,"   [\(i)] \(d.text.prefix(50))... at \(d.createdAt)")
+                    log.info("   [\(i)] \(d.text.prefix(50))... at \(d.createdAt)")
                 }
             }
             return results
         } catch {
-            TalkieLogger.error(.database,"[LiveDatabase] all() error: \(error)")
+            log.error("[LiveDatabase] all() error: \(error)")
             return []
         }
     }
@@ -562,14 +564,14 @@ private extension LiveDatabase {
             if fm.fileExists(atPath: oldGroupPath.path) {
                 oldDbPaths.append(oldGroupPath.appendingPathComponent("PastLives.sqlite"))
                 jsonPaths.append(oldGroupPath.appendingPathComponent("utterances.json"))
-                TalkieLogger.info(.database,"[LiveDatabase] Found old Group Container data for migration: \(oldGroupPath.path)")
+                log.info("[LiveDatabase] Found old Group Container data for migration: \(oldGroupPath.path)")
             }
 
             // 2. Check old Application Support/TalkieLive/ location
             let oldAppSupport = appSupport.appendingPathComponent("TalkieLive")
             oldDbPaths.append(oldAppSupport.appendingPathComponent("PastLives.sqlite"))
             jsonPaths.append(oldAppSupport.appendingPathComponent("utterances.json"))
-            TalkieLogger.info(.database,"[LiveDatabase] Checking old App Support for migration: \(oldAppSupport.path)")
+            log.info("[LiveDatabase] Checking old App Support for migration: \(oldAppSupport.path)")
         }
 
         // Log existing count but continue to check for additional old data
@@ -577,13 +579,13 @@ private extension LiveDatabase {
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM dictations")
         }) ?? 0
 
-        TalkieLogger.info(.database,"[LiveDatabase] Current record count: \(existingCount), checking for old data to migrate...")
+        log.info("[LiveDatabase] Current record count: \(existingCount), checking for old data to migrate...")
 
         var migratedCount = 0
 
         // 1. Migrate from old SQLite databases (check all locations)
         for oldDbPath in oldDbPaths where fm.fileExists(atPath: oldDbPath.path) {
-            TalkieLogger.info(.database,"[LiveDatabase] Found old database at: \(oldDbPath.path)")
+            log.info("[LiveDatabase] Found old database at: \(oldDbPath.path)")
             do {
                 let oldDb = try DatabaseQueue(path: oldDbPath.path)
 
@@ -672,20 +674,20 @@ private extension LiveDatabase {
                         migratedCount += 1
                     }
                 }
-                TalkieLogger.info(.database,"[LiveDatabase] Migrated \(migratedCount) records from old SQLite")
+                log.info("[LiveDatabase] Migrated \(migratedCount) records from old SQLite")
 
                 // Rename old database to mark as migrated
                 let backupPath = oldDbPath.deletingPathExtension().appendingPathExtension("migrated.sqlite")
                 try? fm.moveItem(at: oldDbPath, to: backupPath)
 
             } catch {
-                TalkieLogger.error(.database,"[LiveDatabase] Failed to migrate from old SQLite: \(error)")
+                log.error("[LiveDatabase] Failed to migrate from old SQLite: \(error)")
             }
         }
 
         // 2. Migrate from JSON files (check all locations)
         for jsonPath in jsonPaths where fm.fileExists(atPath: jsonPath.path) {
-            TalkieLogger.info(.database,"[LiveDatabase] Found old JSON at: \(jsonPath.path)")
+            log.info("[LiveDatabase] Found old JSON at: \(jsonPath.path)")
             do {
                 let data = try Data(contentsOf: jsonPath)
                 let utterances = try JSONDecoder().decode([LegacyJSONUtterance].self, from: data)
@@ -727,19 +729,19 @@ private extension LiveDatabase {
                         migratedCount += 1
                     }
                 }
-                TalkieLogger.info(.database,"[LiveDatabase] Migrated records from JSON (total now: \(migratedCount))")
+                log.info("[LiveDatabase] Migrated records from JSON (total now: \(migratedCount))")
 
                 // Rename JSON to mark as migrated
                 let backupPath = jsonPath.deletingPathExtension().appendingPathExtension("migrated.json")
                 try? fm.moveItem(at: jsonPath, to: backupPath)
 
             } catch {
-                TalkieLogger.error(.database,"[LiveDatabase] Failed to migrate from JSON: \(error)")
+                log.error("[LiveDatabase] Failed to migrate from JSON: \(error)")
             }
         }
 
         if migratedCount > 0 {
-            TalkieLogger.info(.database,"[LiveDatabase] Migration complete: \(migratedCount) total records")
+            log.info("[LiveDatabase] Migration complete: \(migratedCount) total records")
         }
     }
 }
