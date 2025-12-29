@@ -124,6 +124,10 @@ struct AllMemos: View {
                 loadVoiceMemo(id: memoID)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .talkieSyncCompleted)) { _ in
+            // Refresh after CloudKit sync completes
+            Task { await viewModel.refresh() }
+        }
     }
 
     // MARK: - List Pane

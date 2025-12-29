@@ -618,36 +618,27 @@ private struct MonitorContentView: View {
     }
 
     private var statsPanel: some View {
-        VStack(spacing: 12) {
-            // Primary metrics
-            HStack(spacing: 24) {
-                statCard(title: "TOTAL ACTIONS", value: "\(stats.totalActions)", color: .blue)
-                statCard(title: "RECENT", value: "\(stats.recentActions)", color: .purple)
-                statCard(title: "AVG TIME", value: formatDuration(stats.avgProcessingTime), color: .green)
+        VStack(alignment: .leading, spacing: 12) {
+            // All metrics in a flowing grid
+            FlowLayout(spacing: 8) {
+                statCard(title: "TOTAL", value: "\(stats.totalActions)", color: .blue)
+                statCard(title: "AVG", value: formatDuration(stats.avgProcessingTime), color: .green)
                 statCard(title: "MIN", value: formatDuration(stats.minProcessingTime), color: .cyan)
                 statCard(title: "MAX", value: formatDuration(stats.maxProcessingTime), color: .red)
-            }
-
-            // Percentiles
-            HStack(spacing: 24) {
-                statCard(title: "P50 (MEDIAN)", value: formatDuration(stats.p50), color: .orange)
+                statCard(title: "P50", value: formatDuration(stats.p50), color: .orange)
                 statCard(title: "P95", value: formatDuration(stats.p95), color: .pink)
-                statCard(title: "P99", value: formatDuration(stats.p99), color: .red)
-
-                Spacer()
+                statCard(title: "P99", value: formatDuration(stats.p99), color: .purple)
             }
 
             // Category breakdown
             if !stats.categoryBreakdown.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("TIME BY CATEGORY")
+                HStack(spacing: 12) {
+                    Text("BY CATEGORY")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(.secondary)
 
-                    HStack(spacing: 12) {
-                        ForEach(Array(stats.categoryBreakdown.sorted(by: { $0.value > $1.value })), id: \.key) { category, time in
-                            categoryChip(category: category, time: time)
-                        }
+                    ForEach(Array(stats.categoryBreakdown.sorted(by: { $0.value > $1.value })), id: \.key) { category, time in
+                        categoryChip(category: category, time: time)
                     }
                 }
             }

@@ -294,6 +294,21 @@ class CloudKitSyncManager {
         syncNow()
     }
 
+    /// Force sync CoreData → GRDB (use after CloudKit import completes)
+    func forceSyncToGRDB() {
+        guard let context = viewContext else {
+            logger.warning("Cannot force sync - no view context")
+            return
+        }
+        Task {
+            await syncCoreDataToGRDB(context: context)
+            // Notify views to refresh
+            await MainActor.run {
+                NotificationCenter.default.post(name: .talkieSyncCompleted, object: nil)
+            }
+        }
+    }
+
     /// Schedule a debounced sync - coalesces rapid CloudKit notifications
     private func scheduleDebounceSync() {
         // Cancel any existing debounce timer
@@ -775,7 +790,8 @@ class CloudKitSyncManager {
 
     /// Sync Core Data changes to GRDB (phone → Mac data flow)
     /// Called after CloudKit pushes changes to Core Data
-    private func syncCoreDataToGRDB(context: NSManagedObjectContext) async {
+    /// Can be called manually via forceSyncToGRDB()
+    func syncCoreDataToGRDB(context: NSManagedObjectContext) async {
         logger.info("🌉 [Bridge 1] Starting Core Data → GRDB sync")
         let syncStart = Date()
 
