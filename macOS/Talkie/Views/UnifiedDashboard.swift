@@ -1108,9 +1108,9 @@ struct ActivityHeatmapGrid: View {
         let grid = buildGrid()
 
         HStack(alignment: .top, spacing: spacing) {
-            // Day labels
+            // Day labels (use index as ID to avoid duplicates: S, T appear twice)
             VStack(alignment: .trailing, spacing: spacing) {
-                ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
+                ForEach(Array(["S", "M", "T", "W", "T", "F", "S"].enumerated()), id: \.offset) { _, day in
                     Text(day)
                         .font(.system(size: 8))
                         .foregroundColor(Theme.current.foregroundMuted)

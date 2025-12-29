@@ -80,7 +80,8 @@ class CloudKitSyncManager {
     }()
 
     private init() {
-        loadSyncHistory()
+        // Don't load sync history here - database isn't initialized yet
+        // loadSyncHistory() is called in configure() when database is ready
     }
 
     deinit {
@@ -104,6 +105,9 @@ class CloudKitSyncManager {
 
     func configure(with context: NSManagedObjectContext) {
         self.viewContext = context
+
+        // Load sync history now that database is ready
+        loadSyncHistory()
 
         let now = Date()
         let timeFormatter = DateFormatter()

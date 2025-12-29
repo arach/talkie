@@ -49,18 +49,7 @@ struct StatusBar: View {
 
     // Static cache - computed once at app launch
     private static let cachedGitBranch: String? = {
-        // Try known development paths first
-        let devPaths = [
-            "/Users/arach/dev/talkie-dev",  // Main repo
-            FileManager.default.currentDirectoryPath
-        ]
-
-        for basePath in devPaths {
-            if let branch = readGitBranch(from: URL(fileURLWithPath: basePath)) {
-                return branch
-            }
-        }
-        return nil
+        readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
     }()
 
     private static func readGitBranch(from directory: URL) -> String? {

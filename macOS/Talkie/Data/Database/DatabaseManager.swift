@@ -28,7 +28,8 @@ final class DatabaseManager {
         // Create directory if needed
         try? FileManager.default.createDirectory(at: talkieDir, withIntermediateDirectories: true)
 
-        return talkieDir.appendingPathComponent("talkie.sqlite")
+        // Use distinct filename to avoid conflict with CoreData's talkie.sqlite
+        return talkieDir.appendingPathComponent("talkie_grdb.sqlite")
     }
 
     private init() {}
