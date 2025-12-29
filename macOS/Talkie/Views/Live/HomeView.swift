@@ -13,7 +13,6 @@ struct HomeView: View {
     private let store = DictationStore.shared
     @State private var activityData: [DayActivity] = []
     @State private var stats = HomeStats()
-    @State private var memosViewModel = MemosViewModel()
 
     #if DEBUG
     @State private var debugActivityLevel: ActivityViewLevel? = nil
@@ -22,7 +21,6 @@ struct HomeView: View {
     // Navigation callbacks
     var onSelectDictation: ((Dictation) -> Void)?
     var onSelectApp: ((String, String?) -> Void)?  // (appName, bundleID)
-    var onSelectMemo: ((MemoModel) -> Void)?
 
     private var activityLevel: ActivityViewLevel {
         #if DEBUG
@@ -33,9 +31,7 @@ struct HomeView: View {
     }
 
     // Computed properties for adaptive display
-    private var hasMemos: Bool { !memosViewModel.memos.isEmpty }
     private var hasDictations: Bool { !store.dictations.isEmpty || store.cachedCount > 0 }
-    private var hasActivity: Bool { hasMemos || hasDictations }
 
     var body: some View {
         GeometryReader { geometry in
@@ -45,14 +41,17 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Header
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Home")
+                        Text("Voice Stats")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(TalkieTheme.textPrimary)
+                        Text("Your dictation activity and insights")
+                            .font(.system(size: 13))
+                            .foregroundColor(TalkieTheme.textSecondary)
                     }
                     .padding(.horizontal, GridLayout.padding)
                     .padding(.top, 20)
 
-                    if hasActivity {
+                    if hasDictations {
                         // Row 1: Insight (2 slots) | Streak (1 slot) | Today (1 slot)
                         HStack(spacing: GridLayout.gutter) {
                             InsightCard(insight: stats.insight)
@@ -66,23 +65,13 @@ struct HomeView: View {
                         }
                         .padding(.horizontal, GridLayout.padding)
 
-                        // Row 2: Adaptive - Memos and/or Dictations
+                        // Row 2: Recent Dictations (full width)
                         HStack(alignment: .top, spacing: GridLayout.gutter) {
-                            if hasMemos {
-                                RecentMemosCard(
-                                    memos: Array(memosViewModel.memos.prefix(5)),
-                                    onSelectMemo: onSelectMemo
-                                )
-                                .frame(width: GridLayout.width(slots: hasDictations ? 2 : 4, in: containerWidth))
-                            }
-
-                            if hasDictations {
-                                RecentActivityCard(
-                                    dictations: Array(store.dictations.prefix(5)),
-                                    onSelectDictation: onSelectDictation
-                                )
-                                .frame(width: GridLayout.width(slots: hasMemos ? 2 : 4, in: containerWidth))
-                            }
+                            RecentActivityCard(
+                                dictations: Array(store.dictations.prefix(5)),
+                                onSelectDictation: onSelectDictation
+                            )
+                            .frame(width: GridLayout.width(slots: 4, in: containerWidth))
                         }
                         .padding(.horizontal, GridLayout.padding)
 
@@ -139,7 +128,6 @@ struct HomeView: View {
         .task {
             store.refresh()  // Ensure dictations are loaded from database
             loadActivityData()
-            await memosViewModel.loadMemos()
         }
         .onChange(of: store.dictations.count) { _, _ in
             loadActivityData()
@@ -1879,47 +1867,60 @@ struct LiveRecentMemoRow: View {
 
 struct WelcomeCard: View {
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: Spacing.xl) {
             // Welcome message
-            VStack(spacing: 8) {
-                Image(systemName: "hand.wave.fill")
-                    .font(.system(size: 36))
-                    .foregroundColor(.green)
+            VStack(spacing: Spacing.sm) {
+                Image(systemName: "waveform.badge.mic")
+                    .font(.system(size: 48))
+                    .foregroundColor(.accentColor)
 
-                Text("Welcome to Talkie")
-                    .font(.system(size: 20, weight: .bold))
+                Text("Start Dictating")
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(TalkieTheme.textPrimary)
 
-                Text("Your voice-powered productivity companion")
-                    .font(.system(size: 13))
+                Text("Speak anywhere, type everywhere. Let's set up your first dictation.")
+                    .font(.system(size: 14))
                     .foregroundColor(TalkieTheme.textSecondary)
+                    .multilineTextAlignment(.center)
             }
 
-            // Quick actions
-            HStack(spacing: 16) {
-                WelcomeAction(
-                    icon: "mic.fill",
-                    title: "Dictate",
-                    description: "Press your hotkey to start",
-                    color: .green
+            // Feature highlights
+            HStack(spacing: Spacing.lg) {
+                WelcomeFeature(
+                    icon: "text.insert",
+                    title: "Auto-Paste",
+                    description: "Text appears at your cursor"
                 )
 
-                WelcomeAction(
-                    icon: "doc.text.fill",
-                    title: "Create Memo",
-                    description: "Save longer recordings",
-                    color: .blue
+                WelcomeFeature(
+                    icon: "keyboard",
+                    title: "Global Hotkey",
+                    description: "Dictate from any app"
                 )
 
-                WelcomeAction(
+                WelcomeFeature(
                     icon: "bolt.fill",
-                    title: "Quick Actions",
-                    description: "Process text with AI",
-                    color: .orange
+                    title: "Fast & Private",
+                    description: "Local AI on your Mac"
                 )
             }
+
+            // CTA Button
+            Button(action: navigateToOnboarding) {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "mic.fill")
+                    Text("Set Up Dictation")
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, Spacing.xl)
+                .padding(.vertical, Spacing.md)
+                .background(Color.accentColor)
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(32)
+        .padding(Spacing.xxl)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 12)
@@ -1929,6 +1930,36 @@ struct WelcomeCard: View {
                         .stroke(TalkieTheme.border, lineWidth: 1)
                 )
         )
+    }
+
+    private func navigateToOnboarding() {
+        // Navigate to Dictations which shows the onboarding for new users
+        NotificationCenter.default.post(name: .init("NavigateToLiveRecent"), object: nil)
+    }
+}
+
+struct WelcomeFeature: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        VStack(spacing: Spacing.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(.accentColor)
+
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(TalkieTheme.textPrimary)
+
+            Text(description)
+                .font(.system(size: 10))
+                .foregroundColor(TalkieTheme.textTertiary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

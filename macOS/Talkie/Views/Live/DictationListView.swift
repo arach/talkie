@@ -22,6 +22,15 @@ struct DictationListView: View {
     @State private var dropMessage: String?
     @State private var isTranscribingDrop = false
 
+    // Onboarding state
+    @AppStorage("hasDismissedDictationOnboarding") private var hasDismissedOnboarding = false
+    @State private var showOnboarding = false
+
+    /// Show onboarding when user has no dictations and hasn't dismissed it
+    private var shouldShowOnboarding: Bool {
+        store.dictations.isEmpty && !hasDismissedOnboarding && searchText.isEmpty
+    }
+
     private var filteredDictations: [Dictation] {
         guard !searchText.isEmpty else {
             return store.dictations
@@ -35,19 +44,43 @@ struct DictationListView: View {
     }
 
     var body: some View {
-        HSplitView {
-            // Left: List of dictations
-            listColumn
-                .frame(minWidth: 400, idealWidth: 500)
-
-            // Right: Detail view
-            detailColumn
-                .frame(minWidth: 350)
+        Group {
+            if shouldShowOnboarding {
+                // Show onboarding for new users with 0 dictations
+                DictationOnboardingView(
+                    onComplete: {
+                        hasDismissedOnboarding = true
+                    },
+                    onSkip: {
+                        hasDismissedOnboarding = true
+                    }
+                )
+            } else {
+                // Normal dictation list view
+                mainContent
+            }
         }
         .task {
             // Load last 50 dictations in background when navigating to page
             // Non-blocking - page renders immediately, data loads async
             store.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .init("SelectDictation"))) { notification in
+            if let dictationID = notification.object as? UUID {
+                selectedDictationIDs = [dictationID]
+            }
+        }
+    }
+
+    private var mainContent: some View {
+        HSplitView {
+            // Left: List of dictations
+            listColumn
+                .frame(minWidth: 300, idealWidth: 450)
+
+            // Right: Detail view
+            detailColumn
+                .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
         }
         .onDrop(of: [UTType.audio, UTType.fileURL], isTargeted: $isDropTargeted) { providers in
             handleAudioDrop(providers)
@@ -55,11 +88,6 @@ struct DictationListView: View {
         .overlay {
             if isDropTargeted || isTranscribingDrop {
                 dropZoneOverlay
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .init("SelectDictation"))) { notification in
-            if let dictationID = notification.object as? UUID {
-                selectedDictationIDs = [dictationID]
             }
         }
     }

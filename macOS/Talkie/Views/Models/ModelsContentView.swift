@@ -65,7 +65,7 @@ struct ModelsContentView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
 
-                // Two-column layout: Local Models | Speech-to-Text
+                // Two-column layout: Local Models | Cloud Providers
                 // Each column expands independently without affecting the other
                 HStack(alignment: .top, spacing: 16) {
                     // Left column: Local Models
@@ -88,53 +88,53 @@ struct ModelsContentView: View {
                         localModelsColumn
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: true)  // Don't stretch to match sibling
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    // Right column: Speech-to-Text
+                    // Right column: Cloud Providers
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
-                            // Vertical accent bar - Green
+                            // Vertical accent bar - Blue
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(settingsManager.midnightAccentSTT)
+                                .fill(settingsManager.midnightAccentCloud)
                                 .frame(width: 3, height: 14)
 
-                            Text("SPEECH-TO-TEXT")
+                            Text("CLOUD PROVIDERS")
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                 .foregroundColor(settingsManager.midnightTextSecondary)
                             Spacer()
-                            Text("HIGH FIDELITY AUDIO")
+                            Text("API CONFIGURATION")
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
                                 .foregroundColor(settingsManager.midnightTextTertiary)
                         }
 
-                        speechToTextColumn
+                        cloudProvidersGrid
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: true)  // Don't stretch to match sibling
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 24)
 
                 Divider()
                     .padding(.horizontal, 24)
 
-                // Cloud Providers Section
+                // Speech-to-Text Section (separate row)
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
-                        // Vertical accent bar - Blue
+                        // Vertical accent bar - Green
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(settingsManager.midnightAccentCloud)
+                            .fill(settingsManager.midnightAccentSTT)
                             .frame(width: 3, height: 14)
 
-                        Text("CLOUD PROVIDERS")
+                        Text("SPEECH-TO-TEXT")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .foregroundColor(settingsManager.midnightTextSecondary)
                         Spacer()
-                        Text("API CONFIGURATION")
+                        Text("HIGH FIDELITY AUDIO")
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
                             .foregroundColor(settingsManager.midnightTextTertiary)
                     }
 
-                    cloudProvidersGrid
+                    speechToTextColumn
                 }
                 .padding(.horizontal, 24)
 

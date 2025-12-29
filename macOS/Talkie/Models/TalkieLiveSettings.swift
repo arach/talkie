@@ -116,6 +116,7 @@ typealias OverlayPosition = IndicatorPosition
 enum VisualTheme: String, CaseIterable, Codable {
     case live = "live"
     case midnight = "midnight"
+    case linear = "linear"
     case terminal = "terminal"
     case warm = "warm"
     case minimal = "minimal"
@@ -124,6 +125,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         switch self {
         case .live: return "Live"
         case .midnight: return "Midnight"
+        case .linear: return "Linear"
         case .terminal: return "Terminal"
         case .warm: return "Warm"
         case .minimal: return "Minimal"
@@ -134,6 +136,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         switch self {
         case .live: return "Default blue accent"
         case .midnight: return "Deep black, high contrast"
+        case .linear: return "True black, Vercel-inspired"
         case .terminal: return "Green on black"
         case .warm: return "Cozy orange tones"
         case .minimal: return "Clean and subtle"
@@ -145,6 +148,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         switch self {
         case .live: return .blue
         case .midnight: return .blue
+        case .linear: return .blue
         case .terminal: return .green
         case .warm: return .orange
         case .minimal: return .gray
@@ -156,6 +160,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         switch self {
         case .live: return .dark
         case .midnight: return .dark
+        case .linear: return .dark
         case .terminal: return .dark
         case .warm: return .dark
         case .minimal: return .system
@@ -169,6 +174,8 @@ enum VisualTheme: String, CaseIterable, Codable {
             return (Color(white: 0.1), Color.white.opacity(0.9), Color.blue)
         case .midnight:
             return (Color.black, Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
+        case .linear:
+            return (Color.black, Color.white, Color(red: 0.0, green: 0.83, blue: 1.0))
         case .terminal:
             return (Color.black, Color.green.opacity(0.9), Color.green)
         case .warm:
@@ -444,6 +451,7 @@ final class LiveSettings {
             guard let theme = SettingsManager.shared.currentTheme else { return .live }
             switch theme {
             case .talkiePro: return .midnight
+            case .linear: return .linear
             case .terminal: return .terminal
             case .minimal: return .minimal
             case .warm: return .warm
@@ -455,6 +463,7 @@ final class LiveSettings {
             switch newValue {
             case .live: preset = .classic
             case .midnight: preset = .talkiePro
+            case .linear: preset = .linear
             case .terminal: preset = .terminal
             case .warm: preset = .warm
             case .minimal: preset = .minimal

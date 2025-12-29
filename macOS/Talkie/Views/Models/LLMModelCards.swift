@@ -25,13 +25,13 @@ struct ProviderCard<Content: View>: View {
             // Header
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(SettingsManager.shared.fontTitle)
+                    .font(Theme.current.fontTitle)
                     .foregroundColor(isConfigured ? .blue : .secondary)
                     .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(SettingsManager.shared.fontBody)
+                        .font(Theme.current.fontBody)
 
                     HStack(spacing: 6) {
                         Circle()
@@ -55,7 +55,7 @@ struct ProviderCard<Content: View>: View {
                             Text("•")
                                 .foregroundColor(Theme.current.foregroundSecondary)
                             Text(model)
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(Theme.current.foregroundSecondary)
                         }
                     }
@@ -86,23 +86,23 @@ struct ModelRow: View {
             // Model info
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.displayName)
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
 
                 HStack(spacing: 8) {
                     Text(model.size)
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
                     if let sizeGB = model.sizeInGB {
                         Text("~\(String(format: "%.1f", sizeGB))GB")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
                     if model.isInstalled {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                             Text("INSTALLED")
                                 .font(Theme.current.fontXSBold)
                         }
@@ -119,7 +119,7 @@ struct ModelRow: View {
                     ProgressView(value: downloadProgress)
                         .frame(width: 80)
                     Text("\(Int(downloadProgress * 100))%")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
             } else if model.isInstalled {
@@ -137,7 +137,7 @@ struct ModelRow: View {
                 Button(action: onDownload) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.circle.fill")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                         Text("DOWNLOAD")
                             .font(Theme.current.fontXSBold)
                     }

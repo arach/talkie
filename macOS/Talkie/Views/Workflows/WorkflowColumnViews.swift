@@ -27,13 +27,13 @@ struct WorkflowListColumn: View {
                     Text("WORKFLOWS")
                         .font(Theme.current.fontSMBold)
                     Text("\(workflowManager.workflows.count) total")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 Spacer()
                 Button(action: createNewWorkflow) {
                     Image(systemName: "plus")
-                        .font(SettingsManager.shared.fontBody)
+                        .font(Theme.current.fontBody)
                         .foregroundColor(Theme.current.foreground)
                         .frame(width: 24, height: 24)
                         .background(Theme.current.surfaceSelected)
@@ -41,14 +41,14 @@ struct WorkflowListColumn: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(12)
+            .padding(Spacing.md)
             .background(Theme.current.surface1)
 
             Divider()
 
             // Workflow List
             ScrollView {
-                VStack(spacing: 4) {
+                VStack(spacing: Spacing.xs) {
                     ForEach(workflowManager.workflows) { workflow in
                         WorkflowListItem(
                             workflow: workflow,
@@ -59,7 +59,7 @@ struct WorkflowListColumn: View {
                         )
                     }
                 }
-                .padding(8)
+                .padding(Spacing.sm)
             }
         }
     }
@@ -124,17 +124,17 @@ struct WorkflowDetailColumn: View {
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "rectangle.stack")
-                        .font(SettingsManager.shared.fontDisplay)
-                        .foregroundColor(.secondary.opacity(0.2))
+                        .font(.system(size: 40, weight: .light))
+                        .foregroundColor(Theme.current.foregroundMuted)
 
                     Text("SELECT OR CREATE")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
                     Button(action: createNewWorkflow) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                             Text("NEW WORKFLOW")
                                 .font(Theme.current.fontXSBold)
                         }

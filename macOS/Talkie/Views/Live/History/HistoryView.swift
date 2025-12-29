@@ -200,9 +200,9 @@ struct HistoryView: View {
                     // Two-column layout for history
                     HSplitView {
                         historyListView
-                            .frame(minWidth: 280, idealWidth: 400)
+                            .frame(minWidth: 300, idealWidth: 450)
                         detailColumnView
-                            .frame(minWidth: 300)
+                            .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
                     }
                 }
 

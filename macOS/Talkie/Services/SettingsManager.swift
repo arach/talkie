@@ -217,6 +217,7 @@ enum FontSizeOption: String, CaseIterable {
 // MARK: - Curated Theme Presets
 enum ThemePreset: String, CaseIterable {
     case talkiePro = "talkiePro"
+    case linear = "linear"
     case terminal = "terminal"
     case minimal = "minimal"
     case classic = "classic"
@@ -225,6 +226,7 @@ enum ThemePreset: String, CaseIterable {
     var displayName: String {
         switch self {
         case .talkiePro: return "Talkie Pro"
+        case .linear: return "Linear"
         case .terminal: return "Terminal"
         case .minimal: return "Minimal"
         case .classic: return "Classic"
@@ -235,6 +237,7 @@ enum ThemePreset: String, CaseIterable {
     var description: String {
         switch self {
         case .talkiePro: return "Sharp, professional, high contrast"
+        case .linear: return "True black, minimal, Vercel-inspired"
         case .terminal: return "Terminal vibes with green accents"
         case .minimal: return "Clean and subtle, adapts to system"
         case .classic: return "Comfortable defaults with blue accents"
@@ -245,6 +248,7 @@ enum ThemePreset: String, CaseIterable {
     var icon: String {
         switch self {
         case .talkiePro: return "waveform"
+        case .linear: return "square.stack.3d.up"
         case .terminal: return "terminal"
         case .minimal: return "circle"
         case .classic: return "star"
@@ -257,6 +261,9 @@ enum ThemePreset: String, CaseIterable {
         case .talkiePro:
             // fg: white*0.85 = 0.85
             return (Color(white: 0.08), Color(white: 0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
+        case .linear:
+            // True black with pure white text, cyan accent (Vercel/Linear style)
+            return (Color.black, Color.white, Color(red: 0.0, green: 0.83, blue: 1.0))
         case .terminal:
             // fg: green*0.9 ≈ (0, 0.9*0.85, 0) = (0, 0.765, 0)
             return (Color.black, Color(red: 0, green: 0.765, blue: 0), Color.green)
@@ -276,6 +283,7 @@ enum ThemePreset: String, CaseIterable {
     var appearanceMode: AppearanceMode {
         switch self {
         case .talkiePro: return .dark
+        case .linear: return .dark
         case .terminal: return .dark
         case .minimal: return .system  // Respects system light/dark
         case .classic: return .dark
@@ -287,6 +295,7 @@ enum ThemePreset: String, CaseIterable {
     var uiFontStyle: FontStyleOption {
         switch self {
         case .talkiePro: return .system     // SF Pro - clean, professional
+        case .linear: return .system        // Clean geometric sans-serif
         case .terminal: return .monospace
         case .minimal: return .system       // Clean system font
         case .classic: return .system
@@ -298,6 +307,7 @@ enum ThemePreset: String, CaseIterable {
     var contentFontStyle: FontStyleOption {
         switch self {
         case .talkiePro: return .system     // SF Pro - readable, luxurious
+        case .linear: return .system        // Clean, readable content
         case .terminal: return .monospace   // Full terminal experience
         case .minimal: return .system       // Clean system font for content
         case .classic: return .system       // Standard system font
@@ -308,6 +318,7 @@ enum ThemePreset: String, CaseIterable {
     var accentColor: AccentColorOption {
         switch self {
         case .talkiePro: return .blue
+        case .linear: return .blue          // Cyan-ish blue like Linear
         case .terminal: return .green
         case .minimal: return .gray
         case .classic: return .blue
@@ -319,10 +330,19 @@ enum ThemePreset: String, CaseIterable {
     var fontSize: FontSizeOption {
         switch self {
         case .talkiePro: return .medium
+        case .linear: return .medium
         case .terminal: return .medium
         case .minimal: return .medium
         case .classic: return .medium
         case .warm: return .medium
+        }
+    }
+
+    /// Whether this theme uses true black backgrounds (for OLED optimization)
+    var usesTrueBlack: Bool {
+        switch self {
+        case .linear, .terminal: return true
+        default: return false
         }
     }
 }
@@ -373,6 +393,11 @@ class SettingsManager {
     /// Check if minimal theme is active
     var isMinimalTheme: Bool {
         currentTheme == .minimal
+    }
+
+    /// Check if linear theme is active (Vercel/Linear-inspired)
+    var isLinearTheme: Bool {
+        currentTheme == .linear
     }
 
     /// Check if terminal theme is active
@@ -532,6 +557,10 @@ class SettingsManager {
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.05) : Color(white: 0.96)
         }
+        if isLinearTheme {
+            // Linear: True black (#000) - Vercel/Linear style
+            return Color.black
+        }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
         }
@@ -555,6 +584,10 @@ class SettingsManager {
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.08) : Color(white: 0.88)
         }
+        if isLinearTheme {
+            // Linear: Very dark gray (#0a0a0a) - subtle elevation
+            return Color(white: 0.04)
+        }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.14) : Color(white: 0.94)
         }
@@ -575,6 +608,10 @@ class SettingsManager {
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.12) : Color(white: 0.90)
         }
+        if isLinearTheme {
+            // Linear: Card surface (#111111) - for elevated cards
+            return Color(white: 0.067)
+        }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.18) : Color(white: 0.91)
         }
@@ -594,6 +631,10 @@ class SettingsManager {
     var tacticalForeground: Color {
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.98) : Color(white: 0.08)
+        }
+        if isLinearTheme {
+            // Linear: Pure white text - high contrast
+            return Color.white
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.92) : Color(white: 0.12)
@@ -617,6 +658,10 @@ class SettingsManager {
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.72) : Color(white: 0.32)
         }
+        if isLinearTheme {
+            // Linear: Gray text (~#888) - for descriptions
+            return Color(white: 0.53)
+        }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.65) : Color(white: 0.38)
         }
@@ -637,6 +682,10 @@ class SettingsManager {
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.52) : Color(white: 0.48)
         }
+        if isLinearTheme {
+            // Linear: Muted gray (~#666) - for metadata
+            return Color(white: 0.40)
+        }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.48) : Color(white: 0.50)
         }
@@ -656,6 +705,10 @@ class SettingsManager {
     var tacticalDivider: Color {
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.2) : Color(white: 0.65)
+        }
+        if isLinearTheme {
+            // Linear: Subtle border (white at ~10%) - minimal separation
+            return Color.white.opacity(0.10)
         }
         if isMinimalTheme {
             return isDarkMode ? Color(white: 0.22) : Color(white: 0.88)
@@ -696,22 +749,34 @@ class SettingsManager {
 
     /// Surface Level 0: Window/App background (deepest layer)
     var surfaceBase: Color {
-        isDarkMode ? Color(white: 0.05) : Color(white: 0.98)
+        if isLinearTheme {
+            return Color.black
+        }
+        return isDarkMode ? Color(white: 0.05) : Color(white: 0.98)
     }
 
     /// Surface Level 1: Primary content areas (slightly elevated)
     var surface1: Color {
-        isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
+        if isLinearTheme {
+            return Color(white: 0.04)
+        }
+        return isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
     }
 
     /// Surface Level 2: Cards, panels, modals (more elevated)
     var surface2: Color {
-        isDarkMode ? Color(white: 0.12) : Color(white: 0.92)
+        if isLinearTheme {
+            return Color(white: 0.067)
+        }
+        return isDarkMode ? Color(white: 0.12) : Color(white: 0.92)
     }
 
     /// Surface Level 3: Elevated elements (popovers, tooltips, menus)
     var surface3: Color {
-        isDarkMode ? Color(white: 0.16) : Color(white: 0.88)
+        if isLinearTheme {
+            return Color(white: 0.10)
+        }
+        return isDarkMode ? Color(white: 0.16) : Color(white: 0.88)
     }
 
     /// Surface Overlay: Tint for depth effect
@@ -726,7 +791,10 @@ class SettingsManager {
 
     /// Text/Input background (slightly elevated from base)
     var surfaceInput: Color {
-        isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
+        if isLinearTheme {
+            return Color(white: 0.05)
+        }
+        return isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
     }
 
     // MARK: - Interactive Surface States (Appearance-Aware Solid Colors)
@@ -734,22 +802,34 @@ class SettingsManager {
 
     /// Hover state overlay - dark: 0.05+0.05=0.10, light: 0.95-0.05=0.90
     var surfaceHover: Color {
-        isDarkMode ? Color(white: 0.10) : Color(white: 0.90)
+        if isLinearTheme {
+            return Color(white: 0.08)
+        }
+        return isDarkMode ? Color(white: 0.10) : Color(white: 0.90)
     }
 
     /// Active/pressed state overlay - dark: 0.05+0.08=0.13, light: 0.95-0.08=0.87
     var surfaceActive: Color {
-        isDarkMode ? Color(white: 0.13) : Color(white: 0.87)
+        if isLinearTheme {
+            return Color(white: 0.10)
+        }
+        return isDarkMode ? Color(white: 0.13) : Color(white: 0.87)
     }
 
     /// Selected state overlay - dark: 0.05+0.1=0.15, light: 0.95-0.1=0.85
     var surfaceSelected: Color {
-        isDarkMode ? Color(white: 0.15) : Color(white: 0.85)
+        if isLinearTheme {
+            return Color(white: 0.12)
+        }
+        return isDarkMode ? Color(white: 0.15) : Color(white: 0.85)
     }
 
     /// Alternating row background (for lists) - dark: 0.05+0.02=0.07, light: 0.95-0.02=0.93
     var surfaceAlternate: Color {
-        isDarkMode ? Color(white: 0.07) : Color(white: 0.93)
+        if isLinearTheme {
+            return Color(white: 0.03)
+        }
+        return isDarkMode ? Color(white: 0.07) : Color(white: 0.93)
     }
 
     // MARK: - Semantic Surface Colors

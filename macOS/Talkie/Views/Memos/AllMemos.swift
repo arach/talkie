@@ -68,10 +68,10 @@ struct AllMemos: View {
         TalkieSection("AllMemos") {
             HSplitView {
                 listPane
-                    .frame(minWidth: 350, idealWidth: 500)
+                    .frame(minWidth: 300, idealWidth: 450)
 
                 inspectorContent
-                    .frame(minWidth: 300)
+                    .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
             }
             .onChange(of: searchText) { _, newValue in
                 // Debounce search (500ms)

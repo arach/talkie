@@ -10,6 +10,30 @@ import CoreData
 import Combine
 import AppKit
 
+// MARK: - Card Style Modifier
+
+/// Unified card styling - uses shadow for depth instead of borders
+struct CardStyle: ViewModifier {
+    var cornerRadius: CGFloat = 12
+    var padding: CGFloat = Spacing.md
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Theme.current.surface1)
+                    .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+            )
+    }
+}
+
+extension View {
+    func cardStyle(cornerRadius: CGFloat = 12, padding: CGFloat = Spacing.md) -> some View {
+        modifier(CardStyle(cornerRadius: cornerRadius, padding: padding))
+    }
+}
+
 // MARK: - Unified Activity Item
 
 enum ActivityItemType {
@@ -48,6 +72,7 @@ struct UnifiedDashboard: View {
     private let liveState = ServiceManager.shared.live
     private let serviceMonitor = ServiceManager.shared.engine
     private let syncManager = CloudKitSyncManager.shared
+    private let settings = SettingsManager.shared  // For theme observation
 
     // State
     @State private var unifiedActivity: [UnifiedActivityItem] = []
@@ -124,26 +149,19 @@ struct UnifiedDashboard: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("DASHBOARD")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.current.foregroundMuted)
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+            Text("Home")
+                .font(Theme.current.fontDisplay)
+                .foregroundColor(Theme.current.foreground)
 
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Home")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(Theme.current.foreground)
-
-                if streak > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: streak >= 7 ? "flame.fill" : "flame")
-                            .foregroundColor(.orange)
-                        Text("\(streak) day streak")
-                            .foregroundColor(.orange)
-                    }
-                    .font(.system(size: 13, weight: .medium))
+            if streak > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: streak >= 7 ? "flame.fill" : "flame")
+                        .foregroundColor(.orange)
+                    Text("\(streak) day streak")
+                        .foregroundColor(.orange)
                 }
+                .font(.system(size: 13, weight: .medium))
             }
         }
     }
@@ -193,11 +211,11 @@ struct UnifiedDashboard: View {
     // MARK: - Activity Heatmap
 
     private var activityHeatmap: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             HStack {
-                Text("ACTIVITY")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
+                Text(settings.uiAllCaps ? "ACTIVITY" : "Activity")
+                    .font(Theme.current.fontSMMedium)
+                    .tracking(settings.uiAllCaps ? 1 : 0)
                     .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
@@ -205,7 +223,7 @@ struct UnifiedDashboard: View {
                 // Legend
                 HStack(spacing: 4) {
                     Text("Less")
-                        .font(.system(size: 9))
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundMuted)
 
                     ForEach([0, 1, 2, 3, 4], id: \.self) { level in
@@ -215,7 +233,7 @@ struct UnifiedDashboard: View {
                     }
 
                     Text("More")
-                        .font(.system(size: 9))
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundMuted)
                 }
             }
@@ -223,15 +241,7 @@ struct UnifiedDashboard: View {
             // Grid - 13 weeks (quarter view)
             ActivityHeatmapGrid(data: activityData)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Theme.current.surface1)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Theme.current.divider, lineWidth: 1)
-                )
-        )
+        .cardStyle()
     }
 
     // MARK: - Recent Activity (Side by Side)
@@ -247,17 +257,17 @@ struct UnifiedDashboard: View {
     }
 
     private var recentMemosCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             HStack {
-                Text("RECENT MEMOS")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
+                Text(settings.uiAllCaps ? "RECENT MEMOS" : "Recent Memos")
+                    .font(Theme.current.fontSMMedium)
+                    .tracking(settings.uiAllCaps ? 1 : 0)
                     .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
 
                 Text("\(min(allMemos.count, 8)) latest")
-                    .font(.system(size: 11))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foregroundMuted)
             }
 
@@ -267,7 +277,6 @@ struct UnifiedDashboard: View {
                 } else {
                     ForEach(Array(allMemos.prefix(8))) { memo in
                         MemoActivityRow(memo: memo) {
-                            // Navigate to All Memos with this memo selected
                             NotificationCenter.default.post(
                                 name: .init("NavigateToMemo"),
                                 object: memo.id
@@ -279,37 +288,38 @@ struct UnifiedDashboard: View {
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Theme.current.surface1)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(Theme.current.divider, lineWidth: 1)
-                    )
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             )
         }
         .frame(maxWidth: .infinity)
     }
 
     private var recentDictationsCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             HStack {
-                Text("RECENT DICTATIONS")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
+                Text(settings.uiAllCaps ? "RECENT DICTATIONS" : "Recent Dictations")
+                    .font(Theme.current.fontSMMedium)
+                    .tracking(settings.uiAllCaps ? 1 : 0)
                     .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
 
                 Text("\(min(dictationStore.dictations.count, 8)) latest")
-                    .font(.system(size: 11))
+                    .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foregroundMuted)
             }
 
             VStack(spacing: 0) {
-                if dictationStore.dictations.isEmpty {
+                if dictationStore.dictations.isEmpty && dictationStore.cachedCount == 0 {
                     emptyDictationState
+                } else if dictationStore.dictations.isEmpty {
+                    // Data still loading - show placeholder
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Spacing.xl)
                 } else {
                     ForEach(Array(dictationStore.dictations.prefix(8))) { dictation in
                         DictationActivityRow(dictation: dictation) {
-                            // Navigate to Live Recent with this dictation selected
                             NotificationCenter.default.post(
                                 name: .init("NavigateToDictation"),
                                 object: dictation.id
@@ -321,51 +331,51 @@ struct UnifiedDashboard: View {
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Theme.current.surface1)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(Theme.current.divider, lineWidth: 1)
-                    )
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             )
         }
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Empty States (Enhanced)
+
     private var emptyMemoState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 24))
-                .foregroundColor(Theme.current.foregroundMuted)
-            Text("No memos yet")
-                .font(.system(size: 12))
-                .foregroundColor(Theme.current.foregroundMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        EmptyStateView(
+            icon: "mic.badge.plus",
+            gradientColors: [.blue, .purple],
+            title: "No memos yet",
+            subtitle: "Record your first voice memo",
+            buttonTitle: "Record Now",
+            buttonAction: {
+                // TODO: Trigger recording
+            }
+        )
     }
 
     private var emptyDictationState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 24))
-                .foregroundColor(Theme.current.foregroundMuted)
-            Text("No dictations yet")
-                .font(.system(size: 12))
-                .foregroundColor(Theme.current.foregroundMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        EmptyStateView(
+            icon: "waveform.badge.plus",
+            gradientColors: [.cyan, .green],
+            title: "No dictations yet",
+            subtitle: "Use your hotkey to start dictating",
+            buttonTitle: "Set Up Dictation",
+            buttonAction: {
+                // Navigate to Dictations where the onboarding flow shows
+                NotificationCenter.default.post(name: .init("NavigateToLiveRecent"), object: nil)
+            }
+        )
     }
 
     // MARK: - Quick Actions (Compact - for sidebar)
 
     private var quickActionsCompact: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("QUICK ACTIONS")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(settings.uiAllCaps ? "QUICK ACTIONS" : "Quick Actions")
+                .font(Theme.current.fontSMMedium)
+                .tracking(settings.uiAllCaps ? 1 : 0)
                 .foregroundColor(Theme.current.foregroundMuted)
 
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 CompactActionButton(icon: "mic.fill", title: "Record", color: .green) {
                     // Trigger recording
                 }
@@ -380,27 +390,19 @@ struct UnifiedDashboard: View {
                 }
             }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Theme.current.surface1)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Theme.current.divider, lineWidth: 1)
-                )
-        )
+        .cardStyle(cornerRadius: 10, padding: Spacing.md)
     }
 
     // MARK: - Quick Actions (Full width - legacy)
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("QUICK ACTIONS")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1)
+            Text(settings.uiAllCaps ? "QUICK ACTIONS" : "Quick Actions")
+                .font(Theme.current.fontSMMedium)
+                .tracking(settings.uiAllCaps ? 1 : 0)
                 .foregroundColor(Theme.current.foregroundMuted)
 
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.md) {
                 DashboardActionCard(
                     icon: "mic.fill",
                     title: "Record",
@@ -694,12 +696,14 @@ struct UnifiedDashboard: View {
     }
 
     private func activityColor(for level: Int) -> Color {
+        // Muted cyan-tinted colors for a cohesive dark theme
+        let baseColor = Color(red: 0.2, green: 0.8, blue: 0.7) // Muted teal/cyan
         switch level {
-        case 0: return TalkieTheme.surfaceCard
-        case 1: return Color.green.opacity(0.3)
-        case 2: return Color.green.opacity(0.5)
-        case 3: return Color.green.opacity(0.7)
-        default: return Color.green
+        case 0: return Theme.current.surface1.opacity(0.5)
+        case 1: return baseColor.opacity(0.2)
+        case 2: return baseColor.opacity(0.4)
+        case 3: return baseColor.opacity(0.6)
+        default: return baseColor.opacity(0.85)
         }
     }
 
@@ -883,41 +887,46 @@ struct CompactStatCard: View {
     let detail: String
     let color: Color
 
+    @State private var isHovered = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(color)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(color.opacity(isHovered ? 1.0 : 0.8))
 
                 Spacer()
             }
 
+            // Use tabular figures for proper number alignment
             Text(value)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 28, weight: .semibold, design: .default).monospacedDigit())
                 .foregroundColor(Theme.current.foreground)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(Theme.current.fontSMMedium)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text(detail)
-                    .font(.system(size: 9))
+                    .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
                     .lineLimit(1)
             }
         }
-        .padding(12)
+        .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Theme.current.surface1)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Theme.current.divider, lineWidth: 1)
-                )
+                .shadow(color: .black.opacity(0.15), radius: isHovered ? 8 : 4, y: isHovered ? 4 : 2)
         )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
 
@@ -1165,6 +1174,86 @@ struct ActivityHeatmapGrid: View {
         }
 
         return grid
+    }
+}
+
+// MARK: - Empty State View
+
+struct EmptyStateView: View {
+    let icon: String
+    let gradientColors: [Color]
+    let title: String
+    let subtitle: String
+    let buttonTitle: String
+    let buttonAction: () -> Void
+
+    @State private var isHovered = false
+    @State private var isButtonHovered = false
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            // Animated icon with gradient
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [gradientColors[0].opacity(0.2), gradientColors[1].opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 64, height: 64)
+                    .scaleEffect(isHovered ? 1.1 : 1.0)
+
+                Image(systemName: icon)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: gradientColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .scaleEffect(isHovered ? 1.05 : 1.0)
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isHovered)
+
+            VStack(spacing: Spacing.xs) {
+                Text(title)
+                    .font(Theme.current.fontBodyMedium)
+                    .foregroundColor(Theme.current.foreground)
+
+                Text(subtitle)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+
+            Button(action: buttonAction) {
+                Text(buttonTitle)
+                    .font(Theme.current.fontSMMedium)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.sm)
+                    .background(
+                        Capsule()
+                            .fill(LinearGradient(
+                                colors: gradientColors,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ))
+                            .shadow(color: gradientColors[0].opacity(isButtonHovered ? 0.4 : 0), radius: 8, y: 2)
+                    )
+                    .scaleEffect(isButtonHovered ? 1.05 : 1.0)
+            }
+            .buttonStyle(.plain)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isButtonHovered)
+            .onHover { hovering in
+                isButtonHovered = hovering
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.xl)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
 

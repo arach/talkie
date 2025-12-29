@@ -62,8 +62,35 @@ extension FocusedValues {
     }
 }
 
+/// Static initializer that runs BEFORE TalkieApp is created
+/// Used to set theme from CLI arguments before any views are created
+private enum EarlyThemeInit {
+    static let didRun: Bool = {
+        // Parse --theme argument and set UserDefaults BEFORE SettingsManager initializes
+        for arg in ProcessInfo.processInfo.arguments {
+            if arg.hasPrefix("--theme=") {
+                let themeName = String(arg.dropFirst("--theme=".count))
+                if let theme = ThemePreset(rawValue: themeName) {
+                    // Set UserDefaults first (for persistence)
+                    UserDefaults.standard.set(themeName, forKey: "currentTheme")
+                    UserDefaults.standard.synchronize()
+                    // Also explicitly set SettingsManager property (in case it was already initialized)
+                    SettingsManager.shared.currentTheme = theme
+                    Theme.invalidate()
+                    NSLog("[EarlyThemeInit] Theme set to: %@", themeName)
+                }
+                break
+            }
+        }
+        return true
+    }()
+}
+
 @main
 struct TalkieApp: App {
+    // Ensure early theme init runs before anything else
+    private let _earlyInit = EarlyThemeInit.didRun
+
     // Wire up AppDelegate for push notification handling
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 

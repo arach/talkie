@@ -16,46 +16,84 @@ struct DesignAuditView: View {
     @State private var auditReport: FullAuditReport?
     @State private var isRunningAudit = false
     @State private var selectedScreen: AppScreen?
+    @State private var availableRuns: [DesignAuditor.AuditRunInfo] = []
+    @State private var selectedRunNumber: Int?
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header with Run Audit button
-            HStack {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Design System Audit")
-                        .font(Theme.current.fontTitle)
-                        .foregroundColor(Theme.current.foreground)
+            // Header with Run Audit button and run picker
+            VStack(spacing: Spacing.sm) {
+                HStack {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Design System Audit")
+                            .font(Theme.current.fontTitle)
+                            .foregroundColor(Theme.current.foreground)
 
-                    if let report = auditReport {
-                        Text("Last run: \(report.timestamp.formatted())")
-                            .font(Theme.current.fontSM)
-                            .foregroundColor(Theme.current.foregroundSecondary)
-                    }
-                }
+                        if let report = auditReport {
+                            HStack(spacing: Spacing.sm) {
+                                Text(report.runSummary)
+                                    .font(Theme.current.fontSM)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
 
-                Spacer()
+                                Text("•")
+                                    .foregroundColor(Theme.current.foregroundMuted)
 
-                Button(action: runAudit) {
-                    HStack(spacing: Spacing.xs) {
-                        if isRunningAudit {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .frame(width: 14, height: 14)
-                        } else {
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 14))
+                                Text(report.timestamp.formatted(date: .abbreviated, time: .shortened))
+                                    .font(Theme.current.fontSM)
+                                    .foregroundColor(Theme.current.foregroundMuted)
+                            }
                         }
-                        Text(isRunningAudit ? "Running..." : "Run Audit")
-                            .font(Theme.current.fontBodyMedium)
                     }
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.vertical, Spacing.sm)
-                    .background(TalkieTheme.accent.opacity(Opacity.light))
-                    .foregroundColor(TalkieTheme.accent)
-                    .cornerRadius(CornerRadius.sm)
+
+                    Spacer()
+
+                    // Run history picker
+                    if !availableRuns.isEmpty {
+                        Picker("Run", selection: $selectedRunNumber) {
+                            ForEach(availableRuns) { run in
+                                HStack {
+                                    Text("Run #\(run.id)")
+                                    Text("•")
+                                        .foregroundColor(.secondary)
+                                    Text(run.gitBranch ?? "unknown")
+                                        .foregroundColor(.secondary)
+                                    Text("(\(run.grade))")
+                                        .foregroundColor(gradeColor(run.grade))
+                                }
+                                .tag(run.id as Int?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 220)
+                        .onChange(of: selectedRunNumber) { _, newValue in
+                            if let runNumber = newValue {
+                                loadRun(runNumber)
+                            }
+                        }
+                    }
+
+                    Button(action: runAudit) {
+                        HStack(spacing: Spacing.xs) {
+                            if isRunningAudit {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 14))
+                            }
+                            Text(isRunningAudit ? "Running..." : "Run Audit")
+                                .font(Theme.current.fontBodyMedium)
+                        }
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.vertical, Spacing.sm)
+                        .background(TalkieTheme.accent.opacity(Opacity.light))
+                        .foregroundColor(TalkieTheme.accent)
+                        .cornerRadius(CornerRadius.sm)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRunningAudit)
                 }
-                .buttonStyle(.plain)
-                .disabled(isRunningAudit)
             }
             .padding(Spacing.lg)
             .background(Theme.current.surface1)
@@ -80,9 +118,23 @@ struct DesignAuditView: View {
     // MARK: - Actions
 
     private func loadCachedAudit() {
+        // Load available runs
+        availableRuns = DesignAuditor.shared.listAllRuns()
+
+        // Load latest audit if not already loaded
         if auditReport == nil {
             auditReport = DesignAuditor.shared.loadLatestAudit()
+            // Set the picker to the latest run
+            if let report = auditReport, let runNumber = report.runNumber {
+                selectedRunNumber = runNumber
+            } else if let firstRun = availableRuns.first {
+                selectedRunNumber = firstRun.id
+            }
         }
+    }
+
+    private func loadRun(_ runNumber: Int) {
+        auditReport = DesignAuditor.shared.loadRun(runNumber)
     }
 
     // MARK: - Subviews
@@ -543,6 +595,14 @@ struct DesignAuditView: View {
             await MainActor.run {
                 auditReport = report
                 isRunningAudit = false
+
+                // Refresh available runs list
+                availableRuns = DesignAuditor.shared.listAllRuns()
+
+                // Select the new run
+                if let runNumber = report.runNumber {
+                    selectedRunNumber = runNumber
+                }
             }
         }
     }
