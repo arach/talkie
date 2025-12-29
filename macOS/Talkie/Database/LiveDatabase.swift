@@ -21,6 +21,7 @@ enum LiveDatabase {
 
     /// The resolved database URL (Application Support, shared by all apps)
     /// ~/Library/Application Support/Talkie/live.sqlite
+    /// Falls back to temp directory if Application Support unavailable (should never happen)
     static let databaseURL: URL = {
         let fm = FileManager.default
 
@@ -33,7 +34,11 @@ enum LiveDatabase {
             return dbURL
         }
 
-        fatalError("Could not determine database location")
+        // Fallback to temp directory (should never happen on macOS)
+        logger.error("[LiveDatabase] Application Support unavailable, using temp directory")
+        let tempURL = fm.temporaryDirectory.appendingPathComponent(folderName, isDirectory: true)
+        try? fm.createDirectory(at: tempURL, withIntermediateDirectories: true)
+        return tempURL.appendingPathComponent(dbFilename)
     }()
 
     static let shared: DatabaseQueue = {
@@ -208,7 +213,60 @@ enum LiveDatabase {
 
             return dbQueue
         } catch {
-            fatalError("LiveDatabase init error: \(error)")
+            // Log error and fall back to in-memory database to prevent crash
+            // User will lose persistence but app remains functional
+            logger.error("[LiveDatabase] Failed to initialize database: \(error.localizedDescription)")
+            logger.error("[LiveDatabase] Falling back to in-memory database - data will not persist!")
+
+            // Create in-memory database as fallback
+            do {
+                let memoryDb = try DatabaseQueue()
+                var migrator = DatabaseMigrator()
+                migrator.registerMigration("v1_memory_fallback") { db in
+                    try db.create(table: "dictations") { t in
+                        t.autoIncrementedPrimaryKey("id")
+                        t.column("createdAt", .double).notNull()
+                        t.column("text", .text).notNull()
+                        t.column("mode", .text).notNull()
+                        t.column("appBundleID", .text)
+                        t.column("appName", .text)
+                        t.column("windowTitle", .text)
+                        t.column("durationSeconds", .double)
+                        t.column("wordCount", .integer)
+                        t.column("audioFilename", .text)
+                        t.column("transcriptionModel", .text)
+                        t.column("transcriptionStatus", .text).notNull().defaults(to: "success")
+                        t.column("transcriptionError", .text)
+                        t.column("perfEngineMs", .integer)
+                        t.column("perfEndToEndMs", .integer)
+                        t.column("perfInAppMs", .integer)
+                        t.column("promotionStatus", .text).notNull().defaults(to: "none")
+                        t.column("talkieMemoID", .text)
+                        t.column("commandID", .text)
+                        t.column("createdInTalkieView", .integer).notNull().defaults(to: 0)
+                        t.column("pasteTimestamp", .double)
+                        t.column("sessionID", .text)
+                        t.column("metadata", .text)
+                    }
+                    try db.create(table: "live_state") { t in
+                        t.column("id", .integer).primaryKey()
+                        t.column("state", .text).notNull()
+                        t.column("updatedAt", .double).notNull()
+                        t.column("elapsedTime", .double).defaults(to: 0)
+                        t.column("transcript", .text).defaults(to: "")
+                    }
+                    try db.execute(
+                        sql: "INSERT INTO live_state (id, state, updatedAt) VALUES (1, 'idle', ?)",
+                        arguments: [Date().timeIntervalSince1970]
+                    )
+                }
+                try migrator.migrate(memoryDb)
+                return memoryDb
+            } catch {
+                // If even in-memory fails, we have a serious problem - but still don't crash
+                logger.fault("[LiveDatabase] In-memory database also failed: \(error.localizedDescription)")
+                return try! DatabaseQueue() // Last resort: empty in-memory DB
+            }
         }
     }()
 }

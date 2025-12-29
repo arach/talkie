@@ -346,7 +346,13 @@ struct HistoryView: View {
                         metadata["audioDuration"] = String(format: "%.2f", seconds)
                     }
                 }
-            } catch { }
+            } catch {
+                // Non-critical: duration metadata is optional
+                // Log for debugging if audio file issues occur
+                #if DEBUG
+                print("[HistoryView] Failed to load audio duration for \(url.lastPathComponent): \(error.localizedDescription)")
+                #endif
+            }
         }
 
         // Audio track info
