@@ -45,13 +45,13 @@ struct WorkflowsContentView: View {
                         Text("WORKFLOWS")
                             .font(Theme.current.fontSMBold)
                         Text("\(workflowManager.workflows.count) total")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     Spacer()
                     Button(action: createNewWorkflow) {
                         Image(systemName: "plus")
-                            .font(SettingsManager.shared.fontBody)
+                            .font(Theme.current.fontBody)
                             .foregroundColor(Theme.current.foreground)
                             .frame(width: 24, height: 24)
                             .background(Theme.current.surfaceSelected)
@@ -59,7 +59,7 @@ struct WorkflowsContentView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(12)
+                .padding(Spacing.md)
 
                 Divider()
                     .opacity(0.5)
@@ -77,7 +77,7 @@ struct WorkflowsContentView: View {
                             )
                         }
                     }
-                    .padding(8)
+                    .padding(Spacing.sm)
                 }
             }
             .frame(minWidth: 240, idealWidth: 280, maxWidth: 320)
@@ -100,7 +100,7 @@ struct WorkflowsContentView: View {
                 // Empty state
                 VStack(spacing: 12) {
                     Image(systemName: "rectangle.stack")
-                        .font(SettingsManager.shared.fontDisplay)
+                        .font(.system(size: 40, weight: .light))
                         .foregroundColor(.secondary.opacity(0.2))
 
                     Text("SELECT OR CREATE")
@@ -110,7 +110,7 @@ struct WorkflowsContentView: View {
                     Button(action: createNewWorkflow) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                             Text("NEW WORKFLOW")
                                 .font(Theme.current.fontXSBold)
                         }
@@ -239,40 +239,40 @@ struct WorkflowMemoSelectorSheet: View {
                         Image(systemName: workflow.icon)
                             .foregroundColor(workflow.color.color)
                         Text(workflow.name)
-                            .font(SettingsManager.shared.fontBody)
+                            .font(Theme.current.fontBody)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
                 }
                 Spacer()
                 Button(action: onCancel) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(SettingsManager.shared.fontHeadline)
+                        .font(Theme.current.fontHeadline)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(16)
+            .padding(Spacing.lg)
 
             // Search bar
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 TextField("Search memos...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(SettingsManager.shared.fontBody)
+                    .font(Theme.current.fontBody)
 
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(SettingsManager.shared.fontSM)
+                            .font(Theme.current.fontSM)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(10)
+            .padding(Spacing.sm)
             .background(Theme.current.surface1)
             .cornerRadius(8)
             .padding(.horizontal, 16)
@@ -283,7 +283,7 @@ struct WorkflowMemoSelectorSheet: View {
             if memos.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "waveform.slash")
-                        .font(SettingsManager.shared.fontDisplay)
+                        .font(.system(size: 40, weight: .light))
                         .foregroundColor(.secondary.opacity(0.4))
 
                     Text("No Transcribed Memos")
@@ -291,18 +291,18 @@ struct WorkflowMemoSelectorSheet: View {
                         .foregroundColor(Theme.current.foregroundSecondary)
 
                     Text("Record and transcribe a voice memo first")
-                        .font(SettingsManager.shared.fontSM)
+                        .font(Theme.current.fontSM)
                         .foregroundColor(.secondary.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filteredMemos.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
-                        .font(SettingsManager.shared.fontTitle)
+                        .font(Theme.current.fontTitle)
                         .foregroundColor(.secondary.opacity(0.4))
 
                     Text("No matching memos")
-                        .font(SettingsManager.shared.fontBody)
+                        .font(Theme.current.fontBody)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -328,7 +328,7 @@ struct WorkflowMemoSelectorSheet: View {
             // Footer with action button
             HStack {
                 Text("\(filteredMemos.count) memo\(filteredMemos.count == 1 ? "" : "s")")
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
@@ -347,7 +347,7 @@ struct WorkflowMemoSelectorSheet: View {
                 .disabled(selectedMemo == nil)
                 .keyboardShortcut(.return, modifiers: [])
             }
-            .padding(16)
+            .padding(Spacing.lg)
         }
         .frame(width: 500, height: 500)
         .background(Theme.current.surfaceInput)
@@ -387,7 +387,7 @@ struct WorkflowCard: View {
         }) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(SettingsManager.shared.fontTitle)
+                    .font(Theme.current.fontTitle)
                     .foregroundColor(.primary.opacity(0.7))
                     .frame(width: 32, height: 32)
                     .background(Theme.current.surfaceHover)
@@ -398,7 +398,7 @@ struct WorkflowCard: View {
                         .font(Theme.current.fontSMBold)
 
                     Text(description)
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
                     if isExecuting {
@@ -415,10 +415,10 @@ struct WorkflowCard: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(.secondary.opacity(0.3))
             }
-            .padding(12)
+            .padding(Spacing.md)
             .background(Theme.current.surface1)
             .cornerRadius(4)
             .overlay(
@@ -490,12 +490,12 @@ struct MemoSelectorSheet: View {
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(SettingsManager.shared.fontHeadline)
+                        .font(Theme.current.fontHeadline)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(16)
+            .padding(Spacing.lg)
 
             Divider()
 
@@ -509,7 +509,7 @@ struct MemoSelectorSheet: View {
                         }) {
                             HStack(spacing: 12) {
                                 Image(systemName: "waveform")
-                                    .font(SettingsManager.shared.fontTitle)
+                                    .font(Theme.current.fontTitle)
                                     .foregroundColor(.blue)
                                     .frame(width: 32)
 
@@ -520,7 +520,7 @@ struct MemoSelectorSheet: View {
 
                                     if let date = memo.createdAt {
                                         Text(date, style: .relative)
-                                            .font(SettingsManager.shared.fontXS)
+                                            .font(Theme.current.fontXS)
                                             .foregroundColor(Theme.current.foregroundSecondary)
                                     }
                                 }
@@ -528,17 +528,17 @@ struct MemoSelectorSheet: View {
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
-                                    .font(SettingsManager.shared.fontSM)
+                                    .font(Theme.current.fontSM)
                                     .foregroundColor(Theme.current.foregroundSecondary)
                             }
-                            .padding(12)
+                            .padding(Spacing.md)
                             .background(Theme.current.surface1)
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(16)
+                .padding(Spacing.lg)
             }
         }
         .frame(width: 400, height: 500)

@@ -56,14 +56,14 @@ struct AIResultsContentView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Image(systemName: "sparkles")
-                            .font(SettingsManager.shared.fontTitle)
+                            .font(Theme.current.fontTitle)
                         Text("ACTIVITY LOG")
                             .font(Theme.current.fontBodyBold)
                     }
                     .foregroundColor(Theme.current.foreground)
 
                     Text("All workflow runs across your memos")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,7 +76,7 @@ struct AIResultsContentView: View {
                     VStack(spacing: 16) {
                         Spacer()
                         Image(systemName: "wand.and.rays")
-                            .font(SettingsManager.shared.fontDisplay)
+                            .font(.system(size: 40, weight: .light))
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO RESULTS YET")
@@ -84,7 +84,7 @@ struct AIResultsContentView: View {
                             .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Run workflows on your memos")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.6))
                         Spacer()
                     }
@@ -122,13 +122,13 @@ struct AIResultsContentView: View {
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.right")
-                        .font(SettingsManager.shared.fontDisplay)
+                        .font(.system(size: 40, weight: .light))
                         .foregroundColor(.secondary.opacity(0.3))
                     Text("SELECT A RUN")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(Theme.current.foregroundSecondary)
                     Text("Choose a workflow run to view details")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.secondary.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -155,7 +155,7 @@ struct AIMemoHeaderView: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
-                .font(SettingsManager.shared.fontSM)
+                .font(Theme.current.fontSM)
                 .foregroundColor(Theme.current.foregroundSecondary)
 
             Text(memo.title ?? "Untitled")
@@ -198,7 +198,7 @@ struct AIRunRowView: View {
             HStack(spacing: 10) {
                 // Workflow icon
                 Image(systemName: workflowIcon)
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(isSelected ? .white : .secondary)
                     .frame(width: 22, height: 22)
                     .background(isSelected ? settings.resolvedAccentColor : Color.primary.opacity(0.05))
@@ -213,12 +213,12 @@ struct AIRunRowView: View {
                     HStack(spacing: 6) {
                         if let model = modelId {
                             Text(model)
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.7))
                         }
 
                         Text(formatDate(runDate))
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.5))
                     }
                 }
@@ -226,7 +226,7 @@ struct AIRunRowView: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(isSelected ? .white.opacity(0.5) : .secondary.opacity(0.3))
             }
             .padding(.horizontal, 12)
@@ -281,7 +281,7 @@ struct AIRunDetailView: View {
                 // Workflow info
                 HStack(spacing: 10) {
                     Image(systemName: workflowIcon)
-                        .font(SettingsManager.shared.fontTitle)
+                        .font(Theme.current.fontTitle)
                         .foregroundColor(.blue)
                         .frame(width: 32, height: 32)
                         .background(Theme.current.surfaceInfo)
@@ -294,7 +294,7 @@ struct AIRunDetailView: View {
                         HStack(spacing: 8) {
                             if let model = modelId {
                                 Text(model)
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(Theme.current.foregroundSecondary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -303,7 +303,7 @@ struct AIRunDetailView: View {
                             }
 
                             Text(formatFullDate(runDate))
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(.secondary.opacity(0.6))
 
                             if let runId = run.id {
@@ -318,7 +318,7 @@ struct AIRunDetailView: View {
 
                     Button(action: onDelete) {
                         Image(systemName: "trash")
-                            .font(SettingsManager.shared.fontBody)
+                            .font(Theme.current.fontBody)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     .buttonStyle(.plain)
@@ -327,9 +327,9 @@ struct AIRunDetailView: View {
                 // Memo reference
                 HStack(spacing: 6) {
                     Image(systemName: "waveform")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                     Text("From: \(memoTitle)")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                 }
                 .foregroundColor(.secondary.opacity(0.7))
             }
@@ -350,7 +350,7 @@ struct AIRunDetailView: View {
                                     .foregroundColor(Theme.current.foregroundSecondary)
 
                                 Text(output)
-                                    .font(SettingsManager.shared.fontBody)
+                                    .font(Theme.current.fontBody)
                                     .foregroundColor(Theme.current.foreground)
                                     .textSelection(.enabled)
                                     .lineSpacing(3)
@@ -413,7 +413,7 @@ struct AIStepCard: View {
                     .cornerRadius(4)
 
                 Image(systemName: step.stepIcon)
-                    .font(SettingsManager.shared.fontBody)
+                    .font(Theme.current.fontBody)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text(step.stepType.uppercased())
@@ -441,7 +441,7 @@ struct AIStepCard: View {
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text(step.input)
-                        .font(SettingsManager.shared.fontSM)
+                        .font(Theme.current.fontSM)
                         .foregroundColor(Theme.current.foregroundSecondary)
                         .lineSpacing(2)
                         .lineLimit(10)
@@ -459,12 +459,12 @@ struct AIStepCard: View {
                         .foregroundColor(.secondary.opacity(0.6))
 
                     Text("→ {{\(step.outputKey)}}")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(.blue.opacity(0.7))
                 }
 
                 Text(step.output)
-                    .font(SettingsManager.shared.fontBody)
+                    .font(Theme.current.fontBody)
                     .foregroundColor(Theme.current.foreground)
                     .textSelection(.enabled)
                     .lineSpacing(3)
@@ -498,21 +498,21 @@ struct ActivityLogContentView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "list.bullet.clipboard")
-                            .font(SettingsManager.shared.fontHeadline)
+                            .font(Theme.current.fontHeadline)
                         Text("ACTIVITY LOG")
                             .font(Theme.current.fontTitleBold)
                     }
                     .foregroundColor(Theme.current.foreground)
 
                     Text("View workflow execution history and results.")
-                        .font(SettingsManager.shared.fontBody)
+                        .font(Theme.current.fontBody)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
 
                 Divider()
 
                 Text("Coming soon: Activity log with workflow execution history")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(.secondary.opacity(0.7))
                     .italic()
 

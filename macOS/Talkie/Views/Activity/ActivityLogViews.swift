@@ -88,9 +88,9 @@ struct ActivityLogFullView: View {
             // Left side: Table
             VStack(spacing: 0) {
                 // Header
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(SettingsManager.shared.fontBody)
+                        .font(Theme.current.fontBody)
                         .foregroundColor(Theme.current.foreground)
 
                     Text("Actions")
@@ -98,31 +98,31 @@ struct ActivityLogFullView: View {
                         .foregroundColor(Theme.current.foreground)
 
                     Text("\(allRuns.count) events")
-                        .font(SettingsManager.shared.fontBody)
+                        .font(Theme.current.fontBody)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.md)
                 .background(Theme.current.surface1)
 
                 Divider()
 
                 if allRuns.isEmpty {
-                    VStack(spacing: 16) {
+                    VStack(spacing: Spacing.lg) {
                         Spacer()
                         Image(systemName: "wand.and.rays")
-                            .font(SettingsManager.shared.fontDisplay)
-                            .foregroundColor(.secondary.opacity(0.3))
+                            .font(.system(size: 40, weight: .light))
+                            .foregroundColor(Theme.current.foregroundMuted)
 
                         Text("NO ACTIVITY YET")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Run workflows on your memos")
-                            .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -131,7 +131,7 @@ struct ActivityLogFullView: View {
                     Table(tableRows, selection: $selectedRunId, sortOrder: $sortOrder) {
                         TableColumn("Timestamp", value: \.timestamp) { row in
                             Text(formatTimestamp(row.timestamp))
-                                .font(SettingsManager.shared.fontSM)
+                                .font(Theme.current.fontSM)
                                 .foregroundColor(Theme.current.foregroundSecondary)
                         }
                         .width(min: 100, ideal: 150, max: 200)
@@ -146,16 +146,16 @@ struct ActivityLogFullView: View {
 
                         TableColumn("Memo", value: \.memoTitle) { row in
                             Text(row.memoTitle)
-                                .font(SettingsManager.shared.fontSM)
+                                .font(Theme.current.fontSM)
                                 .foregroundColor(Theme.current.foregroundSecondary)
                                 .lineLimit(1)
                         }
                         .width(min: 80, ideal: 180, max: 300)
 
                         TableColumn("Status") { row in
-                            HStack(spacing: 6) {
+                            HStack(spacing: Spacing.xs) {
                                 Circle()
-                                    .fill(row.isSuccess ? Color.green : Color.red)
+                                    .fill(row.isSuccess ? SemanticColor.success : SemanticColor.error)
                                     .frame(width: 6, height: 6)
 
                                 if let ms = row.durationMs {
@@ -165,7 +165,7 @@ struct ActivityLogFullView: View {
                                 } else {
                                     Text("--")
                                         .font(.monoSmall)
-                                        .foregroundColor(.secondary.opacity(0.5))
+                                        .foregroundColor(Theme.current.foregroundMuted)
                                 }
                             }
                         }
@@ -174,7 +174,7 @@ struct ActivityLogFullView: View {
                     .tableStyle(.inset(alternatesRowBackgrounds: true))
                 }
             }
-            .frame(minWidth: 400, idealWidth: 550)
+            .frame(minWidth: 300, idealWidth: 450)
             .background(Theme.current.surfaceInput)
 
             // Right side: Inspector (always visible)
@@ -191,20 +191,20 @@ struct ActivityLogFullView: View {
                     )
                 } else {
                     // Empty state
-                    VStack(spacing: 16) {
+                    VStack(spacing: Spacing.lg) {
                         Spacer()
 
                         Image(systemName: "square.stack.3d.up")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary.opacity(0.3))
+                            .font(.system(size: 40, weight: .light))
+                            .foregroundColor(Theme.current.foregroundMuted)
 
                         Text("SELECT AN ACTION")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Click a row to see details")
-                            .font(SettingsManager.shared.fontXS)
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
 
                         Spacer()
                     }
@@ -212,7 +212,7 @@ struct ActivityLogFullView: View {
                     .background(Theme.current.surface1)
                 }
             }
-            .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
+            .frame(minWidth: 240, idealWidth: 320, maxWidth: 450)
         }
         .onKeyPress(.escape) {
             if selectedRunId != nil {
@@ -278,10 +278,10 @@ struct ActivityInspectorPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             // Inspector Header
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: workflowIcon)
-                    .font(SettingsManager.shared.fontBody)
-                    .foregroundColor(.blue)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(TalkieTheme.accent)
                     .frame(width: 24, height: 24)
                     .background(Theme.current.surfaceInfo)
                     .cornerRadius(4)
@@ -291,15 +291,15 @@ struct ActivityInspectorPanel: View {
                         .font(Theme.current.fontBodyMedium)
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.xs) {
                         Text(formatFullDate(runDate))
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
                         if let runId = run.id {
                             Text(runId.uuidString.prefix(8).uppercased())
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.4))
+                                .foregroundColor(Theme.current.foregroundMuted)
                         }
                     }
                 }
@@ -309,34 +309,34 @@ struct ActivityInspectorPanel: View {
                 CloseButton(action: onClose)
                     .help("Close inspector")
             }
-            .padding(12)
+            .padding(Spacing.md)
             .background(Theme.current.surface1)
 
             Divider()
 
             // Memo reference
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.xs) {
                 Image(systemName: "waveform")
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                 Text("From: \(memoTitle)")
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .lineLimit(1)
 
                 Spacer()
 
                 if let model = modelId {
                     Text(model)
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 2)
                         .background(Theme.current.surfaceAlternate)
                         .cornerRadius(3)
                 }
             }
             .foregroundColor(Theme.current.foregroundSecondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
             .background(Theme.current.surface2)
 
             Divider()
@@ -347,17 +347,17 @@ struct ActivityInspectorPanel: View {
                     if stepExecutions.isEmpty {
                         // Fallback to simple output
                         if let output = run.output, !output.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
                                 Text("OUTPUT")
                                     .font(Theme.current.fontXSBold)
                                     .foregroundColor(Theme.current.foregroundSecondary)
 
                                 Text(output)
-                                    .font(SettingsManager.shared.fontSM)
+                                    .font(Theme.current.fontSM)
                                     .foregroundColor(Theme.current.foreground)
                                     .textSelection(.enabled)
                                     .lineSpacing(2)
-                                    .padding(10)
+                                    .padding(Spacing.sm)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Theme.current.surface1)
                                     .cornerRadius(6)
@@ -380,19 +380,19 @@ struct ActivityInspectorPanel: View {
                 TalkieButtonSync("DeleteRun.\(workflowName)", section: "AIResults") {
                     onDelete()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Spacing.xxs) {
                         Image(systemName: "trash")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                         Text("Delete Run")
                             .font(Theme.current.fontXSMedium)
                     }
-                    .foregroundColor(.red.opacity(0.7))
+                    .foregroundColor(SemanticColor.error.opacity(0.7))
                 }
                 .buttonStyle(.plain)
                 .help("Delete this run")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
             .background(Theme.current.surface2)
         }
         .background(Theme.current.surfaceInput)
@@ -411,22 +411,21 @@ struct ActivityInspectorPanel: View {
 struct InspectorStepCard: View {
     let step: WorkflowExecutor.StepExecution
     let isLast: Bool
-    private let settings = SettingsManager.shared
 
     @State private var showInput = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.xs) {
                 Text("\(step.stepNumber)")
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(.white)
                     .frame(width: 16, height: 16)
-                    .background(settings.resolvedAccentColor)
+                    .background(TalkieTheme.accent)
                     .cornerRadius(3)
 
                 Image(systemName: step.stepIcon)
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
 
                 Text(step.stepType.uppercased())
@@ -447,14 +446,14 @@ struct InspectorStepCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("INPUT")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundColor(Theme.current.foregroundMuted)
 
                     Text(step.input)
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                         .lineSpacing(1)
                         .lineLimit(6)
-                        .padding(8)
+                        .padding(Spacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.current.surfaceAlternate)
                         .cornerRadius(4)
@@ -462,32 +461,32 @@ struct InspectorStepCard: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
+                HStack(spacing: Spacing.xxs) {
                     Text("OUTPUT")
                         .font(Theme.current.fontXSBold)
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundColor(Theme.current.foregroundMuted)
 
                     Text("→ {{\(step.outputKey)}}")
-                        .font(SettingsManager.shared.fontXS)
-                        .foregroundColor(.blue.opacity(0.7))
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(TalkieTheme.accent.opacity(0.7))
                 }
 
                 Text(step.output)
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foreground)
                     .textSelection(.enabled)
                     .lineSpacing(2)
-                    .padding(8)
+                    .padding(Spacing.sm)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
                     .cornerRadius(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(isLast ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
+                            .strokeBorder(isLast ? SemanticColor.success.opacity(0.3) : Color.clear, lineWidth: 1)
                     )
             }
         }
-        .padding(10)
+        .padding(Spacing.sm)
         .background(Theme.current.surface2)
         .cornerRadius(6)
     }

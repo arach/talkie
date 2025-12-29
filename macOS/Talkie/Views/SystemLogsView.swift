@@ -485,7 +485,7 @@ struct SystemLogsView: View {
         HStack(spacing: 8) {
             // Terminal icon
             Image(systemName: "terminal")
-                .font(SettingsManager.shared.fontXS)
+                .font(Theme.current.fontXS)
                 .foregroundColor(subtleGreen.opacity(0.7))
 
             Text("SYSTEM LOGS")
@@ -512,7 +512,7 @@ struct SystemLogsView: View {
                     Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 9))
                     Text(showCopiedFeedback ? "COPIED" : "COPY ALL")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                 }
                 .foregroundColor(showCopiedFeedback ? subtleGreen : Theme.current.foregroundMuted)
                 .padding(.horizontal, 6)
@@ -526,7 +526,7 @@ struct SystemLogsView: View {
             // Clear button
             Button(action: { eventManager.clear() }) {
                 Text("CLEAR")
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -539,7 +539,7 @@ struct SystemLogsView: View {
             if let onPopOut = onPopOut {
                 Button(action: onPopOut) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundMuted)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -554,7 +554,7 @@ struct SystemLogsView: View {
             if let onClose = onClose {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundMuted)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -585,7 +585,7 @@ struct SystemLogsView: View {
 
                 // Event count
                 Text("\(filteredEvents.count)")
-                    .font(SettingsManager.shared.fontXS)
+                    .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
             }
 
@@ -733,7 +733,7 @@ struct SystemLogsView: View {
                     Image(systemName: "folder")
                         .font(.system(size: 9))
                     Text("Open Logs")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                 }
                 .foregroundColor(Theme.current.foregroundMuted)
             }
@@ -745,9 +745,9 @@ struct SystemLogsView: View {
             Button(action: { autoScroll.toggle() }) {
                 HStack(spacing: 3) {
                     Image(systemName: autoScroll ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                     Text("AUTO")
-                        .font(SettingsManager.shared.fontXS)
+                        .font(Theme.current.fontXS)
                 }
                 .foregroundColor(autoScroll ? subtleGreen : Theme.current.foregroundMuted)
             }

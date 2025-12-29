@@ -201,23 +201,23 @@ struct StatusBar: View {
 
                 // LEFT/RIGHT edges overlay
                 HStack(spacing: Spacing.sm) {
-                    // LEFT SIDE - ON AIR indicator or Sync status (natural size)
-                    Group {
+                    // LEFT SIDE - Sync status + ON AIR indicator
+                    HStack(spacing: 6) {
+                        SyncStatusIcon(showSuccess: showSuccess)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+
                         if liveState.state == .listening && liveSettings.showOnAir {
                             OnAirIndicator()
-                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        } else {
-                            SyncStatusIcon()
                                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
 
                     Spacer()
 
-                    // RIGHT SIDE - Engine status + Logs + DEV badge
+                    // RIGHT SIDE - Engine + Logs + version
                     HStack(spacing: 6) {
                         if serviceMonitor.state == .running {
-                            EngineStatusIcon()
+                            EngineStatusIcon(showSuccess: showSuccess)
                         } else {
                             HStack(spacing: 4) {
                                 Image(systemName: serviceMonitor.state == .stopped ? "exclamationmark.triangle.fill" : "exclamationmark.circle")
@@ -290,7 +290,8 @@ struct StatusBar: View {
             .padding(.vertical, Spacing.xs)
         }
         .frame(height: 32)
-        .background(barBackgroundColor)
+        .background(Theme.current.surface)
+        .background(barBackgroundColor.opacity(0.3))
         .animation(.easeInOut(duration: 0.2), value: isActive)
         .animation(.easeInOut(duration: 0.15), value: showPID)
         .animation(.easeInOut(duration: 0.2), value: liveState.isRunning)

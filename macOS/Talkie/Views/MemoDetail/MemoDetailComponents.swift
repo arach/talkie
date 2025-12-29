@@ -915,7 +915,7 @@ struct WorkflowPickerSheet: View {
             if availableWorkflows.isEmpty {
                 VStack(spacing: Spacing.lg) {
                     Image(systemName: "flowchart")
-                        .font(SettingsManager.shared.fontDisplay)
+                        .font(.system(size: 40, weight: .light))
                         .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.strong))
 
                     Text("No Workflows")

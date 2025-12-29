@@ -91,54 +91,89 @@ struct TalkieNavigationViewNative: View {
         NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
 
+    private func sectionName(for section: NavigationSection) -> String {
+        switch section {
+        case .home: return "Home"
+        case .scratchPad: return "ScratchPad"
+        case .allMemos: return "AllMemos"
+        case .liveDashboard: return "LiveDashboard"
+        case .liveRecent: return "LiveRecent"
+        case .liveSettings: return "LiveSettings"
+        case .aiResults: return "AIResults"
+        case .workflows: return "Workflows"
+        case .activityLog: return "ActivityLog"
+        case .systemConsole: return "SystemLogs"
+        case .pendingActions: return "PendingActions"
+        case .talkieService: return "TalkieService"
+        case .talkieLiveMonitor: return "TalkieLiveMonitor"
+        case .models: return "Models"
+        case .allowedCommands: return "AllowedCommands"
+        case .smartFolder(let name): return "SmartFolder:\(name)"
+        case .settings: return "Settings"
+        #if DEBUG
+        case .designHome: return "DesignHome"
+        case .designAudit: return "DesignAudit"
+        case .designComponents: return "DesignComponents"
+        #endif
+        }
+    }
+
     // Consistent sidebar width - same for 2-column and 3-column layouts
     private static let sidebarWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (160, 200, 280)
     private static let contentColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (180, 220, 320)
 
     var body: some View {
-        Group {
-            if usesTwoColumns {
-                // 2-column layout: sidebar + detail
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    sidebarView
-                        .navigationSplitViewColumnWidth(
-                            min: Self.sidebarWidth.min,
-                            ideal: Self.sidebarWidth.ideal,
-                            max: Self.sidebarWidth.max
-                        )
-                } detail: {
-                    detailView
-                }
-            } else {
-                // 3-column layout: sidebar + content + detail
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    sidebarView
-                        .navigationSplitViewColumnWidth(
-                            min: Self.sidebarWidth.min,
-                            ideal: Self.sidebarWidth.ideal,
-                            max: Self.sidebarWidth.max
-                        )
-                } content: {
-                    contentView
-                        .navigationSplitViewColumnWidth(
-                            min: Self.contentColumnWidth.min,
-                            ideal: Self.contentColumnWidth.ideal,
-                            max: Self.contentColumnWidth.max
-                        )
-                } detail: {
-                    detailView
-                }
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button(action: toggleSidebar) {
-                    Label("Toggle Sidebar", systemImage: "sidebar.left")
+        VStack(spacing: 0) {
+            Group {
+                if usesTwoColumns {
+                    // 2-column layout: sidebar + detail
+                    NavigationSplitView(columnVisibility: $columnVisibility) {
+                        sidebarView
+                            .navigationSplitViewColumnWidth(
+                                min: Self.sidebarWidth.min,
+                                ideal: Self.sidebarWidth.ideal,
+                                max: Self.sidebarWidth.max
+                            )
+                    } detail: {
+                        mainContentView
+                    }
+                } else {
+                    // 3-column layout: sidebar + content + detail
+                    NavigationSplitView(columnVisibility: $columnVisibility) {
+                        sidebarView
+                            .navigationSplitViewColumnWidth(
+                                min: Self.sidebarWidth.min,
+                                ideal: Self.sidebarWidth.ideal,
+                                max: Self.sidebarWidth.max
+                            )
+                    } content: {
+                        contentView
+                            .navigationSplitViewColumnWidth(
+                                min: Self.contentColumnWidth.min,
+                                ideal: Self.contentColumnWidth.ideal,
+                                max: Self.contentColumnWidth.max
+                            )
+                    } detail: {
+                        mainContentView
+                    }
                 }
             }
+            .navigationSplitViewStyle(.balanced)
+
+            // Full-width status bar at bottom
+            StatusBar()
         }
+        // Note: NavigationSplitView provides its own sidebar toggle with hiddenTitleBar
+        // Don't add a custom one or you'll get duplicates
         .onChange(of: selectedSection) { oldValue, newValue in
+            // Track navigation in Performance Monitor
+            if let section = newValue, section != oldValue {
+                PerformanceMonitor.shared.startAction(
+                    type: "Navigate",
+                    name: sectionName(for: section),
+                    context: "Sidebar"
+                )
+            }
             // When switching to 3-column sections, ensure all columns are visible
             if let newValue = newValue, !usesTwoColumns {
                 columnVisibility = .all
@@ -185,88 +220,46 @@ struct TalkieNavigationViewNative: View {
             }
 
             // Home (no section header)
-            NavigationLink(value: NavigationSection.home) {
-                Label("Home", systemImage: "house.fill")
-            }
+            SidebarRow(section: .home, selectedSection: $selectedSection, title: "Home", icon: "house")
 
-            NavigationLink(value: NavigationSection.scratchPad) {
-                Label("Scratch Pad", systemImage: "note.text")
-            }
+            SidebarRow(section: .scratchPad, selectedSection: $selectedSection, title: "Commands", icon: "mic")
 
             // Memos
             Section(settings.uiAllCaps ? "MEMOS" : "Memos") {
-                NavigationLink(value: NavigationSection.allMemos) {
-                    HStack {
-                        Label("All Memos", systemImage: "square.stack")
-                        Spacer()
-                        Text("\(allMemos.count)")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(Theme.current.foregroundSecondary)
-                    }
-                }
+                SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Recordings", icon: "square.stack")
             }
 
             // Live
             Section(settings.uiAllCaps ? "LIVE" : "Live") {
-                NavigationLink(value: NavigationSection.liveDashboard) {
-                    Label("Dashboard", systemImage: "chart.xyaxis.line")
-                }
+                SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Voice Stats", icon: "waveform.path.ecg")
 
-                NavigationLink(value: NavigationSection.liveRecent) {
-                    HStack {
-                        Label("Recent", systemImage: "waveform.badge.mic")
-                        Spacer()
-                        Text("\(liveDataStore.dictations.count)")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(Theme.current.foregroundSecondary)
-                    }
-                }
-
-                // HIDDEN: Live Settings moved to Settings tab
-                // Uncomment to restore in sidebar:
-                // NavigationLink(value: NavigationSection.liveSettings) {
-                //     Label("Live Settings", systemImage: "gearshape")
-                // }
+                SidebarRow(section: .liveRecent, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic")
             }
 
             // Activity
             Section(settings.uiAllCaps ? "ACTIVITY" : "Activity") {
-                NavigationLink(value: NavigationSection.aiResults) {
-                    Label("Actions", systemImage: "chart.line.uptrend.xyaxis")
-                }
+                SidebarRow(section: .aiResults, selectedSection: $selectedSection, title: "Actions", icon: "chart.line.uptrend.xyaxis")
 
-                NavigationLink(value: NavigationSection.pendingActions) {
-                    Label("Pending", systemImage: "clock.arrow.circlepath")
-                }
+                SidebarRow(section: .pendingActions, selectedSection: $selectedSection, title: "Pending", icon: "clock.arrow.circlepath")
             }
 
             // Tools
             Section(settings.uiAllCaps ? "TOOLS" : "Tools") {
-                NavigationLink(value: NavigationSection.workflows) {
-                    Label("Workflows", systemImage: "wand.and.stars")
-                }
+                SidebarRow(section: .workflows, selectedSection: $selectedSection, title: "Workflows", icon: "wand.and.stars")
 
-                NavigationLink(value: NavigationSection.models) {
-                    Label("Models", systemImage: "brain")
-                }
+                SidebarRow(section: .models, selectedSection: $selectedSection, title: "Models", icon: "brain")
 
-                NavigationLink(value: NavigationSection.systemConsole) {
-                    Label("Logs", systemImage: "terminal")
-                }
+                SidebarRow(section: .systemConsole, selectedSection: $selectedSection, title: "Logs", icon: "terminal")
             }
 
             #if DEBUG
             if DesignModeManager.shared.isEnabled {
                 Section(settings.uiAllCaps ? "DESIGN" : "Design") {
-                    NavigationLink(value: NavigationSection.designHome) {
-                        Label("Design Home", systemImage: "paintbrush.fill")
-                    }
-                    NavigationLink(value: NavigationSection.designAudit) {
-                        Label("Audit", systemImage: "checkmark.seal.fill")
-                    }
-                    NavigationLink(value: NavigationSection.designComponents) {
-                        Label("Components", systemImage: "square.grid.2x2")
-                    }
+                    SidebarRow(section: .designHome, selectedSection: $selectedSection, title: "Design Home", icon: "paintbrush")
+
+                    SidebarRow(section: .designAudit, selectedSection: $selectedSection, title: "Audit", icon: "checkmark.seal")
+
+                    SidebarRow(section: .designComponents, selectedSection: $selectedSection, title: "Components", icon: "square.grid.2x2")
                 }
             }
             #endif
@@ -275,9 +268,7 @@ struct TalkieNavigationViewNative: View {
         .animation(.easeInOut(duration: 0.15), value: selectedSection)
         .safeAreaInset(edge: .bottom) {
             List(selection: $selectedSection) {
-                NavigationLink(value: NavigationSection.settings) {
-                    Label("Settings", systemImage: "gear")
-                }
+                SidebarRow(section: .settings, selectedSection: $selectedSection, title: "Settings", icon: "gear")
             }
             .listStyle(.sidebar)
             .frame(height: 36)
@@ -307,11 +298,9 @@ struct TalkieNavigationViewNative: View {
     // MARK: - Detail (Main Content)
 
     @ViewBuilder
-    private var detailView: some View {
-        VStack(spacing: 0) {
-            // Main content
-            Group {
-                switch selectedSection {
+    private var mainContentView: some View {
+        Group {
+            switch selectedSection {
                 // Two-column sections
                 case .home:
                     UnifiedDashboard()
@@ -376,13 +365,9 @@ struct TalkieNavigationViewNative: View {
                     Text("Select an item")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Theme.current.surface1)
-                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            // Status bar at bottom
-            StatusBar()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -447,6 +432,79 @@ extension View {
                     }
                 }
             }
+    }
+}
+
+// MARK: - Sidebar Row with Selection Indicator
+
+/// Custom sidebar row that shows a left accent bar when selected
+/// Also switches icons to filled variant when selected for better visual feedback
+struct SidebarRow<Content: View>: View {
+    let section: NavigationSection
+    @Binding var selectedSection: NavigationSection?
+    @ViewBuilder let content: (_ isSelected: Bool) -> Content
+
+    private var isSelected: Bool {
+        selectedSection == section
+    }
+
+    var body: some View {
+        NavigationLink(value: section) {
+            HStack(spacing: 0) {
+                // Left accent bar
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(isSelected ? (SettingsManager.shared.accentColor.color ?? Color.accentColor) : Color.clear)
+                    .frame(width: 3)
+                    .padding(.vertical, 2)
+                    .animation(.easeOut(duration: 0.15), value: isSelected)
+
+                content(isSelected)
+                    .padding(.leading, 6)
+            }
+        }
+    }
+}
+
+/// Sidebar label that switches between outlined and filled icons based on selection
+struct SidebarLabel: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+
+    /// Converts an icon name to its filled variant if available
+    private var selectedIcon: String {
+        // Already filled
+        if icon.hasSuffix(".fill") { return icon }
+
+        // Common mappings for icons without direct .fill suffix
+        let fillableMappings: [String: String] = [
+            "house": "house.fill",
+            "note.text": "doc.text.fill",
+            "square.stack": "square.stack.fill",
+            "gear": "gearshape.fill",
+            "brain": "brain.fill",
+            "terminal": "terminal.fill",
+            "paintbrush": "paintbrush.fill",
+            "checkmark.seal": "checkmark.seal.fill",
+            "square.grid.2x2": "square.grid.2x2.fill"
+        ]
+
+        return fillableMappings[icon] ?? icon
+    }
+
+    var body: some View {
+        Label(title, systemImage: isSelected ? selectedIcon : icon)
+    }
+}
+
+/// Convenience initializer for SidebarRow with just title and icon
+extension SidebarRow where Content == SidebarLabel {
+    init(section: NavigationSection, selectedSection: Binding<NavigationSection?>, title: String, icon: String) {
+        self.section = section
+        self._selectedSection = selectedSection
+        self.content = { isSelected in
+            SidebarLabel(title: title, icon: icon, isSelected: isSelected)
+        }
     }
 }
 

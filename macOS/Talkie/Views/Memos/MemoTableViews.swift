@@ -144,18 +144,18 @@ struct MemoTableFullView: View {
                 // Header
                 HStack(spacing: 4) {
                     Text("All Memos")
-                        .font(SettingsManager.shared.fontSM)
+                        .font(Theme.current.fontSM)
                         .foregroundColor(Theme.current.foreground)
                         .textCase(SettingsManager.shared.uiTextCase)
 
                     // Show "X of Y" when paginated, just "Y" when showing all
                     if hasMoreMemos {
                         Text("\(visibleMemos.count) of \(allMemos.count)")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     } else {
                         Text("\(allMemos.count)")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
@@ -165,7 +165,7 @@ struct MemoTableFullView: View {
                     if !isCompactMode && (selectedMemo != nil || showInspector) {
                         Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showInspector.toggle() } }) {
                             Image(systemName: "sidebar.right")
-                                .font(SettingsManager.shared.fontXS)
+                                .font(Theme.current.fontXS)
                                 .foregroundColor(showInspector ? .blue : Theme.current.foregroundSecondary)
                         }
                         .buttonStyle(.plain)
@@ -182,7 +182,7 @@ struct MemoTableFullView: View {
                     VStack(spacing: 16) {
                         Spacer()
                         Image(systemName: "waveform.slash")
-                            .font(SettingsManager.shared.fontDisplay)
+                            .font(.system(size: 40, weight: .light))
                             .foregroundColor(.secondary.opacity(0.3))
 
                         Text("NO MEMOS YET")
@@ -190,7 +190,7 @@ struct MemoTableFullView: View {
                             .foregroundColor(Theme.current.foregroundSecondary)
 
                         Text("Record your first voice memo on iOS")
-                            .font(SettingsManager.shared.fontXS)
+                            .font(Theme.current.fontXS)
                             .foregroundColor(.secondary.opacity(0.6))
                         Spacer()
                     }
@@ -245,10 +245,10 @@ struct MemoTableFullView: View {
                         Button(action: loadMore) {
                             HStack(spacing: 4) {
                                 Text("Load \(min(pageSize, remainingCount)) more")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                 Text("·")
                                 Text("\(remainingCount) remaining")
-                                    .font(SettingsManager.shared.fontXS)
+                                    .font(Theme.current.fontXS)
                                     .foregroundColor(Theme.current.foregroundSecondary)
                             }
                             .foregroundColor(.accentColor)
@@ -486,8 +486,8 @@ struct MemoTableRow: View {
 
     // Cache theme/font values to avoid recalculation on hover
     private var theme: Theme { Theme.current }
-    private var fontSM: Font { settings.fontSM }
-    private var fontXS: Font { settings.fontXS }
+    private var fontSM: Font { Theme.current.fontSM }
+    private var fontXS: Font { Theme.current.fontXS }
 
     var body: some View {
         Button(action: onSelect) {
@@ -667,7 +667,7 @@ struct CloseButton: View {
 
                 // Visual button area with highlight
                 Image(systemName: "xmark")
-                    .font(SettingsManager.shared.fontSM)
+                    .font(Theme.current.fontSM)
                     .foregroundColor(isHovering
                         ? Theme.current.foreground
                         : Theme.current.foregroundSecondary)

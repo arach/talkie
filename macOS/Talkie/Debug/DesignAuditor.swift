@@ -398,6 +398,13 @@ struct FullAuditReport: Codable {
     let screens: [ScreenAuditResult]
     let screenshotDirectory: String?  // Path to screenshots directory
 
+    // Metadata for tracking runs
+    let appVersion: String?
+    let gitBranch: String?
+    let gitCommit: String?  // Short SHA
+    let runNumber: Int?
+    let themeName: String?  // Current theme when audit was run
+
     var overallScore: Int {
         guard !screens.isEmpty else { return 0 }
         return screens.reduce(0) { $0 + $1.overallScore } / screens.count
@@ -420,6 +427,16 @@ struct FullAuditReport: Codable {
                   + screen.spacingUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
                   + screen.opacityUsage.filter { !$0.isCompliant }.reduce(0) { $0 + $1.count }
         }
+    }
+
+    /// Human-readable summary of run metadata
+    var runSummary: String {
+        var parts: [String] = []
+        if let version = appVersion { parts.append("v\(version)") }
+        if let branch = gitBranch { parts.append(branch) }
+        if let commit = gitCommit { parts.append(commit) }
+        if let theme = themeName { parts.append(theme) }
+        return parts.isEmpty ? "Unknown" : parts.joined(separator: " • ")
     }
 }
 
@@ -447,6 +464,151 @@ class DesignAuditor {
     }
 
     private init() {}
+
+    // MARK: - Metadata Helpers
+
+    /// Get current app version
+    nonisolated func getAppVersion() -> String? {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+    }
+
+    /// Get current git branch
+    nonisolated func getGitBranch() -> String? {
+        // Try known development paths
+        let devPaths = [
+            "/Users/arach/dev/talkie-dev",
+            FileManager.default.currentDirectoryPath
+        ]
+
+        for basePath in devPaths {
+            if let branch = readGitBranch(from: URL(fileURLWithPath: basePath)) {
+                return branch
+            }
+        }
+        return nil
+    }
+
+    /// Get current git commit (short SHA)
+    nonisolated func getGitCommit() -> String? {
+        let devPaths = [
+            "/Users/arach/dev/talkie-dev",
+            FileManager.default.currentDirectoryPath
+        ]
+
+        for basePath in devPaths {
+            if let commit = readGitCommit(from: URL(fileURLWithPath: basePath)) {
+                return commit
+            }
+        }
+        return nil
+    }
+
+    /// Read git branch from a directory
+    private nonisolated func readGitBranch(from directory: URL) -> String? {
+        let fm = FileManager.default
+        let gitPath = directory.appendingPathComponent(".git")
+
+        guard fm.fileExists(atPath: gitPath.path) else { return nil }
+
+        var isDir: ObjCBool = false
+        fm.fileExists(atPath: gitPath.path, isDirectory: &isDir)
+
+        if isDir.boolValue {
+            // Regular repo: .git/HEAD contains "ref: refs/heads/branch"
+            let headPath = gitPath.appendingPathComponent("HEAD")
+            if let content = try? String(contentsOf: headPath, encoding: .utf8),
+               content.hasPrefix("ref: refs/heads/") {
+                return content
+                    .replacingOccurrences(of: "ref: refs/heads/", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } else {
+            // Worktree: .git file contains path to actual git dir
+            if let worktreeRef = try? String(contentsOf: gitPath, encoding: .utf8),
+               worktreeRef.hasPrefix("gitdir:") {
+                let gitDir = worktreeRef
+                    .replacingOccurrences(of: "gitdir:", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let worktreeHead = URL(fileURLWithPath: gitDir).appendingPathComponent("HEAD")
+                if let content = try? String(contentsOf: worktreeHead, encoding: .utf8),
+                   content.hasPrefix("ref: refs/heads/") {
+                    return content
+                        .replacingOccurrences(of: "ref: refs/heads/", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Read git commit SHA from a directory
+    private nonisolated func readGitCommit(from directory: URL) -> String? {
+        let fm = FileManager.default
+        let gitPath = directory.appendingPathComponent(".git")
+
+        guard fm.fileExists(atPath: gitPath.path) else { return nil }
+
+        var isDir: ObjCBool = false
+        fm.fileExists(atPath: gitPath.path, isDirectory: &isDir)
+
+        var headPath: URL
+
+        if isDir.boolValue {
+            headPath = gitPath.appendingPathComponent("HEAD")
+        } else {
+            // Worktree
+            if let worktreeRef = try? String(contentsOf: gitPath, encoding: .utf8),
+               worktreeRef.hasPrefix("gitdir:") {
+                let gitDir = worktreeRef
+                    .replacingOccurrences(of: "gitdir:", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                headPath = URL(fileURLWithPath: gitDir).appendingPathComponent("HEAD")
+            } else {
+                return nil
+            }
+        }
+
+        // Read HEAD
+        guard let headContent = try? String(contentsOf: headPath, encoding: .utf8) else { return nil }
+
+        if headContent.hasPrefix("ref: ") {
+            // It's a branch ref, need to resolve it
+            let refPath = headContent
+                .replacingOccurrences(of: "ref: ", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // Find the actual git directory
+            let gitDir: URL
+            if isDir.boolValue {
+                gitDir = gitPath
+            } else if let worktreeRef = try? String(contentsOf: gitPath, encoding: .utf8),
+                      worktreeRef.hasPrefix("gitdir:") {
+                let dir = worktreeRef
+                    .replacingOccurrences(of: "gitdir:", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                // Go from .git/worktrees/branch to .git
+                gitDir = URL(fileURLWithPath: dir).deletingLastPathComponent().deletingLastPathComponent()
+            } else {
+                return nil
+            }
+
+            let commitPath = gitDir.appendingPathComponent(refPath)
+            if let commit = try? String(contentsOf: commitPath, encoding: .utf8) {
+                return String(commit.trimmingCharacters(in: .whitespacesAndNewlines).prefix(7))
+            }
+        } else {
+            // Detached HEAD - content is the commit SHA
+            return String(headContent.trimmingCharacters(in: .whitespacesAndNewlines).prefix(7))
+        }
+
+        return nil
+    }
+
+    /// Get current theme name
+    nonisolated func getCurrentThemeName() -> String? {
+        // Read from UserDefaults since we can't access MainActor-isolated SettingsManager
+        UserDefaults.standard.string(forKey: "currentTheme")
+    }
 
     // MARK: - Persistence
 
@@ -493,10 +655,100 @@ class DesignAuditor {
         return report
     }
 
+    /// Metadata for a saved audit run (for listing)
+    struct AuditRunInfo: Identifiable {
+        let id: Int  // run number
+        let timestamp: Date
+        let appVersion: String?
+        let gitBranch: String?
+        let gitCommit: String?
+        let themeName: String?
+        let overallScore: Int
+        let grade: String
+        let totalIssues: Int
+        let screenshotCount: Int
+
+        var directoryName: String {
+            "run-\(String(format: "%03d", id))"
+        }
+    }
+
+    /// List all saved audit runs with their metadata
+    func listAllRuns() -> [AuditRunInfo] {
+        guard FileManager.default.fileExists(atPath: cacheDirectory.path) else {
+            return []
+        }
+
+        let existingRuns = (try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory.path)) ?? []
+        let runDirectories = existingRuns.filter { $0.hasPrefix("run-") }
+            .compactMap { dirname -> (String, Int)? in
+                guard let num = Int(dirname.replacingOccurrences(of: "run-", with: "")) else { return nil }
+                return (dirname, num)
+            }
+            .sorted { $0.1 > $1.1 }  // Sort descending (newest first)
+
+        var runs: [AuditRunInfo] = []
+
+        for (dirname, runNumber) in runDirectories {
+            let reportPath = cacheDirectory.appendingPathComponent("\(dirname)/audit.json")
+            guard let data = try? Data(contentsOf: reportPath),
+                  let report = try? JSONDecoder().decode(FullAuditReport.self, from: data) else {
+                continue
+            }
+
+            // Count screenshots
+            let screenshotsDir = cacheDirectory.appendingPathComponent("\(dirname)/screenshots")
+            let screenshotCount = (try? FileManager.default.contentsOfDirectory(atPath: screenshotsDir.path))?.count ?? 0
+
+            runs.append(AuditRunInfo(
+                id: runNumber,
+                timestamp: report.timestamp,
+                appVersion: report.appVersion,
+                gitBranch: report.gitBranch,
+                gitCommit: report.gitCommit,
+                themeName: report.themeName,
+                overallScore: report.overallScore,
+                grade: report.grade,
+                totalIssues: report.totalIssues,
+                screenshotCount: screenshotCount
+            ))
+        }
+
+        return runs
+    }
+
+    /// Load a specific audit run by number
+    func loadRun(_ runNumber: Int) -> FullAuditReport? {
+        let dirname = "run-\(String(format: "%03d", runNumber))"
+        let reportPath = cacheDirectory.appendingPathComponent("\(dirname)/audit.json")
+
+        guard let data = try? Data(contentsOf: reportPath),
+              let report = try? JSONDecoder().decode(FullAuditReport.self, from: data) else {
+            print("❌ Could not load run-\(String(format: "%03d", runNumber))")
+            return nil
+        }
+
+        print("📂 Loaded audit from: \(dirname)")
+        return report
+    }
+
+    /// Delete a specific audit run
+    func deleteRun(_ runNumber: Int) {
+        let dirname = "run-\(String(format: "%03d", runNumber))"
+        let runDir = cacheDirectory.appendingPathComponent(dirname)
+
+        do {
+            try FileManager.default.removeItem(at: runDir)
+            print("🗑️ Deleted: \(dirname)")
+        } catch {
+            print("❌ Failed to delete \(dirname): \(error)")
+        }
+    }
+
     /// Save audit report and screenshots to disk
-    private func saveAudit(_ report: FullAuditReport) {
-        let runNumber = getNextRunNumber()
-        let runDirectory = cacheDirectory.appendingPathComponent("run-\(String(format: "%03d", runNumber))")
+    private func saveAudit(_ report: FullAuditReport, runNumber: Int? = nil) {
+        let actualRunNumber = runNumber ?? getNextRunNumber()
+        let runDirectory = cacheDirectory.appendingPathComponent("run-\(String(format: "%03d", actualRunNumber))")
 
         do {
             try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
@@ -508,7 +760,23 @@ class DesignAuditor {
             let data = try encoder.encode(report)
             try data.write(to: runDirectory.appendingPathComponent("audit.json"))
 
-            print("✅ Saved audit to: run-\(String(format: "%03d", runNumber))")
+            // Also save a summary file for quick reference
+            let summary = """
+            Talkie Design Audit - Run #\(actualRunNumber)
+            ============================================
+            Date: \(report.timestamp)
+            Version: \(report.appVersion ?? "unknown")
+            Branch: \(report.gitBranch ?? "unknown")
+            Commit: \(report.gitCommit ?? "unknown")
+            Theme: \(report.themeName ?? "default")
+
+            Overall Score: \(report.overallScore)% (\(report.grade))
+            Total Issues: \(report.totalIssues)
+            Screens Audited: \(report.screens.count)
+            """
+            try summary.write(to: runDirectory.appendingPathComponent("summary.txt"), atomically: true, encoding: .utf8)
+
+            print("✅ Saved audit to: run-\(String(format: "%03d", actualRunNumber))")
         } catch {
             print("❌ Failed to save audit: \(error)")
         }
@@ -697,6 +965,20 @@ class DesignAuditor {
     /// Audit all screens with screenshot capture
     func auditAll() async -> FullAuditReport {
         print("🔍 Starting full design audit...")
+
+        // Gather metadata first
+        let runNumber = getNextRunNumber()
+        let appVersion = getAppVersion()
+        let gitBranch = getGitBranch()
+        let gitCommit = getGitCommit()
+        let themeName = getCurrentThemeName()
+
+        print("📋 Run #\(runNumber)")
+        print("   Version: \(appVersion ?? "unknown")")
+        print("   Branch: \(gitBranch ?? "unknown")")
+        print("   Commit: \(gitCommit ?? "unknown")")
+        print("   Theme: \(themeName ?? "default")")
+
         var results: [ScreenAuditResult] = []
 
         // Run static code analysis
@@ -707,7 +989,6 @@ class DesignAuditor {
         }
 
         // Capture screenshots
-        let runNumber = getNextRunNumber()
         let runDirectory = cacheDirectory.appendingPathComponent("run-\(String(format: "%03d", runNumber))")
         let screenshotsDirectory = runDirectory.appendingPathComponent("screenshots")
 
@@ -723,13 +1004,19 @@ class DesignAuditor {
         let report = FullAuditReport(
             timestamp: Date(),
             screens: results,
-            screenshotDirectory: screenshotsDirectory.path
+            screenshotDirectory: screenshotsDirectory.path,
+            appVersion: appVersion,
+            gitBranch: gitBranch,
+            gitCommit: gitCommit,
+            runNumber: runNumber,
+            themeName: themeName
         )
 
         // Save to disk
-        saveAudit(report)
+        saveAudit(report, runNumber: runNumber)
 
         print("✅ Audit complete!")
+        print("📁 Results saved to: run-\(String(format: "%03d", runNumber))")
         return report
     }
 
@@ -744,7 +1031,16 @@ class DesignAuditor {
             results.append(result)
         }
 
-        return FullAuditReport(timestamp: Date(), screens: results, screenshotDirectory: nil)
+        return FullAuditReport(
+            timestamp: Date(),
+            screens: results,
+            screenshotDirectory: nil,
+            appVersion: getAppVersion(),
+            gitBranch: getGitBranch(),
+            gitCommit: getGitCommit(),
+            runNumber: nil,
+            themeName: getCurrentThemeName()
+        )
     }
 
     /// Audit a single screen with optional screenshot capture

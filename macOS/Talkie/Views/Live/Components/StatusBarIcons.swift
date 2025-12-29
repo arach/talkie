@@ -148,6 +148,8 @@ struct SimpleEngineIcon: View {
 // MARK: - Engine Status Icon
 
 struct EngineStatusIcon: View {
+    var showSuccess: Bool = false
+
     private let serviceMonitor = ServiceManager.shared.engine
     private let layoutManager = SessionLayoutManager.shared
     @State private var isHovered = false
@@ -156,8 +158,13 @@ struct EngineStatusIcon: View {
     @State private var pidCopied = false
 
     private var statusColor: Color {
+        // Flash green after successful action
+        if showSuccess && serviceMonitor.state == .running {
+            return SemanticColor.success
+        }
+
         switch serviceMonitor.state {
-        case .running: return SemanticColor.success
+        case .running: return TalkieTheme.textMuted  // Gray when idle
         case .stopped: return SemanticColor.error
         case .launching: return SemanticColor.info
         case .terminating: return SemanticColor.warning
@@ -307,6 +314,7 @@ struct EngineStatusIcon: View {
                 pidCopied = false
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: showSuccess)
     }
 
     private func copyPID(_ pid: Int32) {
@@ -431,13 +439,16 @@ struct ModelStatusIcon: View {
 // MARK: - Sync Status Icon
 
 struct SyncStatusIcon: View {
+    var showSuccess: Bool = false
+
     @Environment(CloudKitSyncManager.self) private var syncManager
     @State private var isHovered = false
     @State private var showingSyncHistory = false
 
     private var statusColor: Color {
+        if showSuccess { return SemanticColor.success }
         if syncManager.isSyncing { return SemanticColor.info }
-        return SemanticColor.success
+        return TalkieTheme.textMuted  // Gray when idle
     }
 
     private var icon: String {
@@ -478,6 +489,7 @@ struct SyncStatusIcon: View {
         .sheet(isPresented: $showingSyncHistory) {
             SyncHistoryView()
         }
+        .animation(.easeInOut(duration: 0.3), value: showSuccess)
     }
 
     private func showSyncHistory() {
