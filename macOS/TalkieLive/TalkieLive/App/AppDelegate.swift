@@ -4,6 +4,8 @@ import TalkieKit
 import Carbon.HIToolbox
 import Combine
 
+private let log = Log(.system)
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
@@ -32,13 +34,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Configure unified logger first
+        TalkieLogger.configure(source: .talkieLive)
+
         // Fratricide prevention: if another instance is already running, quit
         if let bundleID = Bundle.main.bundleIdentifier {
             let runningApps = NSWorkspace.shared.runningApplications.filter {
                 $0.bundleIdentifier == bundleID && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
             }
             if !runningApps.isEmpty {
-                print("⚠️ Another TalkieLive (\(bundleID)) is already running - exiting to prevent fratricide")
+                log.warning("Another TalkieLive (\(bundleID)) is already running - exiting to prevent fratricide", critical: true)
                 NSApp.terminate(nil)
                 return
             }
@@ -245,10 +250,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func setupFloatingPill() {
         // Wire up floating pill - handle taps based on current state
         floatingPill.onTap = { [weak self] state, modifiers in
-            NSLog("[AppDelegate] onTap received: state=%@, modifiers=%d", state.rawValue, modifiers.rawValue)
+            log.debug("onTap received: state=\(state.rawValue), modifiers=\(modifiers.rawValue)")
 
             guard let self = self else {
-                NSLog("[AppDelegate] self is nil in onTap")
+                log.warning("self is nil in onTap")
                 return
             }
 
@@ -261,18 +266,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // Option+tap: Show failed queue picker if there are queued items
                 if optionHeld {
                     let queuedCount = LiveDatabase.countQueued()
-                    NSLog("[AppDelegate] Option+tap: queuedCount=%d", queuedCount)
+                    log.debug("Option+tap: queuedCount=\(queuedCount)")
 
                     if queuedCount > 0 {
-                        NSLog("[AppDelegate] Showing failed queue picker")
+                        log.debug("Showing failed queue picker")
                         FailedQueueController.shared.show()
                     } else {
-                        NSLog("[AppDelegate] No queued items to show")
+                        log.debug("No queued items to show")
                         NSSound.beep()
                     }
                 } else {
                     // Normal tap: start recording (with optional interstitial mode)
-                    NSLog("[AppDelegate] Starting recording (interstitial=%d)", shiftHeld)
+                    log.debug("Starting recording (interstitial=\(shiftHeld))")
                     self.toggleListening(interstitial: shiftHeld)
                 }
 
@@ -368,8 +373,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func hotkeyDidChange() {
-        print("[AppDelegate] 📨 Received .hotkeyDidChange notification")
-        print("[AppDelegate] Current hotkey: \(LiveSettings.shared.hotkey.displayString) (keyCode=\(LiveSettings.shared.hotkey.keyCode), modifiers=\(LiveSettings.shared.hotkey.modifiers))")
+        log.info("Received .hotkeyDidChange notification")
+        log.debug("Current hotkey: \(LiveSettings.shared.hotkey.displayString) (keyCode=\(LiveSettings.shared.hotkey.keyCode), modifiers=\(LiveSettings.shared.hotkey.modifiers))")
 
         // Unregister old hotkeys and register new ones
         hotKeyManager.unregisterAll()
@@ -384,7 +389,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // UserDefaults changed (possibly from Talkie main app)
         // Re-register hotkeys in case they were updated from the settings UI in Talkie
         Task { @MainActor in
-            print("[AppDelegate] 🔄 UserDefaults changed - re-registering hotkeys")
+            log.debug("UserDefaults changed - re-registering hotkeys")
             hotkeyDidChange()
         }
     }
@@ -431,11 +436,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func toggleListening(interstitial: Bool) {
-        NSLog("[AppDelegate] toggleListening called: interstitial=%d", interstitial)
+        log.debug("toggleListening called: interstitial=\(interstitial)")
         Task {
-            NSLog("[AppDelegate] Calling liveController.toggleListening...")
+            log.debug("Calling liveController.toggleListening...")
             await liveController.toggleListening(interstitial: interstitial)
-            NSLog("[AppDelegate] liveController.toggleListening completed")
+            log.debug("liveController.toggleListening completed")
         }
     }
 
@@ -449,7 +454,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         NSWorkspace.shared.open(url, configuration: configuration) { app, error in
             if let error = error {
-                AppLogger.shared.log(.error, "Failed to open Talkie", detail: error.localizedDescription)
+                log.error("Failed to open Talkie", detail: error.localizedDescription)
 
                 // Fallback: try to find app by bundle identifier
                 let bundleID = "jdi.talkie"
@@ -466,7 +471,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { @MainActor in
             let store = DictationStore.shared
             guard let last = store.utterances.first else {
-                AppLogger.shared.log(.system, "No recent dictations to paste")
+                log.info("No recent dictations to paste")
                 return
             }
 
@@ -478,7 +483,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Simulate paste (Cmd+V)
             simulatePaste()
 
-            AppLogger.shared.log(.system, "Pasted last dictation: \(last.text.prefix(30))...")
+            log.info("Pasted last dictation: \(last.text.prefix(30))...")
         }
     }
 
@@ -489,7 +494,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
 
-        AppLogger.shared.log(.system, "Copied dictation to clipboard: \(text.prefix(30))...")
+        log.info("Copied dictation to clipboard: \(text.prefix(30))...")
     }
 
     // MARK: - NSMenuDelegate
@@ -676,7 +681,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Engine must be running for TalkieLive to work
     private func preloadModel(settings: LiveSettings) async {
         let modelId = settings.selectedModelId
-        AppLogger.shared.log(.system, "Loading model", detail: modelId)
+        log.info("Loading model", detail: modelId)
         let loadStart = Date()
 
         // Connect to TalkieEngine - NO FALLBACK
@@ -684,24 +689,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let engineConnected = await client.ensureConnected()
 
         guard engineConnected else {
-            AppLogger.shared.log(.error, "═══════════════════════════════════════════════════")
-            AppLogger.shared.log(.error, "  ❌ TALKIE ENGINE NOT RUNNING")
-            AppLogger.shared.log(.error, "  TalkieLive requires TalkieEngine to be running.")
-            AppLogger.shared.log(.error, "  Please start the Engine service.")
-            AppLogger.shared.log(.error, "═══════════════════════════════════════════════════")
+            log.error("TALKIE ENGINE NOT RUNNING - TalkieLive requires TalkieEngine to be running")
             return
         }
 
-        AppLogger.shared.log(.system, "═══════════════════════════════════════════════════")
-        AppLogger.shared.log(.system, "  🔗 CONNECTED TO TALKIE ENGINE (XPC)")
-        AppLogger.shared.log(.system, "═══════════════════════════════════════════════════")
+        log.info("Connected to TalkieEngine (XPC)")
 
         do {
             try await client.preloadModel(modelId)
             let totalTime = Date().timeIntervalSince(loadStart)
-            AppLogger.shared.log(.system, "Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
+            log.info("Model ready (Engine)", detail: String(format: "%.1fs total", totalTime))
         } catch {
-            AppLogger.shared.log(.error, "Engine preload failed", detail: error.localizedDescription)
+            log.error("Engine preload failed", detail: error.localizedDescription)
         }
     }
 }

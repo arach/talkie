@@ -39,6 +39,13 @@
 //  │    TalkieLogger.error(.database, "Store failed", error: error)              │
 //  │    TalkieLogger.info(.audio, "Recording started", detail: "48kHz stereo")   │
 //  │                                                                             │
+//  │  Critical (Startup) Logging:                                                │
+//  │    Use critical: true for pre-runloop startup code where crash visibility   │
+//  │    is essential. This adds synchronous NSLog output.                        │
+//  │                                                                             │
+//  │    log.info("XPC listener starting", critical: true)  // Startup context    │
+//  │    log.info("Recording started")                      // Normal runtime     │
+//  │                                                                             │
 //  └─────────────────────────────────────────────────────────────────────────────┘
 //
 
@@ -175,28 +182,32 @@ public final class TalkieLogger: @unchecked Sendable {
     // MARK: - Logging Methods
 
     /// Log a debug message (development only)
-    public static func debug(_ category: LogCategory, _ message: String, detail: String? = nil, file: String = #file, line: Int = #line) {
-        shared.log(level: .debug, category: category, message: message, detail: detail, error: nil, file: file, line: line)
+    public static func debug(_ category: LogCategory, _ message: String, detail: String? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        shared.log(level: .debug, category: category, message: message, detail: detail, error: nil, critical: critical, file: file, line: line)
     }
 
     /// Log an info message (normal operation)
-    public static func info(_ category: LogCategory, _ message: String, detail: String? = nil, file: String = #file, line: Int = #line) {
-        shared.log(level: .info, category: category, message: message, detail: detail, error: nil, file: file, line: line)
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public static func info(_ category: LogCategory, _ message: String, detail: String? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        shared.log(level: .info, category: category, message: message, detail: detail, error: nil, critical: critical, file: file, line: line)
     }
 
     /// Log a warning (recoverable issue)
-    public static func warning(_ category: LogCategory, _ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
-        shared.log(level: .warning, category: category, message: message, detail: detail, error: error, file: file, line: line)
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public static func warning(_ category: LogCategory, _ message: String, detail: String? = nil, error: Error? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        shared.log(level: .warning, category: category, message: message, detail: detail, error: error, critical: critical, file: file, line: line)
     }
 
     /// Log an error (failure affecting functionality)
-    public static func error(_ category: LogCategory, _ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
-        shared.log(level: .error, category: category, message: message, detail: detail, error: error, file: file, line: line)
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public static func error(_ category: LogCategory, _ message: String, detail: String? = nil, error: Error? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        shared.log(level: .error, category: category, message: message, detail: detail, error: error, critical: critical, file: file, line: line)
     }
 
     /// Log a fault (critical failure)
-    public static func fault(_ category: LogCategory, _ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
-        shared.log(level: .fault, category: category, message: message, detail: detail, error: error, file: file, line: line)
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public static func fault(_ category: LogCategory, _ message: String, detail: String? = nil, error: Error? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        shared.log(level: .fault, category: category, message: message, detail: detail, error: error, critical: critical, file: file, line: line)
     }
 
     // MARK: - Core Implementation
@@ -207,6 +218,7 @@ public final class TalkieLogger: @unchecked Sendable {
         message: String,
         detail: String?,
         error: Error?,
+        critical: Bool,
         file: String,
         line: Int
     ) {
@@ -224,25 +236,35 @@ public final class TalkieLogger: @unchecked Sendable {
         let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
         let location = "[\(filename):\(line)]"
 
+        // Critical path: synchronous NSLog for crash-safe visibility (startup code)
+        // This runs BEFORE async queue to ensure visibility if we crash during startup
+        if critical {
+            let nslogMsg = "[\(source.rawValue)] [\(category.rawValue.uppercased())] \(message)\(fullDetail.isEmpty ? "" : " - \(fullDetail)") \(location)"
+            NSLog("%@", nslogMsg)
+        }
+
         queue.async { [weak self] in
             guard let self = self else { return }
 
-            // 1. Console output (DEBUG only)
-            if self.consoleEnabled {
+            // 1. Console output (DEBUG only) - skip if already did NSLog
+            if self.consoleEnabled && !critical {
                 let consoleMsg = "\(level.emoji) [\(category.rawValue.uppercased())] \(message)\(fullDetail.isEmpty ? "" : " - \(fullDetail)") \(location)"
                 print(consoleMsg)
             }
 
             // 2. os.Logger (always, for Instruments/Console.app)
+            // Note: We use .public privacy to ensure messages are visible in Console.app
+            // These are app logs, not user-sensitive data
             if let osLogger = self.osLoggers[category] {
                 let osMsg = "\(message)\(fullDetail.isEmpty ? "" : " - \(fullDetail)") \(location)"
-                osLogger.log(level: level.osLogType, "\(osMsg)")
+                osLogger.log(level: level.osLogType, "\(osMsg, privacy: .public)")
             }
 
             // 3. File output (errors/warnings/faults always, others if configured)
             if let writer = self.fileWriter {
                 // Errors and above always go to file with immediate flush
-                let writeMode: LogWriteMode = level >= .error ? .critical : .bestEffort
+                // Critical path also gets immediate flush
+                let writeMode: LogWriteMode = (level >= .error || critical) ? .critical : .bestEffort
 
                 // Only write info+ to file (skip debug to reduce file size)
                 if level >= .info {
@@ -267,7 +289,7 @@ public final class TalkieLogger: @unchecked Sendable {
 public extension TalkieLogger {
     /// Quick error log with just an Error object
     static func error(_ category: LogCategory, error: Error, file: String = #file, line: Int = #line) {
-        shared.log(level: .error, category: category, message: error.localizedDescription, detail: nil, error: nil, file: file, line: line)
+        shared.log(level: .error, category: category, message: error.localizedDescription, detail: nil, error: nil, critical: false, file: file, line: line)
     }
 }
 
@@ -294,27 +316,38 @@ public struct Log: Sendable {
 
     // MARK: - Logging Methods
 
-    public func debug(_ message: String, detail: String? = nil, file: String = #file, line: Int = #line) {
-        TalkieLogger.debug(category, message, detail: detail, file: file, line: line)
+    /// Log a debug message
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public func debug(_ message: String, detail: String? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        TalkieLogger.debug(category, message, detail: detail, critical: critical, file: file, line: line)
     }
 
-    public func info(_ message: String, detail: String? = nil, file: String = #file, line: Int = #line) {
-        TalkieLogger.info(category, message, detail: detail, file: file, line: line)
+    /// Log an info message
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public func info(_ message: String, detail: String? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        TalkieLogger.info(category, message, detail: detail, critical: critical, file: file, line: line)
     }
 
-    public func warning(_ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
-        TalkieLogger.warning(category, message, detail: detail, error: error, file: file, line: line)
+    /// Log a warning
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public func warning(_ message: String, detail: String? = nil, error: Error? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        TalkieLogger.warning(category, message, detail: detail, error: error, critical: critical, file: file, line: line)
     }
 
-    public func error(_ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
-        TalkieLogger.error(category, message, detail: detail, error: error, file: file, line: line)
+    /// Log an error
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public func error(_ message: String, detail: String? = nil, error: Error? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        TalkieLogger.error(category, message, detail: detail, error: error, critical: critical, file: file, line: line)
     }
 
+    /// Log an error from an Error object
     public func error(_ error: Error, file: String = #file, line: Int = #line) {
         TalkieLogger.error(category, error.localizedDescription, file: file, line: line)
     }
 
-    public func fault(_ message: String, detail: String? = nil, error: Error? = nil, file: String = #file, line: Int = #line) {
-        TalkieLogger.fault(category, message, detail: detail, error: error, file: file, line: line)
+    /// Log a fault (critical failure)
+    /// - Parameter critical: If true, also writes to NSLog for crash-safe visibility (use during startup)
+    public func fault(_ message: String, detail: String? = nil, error: Error? = nil, critical: Bool = false, file: String = #file, line: Int = #line) {
+        TalkieLogger.fault(category, message, detail: detail, error: error, critical: critical, file: file, line: line)
     }
 }

@@ -1,9 +1,8 @@
 import Foundation
 import AppKit
-import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "LiveController")
+private let log = Log(.system)
 
 @MainActor
 final class LiveController: ObservableObject {
@@ -58,8 +57,7 @@ final class LiveController: ObservableObject {
             guard let self = self else { return }
 
             // Log state transition prominently
-            logger.info("State: \(oldState.rawValue) → \(newState.rawValue)")
-            AppLogger.shared.log(.system, "State transition", detail: "\(oldState.rawValue) → \(newState.rawValue)")
+            log.info("State: \(oldState.rawValue) → \(newState.rawValue)")
 
             // Sync published state
             self.state = newState
@@ -97,8 +95,8 @@ final class LiveController: ObservableObject {
 
         stateMachine.onInvalidTransition = { currentState, event in
             let eventStr = String(describing: event)
-            logger.warning("⚠️ Invalid transition: \(currentState.rawValue) + \(eventStr)")
-            AppLogger.shared.log(.error, "Invalid state transition", detail: "\(currentState.rawValue) + \(eventStr)")
+            log.warning("Invalid transition: \(currentState.rawValue) + \(eventStr)")
+            log.error("Invalid state transition", detail: "\(currentState.rawValue) + \(eventStr)")
         }
 
         // Wire up capture error handler
@@ -108,14 +106,14 @@ final class LiveController: ObservableObject {
             }
         }
 
-        logger.info("LiveController initialized")
+        log.info("LiveController initialized")
     }
 
     /// Handle audio capture startup failure
     private func handleCaptureError(_ errorMsg: String) {
         guard state == .listening else { return }
 
-        logger.error("Audio capture failed: \(errorMsg)")
+        log.error("Audio capture failed: \(errorMsg)")
         AppLogger.shared.log(.error, "Mic capture failed", detail: errorMsg)
 
         // Play error sound
@@ -136,20 +134,20 @@ final class LiveController: ObservableObject {
     /// Toggle mode: press to start, press to stop
     /// - Parameter interstitial: If true (Shift-click), route to Talkie Core interstitial instead of paste
     func toggleListening(interstitial: Bool = false) async {
-        logger.info("[LiveController] toggleListening: state=\(self.state.rawValue), interstitial=\(interstitial)")
+        log.info("[LiveController] toggleListening: state=\(self.state.rawValue), interstitial=\(interstitial)")
 
         switch state {
         case .idle:
-            logger.info("[LiveController] Calling start()...")
+            log.info("[LiveController] Calling start()...")
             await start()
-            logger.info("[LiveController] start() completed")
+            log.info("[LiveController] start() completed")
         case .listening:
-            logger.info("[LiveController] Calling stop()...")
+            log.info("[LiveController] Calling stop()...")
             stop(interstitial: interstitial)
-            logger.info("[LiveController] stop() completed")
+            log.info("[LiveController] stop() completed")
         case .transcribing, .routing:
             // Don't interrupt processing
-            logger.info("[LiveController] Ignoring toggle - currently processing")
+            log.info("[LiveController] Ignoring toggle - currently processing")
             break
         }
     }
@@ -159,20 +157,20 @@ final class LiveController: ObservableObject {
     /// PTT start: called when PTT hotkey is pressed down
     func pttStart() async {
         guard state == .idle else {
-            logger.info("PTT start ignored - not idle (state=\(self.state.rawValue))")
+            log.info("PTT start ignored - not idle (state=\(self.state.rawValue))")
             return
         }
-        logger.info("PTT recording started (key down)")
+        log.info("PTT recording started (key down)")
         await start()
     }
 
     /// PTT stop: called when PTT hotkey is released
     func pttStop() {
         guard state == .listening else {
-            logger.info("PTT stop ignored - not listening (state=\(self.state.rawValue))")
+            log.info("PTT stop ignored - not listening (state=\(self.state.rawValue))")
             return
         }
-        logger.info("PTT recording stopped (key up)")
+        log.info("PTT recording stopped (key up)")
         stop()
     }
 
@@ -184,7 +182,7 @@ final class LiveController: ObservableObject {
     /// Audio is still preserved in the queue for later access
     func cancelListening() {
         guard state == .listening else {
-            logger.info("cancelListening() ignored - not in listening state (current: \(self.state.rawValue))")
+            log.info("cancelListening() ignored - not in listening state (current: \(self.state.rawValue))")
             return
         }
         isCancelled = true
@@ -196,7 +194,7 @@ final class LiveController: ObservableObject {
         // stopCapture() will trigger process() which will see isCancelled
         // and save the audio with mode="cancelled"
         audio.stopCapture()
-        logger.info("Recording cancelled during listening - audio will be preserved")
+        log.info("Recording cancelled during listening - audio will be preserved")
 
         // Safety timeout: if process() doesn't get called (e.g., PTT too short, no audio file),
         // force reset to idle after 2 seconds
@@ -204,7 +202,7 @@ final class LiveController: ObservableObject {
             try? await Task.sleep(for: .seconds(2))
             guard let self else { return }
             if self.state == .transcribing && self.isCancelled {
-                logger.warning("Cancel timeout - forcing reset to idle (audio file may not have been created)")
+                log.warning("Cancel timeout - forcing reset to idle (audio file may not have been created)")
                 self.recordingStartTime = nil
                 self.capturedContext = nil
                 self.startApp = nil
@@ -259,7 +257,7 @@ final class LiveController: ObservableObject {
 
         // Cancel back to idle
         stateMachine.transition(.cancel)
-        logger.info("Pushed to queue (was \(previousState.rawValue))")
+        log.info("Pushed to queue (was \(previousState.rawValue))")
 
         // Refresh the queue count
         DictationStore.shared.refresh()
@@ -273,7 +271,7 @@ final class LiveController: ObservableObject {
     /// Force reset to idle state - use when stuck or as emergency exit
     /// This will cancel any in-flight transcription and reset all state
     func forceReset() {
-        logger.warning("Force reset requested from state: \(self.state.rawValue)")
+        log.warning("Force reset requested from state: \(self.state.rawValue)")
         AppLogger.shared.log(.system, "Force reset", detail: "Was in \(state.rawValue)")
 
         // Cancel any pending transcription
@@ -298,7 +296,7 @@ final class LiveController: ObservableObject {
 
         // Force reset to idle (emergency exit - works from any state)
         stateMachine.transition(.forceReset)
-        logger.info("Force reset complete - now idle")
+        log.info("Force reset complete - now idle")
     }
 
     /// Get the start app for return-to-origin feature
@@ -313,7 +311,7 @@ final class LiveController: ObservableObject {
         guard state == .listening else { return }
         routeToInterstitial = true
         saveAsMemo = false  // Mutually exclusive
-        logger.info("Intent set: Interstitial editor")
+        log.info("Intent set: Interstitial editor")
     }
 
     /// Set intent to save as memo (Shift+A during recording)
@@ -321,7 +319,7 @@ final class LiveController: ObservableObject {
         guard state == .listening else { return }
         saveAsMemo = true
         routeToInterstitial = false  // Mutually exclusive
-        logger.info("Intent set: Save as memo")
+        log.info("Intent set: Save as memo")
     }
 
     /// Clear capture intent (return to normal paste behavior)
@@ -329,7 +327,7 @@ final class LiveController: ObservableObject {
         guard state == .listening else { return }
         routeToInterstitial = false
         saveAsMemo = false
-        logger.info("Intent cleared: Normal paste")
+        log.info("Intent cleared: Normal paste")
     }
 
     /// Get current capture intent for UI display
@@ -444,7 +442,7 @@ final class LiveController: ObservableObject {
                 self?.checkForStuckState()
             }
         }
-        logger.info("Watchdog started")
+        log.info("Watchdog started")
     }
 
     /// Stop watchdog timer
@@ -473,7 +471,7 @@ final class LiveController: ObservableObject {
         // Check if we've exceeded the timeout
         if elapsed > threshold {
             let timeoutStr = String(format: "%.0fs", elapsed)
-            logger.error("⏱ STUCK STATE DETECTED: \(self.state.rawValue) exceeded \(threshold)s (actual: \(timeoutStr))")
+            log.error("⏱ STUCK STATE DETECTED: \(self.state.rawValue) exceeded \(threshold)s (actual: \(timeoutStr))")
             AppLogger.shared.log(.error, "Stuck state timeout", detail: "\(self.state.rawValue) • \(timeoutStr)")
 
             // Recover from stuck state
@@ -483,7 +481,7 @@ final class LiveController: ObservableObject {
 
     /// Recover from stuck state by pushing to queue and resetting
     private func recoverFromStuckState(reason: String) {
-        logger.warning("🔧 Recovering from stuck state: \(reason)")
+        log.warning("🔧 Recovering from stuck state: \(reason)")
         AppLogger.shared.log(.system, "Auto-recovery triggered", detail: reason)
 
         // Cancel any in-flight transcription task
@@ -528,7 +526,7 @@ final class LiveController: ObservableObject {
 
         // Force reset to idle
         stateMachine.transition(.forceReset)
-        logger.info("Auto-recovery complete - reset to idle")
+        log.info("Auto-recovery complete - reset to idle")
 
         // Refresh stores to show queued item
         DictationStore.shared.refresh()
@@ -536,11 +534,11 @@ final class LiveController: ObservableObject {
 
     private func stop(interstitial: Bool = false) {
         NSLog("[LiveController] stop() called with interstitial=\(interstitial)")
-        logger.info("stop() called with interstitial=\(interstitial)")
+        log.info("stop() called with interstitial=\(interstitial)")
         routeToInterstitial = interstitial
         if interstitial {
             NSLog("[LiveController] Stopping with interstitial routing (Shift-click)")
-            logger.info("Stopping with interstitial routing (Shift-click)")
+            log.info("Stopping with interstitial routing (Shift-click)")
         }
 
         // Transition to transcribing state immediately (before audio callback fires)
@@ -696,7 +694,7 @@ final class LiveController: ObservableObject {
                 // Don't save to database - user explicitly cancelled
                 // Audio file is already preserved in AudioStorage, user can drop it back in if they change their mind
                 let audioPath = AudioStorage.url(for: audioFilename).path
-                logger.info("Recording cancelled - audio preserved at: \(audioPath)")
+                log.info("Recording cancelled - audio preserved at: \(audioPath)")
                 AppLogger.shared.log(.system, "Recording cancelled", detail: "Audio saved: \(audioFilename)")
 
                 // Reset state
@@ -724,7 +722,7 @@ final class LiveController: ObservableObject {
             // Save as Memo mode: Shift+A to auto-promote to permanent memo
             if saveAsMemo {
                 NSLog("[LiveController] === SAVE AS MEMO MODE ACTIVATED ===")
-                logger.info("=== SAVE AS MEMO MODE ACTIVATED ===")
+                log.info("=== SAVE AS MEMO MODE ACTIVATED ===")
                 AppLogger.shared.log(.system, "Saving as memo", detail: "Shift+A mode")
 
                 let routeEnd = Date()
@@ -806,10 +804,10 @@ final class LiveController: ObservableObject {
 
             // Interstitial mode: Shift or Shift+S to route to Talkie Core for editing
             NSLog("[LiveController] Checking routeToInterstitial flag: \(self.routeToInterstitial)")
-            logger.info("Checking routeToInterstitial flag: \(self.routeToInterstitial)")
+            log.info("Checking routeToInterstitial flag: \(self.routeToInterstitial)")
             if routeToInterstitial {
                 NSLog("[LiveController] === INTERSTITIAL MODE ACTIVATED ===")
-                logger.info("=== INTERSTITIAL MODE ACTIVATED ===")
+                log.info("=== INTERSTITIAL MODE ACTIVATED ===")
                 AppLogger.shared.log(.system, "Routing to interstitial", detail: "Shift-click mode")
 
                 let routeEnd = Date()
@@ -1035,7 +1033,7 @@ final class LiveController: ObservableObject {
             logTiming("Pipeline complete")
 
         } catch {
-            logger.error("Transcription error: \(error.localizedDescription)")
+            log.error("Transcription error: \(error.localizedDescription)")
             AppLogger.shared.log(.error, "Transcription failed", detail: "\(error.localizedDescription)\(traceSuffix)")
 
             // Even on failure, we saved the audio - store a record for retry
@@ -1115,12 +1113,12 @@ final class LiveController: ObservableObject {
         let urlString = "\(TalkieEnvironment.current.talkieURLScheme)://interstitial/\(utteranceId)"
         guard let url = URL(string: urlString) else {
             NSLog("[LiveController] ERROR: Failed to create interstitial URL for utterance \(utteranceId)")
-            logger.error("Failed to create interstitial URL for utterance \(utteranceId)")
+            log.error("Failed to create interstitial URL for utterance \(utteranceId)")
             return
         }
 
         NSLog("[LiveController] Launching interstitial editor: \(urlString)")
-        logger.info("Launching interstitial editor for utterance \(utteranceId)")
+        log.info("Launching interstitial editor for utterance \(utteranceId)")
         NSWorkspace.shared.open(url)
         NSLog("[LiveController] NSWorkspace.shared.open() called")
     }

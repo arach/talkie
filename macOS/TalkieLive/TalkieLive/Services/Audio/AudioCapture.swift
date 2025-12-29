@@ -9,9 +9,9 @@ import AVFoundation
 import AppKit
 import Combine
 import CoreAudio
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "AudioCapture")
+private let log = Log(.audio)
 
 /// Shared audio level for UI visualization and silent mic detection
 @MainActor
@@ -126,17 +126,16 @@ final class MicrophoneCapture: LiveAudioCapture {
             queue: .main
         ) { [weak self] notification in
             guard let self = self, self.isCapturing else { return }
-            logger.error("⚠️ Audio engine configuration changed mid-recording! Buffers: \(self.bufferCount)")
-            AppLogger.shared.log(.error, "Audio engine reconfigured", detail: "Recording may be affected. Buffers captured: \(self.bufferCount)")
+            log.error("Audio engine configuration changed mid-recording", detail: "Buffers: \(self.bufferCount)")
 
             // Try to recover by restarting the engine
             if !self.engine.isRunning {
-                logger.warning("Engine stopped - attempting restart")
+                log.warning("Engine stopped - attempting restart")
                 do {
                     try self.engine.start()
-                    logger.info("Engine restarted successfully")
+                    log.info("Engine restarted successfully")
                 } catch {
-                    logger.error("Failed to restart engine: \(error.localizedDescription)")
+                    log.error("Failed to restart engine", error: error)
                     Task { @MainActor in
                         self.onCaptureError?("Audio engine stopped unexpectedly")
                     }
@@ -151,7 +150,7 @@ final class MicrophoneCapture: LiveAudioCapture {
 
     func startCapture(onChunk: @escaping (String) -> Void) {
         guard !isCapturing else {
-            logger.warning("Already capturing")
+            log.warning("Already capturing")
             return
         }
 
@@ -191,8 +190,7 @@ final class MicrophoneCapture: LiveAudioCapture {
                 try audioFile.write(from: buffer)
                 self.bufferCount += 1
             } catch {
-                logger.error("Failed to write audio buffer: \(error.localizedDescription)")
-                AppLogger.shared.log(.error, "Audio write failed", detail: "Buffer \(self.bufferCount): \(error.localizedDescription)")
+                log.error("Failed to write audio buffer", detail: "Buffer \(self.bufferCount)", error: error)
             }
 
             // Calculate RMS level for visualization and silence detection
@@ -205,9 +203,9 @@ final class MicrophoneCapture: LiveAudioCapture {
         do {
             try engine.start()
             isCapturing = true
-            logger.info("Microphone capture started")
+            log.info("Microphone capture started")
         } catch {
-            logger.error("Failed to start audio engine: \(error.localizedDescription)")
+            log.error("Failed to start audio engine", error: error)
             inputNode.removeTap(onBus: 0)
             tempFileURL = nil
             fileCreated = false
@@ -224,7 +222,7 @@ final class MicrophoneCapture: LiveAudioCapture {
         guard let fileURL = tempFileURL else { return }
 
         let format = buffer.format
-        logger.info("Actual buffer format: \(format.sampleRate)Hz, \(format.channelCount)ch, \(format.commonFormat.rawValue)")
+        log.debug("Actual buffer format", detail: "\(format.sampleRate)Hz, \(format.channelCount)ch, \(format.commonFormat.rawValue)")
 
         // Create file with AAC encoding matching the actual buffer format
         let settings: [String: Any] = [
@@ -237,9 +235,9 @@ final class MicrophoneCapture: LiveAudioCapture {
         do {
             audioFile = try AVAudioFile(forWriting: fileURL, settings: settings)
             fileCreated = true
-            logger.info("Created audio file: \(format.sampleRate)Hz, \(format.channelCount)ch")
+            log.info("Created audio file", detail: "\(format.sampleRate)Hz, \(format.channelCount)ch")
         } catch {
-            logger.error("Failed to create audio file: \(error.localizedDescription)")
+            log.error("Failed to create audio file", error: error)
         }
     }
 
@@ -282,20 +280,20 @@ final class MicrophoneCapture: LiveAudioCapture {
             // Check file size to validate recording
             if let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
                let size = attrs[.size] as? Int {
-                logger.info("Captured audio file: \(fileURL.lastPathComponent) (\(size) bytes)")
+                log.info("Captured audio file", detail: "\(fileURL.lastPathComponent) (\(size) bytes)")
 
                 if size > 1000 {
                     onChunk?(fileURL.path)  // Pass path, not data - engine reads directly
                 } else {
-                    logger.warning("Audio file too small (\(size) bytes), likely empty recording")
+                    log.warning("Audio file too small", detail: "\(size) bytes, likely empty recording")
                     try? FileManager.default.removeItem(at: fileURL)
                 }
             } else {
-                logger.error("Failed to get audio file attributes")
+                log.error("Failed to get audio file attributes")
                 try? FileManager.default.removeItem(at: fileURL)
             }
         } else {
-            logger.warning("No temp file URL - file may not have been created")
+            log.warning("No temp file URL - file may not have been created")
         }
 
         let capturedBuffers = bufferCount
@@ -303,13 +301,11 @@ final class MicrophoneCapture: LiveAudioCapture {
         onChunk = nil
         fileCreated = false
         bufferCount = 0
-        logger.info("Microphone capture stopped - \(capturedBuffers) buffers captured")
+        log.info("Microphone capture stopped", detail: "\(capturedBuffers) buffers captured")
 
         // Log warning if suspiciously few buffers (likely a problem)
         if capturedBuffers < 10 {
-            Task { @MainActor in
-                AppLogger.shared.log(.audio, "⚠️ Very short recording", detail: "Only \(capturedBuffers) audio buffers captured")
-            }
+            log.warning("Very short recording", detail: "Only \(capturedBuffers) audio buffers captured")
         }
     }
 
@@ -318,7 +314,7 @@ final class MicrophoneCapture: LiveAudioCapture {
         // Read directly from UserDefaults to avoid MainActor isolation
         let selectedID = UInt32(UserDefaults.standard.integer(forKey: "selectedMicrophoneID"))
         guard selectedID != 0 else {
-            logger.info("Using system default microphone")
+            log.info("Using system default microphone")
             return
         }
 
@@ -327,7 +323,7 @@ final class MicrophoneCapture: LiveAudioCapture {
         let audioUnit = inputNode.audioUnit
 
         guard let audioUnit = audioUnit else {
-            logger.warning("Could not get audio unit from input node")
+            log.warning("Could not get audio unit from input node")
             return
         }
 
@@ -343,9 +339,9 @@ final class MicrophoneCapture: LiveAudioCapture {
         )
 
         if status == noErr {
-            logger.info("Set input device to: \(selectedID)")
+            log.info("Set input device", detail: "deviceID=\(selectedID)")
         } else {
-            logger.warning("Failed to set input device: \(status)")
+            log.warning("Failed to set input device", detail: "status=\(status)")
         }
     }
 }

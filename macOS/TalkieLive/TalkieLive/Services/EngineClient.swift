@@ -11,76 +11,18 @@ import os
 import os.signpost
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "Engine")
+private let log = Log(.xpc)
 
 /// Signpost log for XPC round-trip profiling in Instruments
 private let xpcSignpostLog = OSLog(subsystem: "jdi.talkie.live", category: .pointsOfInterest)
 
-/// Shared file writer for cross-app log viewing in Talkie
-private let logFileWriter = TalkieLogFileWriter(source: .talkieLive)
-
-/// Log level for dev logging
-private enum LogLevel { case debug, info, warning, error }
-
 // TranscriptionPriority is now defined in TalkieKit
 
-/// Dev-friendly console logging with OS_LOG level support
-/// Also writes to shared log file for viewing in Talkie's SystemLogsView
-private func devLog(_ message: String, detail: String? = nil, level: LogLevel = .info, file: String = #file, line: Int = #line) {
-    let filename = (file as NSString).lastPathComponent
-
-    #if DEBUG
-    let timestamp = ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withTime, .withColonSeparatorInTime])
-    let levelIcon = switch level {
-        case .debug: "🔍"
-        case .info: "ℹ️"
-        case .warning: "⚠️"
-        case .error: "❌"
-    }
-    var logLine = "[\(timestamp)] \(levelIcon) [Engine] \(message)"
-    if let detail = detail {
-        logLine += " — \(detail)"
-    }
-    logLine += "  ← \(filename):\(line)"
-    print(logLine)
-    logger.debug("\(message)")
-    #else
-    switch level {
-    case .debug: logger.debug("\(message)")
-    case .info: logger.info("\(message)")
-    case .warning: logger.warning("\(message)")
-    case .error: logger.error("\(message)")
-    }
-    #endif
-
-    // Write to shared log file (warnings/errors are critical for immediate flush)
-    let logType: LogEventType = level == .error ? .error : .system
-    let writeMode: LogWriteMode = (level == .warning || level == .error) ? .critical : .bestEffort
-
-    // Build detail with file:line for errors/warnings
-    var fullDetail = detail
-    if level == .error || level == .warning {
-        let locationInfo = "[\(filename):\(line)]"
-        if let existingDetail = fullDetail {
-            fullDetail = "\(existingDetail) \(locationInfo)"
-        } else {
-            fullDetail = locationInfo
-        }
-    }
-    logFileWriter.log(logType, message, detail: fullDetail, mode: writeMode)
-}
-
 /// Log an XPC error with full details for debugging
-private func logXPCError(_ error: Error, context: String, file: String = #file, line: Int = #line) {
+private func logXPCError(_ error: Error, context: String) {
     let nsError = error as NSError
-    let detail = """
-        Context: \(context)
-        Domain: \(nsError.domain)
-        Code: \(nsError.code)
-        Description: \(error.localizedDescription)
-        Recovery: Try restarting TalkieEngine (⌘Q then relaunch)
-        """
-    devLog("XPC Error: \(context)", detail: detail, level: .error, file: file, line: line)
+    let detail = "Context: \(context) | Domain: \(nsError.domain) | Code: \(nsError.code) | Recovery: Try restarting TalkieEngine"
+    log.error("XPC Error: \(context)", detail: detail, error: error)
 }
 
 /// Engine service modes for XPC connection (aligned with TalkieEnvironment)
@@ -306,7 +248,7 @@ public final class EngineClient: ObservableObject {
     private var engineProxy: TalkieEngineProtocol?
 
     private init() {
-        logger.info("[Engine] Client initialized")
+        log.info("Client initialized")
     }
 
     // MARK: - Connection Management
@@ -314,7 +256,7 @@ public final class EngineClient: ObservableObject {
     /// Connect using honor system: try debug first, fall back to dev
     public func connect() {
         guard connection == nil else {
-            logger.debug("[Connect] Already have connection, state=\(self.connectionState.rawValue)")
+            log.debug("Already have connection", detail: "state=\(self.connectionState.rawValue)")
             return
         }
 
@@ -325,7 +267,7 @@ public final class EngineClient: ObservableObject {
         // Connect directly to environment-specific engine
         connectToMode(primaryMode)
 
-        logger.info("[Engine] Connecting to \(environment.displayName) engine (\(primaryMode.rawValue))")
+        log.info("Connecting to engine", detail: "\(environment.displayName) (\(primaryMode.rawValue))")
     }
 
     /// Try connecting to modes in order until one succeeds
@@ -340,22 +282,22 @@ public final class EngineClient: ObservableObject {
         let remainingModes = Array(modes.dropFirst())
 
         connectionState = .connecting
-        logger.info("[Engine] Trying \(mode.shortName) (\(mode.rawValue))...")
+        log.info("Trying engine", detail: "\(mode.shortName) (\(mode.rawValue))")
 
         tryConnect(to: mode) { [weak self] success in
             guard let self = self else { return }
 
             if success {
                 self.connectedMode = mode
-                logger.info("[Engine] ✓ Connected to \(mode.shortName)")
+                log.info("Connected to engine", detail: mode.shortName)
             } else if !remainingModes.isEmpty {
                 // Try next mode
-                logger.info("[Engine] \(mode.shortName) not available, trying next...")
+                log.info("Engine not available, trying next", detail: mode.shortName)
                 self.connectWithFallback(modes: remainingModes)
             } else {
                 self.connectionState = .error
                 self.lastError = "No engines available"
-                devLog("All connection attempts failed - no engines available", level: .error)
+                log.error("All connection attempts failed - no engines available")
             }
         }
     }
@@ -363,7 +305,7 @@ public final class EngineClient: ObservableObject {
     /// Connect directly to a specific mode
     private func connectToMode(_ mode: EngineServiceMode) {
         connectionState = .connecting
-        logger.info("[Engine] Connecting to \(mode.shortName) (\(mode.rawValue))")
+        log.info("Connecting to mode", detail: "\(mode.shortName) (\(mode.rawValue))")
 
         tryConnect(to: mode) { [weak self] success in
             if success {
@@ -378,7 +320,7 @@ public final class EngineClient: ObservableObject {
     private func tryConnect(to mode: EngineServiceMode, completion: @escaping (Bool) -> Void) {
         let serviceName = mode.rawValue
 
-        devLog("Attempting XPC connection to \(serviceName)...")
+        log.info("Attempting XPC connection", detail: serviceName)
 
         let conn = NSXPCConnection(machServiceName: serviceName)
         conn.remoteObjectInterface = NSXPCInterface(with: TalkieEngineProtocol.self)
@@ -390,9 +332,7 @@ public final class EngineClient: ObservableObject {
             Task { @MainActor in
                 if !completed {
                     completed = true
-                    devLog("XPC connection invalidated before ping completed",
-                           detail: "Service: \(serviceName). Engine may not be running or has a version mismatch.",
-                           level: .warning)
+                    log.warning("XPC connection invalidated before ping completed", detail: "Service: \(serviceName). Engine may not be running or has a version mismatch.")
                     completion(false)
                 } else {
                     self?.handleDisconnection(reason: "XPC invalidated (\(serviceName))")
@@ -437,9 +377,7 @@ public final class EngineClient: ObservableObject {
                     // Set up real disconnection handler now
                     conn.interruptionHandler = { [weak self] in
                         Task { @MainActor in
-                            devLog("XPC connection interrupted",
-                                   detail: "Service: \(serviceName). Engine may have crashed, been killed, or there's an interface version mismatch. Check if TalkieEngine is running.",
-                                   level: .error)
+                            log.error("XPC connection interrupted", detail: "Service: \(serviceName). Engine may have crashed, been killed, or there's an interface version mismatch.")
                             self?.handleDisconnection(reason: "XPC interrupted (\(serviceName)) - engine may have crashed or been killed")
                         }
                     }
@@ -481,9 +419,9 @@ public final class EngineClient: ObservableObject {
 
         if wasConnected {
             let sessionDuration = connectedAt.map { formatDuration(since: $0) } ?? "unknown"
-            logger.warning("[Engine] ⚠️ Disconnected from \(wasMode?.shortName ?? "?"): \(reason) (session: \(sessionDuration))")
+            log.warning("Disconnected from engine", detail: "\(wasMode?.shortName ?? "?"): \(reason) (session: \(sessionDuration))")
         } else {
-            logger.warning("[Engine] ⚠️ Connection failed: \(reason)")
+            log.warning("Connection failed", detail: reason)
         }
 
         connectedAt = nil
@@ -491,13 +429,13 @@ public final class EngineClient: ObservableObject {
 
     /// Disconnect from TalkieEngine
     public func disconnect() {
-        logger.info("[Engine] Disconnecting...")
+        log.info("Disconnecting...")
         handleDisconnection(reason: "User requested disconnect")
     }
 
     /// Reconnect to the engine
     public func reconnect() {
-        logger.info("[Engine] Reconnecting...")
+        log.info("Reconnecting...")
         handleDisconnection(reason: "Reconnect requested")
         transcriptionCount = 0
         connect()
@@ -511,7 +449,7 @@ public final class EngineClient: ObservableObject {
         // Try connecting with retries (engine may need to start via launchd)
         for attempt in 1...3 {
             if attempt > 1 {
-                logger.info("[Connect] Retry attempt \(attempt)/3...")
+                log.info("Retry attempt", detail: "\(attempt)/3")
 
                 // Clean reset for retry - don't use handleDisconnection() as it triggers
                 // the debug→dev fallback which races with our retry loop
@@ -547,11 +485,11 @@ public final class EngineClient: ObservableObject {
         }
 
         if engineRunning {
-            logger.info("[Connect] TalkieEngine already running")
+            log.info("TalkieEngine already running")
             return
         }
 
-        logger.info("[Connect] Launching TalkieEngine...")
+        log.info("Launching TalkieEngine...")
 
         // Try to launch from /Applications
         let engineURL = URL(fileURLWithPath: "/Applications/TalkieEngine.app")
@@ -560,12 +498,12 @@ public final class EngineClient: ObservableObject {
             config.activates = false // Don't bring to front
             do {
                 try await NSWorkspace.shared.openApplication(at: engineURL, configuration: config)
-                logger.info("[Connect] TalkieEngine launched")
+                log.info("TalkieEngine launched")
             } catch {
-                logger.error("[Connect] Failed to launch TalkieEngine: \(error.localizedDescription)")
+                log.error("Failed to launch TalkieEngine", error: error)
             }
         } else {
-            logger.error("[Connect] TalkieEngine not found at /Applications/TalkieEngine.app")
+            log.error("TalkieEngine not found", detail: "/Applications/TalkieEngine.app")
         }
     }
 
@@ -615,7 +553,7 @@ public final class EngineClient: ObservableObject {
             } catch let error as EngineClientError {
                 // Check if it's "Already transcribing" - wait and retry
                 if case .transcriptionFailed(let message) = error, message.contains("Already transcribing") {
-                    logger.info("[Engine] Engine busy (attempt \(attempt)/\(maxAttempts)), waiting 2s...")
+                    log.info("Engine busy, waiting", detail: "attempt \(attempt)/\(maxAttempts)")
                     lastError = error
                     try? await Task.sleep(nanoseconds: retryDelay)
                     continue
@@ -626,13 +564,13 @@ public final class EngineClient: ObservableObject {
         }
 
         // Exhausted retries
-        logger.error("[Engine] Engine still busy after \(maxAttempts) attempts (~60s)")
+        log.error("Engine still busy after max attempts", detail: "\(maxAttempts) attempts (~60s)")
         throw lastError ?? EngineClientError.transcriptionFailed("Engine busy timeout")
     }
 
     private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority) async throws -> String {
         let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
-        logger.info("[Engine] Transcribing '\(fileName)' with model '\(modelId)' priority=\(priority.displayName)")
+        log.info("Transcribing", detail: "'\(fileName)' with model '\(modelId)' priority=\(priority.displayName)")
 
         let startTime = Date()
         // Use generous timeout - transcription should complete, not timeout
@@ -695,7 +633,7 @@ public final class EngineClient: ObservableObject {
                         os_signpost(.end, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID,
                                     "elapsed=%.0fms words=%d chars=%d", elapsed * 1000, wordCount, charCount)
 
-                        logger.info("[Engine] ✓ Transcription #\(self.transcriptionCount) completed in \(String(format: "%.1f", elapsed))s (\(wordCount) words)")
+                        log.info("Transcription completed", detail: "#\(self.transcriptionCount) in \(String(format: "%.1f", elapsed))s (\(wordCount) words)")
                     } else {
                         os_signpost(.end, log: xpcSignpostLog, name: "XPC Transcribe", signpostID: signpostID, "success")
                     }
@@ -712,7 +650,7 @@ public final class EngineClient: ObservableObject {
 
     /// Preload a model for fast transcription
     public func preloadModel(_ modelId: String) async throws {
-        devLog("Preloading model '\(modelId)'...")
+        log.info("Preloading model", detail: modelId)
 
         let startTime = Date()
         let timeoutSeconds: Double = 120
@@ -741,7 +679,7 @@ public final class EngineClient: ObservableObject {
             }
 
             let timeoutWork = DispatchWorkItem {
-                devLog("Preload timeout after \(Int(timeoutSeconds))s", level: .error)
+                log.error("Preload timeout", detail: "\(Int(timeoutSeconds))s")
                 resumeOnce(with: .failure(EngineClientError.preloadFailed("Timeout")))
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
@@ -750,10 +688,10 @@ public final class EngineClient: ObservableObject {
                 timeoutWork.cancel()
                 let elapsed = Date().timeIntervalSince(startTime)
                 if let error = error {
-                    devLog("Model preload failed after \(String(format: "%.1f", elapsed))s: \(error)", level: .error)
+                    log.error("Model preload failed", detail: "\(String(format: "%.1f", elapsed))s: \(error)")
                     resumeOnce(with: .failure(EngineClientError.preloadFailed(error)))
                 } else {
-                    devLog("✓ Model '\(modelId)' preloaded in \(String(format: "%.1f", elapsed))s")
+                    log.info("Model preloaded", detail: "'\(modelId)' in \(String(format: "%.1f", elapsed))s")
                     resumeOnce(with: .success(()))
                 }
             }
@@ -764,16 +702,16 @@ public final class EngineClient: ObservableObject {
 
     /// Unload current model
     public func unloadModel() async {
-        logger.info("[Engine] Unloading model...")
+        log.info("Unloading model...")
 
         guard let proxy = engineProxy else {
-            logger.warning("[Engine] Cannot unload - not connected")
+            log.warning("Cannot unload - not connected")
             return
         }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             proxy.unloadModel {
-                logger.info("[Engine] ✓ Model unloaded")
+                log.info("Model unloaded")
                 continuation.resume()
             }
         }
@@ -798,7 +736,7 @@ public final class EngineClient: ObservableObject {
                     if let engineDebug = status.isDebugBuild {
                         if engineDebug != self.isDebugBuild {
                             self.connectionState = .connectedWrongBuild
-                            logger.warning("[Engine] ⚠️ Build mismatch! App=\(self.isDebugBuild ? "DEBUG" : "RELEASE"), Engine=\(engineDebug ? "DEBUG" : "RELEASE")")
+                            log.warning("Build mismatch", detail: "App=\(self.isDebugBuild ? "DEBUG" : "RELEASE"), Engine=\(engineDebug ? "DEBUG" : "RELEASE")")
                         } else if self.connectionState == .connectedWrongBuild {
                             // Was mismatched, now correct
                             self.connectionState = .connected
@@ -806,9 +744,9 @@ public final class EngineClient: ObservableObject {
                     }
 
                     if let modelId = status.loadedModelId {
-                        logger.debug("[Engine] Status: model='\(modelId)', transcribing=\(status.isTranscribing), debug=\(status.isDebugBuild ?? false)")
+                        log.debug("Status", detail: "model='\(modelId)', transcribing=\(status.isTranscribing), debug=\(status.isDebugBuild ?? false)")
                     } else {
-                        logger.debug("[Engine] Status: no model loaded, debug=\(status.isDebugBuild ?? false)")
+                        log.debug("Status", detail: "no model loaded, debug=\(status.isDebugBuild ?? false)")
                     }
                 }
             }
@@ -819,20 +757,20 @@ public final class EngineClient: ObservableObject {
 
     /// Download a model by ID
     public func downloadModel(_ modelId: String) async throws {
-        logger.info("[Engine] Downloading model '\(modelId)'...")
+        log.info("Downloading model", detail: modelId)
 
         guard let proxy = engineProxy else {
-            logger.error("[Engine] Cannot download - not connected")
+            log.error("Cannot download - not connected")
             throw EngineClientError.notConnected
         }
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             proxy.downloadModel(modelId) { error in
                 if let error = error {
-                    logger.error("[Engine] Download failed: \(error)")
+                    log.error("Download failed", detail: error)
                     continuation.resume(throwing: EngineClientError.downloadFailed(error))
                 } else {
-                    logger.info("[Engine] ✓ Model '\(modelId)' downloaded")
+                    log.info("Model downloaded", detail: modelId)
                     continuation.resume()
                 }
             }
@@ -861,16 +799,16 @@ public final class EngineClient: ObservableObject {
 
     /// Cancel any ongoing download
     public func cancelDownload() async {
-        logger.info("[Engine] Cancelling download...")
+        log.info("[Engine] Cancelling download...")
 
         guard let proxy = engineProxy else {
-            logger.warning("[Engine] Cannot cancel - not connected")
+            log.warning("[Engine] Cannot cancel - not connected")
             return
         }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             proxy.cancelDownload {
-                logger.info("[Engine] ✓ Download cancelled")
+                log.info("[Engine] ✓ Download cancelled")
                 continuation.resume()
             }
         }
@@ -880,33 +818,33 @@ public final class EngineClient: ObservableObject {
 
     /// Refresh available models list
     public func refreshAvailableModels() async {
-        logger.info("[Models] refreshAvailableModels called, connectionState=\(self.connectionState.rawValue)")
+        log.info("[Models] refreshAvailableModels called, connectionState=\(self.connectionState.rawValue)")
 
         guard let proxy = engineProxy else {
-            logger.warning("[Models] Cannot refresh models - engineProxy is nil")
+            log.warning("[Models] Cannot refresh models - engineProxy is nil")
             return
         }
 
-        logger.info("[Models] Calling getAvailableModels on XPC proxy...")
+        log.info("[Models] Calling getAvailableModels on XPC proxy...")
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             proxy.getAvailableModels { [weak self] modelsJSON in
                 Task { @MainActor in
-                    logger.info("[Models] XPC callback received, data=\(modelsJSON != nil ? "\(modelsJSON!.count) bytes" : "nil")")
+                    log.info("[Models] XPC callback received, data=\(modelsJSON != nil ? "\(modelsJSON!.count) bytes" : "nil")")
 
                     if let data = modelsJSON {
                         do {
                             let models = try JSONDecoder().decode([ModelInfo].self, from: data)
                             self?.availableModels = models
-                            logger.info("[Models] ✓ Decoded \(models.count) models: \(models.map { "\($0.id)(\($0.isDownloaded ? "downloaded" : "remote"))" }.joined(separator: ", "))")
+                            log.info("[Models] ✓ Decoded \(models.count) models: \(models.map { "\($0.id)(\($0.isDownloaded ? "downloaded" : "remote"))" }.joined(separator: ", "))")
                         } catch {
-                            logger.error("[Models] JSON decode failed: \(error.localizedDescription)")
+                            log.error("[Models] JSON decode failed: \(error.localizedDescription)")
                             if let jsonString = String(data: data, encoding: .utf8) {
-                                logger.error("[Models] Raw JSON (first 500 chars): \(jsonString.prefix(500))")
+                                log.error("[Models] Raw JSON (first 500 chars): \(jsonString.prefix(500))")
                             }
                         }
                     } else {
-                        logger.warning("[Models] Engine returned nil for getAvailableModels")
+                        log.warning("[Models] Engine returned nil for getAvailableModels")
                     }
                     continuation.resume()
                 }

@@ -8,6 +8,9 @@
 
 import Cocoa
 import SwiftUI
+import TalkieKit
+
+private let log = Log(.system)
 
 // Note: @main is in main.swift which sets up XPC before NSApplication
 @MainActor
@@ -17,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppLogger.shared.info(.system, "TalkieEngine app delegate ready")
+        log.info("TalkieEngine app delegate ready")
         // Signal handling is set up in main.swift before run loop starts
 
         // Ensure we have window server access (needed when launched by launchd)
@@ -41,7 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func autoPreloadDefaultModel() async {
         let defaultModelId = "parakeet:v3"
-        AppLogger.shared.info(.model, "Auto-preloading default model: \(defaultModelId)")
+        log.info("Auto-preloading default model: \(defaultModelId)")
         EngineStatusManager.shared.log(.info, "AutoPreload", "Preloading default model: \(defaultModelId)")
 
         let startTime = Date()
@@ -50,11 +53,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             engineService.preloadModel(defaultModelId) { error in
                 Task { @MainActor in
                     if let error = error {
-                        AppLogger.shared.error(.model, "Auto-preload failed: \(error)")
+                        log.error("Auto-preload failed: \(error)")
                         EngineStatusManager.shared.log(.error, "AutoPreload", "Failed: \(error)")
                     } else {
                         let elapsed = Date().timeIntervalSince(startTime)
-                        AppLogger.shared.info(.model, "Auto-preload complete in \(String(format: "%.1f", elapsed))s")
+                        log.info("Auto-preload complete in \(String(format: "%.1f", elapsed))s")
                         EngineStatusManager.shared.log(.info, "AutoPreload", "✓ Default model ready in \(String(format: "%.1f", elapsed))s")
                     }
                     continuation.resume()
@@ -64,8 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        NSLog("[TalkieEngine] 🛑 applicationWillTerminate - beginning graceful shutdown")
-        AppLogger.shared.info(.system, "TalkieEngine shutting down gracefully")
+        log.info("applicationWillTerminate - beginning graceful shutdown")
         EngineStatusManager.shared.log(.info, "AppDelegate", "Shutting down gracefully...")
 
         // Suspend XPC listener to stop accepting new connections
@@ -77,8 +79,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Give in-flight XPC calls time to complete
         Thread.sleep(forTimeInterval: 0.2)
 
-        NSLog("[TalkieEngine] ✅ Shutdown complete")
-        AppLogger.shared.info(.system, "TalkieEngine shutdown complete")
+        log.info("Shutdown complete")
     }
 
     // MARK: - URL Handling
@@ -92,7 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleURL(_ url: URL) {
         guard url.scheme == "talkieengine" else { return }
 
-        AppLogger.shared.info(.system, "Received URL: \(url.absoluteString)")
+        log.info("Received URL: \(url.absoluteString)")
         EngineStatusManager.shared.log(.info, "URL", "Received: \(url.absoluteString)")
 
         // Handle talkieengine://dashboard (or legacy "status")
@@ -109,7 +110,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 showTraceDetail(refId: refId)
             } else {
                 // Invalid or missing refId - just show the performance tab
-                AppLogger.shared.warning(.system, "Invalid refId in URL: '\(refId)'")
+                log.warning("Invalid refId in URL: '\(refId)'")
                 showStatusWindow()
             }
         }
@@ -127,7 +128,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showTraceDetail(refId: String) {
-        AppLogger.shared.info(.system, "Showing trace detail for refId: \(refId)")
+        log.info("Showing trace detail for refId: \(refId)")
         EngineStatusManager.shared.log(.info, "URL", "Looking up trace: \(refId)")
 
         // Set the highlighted metric
@@ -243,7 +244,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func reloadEngine() {
-        AppLogger.shared.info(.system, "Manual reload requested via menu")
+        log.info("Manual reload requested via menu")
         EngineStatusManager.shared.log(.info, "System", "Reloading engine...")
 
         // For dev/debug modes: kill current process and relaunch from stable path
@@ -252,7 +253,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .appendingPathComponent("dev/talkie/build/Debug/TalkieEngine.app")
 
         if FileManager.default.fileExists(atPath: buildPath.path) {
-            AppLogger.shared.info(.system, "Relaunching from: \(buildPath.path)")
+            log.info("Relaunching from: \(buildPath.path)")
 
             // Launch new instance
             let task = Process()
@@ -261,18 +262,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             do {
                 try task.run()
-                AppLogger.shared.info(.system, "New instance launched, exiting current")
+                log.info("New instance launched, exiting current")
 
                 // Exit current instance after brief delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     exit(0)
                 }
             } catch {
-                AppLogger.shared.error(.system, "Failed to relaunch: \(error)")
+                log.error("Failed to relaunch: \(error)")
                 EngineStatusManager.shared.log(.error, "Reload", "Failed: \(error.localizedDescription)")
             }
         } else {
-            AppLogger.shared.error(.system, "Stable build not found at: \(buildPath.path)")
+            log.error("Stable build not found at: \(buildPath.path)")
             EngineStatusManager.shared.log(.error, "Reload", "Build path not found - run ./run.sh engine first")
         }
     }
@@ -282,7 +283,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
         let userID = getuid()
 
-        AppLogger.shared.info(.system, "Stopping and disabling daemon: \(launchdLabel)")
+        log.info("Stopping and disabling daemon: \(launchdLabel)")
         EngineStatusManager.shared.log(.warning, "Daemon", "Disabling daemon - will not auto-restart")
 
         // Unload the launchd service
@@ -295,7 +296,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             task.waitUntilExit()
 
             if task.terminationStatus == 0 {
-                AppLogger.shared.info(.system, "Daemon disabled successfully")
+                log.info("Daemon disabled successfully")
                 EngineStatusManager.shared.log(.info, "Daemon", "✓ Daemon disabled - use 'launchctl bootstrap' to re-enable")
 
                 // Show notification
@@ -309,11 +310,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     NSApp.terminate(nil)
                 }
             } else {
-                AppLogger.shared.error(.system, "Failed to disable daemon (exit code: \(task.terminationStatus))")
+                log.error("Failed to disable daemon (exit code: \(task.terminationStatus))")
                 EngineStatusManager.shared.log(.error, "Daemon", "Failed to disable (may already be stopped)")
             }
         } catch {
-            AppLogger.shared.error(.system, "Error disabling daemon: \(error)")
+            log.error("Error disabling daemon: \(error)")
             EngineStatusManager.shared.log(.error, "Daemon", "Error: \(error.localizedDescription)")
         }
     }
@@ -323,7 +324,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let launchdLabel = EngineStatusManager.shared.launchMode.launchdLabel
         let userID = getuid()
 
-        AppLogger.shared.info(.system, "Stopping daemon for dev takeover: \(launchdLabel)")
+        log.info("Stopping daemon for dev takeover: \(launchdLabel)")
         EngineStatusManager.shared.log(.info, "Daemon", "Stopping daemon - dev will take over")
 
         let task = Process()
@@ -335,18 +336,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             task.waitUntilExit()
 
             if task.terminationStatus == 0 {
-                AppLogger.shared.info(.system, "Daemon stopped - dev is now primary")
+                log.info("Daemon stopped - dev is now primary")
                 EngineStatusManager.shared.log(.info, "Daemon", "✓ Daemon stopped - dev instance is now primary")
             } else if task.terminationStatus == 3 {
                 // Exit code 3 = not running, which is fine
-                AppLogger.shared.info(.system, "Daemon was not running")
+                log.info("Daemon was not running")
                 EngineStatusManager.shared.log(.info, "Daemon", "Daemon was not running - dev is primary")
             } else {
-                AppLogger.shared.error(.system, "Failed to stop daemon (exit code: \(task.terminationStatus))")
+                log.error("Failed to stop daemon (exit code: \(task.terminationStatus))")
                 EngineStatusManager.shared.log(.error, "Daemon", "Failed to stop (code: \(task.terminationStatus))")
             }
         } catch {
-            AppLogger.shared.error(.system, "Error stopping daemon: \(error)")
+            log.error("Error stopping daemon: \(error)")
             EngineStatusManager.shared.log(.error, "Daemon", "Error: \(error.localizedDescription)")
         }
     }
@@ -356,12 +357,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let userID = getuid()
         let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(launchdLabel).plist"
 
-        AppLogger.shared.info(.system, "Switching to daemon mode: \(launchdLabel)")
+        log.info("Switching to daemon mode: \(launchdLabel)")
         EngineStatusManager.shared.log(.info, "Daemon", "Switching to daemon mode...")
 
         // Check if plist exists
         guard FileManager.default.fileExists(atPath: plistPath) else {
-            AppLogger.shared.error(.system, "Daemon plist not found at: \(plistPath)")
+            log.error("Daemon plist not found at: \(plistPath)")
             EngineStatusManager.shared.log(.error, "Daemon", "Plist not found - run install script first")
 
             let alert = NSAlert()
@@ -382,7 +383,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             task.waitUntilExit()
 
             if task.terminationStatus == 0 {
-                AppLogger.shared.info(.system, "Daemon started successfully")
+                log.info("Daemon started successfully")
                 EngineStatusManager.shared.log(.info, "Daemon", "✓ Daemon started - quitting Xcode instance")
 
                 // Quit this instance - daemon will take over
@@ -392,19 +393,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 // Exit code 37 = already loaded, which is fine
                 if task.terminationStatus == 37 {
-                    AppLogger.shared.info(.system, "Daemon already running")
+                    log.info("Daemon already running")
                     EngineStatusManager.shared.log(.info, "Daemon", "Daemon already running - quitting Xcode instance")
 
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         NSApp.terminate(nil)
                     }
                 } else {
-                    AppLogger.shared.error(.system, "Failed to start daemon (exit code: \(task.terminationStatus))")
+                    log.error("Failed to start daemon (exit code: \(task.terminationStatus))")
                     EngineStatusManager.shared.log(.error, "Daemon", "Failed to start daemon (code: \(task.terminationStatus))")
                 }
             }
         } catch {
-            AppLogger.shared.error(.system, "Error starting daemon: \(error)")
+            log.error("Error starting daemon: \(error)")
             EngineStatusManager.shared.log(.error, "Daemon", "Error: \(error.localizedDescription)")
         }
     }
@@ -447,7 +448,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let userID = getuid()
         let plistPath = "\(NSHomeDirectory())/Library/LaunchAgents/\(launchdLabel).plist"
 
-        AppLogger.shared.info(.system, "Re-enabling daemon: \(launchdLabel)")
+        log.info("Re-enabling daemon: \(launchdLabel)")
 
         // Bootstrap (load) the launchd service
         let task = Process()
@@ -459,7 +460,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             task.waitUntilExit()
 
             if task.terminationStatus == 0 {
-                AppLogger.shared.info(.system, "Daemon re-enabled successfully")
+                log.info("Daemon re-enabled successfully")
 
                 // Show notification
                 let notification = NSUserNotification()
@@ -467,10 +468,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 notification.informativeText = "The daemon will auto-start and run in the background."
                 NSUserNotificationCenter.default.deliver(notification)
             } else {
-                AppLogger.shared.warning(.system, "Failed to re-enable daemon (exit code: \(task.terminationStatus)) - may already be running")
+                log.warning("Failed to re-enable daemon (exit code: \(task.terminationStatus)) - may already be running")
             }
         } catch {
-            AppLogger.shared.error(.system, "Error re-enabling daemon: \(error)")
+            log.error("Error re-enabling daemon: \(error)")
         }
     }
 
