@@ -48,6 +48,7 @@ struct UnifiedDashboard: View {
     private let liveState = ServiceManager.shared.live
     private let serviceMonitor = ServiceManager.shared.engine
     private let syncManager = CloudKitSyncManager.shared
+    private let settings = SettingsManager.shared  // For theme observation
 
     // State
     @State private var unifiedActivity: [UnifiedActivityItem] = []
@@ -124,26 +125,19 @@ struct UnifiedDashboard: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("DASHBOARD")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.current.foregroundMuted)
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+            Text("Home")
+                .font(Theme.current.fontDisplay)
+                .foregroundColor(Theme.current.foreground)
 
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Home")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(Theme.current.foreground)
-
-                if streak > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: streak >= 7 ? "flame.fill" : "flame")
-                            .foregroundColor(.orange)
-                        Text("\(streak) day streak")
-                            .foregroundColor(.orange)
-                    }
-                    .font(.system(size: 13, weight: .medium))
+            if streak > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: streak >= 7 ? "flame.fill" : "flame")
+                        .foregroundColor(.orange)
+                    Text("\(streak) day streak")
+                        .foregroundColor(.orange)
                 }
+                .font(.system(size: 13, weight: .medium))
             }
         }
     }
@@ -195,9 +189,9 @@ struct UnifiedDashboard: View {
     private var activityHeatmap: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("ACTIVITY")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
+                Text(settings.uiAllCaps ? "ACTIVITY" : "Activity")
+                    .font(Theme.current.fontSMMedium)
+                    .tracking(settings.uiAllCaps ? 1 : 0)
                     .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
@@ -249,9 +243,9 @@ struct UnifiedDashboard: View {
     private var recentMemosCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("RECENT MEMOS")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
+                Text(settings.uiAllCaps ? "RECENT MEMOS" : "Recent Memos")
+                    .font(Theme.current.fontSMMedium)
+                    .tracking(settings.uiAllCaps ? 1 : 0)
                     .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
@@ -291,9 +285,9 @@ struct UnifiedDashboard: View {
     private var recentDictationsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("RECENT DICTATIONS")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
+                Text(settings.uiAllCaps ? "RECENT DICTATIONS" : "Recent Dictations")
+                    .font(Theme.current.fontSMMedium)
+                    .tracking(settings.uiAllCaps ? 1 : 0)
                     .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
@@ -360,12 +354,12 @@ struct UnifiedDashboard: View {
 
     private var quickActionsCompact: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("QUICK ACTIONS")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1)
+            Text(settings.uiAllCaps ? "QUICK ACTIONS" : "Quick Actions")
+                .font(Theme.current.fontSMMedium)
+                .tracking(settings.uiAllCaps ? 1 : 0)
                 .foregroundColor(Theme.current.foregroundMuted)
 
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.xs) {
                 CompactActionButton(icon: "mic.fill", title: "Record", color: .green) {
                     // Trigger recording
                 }
@@ -395,12 +389,12 @@ struct UnifiedDashboard: View {
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("QUICK ACTIONS")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1)
+            Text(settings.uiAllCaps ? "QUICK ACTIONS" : "Quick Actions")
+                .font(Theme.current.fontSMMedium)
+                .tracking(settings.uiAllCaps ? 1 : 0)
                 .foregroundColor(Theme.current.foregroundMuted)
 
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.md) {
                 DashboardActionCard(
                     icon: "mic.fill",
                     title: "Record",

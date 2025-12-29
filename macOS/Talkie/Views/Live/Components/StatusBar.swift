@@ -41,6 +41,67 @@ struct StatusBar: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     }
 
+    #if DEBUG
+    // Git branch for debug display (cached at view init)
+    private var gitBranch: String? {
+        Self.cachedGitBranch
+    }
+
+    // Static cache - computed once at app launch
+    private static let cachedGitBranch: String? = {
+        // Try known development paths first
+        let devPaths = [
+            "/Users/arach/dev/talkie-dev",  // Main repo
+            FileManager.default.currentDirectoryPath
+        ]
+
+        for basePath in devPaths {
+            if let branch = readGitBranch(from: URL(fileURLWithPath: basePath)) {
+                return branch
+            }
+        }
+        return nil
+    }()
+
+    private static func readGitBranch(from directory: URL) -> String? {
+        let fm = FileManager.default
+        let gitPath = directory.appendingPathComponent(".git")
+
+        guard fm.fileExists(atPath: gitPath.path) else { return nil }
+
+        // Check if it's a file (worktree) or directory (regular repo)
+        var isDir: ObjCBool = false
+        fm.fileExists(atPath: gitPath.path, isDirectory: &isDir)
+
+        if isDir.boolValue {
+            // Regular repo: .git/HEAD contains "ref: refs/heads/branch"
+            let headPath = gitPath.appendingPathComponent("HEAD")
+            if let content = try? String(contentsOf: headPath, encoding: .utf8),
+               content.hasPrefix("ref: refs/heads/") {
+                return content
+                    .replacingOccurrences(of: "ref: refs/heads/", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } else {
+            // Worktree: .git file contains path to actual git dir
+            if let worktreeRef = try? String(contentsOf: gitPath, encoding: .utf8),
+               worktreeRef.hasPrefix("gitdir:") {
+                let gitDir = worktreeRef
+                    .replacingOccurrences(of: "gitdir:", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let worktreeHead = URL(fileURLWithPath: gitDir).appendingPathComponent("HEAD")
+                if let content = try? String(contentsOf: worktreeHead, encoding: .utf8),
+                   content.hasPrefix("ref: refs/heads/") {
+                    return content
+                        .replacingOccurrences(of: "ref: refs/heads/", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+        }
+        return nil
+    }
+    #endif
+
     // Computed properties (replaces ViewModel aggregation)
     private var microphoneName: String {
         if let device = audioDevices.inputDevices.first(where: { $0.id == liveSettings.selectedMicrophoneID }) {
@@ -192,6 +253,30 @@ struct StatusBar: View {
                             .foregroundColor(TalkieTheme.textMuted)
 
                         #if DEBUG
+                        // Git branch indicator
+                        if let branch = gitBranch {
+                            Text(branch)
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(TalkieTheme.textMuted)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(TalkieTheme.surfaceCard)
+                                )
+                        }
+
+                        // Theme indicator for audit mode
+                        Text(SettingsManager.shared.currentTheme?.displayName ?? "Default")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(LinearStyle.isActive ? LinearStyle.glowColor : TalkieTheme.textMuted)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(LinearStyle.isActive ? LinearStyle.glowColor.opacity(0.15) : Color.clear)
+                            )
+
                         if controlPressed {
                             Divider()
                                 .frame(height: 12)

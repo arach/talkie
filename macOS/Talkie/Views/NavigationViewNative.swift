@@ -194,7 +194,7 @@ struct TalkieNavigationViewNative: View {
             }
 
             // Memos
-            Section("MEMOS") {
+            Section(settings.uiAllCaps ? "MEMOS" : "Memos") {
                 NavigationLink(value: NavigationSection.allMemos) {
                     HStack {
                         Label("All Memos", systemImage: "square.stack")
@@ -207,7 +207,7 @@ struct TalkieNavigationViewNative: View {
             }
 
             // Live
-            Section("LIVE") {
+            Section(settings.uiAllCaps ? "LIVE" : "Live") {
                 NavigationLink(value: NavigationSection.liveDashboard) {
                     Label("Dashboard", systemImage: "chart.xyaxis.line")
                 }
@@ -230,7 +230,7 @@ struct TalkieNavigationViewNative: View {
             }
 
             // Activity
-            Section("ACTIVITY") {
+            Section(settings.uiAllCaps ? "ACTIVITY" : "Activity") {
                 NavigationLink(value: NavigationSection.aiResults) {
                     Label("Actions", systemImage: "chart.line.uptrend.xyaxis")
                 }
@@ -241,7 +241,7 @@ struct TalkieNavigationViewNative: View {
             }
 
             // Tools
-            Section("TOOLS") {
+            Section(settings.uiAllCaps ? "TOOLS" : "Tools") {
                 NavigationLink(value: NavigationSection.workflows) {
                     Label("Workflows", systemImage: "wand.and.stars")
                 }
@@ -257,7 +257,7 @@ struct TalkieNavigationViewNative: View {
 
             #if DEBUG
             if DesignModeManager.shared.isEnabled {
-                Section("DESIGN") {
+                Section(settings.uiAllCaps ? "DESIGN" : "Design") {
                     NavigationLink(value: NavigationSection.designHome) {
                         Label("Design Home", systemImage: "paintbrush.fill")
                     }

@@ -873,6 +873,119 @@ struct ThemeColorPalette {
             accent: Color.cyan
         )
     }
+
+    /// Linear theme palette - Vercel/Linear inspired true black with subtle borders
+    static func linear() -> ThemeColorPalette {
+        ThemeColorPalette(
+            surface: Color.black,
+            surfaceElevated: Color(white: 0.04),
+            surfaceCard: Color(white: 0.06),
+            textPrimary: Color.white,
+            textSecondary: Color(white: 0.6),
+            textTertiary: Color(white: 0.45),
+            textMuted: Color(white: 0.35),
+            border: Color.white.opacity(0.08),
+            borderSubtle: Color.white.opacity(0.05),
+            divider: Color.white.opacity(0.08),
+            hover: Color.white.opacity(0.06),
+            accent: Color(red: 0.0, green: 0.83, blue: 1.0) // Linear cyan
+        )
+    }
+}
+
+// MARK: - Linear Theme Styling
+
+/// Linear-specific styling utilities for Vercel/Linear-inspired design
+enum LinearStyle {
+    /// Subtle glow color for card borders
+    static let glowColor = Color(red: 0.0, green: 0.83, blue: 1.0)
+
+    /// Check if Linear theme is currently active
+    static var isActive: Bool {
+        SettingsManager.shared.isLinearTheme
+    }
+
+    /// Card border color - subtle white or accent glow on hover
+    static func cardBorder(isHovered: Bool) -> Color {
+        if isHovered {
+            return glowColor.opacity(0.3)
+        }
+        return Color.white.opacity(0.08)
+    }
+
+    /// Card shadow for subtle glow effect
+    static func cardShadow(isHovered: Bool) -> Color {
+        if isHovered {
+            return glowColor.opacity(0.15)
+        }
+        return Color.clear
+    }
+
+    /// Card shadow radius
+    static func cardShadowRadius(isHovered: Bool) -> CGFloat {
+        isHovered ? 12 : 0
+    }
+}
+
+/// View modifier for Linear-style cards with glow effect
+struct LinearCardStyle: ViewModifier {
+    let isHovered: Bool
+    var accentColor: Color = LinearStyle.glowColor
+
+    func body(content: Content) -> some View {
+        if LinearStyle.isActive {
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(isHovered ? Color(white: 0.07) : Color(white: 0.05))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .strokeBorder(
+                            isHovered ? accentColor.opacity(0.4) : Color.white.opacity(0.08),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(
+                    color: isHovered ? accentColor.opacity(0.2) : Color.clear,
+                    radius: isHovered ? 16 : 0,
+                    x: 0, y: 0
+                )
+        } else {
+            content
+        }
+    }
+}
+
+/// View modifier for Linear-style section headers with subtle accent
+struct LinearSectionStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if LinearStyle.isActive {
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(Color(white: 0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                        )
+                )
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Apply Linear-style card with glow effect on hover
+    func linearCard(isHovered: Bool, accent: Color = LinearStyle.glowColor) -> some View {
+        modifier(LinearCardStyle(isHovered: isHovered, accentColor: accent))
+    }
+
+    /// Apply Linear-style section background
+    func linearSection() -> some View {
+        modifier(LinearSectionStyle())
+    }
 }
 
 // MARK: - Design (for Live HistoryView)

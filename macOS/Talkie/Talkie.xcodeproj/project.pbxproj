@@ -173,7 +173,6 @@
 		AC3CA013906723835202D212 /* WorkflowRunModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */; };
 		AD8EF53880975F30AD0EC8CA /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C61F06614F98D34848572E /* OnboardingView.swift */; };
 		AD9D159217AF0A90FEE7D5E0 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 82F176DD5AC8EBE60E6289AF /* README.md */; };
-		B213BC6C556325E528768C8D /* MemoRowView.swift.bak in Resources */ = {isa = PBXBuildFile; fileRef = 9432282ED6D2758AA7A1B7EC /* MemoRowView.swift.bak */; };
 		B2D45FD680D49E959CDF36F1 /* SpeechSynthesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21E7CFB7BA19EE59D1A229FC /* SpeechSynthesisService.swift */; };
 		B33086CC4E3AD8DD1FC5EE13 /* TalkieServiceMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720EC90439850FC3D809A9BC /* TalkieServiceMonitorView.swift */; };
 		B3A26A431CEBB6919CFB877D /* WorkflowSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE0F9BE138BF58E1192F3E9 /* WorkflowSettings.swift */; };
@@ -383,7 +382,6 @@
 		936E9217E1D38B321ADE8848 /* AudioDeviceSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceSelector.swift; sourceTree = "<group>"; };
 		938F08F6F9BB5CCABE877A55 /* StatusBarComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarComponents.swift; sourceTree = "<group>"; };
 		93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowConverter.swift; sourceTree = "<group>"; };
-		9432282ED6D2758AA7A1B7EC /* MemoRowView.swift.bak */ = {isa = PBXFileReference; path = MemoRowView.swift.bak; sourceTree = "<group>"; };
 		95F0695BC582E2740F8700BD /* GeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiService.swift; sourceTree = "<group>"; };
 		96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconProvider.swift; sourceTree = "<group>"; };
 		9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
@@ -609,7 +607,6 @@
 			children = (
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				37B249E75E681770AEA53425 /* MemoRowView.swift */,
-				9432282ED6D2758AA7A1B7EC /* MemoRowView.swift.bak */,
 				F07283F6C46D066449E6FB15 /* NavigationViewNative.swift */,
 				35028147CAD1F8AA00F3561D /* PendingActionsView.swift */,
 				5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */,
@@ -1124,7 +1121,6 @@
 				105F1CFFCA8FF0A934729073 /* Assets.xcassets in Resources */,
 				71F80A8C9FB89E9AABF7B5E6 /* LLMModelsSettingsView.swift.disabled in Resources */,
 				59B2EC1EB7D88BC8C366D9FD /* LiveHistoryView.swift.disabled in Resources */,
-				B213BC6C556325E528768C8D /* MemoRowView.swift.bak in Resources */,
 				AD9D159217AF0A90FEE7D5E0 /* README.md in Resources */,
 				3A82694060BF7CD29FC9A051 /* Resources in Resources */,
 				35CAD8238CDD26722C281996 /* TalkieSound.swift.disabled in Resources */,

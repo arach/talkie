@@ -44,6 +44,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     // CLI command handler
     private let cliHandler = CLICommandHandler()
 
+    override init() {
+        super.init()
+        // Early theme parsing - set theme BEFORE views are created
+        Self.parseAndSetThemeEarly()
+    }
+
+    /// Parse --theme argument early and set UserDefaults before SettingsManager initializes
+    private static func parseAndSetThemeEarly() {
+        let args = ProcessInfo.processInfo.arguments
+        for arg in args {
+            if arg.hasPrefix("--theme=") {
+                let themeName = String(arg.dropFirst("--theme=".count))
+                if let theme = ThemePreset(rawValue: themeName) {
+                    // Set UserDefaults directly - SettingsManager will read this on init
+                    UserDefaults.standard.set(theme.rawValue, forKey: "currentTheme")
+                    UserDefaults.standard.synchronize()
+                    NSLog("[AppDelegate] Early theme set: %@", theme.rawValue)
+                }
+                break
+            }
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let launchState = signposter.beginInterval("App Launch")
         NSLog("[AppDelegate] 🎬 applicationDidFinishLaunching called")
@@ -328,11 +351,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         cliHandler.register(
             "audit-screen",
-            description: "Audit a specific screen with screenshot capture (e.g., settings-appearance, settings-dictation-capture)"
+            description: "Audit a specific screen with screenshot capture. Usage: --debug=audit-screen <screen-id> [--theme=<theme>]"
         ) { args in
             NSLog("[audit-screen] Handler started")
-            guard let screenId = args.first else {
+
+            // Parse arguments
+            var screenId: String?
+            var themeName: String?
+
+            for arg in args {
+                if arg.hasPrefix("--theme=") {
+                    themeName = String(arg.dropFirst("--theme=".count))
+                } else if !arg.hasPrefix("--") {
+                    screenId = arg
+                }
+            }
+
+            guard let screenId = screenId else {
                 print("❌ No screen ID provided")
+                print("Usage: --debug=audit-screen <screen-id> [--theme=<theme>]")
+                print("Themes: talkiePro, linear, terminal, minimal, classic, warm")
                 exit(1)
             }
             NSLog("[audit-screen] screenId: %@", screenId)
@@ -346,6 +384,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 exit(1)
             }
             NSLog("[audit-screen] screen: %@", screen.rawValue)
+
+            // Set theme if specified
+            var originalTheme: ThemePreset?
+            if let themeName = themeName {
+                if let theme = ThemePreset(rawValue: themeName) {
+                    await MainActor.run {
+                        originalTheme = SettingsManager.shared.currentTheme
+                        SettingsManager.shared.currentTheme = theme
+
+                        // Force theme cache to update
+                        Theme.invalidate()
+
+                        print("🎨 Theme set to: \(theme.displayName)")
+
+                        // Force all windows to redisplay
+                        for window in NSApp.windows {
+                            // Invalidate the window content to force SwiftUI view rebuild
+                            if let contentView = window.contentView {
+                                contentView.needsDisplay = true
+                                contentView.needsLayout = true
+
+                                // Force SwiftUI hosting view to update
+                                if let hostingView = contentView.subviews.first {
+                                    hostingView.needsDisplay = true
+                                    hostingView.needsLayout = true
+                                }
+                            }
+                            window.displayIfNeeded()
+                        }
+                    }
+
+                    // Wait for views to update
+                    try? await Task.sleep(for: .milliseconds(500))
+                } else {
+                    print("⚠️ Unknown theme: \(themeName)")
+                    print("   Available themes: talkiePro, linear, terminal, minimal, classic, warm")
+                }
+            }
 
             let baseDir = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Desktop")
@@ -381,6 +457,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     NSLog("[audit-screen] Capture returned nil for size: %@", size.rawValue)
                 }
                 NSLog("[audit-screen] Done capturing screenshots")
+            } else if screen.section == .home {
+                // Capture home dashboard from main window
+                NSLog("[audit-screen] Capturing home screen: %@", screen.rawValue)
+
+                await MainActor.run {
+                    // Navigate to home
+                    NotificationCenter.default.post(name: .init("NavigateToHome"), object: nil)
+                }
+
+                // Wait for navigation
+                try? await Task.sleep(for: .milliseconds(500))
+
+                // Find and capture the main window
+                if let mainWindow = await MainActor.run(body: {
+                    NSApp.windows.first { $0.title.contains("Talkie") && !$0.title.contains("Settings") }
+                }) {
+                    await MainActor.run {
+                        mainWindow.makeKeyAndOrderFront(nil)
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+
+                    // Capture using CGWindowListCreateImage
+                    let windowNumber = await MainActor.run(body: { CGWindowID(mainWindow.windowNumber) })
+                    if let cgImage = CGWindowListCreateImage(.null, .optionIncludingWindow, windowNumber, [.boundsIgnoreFraming]) {
+                        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                        if let tiffData = image.tiffRepresentation,
+                           let bitmapImage = NSBitmapImageRep(data: tiffData),
+                           let pngData = bitmapImage.representation(using: .png, properties: [:]) {
+                            let filename = "\(screen.rawValue).png"
+                            let fileURL = screenshotDir.appendingPathComponent(filename)
+                            try? pngData.write(to: fileURL)
+                            screenshotPaths.append(filename)
+                            print("  ✅ Captured: \(filename)")
+                        }
+                    }
+                } else {
+                    print("  ⚠️ No main window found")
+                }
             } else {
                 print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
             }

@@ -24,6 +24,7 @@ struct TalkieHomeView: View {
     private let serviceMonitor = ServiceManager.shared.engine
     private let eventManager = SystemEventManager.shared
     private let dictationStore = DictationStore.shared
+    private let settings = SettingsManager.shared  // For theme observation
 
     // Cached state - only updates when specific properties change
     @State private var recentMemos: [VoiceMemo] = []
@@ -60,6 +61,8 @@ struct TalkieHomeView: View {
             }
             .background(Theme.current.background)
         }
+        // Force view rebuild when theme changes
+        .id("home-\(settings.currentTheme?.rawValue ?? "default")")
         .onAppear {
             loadRecentMemos()
             liveState.startMonitoring()
@@ -100,14 +103,26 @@ struct TalkieHomeView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("HOME")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(Tracking.wide)
-                .foregroundColor(Theme.current.foregroundMuted)
+        let isLinear = settings.isLinearTheme
+        let theme = settings.currentTheme
+
+        return VStack(alignment: .leading, spacing: isLinear ? 0 : Spacing.xs) {
+            #if DEBUG
+            // Debug: show actual theme value
+            Text("Theme: \(theme?.rawValue ?? "nil") | isLinear: \(isLinear ? "YES" : "NO")")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.red)
+            #endif
+
+            if !isLinear {
+                Text("HOME")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(Tracking.wide)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
 
             Text("Dashboard")
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: isLinear ? 28 : 24, weight: isLinear ? .semibold : .bold))
                 .foregroundColor(Theme.current.foreground)
         }
     }
@@ -198,7 +213,9 @@ struct TalkieHomeView: View {
     // MARK: - Recent Activity Section
 
     private var recentActivitySection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        let isLinear = settings.isLinearTheme
+
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 sectionHeader("Recent Activity")
                 Spacer()
@@ -220,10 +237,10 @@ struct TalkieHomeView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(Theme.current.surface1)
+                    .fill(isLinear ? Color(white: 0.04) : Theme.current.surface1)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(Theme.current.divider, lineWidth: 1)
+                            .strokeBorder(isLinear ? Color.white.opacity(0.08) : Theme.current.divider, lineWidth: 1)
                     )
             )
         }
@@ -263,10 +280,12 @@ struct TalkieHomeView: View {
     // MARK: - Helper Views
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 10, weight: .bold))
-            .tracking(Tracking.wide)
-            .foregroundColor(Theme.current.foregroundMuted)
+        let isLinear = settings.isLinearTheme
+
+        return Text(isLinear ? title : title.uppercased())
+            .font(.system(size: isLinear ? 11 : 10, weight: isLinear ? .medium : .bold))
+            .tracking(isLinear ? 0 : Tracking.wide)
+            .foregroundColor(isLinear ? Theme.current.foregroundSecondary : Theme.current.foregroundMuted)
     }
 
     private var emptyStateView: some View {
@@ -380,37 +399,58 @@ struct StatCard: View {
     let color: Color
 
     @State private var isHovered = false
+    private let settings = SettingsManager.shared
+    private var isLinear: Bool { settings.isLinearTheme }
 
     var body: some View {
-        VStack(spacing: Spacing.sm) {
+        VStack(spacing: isLinear ? Spacing.md : Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 24, weight: .medium))
+                .font(.system(size: isLinear ? 20 : 24, weight: .medium))
                 .foregroundColor(color)
 
             Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: isLinear ? 32 : 28, weight: .bold, design: isLinear ? .default : .rounded))
                 .foregroundColor(Theme.current.foreground)
 
             Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Theme.current.foregroundMuted)
-                .textCase(.uppercase)
+                .font(.system(size: isLinear ? 11 : 10, weight: .medium))
+                .foregroundColor(isLinear ? Theme.current.foregroundSecondary : Theme.current.foregroundMuted)
+                .textCase(isLinear ? .none : .uppercase)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Spacing.lg)
+        .padding(.vertical, isLinear ? Spacing.xl : Spacing.lg)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
-                .overlay(
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .strokeBorder(color.opacity(0.2), lineWidth: 1)
-                )
+                .fill(cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .strokeBorder(cardBorder, lineWidth: 1)
+        )
+        .shadow(
+            color: isLinear && isHovered ? color.opacity(0.25) : Color.clear,
+            radius: isLinear && isHovered ? 20 : 0,
+            x: 0, y: 0
         )
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
+    }
+
+    private var cardBackground: Color {
+        if isLinear {
+            return isHovered ? Color(white: 0.06) : Color(white: 0.04)
+        }
+        return isHovered ? Theme.current.surfaceHover : Theme.current.surface1
+    }
+
+    private var cardBorder: Color {
+        if isLinear {
+            return isHovered ? color.opacity(0.5) : Color.white.opacity(0.08)
+        }
+        return color.opacity(0.2)
     }
 }
 
@@ -420,18 +460,20 @@ struct RecentMemoRow: View {
     let memo: VoiceMemo
 
     @State private var isHovered = false
+    private let settings = SettingsManager.shared
+    private var isLinear: Bool { settings.isLinearTheme }
 
     var body: some View {
-        HStack(spacing: Spacing.sm) {
+        HStack(spacing: isLinear ? Spacing.md : Spacing.sm) {
             // Icon
             Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 12))
-                .foregroundColor(.blue)
-                .frame(width: 20)
+                .font(.system(size: isLinear ? 16 : 12))
+                .foregroundColor(isLinear ? LinearStyle.glowColor : .blue)
+                .frame(width: isLinear ? 24 : 20)
 
             // Title or transcription preview
             Text(memoTitle)
-                .font(Theme.current.fontSM)
+                .font(isLinear ? Theme.current.fontBody : Theme.current.fontSM)
                 .foregroundColor(Theme.current.foreground)
                 .lineLimit(1)
 
@@ -441,11 +483,11 @@ struct RecentMemoRow: View {
             TimelineView(.periodic(from: .now, by: 60)) { _ in
             if let createdAt = memo.createdAt {
                 RelativeTimeLabel(date: createdAt, formatter: formatTimeAgo)
-                    .font(Theme.current.fontXS)
+                    .font(isLinear ? Theme.current.fontSM : Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
             } else {
                 Text("")
-                    .font(Theme.current.fontXS)
+                    .font(isLinear ? Theme.current.fontSM : Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
             }
             }
@@ -453,14 +495,14 @@ struct RecentMemoRow: View {
             // Chevron on hover
             if isHovered {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(Theme.current.foregroundMuted)
+                    .font(.system(size: isLinear ? 10 : 9, weight: .medium))
+                    .foregroundColor(isLinear && isHovered ? LinearStyle.glowColor : Theme.current.foregroundMuted)
             }
         }
-        .padding(.vertical, Spacing.xs)
+        .padding(.vertical, isLinear ? Spacing.sm : Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
+                .fill(rowBackground)
         )
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) {
@@ -474,6 +516,13 @@ struct RecentMemoRow: View {
                 object: memo.id
             )
         }
+    }
+
+    private var rowBackground: Color {
+        if isLinear {
+            return isHovered ? Color.white.opacity(0.05) : Color.clear
+        }
+        return isHovered ? Theme.current.surfaceHover : Color.clear
     }
 
     private var memoTitle: String {
@@ -510,42 +559,49 @@ private struct QuickActionButton: View {
     let action: () -> Void
 
     @State private var isHovered = false
+    private let settings = SettingsManager.shared
+    private var isLinear: Bool { settings.isLinearTheme }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: Spacing.sm) {
+            HStack(spacing: isLinear ? Spacing.md : Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.accentColor)
-                    .frame(width: 32)
+                    .font(.system(size: isLinear ? 22 : 20, weight: .medium))
+                    .foregroundColor(isLinear ? LinearStyle.glowColor : .accentColor)
+                    .frame(width: isLinear ? 36 : 32)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: isLinear ? 4 : 2) {
                     Text(title)
-                        .font(Theme.current.fontSM)
+                        .font(isLinear ? Theme.current.fontBody : Theme.current.fontSM)
                         .fontWeight(.semibold)
                         .foregroundColor(Theme.current.foreground)
 
                     Text(subtitle)
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundMuted)
+                        .font(isLinear ? Theme.current.fontSM : Theme.current.fontXS)
+                        .foregroundColor(isLinear ? Theme.current.foregroundSecondary : Theme.current.foregroundMuted)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Theme.current.foregroundMuted)
+                    .font(.system(size: isLinear ? 12 : 11, weight: .medium))
+                    .foregroundColor(isLinear && isHovered ? LinearStyle.glowColor : Theme.current.foregroundMuted)
                     .opacity(isHovered ? 1 : 0.5)
             }
-            .padding(Spacing.md)
+            .padding(isLinear ? Spacing.lg : Spacing.md)
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(Theme.current.divider, lineWidth: 1)
-                    )
+                    .fill(cardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .strokeBorder(cardBorder, lineWidth: 1)
+            )
+            .shadow(
+                color: isLinear && isHovered ? LinearStyle.glowColor.opacity(0.15) : Color.clear,
+                radius: isLinear && isHovered ? 12 : 0,
+                x: 0, y: 0
             )
         }
         .buttonStyle(.plain)
@@ -554,6 +610,20 @@ private struct QuickActionButton: View {
                 isHovered = hovering
             }
         }
+    }
+
+    private var cardBackground: Color {
+        if isLinear {
+            return isHovered ? Color(white: 0.06) : Color(white: 0.04)
+        }
+        return isHovered ? Theme.current.surfaceHover : Theme.current.surface1
+    }
+
+    private var cardBorder: Color {
+        if isLinear {
+            return isHovered ? LinearStyle.glowColor.opacity(0.3) : Color.white.opacity(0.08)
+        }
+        return Theme.current.divider
     }
 }
 
