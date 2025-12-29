@@ -120,8 +120,8 @@ public class XPCServiceManager<ServiceProtocol> {
             return
         }
 
-        // Try other environments in order
-        let envOrder: [TalkieEnvironment] = [.dev, .staging, .production].filter { $0 != currentEnv }
+        // Try other environments in order (prefer production for stability)
+        let envOrder: [TalkieEnvironment] = [.production, .staging, .dev].filter { $0 != currentEnv }
         for env in envOrder {
             if await tryConnect(to: env) {
                 isConnecting = false

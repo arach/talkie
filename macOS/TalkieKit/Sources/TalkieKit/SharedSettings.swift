@@ -10,14 +10,15 @@ import Foundation
 
 // MARK: - Shared Settings Storage
 
-/// Shared UserDefaults suite name for cross-app settings sync
-/// Both Talkie and TalkieLive use this suite for Live settings
-public let kTalkieSharedSuiteName = "com.jdi.talkie.shared"
+/// Shared UserDefaults suite name - derived from TalkieEnvironment
+public var kTalkieSharedSuiteName: String {
+    TalkieEnvironment.current.sharedSettingsSuite
+}
 
 /// Shared settings storage instance
 /// Use this for all Live-related settings that need to sync between apps
 public var TalkieSharedSettings: UserDefaults {
-    UserDefaults(suiteName: kTalkieSharedSuiteName) ?? .standard
+    UserDefaults(suiteName: TalkieEnvironment.current.sharedSettingsSuite) ?? .standard
 }
 
 // MARK: - Settings Keys

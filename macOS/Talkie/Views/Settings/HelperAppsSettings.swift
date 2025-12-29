@@ -107,6 +107,14 @@ struct HelperAppsSettingsView: View {
             .padding(10)
             .background(Color.secondary.opacity(0.05))
             .cornerRadius(8)
+
+            // Developer options (only show if running dev build)
+            #if DEBUG
+            Divider()
+                .padding(.vertical, 8)
+
+            HelperEnvironmentPicker(serviceManager: serviceManager)
+            #endif
         }
         .onAppear {
             // Start monitoring to get PID and connection status
@@ -240,6 +248,61 @@ private struct HelperAppRow: View {
         .onHover { isHovered = $0 }
     }
 }
+
+// MARK: - Helper Environment Picker (Debug only)
+
+#if DEBUG
+private struct HelperEnvironmentPicker: View {
+    let serviceManager: ServiceManager
+
+    private var currentEnvBinding: Binding<TalkieEnvironment> {
+        Binding(
+            get: { serviceManager.effectiveHelperEnvironment },
+            set: { serviceManager.helperEnvironmentOverride = ($0 == TalkieEnvironment.current) ? nil : $0 }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "hammer.fill")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(.purple)
+                Text("DEV OPTIONS")
+                    .font(Theme.current.fontXSMedium)
+                    .foregroundColor(.purple)
+            }
+
+            HStack(spacing: 12) {
+                Text("Launch helpers from:")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Picker("", selection: currentEnvBinding) {
+                    Text("Current (\(TalkieEnvironment.current.displayName))")
+                        .tag(TalkieEnvironment.current)
+                    ForEach(TalkieEnvironment.allCases.filter { $0 != TalkieEnvironment.current }, id: \.self) { env in
+                        Text(env.displayName).tag(env)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+
+                Spacer()
+            }
+
+            if serviceManager.helperEnvironmentOverride != nil {
+                Text("Override active: launching \(serviceManager.effectiveHelperEnvironment.displayName) helpers regardless of app environment")
+                    .font(.system(size: 9))
+                    .foregroundColor(.orange.opacity(0.8))
+            }
+        }
+        .padding(10)
+        .background(Color.purple.opacity(0.05))
+        .cornerRadius(8)
+    }
+}
+#endif
 
 // MARK: - Preview
 

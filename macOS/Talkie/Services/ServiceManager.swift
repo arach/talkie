@@ -150,6 +150,33 @@ public final class ServiceManager {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Helper Environment Override
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static let helperEnvKey = "helperEnvironmentOverride"
+
+    /// Override which environment's helpers to launch (nil = use current app environment)
+    /// Set to .production to always use prod TalkieLive/TalkieEngine even from dev Talkie
+    public var helperEnvironmentOverride: TalkieEnvironment? {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: Self.helperEnvKey) else { return nil }
+            return TalkieEnvironment(rawValue: raw)
+        }
+        set {
+            if let env = newValue {
+                UserDefaults.standard.set(env.rawValue, forKey: Self.helperEnvKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.helperEnvKey)
+            }
+        }
+    }
+
+    /// The effective environment used for launching helpers
+    public var effectiveHelperEnvironment: TalkieEnvironment {
+        helperEnvironmentOverride ?? TalkieEnvironment.current
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Private
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -181,8 +208,9 @@ public final class ServiceManager {
             return
         }
 
-        logger.info("[ServiceManager] Launching Live...")
-        launchHelper(bundleId: TalkieEnvironment.current.liveBundleId, appName: "TalkieLive.app")
+        let env = effectiveHelperEnvironment
+        logger.info("[ServiceManager] Launching Live (\(env.displayName))...")
+        launchHelper(bundleId: env.liveBundleId, appName: "TalkieLive.app")
     }
 
     /// Launch TalkieEngine
@@ -192,13 +220,14 @@ public final class ServiceManager {
             return
         }
 
-        logger.info("[ServiceManager] Launching Engine...")
+        let env = effectiveHelperEnvironment
+        logger.info("[ServiceManager] Launching Engine (\(env.displayName))...")
 
         // Engine is launched via launchctl in dev, or as login item in prod
-        if TalkieEnvironment.current == .dev {
+        if env == .dev {
             launchVialaunchctl(label: "jdi.talkie.engine")
         } else {
-            launchHelper(bundleId: TalkieEnvironment.current.engineBundleId, appName: "TalkieEngine.app")
+            launchHelper(bundleId: env.engineBundleId, appName: "TalkieEngine.app")
         }
     }
 

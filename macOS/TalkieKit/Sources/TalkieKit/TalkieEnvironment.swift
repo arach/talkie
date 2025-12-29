@@ -2,13 +2,37 @@
 //  TalkieEnvironment.swift
 //  TalkieKit
 //
-//  Environment detection and configuration for Talkie suite
-//  Ensures production, staging, and dev builds don't collide
+//  SINGLE SOURCE OF TRUTH for all environment-specific configuration.
+//
+//  ┌─────────────────────────────────────────────────────────────────────────────┐
+//  │                        ENVIRONMENT ISOLATION PHILOSOPHY                      │
+//  ├─────────────────────────────────────────────────────────────────────────────┤
+//  │                                                                              │
+//  │  The developer uses their Mac for BOTH production daily work AND development.│
+//  │  This means prod and dev instances of Talkie apps run simultaneously.        │
+//  │                                                                              │
+//  │  To prevent conflicts, EVERYTHING environment-specific flows from here:      │
+//  │                                                                              │
+//  │    • Bundle IDs        → jdi.talkie.live vs jdi.talkie.live.dev             │
+//  │    • XPC Services      → jdi.talkie.live.xpc vs jdi.talkie.live.xpc.dev     │
+//  │    • Settings Storage  → com.jdi.talkie.shared vs .shared.dev               │
+//  │    • Database Paths    → ~/Library/Application Support/Talkie vs Talkie.dev │
+//  │    • Hotkey Signatures → TLIV vs DLIV (OS-level hotkey routing)             │
+//  │    • Default Hotkeys   → ⌥⌘L (prod) vs ⌃⌥⌘L (dev, intentionally awkward)   │
+//  │    • URL Schemes       → talkie:// vs talkie-dev://                         │
+//  │                                                                              │
+//  │  RULE: Never hardcode environment-specific values elsewhere in the codebase. │
+//  │        Always derive them from TalkieEnvironment.current.                    │
+//  │                                                                              │
+//  │  RULE: Prod settings are sacred. Dev can experiment freely without risk.     │
+//  │                                                                              │
+//  └─────────────────────────────────────────────────────────────────────────────┘
 //
 
 import Foundation
+import Carbon.HIToolbox
 
-/// Talkie deployment environment
+/// Talkie deployment environment - the single source of truth for all environment-specific config
 public enum TalkieEnvironment: String, CaseIterable, Sendable {
     case production = "production"
     case staging = "staging"
@@ -153,6 +177,63 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
             return "~/Applications/Staging/Talkie.app"
         case .dev:
             return "~/Library/Developer/Xcode/DerivedData/.../Talkie.app"
+        }
+    }
+
+    // MARK: - Settings & Storage
+
+    /// UserDefaults suite name for shared settings between Talkie and TalkieLive
+    public var sharedSettingsSuite: String {
+        switch self {
+        case .production: return "com.jdi.talkie.shared"
+        case .staging: return "com.jdi.talkie.shared.staging"
+        case .dev: return "com.jdi.talkie.shared.dev"
+        }
+    }
+
+    /// Application Support directory name for this environment
+    public var appSupportDirectoryName: String {
+        switch self {
+        case .production: return "Talkie"
+        case .staging: return "Talkie.staging"
+        case .dev: return "Talkie.dev"
+        }
+    }
+
+    /// Full path to Application Support directory for this environment
+    public var appSupportDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(appSupportDirectoryName)
+    }
+
+    /// Database directory for this environment
+    public var databaseDirectory: URL {
+        appSupportDirectory.appendingPathComponent("Database")
+    }
+
+    /// Logs directory for this environment
+    public var logsDirectory: URL {
+        appSupportDirectory.appendingPathComponent("Logs")
+    }
+
+    // MARK: - Hotkey Configuration
+
+    /// Hotkey signature prefix (4-char OSType needs 2-char prefix + 2-char suffix)
+    /// Ensures dev/staging/prod hotkeys don't conflict at the OS level
+    public var hotkeySignaturePrefix: String {
+        switch self {
+        case .production: return "TL"  // TLIV, TLPT, etc.
+        case .staging: return "SL"     // SLIV, SLPT, etc.
+        case .dev: return "DL"         // DLIV, DLPT, etc.
+        }
+    }
+
+    /// Default hotkey modifiers - dev/staging add extra modifier to avoid muscle-memory conflicts
+    public var defaultHotkeyModifiers: UInt32 {
+        switch self {
+        case .production: return UInt32(cmdKey | optionKey)              // ⌥⌘
+        case .staging: return UInt32(cmdKey | optionKey | shiftKey)      // ⇧⌥⌘
+        case .dev: return UInt32(cmdKey | optionKey | controlKey)        // ⌃⌥⌘
         }
     }
 

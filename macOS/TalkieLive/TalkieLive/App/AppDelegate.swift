@@ -8,10 +8,15 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var liveController: LiveController!
-    private let hotKeyManager = HotKeyManager()  // Toggle mode hotkey
-    private let pttHotKeyManager = HotKeyManager(signature: "TLPT", hotkeyID: 3)  // Push-to-talk hotkey
-    private let queuePickerHotKeyManager = HotKeyManager(signature: "TLQP", hotkeyID: 2)
-    private let pasteLastHotKeyManager = HotKeyManager(signature: "TLPL", hotkeyID: 4)  // Paste last dictation
+
+    // Hotkey signatures derived from TalkieEnvironment (see TalkieEnvironment.swift for philosophy)
+    private static var sig: String { TalkieEnvironment.current.hotkeySignaturePrefix }
+
+    private let hotKeyManager = HotKeyManager(signature: "\(sig)IV", hotkeyID: 1)  // Toggle mode
+    private let pttHotKeyManager = HotKeyManager(signature: "\(sig)PT", hotkeyID: 3)  // Push-to-talk
+    private let queuePickerHotKeyManager = HotKeyManager(signature: "\(sig)QP", hotkeyID: 2)  // Queue picker
+    private let pasteLastHotKeyManager = HotKeyManager(signature: "\(sig)PL", hotkeyID: 4)  // Paste last
+
     private var cancellables = Set<AnyCancellable>()
 
     // Lazy UI controllers - initialized during boot sequence

@@ -341,17 +341,17 @@ struct HotkeyConfig: Codable, Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
 
-    /// Toggle hotkey default: ⌥⌘L
-    static let `default` = HotkeyConfig(
-        keyCode: 37,  // L
-        modifiers: UInt32(cmdKey | optionKey)  // ⌥⌘
-    )
+    /// Toggle hotkey default - uses TalkieEnvironment for environment-specific modifiers
+    /// Prod: ⌥⌘L, Staging: ⇧⌥⌘L, Dev: ⌃⌥⌘L
+    static var `default`: HotkeyConfig {
+        HotkeyConfig(keyCode: 37, modifiers: TalkieEnvironment.current.defaultHotkeyModifiers)  // L
+    }
 
-    /// Push-to-talk hotkey default: ⌥⌘; (semicolon, right next to L)
-    static let defaultPTT = HotkeyConfig(
-        keyCode: 41,  // ; (semicolon)
-        modifiers: UInt32(cmdKey | optionKey)  // ⌥⌘
-    )
+    /// Push-to-talk hotkey default - uses TalkieEnvironment for environment-specific modifiers
+    /// Prod: ⌥⌘;, Staging: ⇧⌥⌘;, Dev: ⌃⌥⌘;
+    static var defaultPTT: HotkeyConfig {
+        HotkeyConfig(keyCode: 41, modifiers: TalkieEnvironment.current.defaultHotkeyModifiers)  // ;
+    }
 
     var displayString: String {
         var parts: [String] = []
