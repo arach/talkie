@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		81DC1910D66443EA804BE49D /* DictationOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BACCB26E8174224A9887CDA /* DictationOnboardingView.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
 		00EA0C1AD74762B2D0083D75 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BD343AFFEE244146750E16 /* FormControls.swift */; };
@@ -244,6 +245,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7BACCB26E8174224A9887CDA /* DictationOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationOnboardingView.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
@@ -749,6 +751,7 @@
 		93BC57849B0132956BBB7950 /* Live */ = {
 			isa = PBXGroup;
 			children = (
+				7BACCB26E8174224A9887CDA /* DictationOnboardingView.swift */,
 				142040CCF534A9338AEAA0B0 /* DictationListView.swift */,
 				25DB7E4762BA599C3AAC78DC /* HomeView.swift */,
 				5D8DAE62024FE459C3BCE83E /* LiveHistoryView.swift.disabled */,
@@ -1160,6 +1163,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				81DC1910D66443EA804BE49D /* DictationOnboardingView.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
 				1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */,
