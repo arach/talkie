@@ -579,6 +579,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 NSLog("[AppDelegate] Navigating to Live section: \(path.isEmpty ? "default" : path)")
                 logger.info("Navigating to Live section: \(path.isEmpty ? "default" : path)")
 
+                // Ensure main window is visible
+                NSApp.activate(ignoringOtherApps: true)
+                if let mainWindow = NSApp.windows.first(where: { $0.canBecomeMain }) {
+                    mainWindow.makeKeyAndOrderFront(nil)
+                }
+
                 if path == "recent" || path == "history" {
                     // Navigate to Live Recent (history)
                     NotificationCenter.default.post(name: .init("NavigateToLiveRecent"), object: nil)

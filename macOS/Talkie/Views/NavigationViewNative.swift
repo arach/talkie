@@ -219,21 +219,14 @@ struct TalkieNavigationViewNative: View {
                     .listRowBackground(Color.clear)
             }
 
-            // Home (no section header)
+            // Primary navigation (no section header)
             SidebarRow(section: .home, selectedSection: $selectedSection, title: "Home", icon: "house")
-
-            SidebarRow(section: .scratchPad, selectedSection: $selectedSection, title: "Commands", icon: "mic")
-
-            // Memos
-            Section(settings.uiAllCaps ? "MEMOS" : "Memos") {
-                SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Recordings", icon: "square.stack")
-            }
+            SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Recordings", icon: "square.stack")
+            SidebarRow(section: .liveRecent, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic")
 
             // Live
             Section(settings.uiAllCaps ? "LIVE" : "Live") {
-                SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Voice Stats", icon: "waveform.path.ecg")
-
-                SidebarRow(section: .liveRecent, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic")
+                SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Stats", icon: "waveform.path.ecg")
             }
 
             // Activity
@@ -245,6 +238,8 @@ struct TalkieNavigationViewNative: View {
 
             // Tools
             Section(settings.uiAllCaps ? "TOOLS" : "Tools") {
+                SidebarRow(section: .scratchPad, selectedSection: $selectedSection, title: "Commands", icon: "mic")
+
                 SidebarRow(section: .workflows, selectedSection: $selectedSection, title: "Workflows", icon: "wand.and.stars")
 
                 SidebarRow(section: .models, selectedSection: $selectedSection, title: "Models", icon: "brain")

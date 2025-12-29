@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "l")
+        let historyItem = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "h")
         historyItem.keyEquivalentModifierMask = [.option, .command]
         historyItem.target = self
         menu.addItem(historyItem)
@@ -445,9 +445,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showHistory() {
-        // Open Talkie app via URL scheme - macOS will find the registered handler
-        // This works for both debug builds (if run recently) and production
-        guard let url = URL(string: "talkie://live/recent") else { return }
+        // Open Talkie app via URL scheme - environment-aware
+        let scheme = TalkieEnvironment.current.talkieURLScheme
+        guard let url = URL(string: "\(scheme)://live/recent") else { return }
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
@@ -457,7 +457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 log.error("Failed to open Talkie", detail: error.localizedDescription)
 
                 // Fallback: try to find app by bundle identifier
-                let bundleID = "jdi.talkie"
+                let bundleID = TalkieEnvironment.current.talkieBundleId
                 if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
                     NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
                 }
