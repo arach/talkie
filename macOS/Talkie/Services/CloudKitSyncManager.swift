@@ -839,6 +839,12 @@ class CloudKitSyncManager {
                             let existingMemo = try await repository.fetchMemo(id: memoId)
 
                             if let existing = existingMemo {
+                                // Skip soft-deleted memos - respect local deletion
+                                if existing.memo.deletedAt != nil {
+                                    log.info("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(cdMemo.title ?? "Untitled")'")
+                                    continue
+                                }
+
                                 // Compare timestamps - Core Data wins (source of truth from phone)
                                 let cdModified = cdMemo.lastModified ?? Date.distantPast
                                 let grdbModified = existing.memo.lastModified
