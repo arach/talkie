@@ -3631,6 +3631,7 @@ struct QuickSettingsView: View {
     var initialTab: QuickSettingsTab = .shortcuts
     @State private var selectedTab: QuickSettingsTab = .shortcuts
     @StateObject private var permissionManager = PermissionManager.shared
+    @ObservedObject private var settings = LiveSettings.shared
 
     init(initialTab: QuickSettingsTab = .shortcuts) {
         self.initialTab = initialTab
@@ -3659,7 +3660,7 @@ struct QuickSettingsView: View {
             .padding(.bottom, Spacing.sm)
             .background(
                 ZStack {
-                    if LiveSettings.shared.glassMode {
+                    if settings.glassMode {
                         // Glass mode: Frosted glass base
                         Rectangle()
                             .fill(.thinMaterial)
@@ -3686,7 +3687,7 @@ struct QuickSettingsView: View {
                     VStack {
                         Spacer()
                         Rectangle()
-                            .fill(Color.white.opacity(LiveSettings.shared.glassMode ? 0.06 : 0.12))
+                            .fill(Color.white.opacity(settings.glassMode ? 0.06 : 0.12))
                             .frame(height: 1)
                     }
                 }

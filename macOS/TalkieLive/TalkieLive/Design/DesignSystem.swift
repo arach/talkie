@@ -749,13 +749,14 @@ struct GlassBackground: ViewModifier {
     var intensity: GlassIntensity = .regular
     var cornerRadius: CGFloat = CornerRadius.sm
     var tint: Color? = nil
-    @ObservedObject private var settings = LiveSettings.shared
+
+    private var isGlassMode: Bool { LiveSettings.shared.glassMode }
 
     func body(content: Content) -> some View {
         content
             .background(
                 ZStack {
-                    if settings.glassMode {
+                    if isGlassMode {
                         // Glass mode: Full frosted glass effect
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .fill(intensity.material)
@@ -810,7 +811,7 @@ struct GlassBackground: ViewModifier {
                     }
                 }
             )
-            .shadow(color: Color.black.opacity(settings.glassMode ? 0.1 : 0.2), radius: settings.glassMode ? 8 : 2, x: 0, y: settings.glassMode ? 3 : 1)
+            .shadow(color: Color.black.opacity(isGlassMode ? 0.1 : 0.2), radius: isGlassMode ? 8 : 2, x: 0, y: isGlassMode ? 3 : 1)
     }
 }
 
@@ -1007,23 +1008,30 @@ struct GlassTabButton: View {
 
 /// Glass-styled window/panel background
 struct GlassPanel: ViewModifier {
+    private var isGlassMode: Bool { LiveSettings.shared.glassMode }
+
     func body(content: Content) -> some View {
         content
             .background(
                 ZStack {
-                    // Deep glass effect for panels
-                    VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                    if isGlassMode {
+                        // Glass mode: Deep glass effect for panels
+                        VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
 
-                    // Gradient overlay for depth
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.05),
-                            Color.clear,
-                            Color.black.opacity(0.05)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                        // Gradient overlay for depth
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.05),
+                                Color.clear,
+                                Color.black.opacity(0.05)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    } else {
+                        // Legacy mode: Solid dark background
+                        Color(white: 0.08)
+                    }
                 }
             )
     }
@@ -1065,13 +1073,14 @@ struct GlassHoverBackground: ViewModifier {
     var baseOpacity: Double = 0.03  // Darker base
     var hoverOpacity: Double = 0.12  // More contrast on hover
     var accentColor: Color? = nil
-    @ObservedObject private var settings = LiveSettings.shared
+
+    private var isGlassMode: Bool { LiveSettings.shared.glassMode }
 
     func body(content: Content) -> some View {
         content
             .background(
                 ZStack {
-                    if settings.glassMode {
+                    if isGlassMode {
                         // Glass mode: Full glass hover effect
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .fill(Color.white.opacity(isHovered ? hoverOpacity : baseOpacity))
@@ -1128,10 +1137,10 @@ struct GlassHoverBackground: ViewModifier {
                 }
             )
             .shadow(
-                color: Color.black.opacity(settings.glassMode ? (isHovered ? 0.15 : 0.05) : (isHovered ? 0.15 : 0)),
-                radius: settings.glassMode ? (isHovered ? 8 : 2) : 2,
+                color: Color.black.opacity(isGlassMode ? (isHovered ? 0.15 : 0.05) : (isHovered ? 0.15 : 0)),
+                radius: isGlassMode ? (isHovered ? 8 : 2) : 2,
                 x: 0,
-                y: settings.glassMode ? (isHovered ? 4 : 1) : 1
+                y: isGlassMode ? (isHovered ? 4 : 1) : 1
             )
             .animation(TalkieAnimation.fast, value: isHovered)
     }
