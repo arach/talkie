@@ -441,6 +441,11 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Auto-open scratchpad when text is selected at recording start
+    @Published var autoScratchpadOnSelection: Bool {
+        didSet { save() }
+    }
+
     // Legacy compatibility - returns appearance mode
     @available(*, deprecated, message: "Use appearanceMode instead")
     var theme: AppearanceMode {
@@ -595,6 +600,7 @@ final class LiveSettings: ObservableObject {
         // Load return to origin setting (default: false)
         self.returnToOriginAfterPaste = store.bool(forKey: LiveSettingsKey.returnToOriginAfterPaste)
         self.pressEnterAfterPaste = store.bool(forKey: LiveSettingsKey.pressEnterAfterPaste)
+        self.autoScratchpadOnSelection = store.bool(forKey: LiveSettingsKey.autoScratchpadOnSelection)
 
         // Apply TTL to store
         DictationStore.shared.ttlHours = dictationTTLHours
@@ -634,6 +640,7 @@ final class LiveSettings: ObservableObject {
         store.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
         store.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)
         store.set(pressEnterAfterPaste, forKey: LiveSettingsKey.pressEnterAfterPaste)
+        store.set(autoScratchpadOnSelection, forKey: LiveSettingsKey.autoScratchpadOnSelection)
     }
 
     // MARK: - Appearance Application

@@ -711,6 +711,353 @@ extension ButtonStyle where Self == TinyButtonStyle {
     }
 }
 
+// MARK: - Glass Design System
+
+/// Glass intensity levels for different use cases
+enum GlassIntensity {
+    case subtle     // Light frosting, more transparency
+    case regular    // Standard glass effect
+    case prominent  // Heavier frosting, more opaque
+
+    var material: Material {
+        switch self {
+        case .subtle: return .ultraThinMaterial
+        case .regular: return .thinMaterial
+        case .prominent: return .regularMaterial
+        }
+    }
+
+    var highlightOpacity: Double {
+        switch self {
+        case .subtle: return 0.15
+        case .regular: return 0.25
+        case .prominent: return 0.35
+        }
+    }
+
+    var borderOpacity: Double {
+        switch self {
+        case .subtle: return 0.08
+        case .regular: return 0.12
+        case .prominent: return 0.15
+        }
+    }
+}
+
+/// Glass background view modifier
+struct GlassBackground: ViewModifier {
+    var intensity: GlassIntensity = .regular
+    var cornerRadius: CGFloat = CornerRadius.sm
+    var tint: Color? = nil
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                ZStack {
+                    // Base material
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(intensity.material)
+
+                    // Optional color tint
+                    if let tint = tint {
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(tint.opacity(0.05))
+                    }
+
+                    // Inner glow (top-down radial)
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.white.opacity(0.1),
+                                    Color.clear
+                                ],
+                                center: .top,
+                                startRadius: 0,
+                                endRadius: 60
+                            )
+                        )
+
+                    // Convex gradient (gives curved glass illusion)
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(intensity.highlightOpacity * 0.5),
+                                    Color.white.opacity(0.02),
+                                    Color.black.opacity(0.03)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    // Top edge highlight (light catching the edge)
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(intensity.highlightOpacity),
+                                    Color.white.opacity(intensity.highlightOpacity * 0.4),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            ),
+                            lineWidth: 1
+                        )
+
+                    // Subtle border
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(Color.white.opacity(intensity.borderOpacity), lineWidth: 0.5)
+                }
+            )
+            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
+            .shadow(color: Color.white.opacity(0.03), radius: 1, x: 0, y: -1)
+    }
+}
+
+extension View {
+    /// Apply a glass background effect
+    func glassBackground(
+        intensity: GlassIntensity = .regular,
+        cornerRadius: CGFloat = CornerRadius.sm,
+        tint: Color? = nil
+    ) -> some View {
+        modifier(GlassBackground(intensity: intensity, cornerRadius: cornerRadius, tint: tint))
+    }
+}
+
+/// A glass-styled card container
+struct GlassCardView<Content: View>: View {
+    var intensity: GlassIntensity = .regular
+    var cornerRadius: CGFloat = CornerRadius.md
+    var padding: CGFloat = Spacing.md
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .padding(padding)
+        .glassBackground(intensity: intensity, cornerRadius: cornerRadius)
+    }
+}
+
+/// A glass-styled row for settings/list items
+struct GlassRow<Content: View>: View {
+    var isSelected: Bool = false
+    var accentColor: Color = TalkieTheme.accent
+    @ViewBuilder let content: () -> Content
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            content()
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .background(
+            ZStack {
+                // Hover/selection state
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(
+                        isSelected
+                            ? accentColor.opacity(0.15)
+                            : (isHovered ? Color.white.opacity(0.06) : Color.clear)
+                    )
+
+                // Subtle top highlight on hover
+                if isHovered || isSelected {
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isSelected ? 0.15 : 0.08),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
+            }
+        )
+        .animation(TalkieAnimation.fast, value: isHovered)
+        .animation(TalkieAnimation.fast, value: isSelected)
+        .onHover { isHovered = $0 }
+    }
+}
+
+/// Glass-styled sidebar container
+struct GlassSidebar<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(
+            ZStack {
+                // Base frosted glass
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+
+                // Subtle gradient overlay
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.04),
+                                Color.clear,
+                                Color.black.opacity(0.02)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                // Right edge highlight (like light on glass edge)
+                HStack {
+                    Spacer()
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.1),
+                                    Color.white.opacity(0.03)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 1)
+                }
+            }
+        )
+    }
+}
+
+/// Glass-styled tab button
+struct GlassTabButton: View {
+    let icon: String
+    let label: String?
+    var isSelected: Bool
+    var showWarning: Bool = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+
+                if let label = label {
+                    Text(label)
+                        .font(.system(size: 11, weight: .medium))
+                }
+
+                if showWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange)
+                }
+            }
+            .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                ZStack {
+                    if isSelected {
+                        // Selected: accent color with glass overlay
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(TalkieTheme.accent)
+
+                        // Glass highlight on top
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.25),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
+                    } else if isHovered {
+                        // Hovered: subtle glass
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Color.white.opacity(0.08))
+
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    }
+                }
+            )
+            .shadow(color: isSelected ? TalkieTheme.accent.opacity(0.3) : Color.clear, radius: 4, y: 2)
+        }
+        .buttonStyle(.plain)
+        .animation(TalkieAnimation.fast, value: isSelected)
+        .animation(TalkieAnimation.fast, value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+}
+
+/// Glass-styled window/panel background
+struct GlassPanel: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(
+                ZStack {
+                    // Deep glass effect for panels
+                    VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+
+                    // Gradient overlay for depth
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.05),
+                            Color.clear,
+                            Color.black.opacity(0.05)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+            )
+    }
+}
+
+/// NSVisualEffectView wrapper for deeper blur effects
+struct VisualEffectBlur: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+    }
+}
+
+extension View {
+    /// Apply a glass panel background (for windows/sheets)
+    func glassPanel() -> some View {
+        modifier(GlassPanel())
+    }
+}
+
 // MARK: - Toggle Style
 
 struct TalkieToggleStyle: ToggleStyle {

@@ -401,6 +401,53 @@ struct DictationOutputSettingsView: View {
             .background(Theme.current.surface2)
             .cornerRadius(CornerRadius.sm)
 
+            // MARK: - Scratchpad Section
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.cyan)
+                        .frame(width: 3, height: 14)
+
+                    Text("SCRATCHPAD")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Spacer()
+
+                    if live.autoScratchpadOnSelection {
+                        Text("AUTO")
+                            .font(.techLabelSmall)
+                            .foregroundColor(.cyan.opacity(Opacity.prominent))
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    StyledToggle(
+                        label: "Auto-open with selection",
+                        isOn: $live.autoScratchpadOnSelection,
+                        help: "When text is selected, open in Scratchpad to edit or transform it"
+                    )
+
+                    if live.autoScratchpadOnSelection {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: "info.circle")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundMuted)
+                            Text("Select text → press hotkey → dictate your edit")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundMuted)
+                        }
+                        .padding(.leading, Spacing.sm)
+                    }
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface1)
+                .cornerRadius(CornerRadius.sm)
+            }
+            .padding(Spacing.md)
+            .background(Theme.current.surface2)
+            .cornerRadius(CornerRadius.sm)
+
             // MARK: - Context Preference Section
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack(spacing: Spacing.sm) {

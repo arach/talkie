@@ -155,6 +155,71 @@ final class ContextCaptureService {
         return captureBaselineInternal()
     }
 
+    /// Fast check for selected text (for auto-scratchpad feature)
+    /// Returns true if the specified app (or frontmost app) has text currently selected
+    /// This is a lightweight check (~10-50ms) that doesn't capture full context
+    /// - Parameter targetApp: Optional app to check. If nil, checks frontmost app.
+    @MainActor
+    func hasSelectedText(in targetApp: NSRunningApplication? = nil) -> Bool {
+        return getSelectedText(in: targetApp) != nil
+    }
+
+    /// Capture the currently selected text from the specified app (or frontmost app)
+    /// Returns nil if no text is selected or accessibility is not available
+    /// - Parameter targetApp: Optional app to check. If nil, checks frontmost app.
+    @MainActor
+    func getSelectedText(in targetApp: NSRunningApplication? = nil) -> String? {
+        guard AXIsProcessTrusted() else {
+            logger.debug("getSelectedText: AX not trusted, returning nil")
+            return nil
+        }
+
+        let app: NSRunningApplication
+        if let targetApp = targetApp {
+            app = targetApp
+            logger.debug("getSelectedText: Checking target app \(app.localizedName ?? "unknown")")
+        } else if let frontApp = NSWorkspace.shared.frontmostApplication {
+            app = frontApp
+            logger.debug("getSelectedText: Checking frontmost app \(app.localizedName ?? "unknown")")
+        } else {
+            logger.debug("getSelectedText: No app to check")
+            return nil
+        }
+
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+
+        // Get focused element
+        var focusedRef: CFTypeRef?
+        var result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+
+        // Fallback: ask focused window for focused element
+        if result != .success {
+            var windowRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
+               let window = windowRef {
+                result = AXUIElementCopyAttributeValue(window as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+            }
+        }
+
+        guard result == .success, let focusedRef else {
+            return nil
+        }
+
+        let focused = focusedRef as! AXUIElement
+
+        // Check for selected text
+        var selectedRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(focused, kAXSelectedTextAttribute as CFString, &selectedRef) == .success,
+           let selected = selectedRef as? String,
+           !selected.isEmpty {
+            logger.debug("getSelectedText: Found selection (\(selected.count) chars) in \(app.localizedName ?? "unknown")")
+            return selected
+        }
+
+        logger.debug("getSelectedText: No selection found in \(app.localizedName ?? "unknown")")
+        return nil
+    }
+
     /// Schedule background enrichment that updates the DB record after paste
     /// Fire-and-forget: runs in background and updates the record when complete
     func scheduleEnrichment(utteranceId: Int64, baseline: DictationMetadata) {

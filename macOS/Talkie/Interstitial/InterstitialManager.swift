@@ -33,6 +33,11 @@ final class InterstitialManager {
     var polishError: String?
     private(set) var originalText: String = ""
 
+    // Selection replacement context (for Command+Enter)
+    private(set) var originalSelectedText: String?  // Text that was selected when auto-scratchpad triggered
+    private(set) var sourceAppBundleID: String?     // Bundle ID of the app where recording started
+    var hasSelectionContext: Bool { originalSelectedText != nil && sourceAppBundleID != nil }
+
     // View state (editing vs reviewing diff)
     var viewState: InterstitialViewState = .editing
     private(set) var prePolishText: String = ""  // Text before last polish
@@ -177,6 +182,15 @@ final class InterstitialManager {
         originalText = dictation.text
         editedText = dictation.text
 
+        // Read selection replacement context from metadata (for Command+Enter)
+        originalSelectedText = dictation.metadata?["originalSelectedText"]
+        sourceAppBundleID = dictation.metadata?["sourceAppBundleID"]
+        if hasSelectionContext {
+            let selectionCount = self.originalSelectedText?.count ?? 0
+            let appID = self.sourceAppBundleID ?? "?"
+            logger.info("Selection context: \(selectionCount) chars from \(appID)")
+        }
+
         logger.info("Showing interstitial for dictation \(dictationId): \"\(dictation.text.prefix(40))...\"")
 
         createAndShowPanel()
@@ -233,12 +247,24 @@ final class InterstitialManager {
     }
 
     private func setupEventMonitors() {
-        // Local monitor for Escape key to dismiss
+        // Local monitor for keyboard shortcuts
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            if event.keyCode == 53 { // Escape
-                self?.dismiss()
+            guard let self = self else { return event }
+
+            // Escape to dismiss
+            if event.keyCode == 53 {
+                self.dismiss()
                 return nil
             }
+
+            // Command+Enter to replace selection and return to source app
+            if event.keyCode == 36 && event.modifierFlags.contains(.command) {
+                if self.hasSelectionContext {
+                    self.replaceSelectionAndDismiss()
+                    return nil
+                }
+            }
+
             return event
         }
     }
@@ -260,6 +286,8 @@ final class InterstitialManager {
         isPolishing = false
         polishError = nil
         voiceInstruction = nil
+        originalSelectedText = nil
+        sourceAppBundleID = nil
         clearHistory()  // Clear in-memory history on dismiss
 
         logger.info("Interstitial dismissed")
@@ -291,6 +319,40 @@ final class InterstitialManager {
             self.simulatePaste()
         }
         logger.info("Pasting text: \(self.editedText.count) chars")
+    }
+
+    /// Replace original selection in source app with edited text (Command+Enter)
+    /// This activates the source app and pastes to replace the selection
+    func replaceSelectionAndDismiss() {
+        guard let bundleID = sourceAppBundleID else {
+            logger.warning("replaceSelectionAndDismiss: No source app bundle ID")
+            return
+        }
+
+        // Copy edited text to clipboard
+        let textToReplace = editedText
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(textToReplace, forType: .string)
+
+        logger.info("Replacing selection in \(bundleID) with \(textToReplace.count) chars")
+
+        // Dismiss the panel first
+        dismiss()
+
+        // Activate the source app and paste
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Find and activate the source app
+            if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+                app.activate(options: [.activateIgnoringOtherApps])
+
+                // Wait for app activation, then paste
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    self.simulatePaste()
+                }
+            } else {
+                logger.warning("Source app not found: \(bundleID)")
+            }
+        }
     }
 
     private func simulatePaste() {

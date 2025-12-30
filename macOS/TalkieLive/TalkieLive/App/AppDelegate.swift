@@ -296,6 +296,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+
+        // Set liveController reference for Shift toggle on hover
+        floatingPill.liveController = liveController
     }
 
     // MARK: - Hotkeys

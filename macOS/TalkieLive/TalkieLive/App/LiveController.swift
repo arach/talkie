@@ -21,6 +21,8 @@ final class LiveController: ObservableObject {
     private var capturedContext: DictationMetadata?  // Baseline only - enrichment happens after paste
     private var createdInTalkieView: Bool = false  // Was Talkie Live frontmost when recording started?
     private var routeToInterstitial: Bool = false  // Shift or Shift+S: route to Talkie Core interstitial instead of paste
+    private var autoTriggeredScratchpad: Bool = false  // Auto-triggered due to text selection
+    private var originalSelectedText: String?  // Text that was selected when auto-scratchpad triggered (for Command+Enter replacement)
     private var saveAsMemo: Bool = false  // Shift+A: auto-promote to memo after transcription
     private var startApp: NSRunningApplication?  // App where recording started (for return-to-origin)
     private var traceID: String?
@@ -87,9 +89,10 @@ final class LiveController: ObservableObject {
             RecordingOverlayController.shared.state = newState
             RecordingOverlayController.shared.elapsedTime = elapsed
 
-            // Stop elapsed time timer when returning to idle
+            // Stop elapsed time timer and reset pill intent when returning to idle
             if newState == .idle {
                 self.stopElapsedTimeTimer()
+                FloatingPillController.shared.captureIntent = "Paste"
             }
         }
 
@@ -296,6 +299,8 @@ final class LiveController: ObservableObject {
         trace?.invalidate()
         trace = nil
         routeToInterstitial = false
+        autoTriggeredScratchpad = false
+        originalSelectedText = nil
         createdInTalkieView = false
 
         // Force reset to idle (emergency exit - works from any state)
@@ -314,8 +319,10 @@ final class LiveController: ObservableObject {
     func setInterstitialIntent() {
         guard state == .listening else { return }
         routeToInterstitial = true
+        autoTriggeredScratchpad = false  // Explicitly triggered by user
         saveAsMemo = false  // Mutually exclusive
         log.info("Intent set: Interstitial editor")
+        updatePillIntent()
     }
 
     /// Set intent to save as memo (Shift+A during recording)
@@ -324,28 +331,43 @@ final class LiveController: ObservableObject {
         saveAsMemo = true
         routeToInterstitial = false  // Mutually exclusive
         log.info("Intent set: Save as memo")
+        updatePillIntent()
     }
 
     /// Clear capture intent (return to normal paste behavior)
     func clearIntent() {
         guard state == .listening else { return }
         routeToInterstitial = false
+        autoTriggeredScratchpad = false
         saveAsMemo = false
         log.info("Intent cleared: Normal paste")
+        updatePillIntent()
+    }
+
+    /// Update FloatingPill with current intent
+    private func updatePillIntent() {
+        FloatingPillController.shared.captureIntent = captureIntent
     }
 
     /// Get current capture intent for UI display
     var captureIntent: String {
         if saveAsMemo { return "Save as Memo" }
-        if routeToInterstitial { return "Open in Scratchpad" }
+        if routeToInterstitial {
+            return autoTriggeredScratchpad ? "Scratchpad (selection)" : "Open in Scratchpad"
+        }
         return "Paste"
     }
+
+    /// Whether scratchpad was auto-triggered by text selection
+    var isAutoScratchpad: Bool { autoTriggeredScratchpad }
 
     private func start() async {
         // Reset cancelled flag for new recording
         resetCancelled()
         traceID = nil
         routeToInterstitial = false
+        autoTriggeredScratchpad = false
+        originalSelectedText = nil
         saveAsMemo = false
 
         // Start performance trace for this dictation flow
@@ -353,9 +375,31 @@ final class LiveController: ObservableObject {
         trace?.mark("hotkey_pressed")
         trace?.begin("context_capture")
 
+        // Capture frontmost app IMMEDIATELY before any focus changes
+        // This is critical for auto-scratchpad to check the right app
+        let targetApp = NSWorkspace.shared.frontmostApplication
+        log.info("Target app at hotkey: \(targetApp?.localizedName ?? "none") (\(targetApp?.bundleIdentifier ?? "?"))")
+
         // Capture baseline context FIRST to get the REAL target app
         // before any potential TalkieLive activation
         capturedContext = ContextCaptureService.shared.captureBaseline()
+
+        // Auto-scratchpad: if user has text selected, open in scratchpad
+        // Pass the target app to avoid checking wrong app if focus changed
+        // Also capture the selected text for Command+Enter replacement
+        if LiveSettings.shared.autoScratchpadOnSelection {
+            if let selectedText = ContextCaptureService.shared.getSelectedText(in: targetApp) {
+                routeToInterstitial = true
+                autoTriggeredScratchpad = true
+                originalSelectedText = selectedText
+                log.info("Auto-scratchpad: captured \(selectedText.count) chars of selected text")
+                updatePillIntent()
+            } else {
+                log.info("Auto-scratchpad check: no selection found")
+            }
+        } else {
+            log.info("Auto-scratchpad check: enabled=false, skipping selection check")
+        }
 
         // Check if Talkie Live is frontmost AFTER a tiny delay
         // This avoids false positives from menu bar clicks
@@ -365,12 +409,12 @@ final class LiveController: ObservableObject {
 
         // Check frontmost app - if it's the target app from baseline, don't queue
         let currentFrontmost = ContextCapture.getFrontmostApp()
-        let targetApp = capturedContext?.activeAppBundleID
+        let targetBundleID = capturedContext?.activeAppBundleID
         let talkieLiveIsNowFrontmost = ContextCapture.isTalkieLiveFrontmost()
 
         // Only queue if TalkieLive is frontmost AND it was the target app
         // (user intentionally recording inside Talkie Live window)
-        createdInTalkieView = talkieLiveIsNowFrontmost && (targetApp == "jdi.talkie.live")
+        createdInTalkieView = talkieLiveIsNowFrontmost && (targetBundleID == "jdi.talkie.live")
 
         // Store the start app for potential return-to-origin after paste
         startApp = currentFrontmost
@@ -540,11 +584,15 @@ final class LiveController: ObservableObject {
     private func stop(interstitial: Bool = false) {
         NSLog("[LiveController] stop() called with interstitial=\(interstitial)")
         log.info("stop() called with interstitial=\(interstitial)")
-        routeToInterstitial = interstitial
+
+        // Only override routeToInterstitial if explicitly requesting interstitial mode
+        // This preserves auto-scratchpad detection from start()
         if interstitial {
+            routeToInterstitial = true
             NSLog("[LiveController] Stopping with interstitial routing (Shift-click)")
             log.info("Stopping with interstitial routing (Shift-click)")
         }
+        log.info("routeToInterstitial after stop(): \(routeToInterstitial)")
 
         // Transition to transcribing state immediately (before audio callback fires)
         stateMachine.transition(.stopRecording)
@@ -831,7 +879,17 @@ final class LiveController: ObservableObject {
                 AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr) • app: \(appMs)ms • e2e: \(totalMs)ms\(traceSuffix)")
 
                 // Store in GRDB with mode "interstitial", pasteTimestamp = nil
+                // Include original selection context for Command+Enter replacement
                 logTiming("Creating LiveDictation for interstitial")
+                var interstitialMetadata = buildMetadataDict(from: metadata) ?? [:]
+                if autoTriggeredScratchpad {
+                    if let originalText = originalSelectedText {
+                        interstitialMetadata["originalSelectedText"] = originalText
+                    }
+                    if let sourceAppBundleID = startApp?.bundleIdentifier {
+                        interstitialMetadata["sourceAppBundleID"] = sourceAppBundleID
+                    }
+                }
                 let utterance = LiveDictation(
                     text: result.text,
                     mode: "interstitial",
@@ -844,7 +902,7 @@ final class LiveController: ObservableObject {
                     perfEndToEndMs: metadata.perfEndToEndMs,
                     perfInAppMs: metadata.perfInAppMs,
                     sessionID: externalRefId,  // For Engine trace deep link
-                    metadata: buildMetadataDict(from: metadata),
+                    metadata: interstitialMetadata.isEmpty ? nil : interstitialMetadata,
                     audioFilename: audioFilename,
                     createdInTalkieView: createdInTalkieView,
                     pasteTimestamp: nil  // Not pasted yet → interstitial will handle
@@ -875,6 +933,8 @@ final class LiveController: ObservableObject {
 
                 // Reset flag and finish
                 routeToInterstitial = false
+                autoTriggeredScratchpad = false
+                originalSelectedText = nil
                 recordingStartTime = nil
                 capturedContext = nil
                 startApp = nil

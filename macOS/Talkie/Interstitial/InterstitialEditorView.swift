@@ -1160,7 +1160,7 @@ struct InterstitialEditorView: View {
 
             Spacer()
 
-            // Right side: Quick open apps + Copy
+            // Right side: Quick open apps + Replace Selection + Copy
             HStack(spacing: 4) {
                 // Quick open apps
                 QuickOpenBar(
@@ -1168,6 +1168,27 @@ struct InterstitialEditorView: View {
                     showCopyButton: false,
                     compactMode: true
                 )
+
+                // Replace Selection button (only when we have selection context)
+                if manager.hasSelectionContext {
+                    Button(action: { manager.replaceSelectionAndDismiss() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "text.cursor")
+                                .font(.system(size: 10, weight: .medium))
+                            Text("Replace")
+                                .font(Theme.current.fontXSMedium)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                .fill(Color.cyan)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Replace selection in source app (⌘↩)")
+                }
 
                 // Copy (rightmost - primary action)
                 Button(action: { manager.copyToClipboard() }) {

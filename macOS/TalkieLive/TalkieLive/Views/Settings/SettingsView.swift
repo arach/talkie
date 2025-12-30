@@ -23,8 +23,8 @@ struct EmbeddedSettingsView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // MARK: - Settings Sections Navigation (middle column)
-            VStack(spacing: 0) {
+            // MARK: - Settings Sections Navigation (glass sidebar)
+            GlassSidebar {
                 // Header
                 HStack {
                     Text("SETTINGS")
@@ -37,12 +37,12 @@ struct EmbeddedSettingsView: View {
                 .padding(.vertical, Spacing.sm)
 
                 Rectangle()
-                    .fill(TalkieTheme.divider)
+                    .fill(Color.white.opacity(0.06))
                     .frame(height: 0.5)
 
                 // Sections List
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: Spacing.sm) {
+                    VStack(spacing: Spacing.xs) {
                         // APPEARANCE
                         EmbeddedSettingsSectionHeader(title: "APPEARANCE")
                         EmbeddedSettingsRow(
@@ -126,13 +126,22 @@ struct EmbeddedSettingsView: View {
                 }
             }
             .frame(width: 180)
-            .background(TalkieTheme.secondaryBackground)
 
+            // Glass edge separator
             Rectangle()
-                .fill(TalkieTheme.divider)
-                .frame(width: 0.5)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.1),
+                            Color.white.opacity(0.03)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 1)
 
-            // MARK: - Settings Content (right column)
+            // MARK: - Settings Content (right column with glass background)
             VStack(spacing: 0) {
                 switch selectedSection {
                 case .appearance:
@@ -158,9 +167,9 @@ struct EmbeddedSettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(TalkieTheme.surface)
+            .background(.ultraThinMaterial)
         }
-        .background(TalkieTheme.surface)
+        .glassPanel()
         .ignoresSafeArea(.all, edges: .all)
         .onChange(of: initialSection) { _, newSection in
             if let section = newSection {
@@ -210,24 +219,50 @@ struct EmbeddedSettingsRow: View {
         Button(action: action) {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: icon)
-                    .font(Design.fontXS)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(isSelected ? TalkieTheme.accent : TalkieTheme.textSecondary)
                     .frame(width: 16)
 
                 Text(title)
-                    .font(Design.fontSM)
+                    .font(.system(size: 12, weight: isSelected ? .medium : .regular))
                     .foregroundColor(isSelected ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
 
                 Spacer()
             }
             .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
+            .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .fill(isSelected ? TalkieTheme.accent.opacity(0.15) : (isHovered ? TalkieTheme.hover : Color.clear))
+                ZStack {
+                    // Base fill
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(
+                            isSelected
+                                ? TalkieTheme.accent.opacity(0.18)
+                                : (isHovered ? Color.white.opacity(0.08) : Color.clear)
+                        )
+
+                    // Top highlight on selection/hover
+                    if isSelected || isHovered {
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(isSelected ? 0.2 : 0.1),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+                }
             )
+            .shadow(color: isSelected ? TalkieTheme.accent.opacity(0.2) : Color.clear, radius: 4, y: 1)
         }
         .buttonStyle(.plain)
+        .animation(TalkieAnimation.fast, value: isSelected)
+        .animation(TalkieAnimation.fast, value: isHovered)
         .onHover { isHovered = $0 }
     }
 }
@@ -1665,6 +1700,30 @@ struct OutputSettingsSection: View {
                             description: "Send Return key after pasting (for chat apps, terminals)",
                             isOn: $settings.pressEnterAfterPaste
                         )
+                    }
+                }
+            }
+
+            // Scratchpad options
+            SettingsCard(title: "SCRATCHPAD") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SettingsToggleRow(
+                        icon: "text.cursor",
+                        title: "Auto-open with selection",
+                        description: "When text is selected, open in Scratchpad to edit or transform it",
+                        isOn: $settings.autoScratchpadOnSelection
+                    )
+
+                    if settings.autoScratchpadOnSelection {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                            Text("Select text → press hotkey → dictate your edit")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textTertiary)
+                        }
+                        .padding(.leading, 24)
                     }
                 }
             }
@@ -3224,6 +3283,35 @@ struct AboutSettingsSection: View {
         }
     }
 
+    /// Git branch (debug builds only, reads from working tree)
+    private var gitBranch: String? {
+        #if DEBUG
+        // Try to get branch from the source directory
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        task.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
+        // Use the project source directory, not the built app location
+        task.currentDirectoryURL = URL(fileURLWithPath: "/Users/arach/dev/talkie-dev")
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let branch = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !branch.isEmpty {
+                return branch
+            }
+        } catch {}
+        return nil
+        #else
+        return nil
+        #endif
+    }
+
     var body: some View {
         SettingsPageContainer {
             SettingsPageHeader(
@@ -3426,8 +3514,8 @@ struct QuickSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Glass tab bar
-            HStack(spacing: 4) {
+            // Glass tab bar with enhanced styling
+            HStack(spacing: 6) {
                 ForEach(QuickSettingsTab.allCases, id: \.self) { tab in
                     QuickSettingsTabButton(
                         tab: tab,
@@ -3440,15 +3528,39 @@ struct QuickSettingsView: View {
                     }
                 }
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.top, Spacing.sm)
-            .padding(.bottom, Spacing.xs)
+            .padding(.horizontal, Spacing.md)
+            .padding(.top, Spacing.md)
+            .padding(.bottom, Spacing.sm)
             .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
+                ZStack {
+                    // Frosted glass base
+                    Rectangle()
+                        .fill(.thinMaterial)
+
+                    // Top highlight
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.08),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    // Bottom edge (subtle separator)
+                    VStack {
+                        Spacer()
+                        Rectangle()
+                            .fill(Color.white.opacity(0.06))
+                            .frame(height: 1)
+                    }
+                }
             )
 
-            // Content
+            // Content with glass background
             ScrollView {
                 switch selectedTab {
                 case .shortcuts:
@@ -3469,7 +3581,7 @@ struct QuickSettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(.ultraThinMaterial)
+        .glassPanel()
     }
 }
 
@@ -3485,7 +3597,7 @@ struct QuickSettingsTabButton: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 10))
+                    .font(.system(size: 11, weight: .medium))
 
                 if showWarning {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -3494,18 +3606,54 @@ struct QuickSettingsTabButton: View {
                 }
             }
             .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .fill(isSelected ? TalkieTheme.accent : (isHovered ? Color.white.opacity(0.1) : Color.clear))
+                ZStack {
+                    if isSelected {
+                        // Selected: accent with glass highlight
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(TalkieTheme.accent)
+
+                        // Glass highlight on top
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.3),
+                                        Color.white.opacity(0.1),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
+                    } else if isHovered {
+                        // Hovered: subtle glass effect
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Color.white.opacity(0.1))
+
+                        // Top highlight
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.15),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+                }
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .stroke(isSelected ? Color.clear : (isHovered ? Color.white.opacity(0.1) : Color.clear), lineWidth: 0.5)
-            )
+            .shadow(color: isSelected ? TalkieTheme.accent.opacity(0.4) : Color.clear, radius: 6, y: 2)
         }
         .buttonStyle(.plain)
+        .animation(TalkieAnimation.fast, value: isSelected)
+        .animation(TalkieAnimation.fast, value: isHovered)
         .onHover { isHovered = $0 }
         .help(tab.title)
     }
@@ -3652,6 +3800,7 @@ struct ShortcutsQuickSection: View {
 // MARK: - Glass Card Component
 
 struct GlassCard<Content: View>: View {
+    var intensity: GlassIntensity = .subtle
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -3659,14 +3808,7 @@ struct GlassCard<Content: View>: View {
             content()
         }
         .padding(Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                )
-        )
+        .glassBackground(intensity: intensity, cornerRadius: CornerRadius.md)
     }
 }
 

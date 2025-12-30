@@ -41,6 +41,7 @@ public enum LiveSettingsKey {
     public static let pressEnterAfterPaste = "pressEnterAfterPaste"
     public static let primaryContextSource = "primaryContextSource"
     public static let contextCaptureDetail = "contextCaptureDetail"
+    public static let autoScratchpadOnSelection = "autoScratchpadOnSelection"
 
     // MARK: Storage
     public static let utteranceTTLHours = "utteranceTTLHours"
