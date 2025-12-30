@@ -28,6 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Settings window (consolidated - includes permissions tab)
     private var settingsWindow: NSWindow?
 
+    // Event monitors (stored to allow cleanup if needed)
+    private var controlKeyMonitor: Any?
+    #if DEBUG
+    private var glassToggleMonitor: Any?
+    #endif
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu bar app - keep running when windows are closed
         return false
@@ -119,14 +125,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateStatusBarTooltip()
 
             // Monitor Control key to show environment badge
-            NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
+            controlKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
                 self?.updateStatusBarBadge(controlPressed: event.modifierFlags.contains(.control))
                 return event
             }
 
             #if DEBUG
             // Monitor Command+G for glass mode toggle (Dev builds only)
-            NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            glassToggleMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
                 // Command+G toggles glass mode
                 if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "g" {
                     LiveSettings.shared.glassMode.toggle()

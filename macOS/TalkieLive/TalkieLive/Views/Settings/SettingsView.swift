@@ -3412,12 +3412,13 @@ struct AboutSettingsSection: View {
     /// Git branch (debug builds only, reads from working tree)
     private var gitBranch: String? {
         #if DEBUG
-        // Try to get branch from the source directory
+        // Find .git directory by walking up from bundle location
+        guard let gitDir = Self.findGitDirectory() else { return nil }
+
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         task.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
-        // Use the project source directory, not the built app location
-        task.currentDirectoryURL = URL(fileURLWithPath: "/Users/arach/dev/talkie-dev")
+        task.currentDirectoryURL = gitDir
 
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -3436,6 +3437,19 @@ struct AboutSettingsSection: View {
         #else
         return nil
         #endif
+    }
+
+    /// Walk up from bundle location to find .git directory
+    private static func findGitDirectory() -> URL? {
+        var url = Bundle.main.bundleURL
+        for _ in 0..<8 {  // Walk up max 8 levels (DerivedData can be deep)
+            url = url.deletingLastPathComponent()
+            let gitPath = url.appendingPathComponent(".git")
+            if FileManager.default.fileExists(atPath: gitPath.path) {
+                return url
+            }
+        }
+        return nil
     }
 
     var body: some View {

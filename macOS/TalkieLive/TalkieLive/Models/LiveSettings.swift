@@ -447,7 +447,7 @@ final class LiveSettings: ObservableObject {
     }
 
     /// Auto-open scratchpad when text is selected at recording start
-    @Published var autoScratchpadOnSelection: Bool {
+    @Published var autoScratchpadOnSelection: Bool = false {
         didSet { save() }
     }
 
