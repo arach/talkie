@@ -299,22 +299,24 @@ extension DebugToolbar {
         }) {
             // Isolate icon to its own render layer for smooth rotation
             Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundColor(isExpanded ? .orange : .secondary)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isExpanded ? .orange : .accentColor)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 .drawingGroup() // Rasterize before animating
                 .animation(.snappy(duration: 0.15), value: isExpanded)
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
                 .background(
                     Circle()
                         .fill(Color(nsColor: .controlBackgroundColor))
+                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                 )
                 .overlay(
                     Circle()
-                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                        .strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1.5)
                 )
         }
         .buttonStyle(.plain)
+        .help("Debug Toolbar (⌘D to toggle)")
     }
 
     // MARK: - Expanded Panel

@@ -181,6 +181,7 @@ struct TalkieNavigationViewNative: View {
                     "Memos": "\(memosVM.totalCount)"
                 ]
             }
+            .padding(.bottom, 40) // Clear the 32px StatusBar
         }
         #endif
         // Note: NavigationSplitView provides its own sidebar toggle with hiddenTitleBar
