@@ -294,6 +294,9 @@ struct PersistenceController {
             CloudKitSyncManager.shared.configure(with: viewContext)
             CloudKitSyncManager.shared.syncNow()
 
+            // Initialize TalkieData - runs startup inventory and bridge sync if needed
+            TalkieData.shared.configure(with: viewContext)
+
             // Start WAL maintenance (purges old history, logs sizes)
             WALManager.shared.startPeriodicMaintenance(container: persistentContainer)
             WALManager.shared.logDatabaseSizes(container: persistentContainer)

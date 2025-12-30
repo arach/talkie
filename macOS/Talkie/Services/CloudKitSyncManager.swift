@@ -109,6 +109,8 @@ class CloudKitSyncManager {
         // Load sync history now that database is ready
         loadSyncHistory()
 
+        // Note: TalkieData.shared handles bridge sync (CoreData → GRDB) on startup
+
         let now = Date()
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "HH:mm:ss"
