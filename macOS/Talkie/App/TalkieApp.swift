@@ -121,6 +121,8 @@ struct TalkieApp: App {
                     set: { OnboardingManager.shared.shouldShowOnboarding = $0 }
                 )) {
                     OnboardingView()
+                        .environment(SettingsManager.shared)
+                        .environment(LiveSettings.shared)
                 }
         }
         .windowStyle(.hiddenTitleBar)

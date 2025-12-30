@@ -21,6 +21,9 @@ struct WorkflowContext {
     var date: Date
     var outputs: [String: String] = [:]
 
+    /// Tracks output keys in insertion order (Dictionary doesn't guarantee order)
+    var outputOrder: [String] = []
+
     /// The memo being processed
     let memo: MemoModel
 
@@ -50,13 +53,13 @@ struct WorkflowContext {
             result = result.replacingOccurrences(of: "{{\(key)}}", with: value)
         }
 
-        // Handle PREVIOUS_OUTPUT - use the last output if available
-        if let lastOutput = Array(outputs.values).last {
+        // Handle PREVIOUS_OUTPUT - use the last output based on insertion order
+        if let lastKey = outputOrder.last, let lastOutput = outputs[lastKey] {
             result = result.replacingOccurrences(of: "{{PREVIOUS_OUTPUT}}", with: lastOutput)
         }
 
         // Handle OUTPUT - same as PREVIOUS_OUTPUT for backward compatibility
-        if let lastOutput = Array(outputs.values).last {
+        if let lastKey = outputOrder.last, let lastOutput = outputs[lastKey] {
             result = result.replacingOccurrences(of: "{{OUTPUT}}", with: lastOutput)
         }
 
@@ -328,6 +331,7 @@ class WorkflowExecutor {
                 throw error
             }
             workflowContext.outputs[step.outputKey] = output
+            workflowContext.outputOrder.append(step.outputKey)
             logger.info("💾 Saved output to key '\(step.outputKey)'")
             // Record step execution with timing
             let stepCompletedTime = Date()
@@ -1428,6 +1432,47 @@ class WorkflowExecutor {
         }
     }
 
+    /// Save transcript to LocalRepository with proper versioning
+    /// Handles version incrementing, memo updates, and error logging
+    private func saveTranscriptToRepository(
+        transcript: String,
+        memoId: UUID,
+        engine: String,
+        repository: LocalRepository
+    ) async {
+        do {
+            // Fetch existing versions to determine next version number
+            let memoData = try await repository.fetchMemo(id: memoId)
+            let existingVersions = memoData?.transcriptVersions ?? []
+            let nextVersion = (existingVersions.map { $0.version }.max() ?? 0) + 1
+
+            // Save new transcript version
+            let transcriptVersion = TranscriptVersionModel(
+                id: UUID(),
+                memoId: memoId,
+                version: nextVersion,
+                content: transcript,
+                sourceType: "system_macos",
+                engine: engine,
+                createdAt: Date(),
+                transcriptionDurationMs: 0
+            )
+            try await repository.saveTranscriptVersion(transcriptVersion)
+            logger.info("Saved transcript version \(nextVersion) to LocalRepository")
+
+            // Update memo's transcription field
+            if var memoToUpdate = memoData?.memo {
+                memoToUpdate.transcription = transcript
+                memoToUpdate.lastModified = Date()
+                try await repository.saveMemo(memoToUpdate)
+                logger.info("Updated memo transcription field")
+            }
+        } catch {
+            // Log error instead of silently ignoring
+            logger.error("Failed to save transcript to LocalRepository: \(error.localizedDescription)")
+        }
+    }
+
     /// Transcribe using Apple Speech (no download required)
     private func transcribeWithAppleSpeech(audioData: Data, memoId: UUID, config: TranscribeStepConfig) async throws -> String {
         await SystemEventManager.shared.log(.workflow, "Transcribing with Apple Speech", detail: "On-device, instant")
@@ -1436,27 +1481,12 @@ class WorkflowExecutor {
 
             // Save transcript to LocalRepository
             if config.saveAsVersion {
-                let repository = LocalRepository()
-                let transcriptVersion = TranscriptVersionModel(
-                    id: UUID(),
+                await saveTranscriptToRepository(
+                    transcript: transcript,
                     memoId: memoId,
-                    version: 1, // TODO: increment from existing versions
-                    content: transcript,
-                    sourceType: "system_macos",
                     engine: TranscriptEngines.appleSpeech,
-                    createdAt: Date(),
-                    transcriptionDurationMs: 0
+                    repository: LocalRepository()
                 )
-                try? await repository.saveTranscriptVersion(transcriptVersion)
-
-                // Also update the memo's transcription field
-                if let memoData = try? await repository.fetchMemo(id: memoId) {
-                    var memoToUpdate = memoData.memo
-                    memoToUpdate.transcription = transcript
-                    memoToUpdate.lastModified = Date()
-                    try? await repository.saveMemo(memoToUpdate)
-                }
-                logger.info("Saved Apple Speech transcript to LocalRepository")
             }
 
             logger.info("Apple Speech transcription complete: \(transcript.prefix(100))...")
@@ -1493,27 +1523,12 @@ class WorkflowExecutor {
 
             // Save transcript to LocalRepository
             if config.saveAsVersion {
-                let repository = LocalRepository()
-                let transcriptVersion = TranscriptVersionModel(
-                    id: UUID(),
+                await saveTranscriptToRepository(
+                    transcript: transcript,
                     memoId: memoId,
-                    version: 1, // TODO: increment from existing versions
-                    content: transcript,
-                    sourceType: "system_macos",
                     engine: TranscriptEngines.mlxWhisper,
-                    createdAt: Date(),
-                    transcriptionDurationMs: 0
+                    repository: LocalRepository()
                 )
-                try? await repository.saveTranscriptVersion(transcriptVersion)
-
-                // Also update the memo's transcription field
-                if let memoData = try? await repository.fetchMemo(id: memoId) {
-                    var memoToUpdate = memoData.memo
-                    memoToUpdate.transcription = transcript
-                    memoToUpdate.lastModified = Date()
-                    try? await repository.saveMemo(memoToUpdate)
-                }
-                logger.info("Saved Whisper transcript to LocalRepository")
             }
 
             logger.info("Whisper transcription complete: \(transcript.prefix(100))...")
