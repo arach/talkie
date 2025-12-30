@@ -319,6 +319,24 @@ class CloudKitSyncManager {
         }
     }
 
+    /// Full sync ALL CoreData memos to GRDB (ignores timestamp, syncs everything)
+    /// Use when UUIDs are out of sync or for initial population
+    func fullSyncToGRDB() {
+        guard let context = viewContext else {
+            log.warning("Cannot full sync - no view context")
+            return
+        }
+        log.info("🔄 Starting FULL bridge sync (all memos)...")
+        Task {
+            await syncCoreDataToGRDB(context: context, fullSync: true)
+            // Notify views to refresh
+            await MainActor.run {
+                NotificationCenter.default.post(name: .talkieSyncCompleted, object: nil)
+            }
+            log.info("✅ Full bridge sync complete")
+        }
+    }
+
     /// Schedule a debounced sync - coalesces rapid CloudKit notifications
     private func scheduleDebounceSync() {
         // Cancel any existing debounce timer
@@ -408,15 +426,12 @@ class CloudKitSyncManager {
 
             // Mark memos from other devices as received by Mac
             if let context = self.viewContext {
-                // If we detected changes, give Core Data a moment to import them
-                // NSPersistentCloudKitContainer handles import automatically; we just need to refresh
-                if result.changeCount > 0 {
-                    try? await Task.sleep(for: .milliseconds(500)) // 500ms
-                    context.refreshAllObjects()
+                // Always refresh and bridge - NSPersistentCloudKitContainer may have
+                // already pulled changes automatically before this sync ran
+                context.refreshAllObjects()
 
-                    // BRIDGE 1: Sync Core Data → GRDB
-                    await self.syncCoreDataToGRDB(context: context)
-                }
+                // BRIDGE: Sync Core Data → GRDB (always, to catch automatic imports)
+                await self.syncCoreDataToGRDB(context: context)
 
                 // Process auto-run workflows for unprocessed memos
                 await self.processTriggers(context: context)
@@ -808,9 +823,10 @@ class CloudKitSyncManager {
     /// Sync Core Data changes to GRDB (phone → Mac data flow)
     /// Called after CloudKit pushes changes to Core Data
     /// Can be called manually via forceSyncToGRDB()
-    func syncCoreDataToGRDB(context: NSManagedObjectContext) async {
+    /// Set fullSync=true to ignore timestamp and sync ALL memos
+    func syncCoreDataToGRDB(context: NSManagedObjectContext, fullSync: Bool = false) async {
         let syncStart = Date()
-        let lastSync = lastBridge1Sync
+        let lastSync = fullSync ? Date.distantPast : lastBridge1Sync
 
         let repository = LocalRepository()
         var createdCount = 0
@@ -818,18 +834,24 @@ class CloudKitSyncManager {
         var errorCount = 0
 
         await context.perform {
-            // Only fetch memos modified since last sync (huge performance win)
+            // Fetch memos - either all (fullSync) or only modified since last sync
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "lastModified > %@", lastSync as NSDate)
+            if !fullSync {
+                fetchRequest.predicate = NSPredicate(format: "lastModified > %@", lastSync as NSDate)
+            }
             fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.lastModified, ascending: false)]
 
             do {
                 let cdMemos = try context.fetch(fetchRequest)
                 if cdMemos.isEmpty {
                     // Nothing new since last sync - skip silently
+                    if fullSync {
+                        log.info("🌉 [Bridge 1] Full sync: no memos in CoreData")
+                    }
                     return
                 }
-                log.info("🌉 [Bridge 1] Syncing \(cdMemos.count) changed memo(s)")
+                let syncType = fullSync ? "FULL sync" : "incremental sync"
+                log.info("🌉 [Bridge 1] \(syncType): \(cdMemos.count) memo(s)")
 
                 for cdMemo in cdMemos {
                     guard let memoId = cdMemo.id else {
@@ -892,8 +914,8 @@ class CloudKitSyncManager {
         // Skip logging if nothing happened - reduces noise
     }
 
-    /// Convert Core Data VoiceMemo to GRDB MemoModel
-    private func convertToMemoModel(_ cdMemo: VoiceMemo) -> MemoModel {
+    /// Convert CoreData VoiceMemo to GRDB MemoModel
+    func convertToMemoModel(_ cdMemo: VoiceMemo) -> MemoModel {
         let id = cdMemo.id ?? UUID()
         let createdAt = cdMemo.createdAt ?? Date()
         let lastModified = cdMemo.lastModified ?? Date()

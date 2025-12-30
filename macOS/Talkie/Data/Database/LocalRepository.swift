@@ -136,6 +136,19 @@ actor LocalRepository: MemoRepository {
         }
     }
 
+    /// Fetch all memo IDs (for diff comparison)
+    func fetchAllIDs() async throws -> Set<UUID> {
+        let db = try await dbManager.database()
+        return try await db.read { db in
+            let ids = try MemoModel
+                .filter(MemoModel.Columns.deletedAt == nil)
+                .select(MemoModel.Columns.id)
+                .asRequest(of: String.self)
+                .fetchAll(db)
+            return Set(ids.compactMap { UUID(uuidString: $0) })
+        }
+    }
+
     // MARK: - Fetch Single Memo with Relationships
 
     func fetchMemo(id: UUID) async throws -> MemoWithRelationships? {

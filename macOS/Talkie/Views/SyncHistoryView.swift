@@ -164,6 +164,7 @@ struct SyncHistoryView: View {
 
                 Spacer()
 
+                // Sync Now button
                 if syncManager.isSyncing {
                     HStack(spacing: 6) {
                         ProgressView()
@@ -173,7 +174,23 @@ struct SyncHistoryView: View {
                             .font(.system(size: 11))
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
+                } else {
+                    Button {
+                        syncManager.syncNow()
+                    } label: {
+                        Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.bordered)
                 }
+
+                // Copy history button
+                Button {
+                    copyHistoryToClipboard()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .help("Copy sync history")
 
                 Button("Done") {
                     dismiss()
@@ -225,6 +242,19 @@ struct SyncHistoryView: View {
                             }
                         }
                     }
+
+                    // Dev Mode Troubleshooting Section (DEBUG builds only)
+                    #if DEBUG
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    DevModeSyncSection(
+                        syncManager: syncManager,
+                        onForceBridge: {
+                            syncManager.forceSyncToGRDB()
+                        }
+                    )
+                    #endif
                 }
             }
         }
@@ -270,6 +300,38 @@ struct SyncHistoryView: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func copyHistoryToClipboard() {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .medium
+
+        var text = "Sync History\n"
+        text += "============\n\n"
+
+        for event in syncManager.syncHistory {
+            let status = event.status.rawValue.capitalized
+            let time = dateFormatter.string(from: event.timestamp)
+            let duration = event.duration.map { String(format: "%.1fs", $0) } ?? "-"
+
+            text += "[\(status)] \(time)\n"
+            text += "  Items: \(event.itemCount), Duration: \(duration)\n"
+
+            if let error = event.errorMessage {
+                text += "  Error: \(error)\n"
+            }
+
+            if !event.details.isEmpty {
+                for detail in event.details {
+                    text += "    • [\(detail.changeType.rawValue)] \(detail.recordType): \(detail.title)\n"
+                }
+            }
+            text += "\n"
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }
 
@@ -563,6 +625,297 @@ struct SyncRecordDetailRow: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Dev Mode Sync Section
+
+struct DevSyncStats {
+    let coreDataCount: Int
+    let grdbCount: Int
+    let liveCount: Int
+    let lastBridgeSync: Date?
+    let coreDataIDs: Set<UUID>
+    let grdbIDs: Set<UUID>
+
+    var countMismatch: Bool {
+        coreDataCount != grdbCount
+    }
+
+    var inCoreDataOnly: Set<UUID> {
+        coreDataIDs.subtracting(grdbIDs)
+    }
+
+    var inGRDBOnly: Set<UUID> {
+        grdbIDs.subtracting(coreDataIDs)
+    }
+
+    static func gather() async -> DevSyncStats {
+        let (coreDataCount, coreDataIDs) = await fetchCoreDataInfo()
+        let (grdbCount, grdbIDs) = await fetchGRDBInfo()
+        let live = LiveDatabase.count()
+
+        return DevSyncStats(
+            coreDataCount: coreDataCount,
+            grdbCount: grdbCount,
+            liveCount: live,
+            lastBridgeSync: nil,
+            coreDataIDs: coreDataIDs,
+            grdbIDs: grdbIDs
+        )
+    }
+
+    private static func fetchCoreDataInfo() async -> (Int, Set<UUID>) {
+        let context = PersistenceController.shared.container.viewContext
+        return await context.perform {
+            let request: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            request.propertiesToFetch = ["id"]
+            guard let memos = try? context.fetch(request) else {
+                return (0, Set<UUID>())
+            }
+            let ids = Set(memos.compactMap { $0.id })
+            return (memos.count, ids)
+        }
+    }
+
+    private static func fetchGRDBInfo() async -> (Int, Set<UUID>) {
+        do {
+            let repo = LocalRepository()
+            let count = try await repo.countMemos()
+            let ids = try await repo.fetchAllIDs()
+            return (count, ids)
+        } catch {
+            return (0, Set<UUID>())
+        }
+    }
+}
+
+struct DevModeSyncSection: View {
+    let syncManager: CloudKitSyncManager
+    let onForceBridge: () -> Void
+
+    @State private var stats: DevSyncStats?
+    @State private var isLoading = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Image(systemName: "wrench.and.screwdriver")
+                    .foregroundColor(.orange)
+                Text("Dev Mode")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+
+                Button {
+                    Task {
+                        isLoading = true
+                        stats = await DevSyncStats.gather()
+                        isLoading = false
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 16)
+
+            if isLoading {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Loading stats...")
+                        .font(.system(size: 11))
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .padding(.horizontal, 16)
+            } else if let stats = stats {
+                // Database counts
+                VStack(spacing: 8) {
+                    DevStatRow(
+                        label: "Core Data",
+                        value: "\(stats.coreDataCount) memos",
+                        icon: "icloud",
+                        color: .blue
+                    )
+
+                    DevStatRow(
+                        label: "Local GRDB",
+                        value: "\(stats.grdbCount) memos",
+                        icon: "internaldrive",
+                        color: stats.countMismatch ? .orange : .green
+                    )
+
+                    DevStatRow(
+                        label: "Live Database",
+                        value: "\(stats.liveCount) dictations",
+                        icon: "waveform",
+                        color: .purple
+                    )
+
+                    // Diff info
+                    if !stats.inCoreDataOnly.isEmpty || !stats.inGRDBOnly.isEmpty {
+                        Divider()
+                            .padding(.vertical, 4)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !stats.inCoreDataOnly.isEmpty {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "icloud.fill")
+                                        .foregroundColor(.blue)
+                                        .font(.system(size: 10))
+                                    Text("\(stats.inCoreDataOnly.count) in CloudKit only")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.blue)
+                                    Text("(needs bridge)")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                }
+                                .padding(.horizontal, 16)
+                            }
+
+                            if !stats.inGRDBOnly.isEmpty {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "internaldrive.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.system(size: 10))
+                                    Text("\(stats.inGRDBOnly.count) in Local only")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.orange)
+                                    Text("(orphaned)")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+                    } else if stats.countMismatch {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text("Count mismatch (same IDs)")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.orange)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                // Actions
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        Button {
+                            onForceBridge()
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(1))
+                                self.stats = await DevSyncStats.gather()
+                            }
+                        } label: {
+                            Label("Bridge Sync", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            CloudKitSyncManager.shared.fullSyncToGRDB()
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(3))
+                                self.stats = await DevSyncStats.gather()
+                            }
+                        } label: {
+                            Label("Full Sync (All)", systemImage: "arrow.clockwise.circle.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+
+                        Button {
+                            copyStatsToClipboard(stats)
+                        } label: {
+                            Label("Copy Stats", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    if !stats.inCoreDataOnly.isEmpty {
+                        Text("Full Sync will copy \(stats.inCoreDataOnly.count) CloudKit memos to local")
+                            .font(.system(size: 9))
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.vertical, 12)
+        .background(Color.orange.opacity(0.05))
+        .cornerRadius(8)
+        .padding(.horizontal, 16)
+        .task {
+            stats = await DevSyncStats.gather()
+            isLoading = false
+        }
+    }
+
+    private func copyStatsToClipboard(_ stats: DevSyncStats) {
+        var text = """
+        Talkie Sync Stats
+        =================
+        Core Data: \(stats.coreDataCount) memos
+        Local GRDB: \(stats.grdbCount) memos
+        Live DB: \(stats.liveCount) dictations
+        Mismatch: \(stats.countMismatch ? "YES" : "No")
+        """
+
+        if !stats.inCoreDataOnly.isEmpty {
+            text += "\n\nIn CloudKit only (\(stats.inCoreDataOnly.count)):\n"
+            for id in stats.inCoreDataOnly.prefix(20) {
+                text += "  • \(id.uuidString)\n"
+            }
+            if stats.inCoreDataOnly.count > 20 {
+                text += "  ... and \(stats.inCoreDataOnly.count - 20) more\n"
+            }
+        }
+
+        if !stats.inGRDBOnly.isEmpty {
+            text += "\n\nIn Local only (\(stats.inGRDBOnly.count)):\n"
+            for id in stats.inGRDBOnly.prefix(20) {
+                text += "  • \(id.uuidString)\n"
+            }
+            if stats.inGRDBOnly.count > 20 {
+                text += "  ... and \(stats.inGRDBOnly.count - 20) more\n"
+            }
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+struct DevStatRow: View {
+    let label: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(color)
+                .frame(width: 20)
+
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+        }
+        .padding(.horizontal, 16)
     }
 }
 

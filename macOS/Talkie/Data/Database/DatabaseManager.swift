@@ -69,7 +69,18 @@ final class DatabaseManager {
         let dbQueue: DatabaseQueue = try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let queue = try DatabaseQueue(path: dbPath)
+                    // Configure database with PRAGMAs during initialization
+                    // (must be done outside transactions)
+                    var config = Configuration()
+                    config.prepareDatabase { db in
+                        try db.execute(sql: "PRAGMA foreign_keys = ON")
+                        try db.execute(sql: "PRAGMA journal_mode = WAL")
+                        try db.execute(sql: "PRAGMA synchronous = NORMAL")
+                        try db.execute(sql: "PRAGMA temp_store = MEMORY")
+                        try db.execute(sql: "PRAGMA cache_size = -64000")
+                    }
+
+                    let queue = try DatabaseQueue(path: dbPath, configuration: config)
                     continuation.resume(returning: queue)
                 } catch {
                     continuation.resume(throwing: error)
@@ -80,25 +91,13 @@ final class DatabaseManager {
         timeoutTask.cancel()
         await MainActor.run { StartupLogger.shared.log("Database opened ✓") }
 
-        // Configure and migrate on background thread too
-        await MainActor.run { StartupLogger.shared.log("Configuring WAL mode...") }
+        // Run migrations on background thread
+        await MainActor.run { StartupLogger.shared.log("Running migrations...") }
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             DispatchQueue.global(qos: .userInitiated).async { [self] in
                 do {
-                    // Configure database
-                    try dbQueue.write { db in
-                        try db.execute(sql: "PRAGMA foreign_keys = ON")
-                        try db.execute(sql: "PRAGMA journal_mode = WAL")
-                        try db.execute(sql: "PRAGMA synchronous = NORMAL")
-                        try db.execute(sql: "PRAGMA temp_store = MEMORY")
-                        try db.execute(sql: "PRAGMA cache_size = -64000")
-                    }
-
-                    // Run migrations
-                    Task { @MainActor in StartupLogger.shared.log("Running migrations...") }
                     try self.migrator.migrate(dbQueue)
-
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
