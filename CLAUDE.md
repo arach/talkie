@@ -53,6 +53,51 @@ The script:
 - Adds them to the correct PBXGroup (preserves folder structure)
 - Creates backup before changes
 
+## Data Architecture: GRDB-Primary
+
+**GRDB is the local source of truth. CloudKit is a sync layer.**
+
+```
+┌─────────────────────────────────────────────┐
+│              App Layer (UI)                  │
+│         reads/writes from GRDB only          │
+└─────────────────┬───────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────┐
+│                  GRDB                        │
+│         ~/Library/.../Talkie/*.sqlite        │
+│            LOCAL SOURCE OF TRUTH             │
+└─────────────────┬───────────────────────────┘
+                  │ bridge sync (background)
+┌─────────────────▼───────────────────────────┐
+│            Sync Providers                    │
+│  ┌────────────────────────────────────────┐ │
+│  │ CloudKit (via Core Data bridge)        │ │
+│  │ - NSPersistentCloudKitContainer        │ │
+│  │ - Syncs changes TO GRDB                │ │
+│  └────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────┐ │
+│  │ Future: other sync providers           │ │
+│  └────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
+```
+
+### Evolution
+Started with Core Data + CloudKit as source of truth, evolved to GRDB-primary for:
+- **Performance**: GRDB is 10-20x faster for local queries
+- **Flexibility**: Sync layer is now pluggable
+- **Reliability**: App works offline-first, sync catches up
+
+### Startup Order
+1. **GRDB first** - App shows immediately with local data
+2. **CloudKit deferred** - Syncs in background after UI is ready
+
+### Key Files
+- `Data/Database/DatabaseManager.swift` - GRDB for memos
+- `Database/LiveDatabase.swift` - GRDB for live dictations
+- `Models/Persistence.swift` - Core Data + CloudKit bridge
+- `Services/TalkieData.swift` - Bridge sync (CloudKit → GRDB)
+
 ## Data Ownership: Talkie ↔ TalkieLive
 
 **TalkieLive owns all writes to `live.sqlite`. Talkie is read-only.**

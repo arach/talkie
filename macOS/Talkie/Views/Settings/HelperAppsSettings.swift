@@ -10,14 +10,41 @@ import TalkieKit
 
 struct HelperAppsSettingsView: View {
     private let serviceManager = ServiceManager.shared
+    @State private var isRefreshing = false
 
     var body: some View {
         SettingsPageContainer {
-            SettingsPageHeader(
-                icon: "app.connected.to.app.below.fill",
-                title: "HELPER APPS",
-                subtitle: "Manage background services that power Talkie features."
-            )
+            HStack {
+                SettingsPageHeader(
+                    icon: "app.connected.to.app.below.fill",
+                    title: "HELPER APPS",
+                    subtitle: "Manage background services that power Talkie features."
+                )
+                Spacer()
+                Button(action: {
+                    isRefreshing = true
+                    serviceManager.refreshStatus()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        isRefreshing = false
+                    }
+                }) {
+                    Group {
+                        if isRefreshing {
+                            BrailleSpinner(speed: 0.08)
+                                .font(.system(size: 12))
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10))
+                        }
+                    }
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .frame(width: 24, height: 24)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 8)
+            }
         } content: {
             VStack(alignment: .leading, spacing: 16) {
                 // TalkieEngine
@@ -27,7 +54,7 @@ struct HelperAppsSettingsView: View {
                     bundleId: ServiceManager.engineBundleId,
                     status: serviceManager.engineStatus,
                     processId: serviceManager.engine.processId,
-                    environment: EngineClient.shared.connectedMode?.environment,
+                    environment: EngineClient.shared.connectedMode,
                     onLaunch: { serviceManager.launchEngine() },
                     onTerminate: { serviceManager.terminateEngine() },
                     onRegister: { serviceManager.registerEngine() },
@@ -55,43 +82,22 @@ struct HelperAppsSettingsView: View {
                 .padding(.vertical, 8)
 
             // Actions
-            HStack {
-                Button(action: {
-                    serviceManager.refreshStatus()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(Theme.current.fontXS)
-                        Text("REFRESH STATUS")
-                            .font(Theme.current.fontXSMedium)
-                    }
-                    .foregroundColor(Theme.current.foregroundSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
+            Button(action: {
+                serviceManager.openLoginItemsSettings()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "gear")
+                        .font(Theme.current.fontXS)
+                    Text("OPEN LOGIN ITEMS")
+                        .font(Theme.current.fontXSMedium)
                 }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button(action: {
-                    serviceManager.openLoginItemsSettings()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "gear")
-                            .font(Theme.current.fontXS)
-                        Text("OPEN LOGIN ITEMS")
-                            .font(Theme.current.fontXSMedium)
-                    }
-                    .foregroundColor(Theme.current.foregroundSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
+                .foregroundColor(Theme.current.foregroundSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(6)
             }
+            .buttonStyle(.plain)
 
             // Info
             HStack(alignment: .top, spacing: 8) {
