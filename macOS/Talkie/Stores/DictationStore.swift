@@ -356,18 +356,16 @@ final class DictationStore {
             transcriptionStatus: .success
         )
 
-        LiveDatabase.store(liveDictation)
-        logger.info("Added dictation: \(text.prefix(50))... from \(metadata.activeAppName ?? "unknown")")
-
-        // Refresh to get the new dictation with its ID
-        refresh()
+        // TODO: Route through TalkieLive XPC - Talkie is read-only
+        logger.warning("store not implemented - should route through TalkieLive XPC")
+        logger.info("Would add dictation: \(text.prefix(50))... from \(metadata.activeAppName ?? "unknown")")
     }
 
     /// Add a LiveDictation directly (for new recordings)
+    /// TODO: Route through TalkieLive XPC - Talkie is read-only
     func addLive(_ liveDictation: LiveDictation) {
-        LiveDatabase.store(liveDictation)
-        logger.info("Added live dictation: \(liveDictation.text.prefix(50))...")
-        refresh()
+        logger.warning("store not implemented - should route through TalkieLive XPC")
+        logger.info("Would add live dictation: \(liveDictation.text.prefix(50))...")
     }
 
     /// Update an existing dictation
@@ -402,8 +400,9 @@ final class DictationStore {
     }
 
     /// Prune expired dictations
+    /// TODO: Route through TalkieLive XPC - Talkie is read-only
     func pruneExpired() {
-        LiveDatabase.prune(olderThanHours: ttlHours)
+        logger.warning("prune not implemented - should route through TalkieLive XPC")
         refresh()
     }
 

@@ -182,8 +182,8 @@ final class QuickActionRunner {
             try context.save()
             let memoID = memo.id?.uuidString ?? "unknown"
 
-            // Mark as promoted in Live database
-            LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
+            // TODO: Route through TalkieLive XPC - Talkie is read-only
+            logger.warning("markAsMemo not implemented - should route through TalkieLive XPC")
 
             logger.info("Promoted Live #\(live.id ?? 0) to memo: \(memoID)")
             AppLogger.shared.log(.database, "Promoted to memo", detail: String(live.text.prefix(40)))
@@ -205,7 +205,8 @@ final class QuickActionRunner {
         // TODO: Create research memo with additional context
         let memoID = "research_\(UUID().uuidString.prefix(8))"
 
-        LiveDatabase.markAsMemo(id: live.id, talkieMemoID: memoID)
+        // TODO: Route through TalkieLive XPC - Talkie is read-only
+        logger.warning("markAsMemo not implemented - should route through TalkieLive XPC")
 
         logger.info("Created research memo from Live #\(live.id ?? 0): \(memoID)")
         AppLogger.shared.log(.database, "Research memo created", detail: memoID)
@@ -222,7 +223,8 @@ final class QuickActionRunner {
         // TODO: Create command via CommandLedger when available
         let commandID = "claude_\(UUID().uuidString.prefix(8))"
 
-        LiveDatabase.markAsCommand(id: live.id, commandID: commandID)
+        // TODO: Route through TalkieLive XPC - Talkie is read-only
+        logger.warning("markAsCommand not implemented - should route through TalkieLive XPC")
 
         logger.info("Sent Live #\(live.id ?? 0) to Claude: \(commandID)")
         AppLogger.shared.log(.system, "Sent to Claude", detail: commandID)
@@ -237,7 +239,8 @@ final class QuickActionRunner {
         // TODO: Launch workflow picker or default workflow
         let commandID = "workflow_\(UUID().uuidString.prefix(8))"
 
-        LiveDatabase.markAsCommand(id: live.id, commandID: commandID)
+        // TODO: Route through TalkieLive XPC - Talkie is read-only
+        logger.warning("markAsCommand not implemented - should route through TalkieLive XPC")
 
         logger.info("Started workflow for Live #\(live.id ?? 0): \(commandID)")
         AppLogger.shared.log(.system, "Workflow started", detail: commandID)
@@ -246,7 +249,8 @@ final class QuickActionRunner {
     // MARK: - Meta Actions
 
     private func markIgnored(_ live: LiveDictation) {
-        LiveDatabase.markAsIgnored(id: live.id)
+        // TODO: Route through TalkieLive XPC - Talkie is read-only
+        logger.warning("markAsIgnored not implemented - should route through TalkieLive XPC")
         logger.info("Marked Live #\(live.id ?? 0) as ignored")
         AppLogger.shared.log(.database, "Marked ignored", detail: "Live #\(live.id ?? 0)")
     }

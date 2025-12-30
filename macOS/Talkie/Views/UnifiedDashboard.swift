@@ -512,11 +512,9 @@ struct UnifiedDashboard: View {
     }
 
     private func clearPendingTranscriptions() {
-        // Mark all pending items as dismissed
-        let pending = LiveDatabase.fetchNeedsRetry()
-        for item in pending {
-            LiveDatabase.markTranscriptionFailed(id: item.id, error: "Dismissed from Talkie")
-        }
+        // TODO: Route through TalkieLive XPC - Talkie is read-only
+        // Would mark all pending items as dismissed
+        print("[UnifiedDashboard] clearPendingTranscriptions not implemented - should route through TalkieLive XPC")
         pendingRetryCount = 0
     }
 

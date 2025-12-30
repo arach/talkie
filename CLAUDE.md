@@ -53,6 +53,39 @@ The script:
 - Adds them to the correct PBXGroup (preserves folder structure)
 - Creates backup before changes
 
+## Data Ownership: Talkie ↔ TalkieLive
+
+**TalkieLive owns all writes to `live.sqlite`. Talkie is read-only.**
+
+```
+~/Library/Application Support/Talkie/live.sqlite
+├── TalkieLive: READ + WRITE (schema migrations, all mutations)
+└── Talkie:     READ-ONLY (queries only, opened with config.readonly = true)
+```
+
+### Why This Matters
+- **Single writer** prevents corruption and race conditions
+- **SQLite enforces it** - Talkie's read-only config rejects any write attempts
+- **XPC for mutations** - Talkie routes delete/update requests through TalkieLive XPC
+
+### What Each App Does
+
+| Operation | Talkie | TalkieLive |
+|-----------|--------|------------|
+| Schema migrations | ❌ | ✅ |
+| Insert dictations | ❌ | ✅ |
+| Update transcription | ❌ | ✅ |
+| Delete dictations | ❌ (stub + XPC) | ✅ |
+| Update live_state | ❌ | ✅ |
+| Query dictations | ✅ | ✅ |
+| Prune old data | ❌ | ✅ |
+
+### Adding Write Operations
+If Talkie needs to trigger a write (e.g., delete, retranscribe):
+1. Add method to `TalkieLiveXPCProtocol`
+2. Implement in TalkieLive's XPC service
+3. Call via XPC from Talkie (don't touch LiveDatabase directly)
+
 ## Key Patterns
 
 - **Observable migration** - Moving from ObservableObject to @Observable

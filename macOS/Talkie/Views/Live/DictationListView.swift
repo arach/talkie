@@ -452,10 +452,10 @@ struct DictationListView: View {
             try context.save()
             print("[DictationListView] Promoted dictation to memo with metadata: \(memo.title ?? "")")
 
-            // Mark as promoted in Live database (updates promotionStatus and talkieMemoID)
+            // TODO: Route through TalkieLive XPC - Talkie is read-only
             if let liveID = dictation.liveID, let memoID = memo.id?.uuidString {
-                LiveDatabase.markAsMemo(id: liveID, talkieMemoID: memoID)
-                print("[DictationListView] Marked Live #\(liveID) as promoted to memo \(memoID)")
+                print("[DictationListView] markAsMemo not implemented - should route through TalkieLive XPC")
+                print("[DictationListView] Would mark Live #\(liveID) as promoted to memo \(memoID)")
             }
 
             // Show success feedback

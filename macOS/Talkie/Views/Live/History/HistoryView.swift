@@ -463,58 +463,12 @@ struct HistoryView: View {
             createdInTalkieView: true,
             pasteTimestamp: nil
         )
-        LiveDatabase.store(pendingDictation)
-        store.refresh()
-
-        // Get the ID of the just-stored dictation
-        let storedId = LiveDatabase.all().first { $0.audioFilename == storedFilename }?.id
-
-        do {
-            // Transcribe via engine - pass path directly, engine reads the file
-            let startTime = Date()
-            let text = try await EngineClient.shared.transcribe(
-                audioPath: storedURL.path,
-                modelId: settings.selectedModelId,
-                priority: .userInitiated  // User just finished recording
-            )
-            let transcriptionMs = Int(Date().timeIntervalSince(startTime) * 1000)
-
-            // Update the database record with success
-            if let id = storedId {
-                LiveDatabase.markTranscriptionSuccess(
-                    id: id,
-                    text: text,
-                    perfEngineMs: transcriptionMs,
-                    model: settings.selectedModelId
-                )
-            }
-
-            let wordCount = text.split(separator: " ").count
-            let transcriptionTimeStr = transcriptionMs < 1000 ? "\(transcriptionMs)ms" : String(format: "%.1fs", Double(transcriptionMs) / 1000.0)
-            AppLogger.shared.log(.transcription, "Transcription complete", detail: "\(wordCount) words • \(transcriptionTimeStr)")
-
-            // Refresh and select the new dictation
-            store.refresh()
-            selectedSection = .history
-            if let newDictation = store.dictations.first(where: { $0.metadata.audioFilename == storedFilename }) {
-                selectedDictationIDs = [newDictation.id]
-            }
-
-            SoundManager.shared.playPasted()
-            isTranscribingDrop = false
-            dropMessage = nil
-
-        } catch {
-            AppLogger.shared.log(.error, "Transcription failed", detail: error.localizedDescription)
-
-            // Mark as failed in database
-            if let id = storedId {
-                LiveDatabase.markTranscriptionFailed(id: id, error: error.localizedDescription)
-            }
-
-            store.refresh()
-            showDropError("Transcription failed: \(error.localizedDescription)")
-        }
+        // TODO: Audio drop transcription should route through TalkieLive XPC
+        // TalkieLive owns all writes to LiveDatabase
+        print("[HistoryView] Audio drop transcription not implemented - should route through TalkieLive XPC")
+        showDropError("Audio drop not available - TalkieLive handles transcription")
+        isTranscribingDrop = false
+        dropMessage = nil
     }
 
     /// Show a drop error message briefly
