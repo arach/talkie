@@ -1,9 +1,9 @@
 //
-//  GRDBRepository.swift
+//  LocalRepository.swift
 //  Talkie
 //
-//  GRDB implementation of MemoRepository
-//  Efficient SQLite queries with proper indexing
+//  Local storage implementation of MemoRepository
+//  Uses GRDB/SQLite for efficient queries with proper indexing
 //
 
 import Foundation
@@ -12,9 +12,9 @@ import TalkieKit
 
 private let log = Log(.database)
 
-// MARK: - GRDB Repository
+// MARK: - Local Repository
 
-actor GRDBRepository: MemoRepository {
+actor LocalRepository: MemoRepository {
     private let dbManager: DatabaseManager
 
     init(dbManager: DatabaseManager = .shared) {
@@ -479,6 +479,128 @@ actor GRDBRepository: MemoRepository {
         }
 
         return filteredRequest
+    }
+}
+
+// MARK: - Aggregations
+
+extension LocalRepository {
+    /// Count memos created today (local timezone)
+    func countMemosToday() async throws -> Int {
+        try await instrumentRepositoryRead("countMemosToday") {
+            let db = try await dbManager.database()
+            let calendar = Calendar.current
+            let startOfDay = calendar.startOfDay(for: Date())
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt == nil)
+                    .filter(MemoModel.Columns.createdAt >= startOfDay)
+                    .fetchCount(db)
+            }
+        }
+    }
+
+    /// Count memos created this week (local timezone, week starts Monday)
+    func countMemosThisWeek() async throws -> Int {
+        try await instrumentRepositoryRead("countMemosThisWeek") {
+            let db = try await dbManager.database()
+            var calendar = Calendar.current
+            calendar.firstWeekday = 2 // Monday
+            let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt == nil)
+                    .filter(MemoModel.Columns.createdAt >= startOfWeek)
+                    .fetchCount(db)
+            }
+        }
+    }
+
+    /// Heatmap data: date string (yyyy-MM-dd) → count for last N days
+    func fetchHeatmapData(days: Int) async throws -> [String: Int] {
+        try await instrumentRepositoryRead("fetchHeatmapData") {
+            let db = try await dbManager.database()
+            let calendar = Calendar.current
+            let cutoffDate = calendar.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+
+            return try await db.read { db in
+                // Use SQL GROUP BY for efficient aggregation
+                let rows = try Row.fetchAll(
+                    db,
+                    sql: """
+                        SELECT date(createdAt) as day, COUNT(*) as count
+                        FROM voice_memos
+                        WHERE deletedAt IS NULL AND createdAt >= ?
+                        GROUP BY date(createdAt)
+                        """,
+                    arguments: [cutoffDate]
+                )
+
+                var heatmap: [String: Int] = [:]
+                for row in rows {
+                    if let day: String = row["day"],
+                       let count: Int = row["count"] {
+                        heatmap[day] = count
+                    }
+                }
+                return heatmap
+            }
+        }
+    }
+
+    /// Total duration of all non-deleted memos in seconds
+    func totalDuration() async throws -> Double {
+        try await instrumentRepositoryRead("totalDuration") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                let row = try Row.fetchOne(
+                    db,
+                    sql: """
+                        SELECT COALESCE(SUM(duration), 0) as total
+                        FROM voice_memos
+                        WHERE deletedAt IS NULL
+                        """
+                )
+                return row?["total"] ?? 0.0
+            }
+        }
+    }
+
+    /// Fetch memos that have transcription
+    func fetchTranscribedMemos(limit: Int = 100) async throws -> [MemoModel] {
+        try await instrumentRepositoryRead("fetchTranscribedMemos") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt == nil)
+                    .filter(MemoModel.Columns.transcription != nil)
+                    .filter(MemoModel.Columns.transcription != "")
+                    .order(MemoModel.Columns.createdAt.desc)
+                    .limit(limit)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    /// Fetch memos that need transcription (no transcription or empty, not currently transcribing)
+    func fetchUntranscribedMemos(limit: Int = 100) async throws -> [MemoModel] {
+        try await instrumentRepositoryRead("fetchUntranscribedMemos") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt == nil)
+                    .filter(MemoModel.Columns.transcription == nil || MemoModel.Columns.transcription == "")
+                    .filter(MemoModel.Columns.isTranscribing == false)  // Exclude in-progress
+                    .order(MemoModel.Columns.createdAt.desc)
+                    .limit(limit)
+                    .fetchAll(db)
+            }
+        }
     }
 }
 

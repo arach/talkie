@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00EBB818C60D4CF7A777D71A /* StartupLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
 		00EA0C1AD74762B2D0083D75 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BD343AFFEE244146750E16 /* FormControls.swift */; };
@@ -139,7 +140,7 @@
 		871EC1E845E8071556467FFC /* QuickOpenSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A2AA3D0376EDA1A44A3C31 /* QuickOpenSettings.swift */; };
 		87AEEDCCEB14E11296DFA2D0 /* STTModelCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A27F7032460B34EEAC0687 /* STTModelCard.swift */; };
 		89030AC617EF91B518997440 /* WaveformViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEE9D7779F451882D29E1E96 /* WaveformViews.swift */; };
-		892838B3E7D1A51FF2212546 /* GRDBRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46AE7F2005FAA07226D7758 /* GRDBRepository.swift */; };
+		892838B3E7D1A51FF2212546 /* LocalRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A46AE7F2005FAA07226D7758 /* LocalRepository.swift */; };
 		8A8AB92813B5BEFDF31B9300 /* StatusBarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 938F08F6F9BB5CCABE877A55 /* StatusBarComponents.swift */; };
 		8AC21D1116A97047ED797844 /* settings-08-llm-models.png in Resources */ = {isa = PBXBuildFile; fileRef = BE6E603DEC8DF726C421CFB1 /* settings-08-llm-models.png */; };
 		8BB3696770DDD4A71196892D /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31777395717FAEC0695EF5AC /* LLMProvider.swift */; };
@@ -246,6 +247,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupLogger.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
@@ -397,7 +399,7 @@
 		9BF63310490B3BEE637B7870 /* SyncRecordSerializer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRecordSerializer.swift; sourceTree = "<group>"; };
 		A0CC7D537657C56C9B7D1C33 /* ScratchPadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchPadView.swift; sourceTree = "<group>"; };
 		A0DB12E53E73DFD4E74AA50B /* TranscriptVersionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptVersionModel.swift; sourceTree = "<group>"; };
-		A46AE7F2005FAA07226D7758 /* GRDBRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GRDBRepository.swift; sourceTree = "<group>"; };
+		A46AE7F2005FAA07226D7758 /* LocalRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepository.swift; sourceTree = "<group>"; };
 		A4B9380B7A13427DBF036844 /* StartupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupCoordinator.swift; sourceTree = "<group>"; };
 		A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoTableViews.swift; sourceTree = "<group>"; };
 		A64BF792ECAB5F2F70A7A085 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProvider.swift; sourceTree = "<group>"; };
@@ -572,7 +574,7 @@
 				6F46419180036AC6D6D88ACD /* CoreDataMigration.swift */,
 				A8B0EA751EF7354C75F29F3F /* DatabaseManager.swift */,
 				BB3F2B424A6A46603EF1A10D /* ExternalDataAuditor.swift */,
-				A46AE7F2005FAA07226D7758 /* GRDBRepository.swift */,
+				A46AE7F2005FAA07226D7758 /* LocalRepository.swift */,
 				7AA42355C414FF4AA55247E5 /* MemoRepository.swift */,
 				EBCE4AD8B979F9F2297EAE2B /* RepositoryInstrumentation.swift */,
 				9BF63310490B3BEE637B7870 /* SyncRecordSerializer.swift */,
@@ -599,6 +601,7 @@
 		53A7622465701BF0425306D5 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */,
 				C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */,
 				76D097437D3CBB76ADE1BD3B /* BuildInfo.swift */,
 				41CBA070F3919E79B1D5E26F /* DataLayerIntegration.swift */,
@@ -1158,6 +1161,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				00EBB818C60D4CF7A777D71A /* StartupLogger.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
 				1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */,
@@ -1214,7 +1218,7 @@
 				DCB0588B59859EFFD31F946E /* ExpandableModelCards.swift in Sources */,
 				BA79B560FADD6CA64F126193 /* ExternalDataAuditor.swift in Sources */,
 				00EA0C1AD74762B2D0083D75 /* FormControls.swift in Sources */,
-				892838B3E7D1A51FF2212546 /* GRDBRepository.swift in Sources */,
+				892838B3E7D1A51FF2212546 /* LocalRepository.swift in Sources */,
 				3A295348C9E5B3171890C593 /* GeminiService.swift in Sources */,
 				59F341C52213699C8F4592A0 /* GroqProvider.swift in Sources */,
 				380273426E3208A796D04EE5 /* HelperAppsSettings.swift in Sources */,

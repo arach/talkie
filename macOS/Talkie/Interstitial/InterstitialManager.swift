@@ -542,7 +542,7 @@ final class InterstitialManager {
         )
 
         do {
-            let repository = GRDBRepository()
+            let repository = LocalRepository()
             try await repository.saveMemo(memo)
             logger.info("Saved interstitial as memo: \(memo.id)")
             dismiss()

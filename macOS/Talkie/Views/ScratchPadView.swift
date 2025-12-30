@@ -941,7 +941,7 @@ struct ScratchPadView: View {
             )
 
             do {
-                let repository = GRDBRepository()
+                let repository = LocalRepository()
                 try await repository.saveMemo(memo)
 
                 // Clear scratch pad after successful save

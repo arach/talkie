@@ -14,11 +14,11 @@ import ApplicationServices
 
 enum OnboardingStep: Int, CaseIterable {
     case welcome = 0
-    case permissions = 1
-    case modelInstall = 2
-    case llmConfig = 3
-    case liveModePitch = 4
-    case statusCheck = 5
+    case llmConfig = 1        // Local AI Models - first real choice
+    case liveModePitch = 2    // Unlock Live Mode - feature toggle
+    case permissions = 3      // Permissions - based on Live mode choice
+    case modelInstall = 4     // Transcription Model
+    case statusCheck = 5      // System Check
     case complete = 6
     // Note: Services are transparent implementation details, not user-facing setup
 }
@@ -417,9 +417,15 @@ final class OnboardingManager {
 
     func checkModelInstalled() async {
         // Check if the selected model is already downloaded
-        // This would integrate with TalkieEngine's model management
-        // For now, we'll simulate the check
-        isModelDownloaded = false
+        if selectedModelType == "parakeet" {
+            // Check Parakeet models
+            let parakeetService = ParakeetService.shared
+            isModelDownloaded = parakeetService.isModelDownloaded(.v2) || parakeetService.isModelDownloaded(.v3)
+        } else {
+            // Check Whisper models
+            let whisperService = WhisperService.shared
+            isModelDownloaded = WhisperModel.allCases.contains { whisperService.isModelDownloaded($0) }
+        }
     }
 
     func downloadModel() async {
@@ -463,8 +469,7 @@ final class OnboardingManager {
 
         // 2. Model Download (monitor ongoing or check if already installed)
         if isModelDownloaded {
-            await updateCheck(.modelDownload, status: .inProgress("Already installed"))
-            try? await Task.sleep(for: .milliseconds(500))
+            // No fake delay - instant check when already installed
             await updateCheck(.modelDownload, status: .complete)
         } else {
             // Monitor ongoing download
@@ -500,10 +505,23 @@ final class OnboardingManager {
             }
         }
 
-        // 4. Engine Ready
-        await updateCheck(.engineReady, status: .inProgress("Warming up..."))
-        try? await Task.sleep(for: .seconds(2))
-        await updateCheck(.engineReady, status: .complete)
+        // 4. Engine Ready (verify engine is actually responsive)
+        await updateCheck(.engineReady, status: .inProgress("Verifying..."))
+        // Real check: ping the engine via XPC to confirm it's ready
+        let engineResponsive = await checkEngineResponsive()
+        if engineResponsive {
+            await updateCheck(.engineReady, status: .complete)
+        } else {
+            // Give it a brief moment then retry once
+            try? await Task.sleep(for: .milliseconds(500))
+            let retryCheck = await checkEngineResponsive()
+            if retryCheck {
+                await updateCheck(.engineReady, status: .complete)
+            } else {
+                await updateCheck(.engineReady, status: .error("Engine not responding"))
+                return
+            }
+        }
 
         // 5. Live Service (conditional)
         if enableLiveMode {
@@ -532,6 +550,15 @@ final class OnboardingManager {
         await MainActor.run {
             checkStatuses[check] = status
         }
+    }
+
+    /// Check if the engine is actually responsive (not just running)
+    private func checkEngineResponsive() async -> Bool {
+        // If engine is running, try to verify it's responsive via EngineClient
+        guard isTalkieEngineRunning else { return false }
+
+        // Use EngineClient to ping - if connected, engine is responsive
+        return EngineClient.shared.isConnected
     }
 
     // MARK: - LLM Configuration

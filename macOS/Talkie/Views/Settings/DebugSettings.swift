@@ -8,19 +8,14 @@
 import SwiftUI
 import os
 import CloudKit
-import CoreData
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - Debug Info View
 
 struct DebugInfoView: View {
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
-    )
-    private var allVoiceMemos: FetchedResults<VoiceMemo>
-
     @Environment(SettingsManager.self) private var settingsManager: SettingsManager
+    private var memosVM: MemosViewModel { MemosViewModel.shared }
     @State private var iCloudStatus: String = "Checking..."
 
     private let syncIntervalOptions = [1, 5, 10, 15, 30, 60]
@@ -81,7 +76,7 @@ struct DebugInfoView: View {
                 VStack(spacing: Spacing.sm) {
                     debugRow(label: "Bundle ID", value: bundleID, icon: "app.badge")
                     debugRow(label: "Version", value: "\(version) (\(build))", icon: "number")
-                    debugRow(label: "Voice Memos", value: "\(allVoiceMemos.count)", icon: "doc.text")
+                    debugRow(label: "Voice Memos", value: "\(memosVM.totalCount)", icon: "doc.text")
                     debugRow(label: "Last Sync", value: SyncStatusManager.shared.lastSyncAgo, icon: "arrow.triangle.2.circlepath")
                 }
             }
@@ -211,6 +206,9 @@ struct DebugInfoView: View {
 
             // MARK: - Configuration (JSON)
             SettingsJSONExportView()
+        }
+        .task {
+            await memosVM.loadCount()
         }
         .onAppear {
             checkiCloudStatus()

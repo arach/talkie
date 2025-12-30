@@ -38,25 +38,75 @@ final class DatabaseManager {
     private init() {}
 
     /// Initialize database (call on app launch)
-    /// Runs on background thread to avoid blocking UI
+    /// Runs blocking SQLite operations on background thread to avoid blocking UI
     func initialize() async throws {
-        let dbQueue = try DatabaseQueue(path: Self.databaseURL.path)
+        let dbPath = Self.databaseURL.path
+        let dbName = Self.databaseURL.lastPathComponent
 
-        // Configure database
-        var config = Configuration()
-        config.prepareDatabase { db in
-            // Enable foreign keys
-            try db.execute(sql: "PRAGMA foreign_keys = ON")
+        // Log path before any blocking operation
+        await MainActor.run { StartupLogger.shared.log("Database: \(dbName)") }
+        await MainActor.run { StartupLogger.shared.log("Path: ~/Library/.../Talkie/") }
 
-            // Performance optimizations
-            try db.execute(sql: "PRAGMA journal_mode = WAL")
-            try db.execute(sql: "PRAGMA synchronous = NORMAL")
-            try db.execute(sql: "PRAGMA temp_store = MEMORY")
-            try db.execute(sql: "PRAGMA cache_size = -64000")  // 64MB cache
+        // Check if file exists
+        let fileExists = FileManager.default.fileExists(atPath: dbPath)
+        await MainActor.run {
+            StartupLogger.shared.log(fileExists ? "Found existing database" : "Creating new database")
         }
 
-        // Run migrations
-        try migrator.migrate(dbQueue)
+        // Start a timeout warning task
+        let timeoutTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            if !Task.isCancelled {
+                StartupLogger.shared.log("⚠️ Database lock acquisition taking long...", isError: true)
+                StartupLogger.shared.log("Check for other Talkie processes", isError: true)
+            }
+        }
+
+        await MainActor.run { StartupLogger.shared.log("Acquiring database lock...") }
+
+        // Run blocking SQLite operations on background thread
+        // This prevents the main thread from freezing during file lock acquisition
+        let dbQueue: DatabaseQueue = try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let queue = try DatabaseQueue(path: dbPath)
+                    continuation.resume(returning: queue)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        timeoutTask.cancel()
+        await MainActor.run { StartupLogger.shared.log("Database opened ✓") }
+
+        // Configure and migrate on background thread too
+        await MainActor.run { StartupLogger.shared.log("Configuring WAL mode...") }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                do {
+                    // Configure database
+                    try dbQueue.write { db in
+                        try db.execute(sql: "PRAGMA foreign_keys = ON")
+                        try db.execute(sql: "PRAGMA journal_mode = WAL")
+                        try db.execute(sql: "PRAGMA synchronous = NORMAL")
+                        try db.execute(sql: "PRAGMA temp_store = MEMORY")
+                        try db.execute(sql: "PRAGMA cache_size = -64000")
+                    }
+
+                    // Run migrations
+                    Task { @MainActor in StartupLogger.shared.log("Running migrations...") }
+                    try self.migrator.migrate(dbQueue)
+
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        await MainActor.run { StartupLogger.shared.log("Migrations complete ✓") }
 
         // Thread-safe assignment and run pending callbacks
         lock.lock()

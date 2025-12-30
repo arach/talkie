@@ -31,15 +31,9 @@ struct WelcomeView: View {
 
             // Standard layout structure
             VStack(spacing: 0) {
-                // HEADER ZONE (48px) - Icon only
-                HStack {
-                    Spacer()
-                    Image(systemName: "waveform")
-                        .font(.system(size: 20))
-                        .foregroundColor(colors.accent)
-                    Spacer()
-                }
-                .frame(height: OnboardingLayout.headerHeight)
+                // HEADER ZONE (48px) - No icon on welcome, clean presentation
+                Spacer()
+                    .frame(height: OnboardingLayout.headerHeight)
 
                 // CONTENT ZONE (flexible)
                 ScrollView {

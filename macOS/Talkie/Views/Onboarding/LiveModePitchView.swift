@@ -212,7 +212,11 @@ private struct LiveFeatureRow: View {
         .padding(Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isEnabled ? colors.accent.opacity(0.05) : Color.clear)
+                .fill(isEnabled ? colors.accent.opacity(0.05) : colors.surfaceCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .strokeBorder(colors.border.opacity(0.5), lineWidth: 1)
+                )
         )
         .animation(.easeInOut(duration: 0.2), value: isEnabled)
     }

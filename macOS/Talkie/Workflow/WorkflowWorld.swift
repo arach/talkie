@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CoreData
 
 // MARK: - Workflow World Protocol
 
@@ -36,13 +35,13 @@ protocol WorkflowWorld {
     func replayRun(id: UUID) async throws -> WorkflowRunModel
 }
 
-// MARK: - SQLite/GRDB Implementation
+// MARK: - Local Storage Implementation
 
-/// SQLite implementation of WorkflowWorld using GRDB
-actor SQLiteWorkflowWorld: WorkflowWorld {
-    private let repository: GRDBRepository
+/// Local storage implementation of WorkflowWorld using LocalRepository
+actor LocalWorkflowWorld: WorkflowWorld {
+    private let repository: LocalRepository
 
-    init(repository: GRDBRepository = GRDBRepository()) {
+    init(repository: LocalRepository = LocalRepository()) {
         self.repository = repository
     }
 
@@ -159,4 +158,4 @@ enum WorkflowWorldError: Error, LocalizedError {
 
 // MARK: - Sendable Conformance
 
-extension SQLiteWorkflowWorld: Sendable {}
+extension LocalWorkflowWorld: Sendable {}

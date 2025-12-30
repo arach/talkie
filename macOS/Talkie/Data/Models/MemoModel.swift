@@ -223,6 +223,40 @@ extension MemoModel {
 
 extension MemoModel: Sendable {}
 
+// MARK: - Core Data Bridge
+
+extension MemoModel {
+    /// Create MemoModel from VoiceMemo (Core Data) for workflow execution
+    /// This allows Core Data callers to use LocalRepository-based workflows
+    init(from voiceMemo: VoiceMemo) {
+        self.init(
+            id: voiceMemo.id ?? UUID(),
+            createdAt: voiceMemo.createdAt ?? Date(),
+            lastModified: voiceMemo.lastModified ?? Date(),
+            title: voiceMemo.title,
+            duration: voiceMemo.duration,
+            sortOrder: Int(voiceMemo.sortOrder),
+            transcription: voiceMemo.currentTranscript,
+            notes: voiceMemo.notes,
+            summary: voiceMemo.summary,
+            tasks: voiceMemo.tasks,
+            reminders: voiceMemo.reminders,
+            audioFilePath: voiceMemo.fileURL,
+            waveformData: voiceMemo.waveformData,
+            isTranscribing: voiceMemo.isTranscribing,
+            isProcessingSummary: voiceMemo.isProcessingSummary,
+            isProcessingTasks: voiceMemo.isProcessingTasks,
+            isProcessingReminders: voiceMemo.isProcessingReminders,
+            autoProcessed: voiceMemo.autoProcessed,
+            originDeviceId: voiceMemo.originDeviceId,
+            macReceivedAt: voiceMemo.macReceivedAt,
+            cloudSyncedAt: voiceMemo.cloudSyncedAt,
+            deletedAt: nil,
+            pendingWorkflowIds: voiceMemo.pendingWorkflowIds
+        )
+    }
+}
+
 
 // MARK: - Nested Types
 

@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import CoreData
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
@@ -84,26 +83,12 @@ struct WorkflowListColumn: View {
 }
 
 struct WorkflowDetailColumn: View {
-    @Environment(\.managedObjectContext) private var viewContext
     @Binding var editingWorkflow: WorkflowDefinition?
     @Binding var selectedWorkflowID: UUID?
     private let workflowManager = WorkflowManager.shared
     private let settings = SettingsManager.shared
+    private var memosVM: MemosViewModel { MemosViewModel.shared }
     @State private var showingMemoSelector = false
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
-    )
-    private var allMemos: FetchedResults<VoiceMemo>
-
-    private var transcribedMemos: [VoiceMemo] {
-        allMemos.filter { $0.transcription != nil && !$0.transcription!.isEmpty }
-    }
-
-    /// Memos that need transcription (for TRANSCRIBE workflows like HQ Transcribe)
-    private var untranscribedMemos: [VoiceMemo] {
-        allMemos.filter { ($0.transcription == nil || $0.transcription!.isEmpty) && !$0.isTranscribing }
-    }
 
     // Get fresh workflow from manager (source of truth)
     private var currentWorkflow: WorkflowDefinition? {
@@ -150,11 +135,14 @@ struct WorkflowDetailColumn: View {
                 .background(Theme.current.surfaceInput)
             }
         }
+        .task {
+            await memosVM.loadWorkflowMemos()
+        }
         .sheet(isPresented: $showingMemoSelector) {
             // Use currentWorkflow from manager for fresh data
             if let workflow = currentWorkflow ?? editingWorkflow {
                 // Use untranscribed memos for TRANSCRIBE workflows, transcribed for others
-                let memosToShow = workflow.startsWithTranscribe ? untranscribedMemos : transcribedMemos
+                let memosToShow = workflow.startsWithTranscribe ? memosVM.untranscribedMemos : memosVM.transcribedMemos
                 WorkflowMemoSelectorSheet(
                     workflow: workflow,
                     memos: memosToShow,
@@ -207,14 +195,10 @@ struct WorkflowDetailColumn: View {
         selectedWorkflowID = duplicate.id
     }
 
-    private func runWorkflow(_ workflow: WorkflowDefinition, on memo: VoiceMemo) {
+    private func runWorkflow(_ workflow: WorkflowDefinition, on memo: MemoModel) {
         Task {
             do {
-                let _ = try await WorkflowExecutor.shared.executeWorkflow(
-                    workflow,
-                    for: memo,
-                    context: viewContext
-                )
+                let _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo)
             } catch {
                 await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }

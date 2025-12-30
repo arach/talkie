@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 struct StatusCheckView: View {
     let onNext: () -> Void
@@ -82,20 +83,41 @@ struct StatusCheckView: View {
             content: {
                 // Terminal-style status check panel
                 VStack(alignment: .leading, spacing: 0) {
-                    // Header bar with monospaced font
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(manager.allChecksComplete ? SemanticColor.success : colors.accent)
-                            .frame(width: 6, height: 6)
+                    // Header bar - matches row style with [.] indicator
+                    HStack(spacing: Spacing.sm) {
+                        // [.] indicator matching row style
+                        HStack(spacing: 0) {
+                            Text("[")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                            Text(".")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.textTertiary.opacity(0.5))
+                            Text("]")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                        }
+
                         Text("DIAGNOSTICS")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .tracking(1)
                             .foregroundColor(colors.textTertiary)
+
                         Spacer()
+
                         if !manager.allChecksComplete {
-                            ProgressView()
-                                .scaleEffect(0.5)
-                                .frame(width: 12, height: 12)
+                            HStack(spacing: 4) {
+                                BrailleSpinner(speed: 0.08)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(colors.textTertiary)
+                                Text("CHECKING...")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(colors.textTertiary)
+                            }
+                        } else {
+                            Text("ALL CLEAR")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(SemanticColor.success)
                         }
                     }
                     .padding(.horizontal, Spacing.md)
@@ -198,53 +220,72 @@ private struct TechyStatusCheckRow: View {
     let check: StatusCheck
     let status: CheckStatus
 
-    private var statusDotColor: Color {
+    private var statusText: String {
         switch status {
-        case .pending: return colors.textTertiary.opacity(0.4)
-        case .inProgress: return colors.accent
-        case .complete: return SemanticColor.success
-        case .error: return SemanticColor.error
-        }
-    }
-
-    private var summaryText: String {
-        switch status {
-        case .pending: return "Waiting..."
+        case .pending: return "Waiting"
         case .inProgress(let message): return message
         case .complete: return "Ready"
         case .error(let message): return message
         }
     }
 
+    private var statusColor: Color {
+        switch status {
+        case .pending: return colors.textTertiary
+        case .inProgress: return colors.accent
+        case .complete: return SemanticColor.success
+        case .error: return SemanticColor.error
+        }
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
-            // Step name on left
-            Text(check.rawValue.uppercased())
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(colors.textPrimary)
-                .frame(width: 140, alignment: .leading)
+        HStack(spacing: Spacing.sm) {
+            // Left: Bracket with indicator inside [·] or [✓]
+            HStack(spacing: 0) {
+                Text("[")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
 
-            // Summary message in middle
-            Text(summaryText)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(colors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-
-            // Status dot on right - aligned
-            HStack(spacing: 6) {
-                if case .inProgress = status {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 12, height: 12)
-                } else {
-                    Circle()
-                        .fill(statusDotColor)
-                        .frame(width: 6, height: 6)
-                        .shadow(color: statusDotColor.opacity(status == .complete ? 0.5 : 0), radius: 3)
+                // Indicator inside brackets
+                Group {
+                    switch status {
+                    case .pending:
+                        Text("·")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(colors.textTertiary.opacity(0.5))
+                    case .inProgress:
+                        BrailleSpinner(speed: 0.08)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(colors.accent)
+                    case .complete:
+                        Circle()
+                            .fill(SemanticColor.success)
+                            .frame(width: 6, height: 6)
+                            .shadow(color: SemanticColor.success.opacity(0.6), radius: 2)
+                    case .error:
+                        Text("!")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(SemanticColor.error)
+                    }
                 }
+                .frame(width: 12, height: 12)
+
+                Text("]")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
             }
-            .frame(width: 20, alignment: .trailing)
+
+            // Check name
+            Text(check.rawValue.uppercased())
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(colors.textPrimary)
+
+            Spacer()
+
+            // Right: Status text
+            Text(statusText.uppercased())
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(statusColor)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, 10)

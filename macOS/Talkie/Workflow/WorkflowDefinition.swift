@@ -758,6 +758,11 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
         }
     }
 
+    /// Create provider from display name string
+    static func fromDisplayName(_ name: String) -> WorkflowLLMProvider? {
+        allCases.first { $0.displayName == name }
+    }
+
     /// Provider ID used by the LLMProviderRegistry
     var registryId: String {
         rawValue

@@ -704,10 +704,10 @@ struct MemoDetailView: View {
 
         Task {
             do {
+                let memoModel = MemoModel(from: memo)
                 _ = try await WorkflowExecutor.shared.executeWorkflow(
                     workflow,
-                    for: memo,
-                    context: viewContext
+                    for: memoModel
                 )
             } catch {
                 await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)

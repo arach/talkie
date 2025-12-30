@@ -18,7 +18,6 @@
 //
 
 import SwiftUI
-import CoreData
 import UniformTypeIdentifiers
 
 enum NavigationSection: Hashable {
@@ -50,21 +49,14 @@ enum NavigationSection: Hashable {
 }
 
 struct TalkieNavigationViewNative: View {
-    @Environment(\.managedObjectContext) private var viewContext
+    // GRDB-backed ViewModel for memo data
+    private var memosVM: MemosViewModel { MemosViewModel.shared }
 
     // Singletons - observe remote data
     private let settings = SettingsManager.shared
     private let liveDataStore = DictationStore.shared
     private let eventManager = SystemEventManager.shared
     private let pendingActionsManager = PendingActionsManager.shared
-
-    @FetchRequest(
-        sortDescriptors: [
-            NSSortDescriptor(keyPath: \VoiceMemo.sortOrder, ascending: true),
-            NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)
-        ]
-    )
-    private var allMemos: FetchedResults<VoiceMemo>
 
     // Navigation state
     @State private var selectedSection: NavigationSection? = .home
@@ -178,6 +170,19 @@ struct TalkieNavigationViewNative: View {
                 audioDropOverlay
             }
         }
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) {
+            TalkieDebugToolbar {
+                ListViewDebugContent()
+                EngineProcessesDebugContent()
+            } debugInfo: {
+                [
+                    "Section": selectedSection.map { sectionName(for: $0) } ?? "none",
+                    "Memos": "\(memosVM.totalCount)"
+                ]
+            }
+        }
+        #endif
         // Note: NavigationSplitView provides its own sidebar toggle with hiddenTitleBar
         // Don't add a custom one or you'll get duplicates
         .onChange(of: selectedSection) { oldValue, newValue in
@@ -197,8 +202,7 @@ struct TalkieNavigationViewNative: View {
         .setupNotificationObservers(
             selectedSection: $selectedSection,
             previousSection: $previousSection,
-            allMemosCount: allMemos.count,
-            viewContext: viewContext
+            memoCount: memosVM.totalCount
         )
     }
 
@@ -504,11 +508,12 @@ extension View {
     func setupNotificationObservers(
         selectedSection: Binding<NavigationSection?>,
         previousSection: Binding<NavigationSection?>,
-        allMemosCount: Int,
-        viewContext: NSManagedObjectContext
+        memoCount: Int
     ) -> some View {
         self
-            .onChange(of: allMemosCount) { _, _ in
+            .onChange(of: memoCount) { _, _ in
+                // Mark memos as received when count changes (still uses Core Data for CloudKit sync)
+                let viewContext = PersistenceController.shared.container.viewContext
                 PersistenceController.markMemosAsReceivedByMac(context: viewContext)
             }
             .onReceive(NotificationCenter.default.publisher(for: .browseWorkflows)) { _ in

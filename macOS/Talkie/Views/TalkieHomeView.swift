@@ -7,16 +7,10 @@
 //
 
 import SwiftUI
-import CoreData
 
 struct TalkieHomeView: View {
-    @Environment(\.managedObjectContext) private var viewContext
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
-        predicate: nil
-    )
-    private var allMemos: FetchedResults<VoiceMemo>
+    // GRDB-backed ViewModel for memo data
+    private var memosVM: MemosViewModel { MemosViewModel.shared }
 
     // Singleton references - use let for @Observable singletons (not @State which breaks observation)
     private let syncManager = CloudKitSyncManager.shared
@@ -27,7 +21,7 @@ struct TalkieHomeView: View {
     private let settings = SettingsManager.shared  // For theme observation
 
     // Cached state - only updates when specific properties change
-    @State private var recentMemos: [VoiceMemo] = []
+    @State private var recentMemos: [MemoModel] = []
     @State private var recentDictations: [Dictation] = []
     @State private var isLiveRunning: Bool = false
     @State private var serviceState: TalkieServiceState = .unknown
@@ -63,8 +57,13 @@ struct TalkieHomeView: View {
         }
         // Force view rebuild when theme changes
         .id("home-\(settings.currentTheme?.rawValue ?? "default")")
+        .task {
+            // Load stats from GRDB
+            await memosVM.loadStats()
+            await memosVM.loadMemos()
+            recentMemos = Array(memosVM.memos.prefix(10))
+        }
         .onAppear {
-            loadRecentMemos()
             liveState.startMonitoring()
             serviceMonitor.startMonitoring()
 
@@ -94,9 +93,12 @@ struct TalkieHomeView: View {
         .onChange(of: eventManager.events.count) { _, _ in
             workflowEventCount = eventManager.events.filter { $0.type == .workflow }.count
         }
-        .onChange(of: allMemos.count) { _, _ in
+        .onChange(of: memosVM.totalCount) { _, _ in
             // Reload recent memos when count changes (e.g., new memo added)
-            loadRecentMemos()
+            Task {
+                await memosVM.loadMemos()
+                recentMemos = Array(memosVM.memos.prefix(10))
+            }
         }
     }
 
@@ -136,21 +138,21 @@ struct TalkieHomeView: View {
             HStack(spacing: Spacing.md) {
                 StatCard(
                     icon: "square.stack.3d.up.fill",
-                    value: "\(allMemos.count)",
+                    value: "\(memosVM.totalCount)",
                     label: "Total Memos",
                     color: .blue
                 )
 
                 StatCard(
                     icon: "waveform",
-                    value: totalRecordingTime,
+                    value: memosVM.formattedTotalDuration,
                     label: "Recording Time",
                     color: .purple
                 )
 
                 StatCard(
                     icon: "calendar",
-                    value: "\(memosThisWeek)",
+                    value: "\(memosVM.thisWeekCount)",
                     label: "This Week",
                     color: .green
                 )
@@ -256,7 +258,7 @@ struct TalkieHomeView: View {
                 QuickActionButton(
                     icon: "square.stack",
                     title: "All Memos",
-                    subtitle: "\(allMemos.count) total",
+                    subtitle: "\(memosVM.totalCount) total",
                     action: { navigateToAllMemos() }
                 )
 
@@ -308,20 +310,6 @@ struct TalkieHomeView: View {
 
     // MARK: - Computed Properties
 
-    private var totalRecordingTime: String {
-        let total = allMemos.reduce(0.0) { $0 + $1.duration }
-        return formatDuration(total)
-    }
-
-    private var memosThisWeek: Int {
-        let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        return allMemos.filter { memo in
-            guard let createdAt = memo.createdAt else { return false }
-            return createdAt >= weekAgo
-        }.count
-    }
-
     private var totalWorkflowRuns: Int {
         // Use cached count from @State
         workflowEventCount
@@ -349,23 +337,6 @@ struct TalkieHomeView: View {
     }
 
     // MARK: - Helper Methods
-
-    private func loadRecentMemos() {
-        recentMemos = Array(allMemos.prefix(10))
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        let hours = Int(seconds) / 3600
-        let minutes = (Int(seconds) % 3600) / 60
-
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        } else if minutes > 0 {
-            return "\(minutes)m"
-        } else {
-            return "\(Int(seconds))s"
-        }
-    }
 
     private func launchTalkieLive() {
         let appPath = "/Applications/TalkieLive.app"
@@ -457,7 +428,7 @@ struct StatCard: View {
 // MARK: - Recent Memo Row
 
 struct RecentMemoRow: View {
-    let memo: VoiceMemo
+    let memo: MemoModel
 
     @State private var isHovered = false
     private let settings = SettingsManager.shared
@@ -481,15 +452,9 @@ struct RecentMemoRow: View {
 
             // Time ago
             TimelineView(.periodic(from: .now, by: 60)) { _ in
-            if let createdAt = memo.createdAt {
-                RelativeTimeLabel(date: createdAt, formatter: formatTimeAgo)
+                RelativeTimeLabel(date: memo.createdAt, formatter: formatTimeAgo)
                     .font(isLinear ? Theme.current.fontSM : Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
-            } else {
-                Text("")
-                    .font(isLinear ? Theme.current.fontSM : Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
-            }
             }
 
             // Chevron on hover

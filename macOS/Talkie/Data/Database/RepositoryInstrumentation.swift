@@ -19,7 +19,7 @@ let repositorySignposter = OSSignposter(subsystem: "live.talkie.performance", ca
 /// Automatically creates signposts with convention-based naming.
 /// Pattern: `RepositoryName.methodName`
 ///
-/// Usage (in GRDBRepository):
+/// Usage (in LocalRepository):
 /// ```swift
 /// func fetchMemos(...) async throws -> [MemoModel] {
 ///     try await instrumentRepositoryRead("fetchMemos") {
@@ -29,7 +29,7 @@ let repositorySignposter = OSSignposter(subsystem: "live.talkie.performance", ca
 /// ```
 func instrumentRepositoryRead<T>(
     _ operation: String,
-    repository: String = "GRDBRepository",
+    repository: String = "LocalRepository",
     _ work: () async throws -> T
 ) async rethrows -> T {
     let id = repositorySignposter.makeSignpostID()
@@ -56,7 +56,7 @@ func instrumentRepositoryRead<T>(
 ///
 /// Automatically creates signposts for insert/update/delete operations.
 ///
-/// Usage (in GRDBRepository):
+/// Usage (in LocalRepository):
 /// ```swift
 /// func saveMemo(_ memo: MemoModel) async throws {
 ///     try await instrumentRepositoryWrite("saveMemo") {
@@ -66,7 +66,7 @@ func instrumentRepositoryRead<T>(
 /// ```
 func instrumentRepositoryWrite<T>(
     _ operation: String,
-    repository: String = "GRDBRepository",
+    repository: String = "LocalRepository",
     _ work: () async throws -> T
 ) async rethrows -> T {
     let id = repositorySignposter.makeSignpostID()
@@ -103,7 +103,7 @@ func instrumentRepositoryWrite<T>(
 /// ```
 func instrumentRepositoryTransaction<T>(
     _ name: String,
-    repository: String = "GRDBRepository",
+    repository: String = "LocalRepository",
     _ work: () async throws -> T
 ) async rethrows -> T {
     let id = repositorySignposter.makeSignpostID()
@@ -129,7 +129,7 @@ func instrumentRepositoryTransaction<T>(
 /// try await saveWorkflowRun(run)
 /// markTransactionComplete("saveMemoWithWorkflow")
 /// ```
-func markTransactionComplete(_ name: String, repository: String = "GRDBRepository") {
+func markTransactionComplete(_ name: String, repository: String = "LocalRepository") {
     let id = repositorySignposter.makeSignpostID()
 
     repositorySignposter.emitEvent("TransactionCheckpoint", id: id, "\(repository).\(name)")
@@ -138,9 +138,9 @@ func markTransactionComplete(_ name: String, repository: String = "GRDBRepositor
 // MARK: - Usage Example
 
 /*
- EXAMPLE: How to instrument GRDBRepository
+ EXAMPLE: How to instrument LocalRepository
 
- actor GRDBRepository: MemoRepository {
+ actor LocalRepository: MemoRepository {
      // READ operations - automatic signposting
      func fetchMemos(...) async throws -> [MemoModel] {
          try await instrumentRepositoryRead("fetchMemos") {
@@ -181,15 +181,15 @@ func markTransactionComplete(_ name: String, repository: String = "GRDBRepositor
  }
 
  SIGNPOSTS EMITTED (automatically):
- - GRDBRepository.fetchMemos (interval with duration)
- - GRDBRepository.saveMemo (interval with duration)
- - GRDBRepository.saveMemoWithWorkflow (transaction interval)
- - GRDBRepository.countMemos (interval with duration)
+ - LocalRepository.fetchMemos (interval with duration)
+ - LocalRepository.saveMemo (interval with duration)
+ - LocalRepository.saveMemoWithWorkflow (transaction interval)
+ - LocalRepository.countMemos (interval with duration)
 
  IN INSTRUMENTS:
  You'll see a timeline with:
  - "DB Read Complete" events for queries
  - "DB Write Complete" events for updates
  - "DB Transaction Complete" events for multi-step operations
- - All named: GRDBRepository.methodName
+ - All named: LocalRepository.methodName
  */

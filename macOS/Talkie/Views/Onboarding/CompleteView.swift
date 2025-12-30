@@ -132,64 +132,123 @@ struct CompleteView: View {
 
     private var liveModeContent: some View {
         VStack(spacing: Spacing.lg) {
-            // Interactive demo placeholder
-            // Note: Full interactive demo would be ported from TalkieLive
-            VStack(spacing: Spacing.md) {
-                Text("INTERACTIVE DEMO")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundColor(colors.textTertiary)
+            // Two-column layout: Shortcut | Pill
+            HStack(spacing: Spacing.xl) {
+                // Left column: Keyboard shortcut
+                VStack(spacing: Spacing.md) {
+                    Text("SHORTCUT")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(colors.textTertiary)
 
-                Text("Try using \(hotkeyDisplay) to start your first recording")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.textPrimary)
-                    .multilineTextAlignment(.center)
+                    // Key caps
+                    HStack(spacing: 6) {
+                        ForEach(hotkeyDisplay.components(separatedBy: "+"), id: \.self) { key in
+                            Text(key.trimmingCharacters(in: .whitespaces))
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(colors.textPrimary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(colors.surfaceCard)
+                                        .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .strokeBorder(colors.border, lineWidth: 1)
+                                )
+                        }
+                    }
 
-                // Simplified pill demo
-                SimplePillDemo(colors: colors)
-                    .frame(height: 100)
+                    Text("Press anywhere to record")
+                        .font(.system(size: 11))
+                        .foregroundColor(colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+
+                // Divider
+                Rectangle()
+                    .fill(colors.border)
+                    .frame(width: 1, height: 100)
+
+                // Right column: Pill states
+                VStack(spacing: Spacing.md) {
+                    Text("STATUS PILL")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(colors.textTertiary)
+
+                    // Pill state transition: minimized → expanded
+                    HStack(spacing: Spacing.md) {
+                        // Minimized sliver
+                        VStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(TalkieTheme.textMuted.opacity(0.6))
+                                .frame(width: 20, height: 2)
+                            Text("idle")
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                        }
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(colors.textTertiary)
+
+                        // Expanded REC state
+                        VStack(spacing: 4) {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(TalkieTheme.textMuted)
+                                    .frame(width: 6, height: 6)
+                                Text("REC")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(TalkieTheme.textSecondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                            )
+                            Text("hover")
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                        }
+                    }
+
+                    Text("Bottom of your screen")
+                        .font(.system(size: 11))
+                        .foregroundColor(colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .padding(Spacing.lg)
-            .frame(width: 440)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.xl)
+            .frame(width: 480)
             .background(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                RoundedRectangle(cornerRadius: CornerRadius.md)
                     .fill(colors.surfaceCard)
                     .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        RoundedRectangle(cornerRadius: CornerRadius.md)
                             .strokeBorder(colors.border, lineWidth: 1)
                     )
             )
+
+            // Helper text
+            Text("Click the pill or press the shortcut to start recording")
+                .font(.system(size: 11))
+                .foregroundColor(colors.textTertiary)
 
             // Celebration (if triggered)
             if showCelebration {
                 CelebrationView(colors: colors, hotkeyDisplay: hotkeyDisplay)
                     .transition(.scale.combined(with: .opacity))
             }
-
-            // Quick tips for Live mode
-            VStack(spacing: Spacing.sm) {
-                LiveTipRow(
-                    colors: colors,
-                    icon: "command.circle.fill",
-                    title: "Press \(hotkeyDisplay) anywhere to start recording",
-                    subtitle: "Works in any app, even full-screen"
-                )
-
-                LiveTipRow(
-                    colors: colors,
-                    icon: "text.cursor",
-                    title: "Text appears at your cursor automatically",
-                    subtitle: "No need to copy/paste manually"
-                )
-
-                LiveTipRow(
-                    colors: colors,
-                    icon: "display",
-                    title: "Talkie can see your screen for smarter transcriptions",
-                    subtitle: "Enable in Settings if you granted permission"
-                )
-            }
-            .frame(width: 440)
         }
     }
 

@@ -69,6 +69,28 @@ protocol MemoRepository: Actor {
 
     /// Save workflow run
     func saveWorkflowRun(_ run: WorkflowRunModel) async throws
+
+    // MARK: - Aggregations (for dashboard stats)
+
+    /// Count memos created today
+    func countMemosToday() async throws -> Int
+
+    /// Count memos created this week
+    func countMemosThisWeek() async throws -> Int
+
+    /// Heatmap data: date string (yyyy-MM-dd) → count for last N days
+    func fetchHeatmapData(days: Int) async throws -> [String: Int]
+
+    /// Total duration of all memos in seconds
+    func totalDuration() async throws -> Double
+
+    /// Fetch memos that have transcription
+    /// - Parameter limit: Maximum number of memos to return (default 100)
+    func fetchTranscribedMemos(limit: Int) async throws -> [MemoModel]
+
+    /// Fetch memos that need transcription (no transcription or empty, not currently transcribing)
+    /// - Parameter limit: Maximum number of memos to return (default 100)
+    func fetchUntranscribedMemos(limit: Int) async throws -> [MemoModel]
 }
 
 // MARK: - Memo with Relationships
