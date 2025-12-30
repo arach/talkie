@@ -418,6 +418,11 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Glass mode enabled (macOS 26 style glass effects)
+    @Published var glassMode: Bool {
+        didSet { save() }
+    }
+
     /// Which context (start or end app) is primary for utterances
     @Published var primaryContextSource: PrimaryContextSource {
         didSet { save() }
@@ -581,6 +586,9 @@ final class LiveSettings: ObservableObject {
             self.accentColor = .system
         }
 
+        // Load glass mode (default: true for macOS 26 style)
+        self.glassMode = store.object(forKey: LiveSettingsKey.glassMode) as? Bool ?? true
+
         // Load primary context source (default: start app)
         if let rawValue = store.string(forKey: LiveSettingsKey.primaryContextSource),
            let source = PrimaryContextSource(rawValue: rawValue) {
@@ -636,6 +644,7 @@ final class LiveSettings: ObservableObject {
         store.set(visualTheme.rawValue, forKey: LiveSettingsKey.visualTheme)
         store.set(fontSize.rawValue, forKey: LiveSettingsKey.fontSize)
         store.set(accentColor.rawValue, forKey: LiveSettingsKey.accentColor)
+        store.set(glassMode, forKey: LiveSettingsKey.glassMode)
         store.set(primaryContextSource.rawValue, forKey: LiveSettingsKey.primaryContextSource)
         store.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
         store.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)

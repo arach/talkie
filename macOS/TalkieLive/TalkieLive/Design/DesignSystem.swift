@@ -749,71 +749,68 @@ struct GlassBackground: ViewModifier {
     var intensity: GlassIntensity = .regular
     var cornerRadius: CGFloat = CornerRadius.sm
     var tint: Color? = nil
+    @ObservedObject private var settings = LiveSettings.shared
 
     func body(content: Content) -> some View {
         content
             .background(
                 ZStack {
-                    // Base material
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(intensity.material)
-
-                    // Optional color tint
-                    if let tint = tint {
+                    if settings.glassMode {
+                        // Glass mode: Full frosted glass effect
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(tint.opacity(0.05))
+                            .fill(intensity.material)
+
+                        if let tint = tint {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(tint.opacity(0.05))
+                        }
+
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(intensity.highlightOpacity * 0.3),
+                                        Color.white.opacity(0.02),
+                                        Color.black.opacity(0.02)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(intensity.highlightOpacity * 0.6),
+                                        Color.white.opacity(intensity.highlightOpacity * 0.2),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                ),
+                                lineWidth: 0.5
+                            )
+
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(Color.white.opacity(intensity.borderOpacity), lineWidth: 0.5)
+                    } else {
+                        // Legacy mode: Solid opaque background (more distinct)
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(Color(white: 0.12))  // Solid dark background
+
+                        if let tint = tint {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(tint.opacity(0.15))
+                        }
+
+                        // Sharper border for legacy mode
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
                     }
-
-                    // Inner glow (top-down radial)
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    Color.white.opacity(0.1),
-                                    Color.clear
-                                ],
-                                center: .top,
-                                startRadius: 0,
-                                endRadius: 60
-                            )
-                        )
-
-                    // Convex gradient (gives curved glass illusion)
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(intensity.highlightOpacity * 0.5),
-                                    Color.white.opacity(0.02),
-                                    Color.black.opacity(0.03)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-
-                    // Top edge highlight (light catching the edge)
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(intensity.highlightOpacity),
-                                    Color.white.opacity(intensity.highlightOpacity * 0.4),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .center
-                            ),
-                            lineWidth: 1
-                        )
-
-                    // Subtle border
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(Color.white.opacity(intensity.borderOpacity), lineWidth: 0.5)
                 }
             )
-            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
-            .shadow(color: Color.white.opacity(0.03), radius: 1, x: 0, y: -1)
+            .shadow(color: Color.black.opacity(settings.glassMode ? 0.1 : 0.2), radius: settings.glassMode ? 8 : 2, x: 0, y: settings.glassMode ? 3 : 1)
     }
 }
 
@@ -1055,6 +1052,109 @@ extension View {
     /// Apply a glass panel background (for windows/sheets)
     func glassPanel() -> some View {
         modifier(GlassPanel())
+    }
+}
+
+// MARK: - Glass Hover Effect
+
+/// A glass hover effect with blur that provides more dynamic interactivity feedback
+struct GlassHoverBackground: ViewModifier {
+    var isHovered: Bool
+    var isSelected: Bool = false
+    var cornerRadius: CGFloat = CornerRadius.sm
+    var baseOpacity: Double = 0.03  // Darker base
+    var hoverOpacity: Double = 0.12  // More contrast on hover
+    var accentColor: Color? = nil
+    @ObservedObject private var settings = LiveSettings.shared
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                ZStack {
+                    if settings.glassMode {
+                        // Glass mode: Full glass hover effect
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(Color.white.opacity(isHovered ? hoverOpacity : baseOpacity))
+
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(isHovered ? 0.12 : 0.05),
+                                        Color.white.opacity(0.01)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                        if isHovered {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(.ultraThinMaterial)
+                                .opacity(0.5)
+                        }
+
+                        if isSelected, let accent = accentColor {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(accent.opacity(0.15))
+                        }
+
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(isHovered ? 0.25 : 0.08),
+                                        Color.white.opacity(isHovered ? 0.12 : 0.04)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: isHovered ? 1 : 0.5
+                            )
+                    } else {
+                        // Legacy mode: Solid hover effect (more distinct)
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(Color(white: isHovered ? 0.18 : 0.08))  // Solid backgrounds
+
+                        if isSelected, let accent = accentColor {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(accent.opacity(0.2))
+                        }
+
+                        // Always show border in legacy mode
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(Color.white.opacity(isHovered ? 0.2 : 0.1), lineWidth: 1)
+                    }
+                }
+            )
+            .shadow(
+                color: Color.black.opacity(settings.glassMode ? (isHovered ? 0.15 : 0.05) : (isHovered ? 0.15 : 0)),
+                radius: settings.glassMode ? (isHovered ? 8 : 2) : 2,
+                x: 0,
+                y: settings.glassMode ? (isHovered ? 4 : 1) : 1
+            )
+            .animation(TalkieAnimation.fast, value: isHovered)
+    }
+}
+
+extension View {
+    /// Apply a glass hover background with dynamic blur effect
+    func glassHover(
+        isHovered: Bool,
+        isSelected: Bool = false,
+        cornerRadius: CGFloat = CornerRadius.sm,
+        baseOpacity: Double = 0.03,
+        hoverOpacity: Double = 0.12,
+        accentColor: Color? = nil
+    ) -> some View {
+        modifier(GlassHoverBackground(
+            isHovered: isHovered,
+            isSelected: isSelected,
+            cornerRadius: cornerRadius,
+            baseOpacity: baseOpacity,
+            hoverOpacity: hoverOpacity,
+            accentColor: accentColor
+        ))
     }
 }
 

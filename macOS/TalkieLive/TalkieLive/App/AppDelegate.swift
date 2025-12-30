@@ -123,6 +123,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.updateStatusBarBadge(controlPressed: event.modifierFlags.contains(.control))
                 return event
             }
+
+            // Monitor Command+G for glass mode toggle
+            NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+                // Command+G toggles glass mode
+                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "g" {
+                    LiveSettings.shared.glassMode.toggle()
+                    let isGlass = LiveSettings.shared.glassMode
+                    log.info("Glass mode toggled: \(isGlass ? "ON" : "OFF")")
+                    self?.showGlassModeToast(enabled: isGlass)
+                    return nil  // Consume the event
+                }
+                return event
+            }
         }
     }
 
@@ -182,6 +195,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pillItem.target = self
         pillItem.state = .on
         menu.addItem(pillItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let glassItem = NSMenuItem(title: "Glass Mode", action: #selector(toggleGlassMode), keyEquivalent: "g")
+        glassItem.target = self
+        glassItem.state = LiveSettings.shared.glassMode ? .on : .off
+        menu.addItem(glassItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -583,6 +603,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleFloatingPill(_ sender: NSMenuItem) {
         floatingPill.toggle()
         sender.state = floatingPill.isVisible ? .on : .off
+    }
+
+    @objc private func toggleGlassMode(_ sender: NSMenuItem) {
+        LiveSettings.shared.glassMode.toggle()
+        sender.state = LiveSettings.shared.glassMode ? .on : .off
+        let isGlass = LiveSettings.shared.glassMode
+        log.info("Glass mode toggled: \(isGlass ? "ON" : "OFF")")
+        showGlassModeToast(enabled: isGlass)
+    }
+
+    // MARK: - Glass Mode Toast
+
+    private var glassModeToastWindow: NSWindow?
+
+    private func showGlassModeToast(enabled: Bool) {
+        // Dismiss existing toast
+        glassModeToastWindow?.close()
+
+        let icon = enabled ? "sparkles" : "square.stack.3d.up.slash"
+        let text = enabled ? "Glass Mode" : "Legacy Mode"
+
+        let toastView = NSHostingView(rootView:
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                Text(text)
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(enabled ? Color.blue.opacity(0.9) : Color(white: 0.2).opacity(0.9))
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(.ultraThinMaterial)
+            )
+        )
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 150, height: 44),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.level = .floating
+        window.contentView = toastView
+        window.hasShadow = true
+
+        // Center on screen
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let x = screenFrame.midX - 75
+            let y = screenFrame.midY + 100
+            window.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+
+        window.orderFront(nil)
+        glassModeToastWindow = window
+
+        // Auto dismiss after 1.5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                self?.glassModeToastWindow?.animator().alphaValue = 0
+            } completionHandler: {
+                self?.glassModeToastWindow?.close()
+                self?.glassModeToastWindow = nil
+            }
+        }
     }
 
     @objc private func showOnboarding() {
