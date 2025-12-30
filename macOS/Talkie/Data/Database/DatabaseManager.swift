@@ -40,6 +40,9 @@ final class DatabaseManager {
     /// Initialize database (call on app launch)
     /// Runs on background thread to avoid blocking UI
     func initialize() async throws {
+        // Log to startup logger (non-blocking)
+        Task { @MainActor in StartupLogger.shared.log("Opening \(Self.databaseURL.lastPathComponent)") }
+
         let dbQueue = try DatabaseQueue(path: Self.databaseURL.path)
 
         // Configure database
@@ -56,7 +59,9 @@ final class DatabaseManager {
         }
 
         // Run migrations
+        Task { @MainActor in StartupLogger.shared.log("Running migrations...") }
         try migrator.migrate(dbQueue)
+        Task { @MainActor in StartupLogger.shared.log("Migrations complete") }
 
         // Thread-safe assignment and run pending callbacks
         lock.lock()

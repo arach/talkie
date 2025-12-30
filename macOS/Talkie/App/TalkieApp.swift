@@ -219,6 +219,7 @@ struct MigrationGateView: View {
     @State private var needsMigration = false
     @State private var checkComplete = false
     @State private var refreshTrigger = 0
+    @State private var showStartupView = false
 
     // Static guard - persists across view recreations
     private static var hasStartedInit = false
@@ -226,9 +227,13 @@ struct MigrationGateView: View {
     var body: some View {
         Group {
             if !checkComplete {
-                // Show loading while checking
-                ProgressView("Initializing database...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Show startup view only if taking > 200ms (normally instant)
+                if showStartupView {
+                    StartupView()
+                } else {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else if needsMigration {
                 // Show migration UI
                 MigrationView()
@@ -262,6 +267,16 @@ struct MigrationGateView: View {
         // Guard against multiple concurrent calls from .task re-evaluation
         guard !Self.hasStartedInit else { return }
         Self.hasStartedInit = true
+
+        // Show startup view only if initialization takes > 200ms
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            if !checkComplete {
+                StartupLogger.shared.reset()
+                StartupLogger.shared.setPhase("Initializing database...")
+                showStartupView = true
+            }
+        }
 
         Task { @MainActor in
             let uiState = signposter.beginInterval("UI First Render")
