@@ -376,7 +376,7 @@ class CloudKitSyncManager {
         }
 
         NotificationCenter.default.post(name: .talkieSyncStarted, object: nil)
-        log.info("[\(timeFormatter.string(from: startTime))] Sync starting...")
+        log.debug("[\(timeFormatter.string(from: startTime))] Sync starting...")
 
         do {
             let result = try await fetchChanges()
@@ -427,12 +427,12 @@ class CloudKitSyncManager {
                 PersistenceController.processPendingWorkflows(context: context)
             }
 
-            // Log completion with duration
+            // Log completion - only info when there are changes
             let durationStr = String(format: "%.1fs", duration)
             if result.changeCount > 0 {
-                log.info("[\(timeFormatter.string(from: Date()))] Sync complete: \(result.changeCount) change(s) in \(durationStr)")
+                log.info("[\(timeFormatter.string(from: Date()))] Sync: \(result.changeCount) change(s) (\(durationStr))")
             } else {
-                log.info("[\(timeFormatter.string(from: Date()))] Sync complete: no changes (\(durationStr))")
+                log.debug("[\(timeFormatter.string(from: Date()))] Sync: no changes (\(durationStr))")
             }
 
         } catch {

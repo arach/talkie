@@ -536,8 +536,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        NSLog("[AppDelegate] Received URL: \(urlString)")
-        logger.info("Received URL: \(urlString)")
+        logger.debug("URL: \(urlString)")
 
         // Accept environment-specific URL schemes (talkie, talkie-staging, talkie-dev)
         guard url.scheme == TalkieEnvironment.current.talkieURLScheme else {
@@ -841,7 +840,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         // Push is optional - sync still works via timer; push just enables instant sync
-        logger.info("Push unavailable: \(error.localizedDescription) (using timer sync)")
+        // Debug level since this is expected on dev machines without push entitlement
+        logger.debug("Push unavailable: \(error.localizedDescription)")
     }
 
     func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
