@@ -124,7 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return event
             }
 
-            // Monitor Command+G for glass mode toggle
+            #if DEBUG
+            // Monitor Command+G for glass mode toggle (Dev builds only)
             NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
                 // Command+G toggles glass mode
                 if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "g" {
@@ -136,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 return event
             }
+            #endif
         }
     }
 
@@ -198,12 +200,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        #if DEBUG
         let glassItem = NSMenuItem(title: "Glass Mode", action: #selector(toggleGlassMode), keyEquivalent: "g")
         glassItem.target = self
         glassItem.state = LiveSettings.shared.glassMode ? .on : .off
         menu.addItem(glassItem)
-
         menu.addItem(NSMenuItem.separator())
+        #endif
 
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -605,6 +608,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sender.state = floatingPill.isVisible ? .on : .off
     }
 
+    #if DEBUG
     @objc private func toggleGlassMode(_ sender: NSMenuItem) {
         LiveSettings.shared.glassMode.toggle()
         sender.state = LiveSettings.shared.glassMode ? .on : .off
@@ -684,6 +688,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toastDismissWorkItem = dismissWork
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: dismissWork)
     }
+    #endif
 
     @objc private func showOnboarding() {
         OnboardingManager.shared.resetOnboarding()
