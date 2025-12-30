@@ -60,6 +60,15 @@ final class LiveTranscriptionTrace {
         self.traceId = traceId ?? Self.generateTraceId()
     }
 
+    deinit {
+        // IMPORTANT: Close any open signpost interval to prevent crashes
+        // The os_signpost API requires balanced begin/end calls
+        if let signpostID = currentSignpostID, let name = currentStepName {
+            os_signpost(.end, log: signpostLog, name: "Live Step", signpostID: signpostID,
+                        "%{public}s (abandoned)", name)
+        }
+    }
+
     /// Generate a short trace ID (8-char hex)
     private static func generateTraceId() -> String {
         String(UUID().uuidString.prefix(8)).lowercased()
@@ -153,6 +162,17 @@ final class LiveTranscriptionTrace {
         } else {
             os_signpost(.event, log: signpostLog, name: "Live Mark",
                         "trace=%{public}s %{public}s", traceId, name)
+        }
+    }
+
+    // MARK: - Lifecycle
+
+    /// Invalidate the trace - closes any open signpost and prevents further use
+    /// Call this before setting the trace to nil for clean lifecycle management
+    func invalidate() {
+        // Close any open step
+        if currentStepName != nil {
+            _ = end("invalidated")
         }
     }
 

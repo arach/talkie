@@ -125,6 +125,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace?.invalidate()
         trace = nil
 
         // Transition to idle via error event
@@ -208,6 +209,7 @@ final class LiveController: ObservableObject {
                 self.startApp = nil
                 self.pendingAudioFilename = nil
                 self.traceID = nil
+                self.trace?.invalidate()
                 self.trace = nil
                 self.isCancelled = false
                 self.stateMachine.transition(.forceReset)
@@ -253,6 +255,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace?.invalidate()
         trace = nil
 
         // Cancel back to idle
@@ -290,6 +293,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace?.invalidate()
         trace = nil
         routeToInterstitial = false
         createdInTalkieView = false
@@ -519,6 +523,7 @@ final class LiveController: ObservableObject {
         startApp = nil
         pendingAudioFilename = nil
         traceID = nil
+        trace?.invalidate()
         trace = nil
         isCancelled = false
         routeToInterstitial = false
@@ -703,6 +708,7 @@ final class LiveController: ObservableObject {
                 startApp = nil
                 pendingAudioFilename = nil
                 traceID = nil
+                trace?.invalidate()
                 trace = nil
                 isCancelled = false
 
@@ -791,6 +797,7 @@ final class LiveController: ObservableObject {
                 startApp = nil
                 pendingAudioFilename = nil
                 traceID = nil
+                trace?.invalidate()
                 trace = nil
 
                 // Complete the flow
@@ -873,6 +880,7 @@ final class LiveController: ObservableObject {
                 startApp = nil
                 pendingAudioFilename = nil
                 traceID = nil
+                trace?.invalidate()
                 trace = nil
 
                 // Complete the flow (interstitial routing done)
@@ -1069,6 +1077,7 @@ final class LiveController: ObservableObject {
             createdInTalkieView = false
             pendingAudioFilename = nil
             traceID = nil
+            trace?.invalidate()
             trace = nil
             stateMachine.transition(.error(error.localizedDescription))
             return
@@ -1080,6 +1089,7 @@ final class LiveController: ObservableObject {
         createdInTalkieView = false
         pendingAudioFilename = nil
         traceID = nil
+        trace?.invalidate()
         trace = nil
         stateMachine.transition(.complete)
     }

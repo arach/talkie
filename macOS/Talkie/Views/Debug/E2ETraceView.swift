@@ -3,352 +3,303 @@
 //  Talkie
 //
 //  End-to-end performance trace viewer for the Talkie suite.
-//  Shows dictation flows across TalkieLive → TalkieEngine with drill-down.
+//  Reads trace logs directly from TalkieLive and TalkieEngine log files.
+//
+//  Architecture:
+//  - TraceLogReader: Directly scans log files for "Trace complete" entries
+//  - E2ETraceStore: Manages trace state with auto-refresh
+//  - E2ETraceView: Displays traces with timeline visualization
 //
 
 import SwiftUI
 
-// MARK: - User-Controlled Steps
+// MARK: - Data Models
 
-/// Steps that represent user action time, not system latency
-/// These are excluded from bottleneck detection and shown differently
-private let userControlledSteps: Set<String> = [
-    "recording",
-    "record",
-    "user_input",
-    "speaking"
-]
-
-/// Check if a step name represents user-controlled time
-private func isUserControlledStep(_ name: String) -> Bool {
-    userControlledSteps.contains(name.lowercased())
-}
-
-// MARK: - Trace Data Models
-
-/// A single step in any trace (Live or Engine)
+/// A single step in a trace pipeline
 struct TraceStep: Identifiable {
     let id = UUID()
     let name: String
-    let startMs: Int
     let durationMs: Int
-    let metadata: String?
+    let startMs: Int
 
-    var endMs: Int { startMs + durationMs }
-
-    /// Whether this step is user-controlled (not system latency)
     var isUserControlled: Bool {
-        isUserControlledStep(name)
+        ["recording", "record", "user_input", "speaking"].contains(name.lowercased())
     }
 }
 
-/// Scope identifier for drill-down
-enum TraceScope: String, CaseIterable {
-    case live = "Live"
-    case engine = "Engine"
-
-    var color: Color {
-        switch self {
-        case .live: return Color(red: 0.7, green: 0.5, blue: 1.0)   // Purple
-        case .engine: return Color(red: 1.0, green: 0.6, blue: 0.3) // Orange
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .live: return "menubar.rectangle"
-        case .engine: return "gearshape.fill"
-        }
-    }
-}
-
-/// Trace from a single scope (Live or Engine)
-struct ScopeTrace: Identifiable {
+/// A parsed trace from a single app (Live or Engine)
+struct ParsedTrace: Identifiable {
     let id = UUID()
-    let scope: TraceScope
     let traceId: String
     let timestamp: Date
+    let source: TraceSource
     let totalMs: Int
     let steps: [TraceStep]
+
+    enum TraceSource: String {
+        case live = "Live"
+        case engine = "Engine"
+
+        var color: Color {
+            switch self {
+            case .live: return .purple
+            case .engine: return .orange
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .live: return "menubar.rectangle"
+            case .engine: return "gearshape.fill"
+            }
+        }
+    }
 
     /// System latency (excludes user-controlled time like recording)
     var systemLatencyMs: Int {
         steps.filter { !$0.isUserControlled }.reduce(0) { $0 + $1.durationMs }
     }
 
-    /// User-controlled time (recording, etc.)
-    var userTimeMs: Int {
-        steps.filter { $0.isUserControlled }.reduce(0) { $0 + $1.durationMs }
-    }
-
-    /// Bottleneck - only considers system steps, never user-controlled time
+    /// Bottleneck step (excluding user-controlled)
     var bottleneck: TraceStep? {
-        steps.filter { !$0.isUserControlled }.max(by: { $0.durationMs < $1.durationMs })
-    }
-
-    var stepsSummary: String {
-        steps.map { "\($0.name):\($0.durationMs)ms" }.joined(separator: " → ")
+        steps.filter { !$0.isUserControlled }.max { $0.durationMs < $1.durationMs }
     }
 }
 
-/// End-to-end trace combining Live and Engine scopes
+/// Combined E2E trace with optional Live + Engine components
 struct E2ETrace: Identifiable {
     let id = UUID()
     let timestamp: Date
-    let externalRefId: String?
+    let traceId: String?
+    var liveTrace: ParsedTrace?
+    var engineTrace: ParsedTrace?
 
-    var liveTrace: ScopeTrace?
-    var engineTrace: ScopeTrace?
-
-    /// Total end-to-end duration (includes user time)
-    var totalMs: Int {
-        (liveTrace?.totalMs ?? 0) + (engineTrace?.totalMs ?? 0)
-    }
-
-    /// System latency only (excludes user-controlled time like recording)
     var systemLatencyMs: Int {
         (liveTrace?.systemLatencyMs ?? 0) + (engineTrace?.systemLatencyMs ?? 0)
     }
 
-    /// User-controlled time (recording, etc.)
     var userTimeMs: Int {
-        (liveTrace?.userTimeMs ?? 0) + (engineTrace?.userTimeMs ?? 0)
+        let liveUser = liveTrace?.steps.filter { $0.isUserControlled }.reduce(0) { $0 + $1.durationMs } ?? 0
+        let engineUser = engineTrace?.steps.filter { $0.isUserControlled }.reduce(0) { $0 + $1.durationMs } ?? 0
+        return liveUser + engineUser
     }
 
-    /// Check if we have both scopes
+    var totalMs: Int {
+        (liveTrace?.totalMs ?? 0) + (engineTrace?.totalMs ?? 0)
+    }
+
     var isComplete: Bool {
         liveTrace != nil && engineTrace != nil
     }
-
-    /// Summary for display
-    var summary: String {
-        var parts: [String] = []
-        if let live = liveTrace {
-            parts.append("Live: \(live.totalMs)ms")
-        }
-        if let engine = engineTrace {
-            parts.append("Engine: \(engine.totalMs)ms")
-        }
-        return parts.joined(separator: " • ")
-    }
 }
 
-// MARK: - Trace Parser
+// MARK: - Trace Log Reader
 
-/// Parses trace summaries from log file events
-struct TraceParser {
+/// Reads trace entries directly from log files
+struct TraceLogReader {
 
-    /// Parse a Live trace from log detail
-    /// Format: "[traceId] Xms total: step1=Xms, step2=Xms, step3=Xms"
-    static func parseLiveTrace(detail: String, timestamp: Date, traceId: String?) -> ScopeTrace? {
-        var steps: [TraceStep] = []
-        var currentStartMs = 0
-        var extractedTraceId = traceId
-
-        var workingDetail = detail
-
-        // Extract trace ID from brackets at start: "[abc12345]"
-        if let bracketRange = detail.range(of: #"^\[([a-zA-Z0-9\-]+)\]"#, options: .regularExpression) {
-            let match = String(detail[bracketRange])
-            extractedTraceId = String(match.dropFirst().dropLast())
-            workingDetail = String(detail[bracketRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+    /// Log directories for each app
+    private static func logDirectory(for source: ParsedTrace.TraceSource) -> URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
         }
-
-        // Skip past "Xms total: " prefix if present
-        if let colonRange = workingDetail.range(of: "total:") {
-            workingDetail = String(workingDetail[colonRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+        switch source {
+        case .live:
+            return appSupport.appendingPathComponent("TalkieLive/logs")
+        case .engine:
+            return appSupport.appendingPathComponent("TalkieEngine/logs")
         }
-
-        // Parse steps: "step1=Xms, step2=Xms, step3=Xms"
-        let parts = workingDetail.components(separatedBy: ",")
-        for part in parts {
-            let trimmed = part.trimmingCharacters(in: .whitespaces)
-            // Parse "name=Xms"
-            let components = trimmed.components(separatedBy: "=")
-            guard components.count >= 2 else { continue }
-
-            let name = components[0].trimmingCharacters(in: .whitespaces)
-            let msString = components[1]
-                .replacingOccurrences(of: "ms", with: "")
-                .trimmingCharacters(in: .whitespaces)
-            guard let durationMs = Int(msString), !name.isEmpty else { continue }
-
-            steps.append(TraceStep(
-                name: name,
-                startMs: currentStartMs,
-                durationMs: durationMs,
-                metadata: nil
-            ))
-            currentStartMs += durationMs
-        }
-
-        guard !steps.isEmpty else { return nil }
-
-        return ScopeTrace(
-            scope: .live,
-            traceId: extractedTraceId ?? UUID().uuidString,
-            timestamp: timestamp,
-            totalMs: currentStartMs,
-            steps: steps
-        )
     }
 
-    /// Parse an Engine trace from log detail
-    /// Format: "[traceId] Xms total: step1=Xms, step2=Xms" or similar
-    static func parseEngineTrace(detail: String, timestamp: Date, traceId: String?) -> ScopeTrace? {
-        var steps: [TraceStep] = []
-        var currentStartMs = 0
-        var extractedTraceId = traceId
+    /// Get today's log file path
+    private static func logFilePath(for source: ParsedTrace.TraceSource, date: Date = Date()) -> URL? {
+        guard let dir = logDirectory(for: source) else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let filename = "talkie-\(formatter.string(from: date)).log"
+        return dir.appendingPathComponent(filename)
+    }
 
+    /// Read all "Trace complete" entries from a log file
+    static func readTraces(from source: ParsedTrace.TraceSource, date: Date = Date()) -> [ParsedTrace] {
+        guard let path = logFilePath(for: source, date: date),
+              let content = try? String(contentsOf: path, encoding: .utf8) else {
+            return []
+        }
+
+        var traces: [ParsedTrace] = []
+        let lines = content.components(separatedBy: .newlines)
+
+        for line in lines {
+            // Only process "Trace complete" lines
+            guard line.contains("Trace complete") else { continue }
+
+            // Parse: 2025-12-29T17:15:57.635Z|TalkieLive|SYSTEM|Trace complete|[traceId] Xms total: step=Xms, ...
+            let parts = line.components(separatedBy: "|")
+            guard parts.count >= 5 else { continue }
+
+            // Parse timestamp
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            guard let timestamp = isoFormatter.date(from: parts[0]) else { continue }
+
+            // Parse detail (the trace data)
+            let detail = parts[4]
+            guard let trace = parseTraceDetail(detail, timestamp: timestamp, source: source) else { continue }
+
+            traces.append(trace)
+        }
+
+        return traces
+    }
+
+    /// Parse trace detail: "[traceId] Xms total: step1=Xms, step2=Xms"
+    private static func parseTraceDetail(_ detail: String, timestamp: Date, source: ParsedTrace.TraceSource) -> ParsedTrace? {
         var workingDetail = detail
+        var traceId: String = UUID().uuidString.prefix(8).lowercased()
 
-        // Extract trace ID from brackets at start
+        // Extract trace ID from brackets: "[abc12345]"
         if let bracketRange = detail.range(of: #"^\[([a-zA-Z0-9\-]+)\]"#, options: .regularExpression) {
             let match = String(detail[bracketRange])
-            extractedTraceId = String(match.dropFirst().dropLast())
+            traceId = String(match.dropFirst().dropLast())
             workingDetail = String(detail[bracketRange.upperBound...]).trimmingCharacters(in: .whitespaces)
         }
 
-        // Skip past "Xms total: " or "Xms: " prefix if present
+        // Skip past "Xms total: " prefix
         if let colonRange = workingDetail.range(of: "total:") {
             workingDetail = String(workingDetail[colonRange.upperBound...]).trimmingCharacters(in: .whitespaces)
-        } else if let colonRange = workingDetail.range(of: ":") {
-            // Also handle simpler "Xms: step1=..." format
-            let beforeColon = String(workingDetail[..<colonRange.lowerBound])
-            if beforeColon.hasSuffix("ms") {
-                workingDetail = String(workingDetail[colonRange.upperBound...]).trimmingCharacters(in: .whitespaces)
-            }
         }
 
         // Parse steps: "step1=Xms, step2=Xms"
-        let parts = workingDetail.components(separatedBy: ",")
-        for part in parts {
+        var steps: [TraceStep] = []
+        var currentStartMs = 0
+
+        let stepParts = workingDetail.components(separatedBy: ",")
+        for part in stepParts {
             let trimmed = part.trimmingCharacters(in: .whitespaces)
             let components = trimmed.components(separatedBy: "=")
             guard components.count >= 2 else { continue }
 
             let name = components[0].trimmingCharacters(in: .whitespaces)
-            let msString = components[1]
-                .replacingOccurrences(of: "ms", with: "")
-                .trimmingCharacters(in: .whitespaces)
+            let msString = components[1].replacingOccurrences(of: "ms", with: "").trimmingCharacters(in: .whitespaces)
             guard let durationMs = Int(msString), !name.isEmpty else { continue }
 
-            steps.append(TraceStep(
-                name: name,
-                startMs: currentStartMs,
-                durationMs: durationMs,
-                metadata: nil
-            ))
+            steps.append(TraceStep(name: name, durationMs: durationMs, startMs: currentStartMs))
             currentStartMs += durationMs
         }
 
         guard !steps.isEmpty else { return nil }
 
-        return ScopeTrace(
-            scope: .engine,
-            traceId: extractedTraceId ?? UUID().uuidString,
+        return ParsedTrace(
+            traceId: traceId,
             timestamp: timestamp,
+            source: source,
             totalMs: currentStartMs,
             steps: steps
         )
     }
 
-    /// Extract externalRefId from log detail if present
-    static func extractRefId(from detail: String) -> String? {
-        // Look for pattern like "refId:abc12345" or "[abc12345]"
-        if let range = detail.range(of: #"refId:([a-zA-Z0-9]+)"#, options: .regularExpression) {
-            let match = String(detail[range])
-            return String(match.dropFirst(6)) // Remove "refId:"
-        }
-        if let range = detail.range(of: #"\[([a-zA-Z0-9\-]{8})\]"#, options: .regularExpression) {
-            let match = String(detail[range])
-            return String(match.dropFirst().dropLast()) // Remove brackets
-        }
-        return nil
+    /// Get file modification date for change detection
+    static func lastModified(for source: ParsedTrace.TraceSource) -> Date? {
+        guard let path = logFilePath(for: source) else { return nil }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: path.path)
+        return attrs?[.modificationDate] as? Date
     }
 }
 
-// MARK: - E2E Trace Manager
+// MARK: - E2E Trace Store
 
 @MainActor
 @Observable
-class E2ETraceManager {
-    static let shared = E2ETraceManager()
+class E2ETraceStore {
+    static let shared = E2ETraceStore()
 
     var traces: [E2ETrace] = []
     var isLoading = false
     var lastRefresh: Date?
+    var traceCount: Int { traces.count }
+
+    // File watching state
+    private var lastLiveModified: Date?
+    private var lastEngineModified: Date?
+    private var refreshTimer: Timer?
 
     private init() {}
 
-    /// Load and correlate traces from all sources
+    /// Start watching for changes (call on view appear)
+    func startWatching() {
+        // Initial load
+        loadTraces()
+
+        // Check for changes every 2 seconds
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.checkForUpdates()
+            }
+        }
+    }
+
+    /// Stop watching (call on view disappear)
+    func stopWatching() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+
+    /// Check if log files have been modified
+    private func checkForUpdates() {
+        let liveModified = TraceLogReader.lastModified(for: .live)
+        let engineModified = TraceLogReader.lastModified(for: .engine)
+
+        let needsRefresh = (liveModified != lastLiveModified) || (engineModified != lastEngineModified)
+
+        if needsRefresh {
+            lastLiveModified = liveModified
+            lastEngineModified = engineModified
+            loadTraces()
+        }
+    }
+
+    /// Load all traces from log files
     func loadTraces() {
         isLoading = true
 
         Task.detached { [weak self] in
-            // Load events from both sources
-            let liveEvents = LogFileManager.shared.loadEventsFrom(source: .talkieLive, date: Date(), limit: 200)
-            let engineEvents = LogFileManager.shared.loadEventsFrom(source: .talkieEngine, date: Date(), limit: 200)
+            // Read traces from both sources
+            let liveTraces = TraceLogReader.readTraces(from: .live)
+            let engineTraces = TraceLogReader.readTraces(from: .engine)
 
-            // Parse traces
-            var liveTraces: [String: ScopeTrace] = [:] // keyed by refId or timestamp
-            var engineTraces: [String: ScopeTrace] = [:]
+            // Correlate by trace ID
             var e2eTraces: [E2ETrace] = []
+            var usedEngineIds = Set<String>()
 
-            // Parse Live traces
-            for event in liveEvents {
-                guard event.message.contains("Trace complete") || event.message.contains("trace") else { continue }
-                guard let detail = event.detail else { continue }
-
-                let refId = TraceParser.extractRefId(from: detail)
-                if let trace = TraceParser.parseLiveTrace(detail: detail, timestamp: event.timestamp, traceId: refId) {
-                    let key = refId ?? event.timestamp.timeIntervalSince1970.description
-                    liveTraces[key] = trace
-                }
-            }
-
-            // Parse Engine traces
-            for event in engineEvents {
-                guard event.message.contains("Trace complete") || event.message.contains("trace") || event.message.contains("Transcription") else { continue }
-                guard let detail = event.detail else { continue }
-
-                let refId = TraceParser.extractRefId(from: detail)
-                if let trace = TraceParser.parseEngineTrace(detail: detail, timestamp: event.timestamp, traceId: refId) {
-                    let key = refId ?? event.timestamp.timeIntervalSince1970.description
-                    engineTraces[key] = trace
-                }
-            }
-
-            // Correlate by refId
-            var usedEngineKeys = Set<String>()
-            for (key, liveTrace) in liveTraces {
+            // Start with Live traces, try to match Engine traces
+            for live in liveTraces {
                 var e2e = E2ETrace(
-                    timestamp: liveTrace.timestamp,
-                    externalRefId: key.count == 8 ? key : nil,
-                    liveTrace: liveTrace
+                    timestamp: live.timestamp,
+                    traceId: live.traceId,
+                    liveTrace: live
                 )
 
-                // Try to find matching engine trace
-                if let engineTrace = engineTraces[key] {
-                    e2e.engineTrace = engineTrace
-                    usedEngineKeys.insert(key)
+                // Find matching engine trace by ID
+                if let engine = engineTraces.first(where: { $0.traceId == live.traceId }) {
+                    e2e.engineTrace = engine
+                    usedEngineIds.insert(engine.traceId)
                 }
 
                 e2eTraces.append(e2e)
             }
 
-            // Add orphan engine traces (no matching Live)
-            for (key, engineTrace) in engineTraces where !usedEngineKeys.contains(key) {
-                let e2e = E2ETrace(
-                    timestamp: engineTrace.timestamp,
-                    externalRefId: key.count == 8 ? key : nil,
-                    liveTrace: nil,
-                    engineTrace: engineTrace
-                )
-                e2eTraces.append(e2e)
+            // Add orphan engine traces
+            for engine in engineTraces where !usedEngineIds.contains(engine.traceId) {
+                e2eTraces.append(E2ETrace(
+                    timestamp: engine.timestamp,
+                    traceId: engine.traceId,
+                    engineTrace: engine
+                ))
             }
 
-            // Sort by timestamp (newest first)
+            // Sort newest first
             e2eTraces.sort { $0.timestamp > $1.timestamp }
 
             await MainActor.run { [weak self] in
@@ -368,21 +319,21 @@ class E2ETraceManager {
 // MARK: - E2E Trace View
 
 struct E2ETraceView: View {
-    @State private var manager = E2ETraceManager.shared
+    @State private var store = E2ETraceStore.shared
     @State private var expandedTraces: Set<UUID> = []
-    @State private var selectedScope: TraceScope? = nil
     @State private var showOnlyComplete = false
+    @State private var selectedSource: ParsedTrace.TraceSource? = nil
 
-    var filteredTraces: [E2ETrace] {
-        var result = manager.traces
+    private var filteredTraces: [E2ETrace] {
+        var result = store.traces
 
         if showOnlyComplete {
             result = result.filter { $0.isComplete }
         }
 
-        if let scope = selectedScope {
+        if let source = selectedSource {
             result = result.filter { trace in
-                switch scope {
+                switch source {
                 case .live: return trace.liveTrace != nil
                 case .engine: return trace.engineTrace != nil
                 }
@@ -394,18 +345,12 @@ struct E2ETraceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             headerView
-
             Divider()
-
-            // Controls
             controlsView
-
             Divider()
 
-            // Content
-            if manager.isLoading {
+            if store.isLoading && store.traces.isEmpty {
                 loadingView
             } else if filteredTraces.isEmpty {
                 emptyStateView
@@ -415,11 +360,8 @@ struct E2ETraceView: View {
         }
         .frame(minWidth: 800, minHeight: 500)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear {
-            if manager.traces.isEmpty {
-                manager.loadTraces()
-            }
-        }
+        .onAppear { store.startWatching() }
+        .onDisappear { store.stopWatching() }
     }
 
     // MARK: - Header
@@ -427,15 +369,15 @@ struct E2ETraceView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("END-TO-END TRACE VIEWER")
+                Text("E2E TRACE VIEWER")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(Color.green)
+                        .fill(store.isLoading ? Color.orange : Color.green)
                         .frame(width: 6, height: 6)
-                    Text("CROSS-APP TRACING")
+                    Text(store.isLoading ? "REFRESHING" : "WATCHING")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -443,13 +385,13 @@ struct E2ETraceView: View {
 
             Spacer()
 
-            if let lastRefresh = manager.lastRefresh {
+            if let lastRefresh = store.lastRefresh {
                 Text("Updated \(lastRefresh, formatter: timeFormatter)")
                     .font(.system(size: 9))
                     .foregroundColor(.secondary)
             }
 
-            Button(action: { manager.loadTraces() }) {
+            Button(action: { store.loadTraces() }) {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 9))
@@ -458,13 +400,7 @@ struct E2ETraceView: View {
                 }
             }
             .buttonStyle(.plain)
-            .disabled(manager.isLoading)
-
-            Button(action: { manager.clear() }) {
-                Text("Clear")
-                    .font(.system(size: 10))
-            }
-            .buttonStyle(.plain)
+            .disabled(store.isLoading)
         }
         .padding(16)
     }
@@ -473,43 +409,20 @@ struct E2ETraceView: View {
 
     private var controlsView: some View {
         HStack(spacing: 12) {
-            // Scope filter
-            Menu {
-                Button("All Scopes") {
-                    selectedScope = nil
-                }
+            // Source filter
+            Picker("Source", selection: $selectedSource) {
+                Text("All Sources").tag(nil as ParsedTrace.TraceSource?)
                 Divider()
-                ForEach(TraceScope.allCases, id: \.self) { scope in
-                    Button(action: { selectedScope = scope }) {
-                        HStack {
-                            Image(systemName: scope.icon)
-                            Text(scope.rawValue)
-                        }
-                    }
+                ForEach([ParsedTrace.TraceSource.live, .engine], id: \.self) { source in
+                    Label(source.rawValue, systemImage: source.icon).tag(source as ParsedTrace.TraceSource?)
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    if let scope = selectedScope {
-                        Circle()
-                            .fill(scope.color)
-                            .frame(width: 6, height: 6)
-                        Text(scope.rawValue)
-                    } else {
-                        Text("All Scopes")
-                    }
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
-                }
-                .font(.system(size: 10))
             }
-            .menuStyle(.borderlessButton)
+            .pickerStyle(.menu)
+            .frame(width: 130)
 
-            // Complete only toggle
-            Toggle(isOn: $showOnlyComplete) {
-                Text("Complete only")
-                    .font(.system(size: 10))
-            }
-            .toggleStyle(.checkbox)
+            Toggle("Complete only", isOn: $showOnlyComplete)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 10))
 
             Spacer()
 
@@ -526,34 +439,32 @@ struct E2ETraceView: View {
     private var traceListView: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                // Header row
-                traceHeaderRow
+                headerRow
 
                 ForEach(filteredTraces) { trace in
-                    expandableTraceRow(trace: trace)
+                    traceRow(trace)
                     Divider()
                 }
             }
         }
     }
 
-    private var traceHeaderRow: some View {
+    private var headerRow: some View {
         HStack(spacing: 8) {
             Image(systemName: "chevron.right")
-                .font(.system(size: 8))
                 .foregroundColor(.clear)
                 .frame(width: 12)
 
             Text("TIME")
-                .frame(width: 80, alignment: .leading)
+                .frame(width: 70, alignment: .leading)
 
             Text("LATENCY")
-                .frame(width: 90, alignment: .leading)
-
-            Text("SCOPES")
                 .frame(width: 100, alignment: .leading)
 
-            Text("BREAKDOWN")
+            Text("SOURCES")
+                .frame(width: 100, alignment: .leading)
+
+            Text("TIMELINE")
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.system(size: 9, weight: .medium))
@@ -563,59 +474,56 @@ struct E2ETraceView: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
-    private func expandableTraceRow(trace: E2ETrace) -> some View {
+    private func traceRow(_ trace: E2ETrace) -> some View {
         let isExpanded = expandedTraces.contains(trace.id)
 
         return VStack(spacing: 0) {
-            // Main row
-            Button(action: {
+            Button {
                 if isExpanded {
                     expandedTraces.remove(trace.id)
                 } else {
                     expandedTraces.insert(trace.id)
                 }
-            }) {
+            } label: {
                 HStack(spacing: 8) {
-                    // Expand indicator
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 12)
 
-                    // Timestamp
+                    // Time
                     Text(trace.timestamp, formatter: timeFormatter)
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.secondary)
-                        .frame(width: 80, alignment: .leading)
+                        .frame(width: 70, alignment: .leading)
 
-                    // System latency (the metric that matters) + user time dimmed
+                    // Latency
                     HStack(spacing: 4) {
                         Text("\(trace.systemLatencyMs)ms")
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(durationColor(trace.systemLatencyMs))
+                            .foregroundColor(latencyColor(trace.systemLatencyMs))
 
                         if trace.userTimeMs > 0 {
                             Text("+\(trace.userTimeMs / 1000)s")
                                 .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.6))
-                                .help("User recording time (not counted as latency)")
+                                .foregroundColor(.secondary.opacity(0.5))
                         }
                     }
-                    .frame(width: 90, alignment: .leading)
+                    .frame(width: 100, alignment: .leading)
 
-                    // Scope badges
+                    // Source badges
                     HStack(spacing: 4) {
                         if trace.liveTrace != nil {
-                            scopeBadge(.live)
+                            sourceBadge(.live)
                         }
                         if trace.engineTrace != nil {
-                            scopeBadge(.engine)
+                            sourceBadge(.engine)
                         }
                     }
                     .frame(width: 100, alignment: .leading)
 
                     // Timeline bar
-                    timelineBar(trace: trace)
+                    timelineBar(trace)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -624,30 +532,26 @@ struct E2ETraceView: View {
             .buttonStyle(.plain)
             .background(isExpanded ? Color.accentColor.opacity(0.05) : Color.clear)
 
-            // Expanded detail
             if isExpanded {
-                traceDetailView(trace: trace)
+                detailView(trace)
             }
         }
     }
 
-    private func scopeBadge(_ scope: TraceScope) -> some View {
+    private func sourceBadge(_ source: ParsedTrace.TraceSource) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: scope.icon)
+            Image(systemName: source.icon)
                 .font(.system(size: 7))
-            Text(scope.rawValue)
+            Text(source.rawValue)
                 .font(.system(size: 8, weight: .medium))
         }
         .foregroundColor(.white)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(
-            RoundedRectangle(cornerRadius: 3)
-                .fill(scope.color)
-        )
+        .background(RoundedRectangle(cornerRadius: 3).fill(source.color))
     }
 
-    private func timelineBar(trace: E2ETrace) -> some View {
+    private func timelineBar(_ trace: E2ETrace) -> some View {
         GeometryReader { geo in
             let total = CGFloat(max(trace.totalMs, 1))
             let liveWidth = CGFloat(trace.liveTrace?.totalMs ?? 0) / total * geo.size.width
@@ -656,12 +560,12 @@ struct E2ETraceView: View {
             HStack(spacing: 1) {
                 if trace.liveTrace != nil {
                     Rectangle()
-                        .fill(TraceScope.live.color)
+                        .fill(ParsedTrace.TraceSource.live.color)
                         .frame(width: max(liveWidth, 2))
                 }
                 if trace.engineTrace != nil {
                     Rectangle()
-                        .fill(TraceScope.engine.color)
+                        .fill(ParsedTrace.TraceSource.engine.color)
                         .frame(width: max(engineWidth, 2))
                 }
                 Spacer(minLength: 0)
@@ -674,27 +578,21 @@ struct E2ETraceView: View {
 
     // MARK: - Detail View
 
-    private func traceDetailView(trace: E2ETrace) -> some View {
+    private func detailView(_ trace: E2ETrace) -> some View {
         VStack(spacing: 0) {
-            // Live scope section
-            if let liveTrace = trace.liveTrace {
-                scopeDetailSection(trace: liveTrace)
+            if let live = trace.liveTrace {
+                sourceDetail(live)
             }
-
-            // Engine scope section
-            if let engineTrace = trace.engineTrace {
-                scopeDetailSection(trace: engineTrace)
+            if let engine = trace.engineTrace {
+                sourceDetail(engine)
             }
-
-            // Reference ID
-            if let refId = trace.externalRefId {
+            if let traceId = trace.traceId {
                 HStack {
-                    Text("Correlation ID:")
+                    Text("Trace ID:")
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
-                    Text(refId)
+                    Text(traceId)
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.primary)
                 }
                 .padding(.horizontal, 60)
                 .padding(.vertical, 8)
@@ -703,79 +601,29 @@ struct E2ETraceView: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.3))
     }
 
-    private func scopeDetailSection(trace: ScopeTrace) -> some View {
+    private func sourceDetail(_ trace: ParsedTrace) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Scope header - show system latency prominently
+            // Header
             HStack {
-                Image(systemName: trace.scope.icon)
-                    .foregroundColor(trace.scope.color)
-                Text("\(trace.scope.rawValue.uppercased()) SCOPE")
+                Image(systemName: trace.source.icon)
+                    .foregroundColor(trace.source.color)
+                Text("\(trace.source.rawValue.uppercased())")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(.secondary)
 
                 Spacer()
 
-                // System latency (primary metric)
                 Text("\(trace.systemLatencyMs)ms latency")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(trace.scope.color)
-
-                // User time (dimmed, if any)
-                if trace.userTimeMs > 0 {
-                    Text("• \(String(format: "%.1f", Double(trace.userTimeMs) / 1000))s user")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.5))
-                }
+                    .foregroundColor(trace.source.color)
             }
             .padding(.horizontal, 60)
             .padding(.top, 12)
 
-            // Step timeline
-            GeometryReader { geo in
-                let total = CGFloat(max(trace.totalMs, 1))
-                let width = geo.size.width - 120
-
-                ZStack(alignment: .leading) {
-                    // Background
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(height: 24)
-
-                    // Steps
-                    ForEach(trace.steps) { step in
-                        let startX = CGFloat(step.startMs) / total * width
-                        let stepWidth = CGFloat(step.durationMs) / total * width
-
-                        // User-controlled steps shown with lower opacity and dashed border
-                        if step.isUserControlled {
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.1))
-                                .overlay(
-                                    Rectangle()
-                                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                                        .foregroundColor(.secondary.opacity(0.3))
-                                )
-                                .frame(width: max(stepWidth, 2), height: 24)
-                                .offset(x: startX)
-                                .help("\(step.name): \(step.durationMs)ms (user time - not counted)")
-                        } else {
-                            Rectangle()
-                                .fill(stepColor(step.name, scope: trace.scope))
-                                .frame(width: max(stepWidth, 2), height: 24)
-                                .offset(x: startX)
-                                .help("\(step.name): \(step.durationMs)ms")
-                        }
-                    }
-                }
-                .cornerRadius(4)
-            }
-            .frame(height: 24)
-            .padding(.horizontal, 60)
-
-            // Steps table
-            VStack(spacing: 0) {
+            // Steps
+            VStack(spacing: 2) {
                 ForEach(trace.steps) { step in
-                    stepRow(step: step, systemLatencyMs: trace.systemLatencyMs, scope: trace.scope, isBottleneck: step.id == trace.bottleneck?.id)
+                    stepRow(step, trace: trace)
                 }
             }
             .padding(.horizontal, 60)
@@ -783,93 +631,42 @@ struct E2ETraceView: View {
         }
     }
 
-    private func stepRow(step: TraceStep, systemLatencyMs: Int, scope: TraceScope, isBottleneck: Bool) -> some View {
-        let isUserTime = step.isUserControlled
+    private func stepRow(_ step: TraceStep, trace: ParsedTrace) -> some View {
+        let isBottleneck = step.id == trace.bottleneck?.id
 
         return HStack(spacing: 8) {
-            // Circle indicator - dashed for user time
-            if isUserTime {
-                Circle()
-                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
-                    .foregroundColor(.secondary.opacity(0.5))
-                    .frame(width: 6, height: 6)
-            } else {
-                Circle()
-                    .fill(stepColor(step.name, scope: scope))
-                    .frame(width: 6, height: 6)
-            }
+            Circle()
+                .fill(step.isUserControlled ? Color.secondary.opacity(0.3) : stepColor(step.name, source: trace.source))
+                .frame(width: 6, height: 6)
 
-            // Step name - dimmed for user time
-            HStack(spacing: 4) {
-                Text(step.name)
-                    .font(.system(size: 10))
-                    .foregroundColor(isUserTime ? .secondary : .primary)
-                if isUserTime {
-                    Text("(user)")
-                        .font(.system(size: 8))
-                        .foregroundColor(.secondary.opacity(0.5))
-                }
-            }
-            .frame(width: 140, alignment: .leading)
+            Text(step.name)
+                .font(.system(size: 10))
+                .foregroundColor(step.isUserControlled ? .secondary : .primary)
+                .frame(width: 120, alignment: .leading)
 
-            // Duration - formatted differently for user time
-            if isUserTime {
+            if step.isUserControlled {
                 Text("\(String(format: "%.1f", Double(step.durationMs) / 1000))s")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary.opacity(0.5))
-                    .frame(width: 60, alignment: .leading)
             } else {
                 Text("\(step.durationMs)ms")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(isBottleneck ? .orange : .primary)
-                    .frame(width: 60, alignment: .leading)
             }
 
-            // Percentage bar - only for system steps, uses system latency as denominator
-            if !isUserTime {
-                let pct = systemLatencyMs > 0 ? Double(step.durationMs) / Double(systemLatencyMs) * 100 : 0
-                HStack(spacing: 4) {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.2))
-                            Rectangle()
-                                .fill(stepColor(step.name, scope: scope))
-                                .frame(width: geo.size.width * CGFloat(pct / 100))
-                        }
-                        .cornerRadius(2)
-                    }
-                    .frame(height: 6)
-
-                    Text("\(Int(pct))%")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .frame(width: 30, alignment: .trailing)
-                }
-                .frame(width: 120)
-            } else {
-                // Empty space for user time rows
-                Spacer()
-                    .frame(width: 120)
-            }
-
-            // Bottleneck badge - never shown for user time
-            if isBottleneck && !isUserTime {
+            if isBottleneck && !step.isUserControlled {
                 Text("BOTTLENECK")
                     .font(.system(size: 7, weight: .bold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.orange)
-                    )
+                    .background(RoundedRectangle(cornerRadius: 2).fill(Color.orange))
             }
 
             Spacer()
         }
-        .padding(.vertical, 4)
-        .opacity(isUserTime ? 0.6 : 1.0)
+        .padding(.vertical, 2)
+        .opacity(step.isUserControlled ? 0.6 : 1.0)
     }
 
     // MARK: - States
@@ -894,40 +691,33 @@ struct E2ETraceView: View {
             Text("No traces found")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
-            Text("Use TalkieLive to record dictations")
+            Text("Record a dictation with TalkieLive to see traces")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
-            Button(action: { manager.loadTraces() }) {
-                Text("Refresh")
-            }
-            .buttonStyle(.bordered)
+            Button("Refresh") { store.loadTraces() }
+                .buttonStyle(.bordered)
             Spacer()
         }
     }
 
     // MARK: - Helpers
 
-    private func durationColor(_ ms: Int) -> Color {
+    private func latencyColor(_ ms: Int) -> Color {
         if ms >= 2000 { return .red }
         if ms >= 1000 { return .orange }
         return .green
     }
 
-    private func stepColor(_ name: String, scope: TraceScope) -> Color {
-        // Different colors for different step types
+    private func stepColor(_ name: String, source: ParsedTrace.TraceSource) -> Color {
         switch name.lowercased() {
         case "hotkey_pressed", "hotkey": return .purple
         case "context_capture", "context": return .blue
         case "recording", "record": return .cyan
         case "file_save", "save": return .teal
-        case "xpc_request", "xpc": return .indigo
+        case "engine", "xpc": return .indigo
         case "routing", "route", "paste": return .mint
-        case "file_check": return .gray
-        case "model_check", "model_load": return .yellow
-        case "audio_load", "audio": return .blue
         case "inference", "transcribe": return .orange
-        case "post_process", "format": return .green
-        default: return scope.color
+        default: return source.color
         }
     }
 
@@ -937,8 +727,6 @@ struct E2ETraceView: View {
         return f
     }
 }
-
-// MARK: - Preview
 
 #Preview {
     E2ETraceView()
