@@ -82,18 +82,11 @@ struct OnboardingView: View {
                 .padding(.horizontal, Spacing.lg)
 
                 // Step content - flexible to fill available space
+                // Order: Welcome → LLM Config → Live Mode → Permissions → Model Install → Status Check → Complete
                 Group {
                     switch manager.currentStep {
                     case .welcome:
                         WelcomeView(onNext: {
-                            manager.currentStep = .permissions
-                        })
-                    case .permissions:
-                        PermissionsSetupView(onNext: {
-                            manager.currentStep = .modelInstall
-                        })
-                    case .modelInstall:
-                        ModelInstallView(onNext: {
                             manager.currentStep = .llmConfig
                         })
                     case .llmConfig:
@@ -102,6 +95,14 @@ struct OnboardingView: View {
                         })
                     case .liveModePitch:
                         LiveModePitchView(onNext: {
+                            manager.currentStep = .permissions
+                        })
+                    case .permissions:
+                        PermissionsSetupView(onNext: {
+                            manager.currentStep = .modelInstall
+                        })
+                    case .modelInstall:
+                        ModelInstallView(onNext: {
                             manager.currentStep = .statusCheck
                         })
                     case .statusCheck:

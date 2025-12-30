@@ -23,8 +23,8 @@ struct ModelInstallView: View {
             title: "TRANSCRIPTION MODEL",
             subtitle: "Choose your AI model",
             illustration: {
-                // CPU/chip icon - represents on-device AI
-                Image(systemName: "cpu.fill")
+                // Waveform icon - represents speech/audio transcription
+                Image(systemName: "waveform")
                     .font(.system(size: 40, weight: .medium))
                     .foregroundColor(colors.accent)
                     .frame(width: 72, height: 72)
@@ -336,10 +336,10 @@ private struct OnboardingModelCard: View {
                         Divider()
                             .background(colors.border)
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
-            .clipped()
         }
         .buttonStyle(.plain)
         .onHover { hovering in

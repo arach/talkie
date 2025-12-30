@@ -14,11 +14,11 @@ import ApplicationServices
 
 enum OnboardingStep: Int, CaseIterable {
     case welcome = 0
-    case permissions = 1
-    case modelInstall = 2
-    case llmConfig = 3
-    case liveModePitch = 4
-    case statusCheck = 5
+    case llmConfig = 1        // Local AI Models - first real choice
+    case liveModePitch = 2    // Unlock Live Mode - feature toggle
+    case permissions = 3      // Permissions - based on Live mode choice
+    case modelInstall = 4     // Transcription Model
+    case statusCheck = 5      // System Check
     case complete = 6
     // Note: Services are transparent implementation details, not user-facing setup
 }
@@ -417,9 +417,15 @@ final class OnboardingManager {
 
     func checkModelInstalled() async {
         // Check if the selected model is already downloaded
-        // This would integrate with TalkieEngine's model management
-        // For now, we'll simulate the check
-        isModelDownloaded = false
+        if selectedModelType == "parakeet" {
+            // Check Parakeet models
+            let parakeetService = ParakeetService.shared
+            isModelDownloaded = parakeetService.isModelDownloaded(.v2) || parakeetService.isModelDownloaded(.v3)
+        } else {
+            // Check Whisper models
+            let whisperService = WhisperService.shared
+            isModelDownloaded = WhisperModel.allCases.contains { whisperService.isModelDownloaded($0) }
+        }
     }
 
     func downloadModel() async {

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 struct StatusCheckView: View {
     let onNext: () -> Void
@@ -82,24 +83,39 @@ struct StatusCheckView: View {
             content: {
                 // Terminal-style status check panel
                 VStack(alignment: .leading, spacing: 0) {
-                    // Header bar - clean, no decorative dots
-                    HStack(spacing: 8) {
-                        Text("[ DIAGNOSTICS ]")
+                    // Header bar - matches row style with [.] indicator
+                    HStack(spacing: Spacing.sm) {
+                        // [.] indicator matching row style
+                        HStack(spacing: 0) {
+                            Text("[")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                            Text(".")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.textTertiary.opacity(0.5))
+                            Text("]")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                        }
+
+                        Text("DIAGNOSTICS")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .tracking(1)
                             .foregroundColor(colors.textTertiary)
+
                         Spacer()
+
                         if !manager.allChecksComplete {
                             HStack(spacing: 4) {
-                                ProgressView()
-                                    .scaleEffect(0.5)
-                                    .frame(width: 12, height: 12)
-                                Text("checking...")
+                                BrailleSpinner(speed: 0.08)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(colors.textTertiary)
+                                Text("CHECKING...")
                                     .font(.system(size: 9, design: .monospaced))
                                     .foregroundColor(colors.textTertiary)
                             }
                         } else {
-                            Text("all clear")
+                            Text("ALL CLEAR")
                                 .font(.system(size: 9, design: .monospaced))
                                 .foregroundColor(SemanticColor.success)
                         }
@@ -206,7 +222,7 @@ private struct TechyStatusCheckRow: View {
 
     private var statusText: String {
         switch status {
-        case .pending: return "..."
+        case .pending: return "Waiting"
         case .inProgress(let message): return message
         case .complete: return "Ready"
         case .error(let message): return message
@@ -223,33 +239,53 @@ private struct TechyStatusCheckRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Step name on left with brackets
-            Text("[ \(check.rawValue.uppercased()) ]")
+        HStack(spacing: Spacing.sm) {
+            // Left: Bracket with indicator inside [·] or [✓]
+            HStack(spacing: 0) {
+                Text("[")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+
+                // Indicator inside brackets
+                Group {
+                    switch status {
+                    case .pending:
+                        Text("·")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(colors.textTertiary.opacity(0.5))
+                    case .inProgress:
+                        BrailleSpinner(speed: 0.08)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(colors.accent)
+                    case .complete:
+                        Circle()
+                            .fill(SemanticColor.success)
+                            .frame(width: 6, height: 6)
+                            .shadow(color: SemanticColor.success.opacity(0.6), radius: 2)
+                    case .error:
+                        Text("!")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(SemanticColor.error)
+                    }
+                }
+                .frame(width: 12, height: 12)
+
+                Text("]")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(colors.textTertiary)
+            }
+
+            // Check name
+            Text(check.rawValue.uppercased())
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .foregroundColor(colors.textPrimary)
 
             Spacer()
 
-            // Status text on right with indicator
-            HStack(spacing: 6) {
-                if case .inProgress = status {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 12, height: 12)
-                }
-
-                Text(statusText)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(statusColor)
-
-                if case .complete = status {
-                    Circle()
-                        .fill(SemanticColor.success)
-                        .frame(width: 6, height: 6)
-                        .shadow(color: SemanticColor.success.opacity(0.5), radius: 3)
-                }
-            }
+            // Right: Status text
+            Text(statusText.uppercased())
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(statusColor)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, 10)

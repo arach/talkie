@@ -36,26 +36,15 @@ struct LLMConfigView: View {
             title: "LOCAL AI MODELS",
             subtitle: "Private, fast, and free - runs entirely on your Mac",
             illustration: {
-                ZStack {
-                    // Pulsing rings
-                    ForEach(0..<3) { index in
-                        Circle()
-                            .stroke(colors.accent.opacity(0.3), lineWidth: 2)
-                            .frame(width: 80 + CGFloat(index * 30))
-                            .scaleEffect(isPulsing ? 1.2 : 1.0)
-                            .opacity(isPulsing ? 0.5 : 0.8)
-                    }
-
-                    // Brain/CPU icon
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 56))
-                        .foregroundColor(colors.accent)
-                }
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                        isPulsing = true
-                    }
-                }
+                // CPU/GPU chip icon - represents on-device AI
+                Image(systemName: "cpu.fill")
+                    .font(.system(size: 40, weight: .medium))
+                    .foregroundColor(colors.accent)
+                    .frame(width: 72, height: 72)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(colors.accent.opacity(0.15))
+                    )
             },
             content: {
                 VStack(spacing: Spacing.md) {

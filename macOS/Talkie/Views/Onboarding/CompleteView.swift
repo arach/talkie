@@ -131,84 +131,118 @@ struct CompleteView: View {
     // MARK: - Live Mode Content
 
     private var liveModeContent: some View {
-        VStack(spacing: Spacing.xl) {
-            // Primary CTA: The keyboard shortcut - elevated presentation
-            VStack(spacing: Spacing.md) {
-                // Large shortcut display
-                HStack(spacing: 6) {
-                    ForEach(hotkeyDisplay.components(separatedBy: "+"), id: \.self) { key in
-                        Text(key.trimmingCharacters(in: .whitespaces))
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundColor(colors.textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(colors.surfaceCard)
-                                    .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .strokeBorder(colors.border, lineWidth: 1)
-                            )
-                    }
-                }
-
-                Text("Press this shortcut anywhere to start recording")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(colors.textSecondary)
-            }
-
-            // Secondary: The pill location hint
-            VStack(spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "arrow.down")
-                        .font(.system(size: 12))
-                        .foregroundColor(colors.accent)
-
-                    Text("Look for the pill at the bottom of your screen")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(colors.textPrimary)
-
-                    Image(systemName: "arrow.down")
-                        .font(.system(size: 12))
-                        .foregroundColor(colors.accent)
-                }
-
-                // Mini pill preview
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(colors.accent)
-                        .frame(width: 6, height: 6)
-                    Text("REC")
+        VStack(spacing: Spacing.lg) {
+            // Two-column layout: Shortcut | Pill
+            HStack(spacing: Spacing.xl) {
+                // Left column: Keyboard shortcut
+                VStack(spacing: Spacing.md) {
+                    Text("SHORTCUT")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1)
                         .foregroundColor(colors.textTertiary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(colors.surfaceCard)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(colors.border, lineWidth: 1)
-                        )
-                )
 
-                Text("Click on it to start a recording, or use the keyboard shortcut")
-                    .font(.system(size: 10))
-                    .foregroundColor(colors.textTertiary)
+                    // Key caps
+                    HStack(spacing: 6) {
+                        ForEach(hotkeyDisplay.components(separatedBy: "+"), id: \.self) { key in
+                            Text(key.trimmingCharacters(in: .whitespaces))
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(colors.textPrimary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(colors.surfaceCard)
+                                        .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .strokeBorder(colors.border, lineWidth: 1)
+                                )
+                        }
+                    }
+
+                    Text("Press anywhere to record")
+                        .font(.system(size: 11))
+                        .foregroundColor(colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+
+                // Divider
+                Rectangle()
+                    .fill(colors.border)
+                    .frame(width: 1, height: 100)
+
+                // Right column: Pill states
+                VStack(spacing: Spacing.md) {
+                    Text("STATUS PILL")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(colors.textTertiary)
+
+                    // Pill state transition: minimized → expanded
+                    HStack(spacing: Spacing.md) {
+                        // Minimized sliver
+                        VStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(TalkieTheme.textMuted.opacity(0.6))
+                                .frame(width: 20, height: 2)
+                            Text("idle")
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                        }
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(colors.textTertiary)
+
+                        // Expanded REC state
+                        VStack(spacing: 4) {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(TalkieTheme.textMuted)
+                                    .frame(width: 6, height: 6)
+                                Text("REC")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(TalkieTheme.textSecondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                            )
+                            Text("hover")
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(colors.textTertiary)
+                        }
+                    }
+
+                    Text("Bottom of your screen")
+                        .font(.system(size: 11))
+                        .foregroundColor(colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .padding(Spacing.md)
-            .frame(width: 400)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.xl)
+            .frame(width: 480)
             .background(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(colors.accent.opacity(0.05))
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(colors.surfaceCard)
                     .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(colors.accent.opacity(0.2), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: CornerRadius.md)
+                            .strokeBorder(colors.border, lineWidth: 1)
                     )
             )
+
+            // Helper text
+            Text("Click the pill or press the shortcut to start recording")
+                .font(.system(size: 11))
+                .foregroundColor(colors.textTertiary)
 
             // Celebration (if triggered)
             if showCelebration {

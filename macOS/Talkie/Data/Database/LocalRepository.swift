@@ -531,7 +531,7 @@ extension LocalRepository {
                     db,
                     sql: """
                         SELECT date(createdAt) as day, COUNT(*) as count
-                        FROM memos
+                        FROM voice_memos
                         WHERE deletedAt IS NULL AND createdAt >= ?
                         GROUP BY date(createdAt)
                         """,
@@ -560,7 +560,7 @@ extension LocalRepository {
                     db,
                     sql: """
                         SELECT COALESCE(SUM(duration), 0) as total
-                        FROM memos
+                        FROM voice_memos
                         WHERE deletedAt IS NULL
                         """
                 )
