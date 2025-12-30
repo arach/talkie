@@ -15,9 +15,9 @@ import GRDB
 @MainActor
 final class CoreDataMigration {
     private let coreDataContext: NSManagedObjectContext
-    private let repository: GRDBRepository
+    private let repository: LocalRepository
 
-    init(coreDataContext: NSManagedObjectContext, repository: GRDBRepository = GRDBRepository()) {
+    init(coreDataContext: NSManagedObjectContext, repository: LocalRepository = LocalRepository()) {
         self.coreDataContext = coreDataContext
         self.repository = repository
     }

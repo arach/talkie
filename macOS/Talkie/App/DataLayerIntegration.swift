@@ -122,7 +122,7 @@ func performanceTest() async {
     print("  OLD: \(Int(oldTime * 1000))ms")
 
     let newStart = Date()
-    let repository = GRDBRepository()
+    let repository = LocalRepository()
     _ = try? await repository.fetchMemos(
         sortBy: .timestamp,
         ascending: false,

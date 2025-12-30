@@ -1,9 +1,9 @@
 //
-//  GRDBRepository.swift
+//  LocalRepository.swift
 //  Talkie
 //
-//  GRDB implementation of MemoRepository
-//  Efficient SQLite queries with proper indexing
+//  Local storage implementation of MemoRepository
+//  Uses GRDB/SQLite for efficient queries with proper indexing
 //
 
 import Foundation
@@ -12,9 +12,9 @@ import TalkieKit
 
 private let log = Log(.database)
 
-// MARK: - GRDB Repository
+// MARK: - Local Repository
 
-actor GRDBRepository: MemoRepository {
+actor LocalRepository: MemoRepository {
     private let dbManager: DatabaseManager
 
     init(dbManager: DatabaseManager = .shared) {
@@ -484,7 +484,7 @@ actor GRDBRepository: MemoRepository {
 
 // MARK: - Aggregations
 
-extension GRDBRepository {
+extension LocalRepository {
     /// Count memos created today (local timezone)
     func countMemosToday() async throws -> Int {
         try await instrumentRepositoryRead("countMemosToday") {

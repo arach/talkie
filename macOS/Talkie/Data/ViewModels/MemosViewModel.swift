@@ -115,7 +115,7 @@ final class MemosViewModel {
 
     // MARK: - Init
 
-    init(repository: any MemoRepository = GRDBRepository()) {
+    init(repository: any MemoRepository = LocalRepository()) {
         self.repository = repository
     }
 

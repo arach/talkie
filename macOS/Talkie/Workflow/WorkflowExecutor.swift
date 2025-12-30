@@ -423,7 +423,7 @@ class WorkflowExecutor {
         logger.info("🌉 [Bridge 2] Saving workflow run with event sourcing to GRDB: \(workflow.name)")
         Task {
             do {
-                let repository = GRDBRepository()
+                let repository = LocalRepository()
 
                 // Calculate duration
                 let durationMs = Int(completedAt.timeIntervalSince(startedAt) * 1000)

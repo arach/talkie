@@ -17,18 +17,18 @@ private let log = Log(.database)
 struct DataInventory {
     let cloudKit: Int?      // nil = unknown/checking
     let coreData: Int
-    let grdb: Int
+    let local: Int          // Local repository (SQLite)
     let live: Int
     let timestamp: Date
 
     var needsBridgeSync: Bool {
-        grdb == 0 && coreData > 0
+        local == 0 && coreData > 0
     }
 
     var isHealthy: Bool {
-        // Healthy = GRDB roughly matches CoreData (within 10% or small absolute diff)
+        // Healthy = local roughly matches CoreData (within 10% or small absolute diff)
         guard coreData > 0 else { return true }
-        let diff = abs(coreData - grdb)
+        let diff = abs(coreData - local)
         return diff <= 10 || Double(diff) / Double(coreData) < 0.1
     }
 }
@@ -73,20 +73,20 @@ class TalkieData {
 
         log.info("📊 [TalkieData] Inventory complete:")
         log.info("   • CoreData: \(inventory.coreData) memos")
-        log.info("   • GRDB: \(inventory.grdb) memos")
+        log.info("   • Local: \(inventory.local) memos")
         log.info("   • Live: \(inventory.live) dictations")
         log.info("   • Healthy: \(inventory.isHealthy)")
 
         // 2. Reconcile if needed
         if inventory.needsBridgeSync {
-            log.info("🔄 [TalkieData] GRDB empty but CoreData has data - syncing...")
+            log.info("🔄 [TalkieData] Local empty but CoreData has data - syncing...")
             isSyncing = true
             await runBridgeSync()
             isSyncing = false
 
             // Re-inventory after sync
             self.inventory = await takeInventory()
-            log.info("✅ [TalkieData] Bridge sync complete - GRDB now has \(self.inventory?.grdb ?? 0) memos")
+            log.info("✅ [TalkieData] Bridge sync complete - local now has \(self.inventory?.local ?? 0) memos")
         }
 
         // 3. Mark ready
@@ -102,13 +102,13 @@ class TalkieData {
     /// Count records in all data sources
     func takeInventory() async -> DataInventory {
         async let coreDataCount = countCoreData()
-        async let grdbCount = countGRDB()
+        async let localCount = countLocal()
         async let liveCount = countLive()
 
         return DataInventory(
             cloudKit: nil, // CloudKit count is expensive, skip for now
             coreData: await coreDataCount,
-            grdb: await grdbCount,
+            local: await localCount,
             live: await liveCount,
             timestamp: Date()
         )
@@ -123,11 +123,11 @@ class TalkieData {
         }
     }
 
-    private func countGRDB() async -> Int {
+    private func countLocal() async -> Int {
         do {
-            return try await GRDBRepository().countMemos()
+            return try await LocalRepository().countMemos()
         } catch {
-            log.error("Failed to count GRDB: \(error.localizedDescription)")
+            log.error("Failed to count local: \(error.localizedDescription)")
             return 0
         }
     }

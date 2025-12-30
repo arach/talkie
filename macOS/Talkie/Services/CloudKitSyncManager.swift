@@ -812,7 +812,7 @@ class CloudKitSyncManager {
         let syncStart = Date()
         let lastSync = lastBridge1Sync
 
-        let repository = GRDBRepository()
+        let repository = LocalRepository()
         var createdCount = 0
         var updatedCount = 0
         var errorCount = 0

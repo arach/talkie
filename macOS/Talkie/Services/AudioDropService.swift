@@ -111,7 +111,7 @@ actor AudioDropService {
         )
 
         // Save to database
-        let repository = GRDBRepository()
+        let repository = LocalRepository()
         try await repository.saveMemo(memo)
 
         await onProgress?(.complete)

@@ -36,13 +36,13 @@ protocol WorkflowWorld {
     func replayRun(id: UUID) async throws -> WorkflowRunModel
 }
 
-// MARK: - SQLite/GRDB Implementation
+// MARK: - Local Storage Implementation
 
-/// SQLite implementation of WorkflowWorld using GRDB
+/// Local storage implementation of WorkflowWorld
 actor SQLiteWorkflowWorld: WorkflowWorld {
-    private let repository: GRDBRepository
+    private let repository: LocalRepository
 
-    init(repository: GRDBRepository = GRDBRepository()) {
+    init(repository: LocalRepository = LocalRepository()) {
         self.repository = repository
     }
 
