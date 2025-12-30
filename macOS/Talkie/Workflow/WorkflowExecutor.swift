@@ -21,14 +21,8 @@ struct WorkflowContext {
     var date: Date
     var outputs: [String: String] = [:]
 
-    // MARK: - Backend Support (WFKit)
-    /// Reference to the voice memo being processed (needed for LocalSwiftBackend)
-    /// Stored as unowned to avoid retain cycles - memo must outlive context
-    unowned var memo: VoiceMemo
-
-    /// Core Data context for persistence operations
-    /// Stored as unowned to avoid retain cycles
-    unowned var coreDataContext: NSManagedObjectContext
+    /// The memo being processed
+    let memo: MemoModel
 
     /// Filename-safe date formatter (2025-11-26)
     private static let dateFormatter: DateFormatter = {
@@ -173,17 +167,18 @@ class WorkflowExecutor {
         }
     }
 
-    // MARK: - Execute Workflow Definition (new step-based system)
+    // MARK: - Execute Workflow Definition
+
+    /// Execute workflow from MemoModel - pure LocalRepository, no Core Data
     func executeWorkflow(
         _ workflow: WorkflowDefinition,
-        for memo: VoiceMemo,
-        context: NSManagedObjectContext
+        for memo: MemoModel
     ) async throws -> [String: String] {
         // Check if workflow starts with transcription - if so, we don't need a transcript yet
         let startsWithTranscribe = workflow.steps.first?.type == .transcribe
 
         // Require transcript for non-transcription workflows
-        let transcript = memo.currentTranscript ?? ""
+        let transcript = memo.transcription ?? ""
         if !startsWithTranscribe && transcript.isEmpty {
             throw WorkflowError.noTranscript
         }
@@ -205,9 +200,8 @@ class WorkflowExecutor {
         var workflowContext = WorkflowContext(
             transcript: transcript,  // May be empty for transcription-first workflows
             title: memo.title ?? "Untitled",
-            date: memo.createdAt ?? Date(),
-            memo: memo,
-            coreDataContext: context
+            date: memo.createdAt,
+            memo: memo
         )
 
         // Add workflow name to context for use in templates
@@ -221,14 +215,14 @@ class WorkflowExecutor {
         var stepExecutions: [StepExecution] = []
 
         // Log workflow start to console
-        await SystemEventManager.shared.log(.workflow, "Starting: \(workflow.name)", detail: "Memo: \(memo.title ?? "Untitled")")
+        await SystemEventManager.shared.log(.workflow, "Starting: \(workflow.name)", detail: "Memo: \(memo.displayTitle)")
         // Register with pending actions manager
         let pendingActionId = PendingActionsManager.shared.startAction(
             workflowId: workflow.id,
             workflowName: workflow.name,
             workflowIcon: workflow.icon,
             memoId: memo.id,
-            memoTitle: memo.title ?? "Untitled",
+            memoTitle: memo.displayTitle,
             totalSteps: workflow.steps.filter { $0.isEnabled }.count
         )
 
@@ -289,7 +283,7 @@ class WorkflowExecutor {
             let stepStartTime = Date()
             let output: String
             do {
-                output = try await executeStep(step, context: &workflowContext, memo: memo, coreDataContext: context)
+                output = try await executeStep(step, context: &workflowContext)
                 logger.info("✅ Step \(index + 1) completed, output length: \(output.count) chars")
             } catch is TriggerNotMatchedError {
                 // Trigger step didn't match - stop workflow gracefully (not an error)
@@ -325,7 +319,6 @@ class WorkflowExecutor {
                     providerName: usedProvider,
                     modelId: usedModel,
                     memo: memo,
-                    context: context,
                     startedAt: workflowStartTime,
                     completedAt: failedAt,
                     status: .failed,
@@ -372,7 +365,6 @@ class WorkflowExecutor {
             providerName: usedProvider,
             modelId: usedModel,
             memo: memo,
-            context: context,
             startedAt: workflowStartTime,
             completedAt: workflowCompletedTime
         )
@@ -403,8 +395,7 @@ class WorkflowExecutor {
         stepExecutions: [StepExecution],
         providerName: String?,
         modelId: String?,
-        memo: VoiceMemo,
-        context: NSManagedObjectContext,
+        memo: MemoModel,
         startedAt: Date,
         completedAt: Date,
         status: WorkflowRunModel.Status = .completed,
@@ -419,8 +410,8 @@ class WorkflowExecutor {
             stepOutputsJSON = jsonString
         }
 
-        // BRIDGE 2a: Save to GRDB with full event sourcing
-        logger.info("🌉 [Bridge 2] Saving workflow run with event sourcing to GRDB: \(workflow.name)")
+        // Save to LocalRepository (source of truth)
+        logger.info("💾 Saving workflow run to LocalRepository: \(workflow.name)")
         Task {
             do {
                 let repository = LocalRepository()
@@ -440,7 +431,7 @@ class WorkflowExecutor {
                 // 1. Create workflow run
                 let workflowRun = WorkflowRunModel(
                     id: runId,
-                    memoId: memo.id ?? UUID(),
+                    memoId: memo.id,
                     workflowId: workflow.id,
                     workflowName: workflow.name,
                     workflowIcon: workflow.icon,
@@ -450,7 +441,7 @@ class WorkflowExecutor {
                     startedAt: startedAt,
                     completedAt: completedAt,
                     runDate: runDate,
-                    inputTranscript: memo.currentTranscript,
+                    inputTranscript: memo.transcription,
                     inputTitle: memo.title,
                     inputDate: memo.createdAt,
                     output: output,
@@ -541,45 +532,68 @@ class WorkflowExecutor {
                     try await repository.saveWorkflowEvent(runFailedEvent)
                 }
 
-                logger.info("✅ [Event Sourcing] Saved \(eventSequence + 1) workflow events")
-                logger.info("✅ [Bridge 2] Complete workflow run saved to GRDB with full event sourcing")
+                logger.info("✅ Saved \(eventSequence + 1) workflow events")
+                logger.info("💾 Complete workflow run saved to LocalRepository")
+
+                // Sync to Core Data for CloudKit
+                await MainActor.run {
+                    syncWorkflowRunToCoreData(
+                        runId: runId,
+                        workflow: workflow,
+                        output: output,
+                        providerName: providerName,
+                        modelId: modelId,
+                        memoId: memo.id,
+                        runDate: runDate,
+                        stepOutputsJSON: stepOutputsJSON
+                    )
+                }
             } catch {
-                logger.error("❌ [Bridge 2] Failed to save to GRDB: \(error.localizedDescription)")
+                logger.error("❌ Failed to save to LocalRepository: \(error.localizedDescription)")
             }
         }
+    }
 
-        // BRIDGE 2b: Save to Core Data (for CloudKit sync to phone)
-        logger.info("🌉 [Bridge 2] Saving workflow run to Core Data for CloudKit: \(workflow.name)")
-        context.perform {
-            let run = WorkflowRun(context: context)
-            run.id = runId  // Use same ID
-            run.workflowId = workflow.id
-            run.workflowName = workflow.name
-            run.workflowIcon = workflow.icon
-            run.output = output
-            run.providerName = providerName
-            run.modelId = modelId
-            run.runDate = runDate
-            run.status = "completed"
-            run.memo = memo
-            run.memoId = memo.id  // Denormalized for CloudKit querying
-            run.stepOutputsJSON = stepOutputsJSON
+    /// Sync workflow run to Core Data for CloudKit sync
+    @MainActor
+    private func syncWorkflowRunToCoreData(
+        runId: UUID,
+        workflow: WorkflowDefinition,
+        output: String,
+        providerName: String?,
+        modelId: String?,
+        memoId: UUID,
+        runDate: Date,
+        stepOutputsJSON: String?
+    ) {
+        let context = PersistenceController.shared.container.viewContext
+        logger.info("☁️ Syncing workflow run to Core Data for CloudKit: \(workflow.name)")
 
-            do {
-                try context.save()
-                logger.info("✅ [Bridge 2] Saved to Core Data (will sync to CloudKit): \(workflow.name)")
-            } catch {
-                logger.error("❌ [Bridge 2] Failed to save to Core Data: \(error.localizedDescription)")
-            }
+        let run = WorkflowRun(context: context)
+        run.id = runId
+        run.workflowId = workflow.id
+        run.workflowName = workflow.name
+        run.workflowIcon = workflow.icon
+        run.output = output
+        run.providerName = providerName
+        run.modelId = modelId
+        run.runDate = runDate
+        run.status = "completed"
+        run.memoId = memoId
+        run.stepOutputsJSON = stepOutputsJSON
+
+        do {
+            try context.save()
+            logger.info("✅ Synced to Core Data (will sync to CloudKit): \(workflow.name)")
+        } catch {
+            logger.error("❌ Failed to sync to Core Data: \(error.localizedDescription)")
         }
     }
 
     // MARK: - Execute Single Step
     private func executeStep(
         _ step: WorkflowStep,
-        context: inout WorkflowContext,
-        memo: VoiceMemo,
-        coreDataContext: NSManagedObjectContext
+        context: inout WorkflowContext
     ) async throws -> String {
         switch step.config {
         case .llm(let config):
@@ -589,7 +603,7 @@ class WorkflowExecutor {
             return try await executeShellStep(config, context: context)
 
         case .webhook(let config):
-            return try await executeWebhookStep(config, context: context, memo: memo)
+            return try await executeWebhookStep(config, context: context)
 
         case .email(let config):
             return try await executeEmailStep(config, context: context)
@@ -598,7 +612,7 @@ class WorkflowExecutor {
             return try await executeNotificationStep(config, context: context)
 
         case .iOSPush(let config):
-            return try await executeiOSPushStep(config, context: context, memo: memo, coreDataContext: coreDataContext)
+            return try await executeiOSPushStep(config, context: context)
 
         case .appleNotes(let config):
             return try await executeAppleNotesStep(config, context: context)
@@ -622,10 +636,10 @@ class WorkflowExecutor {
             return try executeTransformStep(config, context: context)
 
         case .transcribe(let config):
-            return try await executeTranscribeStep(config, memo: memo, context: context)
+            return try await executeTranscribeStep(config, context: context)
 
         case .speak(let config):
-            return try await executeSpeakStep(config, memo: memo, context: context)
+            return try await executeSpeakStep(config, context: context)
 
         case .trigger(let config):
             return try executeTriggerStep(config, context: context)
@@ -634,7 +648,7 @@ class WorkflowExecutor {
             return try await executeIntentExtractStep(config, context: context)
 
         case .executeWorkflows(let config):
-            return try await executeWorkflowsStep(config, context: context, memo: memo, coreDataContext: coreDataContext)
+            return try await executeWorkflowsStep(config, context: context)
         }
     }
 
@@ -898,7 +912,7 @@ class WorkflowExecutor {
     }
 
     // MARK: - Webhook Step Execution
-    private func executeWebhookStep(_ config: WebhookStepConfig, context: WorkflowContext, memo: VoiceMemo) async throws -> String {
+    private func executeWebhookStep(_ config: WebhookStepConfig, context: WorkflowContext) async throws -> String {
         guard let url = URL(string: config.url) else {
             throw WorkflowError.executionFailed("Invalid webhook URL")
         }
@@ -1006,10 +1020,10 @@ class WorkflowExecutor {
     /// Creates a PushNotification record that iOS subscribes to via CKQuerySubscription
     private func executeiOSPushStep(
         _ config: iOSPushStepConfig,
-        context: WorkflowContext,
-        memo: VoiceMemo,
-        coreDataContext: NSManagedObjectContext
+        context: WorkflowContext
     ) async throws -> String {
+        let memo = context.memo
+
         // Resolve template variables, including workflow name
         var resolvedTitle = context.resolve(config.title)
         var resolvedBody = context.resolve(config.body)
@@ -1024,10 +1038,12 @@ class WorkflowExecutor {
         logger.debug("📱 [iOS Push] Creating push notification record...")
         logger.debug("📱 [iOS Push]   Title: \(resolvedTitle)")
         logger.debug("📱 [iOS Push]   Body: \(resolvedBody)")
-        logger.debug("📱 [iOS Push]   Memo: \(memo.title ?? "Untitled") (ID: \(memo.id?.uuidString.prefix(8) ?? "nil")...)")
+        logger.debug("📱 [iOS Push]   Memo: \(memo.displayTitle) (ID: \(memo.id.uuidString.prefix(8))...)")
         logger.debug("📱 [iOS Push]   Sound: \(config.sound ? "enabled" : "disabled")")
-        // Create PushNotification record in Core Data
-        // This will sync to CloudKit and trigger the iOS CKQuerySubscription
+
+        // Create PushNotification record in Core Data for CloudKit sync
+        // This is one of the few places we need Core Data - for iOS push via CloudKit
+        let coreDataContext = PersistenceController.shared.container.viewContext
         return try await coreDataContext.perform {
             let notificationId = UUID()
             let pushNotification = PushNotification(context: coreDataContext)
@@ -1338,28 +1354,34 @@ class WorkflowExecutor {
     }
 
     // MARK: - Transcribe Step Execution
-    private func executeTranscribeStep(_ config: TranscribeStepConfig, memo: VoiceMemo, context: WorkflowContext) async throws -> String {
+    private func executeTranscribeStep(_ config: TranscribeStepConfig, context: WorkflowContext) async throws -> String {
+        let memo = context.memo
         logger.info("Executing transcribe step: tier=\(config.qualityTier.rawValue), primary=\(config.primaryModel), fallback=\(config.effectiveFallbackModel ?? "none")")
 
         // Check if memo already has a transcript and we're not overwriting
-        if let existingTranscript = memo.currentTranscript, !existingTranscript.isEmpty, !config.overwriteExisting {
+        if let existingTranscript = memo.transcription, !existingTranscript.isEmpty, !config.overwriteExisting {
             logger.info("Memo already has transcript, skipping transcription (overwriteExisting=false)")
             return existingTranscript
         }
 
-        // Get audio data from memo
-        guard let audioData = memo.audioData else {
-            throw WorkflowError.executionFailed("No audio data available for transcription")
+        // Load audio data from local file path
+        guard let audioFilePath = memo.audioFilePath else {
+            throw WorkflowError.executionFailed("No audio file path available for transcription")
         }
 
-        logger.info("Transcribing audio (\(audioData.count) bytes) with \(config.qualityTier.displayName) quality")
+        let audioURL = AudioStorage.url(for: audioFilePath)
+        guard let audioData = try? Data(contentsOf: audioURL) else {
+            throw WorkflowError.executionFailed("Could not load audio from: \(audioFilePath)")
+        }
+
+        logger.info("Transcribing audio (\(audioData.count) bytes) from \(audioFilePath) with \(config.qualityTier.displayName) quality")
 
         // Try primary model first
         do {
             return try await transcribeWithModel(
                 modelId: config.primaryModel,
                 audioData: audioData,
-                memo: memo,
+                memoId: memo.id,
                 config: config,
                 isPrimary: true
             )
@@ -1390,7 +1412,7 @@ class WorkflowExecutor {
             return try await transcribeWithModel(
                 modelId: fallbackModel,
                 audioData: audioData,
-                memo: memo,
+                memoId: memo.id,
                 config: config,
                 isPrimary: false
             )
@@ -1398,31 +1420,43 @@ class WorkflowExecutor {
     }
 
     /// Transcribe using a specific model ID
-    private func transcribeWithModel(modelId: String, audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig, isPrimary: Bool) async throws -> String {
+    private func transcribeWithModel(modelId: String, audioData: Data, memoId: UUID, config: TranscribeStepConfig, isPrimary: Bool) async throws -> String {
         if modelId == "apple_speech" {
-            return try await transcribeWithAppleSpeech(audioData: audioData, memo: memo, config: config)
+            return try await transcribeWithAppleSpeech(audioData: audioData, memoId: memoId, config: config)
         } else {
-            return try await transcribeWithWhisper(modelId: modelId, audioData: audioData, memo: memo, config: config)
+            return try await transcribeWithWhisper(modelId: modelId, audioData: audioData, memoId: memoId, config: config)
         }
     }
 
     /// Transcribe using Apple Speech (no download required)
-    private func transcribeWithAppleSpeech(audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
+    private func transcribeWithAppleSpeech(audioData: Data, memoId: UUID, config: TranscribeStepConfig) async throws -> String {
         await SystemEventManager.shared.log(.workflow, "Transcribing with Apple Speech", detail: "On-device, instant")
         do {
             let transcript = try await AppleSpeechService.shared.transcribe(audioData: audioData)
 
-            // Save transcript to memo if configured
-            if config.saveAsVersion, let context = memo.managedObjectContext {
-                await MainActor.run {
-                    memo.addSystemTranscript(
-                        content: transcript,
-                        fromMacOS: true,
-                        engine: TranscriptEngines.appleSpeech
-                    )
-                    try? context.save()
+            // Save transcript to LocalRepository
+            if config.saveAsVersion {
+                let repository = LocalRepository()
+                let transcriptVersion = TranscriptVersionModel(
+                    id: UUID(),
+                    memoId: memoId,
+                    version: 1, // TODO: increment from existing versions
+                    content: transcript,
+                    sourceType: "system_macos",
+                    engine: TranscriptEngines.appleSpeech,
+                    createdAt: Date(),
+                    transcriptionDurationMs: 0
+                )
+                try? await repository.saveTranscriptVersion(transcriptVersion)
+
+                // Also update the memo's transcription field
+                if let memoData = try? await repository.fetchMemo(id: memoId) {
+                    var memoToUpdate = memoData.memo
+                    memoToUpdate.transcription = transcript
+                    memoToUpdate.lastModified = Date()
+                    try? await repository.saveMemo(memoToUpdate)
                 }
-                logger.info("Saved Apple Speech transcript as new version")
+                logger.info("Saved Apple Speech transcript to LocalRepository")
             }
 
             logger.info("Apple Speech transcription complete: \(transcript.prefix(100))...")
@@ -1435,7 +1469,7 @@ class WorkflowExecutor {
     }
 
     /// Transcribe using Whisper via TalkieEngine (requires model download)
-    private func transcribeWithWhisper(modelId: String, audioData: Data, memo: VoiceMemo, config: TranscribeStepConfig) async throws -> String {
+    private func transcribeWithWhisper(modelId: String, audioData: Data, memoId: UUID, config: TranscribeStepConfig) async throws -> String {
         let modelName = TranscribeStepConfig.availableModels.first { $0.id == modelId }?.name ?? modelId
         await SystemEventManager.shared.log(.workflow, "Transcribing with Whisper", detail: modelName)
 
@@ -1457,17 +1491,29 @@ class WorkflowExecutor {
         do {
             let transcript = try await WhisperService.shared.transcribe(audioData: audioData, model: whisperModel)
 
-            // Save transcript to memo if configured
-            if config.saveAsVersion, let context = memo.managedObjectContext {
-                await MainActor.run {
-                    memo.addSystemTranscript(
-                        content: transcript,
-                        fromMacOS: true,
-                        engine: TranscriptEngines.mlxWhisper
-                    )
-                    try? context.save()
+            // Save transcript to LocalRepository
+            if config.saveAsVersion {
+                let repository = LocalRepository()
+                let transcriptVersion = TranscriptVersionModel(
+                    id: UUID(),
+                    memoId: memoId,
+                    version: 1, // TODO: increment from existing versions
+                    content: transcript,
+                    sourceType: "system_macos",
+                    engine: TranscriptEngines.mlxWhisper,
+                    createdAt: Date(),
+                    transcriptionDurationMs: 0
+                )
+                try? await repository.saveTranscriptVersion(transcriptVersion)
+
+                // Also update the memo's transcription field
+                if let memoData = try? await repository.fetchMemo(id: memoId) {
+                    var memoToUpdate = memoData.memo
+                    memoToUpdate.transcription = transcript
+                    memoToUpdate.lastModified = Date()
+                    try? await repository.saveMemo(memoToUpdate)
                 }
-                logger.info("Saved Whisper transcript as new version")
+                logger.info("Saved Whisper transcript to LocalRepository")
             }
 
             logger.info("Whisper transcription complete: \(transcript.prefix(100))...")
@@ -1481,7 +1527,7 @@ class WorkflowExecutor {
 
     // MARK: - Speak Step Execution (Walkie-Talkie Mode!)
 
-    private func executeSpeakStep(_ config: SpeakStepConfig, memo: VoiceMemo, context: WorkflowContext) async throws -> String {
+    private func executeSpeakStep(_ config: SpeakStepConfig, context: WorkflowContext) async throws -> String {
         logger.info("Executing speak step (Walkie-Talkie mode) with provider: \(config.provider.rawValue)")
         // Resolve text with variables
         let textToSpeak = context.resolve(config.text)
@@ -2039,10 +2085,9 @@ class WorkflowExecutor {
 
     private func executeWorkflowsStep(
         _ config: ExecuteWorkflowsStepConfig,
-        context: WorkflowContext,
-        memo: VoiceMemo,
-        coreDataContext: NSManagedObjectContext
+        context: WorkflowContext
     ) async throws -> String {
+        let memo = context.memo
         logger.info("📋 executeWorkflowsStep started")
         // Get intents from previous step
         let intentsJson = context.resolve(config.intentsKey)
@@ -2098,7 +2143,7 @@ class WorkflowExecutor {
             }
 
             do {
-                _ = try await executeWorkflow(workflow, for: memo, context: coreDataContext)
+                _ = try await executeWorkflow(workflow, for: memo)
                 results.append("\(intent.action): Completed - \(workflow.name)")
                 logger.info("Executed workflow '\(workflow.name)' for intent '\(intent.action)'")
             } catch {

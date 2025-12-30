@@ -219,7 +219,9 @@ struct PendingActionsView: View {
 
                 // Re-run the workflow
                 await SystemEventManager.shared.log(.workflow, "Retrying: \(workflow.name)", detail: "Memo: \(memo.title ?? "Untitled")")
-                _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: viewContext)
+                // Convert VoiceMemo to MemoModel for LocalRepository-based execution
+                let memoModel = MemoModel(from: memo)
+                _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
 
             } catch {
                 await SystemEventManager.shared.log(.error, "Retry failed", detail: error.localizedDescription)

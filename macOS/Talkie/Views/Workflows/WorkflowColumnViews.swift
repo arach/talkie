@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import CoreData
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
@@ -198,30 +197,12 @@ struct WorkflowDetailColumn: View {
 
     private func runWorkflow(_ workflow: WorkflowDefinition, on memo: MemoModel) {
         Task {
-            // Fetch VoiceMemo from Core Data for workflow execution
-            let viewContext = PersistenceController.shared.container.viewContext
-            guard let voiceMemo = fetchVoiceMemo(id: memo.id, context: viewContext) else {
-                await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: "Could not find memo in Core Data")
-                return
-            }
-
             do {
-                let _ = try await WorkflowExecutor.shared.executeWorkflow(
-                    workflow,
-                    for: voiceMemo,
-                    context: viewContext
-                )
+                let _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo)
             } catch {
                 await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }
         }
-    }
-
-    private func fetchVoiceMemo(id: UUID, context: NSManagedObjectContext) -> VoiceMemo? {
-        let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        fetchRequest.fetchLimit = 1
-        return try? context.fetch(fetchRequest).first
     }
 }
 

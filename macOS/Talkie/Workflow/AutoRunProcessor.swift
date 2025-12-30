@@ -117,12 +117,14 @@ class AutoRunProcessor {
                 do {
                     logger.info("AutoRunProcessor: Executing transcription workflow '\(workflow.name)'")
                     await SystemEventManager.shared.log(.workflow, "[AUTO-RUN] Executing: \(workflow.name)", detail: "Transcription workflow starting...")
-                    _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
+                    // Convert VoiceMemo to MemoModel for LocalRepository-based execution
+                    let memoModel = MemoModel(from: memo)
+                    _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
                     successCount += 1
                     logger.info("AutoRunProcessor: Workflow '\(workflow.name)' completed successfully")
                     await SystemEventManager.shared.log(.workflow, "[AUTO-RUN] Completed: \(workflow.name)", detail: "Success")
 
-                    // Refresh memo to pick up new transcript
+                    // Refresh memo to pick up new transcript from sync
                     context.refresh(memo, mergeChanges: true)
                 } catch {
                     failureCount += 1
@@ -144,7 +146,9 @@ class AutoRunProcessor {
                     do {
                         logger.info("AutoRunProcessor: Executing workflow '\(workflow.name)'")
                         await SystemEventManager.shared.log(.workflow, "[AUTO-RUN] Executing: \(workflow.name)", detail: "Post-transcription workflow starting...")
-                        _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
+                        // Convert VoiceMemo to MemoModel for LocalRepository-based execution
+                        let memoModel = MemoModel(from: memo)
+                        _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
                         successCount += 1
                         logger.info("AutoRunProcessor: Workflow '\(workflow.name)' completed successfully")
                         await SystemEventManager.shared.log(.workflow, "[AUTO-RUN] Completed: \(workflow.name)", detail: "Success")
@@ -244,8 +248,15 @@ class AutoRunProcessor {
     }
 
     /// Run a specific workflow on a memo (for testing/manual execution)
-    func runWorkflow(_ workflow: WorkflowDefinition, on memo: VoiceMemo, context: NSManagedObjectContext) async throws {
+    func runWorkflow(_ workflow: WorkflowDefinition, on memo: VoiceMemo) async throws {
         logger.info("AutoRunProcessor: Manual run of '\(workflow.name)' on '\(memo.title ?? "Untitled")'")
-        _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo, context: context)
+        let memoModel = MemoModel(from: memo)
+        _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
+    }
+
+    /// Run a specific workflow on a MemoModel (preferred)
+    func runWorkflow(_ workflow: WorkflowDefinition, on memo: MemoModel) async throws {
+        logger.info("AutoRunProcessor: Manual run of '\(workflow.name)' on '\(memo.displayTitle)'")
+        _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo)
     }
 }

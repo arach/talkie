@@ -85,10 +85,12 @@ protocol MemoRepository: Actor {
     func totalDuration() async throws -> Double
 
     /// Fetch memos that have transcription
-    func fetchTranscribedMemos() async throws -> [MemoModel]
+    /// - Parameter limit: Maximum number of memos to return (default 100)
+    func fetchTranscribedMemos(limit: Int) async throws -> [MemoModel]
 
-    /// Fetch memos that need transcription (no transcription or empty)
-    func fetchUntranscribedMemos() async throws -> [MemoModel]
+    /// Fetch memos that need transcription (no transcription or empty, not currently transcribing)
+    /// - Parameter limit: Maximum number of memos to return (default 100)
+    func fetchUntranscribedMemos(limit: Int) async throws -> [MemoModel]
 }
 
 // MARK: - Memo with Relationships

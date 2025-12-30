@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import CoreData
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
@@ -181,30 +180,12 @@ struct WorkflowsContentView: View {
 
     private func runWorkflow(_ workflow: WorkflowDefinition, on memo: MemoModel) {
         Task {
-            // Fetch VoiceMemo from Core Data for workflow execution
-            let viewContext = PersistenceController.shared.container.viewContext
-            guard let voiceMemo = fetchVoiceMemo(id: memo.id, context: viewContext) else {
-                await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: "Could not find memo in Core Data")
-                return
-            }
-
             do {
-                let _ = try await WorkflowExecutor.shared.executeWorkflow(
-                    workflow,
-                    for: voiceMemo,
-                    context: viewContext
-                )
+                let _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo)
             } catch {
                 await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }
         }
-    }
-
-    private func fetchVoiceMemo(id: UUID, context: NSManagedObjectContext) -> VoiceMemo? {
-        let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        fetchRequest.fetchLimit = 1
-        return try? context.fetch(fetchRequest).first
     }
 }
 
@@ -362,12 +343,6 @@ struct WorkflowMemoSelectorSheet: View {
 private struct WorkflowMemoRow: View {
     let memo: MemoModel
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.timeStyle = .short
-        return f
-    }()
-
     var body: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
@@ -506,24 +481,24 @@ struct WorkflowCard: View {
         showingMemoSelector = false
 
         Task {
-            // Fetch VoiceMemo from Core Data for workflow execution
-            let viewContext = PersistenceController.shared.container.viewContext
-            guard let voiceMemo = fetchVoiceMemo(id: memo.id, context: viewContext) else {
-                await MainActor.run {
-                    errorMessage = "Could not find memo"
-                    isExecuting = false
-                }
-                return
-            }
-
             do {
-                try await WorkflowExecutor.shared.execute(
-                    action: actionType,
-                    for: voiceMemo,
-                    providerName: provider,
-                    modelId: model,
-                    context: viewContext
+                // Use the new MemoModel-based execution
+                let workflow = WorkflowDefinition(
+                    name: title,
+                    description: description,
+                    steps: [
+                        WorkflowStep(
+                            type: actionType == .summarize ? .llm : .llm,
+                            config: .llm(LLMStepConfig(
+                                provider: WorkflowLLMProvider.fromDisplayName(provider),
+                                modelId: model,
+                                prompt: actionType.systemPrompt.replacingOccurrences(of: "{{TRANSCRIPT}}", with: "{{transcript}}")
+                            )),
+                            outputKey: "result"
+                        )
+                    ]
                 )
+                let _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo)
                 await MainActor.run {
                     isExecuting = false
                 }
@@ -534,13 +509,6 @@ struct WorkflowCard: View {
                 }
             }
         }
-    }
-
-    private func fetchVoiceMemo(id: UUID, context: NSManagedObjectContext) -> VoiceMemo? {
-        let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        fetchRequest.fetchLimit = 1
-        return try? context.fetch(fetchRequest).first
     }
 }
 

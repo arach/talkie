@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CoreData
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "LocalSwiftBackend")
@@ -23,17 +22,12 @@ final class LocalSwiftBackend: ExecutionBackend {
     // MARK: - Properties
 
     private let executor: WorkflowExecutor
-    private let coreDataContext: NSManagedObjectContext
 
     // MARK: - Initialization
 
     @MainActor
-    init(
-        executor: WorkflowExecutor = .shared,
-        coreDataContext: NSManagedObjectContext
-    ) {
+    init(executor: WorkflowExecutor = .shared) {
         self.executor = executor
-        self.coreDataContext = coreDataContext
     }
 
     // MARK: - ExecutionBackend Protocol
@@ -48,8 +42,7 @@ final class LocalSwiftBackend: ExecutionBackend {
         // This keeps all your existing step implementations working!
         let outputs = try await executor.executeWorkflow(
             workflow,
-            for: context.memo,
-            context: context.coreDataContext
+            for: context.memo
         )
 
         logger.info("✅ LocalSwiftBackend completed: \(outputs.count) outputs")
@@ -74,8 +67,7 @@ final class LocalSwiftBackend: ExecutionBackend {
 
         let outputs = try await executor.executeWorkflow(
             miniWorkflow,
-            for: context.memo,
-            context: context.coreDataContext
+            for: context.memo
         )
 
         let duration = Date().timeIntervalSince(startTime)

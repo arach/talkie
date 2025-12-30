@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CoreData
 
 // MARK: - Workflow World Protocol
 
@@ -38,8 +37,8 @@ protocol WorkflowWorld {
 
 // MARK: - Local Storage Implementation
 
-/// Local storage implementation of WorkflowWorld
-actor SQLiteWorkflowWorld: WorkflowWorld {
+/// Local storage implementation of WorkflowWorld using LocalRepository
+actor LocalWorkflowWorld: WorkflowWorld {
     private let repository: LocalRepository
 
     init(repository: LocalRepository = LocalRepository()) {
@@ -159,4 +158,4 @@ enum WorkflowWorldError: Error, LocalizedError {
 
 // MARK: - Sendable Conformance
 
-extension SQLiteWorkflowWorld: Sendable {}
+extension LocalWorkflowWorld: Sendable {}

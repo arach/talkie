@@ -358,7 +358,7 @@ final class MemosViewModel {
     /// Load transcribed memos (for workflow memo selection)
     func loadTranscribedMemos() async {
         do {
-            transcribedMemos = try await repository.fetchTranscribedMemos()
+            transcribedMemos = try await repository.fetchTranscribedMemos(limit: 100)
         } catch {
             log.error("Failed to load transcribed memos: \(error.localizedDescription)")
         }
@@ -367,7 +367,7 @@ final class MemosViewModel {
     /// Load untranscribed memos (for transcription workflows)
     func loadUntranscribedMemos() async {
         do {
-            untranscribedMemos = try await repository.fetchUntranscribedMemos()
+            untranscribedMemos = try await repository.fetchUntranscribedMemos(limit: 100)
         } catch {
             log.error("Failed to load untranscribed memos: \(error.localizedDescription)")
         }

@@ -570,7 +570,7 @@ extension LocalRepository {
     }
 
     /// Fetch memos that have transcription
-    func fetchTranscribedMemos() async throws -> [MemoModel] {
+    func fetchTranscribedMemos(limit: Int = 100) async throws -> [MemoModel] {
         try await instrumentRepositoryRead("fetchTranscribedMemos") {
             let db = try await dbManager.database()
 
@@ -580,13 +580,14 @@ extension LocalRepository {
                     .filter(MemoModel.Columns.transcription != nil)
                     .filter(MemoModel.Columns.transcription != "")
                     .order(MemoModel.Columns.createdAt.desc)
+                    .limit(limit)
                     .fetchAll(db)
             }
         }
     }
 
-    /// Fetch memos that need transcription (no transcription or empty)
-    func fetchUntranscribedMemos() async throws -> [MemoModel] {
+    /// Fetch memos that need transcription (no transcription or empty, not currently transcribing)
+    func fetchUntranscribedMemos(limit: Int = 100) async throws -> [MemoModel] {
         try await instrumentRepositoryRead("fetchUntranscribedMemos") {
             let db = try await dbManager.database()
 
@@ -594,7 +595,9 @@ extension LocalRepository {
                 try MemoModel
                     .filter(MemoModel.Columns.deletedAt == nil)
                     .filter(MemoModel.Columns.transcription == nil || MemoModel.Columns.transcription == "")
+                    .filter(MemoModel.Columns.isTranscribing == false)  // Exclude in-progress
                     .order(MemoModel.Columns.createdAt.desc)
+                    .limit(limit)
                     .fetchAll(db)
             }
         }

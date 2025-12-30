@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CoreData
 
 // MARK: - Execution Backend Protocol
 
@@ -198,7 +197,7 @@ extension WorkflowContext {
     }
 
     /// Create context from JSON (for remote execution results)
-    static func fromJSON(_ json: [String: Any], memo: VoiceMemo, date: Date, coreDataContext: NSManagedObjectContext) -> WorkflowContext {
+    static func fromJSON(_ json: [String: Any], memo: MemoModel, date: Date) -> WorkflowContext {
         let transcript = json["transcript"] as? String ?? ""
         let title = json["title"] as? String ?? "Untitled"
         let outputs = json["outputs"] as? [String: String] ?? [:]
@@ -207,8 +206,7 @@ extension WorkflowContext {
             transcript: transcript,
             title: title,
             date: date,
-            memo: memo,
-            coreDataContext: coreDataContext
+            memo: memo
         )
         context.outputs = outputs
         return context
