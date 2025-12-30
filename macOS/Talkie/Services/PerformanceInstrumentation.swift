@@ -384,7 +384,7 @@ final class PerformanceMonitor {
     func addOperation(category: OperationCategory, name: String, duration: TimeInterval) {
         guard let actionID = activeActionID,
               let index = actions.firstIndex(where: { $0.id == actionID }) else {
-            print("⚠️ No active action to add operation to: [\(category.rawValue)] \(name)")
+            // Silently ignore operations without an active action - this is normal for background work
             return
         }
 

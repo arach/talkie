@@ -48,6 +48,23 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		A1B2C3D4E5F60718293A4B5C /* Install to Debug Path */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Install to Debug Path";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Only run for Debug builds\nif [ \"$CONFIGURATION\" = \"Debug\" ]; then\n    DEST=\"$HOME/Library/Developer/Talkie/Debug\"\n    mkdir -p \"$DEST\"\n    \n    # Remove old and copy new\n    rm -rf \"$DEST/TalkieEngine.app\"\n    cp -R \"$BUILT_PRODUCTS_DIR/TalkieEngine.app\" \"$DEST/\"\n    \n    echo \"Installed TalkieEngine to $DEST\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXGroup section */
 		76572ACDD8635BEDB04EA761 /* Views */ = {
 			isa = PBXGroup;
@@ -108,6 +125,7 @@
 			buildPhases = (
 				82150A47A9A7BBA9732F261D /* Sources */,
 				8241F25777B3728534E76120 /* Frameworks */,
+				A1B2C3D4E5F60718293A4B5C /* Install to Debug Path */,
 			);
 			buildRules = (
 			);

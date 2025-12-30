@@ -35,8 +35,28 @@ protocol MemoRepository: Actor {
     /// Save or update memo
     func saveMemo(_ memo: MemoModel) async throws
 
-    /// Delete memo
+    /// Delete memo (hard delete)
     func deleteMemo(id: UUID) async throws
+
+    // MARK: - Soft Delete
+
+    /// Soft delete a memo (set deletedAt timestamp)
+    func softDeleteMemo(id: UUID) async throws
+
+    /// Soft delete multiple memos
+    func softDeleteMemos(ids: Set<UUID>) async throws
+
+    /// Fetch memos pending deletion
+    func fetchPendingDeletions() async throws -> [MemoModel]
+
+    /// Count memos pending deletion
+    func countPendingDeletions() async throws -> Int
+
+    /// Restore a soft-deleted memo
+    func restoreMemo(id: UUID) async throws
+
+    /// Hard delete (permanent) - use after user confirms
+    func hardDeleteMemo(id: UUID) async throws
 
     /// Fetch transcript versions for a memo
     func fetchTranscriptVersions(for memoId: UUID) async throws -> [TranscriptVersionModel]

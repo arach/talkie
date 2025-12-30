@@ -32,6 +32,10 @@ struct AllMemos: View {
     @State private var dateColumnWidth: CGFloat = 90
     @State private var dragStartWidth: CGFloat = 0
 
+    // Delete confirmation
+    @State private var showDeleteConfirmation = false
+    @State private var memosToDelete: Set<UUID> = []
+
 
     // View mode: auto switches based on count, or user can force
     enum ViewMode: String, CaseIterable {
@@ -127,6 +131,9 @@ struct AllMemos: View {
         .onReceive(NotificationCenter.default.publisher(for: .talkieSyncCompleted)) { _ in
             // Refresh after CloudKit sync completes
             Task { await viewModel.refresh() }
+        }
+        .alert(isPresented: $showDeleteConfirmation) {
+            deleteConfirmationAlert
         }
     }
 
@@ -331,6 +338,7 @@ struct AllMemos: View {
                                 }
                             )
                             .id(memo.id)
+                            .contextMenu { memoContextMenu(for: memo) }
                             .onAppear {
                                 if memo.id == viewModel.memos.last?.id {
                                     Task { await viewModel.loadNextPage() }
@@ -357,6 +365,7 @@ struct AllMemos: View {
                                     isEvenRow: index.isMultiple(of: 2)
                                 )
                                 .id(memo.id)
+                                .contextMenu { memoContextMenu(for: memo) }
                                 .animation(.easeIn(duration: 0.15), value: isMultiSelectMode)
                                 .onAppear {
                                     if memo.id == viewModel.memos.last?.id {
@@ -606,6 +615,24 @@ struct AllMemos: View {
                     .buttonStyle(.plain)
 
                     Button {
+                        memosToDelete = selectedMemoIDs
+                        showDeleteConfirmation = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10))
+                            Text("Delete")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(CornerRadius.xs)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
                         selectedMemoIDs.removeAll()
                     } label: {
                         Image(systemName: "xmark")
@@ -686,19 +713,30 @@ struct AllMemos: View {
                     }
 
                     // Bulk action buttons
-                    HStack(spacing: 10) {
-                        Button {
-                            // Export all selected
-                        } label: {
-                            Label("Export", systemImage: "square.and.arrow.up")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
+                    VStack(spacing: 10) {
+                        HStack(spacing: 10) {
+                            Button {
+                                // Export all selected
+                            } label: {
+                                Label("Export", systemImage: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
 
-                        Button {
-                            selectedMemoIDs.removeAll()
+                            Button {
+                                selectedMemoIDs.removeAll()
+                            } label: {
+                                Label("Clear", systemImage: "xmark")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
+                        Button(role: .destructive) {
+                            memosToDelete = selectedMemoIDs
+                            showDeleteConfirmation = true
                         } label: {
-                            Label("Clear", systemImage: "xmark")
+                            Label("Delete \(selectedMemoIDs.count) Memos", systemImage: "trash")
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -780,6 +818,86 @@ struct AllMemos: View {
             logger.error("Failed to fetch VoiceMemo: \(error.localizedDescription)")
             selectedVoiceMemo = nil
         }
+    }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private func memoContextMenu(for memo: MemoModel) -> some View {
+        // Copy transcript
+        Button {
+            if let transcript = memo.transcription, !transcript.isEmpty {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(transcript, forType: .string)
+            }
+        } label: {
+            Label("Copy Transcript", systemImage: "doc.on.doc")
+        }
+        .disabled(memo.transcription?.isEmpty ?? true)
+
+        // Copy title
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(memo.displayTitle, forType: .string)
+        } label: {
+            Label("Copy Title", systemImage: "textformat")
+        }
+
+        Divider()
+
+        // Show in Finder (if audio file exists)
+        if let audioPath = memo.audioFilePath {
+            Button {
+                let url = URL(fileURLWithPath: audioPath)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Label("Show in Finder", systemImage: "folder")
+            }
+        }
+
+        // Re-transcribe
+        Button {
+            // Select this memo and trigger re-transcribe via detail view
+            selectedMemoIDs = [memo.id]
+            loadVoiceMemo(id: memo.id)
+        } label: {
+            Label("Re-transcribe", systemImage: "arrow.triangle.2.circlepath")
+        }
+
+        Divider()
+
+        // Delete
+        Button(role: .destructive) {
+            memosToDelete = [memo.id]
+            showDeleteConfirmation = true
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    // MARK: - Delete Confirmation
+
+    private var deleteConfirmationAlert: Alert {
+        let count = memosToDelete.count
+        let title = count == 1 ? "Delete Memo?" : "Delete \(count) Memos?"
+        let message = count == 1
+            ? "This memo will be moved to pending deletions. Approve in Sync Manager (cloud icon) to permanently delete."
+            : "These \(count) memos will be moved to pending deletions. Approve in Sync Manager (cloud icon) to permanently delete."
+
+        return Alert(
+            title: Text(title),
+            message: Text(message),
+            primaryButton: .destructive(Text("Delete")) {
+                Task {
+                    await viewModel.deleteMemos(memosToDelete)
+                    selectedMemoIDs.subtract(memosToDelete)
+                    memosToDelete.removeAll()
+                }
+            },
+            secondaryButton: .cancel {
+                memosToDelete.removeAll()
+            }
+        )
     }
 }
 

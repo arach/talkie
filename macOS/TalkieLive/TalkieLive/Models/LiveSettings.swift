@@ -10,91 +10,8 @@ import SwiftUI
 import Carbon.HIToolbox
 import TalkieKit
 
-// MARK: - Appearance Options
-
-enum OverlayStyle: String, CaseIterable, Codable {
-    case particles = "particles"
-    case particlesCalm = "particlesCalm"
-    case waveform = "waveform"
-    case waveformSensitive = "waveformSensitive"
-    case pillOnly = "pillOnly"
-
-    var displayName: String {
-        switch self {
-        case .particles: return "Particles"
-        case .particlesCalm: return "Particles (Calm)"
-        case .waveform: return "Waveform"
-        case .waveformSensitive: return "Waveform (Sensitive)"
-        case .pillOnly: return "Pill Only"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .particles: return "Responsive particles that react to your voice"
-        case .particlesCalm: return "Smooth, relaxed particle flow"
-        case .waveform: return "Scrolling audio bars"
-        case .waveformSensitive: return "Waveform with enhanced low-level response"
-        case .pillOnly: return "No top overlay, just the bottom pill"
-        }
-    }
-
-    var showsTopOverlay: Bool {
-        switch self {
-        case .particles, .particlesCalm, .waveform, .waveformSensitive: return true
-        case .pillOnly: return false
-        }
-    }
-}
-
-/// Position for the recording indicator (particles/waveform overlay)
-enum IndicatorPosition: String, CaseIterable, Codable {
-    case topCenter = "topCenter"
-    case topLeft = "topLeft"
-    case topRight = "topRight"
-
-    var displayName: String {
-        switch self {
-        case .topCenter: return "Top Center"
-        case .topLeft: return "Top Left"
-        case .topRight: return "Top Right"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .topCenter: return "Centered at top of screen"
-        case .topLeft: return "Upper left corner"
-        case .topRight: return "Upper right corner"
-        }
-    }
-}
-
-/// Position for the floating pill widget
-enum PillPosition: String, CaseIterable, Codable {
-    case bottomCenter = "bottomCenter"
-    case bottomLeft = "bottomLeft"
-    case bottomRight = "bottomRight"
-    case topCenter = "topCenter"
-
-    var displayName: String {
-        switch self {
-        case .bottomCenter: return "Bottom Center"
-        case .bottomLeft: return "Bottom Left"
-        case .bottomRight: return "Bottom Right"
-        case .topCenter: return "Top Center"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .bottomCenter: return "Centered at bottom edge"
-        case .bottomLeft: return "Lower left corner"
-        case .bottomRight: return "Lower right corner"
-        case .topCenter: return "Centered at top edge"
-        }
-    }
-}
+// MARK: - Appearance Types (from TalkieKit)
+// OverlayStyle, IndicatorPosition, PillPosition are now in TalkieKit
 
 // Legacy compatibility alias
 typealias OverlayPosition = IndicatorPosition
@@ -459,6 +376,11 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Show "On Air" indicator while recording
+    @Published var showOnAir: Bool {
+        didSet { save() }
+    }
+
     @Published var startSound: TalkieSound {
         didSet { save() }
     }
@@ -511,6 +433,11 @@ final class LiveSettings: ObservableObject {
 
     /// Whether to activate the start app after pasting
     @Published var returnToOriginAfterPaste: Bool {
+        didSet { save() }
+    }
+
+    /// Press Enter/Return after pasting (useful for chat apps, terminals)
+    @Published var pressEnterAfterPaste: Bool {
         didSet { save() }
     }
 
@@ -593,6 +520,7 @@ final class LiveSettings: ObservableObject {
         // Load pill settings
         self.pillShowOnAllScreens = store.object(forKey: LiveSettingsKey.pillShowOnAllScreens) as? Bool ?? true
         self.pillExpandsDuringRecording = store.object(forKey: LiveSettingsKey.pillExpandsDuringRecording) as? Bool ?? true
+        self.showOnAir = store.object(forKey: LiveSettingsKey.showOnAir) as? Bool ?? true
 
         // Load sounds (default to pop for start/finish, tink for pasted)
         if let rawValue = store.string(forKey: LiveSettingsKey.startSound),
@@ -666,6 +594,7 @@ final class LiveSettings: ObservableObject {
 
         // Load return to origin setting (default: false)
         self.returnToOriginAfterPaste = store.bool(forKey: LiveSettingsKey.returnToOriginAfterPaste)
+        self.pressEnterAfterPaste = store.bool(forKey: LiveSettingsKey.pressEnterAfterPaste)
 
         // Apply TTL to store
         DictationStore.shared.ttlHours = dictationTTLHours
@@ -693,6 +622,7 @@ final class LiveSettings: ObservableObject {
         store.set(pillPosition.rawValue, forKey: LiveSettingsKey.pillPosition)
         store.set(pillShowOnAllScreens, forKey: LiveSettingsKey.pillShowOnAllScreens)
         store.set(pillExpandsDuringRecording, forKey: LiveSettingsKey.pillExpandsDuringRecording)
+        store.set(showOnAir, forKey: LiveSettingsKey.showOnAir)
         store.set(startSound.rawValue, forKey: LiveSettingsKey.startSound)
         store.set(finishSound.rawValue, forKey: LiveSettingsKey.finishSound)
         store.set(pastedSound.rawValue, forKey: LiveSettingsKey.pastedSound)
@@ -703,6 +633,7 @@ final class LiveSettings: ObservableObject {
         store.set(primaryContextSource.rawValue, forKey: LiveSettingsKey.primaryContextSource)
         store.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
         store.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)
+        store.set(pressEnterAfterPaste, forKey: LiveSettingsKey.pressEnterAfterPaste)
     }
 
     // MARK: - Appearance Application

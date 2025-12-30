@@ -141,12 +141,18 @@ struct SyncHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(CloudKitSyncManager.self) private var syncManager
 
+    @State private var pendingDeletions: [MemoModel] = []
+    @State private var selectedDeletions: Set<UUID> = []
+    @State private var isLoadingDeletions = false
+
+    private let viewModel = MemosViewModel()
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Sync History")
+                    Text("Sync Manager")
                         .font(.system(size: 16, weight: .semibold))
 
                     if let lastSync = syncManager.lastSyncDate {
@@ -178,24 +184,45 @@ struct SyncHistoryView: View {
 
             Divider()
 
-            // Sync Events List
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    if syncManager.syncHistory.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 48))
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                            Text("No sync history yet")
-                                .font(.system(size: 14))
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.top, 80)
-                    } else {
-                        ForEach(syncManager.syncHistory) { event in
-                            SyncEventRow(event: event)
-                            Divider()
+                    // Pending Deletions Section
+                    if !pendingDeletions.isEmpty {
+                        PendingDeletionsSection(
+                            deletions: pendingDeletions,
+                            selectedDeletions: $selectedDeletions,
+                            onApprove: approveDeletions,
+                            onRestore: restoreDeletions
+                        )
+
+                        Divider()
+                            .padding(.vertical, 8)
+                    }
+
+                    // Sync History Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Sync History")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+
+                        if syncManager.syncHistory.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                Text("No sync history yet")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                        } else {
+                            ForEach(syncManager.syncHistory) { event in
+                                SyncEventRow(event: event)
+                                Divider()
+                            }
                         }
                     }
                 }
@@ -203,12 +230,184 @@ struct SyncHistoryView: View {
         }
         .frame(width: 600, height: 500)
         .background(Color(nsColor: .windowBackgroundColor))
+        .task {
+            await loadPendingDeletions()
+        }
+    }
+
+    private func loadPendingDeletions() async {
+        isLoadingDeletions = true
+        pendingDeletions = await viewModel.fetchPendingDeletions()
+        isLoadingDeletions = false
+    }
+
+    private func approveDeletions() {
+        let idsToDelete = selectedDeletions.isEmpty
+            ? Set(pendingDeletions.map(\.id))
+            : selectedDeletions
+
+        Task {
+            await viewModel.permanentlyDeleteMemos(idsToDelete)
+            await loadPendingDeletions()
+            selectedDeletions.removeAll()
+        }
+    }
+
+    private func restoreDeletions() {
+        let idsToRestore = selectedDeletions.isEmpty
+            ? Set(pendingDeletions.map(\.id))
+            : selectedDeletions
+
+        Task {
+            await viewModel.restoreMemos(idsToRestore)
+            await loadPendingDeletions()
+            selectedDeletions.removeAll()
+        }
     }
 
     private func formatRelativeTime(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - Pending Deletions Section
+
+struct PendingDeletionsSection: View {
+    let deletions: [MemoModel]
+    @Binding var selectedDeletions: Set<UUID>
+
+    let onApprove: () -> Void
+    let onRestore: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Image(systemName: "trash.circle.fill")
+                    .foregroundColor(.orange)
+                Text("Pending Deletions")
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text("(\(deletions.count))")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Spacer()
+
+                // Action buttons
+                HStack(spacing: 8) {
+                    Button(action: onRestore) {
+                        Label(
+                            selectedDeletions.isEmpty ? "Restore All" : "Restore",
+                            systemImage: "arrow.uturn.backward"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onApprove) {
+                        Label(
+                            selectedDeletions.isEmpty ? "Delete All" : "Delete",
+                            systemImage: "trash"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            // Deletion list
+            VStack(spacing: 0) {
+                ForEach(deletions) { memo in
+                    PendingDeletionRow(
+                        memo: memo,
+                        isSelected: selectedDeletions.contains(memo.id),
+                        onToggle: {
+                            if selectedDeletions.contains(memo.id) {
+                                selectedDeletions.remove(memo.id)
+                            } else {
+                                selectedDeletions.insert(memo.id)
+                            }
+                        }
+                    )
+                    Divider()
+                        .padding(.leading, 48)
+                }
+            }
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+            .cornerRadius(8)
+            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 8)
+    }
+}
+
+// MARK: - Pending Deletion Row
+
+struct PendingDeletionRow: View {
+    let memo: MemoModel
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                // Selection checkbox
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(isSelected ? .accentColor : Theme.current.foregroundSecondary)
+
+                // Source icon
+                Image(systemName: memo.source.icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(memo.source.color)
+                    .frame(width: 20)
+
+                // Memo info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(memo.displayTitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        if let deletedAt = memo.deletedAt {
+                            Text("Deleted \(formatRelativeTime(deletedAt))")
+                                .font(.system(size: 10))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+
+                        if memo.duration > 0 {
+                            Text("•")
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Text(formatDuration(memo.duration))
+                                .font(.system(size: 10))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func formatRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

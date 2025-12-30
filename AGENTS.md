@@ -452,6 +452,37 @@ git commit -m "♻️ Refactor to async/await"
 - [ ] No hardcoded strings (use Localizable.strings)
 - [ ] No secrets in code
 - [ ] No hardcoded file paths (see below)
+- [ ] No direct os.log usage (use TalkieLogger)
+
+---
+
+## Logging
+
+**ALWAYS use TalkieLogger. NEVER use os.log directly.**
+
+```swift
+import TalkieKit
+
+private let log = Log(.database)
+
+// Usage
+log.info("Starting operation")
+log.debug("Details: \(value)")
+log.warning("Something unexpected")
+log.error("Failed: \(error)")
+log.info("Critical startup", critical: true)  // Synchronous, crash-safe
+```
+
+**Categories:** `.system`, `.audio`, `.transcription`, `.database`, `.xpc`, `.sync`, `.ui`, `.workflow`
+
+**Do NOT use:**
+- `import os.log` or `import os`
+- `Logger(subsystem:category:)`
+- `os_log()` / `os_signpost()`
+- `print()` (except temporary debugging)
+- `NSLog()`
+
+TalkieLogger routes to Console.app, file logs, and handles critical startup logging. SwiftLint will flag violations.
 
 ---
 

@@ -38,6 +38,7 @@ public enum LiveSettingsKey {
     // MARK: Routing & Output
     public static let routingMode = "routingMode"
     public static let returnToOriginAfterPaste = "returnToOriginAfterPaste"
+    public static let pressEnterAfterPaste = "pressEnterAfterPaste"
     public static let primaryContextSource = "primaryContextSource"
     public static let contextCaptureDetail = "contextCaptureDetail"
 

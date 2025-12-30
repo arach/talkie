@@ -19,6 +19,7 @@
 
 import SwiftUI
 import CoreData
+import UniformTypeIdentifiers
 
 enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
@@ -80,6 +81,11 @@ struct TalkieNavigationViewNative: View {
 
     // Column visibility (NavigationSplitView manages this for us)
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+
+    // App-wide audio drop zone state
+    @State private var isDropTargeted = false
+    @State private var dropProgress: AudioDropService.DropProgress?
+    @State private var dropError: String?
 
     // Optional initializer for screenshot capture with specific navigation state
     init(initialSection: NavigationSection? = .home, initialSettingsSection: SettingsSection = .appearance) {
@@ -163,6 +169,15 @@ struct TalkieNavigationViewNative: View {
             // Full-width status bar at bottom
             StatusBar()
         }
+        // App-wide audio drop zone
+        .onDrop(of: AudioDropService.supportedUTTypes, isTargeted: $isDropTargeted) { providers in
+            handleAudioDrop(providers)
+        }
+        .overlay {
+            if isDropTargeted || dropProgress != nil || dropError != nil {
+                audioDropOverlay
+            }
+        }
         // Note: NavigationSplitView provides its own sidebar toggle with hiddenTitleBar
         // Don't add a custom one or you'll get duplicates
         .onChange(of: selectedSection) { oldValue, newValue in
@@ -204,6 +219,116 @@ struct TalkieNavigationViewNative: View {
         }
     }
 
+    // MARK: - Audio Drop Zone
+
+    /// Handle dropped audio files - creates a VoiceMemo
+    private func handleAudioDrop(_ providers: [NSItemProvider]) -> Bool {
+        Task {
+            do {
+                let memo = try await AudioDropService.shared.processDroppedAudio(
+                    providers: providers,
+                    onProgress: { progress in
+                        self.dropProgress = progress
+                        if case .complete = progress {
+                            // Clear after short delay
+                            Task {
+                                try? await Task.sleep(for: .milliseconds(500))
+                                self.dropProgress = nil
+                            }
+                        }
+                    }
+                )
+
+                // Navigate to the new memo
+                selectedSection = .allMemos
+                NotificationCenter.default.post(
+                    name: .init("SelectMemo"),
+                    object: memo.id
+                )
+            } catch {
+                dropError = error.localizedDescription
+                // Clear error after delay
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    dropError = nil
+                }
+            }
+        }
+        return true
+    }
+
+    /// Visual overlay for audio drop zone
+    private var audioDropOverlay: some View {
+        ZStack {
+            // Semi-transparent background
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            // Center content
+            VStack(spacing: Spacing.md) {
+                if let error = dropError {
+                    // Error state
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.red)
+                    Text(error)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                } else if let progress = dropProgress {
+                    // Progress states
+                    switch progress {
+                    case .validating, .copying, .extractingMetadata:
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
+                        Text("Preparing...")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                    case .transcribing(let filename, let size):
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
+                        Text("Transcribing \(size)...")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Text(filename)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.7))
+                    case .complete:
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.green)
+                        Text("Memo created!")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                    }
+                } else {
+                    // Drag target state
+                    Image(systemName: "waveform.badge.plus")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.white)
+                    Text("Drop audio file to transcribe")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text("m4a, mp3, wav, aac, flac, ogg, caf")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            .padding(Spacing.xxl)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.lg)
+                    .stroke(Color.white.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.lg)
+                            .fill(Color.black.opacity(0.5))
+                    )
+            )
+        }
+        .animation(.easeInOut(duration: 0.2), value: isDropTargeted)
+        .animation(.easeInOut(duration: 0.2), value: dropProgress)
+    }
+
     // MARK: - Sidebar
 
     private var sidebarView: some View {
@@ -224,11 +349,6 @@ struct TalkieNavigationViewNative: View {
             SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Recordings", icon: "square.stack")
             SidebarRow(section: .liveRecent, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic")
 
-            // Live
-            Section(settings.uiAllCaps ? "LIVE" : "Live") {
-                SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Stats", icon: "waveform.path.ecg")
-            }
-
             // Activity
             Section(settings.uiAllCaps ? "ACTIVITY" : "Activity") {
                 SidebarRow(section: .aiResults, selectedSection: $selectedSection, title: "Actions", icon: "chart.line.uptrend.xyaxis")
@@ -238,7 +358,9 @@ struct TalkieNavigationViewNative: View {
 
             // Tools
             Section(settings.uiAllCaps ? "TOOLS" : "Tools") {
-                SidebarRow(section: .scratchPad, selectedSection: $selectedSection, title: "Commands", icon: "mic")
+                SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Stats", icon: "waveform.path.ecg")
+
+                SidebarRow(section: .scratchPad, selectedSection: $selectedSection, title: "Scratch Pad", icon: "note.text")
 
                 SidebarRow(section: .workflows, selectedSection: $selectedSection, title: "Workflows", icon: "wand.and.stars")
 

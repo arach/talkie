@@ -515,6 +515,28 @@ TalkieDebugToolbar {
 - **Spacing**: Use `Spacing.sm/md/lg` not raw numbers
 - **Debug compliance**: Press ⌘⇧D → Audit button
 
+### Logging (TalkieLogger)
+
+**ALWAYS use TalkieLogger. NEVER use os.log directly.**
+
+```swift
+import TalkieKit
+
+private let log = Log(.database)
+
+log.info("Starting operation")
+log.debug("Details: \(value)")
+log.warning("Something unexpected")
+log.error("Failed: \(error)")
+log.info("Critical startup", critical: true)  // Synchronous, crash-safe
+```
+
+**Categories**: `.system`, `.audio`, `.transcription`, `.database`, `.xpc`, `.sync`, `.ui`, `.workflow`
+
+**Never use**: `import os.log`, `Logger(subsystem:)`, `os_log()`, `print()`, `NSLog()`
+
+TalkieLogger routes to Console.app + file logs. SwiftLint flags violations.
+
 ---
 
 ## User Preferences
@@ -562,6 +584,7 @@ TalkieDebugToolbar {
 | TalkieKit package | `macOS/TalkieKit/` (shared components for 3 apps) |
 | DebugKit package | `/Packages/DebugKit/` (debug components) |
 | WFKit package | `/Packages/WFKit/` (workflow editor library) |
+| TalkieLogger | `TalkieKit/Sources/TalkieKit/Logging/TalkieLogger.swift` |
 
 ### "How do I...?"
 

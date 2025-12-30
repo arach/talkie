@@ -35,7 +35,9 @@ actor GRDBRepository: MemoRepository {
             print("🔍 [GRDB] Executing query: sort=\(sortBy), limit=\(limit), offset=\(offset), filters=\(filters.count)")
 
             let result = try await db.read { db in
+                // Start with non-deleted memos only
                 var request = MemoModel.all()
+                    .filter(MemoModel.Columns.deletedAt == nil)
 
                 // Apply search filter (uses FTS5 full-text search index)
                 if let query = searchQuery, !query.isEmpty {
@@ -112,7 +114,9 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             return try await db.read { db in
+                // Count only non-deleted memos
                 var request = MemoModel.all()
+                    .filter(MemoModel.Columns.deletedAt == nil)
 
                 if let query = searchQuery, !query.isEmpty {
                     request = request.filter(
@@ -186,6 +190,85 @@ actor GRDBRepository: MemoRepository {
                     .deleteAll(db)
             }
         }
+    }
+
+    // MARK: - Soft Delete
+
+    /// Soft delete a memo (set deletedAt timestamp)
+    func softDeleteMemo(id: UUID) async throws {
+        try await instrumentRepositoryWrite("softDeleteMemo") {
+            let db = try await dbManager.database()
+
+            try await db.write { db in
+                try db.execute(
+                    sql: "UPDATE voice_memos SET deletedAt = ? WHERE id = ?",
+                    arguments: [Date(), id.uuidString]
+                )
+            }
+        }
+    }
+
+    /// Soft delete multiple memos
+    func softDeleteMemos(ids: Set<UUID>) async throws {
+        try await instrumentRepositoryWrite("softDeleteMemos") {
+            let db = try await dbManager.database()
+            let now = Date()
+
+            try await db.write { db in
+                for id in ids {
+                    try db.execute(
+                        sql: "UPDATE voice_memos SET deletedAt = ? WHERE id = ?",
+                        arguments: [now, id.uuidString]
+                    )
+                }
+            }
+        }
+    }
+
+    /// Fetch memos pending deletion
+    func fetchPendingDeletions() async throws -> [MemoModel] {
+        try await instrumentRepositoryRead("fetchPendingDeletions") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt != nil)
+                    .order(MemoModel.Columns.deletedAt.desc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    /// Count memos pending deletion
+    func countPendingDeletions() async throws -> Int {
+        try await instrumentRepositoryRead("countPendingDeletions") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt != nil)
+                    .fetchCount(db)
+            }
+        }
+    }
+
+    /// Restore a soft-deleted memo
+    func restoreMemo(id: UUID) async throws {
+        try await instrumentRepositoryWrite("restoreMemo") {
+            let db = try await dbManager.database()
+
+            try await db.write { db in
+                try db.execute(
+                    sql: "UPDATE voice_memos SET deletedAt = NULL WHERE id = ?",
+                    arguments: [id.uuidString]
+                )
+            }
+        }
+    }
+
+    /// Hard delete (permanent) - use after user confirms in Cloud Manager
+    func hardDeleteMemo(id: UUID) async throws {
+        try await deleteMemo(id: id)
     }
 
     // MARK: - Relationships

@@ -8,10 +8,10 @@
 
 import Foundation
 import CoreData
-import os
 import Observation
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "TalkieData")
+private let log = Log(.database)
 
 /// Snapshot of data across all sources
 struct DataInventory {
@@ -65,33 +65,33 @@ class TalkieData {
 
     /// Run on app launch - inventory all data sources and reconcile if needed
     func runStartupChecks() async {
-        logger.info("📊 [TalkieData] Running startup inventory...")
+        log.info("📊 [TalkieData] Running startup inventory...")
 
         // 1. Take inventory
         let inventory = await takeInventory()
         self.inventory = inventory
 
-        logger.info("📊 [TalkieData] Inventory complete:")
-        logger.info("   • CoreData: \(inventory.coreData) memos")
-        logger.info("   • GRDB: \(inventory.grdb) memos")
-        logger.info("   • Live: \(inventory.live) dictations")
-        logger.info("   • Healthy: \(inventory.isHealthy)")
+        log.info("📊 [TalkieData] Inventory complete:")
+        log.info("   • CoreData: \(inventory.coreData) memos")
+        log.info("   • GRDB: \(inventory.grdb) memos")
+        log.info("   • Live: \(inventory.live) dictations")
+        log.info("   • Healthy: \(inventory.isHealthy)")
 
         // 2. Reconcile if needed
         if inventory.needsBridgeSync {
-            logger.info("🔄 [TalkieData] GRDB empty but CoreData has data - syncing...")
+            log.info("🔄 [TalkieData] GRDB empty but CoreData has data - syncing...")
             isSyncing = true
             await runBridgeSync()
             isSyncing = false
 
             // Re-inventory after sync
             self.inventory = await takeInventory()
-            logger.info("✅ [TalkieData] Bridge sync complete - GRDB now has \(self.inventory?.grdb ?? 0) memos")
+            log.info("✅ [TalkieData] Bridge sync complete - GRDB now has \(self.inventory?.grdb ?? 0) memos")
         }
 
         // 3. Mark ready
         isReady = true
-        logger.info("✅ [TalkieData] Data layer ready")
+        log.info("✅ [TalkieData] Data layer ready")
 
         // Notify UI
         NotificationCenter.default.post(name: .talkieDataReady, object: nil)
@@ -127,7 +127,7 @@ class TalkieData {
         do {
             return try await GRDBRepository().countMemos()
         } catch {
-            logger.error("Failed to count GRDB: \(error.localizedDescription)")
+            log.error("Failed to count GRDB: \(error.localizedDescription)")
             return 0
         }
     }
@@ -142,7 +142,7 @@ class TalkieData {
     /// Copy all memos from CoreData to GRDB
     func runBridgeSync() async {
         guard let context = coreDataContext else {
-            logger.error("Cannot run bridge sync - no CoreData context")
+            log.error("Cannot run bridge sync - no CoreData context")
             return
         }
 

@@ -59,6 +59,29 @@ The script:
 - **Midnight theme** - Dark UI via SettingsManager color properties
 - **XPC communication** - Talkie <-> TalkieLive via TalkieLiveXPCProtocol
 
+## Logging
+
+**ALWAYS use TalkieLogger, NEVER use os.log directly.**
+
+```swift
+import TalkieKit
+
+private let log = Log(.database)  // or .system, .audio, .transcription, .xpc, .sync, .ui, .workflow
+
+// Usage
+log.info("Starting operation")
+log.debug("Details: \(value)")
+log.warning("Something unexpected")
+log.error("Failed: \(error)")
+```
+
+Categories: `.system`, `.audio`, `.transcription`, `.database`, `.xpc`, `.sync`, `.ui`, `.workflow`
+
+Do NOT use:
+- `import os.log`
+- `Logger(subsystem:category:)`
+- `os_log()`
+
 ## Common Tasks
 
 When moving/adding Swift files:

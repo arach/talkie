@@ -413,6 +413,23 @@ final class DatabaseManager {
             print("✅ Vercel-compatible workflow schema migrated successfully!")
         }
 
+        // Migration v4: Add soft delete support
+        migrator.registerMigration("v4_soft_delete") { db in
+            print("📦 Adding soft delete support...")
+
+            // Add deletedAt column for soft delete
+            try db.alter(table: "voice_memos") { t in
+                t.add(column: "deletedAt", .datetime)
+            }
+
+            // Index for efficiently filtering out deleted memos
+            try db.create(index: "idx_memos_deleted_at",
+                         on: "voice_memos",
+                         columns: ["deletedAt"])
+
+            print("✅ Soft delete migration complete!")
+        }
+
         return migrator
     }
 }

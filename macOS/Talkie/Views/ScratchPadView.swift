@@ -611,6 +611,20 @@ struct ScratchPadView: View {
         HStack(spacing: Spacing.sm) {
             voicePromptButton
 
+            // Selection hint - shows when text is selected
+            if polishState.isTransformingSelection {
+                Text("Selection")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .stroke(Theme.current.foregroundMuted.opacity(0.3), lineWidth: 1)
+                    )
+                    .help("Commands will apply to selected text only")
+            }
+
             ForEach(SmartAction.builtIn.prefix(3)) { action in
                 quickActionChip(action)
             }
@@ -678,7 +692,7 @@ struct ScratchPadView: View {
                     }
                 }
 
-                Text(isRecordingInstruction ? "STOP" : "VOICE")
+                Text(isRecordingInstruction ? "STOP" : "COMMAND")
                     .font(.system(size: 10, weight: .bold))
             }
             .foregroundColor(.white)

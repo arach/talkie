@@ -530,18 +530,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("✅ Cleared all pending and recent actions")
             exit(0)
         }
-
-        cliHandler.register(
-            "clear-pending",
-            description: "Clear all pending and recent actions from the queue"
-        ) { _ in
-            await MainActor.run {
-                PendingActionsManager.shared.cancelAll()
-                PendingActionsManager.shared.clearAllRecentActions()
-            }
-            print("✅ Cleared all pending and recent actions")
-            exit(0)
-        }
     }
 
     // MARK: - URL Handling
@@ -826,6 +814,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // Log notification for debugging
+        let title = notification.request.content.title
+        let body = notification.request.content.body
+        logger.info("📬 Notification received - title: '\(title)', body: '\(body)'")
+
+        // Filter out test/example notifications
+        if title.lowercased().contains("example") || body.lowercased().contains("example") {
+            logger.warning("⚠️ Suppressing example notification")
+            completionHandler([])
+            return
+        }
+
         // Show banner and play sound even when app is active
         completionHandler([.banner, .sound])
     }

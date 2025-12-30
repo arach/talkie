@@ -56,7 +56,7 @@ final class LiveController: ObservableObject {
         stateMachine.onStateChange = { [weak self] oldState, newState in
             guard let self = self else { return }
 
-            // Log state transition prominently
+            // Log state transition
             log.info("State: \(oldState.rawValue) → \(newState.rawValue)")
 
             // Sync published state
@@ -652,12 +652,12 @@ final class LiveController: ObservableObject {
         // Track milestone
         ProcessingMilestones.shared.markTranscribing()
 
-        // Generate external reference ID for Engine trace correlation (short 8-char hex)
-        let externalRefId = String(UUID().uuidString.prefix(8)).lowercased()
+        // Use trace's ID for Engine correlation (so E2E view can link them)
+        let externalRefId = trace?.traceId ?? String(UUID().uuidString.prefix(8)).lowercased()
 
         // End file save, begin engine transcription
         trace?.end(fileSizeStr)
-        trace?.externalRefId = externalRefId  // For Engine correlation
+        trace?.externalRefId = externalRefId  // Already the same, but kept for reference
         trace?.begin("engine")
 
         do {

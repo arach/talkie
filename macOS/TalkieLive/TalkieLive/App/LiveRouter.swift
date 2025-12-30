@@ -65,6 +65,12 @@ struct TranscriptRouter: LiveRouter {
         // Paste if enabled
         if mode == .paste {
             simulatePaste()
+
+            // Optionally press Enter after paste (for chat apps, terminals)
+            let shouldPressEnter = await MainActor.run { LiveSettings.shared.pressEnterAfterPaste }
+            if shouldPressEnter {
+                simulateEnter()
+            }
         }
     }
 
@@ -114,5 +120,29 @@ struct TranscriptRouter: LiveRouter {
         }
 
         logger.info("Pasted (\(eventsPosted)/4 events posted)")
+    }
+
+    private func simulateEnter() {
+        guard let src = CGEventSource(stateID: .combinedSessionState) else {
+            logger.error("❌ Failed to create CGEventSource - cannot send Enter")
+            return
+        }
+
+        // Small delay to ensure paste completes first
+        usleep(50_000)  // 50ms
+
+        // Return/Enter key = 0x24
+        let events: [(UInt16, Bool)] = [
+            (0x24, true),   // Return down
+            (0x24, false)   // Return up
+        ]
+
+        for (key, down) in events {
+            if let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) {
+                evt.post(tap: .cghidEventTap)
+            }
+        }
+
+        logger.info("Sent Enter key")
     }
 }

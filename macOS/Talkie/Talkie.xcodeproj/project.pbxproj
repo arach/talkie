@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		201648D47ACE4C9B9EC8CFB0 /* AudioDropService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763499B2C4FA42C281AFC119 /* AudioDropService.swift */; };
 		E2509FD0FB0D45F0B08460BF /* TalkieData.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B8636EBFE34F0688638236 /* TalkieData.swift */; };
 		81DC1910D66443EA804BE49D /* DictationOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BACCB26E8174224A9887CDA /* DictationOnboardingView.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
@@ -247,6 +248,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		763499B2C4FA42C281AFC119 /* AudioDropService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDropService.swift; sourceTree = "<group>"; };
 		E1B8636EBFE34F0688638236 /* TalkieData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieData.swift; sourceTree = "<group>"; };
 		7BACCB26E8174224A9887CDA /* DictationOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationOnboardingView.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
@@ -1016,6 +1018,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				763499B2C4FA42C281AFC119 /* AudioDropService.swift */,
 				E1B8636EBFE34F0688638236 /* TalkieData.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
 				96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */,
@@ -1169,6 +1172,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				201648D47ACE4C9B9EC8CFB0 /* AudioDropService.swift in Sources */,
 				E2509FD0FB0D45F0B08460BF /* TalkieData.swift in Sources */,
 				81DC1910D66443EA804BE49D /* DictationOnboardingView.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,

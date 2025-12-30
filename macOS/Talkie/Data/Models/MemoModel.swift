@@ -56,6 +56,12 @@ struct MemoModel: Identifiable, Codable, Hashable {
 
     var cloudSyncedAt: Date?
 
+    // MARK: - Soft Delete
+
+    /// When set, memo is pending deletion (soft delete)
+    /// User must approve in Cloud Manager to permanently delete
+    var deletedAt: Date?
+
     // MARK: - Workflows
 
     /// JSON array of pending workflow IDs
@@ -85,6 +91,7 @@ struct MemoModel: Identifiable, Codable, Hashable {
         originDeviceId: String? = nil,
         macReceivedAt: Date? = nil,
         cloudSyncedAt: Date? = nil,
+        deletedAt: Date? = nil,
         pendingWorkflowIds: String? = nil
     ) {
         self.id = id
@@ -108,6 +115,7 @@ struct MemoModel: Identifiable, Codable, Hashable {
         self.originDeviceId = originDeviceId
         self.macReceivedAt = macReceivedAt
         self.cloudSyncedAt = cloudSyncedAt
+        self.deletedAt = deletedAt
         self.pendingWorkflowIds = pendingWorkflowIds
     }
 }
@@ -139,6 +147,7 @@ extension MemoModel: FetchableRecord, PersistableRecord {
         static let originDeviceId = Column(CodingKeys.originDeviceId)
         static let macReceivedAt = Column(CodingKeys.macReceivedAt)
         static let cloudSyncedAt = Column(CodingKeys.cloudSyncedAt)
+        static let deletedAt = Column(CodingKeys.deletedAt)
         static let pendingWorkflowIds = Column(CodingKeys.pendingWorkflowIds)
     }
 
@@ -202,6 +211,11 @@ extension MemoModel {
     /// Is processing any AI action
     var isProcessing: Bool {
         isTranscribing || isProcessingSummary || isProcessingTasks || isProcessingReminders
+    }
+
+    /// Is pending deletion (soft deleted)
+    var isPendingDeletion: Bool {
+        deletedAt != nil
     }
 }
 

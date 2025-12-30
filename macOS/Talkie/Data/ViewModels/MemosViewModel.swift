@@ -8,6 +8,10 @@
 
 import Foundation
 import SwiftUI
+import CoreData
+import TalkieKit
+
+private let log = Log(.database)
 
 // MARK: - Memo Filters
 
@@ -163,17 +167,129 @@ final class MemosViewModel {
         await loadMemos()
     }
 
-    /// Delete memo
+    /// Delete memo from both GRDB and CoreData (triggers CloudKit sync)
     func deleteMemo(_ memo: MemoModel) async {
-        do {
-            try await repository.deleteMemo(id: memo.id)
+        await deleteMemos([memo.id])
+    }
 
-            // Remove from local array
-            memos.removeAll { $0.id == memo.id }
-            totalCount -= 1
+    /// Soft delete memos (marks for deletion, requires approval in Cloud Manager)
+    func deleteMemos(_ ids: Set<UUID>) async {
+        guard !ids.isEmpty else { return }
+
+        log.info("Soft deleting \(ids.count) memo(s): \(ids.map { $0.uuidString.prefix(8) }.joined(separator: ", "))")
+
+        do {
+            // Soft delete in GRDB (set deletedAt timestamp)
+            try await repository.softDeleteMemos(ids: ids)
+            log.info("  Marked \(ids.count) memo(s) for deletion")
+
+            // Remove from local array (they're now filtered out)
+            let beforeCount = memos.count
+            memos.removeAll { ids.contains($0.id) }
+            let removed = beforeCount - memos.count
+            totalCount -= removed
+
+            log.info("  UI: removed \(removed) from view, total now \(self.totalCount)")
+            log.info("  Pending deletion - approve in Cloud Manager to permanently delete")
         } catch {
+            log.error("Soft delete failed: \(error.localizedDescription)")
             self.error = error
         }
+    }
+
+    /// Permanently delete memos (called from Cloud Manager after approval)
+    func permanentlyDeleteMemos(_ ids: Set<UUID>) async {
+        guard !ids.isEmpty else { return }
+
+        log.info("Permanently deleting \(ids.count) memo(s)")
+
+        do {
+            // 1. Delete from CoreData (triggers CloudKit sync)
+            let coreDataDeleted = await deleteFromCoreData(ids: ids)
+            log.info("  CoreData: deleted \(coreDataDeleted) record(s)")
+
+            // 2. Hard delete from GRDB
+            for id in ids {
+                try await repository.hardDeleteMemo(id: id)
+            }
+            log.info("  GRDB: hard deleted \(ids.count) record(s)")
+        } catch {
+            log.error("Permanent delete failed: \(error.localizedDescription)")
+            self.error = error
+        }
+    }
+
+    /// Restore soft-deleted memos
+    func restoreMemos(_ ids: Set<UUID>) async {
+        guard !ids.isEmpty else { return }
+
+        log.info("Restoring \(ids.count) memo(s)")
+
+        do {
+            for id in ids {
+                try await repository.restoreMemo(id: id)
+            }
+            log.info("  Restored \(ids.count) memo(s)")
+
+            // Refresh to show restored memos
+            await loadMemos()
+        } catch {
+            log.error("Restore failed: \(error.localizedDescription)")
+            self.error = error
+        }
+    }
+
+    /// Fetch memos pending deletion (for Cloud Manager)
+    func fetchPendingDeletions() async -> [MemoModel] {
+        do {
+            return try await repository.fetchPendingDeletions()
+        } catch {
+            log.error("Failed to fetch pending deletions: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    /// Count memos pending deletion
+    func countPendingDeletions() async -> Int {
+        do {
+            return try await repository.countPendingDeletions()
+        } catch {
+            return 0
+        }
+    }
+
+    /// Delete from CoreData (triggers CloudKit sync for remote deletion)
+    /// Returns number of records deleted
+    private func deleteFromCoreData(ids: Set<UUID>) async -> Int {
+        let context = PersistenceController.shared.container.viewContext
+
+        var deletedCount = 0
+
+        await context.perform {
+            for id in ids {
+                let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+                fetchRequest.fetchLimit = 1
+
+                if let results = try? context.fetch(fetchRequest),
+                   let memo = results.first {
+                    log.debug("  Deleting CoreData memo: \(memo.title ?? "untitled")")
+                    context.delete(memo)
+                    deletedCount += 1
+                } else {
+                    log.debug("  CoreData memo not found for id: \(id.uuidString.prefix(8))")
+                }
+            }
+
+            do {
+                try context.save()
+                log.debug("  CoreData context saved successfully")
+            } catch {
+                log.error("  CoreData save failed: \(error.localizedDescription)")
+            }
+        }
+
+        return deletedCount
     }
 
     /// Search (debounced via Combine in view)

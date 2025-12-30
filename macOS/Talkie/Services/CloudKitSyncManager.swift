@@ -13,10 +13,10 @@
 import Foundation
 import CloudKit
 import CoreData
-import os
 import Observation
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "CloudKitSync")
+private let log = Log(.sync)
 
 @MainActor
 @Observable
@@ -122,7 +122,7 @@ class CloudKitSyncManager {
             }
         }
         let nextForegroundSync = now.addingTimeInterval(syncInterval)
-        logger.info("Foreground timer started - next sync at \(timeFormatter.string(from: nextForegroundSync)) (every \(Int(self.syncInterval))s)")
+        log.info("Foreground timer started - next sync at \(timeFormatter.string(from: nextForegroundSync)) (every \(Int(self.syncInterval))s)")
 
         // MARK: - Background Sync (App running but not focused)
         // Disable App Nap so timers continue running when app loses focus
@@ -168,12 +168,12 @@ class CloudKitSyncManager {
             }
         }
 
-        logger.info("CloudKitSyncManager configured - foreground: \(Int(self.syncInterval))s, background: \(Int(self.backgroundSyncInterval))s")
+        log.info("CloudKitSyncManager configured - foreground: \(Int(self.syncInterval))s, background: \(Int(self.backgroundSyncInterval))s")
 
         if serverChangeToken != nil {
-            logger.info("Existing server change token found - will fetch delta")
+            log.info("Existing server change token found - will fetch delta")
         } else {
-            logger.info("No server change token - will perform full sync")
+            log.info("No server change token - will perform full sync")
         }
 
         // Run one-time migrations
@@ -194,7 +194,7 @@ class CloudKitSyncManager {
             }
         }
         let nextSync = now.addingTimeInterval(syncInterval)
-        logger.info("Sync timer restarted - next sync at \(timeFormatter.string(from: nextSync)) (every \(Int(self.syncInterval))s / \(Int(self.syncInterval/60))min)")
+        log.info("Sync timer restarted - next sync at \(timeFormatter.string(from: nextSync)) (every \(Int(self.syncInterval))s / \(Int(self.syncInterval/60))min)")
 
         // Restart background scheduler
         backgroundActivityScheduler?.invalidate()
@@ -220,7 +220,7 @@ class CloudKitSyncManager {
             reason: "Talkie needs to sync voice memos from iOS in real-time"
         )
 
-        logger.info("App Nap FULLY disabled - timers will fire even when app loses focus")
+        log.info("App Nap FULLY disabled - timers will fire even when app loses focus")
     }
 
     /// Stops App Nap prevention (called on deinit or when explicitly disabled)
@@ -228,7 +228,7 @@ class CloudKitSyncManager {
         if let activity = appNapActivity {
             ProcessInfo.processInfo.endActivity(activity)
             appNapActivity = nil
-            logger.info("App Nap prevention disabled")
+            log.info("App Nap prevention disabled")
         }
     }
 
@@ -267,14 +267,14 @@ class CloudKitSyncManager {
 
         let now = Date()
         let firstExpected = now.addingTimeInterval(backgroundSyncInterval)
-        logger.info("Background scheduler started - first expected ~\(timeFormatter.string(from: firstExpected)) (every \(Int(self.backgroundSyncInterval))s +/- 30s)")
+        log.info("Background scheduler started - first expected ~\(timeFormatter.string(from: firstExpected)) (every \(Int(self.backgroundSyncInterval))s +/- 30s)")
     }
 
     /// Invalidates the background activity scheduler
     private func stopBackgroundActivityScheduler() {
         backgroundActivityScheduler?.invalidate()
         backgroundActivityScheduler = nil
-        logger.info("Background activity scheduler stopped")
+        log.info("Background activity scheduler stopped")
     }
 
     /// Record user activity (called when user triggers manual sync)
@@ -285,7 +285,7 @@ class CloudKitSyncManager {
     /// Trigger a sync immediately
     func syncNow() {
         guard !isSyncing else {
-            logger.info("Sync already in progress, skipping")
+            log.info("Sync already in progress, skipping")
             return
         }
 
@@ -303,7 +303,7 @@ class CloudKitSyncManager {
     /// Force sync CoreData → GRDB (use after CloudKit import completes)
     func forceSyncToGRDB() {
         guard let context = viewContext else {
-            logger.warning("Cannot force sync - no view context")
+            log.warning("Cannot force sync - no view context")
             return
         }
         Task {
@@ -372,7 +372,7 @@ class CloudKitSyncManager {
         }
 
         NotificationCenter.default.post(name: .talkieSyncStarted, object: nil)
-        logger.info("[\(timeFormatter.string(from: startTime))] Sync starting...")
+        log.info("[\(timeFormatter.string(from: startTime))] Sync starting...")
 
         do {
             let result = try await fetchChanges()
@@ -426,14 +426,14 @@ class CloudKitSyncManager {
             // Log completion with duration
             let durationStr = String(format: "%.1fs", duration)
             if result.changeCount > 0 {
-                logger.info("[\(timeFormatter.string(from: Date()))] Sync complete: \(result.changeCount) change(s) in \(durationStr)")
+                log.info("[\(timeFormatter.string(from: Date()))] Sync complete: \(result.changeCount) change(s) in \(durationStr)")
             } else {
-                logger.info("[\(timeFormatter.string(from: Date()))] Sync complete: no changes (\(durationStr))")
+                log.info("[\(timeFormatter.string(from: Date()))] Sync complete: no changes (\(durationStr))")
             }
 
         } catch {
             let duration = Date().timeIntervalSince(startTime)
-            logger.error("Sync failed: \(error.localizedDescription)")
+            log.error("Sync failed: \(error.localizedDescription)")
 
             DispatchQueue.main.async {
                 self.isSyncing = false
@@ -473,15 +473,15 @@ class CloudKitSyncManager {
             let memos = try context.fetch(request)
 
             if !memos.isEmpty {
-                logger.info("Found \(memos.count) unprocessed memo(s)")
+                log.info("Found \(memos.count) unprocessed memo(s)")
                 for memo in memos {
                     let hasTranscript = memo.transcription != nil && !memo.transcription!.isEmpty
-                    logger.info("Auto-run: '\(memo.title ?? "Untitled")' (has transcript: \(hasTranscript))")
+                    log.info("Auto-run: '\(memo.title ?? "Untitled")' (has transcript: \(hasTranscript))")
                     await AutoRunProcessor.shared.processNewMemo(memo, context: context)
                 }
             }
         } catch {
-            logger.error("Failed to process auto-run workflows: \(error.localizedDescription)")
+            log.error("Failed to process auto-run workflows: \(error.localizedDescription)")
         }
     }
 
@@ -512,7 +512,7 @@ class CloudKitSyncManager {
                 case .success(let record):
                     changedRecords.append(record)
                 case .failure(let error):
-                    logger.warning("Failed to fetch record \(recordID.recordName): \(error.localizedDescription)")
+                    log.warning("Failed to fetch record \(recordID.recordName): \(error.localizedDescription)")
                 }
             }
 
@@ -531,9 +531,9 @@ class CloudKitSyncManager {
                 case .failure(let error):
                     // Zone might not exist yet - that's OK
                     if let ckError = error as? CKError, ckError.code == .zoneNotFound {
-                        logger.info("CloudKit zone not found - will be created on first save")
+                        log.info("CloudKit zone not found - will be created on first save")
                     } else {
-                        logger.warning("Zone fetch error: \(error.localizedDescription)")
+                        log.warning("Zone fetch error: \(error.localizedDescription)")
                     }
                 }
             }
@@ -593,14 +593,14 @@ class CloudKitSyncManager {
                             typeCount[typeName, default: 0] += 1
                         }
                         let typeSummary = typeCount.map { "\($0.value) \($0.key)" }.joined(separator: ", ")
-                        logger.info("Fetched: \(typeSummary)\(deletedRecordIDs.count > 0 ? ", \(deletedRecordIDs.count) deleted" : "")")
+                        log.info("Fetched: \(typeSummary)\(deletedRecordIDs.count > 0 ? ", \(deletedRecordIDs.count) deleted" : "")")
 
                         // Debug: print top 3 records
                         for (i, record) in changedRecords.prefix(3).enumerated() {
                             let typeName = record.recordType.replacingOccurrences(of: "CD_", with: "")
                             let title = record["CD_title"] as? String ?? "?"
                             let modDate = record.modificationDate.map { "\($0)" } ?? "?"
-                            logger.info("  [\(i+1)] \(typeName): '\(title)' modified: \(modDate)")
+                            log.info("  [\(i+1)] \(typeName): '\(title)' modified: \(modDate)")
                         }
 
                     }
@@ -615,7 +615,7 @@ class CloudKitSyncManager {
                 case .failure(let error):
                     // Handle token reset if needed
                     if let ckError = error as? CKError, ckError.code == .changeTokenExpired {
-                        logger.warning("Change token expired - will reset and retry")
+                        log.warning("Change token expired - will reset and retry")
                         Task { @MainActor in
                             self.serverChangeToken = nil
                         }
@@ -631,7 +631,7 @@ class CloudKitSyncManager {
     /// Clear the sync token (for debugging/reset)
     func resetSyncToken() {
         serverChangeToken = nil
-        logger.info("Sync token reset - next sync will fetch all records")
+        log.info("Sync token reset - next sync will fetch all records")
     }
 
     // MARK: - Sync History Management
@@ -650,7 +650,7 @@ class CloudKitSyncManager {
                     self.syncHistory = events
                 }
             } catch {
-                logger.error("Failed to load sync history from database: \(error.localizedDescription)")
+                log.error("Failed to load sync history from database: \(error.localizedDescription)")
                 await MainActor.run {
                     self.syncHistory = []
                 }
@@ -686,7 +686,7 @@ class CloudKitSyncManager {
                     }
                 }
             } catch {
-                logger.error("Failed to save sync event to database: \(error.localizedDescription)")
+                log.error("Failed to save sync event to database: \(error.localizedDescription)")
             }
         }
     }
@@ -702,7 +702,7 @@ class CloudKitSyncManager {
                     .fetchOne(db)?.timestamp
             }
         } catch {
-            logger.error("Failed to get last sync timestamp: \(error.localizedDescription)")
+            log.error("Failed to get last sync timestamp: \(error.localizedDescription)")
             return nil
         }
     }
@@ -722,7 +722,7 @@ class CloudKitSyncManager {
         }
 
         let detailString = details.joined(separator: " | ")
-        logger.info("RemoteChange: \(detailString)")
+        log.info("RemoteChange: \(detailString)")
 
         // Fetch actual persistent history to see what changed
         if let token = notification.userInfo?[NSPersistentHistoryTokenKey] as? NSPersistentHistoryToken,
@@ -772,10 +772,10 @@ class CloudKitSyncManager {
                         deleteCount > 0 ? "-\(deleteCount)" : nil
                     ].compactMap { $0 }.joined(separator: " ")
 
-                    logger.info("   └─ Tx[\(i)]: author=\(author) context=\(contextName) entities=[\(entityList)] changes=\(changesSummary.isEmpty ? "none" : changesSummary)")
+                    log.info("   └─ Tx[\(i)]: author=\(author) context=\(contextName) entities=[\(entityList)] changes=\(changesSummary.isEmpty ? "none" : changesSummary)")
                 }
             } catch {
-                logger.error("   └─ History fetch failed: \(error.localizedDescription)")
+                log.error("   └─ History fetch failed: \(error.localizedDescription)")
             }
         }
     }
@@ -794,12 +794,19 @@ class CloudKitSyncManager {
 
     // MARK: - Bridge 1: Core Data → GRDB Sync
 
+    /// Track last sync time to avoid re-processing unchanged memos
+    private static let lastBridge1SyncKey = "bridge1LastSyncTimestamp"
+    private var lastBridge1Sync: Date {
+        get { UserDefaults.standard.object(forKey: Self.lastBridge1SyncKey) as? Date ?? .distantPast }
+        set { UserDefaults.standard.set(newValue, forKey: Self.lastBridge1SyncKey) }
+    }
+
     /// Sync Core Data changes to GRDB (phone → Mac data flow)
     /// Called after CloudKit pushes changes to Core Data
     /// Can be called manually via forceSyncToGRDB()
     func syncCoreDataToGRDB(context: NSManagedObjectContext) async {
-        logger.info("🌉 [Bridge 1] Starting Core Data → GRDB sync")
         let syncStart = Date()
+        let lastSync = lastBridge1Sync
 
         let repository = GRDBRepository()
         var createdCount = 0
@@ -807,17 +814,22 @@ class CloudKitSyncManager {
         var errorCount = 0
 
         await context.perform {
-            // Query all VoiceMemo entities (we'll use lastModified for change detection)
+            // Only fetch memos modified since last sync (huge performance win)
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "lastModified > %@", lastSync as NSDate)
             fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.lastModified, ascending: false)]
 
             do {
                 let cdMemos = try context.fetch(fetchRequest)
-                logger.info("🌉 [Bridge 1] Found \(cdMemos.count) memo(s) in Core Data")
+                if cdMemos.isEmpty {
+                    // Nothing new since last sync - skip silently
+                    return
+                }
+                log.info("🌉 [Bridge 1] Syncing \(cdMemos.count) changed memo(s)")
 
                 for cdMemo in cdMemos {
                     guard let memoId = cdMemo.id else {
-                        logger.warning("🌉 [Bridge 1] Skipping memo with nil ID")
+                        log.warning("🌉 [Bridge 1] Skipping memo with nil ID")
                         continue
                     }
 
@@ -832,38 +844,42 @@ class CloudKitSyncManager {
                                 let grdbModified = existing.memo.lastModified
 
                                 if cdModified > grdbModified {
-                                    logger.info("🌉 [Bridge 1] Updating memo in GRDB: '\(cdMemo.title ?? "Untitled")' (CD: \(cdModified) > GRDB: \(grdbModified))")
+                                    log.info("🌉 [Bridge 1] Updating memo: '\(cdMemo.title ?? "Untitled")'")
                                     let memoModel = self.convertToMemoModel(cdMemo)
                                     try await repository.saveMemo(memoModel)
                                     updatedCount += 1
-                                    logger.info("✅ [Bridge 1] Updated: \(memoId)")
                                 } else {
-                                    logger.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(cdMemo.title ?? "Untitled")'")
+                                    log.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(cdMemo.title ?? "Untitled")'")
                                 }
                             } else {
                                 // New memo - create in GRDB
-                                logger.info("🌉 [Bridge 1] Creating new memo in GRDB: '\(cdMemo.title ?? "Untitled")'")
+                                log.info("🌉 [Bridge 1] Creating new memo in GRDB: '\(cdMemo.title ?? "Untitled")'")
                                 let memoModel = self.convertToMemoModel(cdMemo)
                                 try await repository.saveMemo(memoModel)
                                 createdCount += 1
-                                logger.info("✅ [Bridge 1] Created: \(memoId)")
                             }
                         } catch {
-                            logger.error("❌ [Bridge 1] Failed to sync memo \(memoId): \(error.localizedDescription)")
+                            log.error("❌ [Bridge 1] Failed to sync memo \(memoId): \(error.localizedDescription)")
                             errorCount += 1
                         }
                     }
                 }
             } catch {
-                logger.error("❌ [Bridge 1] Failed to fetch Core Data memos: \(error.localizedDescription)")
+                log.error("❌ [Bridge 1] Failed to fetch Core Data memos: \(error.localizedDescription)")
             }
         }
 
         // Wait a moment for all async tasks to complete
         try? await Task.sleep(for: .seconds(1)) // 1 second
 
+        // Update sync timestamp for next run
+        lastBridge1Sync = syncStart
+
         let duration = Date().timeIntervalSince(syncStart)
-        logger.info("🌉 [Bridge 1] Complete: \(createdCount) created, \(updatedCount) updated, \(errorCount) errors (\(String(format: "%.1fs", duration)))")
+        if createdCount > 0 || updatedCount > 0 || errorCount > 0 {
+            log.info("🌉 [Bridge 1] Complete: \(createdCount) created, \(updatedCount) updated, \(errorCount) errors (\(String(format: "%.1fs", duration)))")
+        }
+        // Skip logging if nothing happened - reduces noise
     }
 
     /// Convert Core Data VoiceMemo to GRDB MemoModel
@@ -875,7 +891,7 @@ class CloudKitSyncManager {
         // Convert sort order (Core Data uses Int32, GRDB uses Int)
         let sortOrder = Int(cdMemo.sortOrder)
 
-        logger.info("🔄 [Bridge 1] Converting memo: '\(cdMemo.title ?? "Untitled")' (id: \(id))")
+        log.info("🔄 [Bridge 1] Converting memo: '\(cdMemo.title ?? "Untitled")' (id: \(id))")
 
         return MemoModel(
             id: id,

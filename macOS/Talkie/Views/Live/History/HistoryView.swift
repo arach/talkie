@@ -2,6 +2,17 @@
 //  HistoryView.swift
 //  TalkieLive
 //
+//  ⚠️ DEPRECATED - This file is no longer used.
+//
+//  This was the standalone TalkieLive navigation shell with its own sidebar.
+//  The unified Talkie app now uses:
+//  - NavigationViewNative.swift for navigation
+//  - DictationListView.swift for the dictation list
+//
+//  This file is kept temporarily for reference. Components like DictationDetailView
+//  may be worth extracting if needed. Otherwise, this can be deleted.
+//
+//  Original description:
 //  Main window showing dictation history - matches macOS Talkie style
 //
 

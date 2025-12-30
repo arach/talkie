@@ -128,6 +128,22 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         AppLogger.app.info("[Push] Received remote notification")
 
+        // Log raw notification for debugging
+        if let aps = userInfo["aps"] as? [String: Any] {
+            if let alert = aps["alert"] as? [String: Any] {
+                let title = alert["title"] as? String ?? ""
+                let body = alert["body"] as? String ?? ""
+                AppLogger.app.info("[Push] Alert - title: '\(title)', body: '\(body)'")
+
+                // Skip processing for test/example notifications
+                if title.lowercased().contains("example") || body.lowercased().contains("example") {
+                    AppLogger.app.info("[Push] Ignoring example notification")
+                    completionHandler(.noData)
+                    return
+                }
+            }
+        }
+
         // Check if this is a CloudKit notification
         if let ckNotification = CKNotification(fromRemoteNotificationDictionary: userInfo as! [String: NSObject]) {
             handleCloudKitNotification(ckNotification)
@@ -314,6 +330,16 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     // MARK: - UNUserNotificationCenterDelegate
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        // Filter out test/example notifications (likely from CloudKit schema initialization)
+        let title = notification.request.content.title.lowercased()
+        let body = notification.request.content.body.lowercased()
+        if title.contains("example") || body.contains("example") ||
+           title.contains("test") && title.contains("data") {
+            AppLogger.app.info("[Push] Suppressing test/example notification: \(notification.request.content.title)")
+            completionHandler([]) // Don't show
+            return
+        }
+
         // Show notifications even when app is in foreground (for workflow completions)
         completionHandler([.banner, .sound])
     }

@@ -1655,6 +1655,20 @@ struct OutputSettingsSection: View {
                 }
             }
 
+            // Paste options (only shown when paste mode is enabled)
+            if settings.routingMode == .paste {
+                SettingsCard(title: "PASTE OPTIONS") {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SettingsToggleRow(
+                            icon: "return",
+                            title: "Press Enter after paste",
+                            description: "Send Return key after pasting (for chat apps, terminals)",
+                            isOn: $settings.pressEnterAfterPaste
+                        )
+                    }
+                }
+            }
+
             // Context Settings - which app to show in history
             SettingsCard(title: "APP CONTEXT") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -1827,88 +1841,102 @@ struct OverlaySettingsSection: View {
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "rectangle.inset.topright.filled",
-                title: "OVERLAY",
-                subtitle: "Configure the recording indicator and floating pill."
+                title: "VISUAL FEEDBACK",
+                subtitle: "Configure HUD overlay and floating pill positions."
             )
         } content: {
-            // SECTION 1: Recording Indicator
-            OverlaySectionHeader(
-                icon: "sparkles",
-                title: "RECORDING INDICATOR",
-                description: "Visual feedback shown while recording audio"
-            )
+            // Interactive Preview (from TalkieKit)
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack {
+                    Text("PREVIEW")
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(1)
+                        .foregroundColor(TalkieTheme.textSecondary)
 
-            // Indicator Style
-            SettingsCard(title: "INDICATOR STYLE") {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    ForEach(OverlayStyle.allCases, id: \.rawValue) { style in
-                        OverlayStyleRow(
-                            style: style,
-                            isSelected: settings.overlayStyle == style
-                        ) {
-                            settings.overlayStyle = style
-                        }
-                    }
+                    Spacer()
+
+                    Text("Hover to simulate recording")
+                        .font(.system(size: 9))
+                        .foregroundColor(TalkieTheme.textTertiary)
                 }
+
+                LivePreviewScreen(
+                    overlayStyle: $settings.overlayStyle,
+                    hudPosition: $settings.overlayPosition,
+                    pillPosition: $settings.pillPosition,
+                    showOnAir: $settings.showOnAir
+                )
+                .frame(maxWidth: .infinity)
+                .scaleEffect(0.85)
+                .frame(height: 230)
             }
+            .padding(.bottom, Spacing.md)
 
-            // Indicator Position
-            SettingsCard(title: "INDICATOR POSITION") {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    ForEach(IndicatorPosition.allCases, id: \.rawValue) { position in
-                        IndicatorPositionRow(
-                            position: position,
-                            isSelected: settings.overlayPosition == position
-                        ) {
-                            settings.overlayPosition = position
-                        }
-                    }
-                }
-            }
-
-            // SECTION 2: Floating Pill
-            OverlaySectionHeader(
-                icon: "capsule.fill",
-                title: "FLOATING PILL",
-                description: "Persistent widget for quick access and status"
-            )
-            .padding(.top, Spacing.lg)
-
-            // Pill Position
-            SettingsCard(title: "PILL POSITION") {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    ForEach(PillPosition.allCases, id: \.rawValue) { position in
-                        PillPositionRow(
-                            position: position,
-                            isSelected: settings.pillPosition == position
-                        ) {
-                            settings.pillPosition = position
-                        }
-                    }
-                }
-            }
-
-            // Pill Options
-            SettingsCard(title: "PILL OPTIONS") {
+            // HUD Settings
+            SettingsCard(title: "HUD OVERLAY") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    // Show on all screens toggle
+                    // Toggle HUD
                     SettingsToggleRow(
-                        icon: "display.2",
-                        title: "Show on all screens",
-                        description: "Display pill on every connected monitor",
-                        isOn: $settings.pillShowOnAllScreens
+                        icon: "sparkles",
+                        title: "Show HUD overlay",
+                        description: "Animated feedback at top of screen",
+                        isOn: Binding(
+                            get: { settings.overlayStyle.showsTopOverlay },
+                            set: { show in
+                                settings.overlayStyle = show ? .particles : .pillOnly
+                            }
+                        )
+                    )
+
+                    if settings.overlayStyle.showsTopOverlay {
+                        Rectangle()
+                            .fill(Design.divider)
+                            .frame(height: 0.5)
+
+                        // Style selector
+                        HStack(spacing: Spacing.sm) {
+                            Text("Style")
+                                .font(.system(size: 10))
+                                .foregroundColor(TalkieTheme.textSecondary)
+
+                            LiveStyleSelector(selection: $settings.overlayStyle)
+                        }
+                        .padding(.leading, 28)
+                    }
+
+                    Rectangle()
+                        .fill(Design.divider)
+                        .frame(height: 0.5)
+
+                    // ON AIR toggle
+                    SettingsToggleRow(
+                        icon: "record.circle",
+                        title: "Show ON AIR indicator",
+                        description: "Neon sign in corner during recording",
+                        isOn: $settings.showOnAir
+                    )
+                }
+            }
+
+            // Pill Settings
+            SettingsCard(title: "FLOATING PILL") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SettingsToggleRow(
+                        icon: "timer",
+                        title: "Expand during recording",
+                        description: "Show timer and audio level",
+                        isOn: $settings.pillExpandsDuringRecording
                     )
 
                     Rectangle()
                         .fill(Design.divider)
                         .frame(height: 0.5)
 
-                    // Expand during recording toggle
                     SettingsToggleRow(
-                        icon: "timer",
-                        title: "Expand during recording",
-                        description: "Show timer and controls while recording",
-                        isOn: $settings.pillExpandsDuringRecording
+                        icon: "display.2",
+                        title: "Show on all screens",
+                        description: "Display on every connected monitor",
+                        isOn: $settings.pillShowOnAllScreens
                     )
                 }
             }
@@ -3354,6 +3382,7 @@ struct AboutInfoRow: View {
 
 enum QuickSettingsTab: String, CaseIterable {
     case shortcuts
+    case sounds
     case audio
     case feedback
     case output
@@ -3363,6 +3392,7 @@ enum QuickSettingsTab: String, CaseIterable {
     var title: String {
         switch self {
         case .shortcuts: return "Shortcuts"
+        case .sounds: return "Sounds"
         case .audio: return "Audio"
         case .feedback: return "Feedback"
         case .output: return "Output"
@@ -3374,6 +3404,7 @@ enum QuickSettingsTab: String, CaseIterable {
     var icon: String {
         switch self {
         case .shortcuts: return "command"
+        case .sounds: return "speaker.wave.2"
         case .audio: return "mic.fill"
         case .feedback: return "rectangle.inset.topright.filled"
         case .output: return "arrow.right.doc.on.clipboard"
@@ -3422,6 +3453,8 @@ struct QuickSettingsView: View {
                 switch selectedTab {
                 case .shortcuts:
                     ShortcutsQuickSection()
+                case .sounds:
+                    SoundsSettingsSection()
                 case .audio:
                     AudioSettingsSection()
                 case .feedback:
