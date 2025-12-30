@@ -39,6 +39,23 @@ struct StatusCheckView: View {
         }
     }
 
+    private var hasError: Bool {
+        manager.checkStatuses.contains { check in
+            if case .error = check.value { return true }
+            return false
+        }
+    }
+
+    private var overallStatusColor: Color {
+        if hasError {
+            return SemanticColor.error
+        } else if manager.allChecksComplete {
+            return SemanticColor.success
+        } else {
+            return colors.textTertiary.opacity(0.5)
+        }
+    }
+
     var body: some View {
         OnboardingStepLayout(
             colors: colors,
@@ -83,16 +100,20 @@ struct StatusCheckView: View {
             content: {
                 // Terminal-style status check panel
                 VStack(alignment: .leading, spacing: 0) {
-                    // Header bar - matches row style with [.] indicator
+                    // Header bar - matches row style with status indicator
                     HStack(spacing: Spacing.sm) {
-                        // [.] indicator matching row style
+                        // Status dot in brackets - reflects overall status
                         HStack(spacing: 0) {
                             Text("[")
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .foregroundColor(colors.textTertiary)
-                            Text(".")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(colors.textTertiary.opacity(0.5))
+
+                            // Status dot: gray (pending), green (complete), red (error)
+                            Circle()
+                                .fill(overallStatusColor)
+                                .frame(width: 6, height: 6)
+                                .shadow(color: manager.allChecksComplete ? SemanticColor.success.opacity(0.6) : Color.clear, radius: 2)
+
                             Text("]")
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .foregroundColor(colors.textTertiary)
@@ -105,7 +126,11 @@ struct StatusCheckView: View {
 
                         Spacer()
 
-                        if !manager.allChecksComplete {
+                        if hasError {
+                            Text("ERROR")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(SemanticColor.error)
+                        } else if !manager.allChecksComplete {
                             HStack(spacing: 4) {
                                 BrailleSpinner(speed: 0.08)
                                     .font(.system(size: 10, design: .monospaced))

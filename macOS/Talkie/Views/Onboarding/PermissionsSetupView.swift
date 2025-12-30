@@ -171,18 +171,24 @@ private struct PermissionRow: View {
     var isRequired: Bool = true
     let action: () -> Void
 
+    @State private var isHovered = false
+
+    // Neutral pending color - not alarming
+    private var pendingColor: Color {
+        colors.textSecondary
+    }
+
     var body: some View {
         HStack(spacing: Spacing.md) {
-            // Icon with color coding
+            // Icon with color coding - green when granted, neutral when pending
             ZStack {
                 Circle()
-                    .fill(isGranted ? Color.green : (isRequired ? Color.red : Color.purple))
-                    .opacity(0.15)
+                    .fill(isGranted ? Color.green.opacity(0.15) : pendingColor.opacity(0.1))
                     .frame(width: 32, height: 32)
 
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(isGranted ? .green : (isRequired ? Color.red : Color.purple))
+                    .foregroundColor(isGranted ? .green : pendingColor)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -191,17 +197,19 @@ private struct PermissionRow: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(colors.textPrimary)
 
-                    // Badge
-                    Text(isRequired ? "REQUIRED" : "OPTIONAL")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(0.5)
-                        .foregroundColor(isRequired ? .red : Color.purple)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill((isRequired ? Color.red : Color.purple).opacity(0.15))
-                        )
+                    // Badge - neutral styling for pending, don't use alarming red
+                    if !isGranted {
+                        Text(isRequired ? "REQUIRED" : "OPTIONAL")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(isRequired ? colors.textSecondary : colors.textTertiary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .strokeBorder(isRequired ? colors.textSecondary.opacity(0.3) : colors.textTertiary.opacity(0.3), lineWidth: 1)
+                            )
+                    }
                 }
 
                 Text(description)
@@ -216,16 +224,24 @@ private struct PermissionRow: View {
                     .font(.system(size: 18))
                     .foregroundColor(.green)
             } else {
+                // Outlined button style - looks more like an actionable button
                 Button(action: action) {
                     Text(actionTitle)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(isHovered ? .white : colors.accent)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(isRequired ? colors.accent : Color.purple)
-                        .cornerRadius(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isHovered ? colors.accent : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(colors.accent, lineWidth: 1.5)
+                        )
                 }
                 .buttonStyle(.plain)
+                .onHover { isHovered = $0 }
             }
         }
         .padding(Spacing.sm)

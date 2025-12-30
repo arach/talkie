@@ -99,7 +99,7 @@ final class OnboardingManager {
     var isDownloadingModel = false
     var downloadProgress: Double = 0
     var downloadStatus: String = ""
-    var selectedModelType: String = "parakeet"  // "parakeet" or "whisper"
+    var selectedModelType: String = ""  // "parakeet", "whisper", or "" for none
 
     // Status check state
     var checkStatuses: [StatusCheck: CheckStatus] = [:]
@@ -174,7 +174,7 @@ final class OnboardingManager {
         isDownloadingModel = false
         downloadProgress = 0
         downloadStatus = ""
-        selectedModelType = "parakeet"
+        selectedModelType = ""
         llmProvider = nil
         hasConfiguredLLM = false
         selectedLocalModel = nil
@@ -407,15 +407,29 @@ final class OnboardingManager {
 
     // MARK: - Model Installation
 
-    var selectedModelId: String {
-        selectedModelType == "parakeet" ? "parakeet:v3" : "whisper:large-v3-turbo"
+    var selectedModelId: String? {
+        switch selectedModelType {
+        case "parakeet": return "parakeet:v3"
+        case "whisper": return "whisper:large-v3-turbo"
+        default: return nil
+        }
     }
 
     var selectedModelDisplayName: String {
-        selectedModelType == "parakeet" ? "Parakeet v3" : "Whisper Large v3"
+        switch selectedModelType {
+        case "parakeet": return "Parakeet v3"
+        case "whisper": return "Whisper Large v3"
+        default: return "None"
+        }
     }
 
     func checkModelInstalled() async {
+        // No model selected = nothing to check
+        guard !selectedModelType.isEmpty else {
+            isModelDownloaded = false
+            return
+        }
+
         // Check if the selected model is already downloaded
         if selectedModelType == "parakeet" {
             // Check Parakeet models
@@ -429,6 +443,9 @@ final class OnboardingManager {
     }
 
     func downloadModel() async {
+        // No model selected = nothing to download
+        guard !selectedModelType.isEmpty else { return }
+
         isDownloadingModel = true
         downloadStatus = "Downloading \(selectedModelDisplayName)..."
         errorMessage = nil
@@ -464,27 +481,45 @@ final class OnboardingManager {
             return
         }
 
-        // 1. Model Selection (instant)
-        await updateCheck(.modelSelection, status: .complete)
-
-        // 2. Model Download (monitor ongoing or check if already installed)
-        if isModelDownloaded {
-            // No fake delay - instant check when already installed
-            await updateCheck(.modelDownload, status: .complete)
+        // 1. Model Selection - check if user selected a model
+        if selectedModelType.isEmpty {
+            // User skipped model selection - mark as skipped (still valid)
+            await updateCheck(.modelSelection, status: .complete)  // "Ready" means ready to proceed
+            await updateCheck(.modelDownload, status: .complete)   // Skipped = no download needed
         } else {
-            // Monitor ongoing download
-            while isDownloadingModel {
-                let percentage = Int(downloadProgress * 100)
-                await updateCheck(.modelDownload, status: .inProgress("\(percentage)%"))
-                try? await Task.sleep(for: .milliseconds(100))
-            }
+            // User selected a model
+            await updateCheck(.modelSelection, status: .complete)
 
-            // Check if download completed
+            // 2. Model Download (monitor ongoing or check if already installed)
             if isModelDownloaded {
+                // No fake delay - instant check when already installed
                 await updateCheck(.modelDownload, status: .complete)
+            } else if isDownloadingModel {
+                // Monitor ongoing download
+                while isDownloadingModel {
+                    let percentage = Int(downloadProgress * 100)
+                    await updateCheck(.modelDownload, status: .inProgress("\(percentage)%"))
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+
+                // Check if download completed
+                if isModelDownloaded {
+                    await updateCheck(.modelDownload, status: .complete)
+                } else {
+                    await updateCheck(.modelDownload, status: .error("Download failed"))
+                    return
+                }
             } else {
-                await updateCheck(.modelDownload, status: .error("Download failed"))
-                return
+                // Model selected but not downloading and not downloaded - waiting for download
+                await updateCheck(.modelDownload, status: .inProgress("Waiting..."))
+                // Wait a bit for download to start
+                try? await Task.sleep(for: .seconds(2))
+                if isModelDownloaded {
+                    await updateCheck(.modelDownload, status: .complete)
+                } else if !isDownloadingModel {
+                    // Download never started - proceed anyway (cloud transcription fallback)
+                    await updateCheck(.modelDownload, status: .complete)
+                }
             }
         }
 

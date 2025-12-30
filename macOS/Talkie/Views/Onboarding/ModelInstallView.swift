@@ -11,7 +11,7 @@ struct ModelInstallView: View {
     let onNext: () -> Void
     @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedModel: ModelChoice = .parakeet
+    @State private var selectedModel: ModelChoice = .none
 
     private var colors: OnboardingColors {
         OnboardingColors.forScheme(colorScheme)
@@ -53,8 +53,14 @@ struct ModelInstallView: View {
                             modelURL: URL(string: "https://github.com/FluidInference/FluidAudio")!,
                             paperURL: URL(string: "https://arxiv.org/abs/2409.17143")
                         ) {
-                            selectedModel = .parakeet
-                            manager.selectedModelType = "parakeet"
+                            // Toggle: tap again to deselect
+                            if selectedModel == .parakeet {
+                                selectedModel = .none
+                                manager.selectedModelType = ""
+                            } else {
+                                selectedModel = .parakeet
+                                manager.selectedModelType = "parakeet"
+                            }
                         }
 
                         OnboardingModelCard(
@@ -73,14 +79,25 @@ struct ModelInstallView: View {
                             modelURL: URL(string: "https://huggingface.co/openai/whisper-large-v3")!,
                             paperURL: URL(string: "https://arxiv.org/abs/2212.04356")
                         ) {
-                            selectedModel = .whisper
-                            manager.selectedModelType = "whisper"
+                            // Toggle: tap again to deselect
+                            if selectedModel == .whisper {
+                                selectedModel = .none
+                                manager.selectedModelType = ""
+                            } else {
+                                selectedModel = .whisper
+                                manager.selectedModelType = "whisper"
+                            }
                         }
                     }
 
                     // Helper text moved here - right below model selection
-                    if !manager.isModelDownloaded && !manager.isDownloadingModel {
-                        Text("Click Continue to start download, you can change this at any time")
+                    if selectedModel == .none {
+                        Text("Select a model, or skip to use cloud transcription only")
+                            .font(.system(size: 10))
+                            .foregroundColor(colors.textTertiary.opacity(0.8))
+                            .padding(.top, Spacing.xs)
+                    } else if !manager.isModelDownloaded && !manager.isDownloadingModel {
+                        Text("Click Continue to start download, or click again to deselect")
                             .font(.system(size: 10))
                             .foregroundColor(colors.textTertiary.opacity(0.8))
                             .padding(.top, Spacing.xs)
@@ -107,11 +124,11 @@ struct ModelInstallView: View {
                         Spacer()
                         OnboardingCTAButton(
                             colors: colors,
-                            title: "CONTINUE",
+                            title: selectedModel == .none ? "SKIP" : "CONTINUE",
                             icon: "arrow.right",
                             action: {
-                                // Start download in background if not already started
-                                if !manager.isModelDownloaded && !manager.isDownloadingModel {
+                                // Start download in background if model selected and not already started
+                                if selectedModel != .none && !manager.isModelDownloaded && !manager.isDownloadingModel {
                                     Task {
                                         await manager.downloadModel()
                                     }
@@ -136,7 +153,11 @@ struct ModelInstallView: View {
         )
         .onAppear {
             // Sync local state with manager
-            selectedModel = manager.selectedModelType == "parakeet" ? .parakeet : .whisper
+            switch manager.selectedModelType {
+            case "parakeet": selectedModel = .parakeet
+            case "whisper": selectedModel = .whisper
+            default: selectedModel = .none
+            }
         }
         .task {
             await manager.checkModelInstalled()
@@ -147,6 +168,7 @@ struct ModelInstallView: View {
 // MARK: - Model Choice
 
 private enum ModelChoice {
+    case none
     case parakeet
     case whisper
 }
