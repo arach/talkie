@@ -616,36 +616,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Glass Mode Toast
 
     private var glassModeToastWindow: NSWindow?
+    private var toastDismissWorkItem: DispatchWorkItem?
 
     private func showGlassModeToast(enabled: Bool) {
-        // Dismiss existing toast
-        glassModeToastWindow?.close()
+        // Cancel any pending dismiss
+        toastDismissWorkItem?.cancel()
 
-        let icon = enabled ? "sparkles" : "square.stack.3d.up.slash"
-        let text = enabled ? "Glass Mode" : "Legacy Mode"
+        // Dismiss existing toast immediately
+        glassModeToastWindow?.orderOut(nil)
+        glassModeToastWindow = nil
 
-        let toastView = NSHostingView(rootView:
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                Text(text)
-                    .font(.system(size: 14, weight: .medium))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(enabled ? Color.blue.opacity(0.9) : Color(white: 0.2).opacity(0.9))
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-            )
-        )
+        // Create simple AppKit toast (no SwiftUI to avoid memory issues)
+        let text = enabled ? "✨ Glass Mode" : "◼︎ Legacy Mode"
+
+        let label = NSTextField(labelWithString: text)
+        label.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        label.textColor = .white
+        label.alignment = .center
+        label.sizeToFit()
+
+        let padding: CGFloat = 16
+        let width = label.frame.width + padding * 2
+        let height: CGFloat = 36
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 10
+        container.layer?.backgroundColor = (enabled ? NSColor.systemBlue : NSColor(white: 0.2, alpha: 1)).withAlphaComponent(0.9).cgColor
+
+        label.frame = NSRect(x: padding, y: (height - label.frame.height) / 2, width: label.frame.width, height: label.frame.height)
+        container.addSubview(label)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 150, height: 44),
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -653,13 +656,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.level = .floating
-        window.contentView = toastView
+        window.contentView = container
         window.hasShadow = true
 
         // Center on screen
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
-            let x = screenFrame.midX - 75
+            let x = screenFrame.midX - width / 2
             let y = screenFrame.midY + 100
             window.setFrameOrigin(NSPoint(x: x, y: y))
         }
@@ -668,15 +671,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         glassModeToastWindow = window
 
         // Auto dismiss after 1.5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        let dismissWork = DispatchWorkItem { [weak self] in
+            guard let window = self?.glassModeToastWindow else { return }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.3
-                self?.glassModeToastWindow?.animator().alphaValue = 0
-            } completionHandler: {
-                self?.glassModeToastWindow?.close()
+                window.animator().alphaValue = 0
+            } completionHandler: { [weak self] in
+                self?.glassModeToastWindow?.orderOut(nil)
                 self?.glassModeToastWindow = nil
             }
         }
+        toastDismissWorkItem = dismissWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: dismissWork)
     }
 
     @objc private func showOnboarding() {
