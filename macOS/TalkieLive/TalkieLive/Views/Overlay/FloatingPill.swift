@@ -667,6 +667,7 @@ struct FloatingPillView: View {
                 micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
                 audioLevel: controller.audioLevel,
                 forceExpanded: isExpanded,
+                identifier: "floating",
                 onTap: {
                     // Visual feedback - quick scale down/up
                     provideTapFeedback()

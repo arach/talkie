@@ -125,6 +125,7 @@ struct UnifiedDashboard: View {
         }
         .background(Theme.current.background)
         .onAppear {
+            dictationStore.refresh()  // Load dictations from database
             loadData()
             isLiveRunning = liveState.isRunning
             serviceState = serviceMonitor.state

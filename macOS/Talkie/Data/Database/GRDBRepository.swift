@@ -8,6 +8,9 @@
 
 import Foundation
 import GRDB
+import TalkieKit
+
+private let log = Log(.database)
 
 // MARK: - GRDB Repository
 
@@ -32,7 +35,7 @@ actor GRDBRepository: MemoRepository {
             let startTime = Date()
             let db = try await dbManager.database()
 
-            print("🔍 [GRDB] Executing query: sort=\(sortBy), limit=\(limit), offset=\(offset), filters=\(filters.count)")
+            log.debug("Executing query: sort=\(sortBy), limit=\(limit), offset=\(offset), filters=\(filters.count)")
 
             let result = try await db.read { db in
                 // Start with non-deleted memos only
@@ -101,7 +104,7 @@ actor GRDBRepository: MemoRepository {
             }
 
             let elapsed = Date().timeIntervalSince(startTime)
-            print("✅ [GRDB] Query completed in \(Int(elapsed * 1000))ms, returned \(result.count) memos")
+            log.debug("Query completed in \(Int(elapsed * 1000))ms, returned \(result.count) memos")
 
             return result
         }
@@ -200,10 +203,14 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             try await db.write { db in
-                try db.execute(
-                    sql: "UPDATE voice_memos SET deletedAt = ? WHERE id = ?",
-                    arguments: [Date(), id.uuidString]
-                )
+                // Use GRDB's proper update API instead of raw SQL
+                if var memo = try MemoModel.fetchOne(db, key: id) {
+                    memo.deletedAt = Date()
+                    try memo.update(db)
+                    log.info("🗑️ Soft delete id=\(id.uuidString.prefix(8)), success")
+                } else {
+                    log.warning("🗑️ Soft delete id=\(id.uuidString.prefix(8)), memo not found")
+                }
             }
         }
     }
@@ -216,12 +223,22 @@ actor GRDBRepository: MemoRepository {
 
             try await db.write { db in
                 for id in ids {
-                    try db.execute(
-                        sql: "UPDATE voice_memos SET deletedAt = ? WHERE id = ?",
-                        arguments: [now, id.uuidString]
-                    )
+                    // Use GRDB's proper update API instead of raw SQL
+                    if var memo = try MemoModel.fetchOne(db, key: id) {
+                        memo.deletedAt = now
+                        try memo.update(db)
+                        log.info("🗑️ Soft delete id=\(id.uuidString.prefix(8)), success")
+                    } else {
+                        log.warning("🗑️ Soft delete id=\(id.uuidString.prefix(8)), memo not found")
+                    }
                 }
             }
+
+            // Verify the update persisted
+            let count = try await db.read { db in
+                try MemoModel.filter(MemoModel.Columns.deletedAt != nil).fetchCount(db)
+            }
+            log.info("🗑️ Pending deletions count: \(count)")
         }
     }
 
@@ -258,10 +275,14 @@ actor GRDBRepository: MemoRepository {
             let db = try await dbManager.database()
 
             try await db.write { db in
-                try db.execute(
-                    sql: "UPDATE voice_memos SET deletedAt = NULL WHERE id = ?",
-                    arguments: [id.uuidString]
-                )
+                // Use GRDB's proper update API instead of raw SQL
+                if var memo = try MemoModel.fetchOne(db, key: id) {
+                    memo.deletedAt = nil
+                    try memo.update(db)
+                    log.info("♻️ Restore id=\(id.uuidString.prefix(8)), success")
+                } else {
+                    log.warning("♻️ Restore id=\(id.uuidString.prefix(8)), memo not found")
+                }
             }
         }
     }

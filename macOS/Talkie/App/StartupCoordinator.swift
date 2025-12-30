@@ -34,13 +34,14 @@ final class StartupCoordinator {
         guard !hasInitialized else { return }
 
         let state = signposter.beginInterval("Phase 1: Critical")
-        logger.info("⚡️ Phase 1: Critical initialization")
 
         // Configure window appearance to match theme before SwiftUI renders
         // This prevents the "flicker" of default colors before theme loads
         configureWindowAppearance()
 
         hasInitialized = true
+        let appearance = SettingsManager.shared.appearanceMode
+        logger.info("Startup[1]: window appearance (\(appearance.rawValue)) ✓")
         signposter.endInterval("Phase 1: Critical", state)
     }
 
@@ -75,22 +76,18 @@ final class StartupCoordinator {
     /// Initialize database asynchronously
     /// Returns true if already initialized (to avoid duplicate calls)
     func initializeDatabase() async -> Bool {
-        guard !databaseInitialized else {
-            logger.info("✓ Database already initialized (skipping duplicate)")
-            return true
-        }
+        guard !databaseInitialized else { return true }
 
         let state = signposter.beginInterval("Phase 2: Database")
-        logger.info("⚡️ Phase 2: Database initialization (async)")
 
         do {
             try await DatabaseManager.shared.initialize()
-            logger.info("✅ Database ready")
             databaseInitialized = true
+            logger.info("Startup[2]: GRDB initialized ✓")
             signposter.endInterval("Phase 2: Database", state)
             return true
         } catch {
-            logger.error("❌ Database initialization failed: \(error.localizedDescription)")
+            logger.error("Startup[2]: GRDB failed - \(error.localizedDescription)")
             signposter.endInterval("Phase 2: Database", state)
             return false
         }
@@ -101,8 +98,6 @@ final class StartupCoordinator {
     /// Initialize non-critical services after UI is interactive
     /// This runs with a small delay to let UI settle
     func initializeDeferred() {
-        logger.info("⚡️ Phase 3: Deferred initialization")
-
         Task { @MainActor in
             let state = signposter.beginInterval("Phase 3: Deferred")
 
@@ -111,38 +106,32 @@ final class StartupCoordinator {
 
             // Request local notification permissions for workflow notifications
             signposter.emitEvent("Notifications")
-            logger.info("  → Local notification permissions")
             requestNotificationPermissions()
 
             // CloudKit can wait - not needed for local UI
             signposter.emitEvent("CloudKit")
-            logger.info("  → CloudKit subscription setup")
             setupCloudKitSubscription()
 
-            // Remote notifications can wait
+            // Remote notifications (fire-and-forget - callback handled by AppDelegate)
             signposter.emitEvent("Remote Notifications")
-            logger.info("  → Remote notifications")
             NSApplication.shared.registerForRemoteNotifications()
 
-            // CloudKit sync can wait
+            // CloudKit sync timing managed by CloudKitSyncManager
             signposter.emitEvent("Sync Engine")
-            logger.info("  → CloudKit sync engine")
-            CloudKitSyncEngine.shared.startPeriodicSync()
 
-            logger.info("✅ Deferred initialization complete")
+            logger.info("Startup[3]: notifications, CloudKit subscription, sync engine ✓")
             signposter.endInterval("Phase 3: Deferred", state)
         }
     }
 
     private func requestNotificationPermissions() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if granted {
-                logger.info("✅ Local notification permissions granted")
-            } else if let error = error {
-                logger.warning("⚠️ Notification permission error: \(error.localizedDescription)")
-            } else {
-                logger.info("ℹ️ Local notification permissions denied")
+            if let error = error {
+                logger.warning("Notifications: \(error.localizedDescription)")
+            } else if !granted {
+                logger.info("Notifications: denied by user")
             }
+            // Silent on success - expected case
         }
     }
 
@@ -155,25 +144,21 @@ final class StartupCoordinator {
             try? await Task.sleep(for: .seconds(1))
 
             let state = signposter.beginInterval("Phase 4: Background")
-            logger.info("⚡️ Phase 4: Background initialization")
 
             // Helper apps can start after everything else
             signposter.emitEvent("Helper Apps")
-            logger.info("  → Helper apps")
             ServiceManager.shared.ensureHelpersRunning()
 
             // XPC connection after UI is ready
             signposter.emitEvent("Engine XPC")
-            logger.info("  → Engine XPC connection")
             EngineClient.shared.connect()
 
             // Start service monitoring (Live + Engine status awareness)
             // Uses 30s interval - aware but not aggressive
             signposter.emitEvent("Service Monitor")
-            logger.info("  → Service status monitoring")
             ServiceManager.shared.startMonitoring(interval: 30.0)
 
-            logger.info("✅ Background initialization complete")
+            logger.info("Startup[4]: helpers, XPC, service monitor (30s) ✓")
             signposter.endInterval("Phase 4: Background", state)
         }
     }
@@ -188,14 +173,11 @@ final class StartupCoordinator {
         let subscriptionID = "talkie-private-db-subscription"
 
         // Check if subscription already exists (async, non-blocking)
+        // Silent on success - only log if we need to create one
         privateDB.fetch(withSubscriptionID: subscriptionID) { existingSubscription, error in
-            if existingSubscription != nil {
-                logger.info("✅ CloudKit subscription exists")
-                return
+            if existingSubscription == nil && error == nil {
+                logger.info("CloudKit: subscription needs creation")
             }
-
-            // Would create subscription here if needed
-            logger.info("ℹ️ CloudKit subscription would be created")
         }
     }
 }

@@ -377,44 +377,28 @@ final class DictationStore {
     }
 
     /// Update dictation text (for retranscription)
+    /// TODO: Route through TalkieLive XPC instead of direct DB write
     func updateText(for id: UUID, newText: String, modelId: String? = nil) {
-        // Find the dictation to get its liveID
-        guard let dictation = dictations.first(where: { $0.id == id }),
-              let liveID = dictation.liveID else {
-            logger.warning("Cannot update text: dictation not found or has no liveID")
-            return
-        }
-
-        LiveDatabase.updateText(for: liveID, newText: newText, modelId: modelId)
-        refresh()
+        logger.warning("updateText not implemented - should route through TalkieLive XPC")
     }
 
-    /// Delete an dictation
+    /// Delete a dictation
+    /// TODO: Route through TalkieLive XPC instead of direct DB write
     func delete(_ dictation: Dictation) {
-        // Use liveID if available, otherwise match by timestamp
-        if let liveID = dictation.liveID,
-           let live = LiveDatabase.fetch(id: liveID) {
-            LiveDatabase.delete(live)
-            logger.info("Deleted dictation by ID: \(dictation.text.prefix(30))...")
-        } else {
-            // Fallback: match by timestamp
-            let liveDictations = LiveDatabase.all()
-            if let live = liveDictations.first(where: { $0.createdAt == dictation.timestamp }) {
-                LiveDatabase.delete(live)
-                logger.info("Deleted dictation by timestamp: \(dictation.text.prefix(30))...")
-            }
-        }
-
-        // Immediately remove from local array (don't wait for incremental refresh)
+        logger.warning("delete not implemented - should route through TalkieLive XPC")
+        // Optimistically remove from local array
         dictations.removeAll { $0.id == dictation.id }
         cachedCount = max(0, cachedCount - 1)
     }
 
     /// Clear all dictations
+    /// TODO: Route through TalkieLive XPC instead of direct DB write
     func clear() {
-        LiveDatabase.deleteAll()
-        logger.info("Cleared all dictations")
-        refresh()
+        logger.warning("clear not implemented - should route through TalkieLive XPC")
+        // Optimistically clear local array
+        dictations.removeAll()
+        cachedCount = 0
+        lastSeenID = 0
     }
 
     /// Prune expired dictations

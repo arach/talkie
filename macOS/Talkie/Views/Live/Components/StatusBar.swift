@@ -142,6 +142,7 @@ struct StatusBar: View {
                             pendingQueueCount: 0,
                             micDeviceName: microphoneName,
                             audioLevel: 0,
+                            identifier: "statusbar",
                             onTap: {
                                 ServiceManager.shared.live.toggleRecording()
                             }

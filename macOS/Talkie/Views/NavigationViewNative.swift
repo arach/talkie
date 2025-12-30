@@ -346,7 +346,7 @@ struct TalkieNavigationViewNative: View {
 
             // Primary navigation (no section header)
             SidebarRow(section: .home, selectedSection: $selectedSection, title: "Home", icon: "house")
-            SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Recordings", icon: "square.stack")
+            SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Memos", icon: "square.stack")
             SidebarRow(section: .liveRecent, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic")
 
             // Activity

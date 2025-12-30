@@ -106,8 +106,12 @@ class CloudKitSyncManager {
     func configure(with context: NSManagedObjectContext) {
         self.viewContext = context
 
-        // Load sync history now that database is ready
-        loadSyncHistory()
+        // Load sync history after GRDB is ready
+        DatabaseManager.shared.afterInitialized { [weak self] in
+            await MainActor.run {
+                self?.loadSyncHistory()
+            }
+        }
 
         // Note: TalkieData.shared handles bridge sync (CoreData → GRDB) on startup
 
@@ -842,7 +846,7 @@ class CloudKitSyncManager {
                                 // Skip soft-deleted memos - respect local deletion
                                 if existing.memo.deletedAt != nil {
                                     log.info("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(cdMemo.title ?? "Untitled")'")
-                                    continue
+                                    return
                                 }
 
                                 // Compare timestamps - Core Data wins (source of truth from phone)

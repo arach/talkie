@@ -32,9 +32,8 @@ func initializeDataLayer() async throws {
         print("✅ Migration already complete")
     }
 
-    // 3. Start CloudKit sync in background
-    CloudKitSyncEngine.shared.startPeriodicSync()
-    print("✅ CloudKit sync started")
+    // 3. CloudKit sync is managed by CloudKitSyncManager (started in StartupCoordinator)
+    print("✅ Data layer ready")
 }
 
 // MARK: - Migration Check View

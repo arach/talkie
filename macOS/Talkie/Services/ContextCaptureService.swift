@@ -157,21 +157,11 @@ final class ContextCaptureService {
 
     /// Schedule background enrichment that updates the DB record after paste
     /// Fire-and-forget: runs in background and updates the record when complete
+    /// TODO: Route metadata updates through TalkieLive XPC instead of direct DB write
     func scheduleEnrichment(utteranceId: Int64, baseline: DictationMetadata) {
-        let options = ContextCaptureOptions(enabled: true, detail: .rich)
-        guard options.detail == .rich else { return }
-
-        Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
-            let enriched = await self.captureRichContext(options: options)
-            let merged = baseline.mergingMissing(from: enriched)
-
-            // Update the database record with enriched metadata
-            await MainActor.run {
-                LiveDatabase.updateMetadata(id: utteranceId, metadata: merged)
-                logger.debug("Enriched context for utterance \(utteranceId)")
-            }
-        }
+        // Disabled - metadata enrichment should be done by TalkieLive
+        // which owns the write path to LiveDatabase
+        logger.debug("scheduleEnrichment disabled - should route through TalkieLive XPC")
     }
 
     // MARK: - Private Helpers

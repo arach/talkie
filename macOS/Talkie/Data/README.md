@@ -50,8 +50,7 @@ Data/
 ├── ViewModels/                      # Business logic
 │   └── MemosViewModel.swift        # All Memos ViewModel
 │
-└── Sync/                            # CloudKit sync
-    └── CloudKitSyncEngine.swift    # Background sync layer
+└── Sync/                            # (CloudKit sync managed by CloudKitSyncManager)
 
 Views/
 ├── Memos/
@@ -99,14 +98,10 @@ Replace old views with new ones:
 - `MemoTableViews` → `AllMemosView2`
 - Views now use `MemosViewModel` instead of `@FetchRequest`
 
-### Step 5: CloudKit Container ID
+### Step 5: CloudKit Sync
 
-Update CloudKit container ID in `CloudKitSyncEngine.swift`:
-
-```swift
-let container = CKContainer(identifier: "iCloud.com.yourcompany.talkie")
-// Change to your actual container ID
-```
+CloudKit sync is handled by `CloudKitSyncManager` in the Services folder.
+Container ID: `iCloud.com.jdi.talkie`
 
 ## 🔍 Key Performance Features
 

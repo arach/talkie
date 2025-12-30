@@ -69,6 +69,7 @@ struct HomeView: View {
                         HStack(alignment: .top, spacing: GridLayout.gutter) {
                             RecentActivityCard(
                                 dictations: Array(store.dictations.prefix(5)),
+                                totalCount: store.cachedCount,
                                 onSelectDictation: onSelectDictation
                             )
                             .frame(width: GridLayout.width(slots: 4, in: containerWidth))
@@ -1607,6 +1608,7 @@ struct TopAppRow: View {
 
 struct RecentActivityCard: View {
     let dictations: [Dictation]
+    let totalCount: Int
     var onSelectDictation: ((Dictation) -> Void)?
 
     var body: some View {
@@ -1619,7 +1621,7 @@ struct RecentActivityCard: View {
 
                 Spacer()
 
-                Text("\(dictations.count) latest")
+                Text(totalCount > dictations.count ? "\(dictations.count) of \(totalCount)" : "\(totalCount) total")
                     .font(.system(size: 10))
                     .foregroundColor(TalkieTheme.textMuted)
             }

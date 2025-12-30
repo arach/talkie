@@ -85,6 +85,9 @@ public struct LivePill: View {
     // Control expansion
     var forceExpanded: Bool = false
 
+    // Optional identifier for logging (e.g., "statusbar", "floating")
+    var identifier: String? = nil
+
     // Optional callbacks
     var onTap: (() -> Void)? = nil
     var onQueueTap: (() -> Void)? = nil  // Tapping the queue badge specifically
@@ -109,6 +112,7 @@ public struct LivePill: View {
         micDeviceName: String?,
         audioLevel: Float = 0,
         forceExpanded: Bool = false,
+        identifier: String? = nil,
         onTap: (() -> Void)? = nil,
         onQueueTap: (() -> Void)? = nil
     ) {
@@ -122,6 +126,7 @@ public struct LivePill: View {
         self.micDeviceName = micDeviceName
         self.audioLevel = audioLevel
         self.forceExpanded = forceExpanded
+        self.identifier = identifier
         self.onTap = onTap
         self.onQueueTap = onQueueTap
     }
@@ -198,17 +203,19 @@ public struct LivePill: View {
             stopModifierMonitor()
         }
         .onChange(of: isEngineConnected) { _, connected in
+            let tag = identifier.map { "[\($0)] " } ?? ""
             if !connected {
-                print("[LivePill] ⚠️ Engine disconnected - mic: \(micDeviceName ?? "nil")")
+                print("[LivePill] \(tag)⚠️ Engine disconnected - mic: \(micDeviceName ?? "nil")")
             } else {
-                print("[LivePill] ✓ Engine connected")
+                print("[LivePill] \(tag)✓ Engine connected")
             }
         }
         .onChange(of: micDeviceName) { oldMic, newMic in
+            let tag = identifier.map { "[\($0)] " } ?? ""
             if oldMic != nil && newMic == nil {
-                print("[LivePill] ⚠️ Microphone lost")
+                print("[LivePill] \(tag)⚠️ Microphone lost")
             } else if oldMic == nil && newMic != nil {
-                print("[LivePill] ✓ Microphone available: \(newMic!)")
+                print("[LivePill] \(tag)✓ Microphone available: \(newMic!)")
             }
         }
     }

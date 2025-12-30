@@ -11,6 +11,7 @@ import Foundation
 import CoreData
 import AppKit
 import os
+import CryptoKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "LocalFiles")
 
@@ -22,7 +23,8 @@ class TranscriptFileManager {
 
     /// Cache of memo IDs to hash of last-written content
     /// Persisted to disk so it survives app restarts
-    private var lastWrittenHashes: [UUID: Int] = [:] {
+    /// Uses SHA256 for stable hashing across app launches (Swift's hashValue is randomized per process)
+    private var lastWrittenHashes: [UUID: String] = [:] {
         didSet { saveHashCache() }
     }
 
@@ -47,7 +49,7 @@ class TranscriptFileManager {
 
     private func loadHashCache() {
         guard let data = try? Data(contentsOf: hashCacheURL),
-              let dict = try? JSONDecoder().decode([String: Int].self, from: data) else {
+              let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
             return
         }
         // Convert string keys back to UUIDs
@@ -56,17 +58,24 @@ class TranscriptFileManager {
                 result[uuid] = pair.value
             }
         }
-        logger.debug("Loaded \(self.lastWrittenHashes.count) transcript hashes from cache")
+        logger.info("Loaded \(self.lastWrittenHashes.count) transcript hashes from cache")
     }
 
     private func saveHashCache() {
         // Convert UUID keys to strings for JSON
-        let dict = lastWrittenHashes.reduce(into: [String: Int]()) { result, pair in
+        let dict = lastWrittenHashes.reduce(into: [String: String]()) { result, pair in
             result[pair.key.uuidString] = pair.value
         }
         if let data = try? JSONEncoder().encode(dict) {
             try? data.write(to: hashCacheURL)
         }
+    }
+
+    /// Compute stable SHA256 hash for content (Swift's hashValue is randomized per process)
+    private func stableHash(_ content: String) -> String {
+        let data = Data(content.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()  // First 16 hex chars
     }
 
     // MARK: - Setup
@@ -218,7 +227,7 @@ class TranscriptFileManager {
         guard let memoId = memo.id else { return .skipped }
 
         let content = generateMarkdownContent(for: memo)
-        let contentHash = content.hashValue
+        let contentHash = stableHash(content)
         let fileURL = transcriptFileURL(for: memo)
 
         // Check if content has changed since last write

@@ -239,6 +239,7 @@ struct SyncHistoryView: View {
         isLoadingDeletions = true
         pendingDeletions = await viewModel.fetchPendingDeletions()
         isLoadingDeletions = false
+        print("📋 [SyncHistory] Loaded \(pendingDeletions.count) pending deletions")
     }
 
     private func approveDeletions() {

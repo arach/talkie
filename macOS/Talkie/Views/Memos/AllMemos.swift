@@ -516,6 +516,7 @@ struct AllMemos: View {
     private var loadingView: some View {
         VStack(spacing: Spacing.md) {
             ProgressView()
+                .frame(width: 32, height: 32)
             Text("Loading memos...")
                 .font(.system(size: 13))
                 .foregroundColor(TalkieTheme.textMuted)

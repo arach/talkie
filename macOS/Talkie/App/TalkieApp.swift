@@ -218,6 +218,9 @@ struct MigrationGateView: View {
     @State private var checkComplete = false
     @State private var refreshTrigger = 0
 
+    // Static guard - persists across view recreations
+    private static var hasStartedInit = false
+
     var body: some View {
         Group {
             if !checkComplete {
@@ -231,6 +234,7 @@ struct MigrationGateView: View {
                     .onDisappear {
                         // After migration completes, reload the view
                         checkComplete = false
+                        Self.hasStartedInit = false  // Allow re-init after migration
                         checkMigrationStatus()
                     }
             } else {
@@ -247,22 +251,21 @@ struct MigrationGateView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MigrationCompleted"))) { _ in
             print("📢 [MigrationGate] Received migration completed notification, refreshing...")
             checkComplete = false
+            Self.hasStartedInit = false  // Allow re-init after migration
             checkMigrationStatus()
         }
     }
 
     private func checkMigrationStatus() {
+        // Guard against multiple concurrent calls from .task re-evaluation
+        guard !Self.hasStartedInit else { return }
+        Self.hasStartedInit = true
+
         Task { @MainActor in
             let uiState = signposter.beginInterval("UI First Render")
-            print("\n🚀 [App Startup] Initializing Talkie...")
 
             // Phase 2: Initialize database (async, prevents duplicates)
             let success = await StartupCoordinator.shared.initializeDatabase()
-
-            if !success {
-                print("❌ [App Startup] Failed to initialize GRDB")
-                // Continue anyway - migration will show error if it fails
-            }
 
             // Check migration status
             signposter.emitEvent("Check Migration")
@@ -270,12 +273,10 @@ struct MigrationGateView: View {
             needsMigration = !migrationComplete
             checkComplete = true
 
-            if needsMigration {
-                print("⚠️ [App Startup] Migration required - showing MigrationView")
-            } else {
-                print("✅ [App Startup] Migration already complete - loading main app\n")
-                // CloudKit sync and other services are handled by StartupCoordinator.initializeDeferred()
-            }
+            // Single summary log
+            let dbStatus = success ? "✓" : "✗"
+            let migrationStatus = needsMigration ? "migration required" : "ready"
+            print("[App] GRDB \(dbStatus) | \(migrationStatus)")
 
             signposter.endInterval("UI First Render", uiState)
         }

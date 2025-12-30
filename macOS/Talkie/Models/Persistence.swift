@@ -241,11 +241,9 @@ struct PersistenceController {
     init(inMemory: Bool = false) {
         container = NSPersistentCloudKitContainer(name: "talkie")
 
-        logger.info("Initializing PersistenceController (token-based sync)...")
-
         if inMemory {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
-            logger.info("Using in-memory store")
+            logger.info("Persistence: in-memory store")
         } else {
             // Configure CloudKit sync - MUST enable history tracking for proper sync!
             // NSPersistentCloudKitContainer requires these options to function correctly.
@@ -261,23 +259,27 @@ struct PersistenceController {
                 // REQUIRED: Enable remote change notifications for real-time sync
                 // Without this, we won't receive updates from other devices!
                 description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
-
-                logger.info("CloudKit container: iCloud.com.jdi.talkie (full sync enabled)")
-                logger.info("Store URL: \(description.url?.absoluteString ?? "nil")")
             }
         }
 
-        container.loadPersistentStores { storeDescription, error in
+        container.loadPersistentStores { [weak container] storeDescription, error in
             if let error = error as NSError? {
-                logger.error("Core Data store failed to load: \(error.localizedDescription)")
-                logger.error("Error details: \(error.userInfo)")
+                logger.error("Persistence: failed - \(error.localizedDescription)")
             } else {
-                logger.info("Core Data loaded successfully")
-                logger.info("Store type: \(storeDescription.type)")
-
-                if let cloudKitOptions = storeDescription.cloudKitContainerOptions {
-                    logger.info("CloudKit container ID: \(cloudKitOptions.containerIdentifier)")
+                let cloudKit = storeDescription.cloudKitContainerOptions?.containerIdentifier ?? "none"
+                let store = storeDescription.url?.lastPathComponent ?? "?"
+                #if DEBUG
+                let env = "dev"
+                #else
+                let env = "prod"
+                #endif
+                // Get local memo count for summary
+                var localCount = 0
+                if let ctx = container?.viewContext {
+                    let req: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+                    localCount = (try? ctx.count(for: req)) ?? 0
                 }
+                logger.info("Persistence: \(store) + \(cloudKit)(\(env)) | \(localCount) local memo(s)")
             }
         }
 
@@ -328,139 +330,78 @@ struct PersistenceController {
     private static func checkiCloudStatus() {
         let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
 
-        // Log build configuration (Development vs Production environment)
-        #if DEBUG
-        logger.info("🔧 Build Configuration: DEBUG (uses CloudKit Development environment)")
-        #else
-        logger.info("🚀 Build Configuration: RELEASE (uses CloudKit Production environment)")
-        #endif
-
         container.accountStatus { status, error in
             if let error = error {
-                logger.error("❌ iCloud account error: \(error.localizedDescription)")
+                logger.error("iCloud error: \(error.localizedDescription)")
                 return
             }
 
             switch status {
             case .available:
-                logger.info("✅ iCloud account status: Available")
                 Task { @MainActor in
                     SyncStatusManager.shared.setCloudAvailable(true)
                 }
-                // Now fetch detailed zone and database info
-                fetchCloudKitDatabaseInfo(container: container)
+                fetchCloudKitSummary(container: container)
             case .noAccount:
-                logger.warning("⚠️ iCloud account status: No Account - user not signed into iCloud")
+                logger.warning("CloudKit: iCloud not signed in")
                 Task { @MainActor in
                     SyncStatusManager.shared.setCloudAvailable(false)
                     SyncStatusManager.shared.setError("No iCloud account")
                 }
             case .restricted:
-                logger.warning("⚠️ iCloud account status: Restricted")
+                logger.warning("CloudKit: iCloud restricted")
                 Task { @MainActor in
                     SyncStatusManager.shared.setCloudAvailable(false)
                     SyncStatusManager.shared.setError("iCloud restricted")
                 }
             case .couldNotDetermine:
-                logger.warning("⚠️ iCloud account status: Could not determine")
+                logger.warning("CloudKit: iCloud status undetermined")
                 Task { @MainActor in
                     SyncStatusManager.shared.setCloudAvailable(false)
                 }
             case .temporarilyUnavailable:
-                logger.warning("⚠️ iCloud account status: Temporarily unavailable")
+                logger.warning("CloudKit: iCloud temporarily unavailable")
                 Task { @MainActor in
                     SyncStatusManager.shared.setCloudAvailable(false)
                     SyncStatusManager.shared.setError("iCloud unavailable")
                 }
             @unknown default:
-                logger.warning("⚠️ iCloud account status: Unknown")
+                logger.warning("CloudKit: iCloud unknown status")
             }
         }
     }
 
-    private static func fetchCloudKitDatabaseInfo(container: CKContainer) {
+    /// Fetch zones and record count, log as single summary line
+    private static func fetchCloudKitSummary(container: CKContainer) {
         let privateDB = container.privateCloudDatabase
 
-        // Log database scope
-        logger.info("📦 CloudKit Database Scope: Private Database")
-        logger.info("📦 Container ID: \(container.containerIdentifier ?? "unknown")")
-
-        // Fetch all record zones to understand structure
         privateDB.fetchAllRecordZones { zones, error in
-            if let error = error {
-                logger.error("❌ Failed to fetch zones: \(error.localizedDescription)")
+            guard let zones = zones, error == nil else {
+                logger.error("CloudKit: zone fetch failed - \(error?.localizedDescription ?? "unknown")")
                 return
             }
 
-            guard let zones = zones else {
-                logger.warning("⚠️ No zones returned")
+            let zoneCount = zones.count
+            guard let cdZone = zones.first(where: { $0.zoneID.zoneName == "com.apple.coredata.cloudkit.zone" }) else {
+                logger.info("CloudKit: \(zoneCount) zone(s), no CoreData zone")
                 return
             }
 
-            logger.info("🗂️ Found \(zones.count) CloudKit zone(s):")
-            for zone in zones {
-                logger.info("  📁 Zone: \(zone.zoneID.zoneName) (owner: \(zone.zoneID.ownerName))")
-
-                // Query records in each zone
-                queryRecordsInZone(database: privateDB, zoneID: zone.zoneID)
-            }
-        }
-    }
-
-    private static func queryRecordsInZone(database: CKDatabase, zoneID: CKRecordZone.ID) {
-        // Core Data + CloudKit uses a zone named "com.apple.coredata.cloudkit.zone"
-        // Query for CD_VoiceMemo records (Core Data prefixes with CD_)
-        let query = CKQuery(recordType: "CD_VoiceMemo", predicate: NSPredicate(value: true))
-
-        database.fetch(withQuery: query, inZoneWith: zoneID, desiredKeys: nil, resultsLimit: CKQueryOperation.maximumResults) { result in
-            switch result {
-            case .failure(let error):
-                // This might fail if the record type doesn't exist in this zone
-                let ckError = error as? CKError
-                if ckError?.code == .unknownItem {
-                    logger.info("  📝 Zone '\(zoneID.zoneName)': No CD_VoiceMemo records (type not found)")
-                } else {
-                    logger.error("  ❌ Query failed in zone '\(zoneID.zoneName)': \(error.localizedDescription)")
+            // Query record count and log combined summary
+            let query = CKQuery(recordType: "CD_VoiceMemo", predicate: NSPredicate(value: true))
+            privateDB.fetch(withQuery: query, inZoneWith: cdZone.zoneID, desiredKeys: nil, resultsLimit: CKQueryOperation.maximumResults) { result in
+                let recordCount: Int
+                switch result {
+                case .failure: recordCount = 0
+                case .success(let (matches, _)): recordCount = matches.count
                 }
-
-            case .success(let (matchResults, _)):
-                let records = matchResults.compactMap { try? $0.1.get() }
-
-                if records.isEmpty {
-                    logger.info("  📝 Zone '\(zoneID.zoneName)': No records returned")
-                    return
-                }
-
-                logger.info("  📝 Zone '\(zoneID.zoneName)': Found \(records.count) CD_VoiceMemo record(s)")
-
-                // Log first few record details
-                for record in records.prefix(3) {
-                    let title = record["CD_title"] as? String ?? "Untitled"
-                    let createdAt = record.creationDate?.description ?? "unknown"
-                    logger.info("    • \(title) (created: \(createdAt), recordID: \(record.recordID.recordName.prefix(20))...)")
-                }
-                if records.count > 3 {
-                    logger.info("    ... and \(records.count - 3) more records")
-                }
+                logger.info("CloudKit: iCloud ✓ | \(zoneCount) zone(s) | \(recordCount) record(s)")
             }
         }
     }
 
     private static func logMemoCount(context: NSManagedObjectContext) {
-        let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-
-        do {
-            let memos = try context.fetch(fetchRequest)
-            logger.info("Total VoiceMemos in database: \(memos.count)")
-            for memo in memos.prefix(5) {
-                logger.info("  - \(memo.title ?? "Untitled") (created: \(memo.createdAt?.description ?? "nil"))")
-            }
-            if memos.count > 5 {
-                logger.info("  ... and \(memos.count - 5) more")
-            }
-        } catch {
-            logger.error("Failed to fetch memos: \(error.localizedDescription)")
-        }
+        // Logged as part of Persistence init line, no separate log needed
     }
 
     /// Mark all memos as received by Mac

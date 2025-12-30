@@ -17,6 +17,9 @@ final class DatabaseManager {
     private var dbQueue: DatabaseQueue?
     nonisolated(unsafe) private let lock = NSLock()
 
+    /// Callbacks waiting for initialization
+    private var pendingCallbacks: [@Sendable () async -> Void] = []
+
     /// Database file location
     private static var databaseURL: URL {
         let appSupport = FileManager.default.urls(
@@ -55,10 +58,37 @@ final class DatabaseManager {
         // Run migrations
         try migrator.migrate(dbQueue)
 
-        // Thread-safe assignment
+        // Thread-safe assignment and run pending callbacks
+        lock.lock()
+        self.dbQueue = dbQueue
+        let callbacks = pendingCallbacks
+        pendingCallbacks.removeAll()
+        lock.unlock()
+
+        // Run any queued callbacks now that DB is ready
+        for callback in callbacks {
+            await callback()
+        }
+    }
+
+    /// Check if database is initialized (thread-safe)
+    var isInitialized: Bool {
         lock.lock()
         defer { lock.unlock() }
-        self.dbQueue = dbQueue
+        return dbQueue != nil
+    }
+
+    /// Run a callback after database is initialized
+    /// If already initialized, runs immediately. Otherwise queues for later.
+    func afterInitialized(_ callback: @escaping @Sendable () async -> Void) {
+        lock.lock()
+        if dbQueue != nil {
+            lock.unlock()
+            Task { await callback() }
+        } else {
+            pendingCallbacks.append(callback)
+            lock.unlock()
+        }
     }
 
     /// Get database queue (must call initialize() first)

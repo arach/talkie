@@ -833,6 +833,7 @@ struct StatusBar: View {
                         pendingQueueCount: LiveDatabase.countNeedsRetry(),
                         micDeviceName: AudioDeviceManager.shared.selectedDeviceName,
                         audioLevel: AudioLevelMonitor.shared.level,
+                        identifier: "debug",
                         onTap: toggleRecording
                     )
 

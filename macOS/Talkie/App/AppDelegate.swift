@@ -69,22 +69,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let launchState = signposter.beginInterval("App Launch")
-        NSLog("[AppDelegate] 🎬 applicationDidFinishLaunching called")
 
         // CRITICAL: Check for debug mode SYNCHRONOUSLY before initialization
         // Debug commands need isolated execution without CloudKit/helpers running
         let arguments = ProcessInfo.processInfo.arguments
         let isDebugMode = arguments.contains(where: { $0.starts(with: "--debug=") })
 
-        NSLog("[AppDelegate] isDebugMode = \(isDebugMode)")
-
         // Register debug commands early (before checking debug mode)
         signposter.emitEvent("Debug Commands")
         registerDebugCommands()
 
         if isDebugMode {
-            NSLog("[AppDelegate] ⚙️ Debug mode - will run CLI command after initialization")
-            logger.debug("⚙️ Debug mode detected - running CLI command after app setup")
+            NSLog("[AppDelegate] ⚙️ Debug CLI mode")
             // Schedule CLI handler to run after app finishes initializing
             Task { @MainActor in
                 // Wait for app to finish initializing and GPU to be ready
@@ -97,10 +93,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
             }
             // Continue with normal initialization so MainActor works properly
-        }
-
-        if !isDebugMode {
-            NSLog("[AppDelegate] ✓ Normal app mode")
+        } else {
+            NSLog("[AppDelegate] ✓ Normal mode")
         }
 
         // App initialization (runs in both normal and debug mode)
@@ -846,13 +840,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        // This is expected in debug builds without Push Notification entitlement
-        // Sync still works via 5-minute timer; push is only for instant sync in production
-        #if DEBUG
-        logger.info("Push notifications unavailable (debug build) - using timer sync")
-        #else
-        logger.error("❌ Failed to register for remote notifications: \(error.localizedDescription)")
-        #endif
+        // Push is optional - sync still works via timer; push just enables instant sync
+        logger.info("Push unavailable: \(error.localizedDescription) (using timer sync)")
     }
 
     func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
