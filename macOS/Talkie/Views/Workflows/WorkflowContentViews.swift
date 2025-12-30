@@ -14,26 +14,12 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Legacy Tool Content Views (keeping for reference)
 
 struct WorkflowsContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
     private let workflowManager = WorkflowManager.shared
     private let settings = SettingsManager.shared
+    private var memosVM: MemosViewModel { MemosViewModel.shared }
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?
     @State private var showingMemoSelector = false
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
-    )
-    private var allMemos: FetchedResults<VoiceMemo>
-
-    private var transcribedMemos: [VoiceMemo] {
-        allMemos.filter { $0.transcription != nil && !$0.transcription!.isEmpty }
-    }
-
-    /// Memos that need transcription (for TRANSCRIBE workflows like HQ Transcribe)
-    private var untranscribedMemos: [VoiceMemo] {
-        allMemos.filter { ($0.transcription == nil || $0.transcription!.isEmpty) && !$0.isTranscribing }
-    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -127,10 +113,13 @@ struct WorkflowsContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            await memosVM.loadWorkflowMemos()
+        }
         .sheet(isPresented: $showingMemoSelector) {
             if let workflow = editingWorkflow {
                 // Use untranscribed memos for TRANSCRIBE workflows, transcribed for others
-                let memosToShow = workflow.startsWithTranscribe ? untranscribedMemos : transcribedMemos
+                let memosToShow = workflow.startsWithTranscribe ? memosVM.untranscribedMemos : memosVM.transcribedMemos
                 WorkflowMemoSelectorSheet(
                     workflow: workflow,
                     memos: memosToShow,
@@ -190,12 +179,19 @@ struct WorkflowsContentView: View {
         selectedWorkflowID = duplicate.id
     }
 
-    private func runWorkflow(_ workflow: WorkflowDefinition, on memo: VoiceMemo) {
+    private func runWorkflow(_ workflow: WorkflowDefinition, on memo: MemoModel) {
         Task {
+            // Fetch VoiceMemo from Core Data for workflow execution
+            let viewContext = PersistenceController.shared.container.viewContext
+            guard let voiceMemo = fetchVoiceMemo(id: memo.id, context: viewContext) else {
+                await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: "Could not find memo in Core Data")
+                return
+            }
+
             do {
                 let _ = try await WorkflowExecutor.shared.executeWorkflow(
                     workflow,
-                    for: memo,
+                    for: voiceMemo,
                     context: viewContext
                 )
             } catch {
@@ -203,27 +199,34 @@ struct WorkflowsContentView: View {
             }
         }
     }
+
+    private func fetchVoiceMemo(id: UUID, context: NSManagedObjectContext) -> VoiceMemo? {
+        let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        fetchRequest.fetchLimit = 1
+        return try? context.fetch(fetchRequest).first
+    }
 }
 
 // MARK: - Workflow Memo Selector Sheet
 
 struct WorkflowMemoSelectorSheet: View {
     let workflow: WorkflowDefinition
-    let memos: [VoiceMemo]
-    let onSelect: (VoiceMemo) -> Void
+    let memos: [MemoModel]
+    let onSelect: (MemoModel) -> Void
     let onCancel: () -> Void
     private let settings = SettingsManager.shared
 
-    @State private var selectedMemo: VoiceMemo?
+    @State private var selectedMemo: MemoModel?
     @State private var searchText = ""
 
-    private var filteredMemos: [VoiceMemo] {
+    private var filteredMemos: [MemoModel] {
         if searchText.isEmpty {
             return memos
         }
         let query = searchText.lowercased()
         return memos.filter {
-            ($0.title?.lowercased().contains(query) ?? false) ||
+            $0.displayTitle.lowercased().contains(query) ||
             ($0.transcription?.lowercased().contains(query) ?? false)
         }
     }
@@ -309,7 +312,7 @@ struct WorkflowMemoSelectorSheet: View {
             } else {
                 List(selection: $selectedMemo) {
                     ForEach(filteredMemos) { memo in
-                        MemoRowView(memo: memo)
+                        WorkflowMemoRow(memo: memo)
                             .tag(memo)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) {
@@ -354,9 +357,67 @@ struct WorkflowMemoSelectorSheet: View {
     }
 }
 
+// MARK: - Workflow Memo Row (MemoModel-compatible)
+
+private struct WorkflowMemoRow: View {
+    let memo: MemoModel
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        return f
+    }()
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(memo.displayTitle)
+                    .font(Theme.current.fontBodyMedium)
+                    .foregroundColor(Theme.current.foreground)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    if memo.source != .unknown {
+                        Image(systemName: memo.source.icon)
+                            .font(.system(size: 9))
+                            .foregroundColor(memo.source.color)
+                    }
+
+                    Text(formatDuration(memo.duration))
+                        .font(Theme.current.fontXS)
+
+                    Text("·")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    Text(memo.createdAt, style: .relative)
+                        .font(Theme.current.fontXS)
+                }
+                .foregroundColor(Theme.current.foregroundSecondary)
+            }
+
+            Spacer()
+
+            if memo.isTranscribing {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 12, height: 12)
+            }
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+    }
+
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
 struct WorkflowCard: View {
-    @Environment(\.managedObjectContext) private var viewContext
     private let settings = SettingsManager.shared
+    private var memosVM: MemosViewModel { MemosViewModel.shared }
     let icon: String
     let title: String
     let description: String
@@ -368,18 +429,9 @@ struct WorkflowCard: View {
     @State private var isExecuting = false
     @State private var errorMessage: String?
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
-    )
-    private var allMemos: FetchedResults<VoiceMemo>
-
-    private var transcribedMemos: [VoiceMemo] {
-        allMemos.filter { $0.transcription != nil && !$0.transcription!.isEmpty }
-    }
-
     var body: some View {
         Button(action: {
-            if !transcribedMemos.isEmpty {
+            if !memosVM.transcribedMemos.isEmpty {
                 showingMemoSelector = true
             } else {
                 errorMessage = "No transcribed memos available"
@@ -428,9 +480,12 @@ struct WorkflowCard: View {
         }
         .buttonStyle(.plain)
         .disabled(isExecuting)
+        .task {
+            await memosVM.loadTranscribedMemos()
+        }
         .sheet(isPresented: $showingMemoSelector) {
             MemoSelectorSheet(
-                memos: transcribedMemos,
+                memos: memosVM.transcribedMemos,
                 actionType: actionType,
                 provider: provider,
                 model: model,
@@ -446,15 +501,25 @@ struct WorkflowCard: View {
         }
     }
 
-    private func executeWorkflow(for memo: VoiceMemo) {
+    private func executeWorkflow(for memo: MemoModel) {
         isExecuting = true
         showingMemoSelector = false
 
         Task {
+            // Fetch VoiceMemo from Core Data for workflow execution
+            let viewContext = PersistenceController.shared.container.viewContext
+            guard let voiceMemo = fetchVoiceMemo(id: memo.id, context: viewContext) else {
+                await MainActor.run {
+                    errorMessage = "Could not find memo"
+                    isExecuting = false
+                }
+                return
+            }
+
             do {
                 try await WorkflowExecutor.shared.execute(
                     action: actionType,
-                    for: memo,
+                    for: voiceMemo,
                     providerName: provider,
                     modelId: model,
                     context: viewContext
@@ -470,16 +535,23 @@ struct WorkflowCard: View {
             }
         }
     }
+
+    private func fetchVoiceMemo(id: UUID, context: NSManagedObjectContext) -> VoiceMemo? {
+        let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        fetchRequest.fetchLimit = 1
+        return try? context.fetch(fetchRequest).first
+    }
 }
 
 struct MemoSelectorSheet: View {
     @Environment(\.dismiss) private var dismiss
     private let settings = SettingsManager.shared
-    let memos: [VoiceMemo]
+    let memos: [MemoModel]
     let actionType: WorkflowActionType
     let provider: String
     let model: String
-    let onExecute: (VoiceMemo) -> Void
+    let onExecute: (MemoModel) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -514,15 +586,13 @@ struct MemoSelectorSheet: View {
                                     .frame(width: 32)
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(memo.title ?? "Untitled")
+                                    Text(memo.displayTitle)
                                         .font(Theme.current.fontBodyMedium)
                                         .lineLimit(1)
 
-                                    if let date = memo.createdAt {
-                                        Text(date, style: .relative)
-                                            .font(Theme.current.fontXS)
-                                            .foregroundColor(Theme.current.foregroundSecondary)
-                                    }
+                                    Text(memo.createdAt, style: .relative)
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
                                 }
 
                                 Spacer()

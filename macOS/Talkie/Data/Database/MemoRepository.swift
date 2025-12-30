@@ -83,6 +83,12 @@ protocol MemoRepository: Actor {
 
     /// Total duration of all memos in seconds
     func totalDuration() async throws -> Double
+
+    /// Fetch memos that have transcription
+    func fetchTranscribedMemos() async throws -> [MemoModel]
+
+    /// Fetch memos that need transcription (no transcription or empty)
+    func fetchUntranscribedMemos() async throws -> [MemoModel]
 }
 
 // MARK: - Memo with Relationships

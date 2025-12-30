@@ -568,6 +568,37 @@ extension GRDBRepository {
             }
         }
     }
+
+    /// Fetch memos that have transcription
+    func fetchTranscribedMemos() async throws -> [MemoModel] {
+        try await instrumentRepositoryRead("fetchTranscribedMemos") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt == nil)
+                    .filter(MemoModel.Columns.transcription != nil)
+                    .filter(MemoModel.Columns.transcription != "")
+                    .order(MemoModel.Columns.createdAt.desc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    /// Fetch memos that need transcription (no transcription or empty)
+    func fetchUntranscribedMemos() async throws -> [MemoModel] {
+        try await instrumentRepositoryRead("fetchUntranscribedMemos") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try MemoModel
+                    .filter(MemoModel.Columns.deletedAt == nil)
+                    .filter(MemoModel.Columns.transcription == nil || MemoModel.Columns.transcription == "")
+                    .order(MemoModel.Columns.createdAt.desc)
+                    .fetchAll(db)
+            }
+        }
+    }
 }
 
 // MARK: - Column Extensions

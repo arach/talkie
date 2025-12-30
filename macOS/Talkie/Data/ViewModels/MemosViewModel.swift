@@ -82,6 +82,11 @@ final class MemosViewModel {
     var totalDuration: Double = 0  // seconds
     var heatmapData: [String: Int] = [:]  // yyyy-MM-dd → count
 
+    // MARK: - Filtered Memo Lists (for workflows)
+
+    var transcribedMemos: [MemoModel] = []
+    var untranscribedMemos: [MemoModel] = []
+
     // MARK: - Dependencies
 
     private let repository: any MemoRepository
@@ -348,6 +353,32 @@ final class MemosViewModel {
         } catch {
             log.error("Failed to load count: \(error.localizedDescription)")
         }
+    }
+
+    /// Load transcribed memos (for workflow memo selection)
+    func loadTranscribedMemos() async {
+        do {
+            transcribedMemos = try await repository.fetchTranscribedMemos()
+        } catch {
+            log.error("Failed to load transcribed memos: \(error.localizedDescription)")
+        }
+    }
+
+    /// Load untranscribed memos (for transcription workflows)
+    func loadUntranscribedMemos() async {
+        do {
+            untranscribedMemos = try await repository.fetchUntranscribedMemos()
+        } catch {
+            log.error("Failed to load untranscribed memos: \(error.localizedDescription)")
+        }
+    }
+
+    /// Load both transcribed and untranscribed memos (for workflow views)
+    func loadWorkflowMemos() async {
+        async let transcribed: () = loadTranscribedMemos()
+        async let untranscribed: () = loadUntranscribedMemos()
+        await transcribed
+        await untranscribed
     }
 
     // MARK: - Filter Management
