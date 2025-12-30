@@ -82,20 +82,26 @@ struct StatusCheckView: View {
             content: {
                 // Terminal-style status check panel
                 VStack(alignment: .leading, spacing: 0) {
-                    // Header bar with monospaced font
+                    // Header bar - clean, no decorative dots
                     HStack(spacing: 8) {
-                        Circle()
-                            .fill(manager.allChecksComplete ? SemanticColor.success : colors.accent)
-                            .frame(width: 6, height: 6)
-                        Text("DIAGNOSTICS")
+                        Text("[ DIAGNOSTICS ]")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .tracking(1)
                             .foregroundColor(colors.textTertiary)
                         Spacer()
                         if !manager.allChecksComplete {
-                            ProgressView()
-                                .scaleEffect(0.5)
-                                .frame(width: 12, height: 12)
+                            HStack(spacing: 4) {
+                                ProgressView()
+                                    .scaleEffect(0.5)
+                                    .frame(width: 12, height: 12)
+                                Text("checking...")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(colors.textTertiary)
+                            }
+                        } else {
+                            Text("all clear")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(SemanticColor.success)
                         }
                     }
                     .padding(.horizontal, Spacing.md)
@@ -198,53 +204,52 @@ private struct TechyStatusCheckRow: View {
     let check: StatusCheck
     let status: CheckStatus
 
-    private var statusDotColor: Color {
+    private var statusText: String {
         switch status {
-        case .pending: return colors.textTertiary.opacity(0.4)
-        case .inProgress: return colors.accent
-        case .complete: return SemanticColor.success
-        case .error: return SemanticColor.error
-        }
-    }
-
-    private var summaryText: String {
-        switch status {
-        case .pending: return "Waiting..."
+        case .pending: return "..."
         case .inProgress(let message): return message
         case .complete: return "Ready"
         case .error(let message): return message
         }
     }
 
+    private var statusColor: Color {
+        switch status {
+        case .pending: return colors.textTertiary
+        case .inProgress: return colors.accent
+        case .complete: return SemanticColor.success
+        case .error: return SemanticColor.error
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            // Step name on left
-            Text(check.rawValue.uppercased())
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            // Step name on left with brackets
+            Text("[ \(check.rawValue.uppercased()) ]")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .foregroundColor(colors.textPrimary)
-                .frame(width: 140, alignment: .leading)
 
-            // Summary message in middle
-            Text(summaryText)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(colors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
+            Spacer()
 
-            // Status dot on right - aligned
+            // Status text on right with indicator
             HStack(spacing: 6) {
                 if case .inProgress = status {
                     ProgressView()
                         .scaleEffect(0.5)
                         .frame(width: 12, height: 12)
-                } else {
+                }
+
+                Text(statusText)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(statusColor)
+
+                if case .complete = status {
                     Circle()
-                        .fill(statusDotColor)
+                        .fill(SemanticColor.success)
                         .frame(width: 6, height: 6)
-                        .shadow(color: statusDotColor.opacity(status == .complete ? 0.5 : 0), radius: 3)
+                        .shadow(color: SemanticColor.success.opacity(0.5), radius: 3)
                 }
             }
-            .frame(width: 20, alignment: .trailing)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, 10)

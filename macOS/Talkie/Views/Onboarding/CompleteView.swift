@@ -131,32 +131,82 @@ struct CompleteView: View {
     // MARK: - Live Mode Content
 
     private var liveModeContent: some View {
-        VStack(spacing: Spacing.lg) {
-            // Interactive demo placeholder
-            // Note: Full interactive demo would be ported from TalkieLive
+        VStack(spacing: Spacing.xl) {
+            // Primary CTA: The keyboard shortcut - elevated presentation
             VStack(spacing: Spacing.md) {
-                Text("INTERACTIVE DEMO")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundColor(colors.textTertiary)
+                // Large shortcut display
+                HStack(spacing: 6) {
+                    ForEach(hotkeyDisplay.components(separatedBy: "+"), id: \.self) { key in
+                        Text(key.trimmingCharacters(in: .whitespaces))
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(colors.textPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(colors.surfaceCard)
+                                    .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(colors.border, lineWidth: 1)
+                            )
+                    }
+                }
 
-                Text("Try using \(hotkeyDisplay) to start your first recording")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(colors.textPrimary)
-                    .multilineTextAlignment(.center)
-
-                // Simplified pill demo
-                SimplePillDemo(colors: colors)
-                    .frame(height: 100)
+                Text("Press this shortcut anywhere to start recording")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(colors.textSecondary)
             }
-            .padding(Spacing.lg)
-            .frame(width: 440)
+
+            // Secondary: The pill location hint
+            VStack(spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.accent)
+
+                    Text("Look for the pill at the bottom of your screen")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(colors.textPrimary)
+
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.accent)
+                }
+
+                // Mini pill preview
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(colors.accent)
+                        .frame(width: 6, height: 6)
+                    Text("REC")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(colors.textTertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(colors.surfaceCard)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(colors.border, lineWidth: 1)
+                        )
+                )
+
+                Text("Click on it to start a recording, or use the keyboard shortcut")
+                    .font(.system(size: 10))
+                    .foregroundColor(colors.textTertiary)
+            }
+            .padding(Spacing.md)
+            .frame(width: 400)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(colors.surfaceCard)
+                    .fill(colors.accent.opacity(0.05))
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(colors.border, lineWidth: 1)
+                            .strokeBorder(colors.accent.opacity(0.2), lineWidth: 1)
                     )
             )
 
@@ -165,31 +215,6 @@ struct CompleteView: View {
                 CelebrationView(colors: colors, hotkeyDisplay: hotkeyDisplay)
                     .transition(.scale.combined(with: .opacity))
             }
-
-            // Quick tips for Live mode
-            VStack(spacing: Spacing.sm) {
-                LiveTipRow(
-                    colors: colors,
-                    icon: "command.circle.fill",
-                    title: "Press \(hotkeyDisplay) anywhere to start recording",
-                    subtitle: "Works in any app, even full-screen"
-                )
-
-                LiveTipRow(
-                    colors: colors,
-                    icon: "text.cursor",
-                    title: "Text appears at your cursor automatically",
-                    subtitle: "No need to copy/paste manually"
-                )
-
-                LiveTipRow(
-                    colors: colors,
-                    icon: "display",
-                    title: "Talkie can see your screen for smarter transcriptions",
-                    subtitle: "Enable in Settings if you granted permission"
-                )
-            }
-            .frame(width: 440)
         }
     }
 
