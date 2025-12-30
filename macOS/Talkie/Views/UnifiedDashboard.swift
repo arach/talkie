@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import CoreData
 import Combine
 import AppKit
 
@@ -51,21 +50,15 @@ struct UnifiedActivityItem: Identifiable {
     let appBundleID: String?
     let isSuccess: Bool
 
-    // Original references
-    var memo: VoiceMemo?
+    // Original reference (for dictations only - memos navigate by ID)
     var dictation: Dictation?
 }
 
 // MARK: - Unified Dashboard
 
 struct UnifiedDashboard: View {
-    @Environment(\.managedObjectContext) private var viewContext
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)],
-        predicate: nil
-    )
-    private var allMemos: FetchedResults<VoiceMemo>
+    // GRDB-backed ViewModel for memo data
+    private var memosVM: MemosViewModel { MemosViewModel.shared }
 
     // Singletons
     private let dictationStore = DictationStore.shared
@@ -124,9 +117,14 @@ struct UnifiedDashboard: View {
             .padding(24)
         }
         .background(Theme.current.background)
+        .task {
+            // Load stats and memos from GRDB
+            await memosVM.loadStats()
+            await memosVM.loadMemos()
+            loadData()
+        }
         .onAppear {
             dictationStore.refresh()  // Load dictations from database
-            loadData()
             isLiveRunning = liveState.isRunning
             serviceState = serviceMonitor.state
             pendingRetryCount = LiveDatabase.countNeedsRetry()
@@ -135,7 +133,7 @@ struct UnifiedDashboard: View {
             loadData()
             pendingRetryCount = LiveDatabase.countNeedsRetry()
         }
-        .onChange(of: allMemos.count) { _, _ in
+        .onChange(of: memosVM.totalCount) { _, _ in
             loadData()
         }
         .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
@@ -183,7 +181,7 @@ struct UnifiedDashboard: View {
             // Total Memos
             CompactStatCard(
                 icon: "doc.text.fill",
-                value: formatNumber(allMemos.count),
+                value: formatNumber(memosVM.totalCount),
                 label: "Memos",
                 detail: "Voice recordings",
                 color: .blue
@@ -267,16 +265,16 @@ struct UnifiedDashboard: View {
 
                 Spacer()
 
-                Text("\(min(allMemos.count, 8)) latest")
+                Text("\(min(memosVM.memos.count, 8)) latest")
                     .font(Theme.current.fontSM)
                     .foregroundColor(Theme.current.foregroundMuted)
             }
 
             VStack(spacing: 0) {
-                if allMemos.isEmpty {
+                if memosVM.memos.isEmpty {
                     emptyMemoState
                 } else {
-                    ForEach(Array(allMemos.prefix(8))) { memo in
+                    ForEach(Array(memosVM.memos.prefix(8))) { memo in
                         MemoActivityRow(memo: memo) {
                             NotificationCenter.default.post(
                                 name: .init("NavigateToMemo"),
@@ -565,24 +563,21 @@ struct UnifiedDashboard: View {
 
     private func loadData() {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
 
         // Build unified activity from memos + dictations
         var items: [UnifiedActivityItem] = []
 
-        // Add memos
-        for memo in allMemos {
-            guard let createdAt = memo.createdAt else { continue }
+        // Add memos (from GRDB via MemosViewModel)
+        for memo in memosVM.memos {
             items.append(UnifiedActivityItem(
-                id: memo.id?.uuidString ?? UUID().uuidString,
+                id: memo.id.uuidString,
                 type: .memo,
                 title: memo.title ?? "Untitled Memo",
                 preview: memo.transcription?.prefix(100).description,
-                date: createdAt,
+                date: memo.createdAt,
                 appName: nil,
                 appBundleID: nil,
                 isSuccess: true,
-                memo: memo,
                 dictation: nil
             ))
         }
@@ -598,7 +593,6 @@ struct UnifiedDashboard: View {
                 appName: dictation.metadata.activeAppName,
                 appBundleID: dictation.metadata.activeAppBundleID,
                 isSuccess: !dictation.text.isEmpty,
-                memo: nil,
                 dictation: dictation
             ))
         }
@@ -606,23 +600,20 @@ struct UnifiedDashboard: View {
         // Sort by date descending
         unifiedActivity = items.sorted { $0.date > $1.date }
 
-        // Calculate stats
-        todayMemos = allMemos.filter { memo in
-            guard let createdAt = memo.createdAt else { return false }
-            return calendar.isDateInToday(createdAt)
-        }.count
+        // Calculate stats - use memosVM for memo stats
+        todayMemos = memosVM.todayCount
 
         todayDictations = dictationStore.dictations.filter {
             calendar.isDateInToday($0.timestamp)
         }.count
 
         totalWords = dictationStore.dictations.reduce(0) { $0 + $1.wordCount }
-            + allMemos.reduce(0) { $0 + ($1.transcription?.split(separator: " ").count ?? 0) }
+            + memosVM.memos.reduce(0) { $0 + ($1.transcription?.split(separator: " ").count ?? 0) }
 
         // Calculate streak
         streak = calculateStreak()
 
-        // Build activity heatmap data
+        // Build activity heatmap data - use memosVM.heatmapData
         activityData = buildActivityData()
     }
 
@@ -631,13 +622,11 @@ struct UnifiedDashboard: View {
         var currentStreak = 0
         var checkDate = calendar.startOfDay(for: Date())
 
-        // Get all activity dates
+        // Get all activity dates from GRDB memos
         var activityDates = Set<Date>()
 
-        for memo in allMemos {
-            if let date = memo.createdAt {
-                activityDates.insert(calendar.startOfDay(for: date))
-            }
+        for memo in memosVM.memos {
+            activityDates.insert(calendar.startOfDay(for: memo.createdAt))
         }
 
         for dictation in dictationStore.dictations {
@@ -659,16 +648,20 @@ struct UnifiedDashboard: View {
         let today = calendar.startOfDay(for: Date())
         let weeksToShow = 13
 
-        // Count activity per day
+        // Use pre-aggregated heatmap data from GRDB, add dictations
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
         var countByDay: [Date: Int] = [:]
 
-        for memo in allMemos {
-            if let date = memo.createdAt {
-                let day = calendar.startOfDay(for: date)
-                countByDay[day, default: 0] += 1
+        // Add memo counts from heatmapData (already aggregated)
+        for (dateString, count) in memosVM.heatmapData {
+            if let date = dateFormatter.date(from: dateString) {
+                countByDay[calendar.startOfDay(for: date)] = count
             }
         }
 
+        // Add dictation counts
         for dictation in dictationStore.dictations {
             let day = calendar.startOfDay(for: dictation.timestamp)
             countByDay[day, default: 0] += 1
@@ -719,7 +712,7 @@ struct UnifiedDashboard: View {
 // MARK: - Memo Activity Row
 
 struct MemoActivityRow: View {
-    let memo: VoiceMemo
+    let memo: MemoModel
     var onSelect: (() -> Void)?
 
     @State private var isHovered = false
@@ -749,11 +742,9 @@ struct MemoActivityRow: View {
             }
 
             // Time ago
-            if let date = memo.createdAt {
-                Text(timeAgo(from: date))
-                    .font(.system(size: 11))
-                    .foregroundColor(Theme.current.foregroundMuted)
-            }
+            Text(timeAgo(from: memo.createdAt))
+                .font(.system(size: 11))
+                .foregroundColor(Theme.current.foregroundMuted)
 
             if isHovered {
                 Image(systemName: "chevron.right")

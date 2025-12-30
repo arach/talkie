@@ -53,6 +53,11 @@ enum MemoFilter: Hashable, Identifiable {
 @MainActor
 @Observable
 final class MemosViewModel {
+    // MARK: - Singleton
+
+    /// Shared instance for views to use
+    static let shared = MemosViewModel()
+
     // MARK: - Published State
 
     var memos: [MemoModel] = []
@@ -70,6 +75,13 @@ final class MemosViewModel {
     private var currentOffset = 0
     private let pageSize = 50
 
+    // MARK: - Aggregation Stats (for dashboards)
+
+    var todayCount = 0
+    var thisWeekCount = 0
+    var totalDuration: Double = 0  // seconds
+    var heatmapData: [String: Int] = [:]  // yyyy-MM-dd → count
+
     // MARK: - Dependencies
 
     private let repository: any MemoRepository
@@ -82,6 +94,18 @@ final class MemosViewModel {
 
     var displayedCount: Int {
         memos.count
+    }
+
+    /// Formatted total duration (HH:mm:ss)
+    var formattedTotalDuration: String {
+        let hours = Int(totalDuration) / 3600
+        let minutes = (Int(totalDuration) % 3600) / 60
+        let seconds = Int(totalDuration) % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
     }
 
     // MARK: - Init
@@ -296,6 +320,34 @@ final class MemosViewModel {
     func search(query: String) async {
         searchQuery = query
         await loadMemos()
+    }
+
+    // MARK: - Aggregation Stats
+
+    /// Load dashboard stats (today, week, duration, heatmap)
+    func loadStats() async {
+        do {
+            async let today = repository.countMemosToday()
+            async let week = repository.countMemosThisWeek()
+            async let duration = repository.totalDuration()
+            async let heatmap = repository.fetchHeatmapData(days: 365)
+
+            todayCount = try await today
+            thisWeekCount = try await week
+            totalDuration = try await duration
+            heatmapData = try await heatmap
+        } catch {
+            log.error("Failed to load stats: \(error.localizedDescription)")
+        }
+    }
+
+    /// Load just memo count (lighter weight for views that only need count)
+    func loadCount() async {
+        do {
+            totalCount = try await repository.countMemos(searchQuery: nil, filters: [])
+        } catch {
+            log.error("Failed to load count: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Filter Management

@@ -69,6 +69,20 @@ protocol MemoRepository: Actor {
 
     /// Save workflow run
     func saveWorkflowRun(_ run: WorkflowRunModel) async throws
+
+    // MARK: - Aggregations (for dashboard stats)
+
+    /// Count memos created today
+    func countMemosToday() async throws -> Int
+
+    /// Count memos created this week
+    func countMemosThisWeek() async throws -> Int
+
+    /// Heatmap data: date string (yyyy-MM-dd) → count for last N days
+    func fetchHeatmapData(days: Int) async throws -> [String: Int]
+
+    /// Total duration of all memos in seconds
+    func totalDuration() async throws -> Double
 }
 
 // MARK: - Memo with Relationships
