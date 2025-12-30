@@ -268,8 +268,8 @@ private struct OnboardingModelCard: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .padding(.top, 4)
-            .frame(width: 160, height: 115)
+            .padding(.top, 10)  // Extra top padding for badge
+            .frame(width: 160, height: 120)
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
                     .fill(colors.surfaceCard)

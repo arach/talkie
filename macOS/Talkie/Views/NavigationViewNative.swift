@@ -170,6 +170,19 @@ struct TalkieNavigationViewNative: View {
                 audioDropOverlay
             }
         }
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) {
+            TalkieDebugToolbar {
+                ListViewDebugContent()
+                EngineProcessesDebugContent()
+            } debugInfo: {
+                [
+                    "Section": selectedSection.map { sectionName(for: $0) } ?? "none",
+                    "Memos": "\(memosVM.totalCount)"
+                ]
+            }
+        }
+        #endif
         // Note: NavigationSplitView provides its own sidebar toggle with hiddenTitleBar
         // Don't add a custom one or you'll get duplicates
         .onChange(of: selectedSection) { oldValue, newValue in
