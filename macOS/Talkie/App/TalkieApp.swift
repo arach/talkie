@@ -8,9 +8,6 @@
 import SwiftUI
 import AppKit
 import CoreData
-import os
-
-private let signposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
 
 // MARK: - Sidebar Toggle Action
 
@@ -104,7 +101,9 @@ struct TalkieApp: App {
 
     var body: some Scene {
         WindowGroup(id: "main") {
-            MigrationGateView()
+            // Show UI immediately - no migration gate
+            // Database init happens in background via .task
+            TalkieNavigationViewNative()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environment(SettingsManager.shared)
                 .environment(EngineClient.shared)
@@ -116,6 +115,10 @@ struct TalkieApp: App {
                 .tint(SettingsManager.shared.accentColor.color)
                 // NOTE: URL handling is done via Apple Events in AppDelegate.handleGetURLEvent
                 // Do NOT add .onOpenURL here - it causes SwiftUI to spawn new windows
+                .task {
+                    // Background database initialization - non-blocking
+                    await StartupCoordinator.shared.initializeDatabase()
+                }
                 .sheet(isPresented: Binding(
                     get: { OnboardingManager.shared.shouldShowOnboarding },
                     set: { OnboardingManager.shared.shouldShowOnboarding = $0 }
@@ -194,114 +197,3 @@ struct TalkieApp: App {
 
 }
 
-// MARK: - Migration Gate View
-
-/// Shows MigrationView if migration is needed, otherwise shows main app
-struct MigrationGateView: View {
-    @Environment(\.managedObjectContext) private var coreDataContext
-    @State private var needsMigration = false
-    @State private var checkComplete = false
-    @State private var refreshTrigger = 0
-    @State private var showStartupView = false
-
-    // Static guard - persists across view recreations
-    private static var hasStartedInit = false
-
-    var body: some View {
-        Group {
-            if !checkComplete {
-                // Show startup view only if taking > 200ms (normally instant)
-                if showStartupView {
-                    StartupView()
-                } else {
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } else if needsMigration {
-                // Show migration UI
-                MigrationView()
-                    .environment(\.managedObjectContext, coreDataContext)
-            } else {
-                // Show main app
-                // Database initialization and CloudKit sync are handled by StartupCoordinator
-                // IMPORTANT: Use TalkieNavigationViewNative (native NavigationSplitView)
-                // DO NOT switch back to custom navigation implementations
-                TalkieNavigationViewNative()
-            }
-        }
-        .task {
-            checkMigrationStatus()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MigrationCompleted"))) { _ in
-            print("📢 [MigrationGate] Received migration completed notification, transitioning to app...")
-            // Migration is complete - go directly to main app
-            // No need to re-run initialization, just update state
-            showStartupView = false
-            needsMigration = false
-            checkComplete = true
-        }
-    }
-
-    private func checkMigrationStatus() {
-        // Guard against multiple concurrent calls from .task re-evaluation
-        guard !Self.hasStartedInit else { return }
-        Self.hasStartedInit = true
-
-        // Show startup view only if initialization takes > 200ms
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            if !checkComplete {
-                StartupLogger.shared.reset()
-                StartupLogger.shared.setPhase("Initializing database...")
-                showStartupView = true
-            }
-        }
-
-        Task { @MainActor in
-            let uiState = signposter.beginInterval("UI First Render")
-
-            // Phase 2: Initialize database (async, prevents duplicates)
-            let success = await StartupCoordinator.shared.initializeDatabase()
-
-            // Check migration status
-            signposter.emitEvent("Check Migration")
-            var migrationComplete = UserDefaults.standard.bool(forKey: "grdb_migration_complete")
-
-            // Fresh install detection: if Core Data is empty, skip migration entirely
-            // CloudKit sync will populate GRDB from the cloud
-            if !migrationComplete {
-                let coreDataCount = countCoreDataMemos()
-                if coreDataCount == 0 {
-                    // Fresh install - no local data to migrate
-                    // Mark migration as complete so CloudKit sync can handle it
-                    UserDefaults.standard.set(true, forKey: "grdb_migration_complete")
-                    migrationComplete = true
-                    print("[App] Fresh install detected - skipping migration, CloudKit will sync")
-                }
-            }
-
-            needsMigration = !migrationComplete
-            checkComplete = true
-
-            // Single summary log
-            let dbStatus = success ? "✓" : "✗"
-            let migrationStatus = needsMigration ? "migration required" : "ready"
-            print("[App] GRDB \(dbStatus) | \(migrationStatus)")
-
-            signposter.endInterval("UI First Render", uiState)
-        }
-    }
-
-    /// Quick count of Core Data memos to detect fresh install
-    private func countCoreDataMemos() -> Int {
-        let fetchRequest = NSFetchRequest<NSNumber>(entityName: "VoiceMemo")
-        fetchRequest.resultType = .countResultType
-        do {
-            let results = try coreDataContext.fetch(fetchRequest)
-            return results.first?.intValue ?? 0
-        } catch {
-            print("[App] Failed to count Core Data memos: \(error)")
-            return 0
-        }
-    }
-}
