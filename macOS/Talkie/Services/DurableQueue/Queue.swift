@@ -103,6 +103,11 @@ public actor Queue<Payload: Codable & Sendable> {
         try? await ensureInitialized()
         self.handler = handler
 
+        // Recover stuck jobs (crashed while running)
+        if durable, let store = durableStore {
+            await recoverStuckJobs(store: store)
+        }
+
         // Log resumed jobs for durable queues
         if durable, let counts = try? await counts(), counts.pending > 0 {
             log.info("[\(name)] Resuming \(counts.pending) pending job(s)")
@@ -110,6 +115,25 @@ public actor Queue<Payload: Codable & Sendable> {
 
         scheduleProcessing()
         log.info("[\(name)] Started")
+    }
+
+    /// Reset jobs stuck in 'running' state (crashed mid-process)
+    private func recoverStuckJobs(store: GRDBQueuePersister) async {
+        do {
+            let stuckJobs = try await store.fetch(queueName: name, statuses: [.running])
+            for var job in stuckJobs {
+                job.status = .pending
+                job.attempt += 1  // Count the failed attempt
+                job.lastError = "Recovered after crash (was stuck in running state)"
+                try await store.save(job)
+                log.warning("[\(job.shortId)] Recovered stuck job (attempt #\(job.attempt))")
+            }
+            if !stuckJobs.isEmpty {
+                log.info("[\(name)] Recovered \(stuckJobs.count) stuck job(s)")
+            }
+        } catch {
+            log.error("[\(name)] Failed to recover stuck jobs: \(error.localizedDescription)")
+        }
     }
 
     /// Stop processing
@@ -188,7 +212,11 @@ public actor Queue<Payload: Codable & Sendable> {
         do {
             // Mark running (durable only)
             if durable, let store = durableStore {
-                try? await store.markStarted(job.id)
+                do {
+                    try await store.markStarted(job.id)
+                } catch {
+                    log.error("[\(job.shortId)] Failed to mark started: \(error.localizedDescription)")
+                }
             }
 
             // Execute
@@ -197,7 +225,11 @@ public actor Queue<Payload: Codable & Sendable> {
 
             // Success - remove
             if durable, let store = durableStore {
-                try? await store.remove(job.id)
+                do {
+                    try await store.remove(job.id)
+                } catch {
+                    log.error("[\(job.shortId)] Failed to remove completed job: \(error.localizedDescription)")
+                }
             } else {
                 memoryStore.removeValue(forKey: job.id)
             }
@@ -223,7 +255,11 @@ public actor Queue<Payload: Codable & Sendable> {
             updatedJob.scheduledAt = Date().addingTimeInterval(delay)
 
             if durable, let store = durableStore {
-                try? await store.save(updatedJob)
+                do {
+                    try await store.save(updatedJob)
+                } catch let saveError {
+                    log.error("[\(job.shortId)] Failed to schedule retry: \(saveError.localizedDescription)")
+                }
             } else {
                 memoryStore[job.id] = PendingJob(
                     job: updatedJob,
@@ -238,7 +274,11 @@ public actor Queue<Payload: Codable & Sendable> {
 
             if durable, let store = durableStore {
                 updatedJob.status = .dead
-                try? await store.save(updatedJob)
+                do {
+                    try await store.save(updatedJob)
+                } catch let saveError {
+                    log.error("[\(job.shortId)] Failed to mark as dead: \(saveError.localizedDescription)")
+                }
             } else {
                 memoryStore.removeValue(forKey: job.id)
             }
