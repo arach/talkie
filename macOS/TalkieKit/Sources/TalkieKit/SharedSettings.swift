@@ -67,6 +67,10 @@ public enum LiveSettingsKey {
     public static let fontSize = "fontSize"
     public static let accentColor = "accentColor"
 
+    // MARK: Dictionary & Text Processing
+    public static let dictionaryEnabled = "dictionaryEnabled"
+    public static let fillerRemovalEnabled = "fillerRemovalEnabled"
+
     // MARK: Legacy
     public static let legacyTheme = "theme"
 }

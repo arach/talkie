@@ -196,6 +196,8 @@ struct SettingsContentColumn: View {
             DictationCaptureSettingsView()
         case .dictationOutput:
             DictationOutputSettingsView()
+        case .dictionary:
+            DictionarySettingsView()
 
         // ACTIONS
         case .quickActions:

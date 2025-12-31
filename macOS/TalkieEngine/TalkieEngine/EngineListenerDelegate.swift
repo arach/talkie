@@ -7,6 +7,7 @@
 
 import Foundation
 import Darwin
+import TalkieKit
 
 class EngineListenerDelegate: NSObject, NSXPCListenerDelegate {
     private let serviceWrapper: XPCServiceWrapper

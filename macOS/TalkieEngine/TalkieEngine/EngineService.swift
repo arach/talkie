@@ -225,16 +225,24 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
     // MARK: - TalkieEngineProtocol
 
-    /// Transcribe audio with priority control
+    /// Transcribe audio file to text
+    /// Transcription is pure by default - use postProcess to opt-in to additional processing
     nonisolated func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
         priority: TranscriptionPriority,
+        postProcess: PostProcessOption,
         reply: @escaping (String?, String?) -> Void
     ) {
         Task(priority: priority.taskPriority) { @MainActor in
-            await self.doTranscribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, reply: reply)
+            await self.doTranscribe(
+                audioPath: audioPath,
+                modelId: modelId,
+                externalRefId: externalRefId,
+                postProcess: postProcess,
+                reply: reply
+            )
         }
     }
 
@@ -242,6 +250,7 @@ final class EngineService: NSObject, TalkieEngineProtocol {
         audioPath: String,
         modelId: String,
         externalRefId: String?,
+        postProcess: PostProcessOption,
         reply: @escaping (String?, String?) -> Void
     ) async {
         guard !isShuttingDown else {
@@ -308,14 +317,35 @@ final class EngineService: NSObject, TalkieEngineProtocol {
 
             trace.mark("complete")
 
+            // Apply post-processing if requested (transcription is pure by default)
+            let finalTranscript: String
+            switch postProcess {
+            case .none:
+                // Raw transcription - no processing
+                trace.begin("postprocess")
+                trace.end("none (raw)")
+                finalTranscript = result.transcript
+
+            case .dictionary:
+                // Apply dictionary replacements
+                trace.begin("postprocess")
+                let processed = TextPostProcessor.shared.process(result.transcript)
+                finalTranscript = processed.processed
+                if processed.hasChanges {
+                    AppLogger.shared.info(.transcription, "Dictionary applied", detail: processed.replacementSummary)
+                    EngineStatusManager.shared.log(.debug, "Dictionary", processed.replacementSummary)
+                }
+                trace.end(processed.hasChanges ? processed.replacementSummary : "dictionary (no changes)")
+            }
+
             // Log trace summary for E2E trace viewer correlation
             AppLogger.shared.log(.performance, "Trace complete", detail: trace.summary)
 
             totalTranscriptions += 1
             let elapsed = trace.elapsedSeconds
             let elapsedMs = trace.elapsedMs
-            let wordCount = result.transcript.split(separator: " ").count
-            AppLogger.shared.info(.transcription, "Transcribed #\(self.totalTranscriptions): \(result.transcript.prefix(50))...")
+            let wordCount = finalTranscript.split(separator: " ").count
+            AppLogger.shared.info(.transcription, "Transcribed #\(self.totalTranscriptions): \(finalTranscript.prefix(50))...")
             let timeStr = elapsedMs < 1000 ? "\(elapsedMs)ms" : String(format: "%.2fs", elapsed)
 
             // Calculate RTF (realtime factor) for performance insight
@@ -324,8 +354,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             let rtfStr = rtf > 0 ? String(format: "%.1fx", 1.0 / rtf) : "—"  // Higher is better (e.g., 5.2x = 5.2x faster than realtime)
 
             // Abbreviated transcript preview (first ~40 chars)
-            let preview = result.transcript.prefix(40)
-            let previewStr = result.transcript.count > 40 ? "\(preview)..." : String(preview)
+            let preview = finalTranscript.prefix(40)
+            let previewStr = finalTranscript.count > 40 ? "\(preview)..." : String(preview)
 
             // Rich log: refId → time (RTF) words "preview..."
             EngineStatusManager.shared.log(.info, "Complete", "\(refStr)✓ \(timeStr) (\(rtfStr)) \(wordCount)w \"\(previewStr)\"")
@@ -336,13 +366,13 @@ final class EngineService: NSObject, TalkieEngineProtocol {
                 elapsed: elapsed,
                 audioDuration: result.audioDuration,
                 wordCount: wordCount,
-                transcript: result.transcript,
+                transcript: finalTranscript,
                 trace: trace,
                 modelId: modelId,
                 audioFilename: fileName,
                 audioSamples: result.sampleCount
             )
-            reply(result.transcript, nil)
+            reply(finalTranscript, nil)
 
         } catch {
             trace.mark("error", metadata: error.localizedDescription)
@@ -924,6 +954,31 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             self.downloadProgress = 0
             AppLogger.shared.info(.transcription, "Download cancelled")
             EngineStatusManager.shared.log(.warning, "Download", "Cancelled download: \(modelId)")
+            reply()
+        }
+    }
+
+    // MARK: - Dictionary Management
+
+    nonisolated func updateDictionary(entriesJSON: Data, reply: @escaping (String?) -> Void) {
+        Task { @MainActor in
+            do {
+                let entries = try JSONDecoder().decode([DictionaryEntry].self, from: entriesJSON)
+                TextPostProcessor.shared.updateDictionary(entries)
+                EngineStatusManager.shared.log(.info, "Dictionary", "Updated with \(entries.count) entries")
+                reply(nil)
+            } catch {
+                AppLogger.shared.error(.system, "Failed to decode dictionary", detail: error.localizedDescription)
+                EngineStatusManager.shared.log(.error, "Dictionary", "Failed to decode: \(error.localizedDescription)")
+                reply(error.localizedDescription)
+            }
+        }
+    }
+
+    nonisolated func setDictionaryEnabled(_ enabled: Bool, reply: @escaping () -> Void) {
+        Task { @MainActor in
+            TextPostProcessor.shared.setEnabled(enabled)
+            EngineStatusManager.shared.log(.info, "Dictionary", enabled ? "Enabled" : "Disabled")
             reply()
         }
     }

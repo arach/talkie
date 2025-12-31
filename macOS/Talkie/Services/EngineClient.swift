@@ -242,10 +242,12 @@ public final class EngineClient {
     ///   - audioData: Audio data to transcribe
     ///   - modelId: Model to use (default: small whisper)
     ///   - priority: Task priority - `.high` for real-time, `.medium` for interactive, `.low` for batch (default: .medium)
+    ///   - postProcess: Optional post-processing to apply (default: .none = raw transcription)
     public func transcribe(
         audioData: Data,
         modelId: String = "whisper:openai_whisper-small",
-        priority: TranscriptionPriority = .medium
+        priority: TranscriptionPriority = .medium,
+        postProcess: PostProcessOption = .none
     ) async throws -> String {
         guard await ensureConnected() else {
             throw NSError(domain: "EngineClient", code: -1,
@@ -263,7 +265,7 @@ public final class EngineClient {
             Task.detached { try? FileManager.default.removeItem(atPath: audioPath) }
         }
 
-        return try await transcribe(audioPath: audioPath, modelId: modelId, priority: priority)
+        return try await transcribe(audioPath: audioPath, modelId: modelId, priority: priority, postProcess: postProcess)
     }
 
     /// Transcribe audio file
@@ -271,10 +273,12 @@ public final class EngineClient {
     ///   - audioPath: Path to audio file
     ///   - modelId: Model to use (default: small whisper)
     ///   - priority: Task priority - `.high` for real-time (Live), `.medium` for interactive, `.low` for batch (default: .medium)
+    ///   - postProcess: Optional post-processing to apply (default: .none = raw transcription)
     public func transcribe(
         audioPath: String,
         modelId: String = "whisper:openai_whisper-small",
-        priority: TranscriptionPriority = .medium
+        priority: TranscriptionPriority = .medium,
+        postProcess: PostProcessOption = .none
     ) async throws -> String {
         guard await ensureConnected() else {
             throw NSError(domain: "EngineClient", code: -1,
@@ -324,7 +328,7 @@ public final class EngineClient {
             DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
 
             // Make XPC call
-            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, priority: priority) { [weak self] transcript, error in
+            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, priority: priority, postProcess: postProcess) { [weak self] transcript, error in
                 // Cancel timeout since we got a response
                 timeoutWork.cancel()
 
@@ -472,6 +476,51 @@ public final class EngineClient {
                         transcribing: status.isTranscribing
                     )
                 }
+            }
+        }
+    }
+
+    // MARK: - Dictionary
+
+    /// Update the dictionary for text post-processing
+    /// Talkie pushes content, Engine persists to its own file
+    public func updateDictionary(_ entries: [DictionaryEntry]) async throws {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
+        }
+
+        let entriesJSON = try JSONEncoder().encode(entries)
+        logger.info("[EngineClient] Updating dictionary with \(entries.count) entries")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            proxy.updateDictionary(entriesJSON: entriesJSON) { error in
+                if let error = error {
+                    logger.error("[EngineClient] Dictionary update error: \(error)")
+                    continuation.resume(throwing: NSError(domain: "EngineClient", code: -6,
+                                                          userInfo: [NSLocalizedDescriptionKey: error]))
+                } else {
+                    logger.info("[EngineClient] Dictionary updated")
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// Enable or disable dictionary processing in Engine
+    /// Engine persists this setting and loads dictionary on startup if enabled
+    public func setDictionaryEnabled(_ enabled: Bool) async {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            logger.warning("[EngineClient] Cannot set dictionary enabled - not connected")
+            return
+        }
+
+        logger.info("[EngineClient] Setting dictionary enabled: \(enabled)")
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            proxy.setDictionaryEnabled(enabled) {
+                logger.info("[EngineClient] Dictionary \(enabled ? "enabled" : "disabled")")
+                continuation.resume()
             }
         }
     }

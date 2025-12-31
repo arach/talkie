@@ -525,23 +525,24 @@ public final class EngineClient: ObservableObject {
     ///   - modelId: Model to use for transcription
     ///   - externalRefId: Optional reference ID for correlating with Engine traces (deep link support)
     ///   - priority: Task priority (defaults to .high for real-time TalkieLive transcription)
-    public func transcribe(audioPath: String, modelId: String = "parakeet:v3", externalRefId: String? = nil, priority: TranscriptionPriority = .high) async throws -> String {
+    ///   - postProcess: Optional post-processing to apply (default: .none = raw transcription)
+    public func transcribe(audioPath: String, modelId: String = "parakeet:v3", externalRefId: String? = nil, priority: TranscriptionPriority = .high, postProcess: PostProcessOption = .none) async throws -> String {
         guard let proxy = engineProxy else {
             // Try to connect first
             let connected = await ensureConnected()
             guard connected, let proxy = engineProxy else {
                 throw EngineClientError.notConnected
             }
-            return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority)
+            return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority, postProcess: postProcess)
         }
 
-        return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority)
+        return try await transcribeWithRetry(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority, postProcess: postProcess)
     }
 
     /// Transcribe with automatic retry for "Already transcribing" errors
     /// This handles the case where engine is busy loading a model (can take 60+ seconds)
     /// or processing another transcription
-    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority) async throws -> String {
+    private func transcribeWithRetry(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority, postProcess: PostProcessOption) async throws -> String {
         let maxAttempts = 30  // 30 attempts × 2s = 60s max wait
         let retryDelay: UInt64 = 2_000_000_000  // 2 seconds
 
@@ -549,7 +550,7 @@ public final class EngineClient: ObservableObject {
 
         for attempt in 1...maxAttempts {
             do {
-                return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority)
+                return try await doTranscribe(proxy: proxy, audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority, postProcess: postProcess)
             } catch let error as EngineClientError {
                 // Check if it's "Already transcribing" - wait and retry
                 if case .transcriptionFailed(let message) = error, message.contains("Already transcribing") {
@@ -568,7 +569,7 @@ public final class EngineClient: ObservableObject {
         throw lastError ?? EngineClientError.transcriptionFailed("Engine busy timeout")
     }
 
-    private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority) async throws -> String {
+    private func doTranscribe(proxy: TalkieEngineProtocol, audioPath: String, modelId: String, externalRefId: String?, priority: TranscriptionPriority, postProcess: PostProcessOption) async throws -> String {
         let fileName = URL(fileURLWithPath: audioPath).lastPathComponent
         log.info("Transcribing", detail: "'\(fileName)' with model '\(modelId)' priority=\(priority.displayName)")
 
@@ -611,8 +612,8 @@ public final class EngineClient: ObservableObject {
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
 
-            // Make XPC call with priority
-            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority) { [weak self] transcript, error in
+            // Make XPC call
+            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: externalRefId, priority: priority, postProcess: postProcess) { [weak self] transcript, error in
                 // Cancel timeout since we got a response
                 timeoutWork.cancel()
 

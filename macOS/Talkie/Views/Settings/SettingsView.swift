@@ -20,6 +20,7 @@ enum SettingsSection: String, Hashable {
     // DICTATION
     case dictationCapture
     case dictationOutput
+    case dictionary
 
     // AI MODELS
     case aiProviders         // API Keys & Providers
@@ -47,6 +48,7 @@ enum SettingsSection: String, Hashable {
         case "appearance": return .appearance
         case "dictation-capture", "capture": return .dictationCapture
         case "dictation-output", "output": return .dictationOutput
+        case "dictionary": return .dictionary
         case "quick-actions", "actions": return .quickActions
         case "quick-open": return .quickOpen
         case "automations", "auto-run", "autorun": return .automations
@@ -70,6 +72,7 @@ enum SettingsSection: String, Hashable {
         case .appearance: return "appearance"
         case .dictationCapture: return "dictation-capture"
         case .dictationOutput: return "dictation-output"
+        case .dictionary: return "dictionary"
         case .quickActions: return "quick-actions"
         case .quickOpen: return "quick-open"
         case .automations: return "automations"
@@ -162,7 +165,7 @@ struct SettingsView: View {
                         }
 
                         // DICTATION
-                        SettingsSidebarSection(title: "DICTATION", isActive: selectedSection == .dictationCapture || selectedSection == .dictationOutput) {
+                        SettingsSidebarSection(title: "DICTATION", isActive: selectedSection == .dictationCapture || selectedSection == .dictationOutput || selectedSection == .dictionary) {
                             SettingsSidebarItem(
                                 icon: "mic.fill",
                                 title: "CAPTURE",
@@ -177,6 +180,15 @@ struct SettingsView: View {
                             ) {
                                 selectedSection = .dictationOutput
                             }
+                            #if DEBUG
+                            SettingsSidebarItem(
+                                icon: "textformat.abc",
+                                title: "DICTIONARY",
+                                isSelected: selectedSection == .dictionary
+                            ) {
+                                selectedSection = .dictionary
+                            }
+                            #endif
                         }
 
                         // AI MODELS
@@ -316,6 +328,8 @@ struct SettingsView: View {
             DictationCaptureSettingsView()
         case .dictationOutput:
             DictationOutputSettingsView()
+        case .dictionary:
+            DictionarySettingsView()
 
         // ACTIONS
         case .quickActions:

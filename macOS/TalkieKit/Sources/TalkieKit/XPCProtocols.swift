@@ -56,6 +56,20 @@ public var kTalkieEngineXPCServiceName: String {
 
 // MARK: - TalkieEngine XPC Protocol
 
+/// Post-processing options for transcription
+/// Transcription is pure by default - processing is opt-in
+@objc public enum PostProcessOption: Int, Sendable {
+    case none = 0        // Raw transcription only (default)
+    case dictionary = 1  // Apply dictionary replacements
+
+    public var displayName: String {
+        switch self {
+        case .none: return "None"
+        case .dictionary: return "Dictionary"
+        }
+    }
+}
+
 /// Task priority for transcription requests
 @objc public enum TranscriptionPriority: Int, Sendable {
     case background = 0       // Lowest - maintenance, cleanup
@@ -91,7 +105,10 @@ public var kTalkieEngineXPCServiceName: String {
 
 /// Protocol for TalkieEngine's XPC service (Talkie/Live → Engine)
 @objc public protocol TalkieEngineProtocol {
-    /// Transcribe audio file to text with priority control
+    /// Transcribe audio file to text
+    ///
+    /// Transcription is pure by default - just audio to text.
+    /// Use `postProcess` to opt-in to additional processing steps.
     ///
     /// Priority Guidelines:
     /// - `.high` - Real-time dictation (TalkieLive) - user is waiting
@@ -103,12 +120,14 @@ public var kTalkieEngineXPCServiceName: String {
     ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
     ///   - externalRefId: Optional trace ID for cross-app correlation
     ///   - priority: Task priority for scheduling
+    ///   - postProcess: Optional processing to apply (default: .none = raw transcription)
     ///   - reply: Callback with transcript or error
     func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
         priority: TranscriptionPriority,
+        postProcess: PostProcessOption,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 
@@ -144,6 +163,26 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Get list of available models (returns JSON-encoded [ModelInfo])
     func getAvailableModels(reply: @escaping (_ modelsJSON: Data?) -> Void)
+
+    /// Update the dictionary for text post-processing
+    /// Talkie pushes content, Engine persists to its own file
+    /// - Parameters:
+    ///   - entriesJSON: JSON-encoded [DictionaryEntry]
+    ///   - reply: Callback with error message if failed
+    func updateDictionary(
+        entriesJSON: Data,
+        reply: @escaping (_ error: String?) -> Void
+    )
+
+    /// Enable or disable dictionary processing
+    /// Engine persists this setting and loads dictionary on startup if enabled
+    /// - Parameters:
+    ///   - enabled: Whether dictionary should be active
+    ///   - reply: Callback when done
+    func setDictionaryEnabled(
+        _ enabled: Bool,
+        reply: @escaping () -> Void
+    )
 }
 
 // Note: LiveState enum is defined in UI/LiveState.swift

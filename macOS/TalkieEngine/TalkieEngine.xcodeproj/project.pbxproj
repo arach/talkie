@@ -18,6 +18,7 @@
 		B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309C8ED6550F5436C180F21E /* main.swift */; };
 		D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3345200BF5B8343E77A15413 /* EngineService.swift */; };
 		D92C5024D36DB3573FEDADC7 /* EngineProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */; };
+		F0E1D2C3B4A5968778899AAB /* TextPostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* TextPostProcessor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		BA001B38FC283CCB38519E75 /* EngineStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineStatusView.swift; sourceTree = "<group>"; };
 		BB26F22F9D507243DB479766 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D04B99055A71871474300365 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E1F2A3B4C5D6E7F8A9B0C1D2 /* TextPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextPostProcessor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +112,7 @@
 				2F4E3464C72C240A7FFD4A74 /* Log.swift */,
 				309C8ED6550F5436C180F21E /* main.swift */,
 				071A5BB5F9E02D438B1F4900 /* TalkieEngine.entitlements */,
+				E1F2A3B4C5D6E7F8A9B0C1D2 /* TextPostProcessor.swift */,
 				A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */,
 				76572ACDD8635BEDB04EA761 /* Views */,
 			);
@@ -191,6 +194,7 @@
 				D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */,
 				5BCD674D514E3D3F8B67D35D /* EngineStatusView.swift in Sources */,
 				22DFC96B3C270049F4000C39 /* Log.swift in Sources */,
+				F0E1D2C3B4A5968778899AAB /* TextPostProcessor.swift in Sources */,
 				2EE2C5A649FB1DE1A536887B /* XPCServiceWrapper.swift in Sources */,
 				B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */,
 			);

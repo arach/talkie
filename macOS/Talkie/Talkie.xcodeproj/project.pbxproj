@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9C7CBB837F4D4F649B75C868 /* DictionarySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */; };
+		215B671D25C84CC792ECD7BA /* DictionaryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */; };
 		8568EEB9B188479AA8530268 /* Queue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D34E87850C4675B05B7232 /* Queue.swift */; };
 		9FE1E494000741BEBAB6DCEF /* DurableQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFA3BB63270F4480A37677BF /* DurableQueue.swift */; };
 		C7DC7C8B88674AA0B6422305 /* SyncQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 342E065617D74B6E9BB2708A /* SyncQueue.swift */; };
@@ -249,6 +251,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySettings.swift; sourceTree = "<group>"; };
+		33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryManager.swift; sourceTree = "<group>"; };
 		54D34E87850C4675B05B7232 /* Queue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Queue.swift; sourceTree = "<group>"; };
 		CFA3BB63270F4480A37677BF /* DurableQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DurableQueue.swift; sourceTree = "<group>"; };
 		342E065617D74B6E9BB2708A /* SyncQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncQueue.swift; sourceTree = "<group>"; };
@@ -798,6 +802,7 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
@@ -1019,6 +1024,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */,
 				9A88BE828DAF4F20853DEEA5 /* DurableQueue */,
 				342E065617D74B6E9BB2708A /* SyncQueue.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
@@ -1174,6 +1180,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9C7CBB837F4D4F649B75C868 /* DictionarySettings.swift in Sources */,
+				215B671D25C84CC792ECD7BA /* DictionaryManager.swift in Sources */,
 				8568EEB9B188479AA8530268 /* Queue.swift in Sources */,
 				9FE1E494000741BEBAB6DCEF /* DurableQueue.swift in Sources */,
 				C7DC7C8B88674AA0B6422305 /* SyncQueue.swift in Sources */,
