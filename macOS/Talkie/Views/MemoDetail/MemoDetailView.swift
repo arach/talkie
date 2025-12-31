@@ -11,8 +11,13 @@ import AppKit
 import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
+
+/// MemoDetailView - displays and edits a memo from GRDB (local source of truth)
+/// Views never touch CoreData - sync layer handles cloud separately
 struct MemoDetailView: View {
-    @ObservedObject var memo: VoiceMemo
+    /// The memo from GRDB - source of truth for display
+    let memo: MemoModel
+
     // Use direct access to SettingsManager.shared instead of @ObservedObject
     // to avoid unnecessary view rebuilds on any published property change
     private let settings = SettingsManager.shared
@@ -30,17 +35,19 @@ struct MemoDetailView: View {
     @State private var showNotesSaved = false
     @State private var playbackTimer: Timer?
     @State private var notesInitialized = false
-    @State private var selectedWorkflowRun: WorkflowRun?
+    @State private var selectedWorkflowRunID: UUID?
     @FocusState private var titleFieldFocused: Bool
 
-    @Environment(\.managedObjectContext) private var viewContext
+    // Repository for GRDB operations - views save here, sync layer handles cloud
+    private let repository = LocalRepository()
     private let workflowManager = WorkflowManager.shared
     @State private var processingWorkflowIDs: Set<UUID> = []
     @State private var showingWorkflowPicker = false
     @State private var cachedQuickActionItems: [QuickActionItem] = []
-    @State private var cachedWorkflowRuns: [WorkflowRun] = []
+    @State private var cachedWorkflowRuns: [WorkflowRunModel] = []
     @State private var showingRetranscribeSheet = false
     @State private var isRetranscribing = false
+    @State private var isTranscribingLocal = false  // Local UI state for transcription
 
     // MARK: - Quick Actions Logic
 
@@ -102,28 +109,24 @@ struct MemoDetailView: View {
         return items
     }
 
-    /// Compute sorted workflow runs from memo (deduplicated by ID to handle CloudKit sync duplicates)
-    private func computeSortedWorkflowRuns() -> [WorkflowRun] {
-        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return [] }
-        // Deduplicate by ID, keeping the most recent one
-        var uniqueRuns: [UUID: WorkflowRun] = [:]
-        for run in runs {
-            guard let id = run.id else { continue }
-            if let existing = uniqueRuns[id] {
-                if (run.runDate ?? .distantPast) > (existing.runDate ?? .distantPast) {
-                    uniqueRuns[id] = run
-                }
-            } else {
-                uniqueRuns[id] = run
+    /// Fetch workflow runs from GRDB (sorted by date, deduplicated)
+    private func fetchWorkflowRuns() async {
+        do {
+            let runs = try await repository.fetchWorkflowRuns(for: memo.id)
+            await MainActor.run {
+                cachedWorkflowRuns = runs
             }
+        } catch {
+            logger.error("Failed to fetch workflow runs: \(error.localizedDescription)")
         }
-        return uniqueRuns.values.sorted { ($0.runDate ?? Date.distantPast) > ($1.runDate ?? Date.distantPast) }
     }
 
     /// Refresh cached data (called on appear and memo change)
     private func refreshCachedData() {
         cachedQuickActionItems = computeQuickActionItems()
-        cachedWorkflowRuns = computeSortedWorkflowRuns()
+        Task {
+            await fetchWorkflowRuns()
+        }
     }
 
     private var memoTitle: String {
@@ -140,7 +143,7 @@ struct MemoDetailView: View {
                 MemoDetailHeaderSection(
                     showHeader: showHeader,
                     memoTitle: memoTitle,
-                    memoSource: memo.source,
+                    memoSource: memo.source.asMemoSource,
                     dateText: formatDate(memoCreatedAt).uppercased(),
                     durationText: formatDuration(memo.duration),
                     isEditing: $isEditing,
@@ -180,7 +183,7 @@ struct MemoDetailView: View {
                     MemoDetailRecentRunsSection(
                         runs: cachedWorkflowRuns,
                         settings: settings,
-                        onSelect: { selectedWorkflowRun = $0 },
+                        onSelect: { selectedWorkflowRunID = $0.id },
                         formatTimeAgo: formatTimeAgo
                     )
                 }
@@ -244,10 +247,6 @@ struct MemoDetailView: View {
                 notesInitialized = true
             }
         }
-        .onChange(of: memo.workflowRuns?.count) { _, _ in
-            // Refresh workflow runs when they change
-            cachedWorkflowRuns = computeSortedWorkflowRuns()
-        }
         .onChange(of: workflowManager.workflows) { _, _ in
             // Refresh quick actions when workflows change
             cachedQuickActionItems = computeQuickActionItems()
@@ -289,24 +288,42 @@ struct MemoDetailView: View {
     }
 
     private func saveAllEdits() {
-        guard let context = memo.managedObjectContext else { return }
+        // Create updated memo with edits
+        var updatedMemo = memo
 
-        // Save title if changed
+        // Update title if changed
         if editedTitle != memoTitle {
-            memo.title = editedTitle
+            updatedMemo.title = editedTitle
         }
 
-        // Save transcript if changed (creates new version)
-        if let currentTranscript = memo.currentTranscript,
-           editedTranscript != currentTranscript,
-           !editedTranscript.isEmpty {
-            memo.addUserTranscript(content: editedTranscript)
+        // Update notes
+        updatedMemo.notes = editedNotes
+        updatedMemo.lastModified = Date()
+
+        // Save to GRDB
+        Task {
+            do {
+                try await repository.saveMemo(updatedMemo)
+
+                // Save transcript version if changed
+                if let currentTranscript = memo.transcription,
+                   editedTranscript != currentTranscript,
+                   !editedTranscript.isEmpty {
+                    let version = TranscriptVersionModel(
+                        id: UUID(),
+                        memoId: memo.id,
+                        version: 1,  // Will be incremented by repository if needed
+                        content: editedTranscript,
+                        sourceType: "user",
+                        engine: "user_edit",
+                        createdAt: Date()
+                    )
+                    try await repository.saveTranscriptVersion(version)
+                }
+            } catch {
+                logger.error("Failed to save memo: \(error.localizedDescription)")
+            }
         }
-
-        // Save notes
-        memo.notes = editedNotes
-
-        try? context.save()
     }
 
     private func debouncedSaveNotes() {
@@ -326,23 +343,30 @@ struct MemoDetailView: View {
     }
 
     private func saveNotes() {
-        guard let context = memo.managedObjectContext else { return }
-        context.perform {
-            memo.notes = editedNotes
-            try? context.save()
+        var updatedMemo = memo
+        updatedMemo.notes = editedNotes
+        updatedMemo.lastModified = Date()
 
-            // Show checkmark briefly
-            DispatchQueue.main.async {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showNotesSaved = true
+        Task {
+            do {
+                try await repository.saveMemo(updatedMemo)
+
+                // Show checkmark briefly
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showNotesSaved = true
+                    }
                 }
 
                 // Hide after 2 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                try? await Task.sleep(for: .seconds(2))
+                await MainActor.run {
                     withAnimation(.easeOut(duration: 0.3)) {
                         showNotesSaved = false
                     }
                 }
+            } catch {
+                logger.error("Failed to save notes: \(error.localizedDescription)")
             }
         }
     }
@@ -452,56 +476,90 @@ struct MemoDetailView: View {
         #if arch(arm64)
         Task {
             do {
-                guard let audioData = memo.audioData else {
-                    logger.debug("[Transcribe] No audio data available")
+                // Load audio from file path
+                guard let audioPath = memo.audioFilePath else {
+                    logger.debug("[Transcribe] No audio file path")
                     return
                 }
 
-                // Set transcribing state
-                await MainActor.run {
-                    memo.isTranscribing = true
-                    try? viewContext.save()
+                let audioURL = AudioStorage.url(for: audioPath)
+                guard let audioData = try? Data(contentsOf: audioURL) else {
+                    logger.debug("[Transcribe] Could not load audio data")
+                    return
                 }
 
-                // Transcribe using WhisperKit (using small model as default)
+                // Set local UI state
+                await MainActor.run {
+                    isTranscribingLocal = true
+                }
+
+                // Update memo state in GRDB
+                var updatedMemo = memo
+                updatedMemo.isTranscribing = true
+                try await repository.saveMemo(updatedMemo)
+
+                // Transcribe using WhisperKit
                 let transcript = try await WhisperService.shared.transcribe(
                     audioData: audioData,
                     model: .small
                 )
 
-                // Save the transcript
+                // Save transcript version to GRDB
+                let version = TranscriptVersionModel(
+                    id: UUID(),
+                    memoId: memo.id,
+                    version: 1,
+                    content: transcript,
+                    sourceType: "system_macos",
+                    engine: TranscriptEngines.whisperKit,
+                    createdAt: Date()
+                )
+                try await repository.saveTranscriptVersion(version)
+
+                // Update memo with transcript and clear transcribing state
+                updatedMemo.transcription = transcript
+                updatedMemo.isTranscribing = false
+                updatedMemo.lastModified = Date()
+                try await repository.saveMemo(updatedMemo)
+
                 await MainActor.run {
-                    memo.addSystemTranscript(
-                        content: transcript,
-                        fromMacOS: true,
-                        engine: TranscriptEngines.whisperKit
-                    )
-                    memo.isTranscribing = false
-                    try? viewContext.save()
-                    // Force SwiftUI to pick up Core Data relationship changes
-                    viewContext.refresh(memo, mergeChanges: true)
+                    isTranscribingLocal = false
                 }
             } catch {
+                // Clear transcribing state on error
+                var updatedMemo = memo
+                updatedMemo.isTranscribing = false
+                try? await repository.saveMemo(updatedMemo)
+
                 await MainActor.run {
-                    memo.isTranscribing = false
-                    try? viewContext.save()
+                    isTranscribingLocal = false
                 }
+                logger.error("Transcription failed: \(error.localizedDescription)")
             }
         }
         #endif
     }
 
     private func deleteMemo() {
-        guard let context = memo.managedObjectContext else { return }
-        context.perform {
-            context.delete(memo)
-            try? context.save()
+        Task {
+            do {
+                try await repository.deleteMemo(id: memo.id)
+            } catch {
+                logger.error("Failed to delete memo: \(error.localizedDescription)")
+            }
         }
     }
 
     private func retranscribe(with modelId: String) {
-        guard let audioData = memo.audioData else {
-            logger.error("Cannot retranscribe: no audio data")
+        // Load audio from file path
+        guard let audioPath = memo.audioFilePath else {
+            logger.error("Cannot retranscribe: no audio file path")
+            return
+        }
+
+        let audioURL = AudioStorage.url(for: audioPath)
+        guard let audioData = try? Data(contentsOf: audioURL) else {
+            logger.error("Cannot retranscribe: could not load audio data")
             return
         }
 
@@ -513,18 +571,28 @@ struct MemoDetailView: View {
                 let transcript = try await engineClient.transcribe(
                     audioData: audioData,
                     modelId: modelId,
-                    priority: .userInitiated  // User clicked re-transcribe button
+                    priority: .userInitiated
                 )
 
-                // Save new transcript
+                // Save new transcript to GRDB
+                var updatedMemo = memo
+                updatedMemo.transcription = transcript
+                updatedMemo.lastModified = Date()
+                try await repository.saveMemo(updatedMemo)
+
+                // Also save as transcript version
+                let version = TranscriptVersionModel(
+                    id: UUID(),
+                    memoId: memo.id,
+                    version: 1,
+                    content: transcript,
+                    sourceType: "system_macos",
+                    engine: modelId,
+                    createdAt: Date()
+                )
+                try await repository.saveTranscriptVersion(version)
+
                 await MainActor.run {
-                    if let context = memo.managedObjectContext {
-                        context.perform {
-                            self.memo.transcription = transcript
-                            self.memo.lastModified = Date()
-                            try? context.save()
-                        }
-                    }
                     isRetranscribing = false
                 }
 
@@ -688,14 +756,12 @@ struct MemoDetailView: View {
 
     /// Check if this workflow has been run on this memo
     private func hasCompletedRun(for workflow: WorkflowDefinition) -> Bool {
-        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return false }
-        return runs.contains { $0.workflowId == workflow.id && $0.status == "completed" }
+        cachedWorkflowRuns.contains { $0.workflowId == workflow.id && $0.status == .completed }
     }
 
     /// Count how many times this workflow has been run (completed) on this memo
     private func runCount(for workflow: WorkflowDefinition) -> Int {
-        guard let runs = memo.workflowRuns as? Set<WorkflowRun> else { return 0 }
-        return runs.filter { $0.workflowId == workflow.id && $0.status == "completed" }.count
+        cachedWorkflowRuns.filter { $0.workflowId == workflow.id && $0.status == .completed }.count
     }
 
     /// Execute a custom workflow definition
@@ -704,37 +770,91 @@ struct MemoDetailView: View {
 
         Task {
             do {
-                let memoModel = MemoModel(from: memo)
                 _ = try await WorkflowExecutor.shared.executeWorkflow(
                     workflow,
-                    for: memoModel
+                    for: memo
                 )
+                // Refresh workflow runs after execution
+                await fetchWorkflowRuns()
             } catch {
                 await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }
 
-            _ = await MainActor.run {
+            await MainActor.run {
                 processingWorkflowIDs.remove(workflow.id)
             }
         }
     }
 
-    /// Execute a legacy built-in action
+    /// Execute a legacy built-in action using GRDB (no CoreData)
     private func executeLegacyAction(_ actionType: WorkflowActionType) {
+        guard let transcript = memo.transcription, !transcript.isEmpty else {
+            logger.debug("❌ No transcript available for \(actionType.rawValue)")
+            return
+        }
+
         Task {
             do {
                 let settings = SettingsManager.shared
                 let (providerName, modelId) = resolveProviderAndModel(from: settings)
 
-                try await WorkflowExecutor.shared.execute(
-                    action: actionType,
-                    for: memo,
-                    providerName: providerName,
-                    modelId: modelId,
-                    context: viewContext
-                )
+                // Get LLM provider
+                guard let provider = LLMProviderRegistry.shared.provider(for: providerName) else {
+                    logger.debug("❌ Provider not available: \(providerName)")
+                    return
+                }
+
+                // Set processing state
+                var updatedMemo = memo
+                switch actionType {
+                case .summarize:
+                    updatedMemo.isProcessingSummary = true
+                case .extractTasks:
+                    updatedMemo.isProcessingTasks = true
+                case .reminders:
+                    updatedMemo.isProcessingReminders = true
+                default:
+                    break
+                }
+                try await repository.saveMemo(updatedMemo)
+
+                // Build prompt and generate
+                let prompt = actionType.systemPrompt.replacingOccurrences(of: "{{TRANSCRIPT}}", with: transcript)
+                let options = GenerationOptions(temperature: 0.7, topP: 0.9, maxTokens: 1024)
+                let output = try await provider.generate(prompt: prompt, model: modelId, options: options)
+
+                // Save result
+                switch actionType {
+                case .summarize:
+                    updatedMemo.summary = output
+                    updatedMemo.isProcessingSummary = false
+                case .extractTasks:
+                    updatedMemo.tasks = output
+                    updatedMemo.isProcessingTasks = false
+                case .reminders:
+                    updatedMemo.reminders = output
+                    updatedMemo.isProcessingReminders = false
+                default:
+                    break
+                }
+                updatedMemo.lastModified = Date()
+                try await repository.saveMemo(updatedMemo)
+
                 logger.debug("✅ \(actionType.rawValue) completed with \(providerName)/\(modelId)")
             } catch {
+                // Clear processing state on error
+                var updatedMemo = memo
+                switch actionType {
+                case .summarize:
+                    updatedMemo.isProcessingSummary = false
+                case .extractTasks:
+                    updatedMemo.isProcessingTasks = false
+                case .reminders:
+                    updatedMemo.isProcessingReminders = false
+                default:
+                    break
+                }
+                try? await repository.saveMemo(updatedMemo)
                 logger.debug("❌ Action error: \(error.localizedDescription)")
             }
         }
@@ -747,11 +867,18 @@ struct MemoDetailView: View {
     }
 
 
-    private func deleteWorkflowRun(_ run: WorkflowRun) {
-        guard let context = memo.managedObjectContext else { return }
-        context.perform {
-            context.delete(run)
-            try? context.save()
+    private func deleteWorkflowRun(_ run: WorkflowRunModel) {
+        Task {
+            do {
+                let db = try await DatabaseManager.shared.database()
+                try await db.write { db in
+                    _ = try WorkflowRunModel.deleteOne(db, key: run.id)
+                }
+                // Refresh the list
+                await fetchWorkflowRuns()
+            } catch {
+                logger.error("Failed to delete workflow run: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -884,7 +1011,7 @@ private struct MemoDetailHeaderSection: View {
 }
 
 private struct MemoDetailTranscriptSection: View {
-    @ObservedObject var memo: VoiceMemo
+    let memo: MemoModel
     let settings: SettingsManager
     @Binding var isEditing: Bool
     @Binding var editedTranscript: String
@@ -916,7 +1043,7 @@ private struct MemoDetailTranscriptHeader: View {
 }
 
 private struct MemoDetailTranscriptContent: View {
-    @ObservedObject var memo: VoiceMemo
+    let memo: MemoModel
     let settings: SettingsManager
     @Binding var isEditing: Bool
     @Binding var editedTranscript: String
@@ -968,7 +1095,7 @@ private struct MemoDetailTranscriptProgressView: View {
 }
 
 private struct MemoDetailTranscriptTextSection: View {
-    @ObservedObject var memo: VoiceMemo
+    let memo: MemoModel
     let settings: SettingsManager
     @Binding var isEditing: Bool
     @Binding var editedTranscript: String
@@ -1015,7 +1142,7 @@ private struct MemoDetailTranscriptEditorView: View {
 }
 
 private struct MemoDetailTranscriptDisplayView: View {
-    @ObservedObject var memo: VoiceMemo
+    let memo: MemoModel
     let settings: SettingsManager
     let transcript: String
     let onRetranscribe: (String) -> Void
@@ -1046,7 +1173,7 @@ private struct MemoDetailTranscriptDisplayView: View {
 }
 
 private struct MemoDetailTranscriptContextMenu: View {
-    @ObservedObject var memo: VoiceMemo
+    let memo: MemoModel
     let transcript: String
     let onRetranscribe: (String) -> Void
 
@@ -1058,7 +1185,7 @@ private struct MemoDetailTranscriptContextMenu: View {
 
         Divider()
 
-        if memo.audioData != nil {
+        if memo.hasAudio {
             Menu("Retranscribe") {
                 Section("Parakeet (Recommended)") {
                     Button("Parakeet v3 (Fast, 25 languages)") {
@@ -1079,13 +1206,6 @@ private struct MemoDetailTranscriptContextMenu: View {
                         onRetranscribe("whisper:openai_whisper-large-v3")
                     }
                 }
-            }
-        }
-
-        if memo.sortedTranscriptVersions.count > 1 {
-            Divider()
-            Button("Version History (\(memo.sortedTranscriptVersions.count))") {
-                // TODO: Show version history sheet
             }
         }
     }
@@ -1151,9 +1271,9 @@ private struct MemoDetailQuickActionsSection: View {
 }
 
 private struct MemoDetailRecentRunsSection: View {
-    let runs: [WorkflowRun]
+    let runs: [WorkflowRunModel]
     let settings: SettingsManager
-    let onSelect: (WorkflowRun) -> Void
+    let onSelect: (WorkflowRunModel) -> Void
     let formatTimeAgo: (Date) -> String
 
     var body: some View {
@@ -1181,18 +1301,18 @@ private struct MemoDetailRecentRunsSection: View {
                                 .foregroundColor(.accentColor)
                                 .frame(width: 20)
 
-                            Text(run.workflowName ?? "Workflow")
+                            Text(run.workflowName)
                                 .font(Theme.current.fontBodyMedium)
                                 .foregroundColor(Theme.current.foreground)
                                 .lineLimit(1)
 
                             Spacer()
 
-                            if run.status == "completed" {
+                            if run.status == .completed {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(Theme.current.fontSM)
                                     .foregroundColor(.green)
-                            } else if run.status == "failed" {
+                            } else if run.status == .failed {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(Theme.current.fontSM)
                                     .foregroundColor(.red)
@@ -1202,7 +1322,7 @@ private struct MemoDetailRecentRunsSection: View {
                             }
 
                             RelativeTimeLabel(
-                                date: run.runDate ?? Date(),
+                                date: run.runDate,
                                 formatter: formatTimeAgo
                             )
                             .font(Theme.current.fontXS)

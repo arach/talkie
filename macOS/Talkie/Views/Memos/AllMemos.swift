@@ -8,7 +8,7 @@
 
 import SwiftUI
 import OSLog
-import CoreData
+// No CoreData - views only access GRDB via LocalRepository
 
 // MARK: - All Memos View
 
@@ -20,9 +20,8 @@ struct AllMemos: View {
     // Debounce search
     @State private var searchTask: Task<Void, Never>?
 
-    // CoreData context for fetching full VoiceMemo objects
-    @Environment(\.managedObjectContext) private var viewContext
-    @State private var selectedVoiceMemo: VoiceMemo?
+    // Selected memo for detail view - from GRDB via ViewModel
+    @State private var selectedMemo: MemoModel?
 
     // For keyboard/click selection
     @State private var lastClickedID: UUID?
@@ -118,13 +117,13 @@ struct AllMemos: View {
                 }
             }
             .onChange(of: selectedMemoIDs) { _, newIDs in
-                // Load full VoiceMemo from CoreData when single selection changes
+                // Select memo from GRDB when single selection changes
                 if newIDs.count == 1, let memoID = newIDs.first {
-                    loadVoiceMemo(id: memoID)
+                    selectMemo(id: memoID)
                     // In compact mode, auto-show inspector sheet
                     // Note: We check this on tap, not here, to avoid sheet appearing on programmatic selection
                 } else {
-                    selectedVoiceMemo = nil
+                    selectedMemo = nil
                 }
             }
             .onChange(of: viewModel.memos) { _, newMemos in
@@ -133,9 +132,9 @@ struct AllMemos: View {
                 let invalidIDs = selectedMemoIDs.subtracting(validIDs)
                 if !invalidIDs.isEmpty {
                     selectedMemoIDs.subtract(invalidIDs)
-                    // Clear the voice memo if it was deleted
-                    if let current = selectedVoiceMemo, let id = current.id, !validIDs.contains(id) {
-                        selectedVoiceMemo = nil
+                    // Clear the selected memo if it was deleted
+                    if let current = selectedMemo, !validIDs.contains(current.id) {
+                        selectedMemo = nil
                     }
                 }
             }
@@ -150,14 +149,14 @@ struct AllMemos: View {
             // Handle deep link to specific memo
             if let memoID = notification.object as? UUID {
                 selectedMemoIDs = [memoID]
-                loadVoiceMemo(id: memoID)
+                selectMemo(id: memoID)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .init("SelectMemo"))) { notification in
             // Handle navigation from dashboard
             if let memoID = notification.object as? UUID {
                 selectedMemoIDs = [memoID]
-                loadVoiceMemo(id: memoID)
+                selectMemo(id: memoID)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .talkieSyncCompleted)) { _ in
@@ -639,7 +638,7 @@ struct AllMemos: View {
             }
 
             // Inspector button in compact mode (when single selection)
-            if isCompactMode && selectedMemoIDs.count == 1 && selectedVoiceMemo != nil {
+            if isCompactMode && selectedMemoIDs.count == 1 && selectedMemo != nil {
                 Button {
                     showInspectorSheet = true
                 } label: {
@@ -810,9 +809,9 @@ struct AllMemos: View {
                     Spacer()
                 }
             }
-        } else if let voiceMemo = selectedVoiceMemo {
-            MemoDetailView(memo: voiceMemo)
-                .id(voiceMemo.id)
+        } else if let memo = selectedMemo {
+            MemoDetailView(memo: memo)
+                .id(memo.id)
         } else {
             // Empty state - matches original MemoInspectorEmptyState
             inspectorPanel {
@@ -873,9 +872,9 @@ struct AllMemos: View {
     private var inspectorSheetContent: some View {
         NavigationStack {
             Group {
-                if let voiceMemo = selectedVoiceMemo {
-                    MemoDetailView(memo: voiceMemo)
-                        .id(voiceMemo.id)
+                if let memo = selectedMemo {
+                    MemoDetailView(memo: memo)
+                        .id(memo.id)
                 } else {
                     // Empty state - shouldn't happen but handle gracefully
                     VStack(spacing: 16) {
@@ -902,20 +901,9 @@ struct AllMemos: View {
 
     // MARK: - Helpers
 
-    /// Fetch VoiceMemo from CoreData
-    private func loadVoiceMemo(id: UUID) {
-        let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        fetchRequest.fetchLimit = 1
-
-        do {
-            let results = try viewContext.fetch(fetchRequest)
-            selectedVoiceMemo = results.first
-        } catch {
-            let logger = Logger(subsystem: "jdi.talkie.core", category: "AllMemos")
-            logger.error("Failed to fetch VoiceMemo: \(error.localizedDescription)")
-            selectedVoiceMemo = nil
-        }
+    /// Find memo from ViewModel - already loaded from GRDB
+    private func selectMemo(id: UUID) {
+        selectedMemo = viewModel.memos.first { $0.id == id }
     }
 
     // MARK: - Context Menu
@@ -957,7 +945,7 @@ struct AllMemos: View {
         Button {
             // Select this memo and trigger re-transcribe via detail view
             selectedMemoIDs = [memo.id]
-            loadVoiceMemo(id: memo.id)
+            selectMemo(id: memo.id)
         } label: {
             Label("Re-transcribe", systemImage: "arrow.triangle.2.circlepath")
         }

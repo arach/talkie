@@ -33,6 +33,7 @@ final class StartupCoordinator {
     func initializeCritical() {
         guard !hasInitialized else { return }
 
+        let startTime = CFAbsoluteTimeGetCurrent()
         let state = signposter.beginInterval("Phase 1: Critical")
 
         // Configure window appearance to match theme before SwiftUI renders
@@ -40,8 +41,9 @@ final class StartupCoordinator {
         configureWindowAppearance()
 
         hasInitialized = true
+        let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
         let appearance = SettingsManager.shared.appearanceMode
-        logger.info("Startup[1]: window appearance (\(appearance.rawValue)) ✓")
+        logger.info("⏱️ Startup[1]: Critical \(String(format: "%.0f", elapsed))ms (appearance: \(appearance.rawValue))")
         signposter.endInterval("Phase 1: Critical", state)
     }
 
@@ -78,16 +80,19 @@ final class StartupCoordinator {
     func initializeDatabase() async -> Bool {
         guard !databaseInitialized else { return true }
 
+        let startTime = CFAbsoluteTimeGetCurrent()
         let state = signposter.beginInterval("Phase 2: Database")
 
         do {
             try await DatabaseManager.shared.initialize()
             databaseInitialized = true
-            logger.info("Startup[2]: GRDB initialized ✓")
+            let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            logger.info("⏱️ Startup[2]: Database \(String(format: "%.0f", elapsed))ms (GRDB)")
             signposter.endInterval("Phase 2: Database", state)
             return true
         } catch {
-            logger.error("Startup[2]: GRDB failed - \(error.localizedDescription)")
+            let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            logger.error("⏱️ Startup[2]: Database FAILED \(String(format: "%.0f", elapsed))ms - \(error.localizedDescription)")
             signposter.endInterval("Phase 2: Database", state)
             return false
         }
@@ -99,6 +104,7 @@ final class StartupCoordinator {
     /// This runs with a small delay to let UI settle
     func initializeDeferred() {
         Task { @MainActor in
+            let startTime = CFAbsoluteTimeGetCurrent()
             let state = signposter.beginInterval("Phase 3: Deferred")
 
             // Small delay to ensure UI is responsive first
@@ -119,7 +125,8 @@ final class StartupCoordinator {
             // CloudKit sync timing managed by CloudKitSyncManager
             signposter.emitEvent("Sync Engine")
 
-            logger.info("Startup[3]: notifications, CloudKit subscription, sync engine ✓")
+            let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            logger.info("⏱️ Startup[3]: Deferred \(String(format: "%.0f", elapsed))ms (notifications, CloudKit)")
             signposter.endInterval("Phase 3: Deferred", state)
         }
     }
@@ -143,6 +150,7 @@ final class StartupCoordinator {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
 
+            let startTime = CFAbsoluteTimeGetCurrent()
             let state = signposter.beginInterval("Phase 4: Background")
 
             // Helper apps can start after everything else
@@ -158,7 +166,15 @@ final class StartupCoordinator {
             signposter.emitEvent("Service Monitor")
             ServiceManager.shared.startMonitoring(interval: 30.0)
 
-            logger.info("Startup[4]: helpers, XPC, service monitor (30s) ✓")
+            // CloudKit sync manager - UI reads from GRDB, this just syncs to cloud
+            signposter.emitEvent("Sync Manager")
+            let syncStart = CFAbsoluteTimeGetCurrent()
+            _ = PersistenceController.shared  // Triggers CloudKit sync infrastructure
+            let syncElapsed = (CFAbsoluteTimeGetCurrent() - syncStart) * 1000
+            logger.info("⏱️ Sync manager: \(String(format: "%.0f", syncElapsed))ms")
+
+            let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync)")
             signposter.endInterval("Phase 4: Background", state)
         }
     }

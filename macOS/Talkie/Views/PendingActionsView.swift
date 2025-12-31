@@ -7,12 +7,11 @@
 //
 
 import SwiftUI
-import CoreData
 import Combine
 
 struct PendingActionsView: View {
     private let pendingManager = PendingActionsManager.shared
-    @Environment(\.managedObjectContext) private var viewContext
+    private let repository = LocalRepository()
     private let settings = SettingsManager.shared
 
     // Timer only created when needed - NOT autoconnect (that runs forever)
@@ -200,14 +199,9 @@ struct PendingActionsView: View {
                 return
             }
 
-            // Load memo
-            let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "id == %@", memoId as CVarArg)
-            fetchRequest.fetchLimit = 1
-
             do {
-                let memos = try viewContext.fetch(fetchRequest)
-                guard let memo = memos.first else {
+                // Load memo from GRDB
+                guard let memoModel = try await repository.fetchMemo(id: memoId)?.memo else {
                     await SystemEventManager.shared.log(.error, "Retry failed", detail: "Memo not found")
                     return
                 }
@@ -218,9 +212,7 @@ struct PendingActionsView: View {
                 }
 
                 // Re-run the workflow
-                await SystemEventManager.shared.log(.workflow, "Retrying: \(workflow.name)", detail: "Memo: \(memo.title ?? "Untitled")")
-                // Convert VoiceMemo to MemoModel for LocalRepository-based execution
-                let memoModel = MemoModel(from: memo)
+                await SystemEventManager.shared.log(.workflow, "Retrying: \(workflow.name)", detail: "Memo: \(memoModel.title ?? "Untitled")")
                 _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
 
             } catch {

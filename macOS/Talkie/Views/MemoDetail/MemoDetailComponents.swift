@@ -836,7 +836,7 @@ extension Notification.Name {
 // MARK: - Workflow Picker Sheet
 
 struct WorkflowPickerSheet: View {
-    let memo: VoiceMemo
+    let memo: MemoModel
     let onSelect: (WorkflowDefinition) -> Void
     let onCancel: () -> Void
 

@@ -88,18 +88,13 @@ class TalkieData {
         log.info("   • Live: \(inventory.live) dictations")
         log.info("   • Healthy: \(inventory.isHealthy)")
 
-        // 2. Reconcile if needed - smart targeted sync (only missing IDs)
+        // 2. Skip automatic sync - GRDB is source of truth
+        // The old logic synced CoreData→GRDB on every launch, but:
+        // - It races with DatabaseManager.initialize() and fails
+        // - Even when it "works", it's 20+ seconds of unnecessary I/O
+        // - GRDB already has the data; CloudKit sync handles new records
         if inventory.needsFullSync {
-            // UUID mismatch detected - some CoreData memos aren't in GRDB
-            let missingIDs = inventory.missingFromLocal
-            log.info("🔄 [TalkieData] \(missingIDs.count) CoreData memo(s) missing from local - syncing targeted...")
-            isSyncing = true
-            await syncMissingMemos(ids: missingIDs)
-            isSyncing = false
-
-            // Re-inventory after sync
-            self.inventory = await takeInventory()
-            log.info("✅ [TalkieData] Targeted sync complete - local now has \(self.inventory?.local ?? 0) memos")
+            log.info("ℹ️ [TalkieData] \(inventory.missingFromLocal.count) memo(s) not in local cache (expected on first run or if DB init is still running)")
         }
 
         // 3. Mark ready

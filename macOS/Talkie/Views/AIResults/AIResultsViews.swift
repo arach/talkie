@@ -6,45 +6,40 @@
 //
 
 import SwiftUI
-import CoreData
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
+private let log = Log(.ui)
 
 // MARK: - Activity Log View
 
 struct AIResultsContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
     private let settings = SettingsManager.shared
+    private let repository = LocalRepository()
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)]
-    )
-    private var allRuns: FetchedResults<WorkflowRun>
-
-    @State private var selectedRun: WorkflowRun?
-    @State private var selectedMemoId: NSManagedObjectID?
+    @State private var allRuns: [WorkflowRunModel] = []
+    @State private var selectedRun: WorkflowRunModel?
+    @State private var memoLookup: [UUID: MemoModel] = [:]
+    @State private var isLoading = false
 
     // Group runs by memo (deduplicated by ID to handle CloudKit sync duplicates)
-    private var runsByMemo: [(memo: VoiceMemo, runs: [WorkflowRun])] {
+    private var runsByMemo: [(memo: MemoModel, runs: [WorkflowRunModel])] {
         // Deduplicate runs by ID, keeping the most recent one
-        var uniqueRuns: [UUID: WorkflowRun] = [:]
+        var uniqueRuns: [UUID: WorkflowRunModel] = [:]
         for run in allRuns {
-            guard let id = run.id else { continue }
-            if let existing = uniqueRuns[id] {
+            if let existing = uniqueRuns[run.id] {
                 // Keep the one with the more recent runDate
-                if (run.runDate ?? .distantPast) > (existing.runDate ?? .distantPast) {
-                    uniqueRuns[id] = run
+                if (run.runDate) > (existing.runDate) {
+                    uniqueRuns[run.id] = run
                 }
             } else {
-                uniqueRuns[id] = run
+                uniqueRuns[run.id] = run
             }
         }
 
-        let grouped = Dictionary(grouping: uniqueRuns.values) { $0.memo }
-        return grouped.compactMap { (memo, runs) -> (VoiceMemo, [WorkflowRun])? in
-            guard let memo = memo else { return nil }
-            return (memo, runs.sorted { ($0.runDate ?? .distantPast) > ($1.runDate ?? .distantPast) })
+        let grouped = Dictionary(grouping: uniqueRuns.values) { $0.memoId }
+        return grouped.compactMap { (memoId, runs) -> (MemoModel, [WorkflowRunModel])? in
+            guard let memo = memoLookup[memoId] else { return nil }
+            return (memo, runs.sorted { ($0.runDate) > ($1.runDate) })
         }.sorted { ($0.runs.first?.runDate ?? .distantPast) > ($1.runs.first?.runDate ?? .distantPast) }
     }
 
@@ -72,7 +67,17 @@ struct AIResultsContentView: View {
 
                 Divider()
 
-                if runsByMemo.isEmpty {
+                if isLoading {
+                    VStack(spacing: 16) {
+                        Spacer()
+                        ProgressView()
+                        Text("Loading...")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if runsByMemo.isEmpty {
                     VStack(spacing: 16) {
                         Spacer()
                         Image(systemName: "wand.and.rays")
@@ -136,19 +141,55 @@ struct AIResultsContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            await loadRuns()
+        }
     }
 
-    private func deleteRun(_ run: WorkflowRun) {
-        viewContext.perform {
-            viewContext.delete(run)
-            try? viewContext.save()
+    private func loadRuns() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Fetch all memos and collect their workflow runs
+            var allRunsCollected: [WorkflowRunModel] = []
+            let memos = try await repository.fetchMemos(
+                sortBy: .timestamp,
+                ascending: false,
+                limit: Int.max,
+                offset: 0,
+                searchQuery: nil,
+                filters: []
+            )
+
+            for memo in memos {
+                memoLookup[memo.id] = memo
+                let runs = try await repository.fetchWorkflowRuns(for: memo.id)
+                allRunsCollected.append(contentsOf: runs)
+            }
+
+            allRuns = allRunsCollected
+        } catch {
+            log.error("Failed to load workflow runs: \(error)")
+        }
+    }
+
+    private func deleteRun(_ run: WorkflowRunModel) {
+        Task {
+            do {
+                try await repository.deleteWorkflowRun(id: run.id)
+                // Refresh the runs list
+                await loadRuns()
+            } catch {
+                log.error("Failed to delete run: \(error)")
+            }
         }
     }
 }
 
 // MARK: - Memo Header in Activity Log
 struct AIMemoHeaderView: View {
-    let memo: VoiceMemo
+    let memo: MemoModel
     let runCount: Int
     private let settings = SettingsManager.shared
 
@@ -158,7 +199,7 @@ struct AIMemoHeaderView: View {
                 .font(Theme.current.fontSM)
                 .foregroundColor(Theme.current.foregroundSecondary)
 
-            Text(memo.title ?? "Untitled")
+            Text(memo.displayTitle)
                 .font(Theme.current.fontSMBold)
                 .foregroundColor(Theme.current.foreground)
                 .lineLimit(1)
@@ -181,17 +222,17 @@ struct AIMemoHeaderView: View {
 
 // MARK: - Run Row in Activity Log List
 struct AIRunRowView: View {
-    let run: WorkflowRun
+    let run: WorkflowRunModel
     let isSelected: Bool
     let onSelect: () -> Void
     private let settings = SettingsManager.shared
 
     @State private var isHovering = false
 
-    private var workflowName: String { run.workflowName ?? "Workflow" }
+    private var workflowName: String { run.workflowName }
     private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
     private var modelId: String? { run.modelId }
-    private var runDate: Date { run.runDate ?? Date() }
+    private var runDate: Date { run.runDate }
 
     var body: some View {
         Button(action: onSelect) {
@@ -255,16 +296,16 @@ struct AIRunRowView: View {
 
 // MARK: - Run Detail View in Activity Log
 struct AIRunDetailView: View {
-    let run: WorkflowRun
+    let run: WorkflowRunModel
     let onDelete: () -> Void
     private let settings = SettingsManager.shared
 
-    private var workflowName: String { run.workflowName ?? "Workflow" }
+    private var workflowName: String { run.workflowName }
     private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
     private var providerName: String? { run.providerName }
     private var modelId: String? { run.modelId }
-    private var runDate: Date { run.runDate ?? Date() }
-    private var memoTitle: String { run.memo?.title ?? "Unknown Memo" }
+    private var runDate: Date { run.runDate }
+    private var memoTitle: String { run.inputTitle ?? "Unknown Memo" }
 
     private var stepExecutions: [WorkflowExecutor.StepExecution] {
         guard let json = run.stepOutputsJSON,
@@ -306,11 +347,9 @@ struct AIRunDetailView: View {
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(.secondary.opacity(0.6))
 
-                            if let runId = run.id {
-                                Text(runId.uuidString.prefix(8).uppercased())
-                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.secondary.opacity(0.4))
-                            }
+                            Text(run.id.uuidString.prefix(8).uppercased())
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.4))
                         }
                     }
 

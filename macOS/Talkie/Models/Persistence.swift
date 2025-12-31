@@ -13,6 +13,7 @@ import Combine
 import Observation
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Persistence")
+private let startupSignposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
 
 // MARK: - WAL Management
 
@@ -239,12 +240,20 @@ struct PersistenceController {
     let container: NSPersistentCloudKitContainer
 
     init(inMemory: Bool = false) {
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        // Phase 1: Create container
+        let containerState = startupSignposter.beginInterval("CoreData.createContainer")
         container = NSPersistentCloudKitContainer(name: "talkie")
+        startupSignposter.endInterval("CoreData.createContainer", containerState)
+        logger.info("⏱️ CoreData.createContainer: \(String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - startTime) * 1000))ms")
 
         if inMemory {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
             logger.info("Persistence: in-memory store")
         } else {
+            // Phase 2: Configure CloudKit options
+            let configState = startupSignposter.beginInterval("CoreData.configureCloudKit")
             // Configure CloudKit sync - MUST enable history tracking for proper sync!
             // NSPersistentCloudKitContainer requires these options to function correctly.
             if let description = container.persistentStoreDescriptions.first {
@@ -260,9 +269,14 @@ struct PersistenceController {
                 // Without this, we won't receive updates from other devices!
                 description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
             }
+            startupSignposter.endInterval("CoreData.configureCloudKit", configState)
         }
 
+        // Phase 3: Load persistent stores (can be slow on first launch or large DBs)
+        let loadState = startupSignposter.beginInterval("CoreData.loadStores")
+        let loadStart = CFAbsoluteTimeGetCurrent()
         container.loadPersistentStores { [weak container] storeDescription, error in
+            let loadElapsed = (CFAbsoluteTimeGetCurrent() - loadStart) * 1000
             if let error = error as NSError? {
                 logger.error("Persistence: failed - \(error.localizedDescription)")
             } else {
@@ -279,12 +293,17 @@ struct PersistenceController {
                     let req: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
                     localCount = (try? ctx.count(for: req)) ?? 0
                 }
-                logger.info("Persistence: \(store) + \(cloudKit)(\(env)) | \(localCount) local memo(s)")
+                logger.info("⏱️ CoreData.loadStores: \(String(format: "%.0f", loadElapsed))ms | \(store) + \(cloudKit)(\(env)) | \(localCount) memo(s)")
             }
         }
+        startupSignposter.endInterval("CoreData.loadStores", loadState)
 
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+
+        // Log Core Data init time (critical path)
+        let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+        logger.info("⏱️ Persistence.init total: \(String(format: "%.0f", elapsed))ms")
 
         // Check iCloud account status and start initial sync
         PersistenceController.checkiCloudStatus()

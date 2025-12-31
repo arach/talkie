@@ -8,6 +8,10 @@
 import SwiftUI
 import AppKit
 import CoreData
+import os
+
+private let startupLogger = Logger(subsystem: "jdi.talkie.performance", category: "Startup")
+private let startupSignposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
 
 // MARK: - Sidebar Toggle Action
 
@@ -84,6 +88,18 @@ private enum EarlyThemeInit {
     }()
 }
 
+// Track app startup time with signposts for Instruments
+private enum StartupTimer {
+    static let appStart = CFAbsoluteTimeGetCurrent()
+    static var bodyAccessed = false
+    static var persistenceState: OSSignpostIntervalState?
+
+    static func logMilestone(_ name: String) {
+        let elapsed = (CFAbsoluteTimeGetCurrent() - appStart) * 1000
+        startupLogger.info("⏱️ \(name): \(String(format: "%.0f", elapsed))ms")
+    }
+}
+
 @main
 struct TalkieApp: App {
     // Ensure early theme init runs before anything else
@@ -92,7 +108,14 @@ struct TalkieApp: App {
     // Wire up AppDelegate for push notification handling
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    let persistenceController = PersistenceController.shared
+    // CoreData is now a sync-layer-only concern - initialized in background by StartupCoordinator
+    // UI reads from GRDB (source of truth), CoreData just syncs to CloudKit
+
+    init() {
+        StartupTimer.logMilestone("TalkieApp.init start")
+        // No CoreData init here - deferred to background
+        StartupTimer.logMilestone("TalkieApp.init end")
+    }
     // Remove @State from global singletons - they're already observable
     // Reference singletons directly via .shared instead
     @FocusedValue(\.sidebarToggle) var sidebarToggle
@@ -100,11 +123,18 @@ struct TalkieApp: App {
     @FocusedValue(\.liveNavigation) var liveNavigation
 
     var body: some Scene {
-        WindowGroup(id: "main") {
-            // Show UI immediately - no migration gate
-            // Database init happens in background via .task
+        // Log time to first body access (once)
+        if !StartupTimer.bodyAccessed {
+            StartupTimer.bodyAccessed = true
+            let elapsed = (CFAbsoluteTimeGetCurrent() - StartupTimer.appStart) * 1000
+            startupSignposter.emitEvent("TalkieApp.body")
+            startupLogger.info("⏱️ TalkieApp.body accessed: \(String(format: "%.0f", elapsed))ms from launch")
+        }
+
+        return WindowGroup(id: "main") {
+            // Show UI immediately - GRDB is source of truth
+            // CoreData + CloudKit sync layer initializes in background
             TalkieNavigationViewNative()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environment(SettingsManager.shared)
                 .environment(EngineClient.shared)
                 .environment(LiveSettings.shared)

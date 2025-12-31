@@ -6,29 +6,28 @@
 //
 
 import SwiftUI
-import CoreData
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
+private let log = Log(.ui)
 
 // MARK: - Activity Run Row Model (for native Table)
 
 struct ActivityRunRow: Identifiable {
-    let id: NSManagedObjectID
-    let runId: UUID?
+    let id: UUID
+    let runId: UUID
     let timestamp: Date
     let workflowName: String
     let memoTitle: String
     let isSuccess: Bool
     let durationMs: Int?
-    let run: WorkflowRun
+    let run: WorkflowRunModel
 
-    init(from run: WorkflowRun) {
-        self.id = run.objectID
+    init(from run: WorkflowRunModel, memoTitle: String = "Unknown") {
+        self.id = run.id
         self.runId = run.id
-        self.timestamp = run.runDate ?? Date.distantPast
-        self.workflowName = run.workflowName ?? "Workflow"
-        self.memoTitle = run.memo?.title ?? "Unknown"
+        self.timestamp = run.runDate
+        self.workflowName = run.workflowName
+        self.memoTitle = memoTitle
         self.isSuccess = run.output != nil && !(run.output?.isEmpty ?? true)
         self.run = run
 
@@ -48,16 +47,16 @@ struct ActivityRunRow: Identifiable {
 // MARK: - Activity Log Full View (with Native Table)
 
 struct ActivityLogFullView: View {
-    @Environment(\.managedObjectContext) private var viewContext
     private let settings = SettingsManager.shared
+    private let repository = LocalRepository()
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \WorkflowRun.runDate, ascending: false)]
-    )
-    private var allRuns: FetchedResults<WorkflowRun>
+    // State for workflow runs
+    @State private var allRuns: [WorkflowRunModel] = []
+    @State private var memoTitles: [UUID: String] = [:]
+    @State private var isLoading = true
 
     // Selection & Inspector state
-    @State private var selectedRunId: NSManagedObjectID?
+    @State private var selectedRunId: UUID?
     @State private var showInspector: Bool = false
 
     // Sorting state for Table
@@ -66,21 +65,17 @@ struct ActivityLogFullView: View {
     // Inspector panel width (resizable)
     @State private var inspectorWidth: CGFloat = 380
 
-    // Convert FetchedResults to row models, deduplicated
+    // Convert workflow runs to row models
     private var tableRows: [ActivityRunRow] {
-        var seen = Set<UUID>()
-        return allRuns.compactMap { run -> ActivityRunRow? in
-            if let runId = run.id {
-                if seen.contains(runId) { return nil }
-                seen.insert(runId)
-            }
-            return ActivityRunRow(from: run)
+        return allRuns.compactMap { run in
+            let title = memoTitles[run.memoId] ?? "Unknown"
+            return ActivityRunRow(from: run, memoTitle: title)
         }.sorted(using: sortOrder)
     }
 
-    private var selectedRun: WorkflowRun? {
+    private var selectedRun: WorkflowRunModel? {
         guard let selectedId = selectedRunId else { return nil }
-        return allRuns.first { $0.objectID == selectedId }
+        return allRuns.first { $0.id == selectedId }
     }
 
     var body: some View {
@@ -109,7 +104,15 @@ struct ActivityLogFullView: View {
 
                 Divider()
 
-                if allRuns.isEmpty {
+                if isLoading {
+                    VStack(spacing: Spacing.lg) {
+                        Spacer()
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if allRuns.isEmpty {
                     VStack(spacing: Spacing.lg) {
                         Spacer()
                         Image(systemName: "wand.and.rays")
@@ -225,7 +228,42 @@ struct ActivityLogFullView: View {
             // Track row selection/deselection
             if newValue != nil, let run = selectedRun {
                 let id = talkieSignposter.makeSignpostID()
-                talkieSignposter.emitEvent("ActionRowClick", id: id, "AIResults.\(run.workflowName ?? "Workflow")")
+                talkieSignposter.emitEvent("ActionRowClick", id: id, "AIResults.\(run.workflowName)")
+            }
+        }
+        .task {
+            await loadWorkflowRuns()
+        }
+    }
+
+    private func loadWorkflowRuns() async {
+        isLoading = true
+        do {
+            let runs = try await repository.allWorkflowRuns()
+
+            // Fetch memo titles for all unique memoIds
+            var titles: [UUID: String] = [:]
+            let uniqueMemoIds = Array(Set(runs.map(\.memoId)))
+
+            for memoId in uniqueMemoIds {
+                do {
+                    if let memo = try await repository.fetchMemo(id: memoId) {
+                        titles[memoId] = memo.memo.displayTitle
+                    }
+                } catch {
+                    log.debug("Failed to fetch memo title for \(memoId.uuidString.prefix(8))")
+                }
+            }
+
+            await MainActor.run {
+                self.allRuns = runs
+                self.memoTitles = titles
+                self.isLoading = false
+            }
+        } catch {
+            log.error("Failed to load workflow runs: \(error)")
+            await MainActor.run {
+                self.isLoading = false
             }
         }
     }
@@ -245,10 +283,17 @@ struct ActivityLogFullView: View {
         }
     }
 
-    private func deleteRun(_ run: WorkflowRun) {
-        viewContext.perform {
-            viewContext.delete(run)
-            try? viewContext.save()
+    private func deleteRun(_ run: WorkflowRunModel) {
+        Task {
+            do {
+                try await repository.deleteWorkflowRun(id: run.id)
+                log.info("Deleted workflow run: \(run.id.uuidString.prefix(8))")
+
+                // Reload the runs
+                await loadWorkflowRuns()
+            } catch {
+                log.error("Failed to delete workflow run: \(error)")
+            }
         }
     }
 }
@@ -256,16 +301,16 @@ struct ActivityLogFullView: View {
 // MARK: - Activity Inspector Panel
 
 struct ActivityInspectorPanel: View {
-    let run: WorkflowRun
+    let run: WorkflowRunModel
     let onClose: () -> Void
     let onDelete: () -> Void
     private let settings = SettingsManager.shared
 
-    private var workflowName: String { run.workflowName ?? "Workflow" }
+    private var workflowName: String { run.workflowName }
     private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
     private var modelId: String? { run.modelId }
-    private var runDate: Date { run.runDate ?? Date() }
-    private var memoTitle: String { run.memo?.title ?? "Unknown Memo" }
+    private var runDate: Date { run.runDate }
+    private var memoTitle: String { "Unknown Memo" }  // Will be passed from parent
 
     private var stepExecutions: [WorkflowExecutor.StepExecution] {
         guard let json = run.stepOutputsJSON,
@@ -296,18 +341,20 @@ struct ActivityInspectorPanel: View {
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
-                        if let runId = run.id {
-                            Text(runId.uuidString.prefix(8).uppercased())
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundColor(Theme.current.foregroundMuted)
-                        }
+                        Text(run.id.uuidString.prefix(8).uppercased())
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(Theme.current.foregroundMuted)
                     }
                 }
 
                 Spacer()
 
-                CloseButton(action: onClose)
-                    .help("Close inspector")
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close inspector")
             }
             .padding(Spacing.md)
             .background(Theme.current.surface1)
