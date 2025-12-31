@@ -83,9 +83,15 @@ class OpenAIProvider: LLMProvider {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw LLMError.generationFailed("Failed to fetch models from OpenAI")
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LLMError.generationFailed("Invalid response from OpenAI")
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            // Try to extract error message from response
+            let errorMessage = extractErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
+            logger.error("OpenAI API error: \(errorMessage)")
+            throw LLMError.generationFailed("OpenAI: \(errorMessage)")
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -163,6 +169,54 @@ class OpenAIProvider: LLMProvider {
             return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
+
+    /// Test the API key by making a simple models request
+    func testConnection() async -> (success: Bool, message: String) {
+        guard let apiKey = SettingsManager.shared.openaiApiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return (false, "No API key configured")
+        }
+
+        let url = URL(string: "https://api.openai.com/v1/models")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return (false, "Invalid response")
+            }
+
+            if (200...299).contains(httpResponse.statusCode) {
+                return (true, "Connected successfully")
+            } else {
+                let errorMessage = extractErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
+                return (false, errorMessage)
+            }
+        } catch {
+            return (false, error.localizedDescription)
+        }
+    }
+
+    /// Extract error message from OpenAI API error response
+    private func extractErrorMessage(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let error = json["error"] as? [String: Any] else {
+            return nil
+        }
+
+        if let message = error["message"] as? String {
+            return message
+        }
+
+        if let type = error["type"] as? String {
+            return type
+        }
+
+        return nil
+    }
     
     func generate(
         prompt: String,
@@ -198,12 +252,17 @@ class OpenAIProvider: LLMProvider {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw LLMError.generationFailed("OpenAI API request failed")
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LLMError.generationFailed("Invalid response from OpenAI")
         }
-        
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorMessage = extractErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
+            logger.error("OpenAI generate error: \(errorMessage)")
+            throw LLMError.generationFailed("OpenAI: \(errorMessage)")
+        }
+
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let choices = json?["choices"] as? [[String: Any]],
               let firstChoice = choices.first,
