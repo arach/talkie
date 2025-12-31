@@ -33,7 +33,7 @@ actor LocalRepository: MemoRepository {
     ) async throws -> [MemoModel] {
         try await instrumentRepositoryRead("fetchMemos") {
             let startTime = Date()
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             log.debug("Executing query: sort=\(sortBy), limit=\(limit), offset=\(offset), filters=\(filters.count)")
 
@@ -114,7 +114,7 @@ actor LocalRepository: MemoRepository {
 
     func countMemos(searchQuery: String? = nil, filters: Set<MemoFilter> = []) async throws -> Int {
         try await instrumentRepositoryRead("countMemos") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 // Count only non-deleted memos
@@ -138,7 +138,7 @@ actor LocalRepository: MemoRepository {
 
     /// Fetch all memo IDs (for diff comparison)
     func fetchAllIDs() async throws -> Set<UUID> {
-        let db = try await dbManager.database()
+        let db = try await dbManager.databaseAsync()
         return try await db.read { db in
             let ids = try MemoModel
                 .filter(MemoModel.Columns.deletedAt == nil)
@@ -153,7 +153,7 @@ actor LocalRepository: MemoRepository {
 
     func fetchMemo(id: UUID) async throws -> MemoWithRelationships? {
         try await instrumentRepositoryRead("fetchMemo") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 // Fetch memo
@@ -187,7 +187,7 @@ actor LocalRepository: MemoRepository {
 
     func saveMemo(_ memo: MemoModel) async throws {
         try await instrumentRepositoryWrite("saveMemo") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             try await db.write { db in
                 let mutableMemo = memo
@@ -198,7 +198,7 @@ actor LocalRepository: MemoRepository {
 
     func deleteMemo(id: UUID) async throws {
         try await instrumentRepositoryWrite("deleteMemo") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             _ = try await db.write { db in
                 try MemoModel
@@ -213,7 +213,7 @@ actor LocalRepository: MemoRepository {
     /// Soft delete a memo (set deletedAt timestamp)
     func softDeleteMemo(id: UUID) async throws {
         try await instrumentRepositoryWrite("softDeleteMemo") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             try await db.write { db in
                 // Use GRDB's proper update API instead of raw SQL
@@ -231,7 +231,7 @@ actor LocalRepository: MemoRepository {
     /// Soft delete multiple memos
     func softDeleteMemos(ids: Set<UUID>) async throws {
         try await instrumentRepositoryWrite("softDeleteMemos") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
             let now = Date()
 
             try await db.write { db in
@@ -258,7 +258,7 @@ actor LocalRepository: MemoRepository {
     /// Fetch memos pending deletion
     func fetchPendingDeletions() async throws -> [MemoModel] {
         try await instrumentRepositoryRead("fetchPendingDeletions") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try MemoModel
@@ -272,7 +272,7 @@ actor LocalRepository: MemoRepository {
     /// Count memos pending deletion
     func countPendingDeletions() async throws -> Int {
         try await instrumentRepositoryRead("countPendingDeletions") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try MemoModel
@@ -285,7 +285,7 @@ actor LocalRepository: MemoRepository {
     /// Restore a soft-deleted memo
     func restoreMemo(id: UUID) async throws {
         try await instrumentRepositoryWrite("restoreMemo") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             try await db.write { db in
                 // Use GRDB's proper update API instead of raw SQL
@@ -309,7 +309,7 @@ actor LocalRepository: MemoRepository {
 
     func fetchTranscriptVersions(for memoId: UUID) async throws -> [TranscriptVersionModel] {
         try await instrumentRepositoryRead("fetchTranscriptVersions") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try TranscriptVersionModel
@@ -322,7 +322,7 @@ actor LocalRepository: MemoRepository {
 
     func fetchWorkflowRuns(for memoId: UUID) async throws -> [WorkflowRunModel] {
         try await instrumentRepositoryRead("fetchWorkflowRuns") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try WorkflowRunModel
@@ -335,7 +335,7 @@ actor LocalRepository: MemoRepository {
 
     func allWorkflowRuns() async throws -> [WorkflowRunModel] {
         try await instrumentRepositoryRead("allWorkflowRuns") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try WorkflowRunModel
@@ -347,7 +347,7 @@ actor LocalRepository: MemoRepository {
 
     func deleteWorkflowRun(id: UUID) async throws {
         try await instrumentRepositoryWrite("deleteWorkflowRun") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             _ = try await db.write { db in
                 try WorkflowRunModel
@@ -359,7 +359,7 @@ actor LocalRepository: MemoRepository {
 
     func saveTranscriptVersion(_ version: TranscriptVersionModel) async throws {
         try await instrumentRepositoryWrite("saveTranscriptVersion") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             try await db.write { db in
                 let mutableVersion = version
@@ -370,7 +370,7 @@ actor LocalRepository: MemoRepository {
 
     func saveWorkflowRun(_ run: WorkflowRunModel) async throws {
         try await instrumentRepositoryWrite("saveWorkflowRun") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             try await db.write { db in
                 let mutableRun = run
@@ -381,7 +381,7 @@ actor LocalRepository: MemoRepository {
 
     func saveWorkflowStep(_ step: WorkflowStepModel) async throws {
         try await instrumentRepositoryWrite("saveWorkflowStep") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             try await db.write { db in
                 let mutableStep = step
@@ -392,7 +392,7 @@ actor LocalRepository: MemoRepository {
 
     func saveWorkflowEvent(_ event: WorkflowEventModel) async throws {
         try await instrumentRepositoryWrite("saveWorkflowEvent") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             try await db.write { db in
                 let mutableEvent = event
@@ -403,7 +403,7 @@ actor LocalRepository: MemoRepository {
 
     func fetchWorkflowSteps(for runId: UUID) async throws -> [WorkflowStepModel] {
         try await instrumentRepositoryRead("fetchWorkflowSteps") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try WorkflowStepModel
@@ -416,7 +416,7 @@ actor LocalRepository: MemoRepository {
 
     func fetchWorkflowEvents(for runId: UUID) async throws -> [WorkflowEventModel] {
         try await instrumentRepositoryRead("fetchWorkflowEvents") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try WorkflowEventModel
@@ -525,7 +525,7 @@ extension LocalRepository {
     /// Count memos created today (local timezone)
     func countMemosToday() async throws -> Int {
         try await instrumentRepositoryRead("countMemosToday") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
             let calendar = Calendar.current
             let startOfDay = calendar.startOfDay(for: Date())
 
@@ -541,7 +541,7 @@ extension LocalRepository {
     /// Count memos created this week (local timezone, week starts Monday)
     func countMemosThisWeek() async throws -> Int {
         try await instrumentRepositoryRead("countMemosThisWeek") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
             var calendar = Calendar.current
             calendar.firstWeekday = 2 // Monday
             let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
@@ -558,7 +558,7 @@ extension LocalRepository {
     /// Heatmap data: date string (yyyy-MM-dd) → count for last N days
     func fetchHeatmapData(days: Int) async throws -> [String: Int] {
         try await instrumentRepositoryRead("fetchHeatmapData") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
             let calendar = Calendar.current
             let cutoffDate = calendar.date(byAdding: .day, value: -days, to: Date()) ?? Date()
 
@@ -590,7 +590,7 @@ extension LocalRepository {
     /// Total duration of all non-deleted memos in seconds
     func totalDuration() async throws -> Double {
         try await instrumentRepositoryRead("totalDuration") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 let row = try Row.fetchOne(
@@ -609,7 +609,7 @@ extension LocalRepository {
     /// Fetch memos that have transcription
     func fetchTranscribedMemos(limit: Int = 100) async throws -> [MemoModel] {
         try await instrumentRepositoryRead("fetchTranscribedMemos") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try MemoModel
@@ -626,7 +626,7 @@ extension LocalRepository {
     /// Fetch memos that need transcription (no transcription or empty, not currently transcribing)
     func fetchUntranscribedMemos(limit: Int = 100) async throws -> [MemoModel] {
         try await instrumentRepositoryRead("fetchUntranscribedMemos") {
-            let db = try await dbManager.database()
+            let db = try await dbManager.databaseAsync()
 
             return try await db.read { db in
                 try MemoModel

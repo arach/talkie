@@ -150,6 +150,31 @@ final class DatabaseManager {
         return db
     }
 
+    /// Get database queue, waiting for initialization if needed
+    /// Use this from views/repositories that may load before DB is ready
+    func databaseAsync() async throws -> DatabaseQueue {
+        // Fast path: already initialized
+        if let db = try? database() {
+            return db
+        }
+
+        // Slow path: wait for initialization
+        return try await withCheckedThrowingContinuation { continuation in
+            afterInitialized { [weak self] in
+                guard let self = self else {
+                    continuation.resume(throwing: DatabaseError.notInitialized)
+                    return
+                }
+                do {
+                    let db = try self.database()
+                    continuation.resume(returning: db)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     // MARK: - Migrations
 
     private var migrator: DatabaseMigrator {

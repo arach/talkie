@@ -611,10 +611,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             } else if screen.section == .memos {
                 // Capture the memos view
                 NSLog("[audit-screen] Capturing memos screen: %@", screen.rawValue)
-                // Note: The app is launched with --section=memos to show the correct view
-
-                // Wait for view to load data (async task in MemosView)
-                try? await Task.sleep(for: .milliseconds(1500))
 
                 // Find and capture the main window
                 let url = await MainActor.run { () -> URL? in
