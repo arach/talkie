@@ -57,37 +57,37 @@
     "openai": {
       "id": "openai",
       "name": "OpenAI",
-      "defaultModel": "gpt-4o-mini",
+      "defaultModel": "gpt-5.2-chat-latest",
       "models": [
         {
-          "id": "gpt-4o",
-          "displayName": "GPT-4o",
-          "description": "Most capable GPT-4 model, multimodal"
+          "id": "gpt-5.2",
+          "displayName": "GPT-5.2 Thinking",
+          "description": "Flagship reasoning model, 400k context"
+        },
+        {
+          "id": "gpt-5.2-chat-latest",
+          "displayName": "GPT-5.2 Instant",
+          "description": "Fast and conversational"
+        },
+        {
+          "id": "gpt-5.2-pro",
+          "displayName": "GPT-5.2 Pro",
+          "description": "Extended reasoning with xhigh effort"
+        },
+        {
+          "id": "gpt-5.1",
+          "displayName": "GPT-5.1 Thinking",
+          "description": "Advanced reasoning, adaptive"
+        },
+        {
+          "id": "gpt-5.1-chat-latest",
+          "displayName": "GPT-5.1 Instant",
+          "description": "Most-used model, warm and intelligent"
         },
         {
           "id": "gpt-4o-mini",
           "displayName": "GPT-4o Mini",
-          "description": "Fast and affordable, great for most tasks"
-        },
-        {
-          "id": "gpt-4-turbo",
-          "displayName": "GPT-4 Turbo",
-          "description": "128k context, knowledge up to Dec 2023"
-        },
-        {
-          "id": "o1-preview",
-          "displayName": "o1 Preview",
-          "description": "Advanced reasoning model"
-        },
-        {
-          "id": "o1-mini",
-          "displayName": "o1 Mini",
-          "description": "Fast reasoning for math and coding"
-        },
-        {
-          "id": "gpt-3.5-turbo",
-          "displayName": "GPT-3.5 Turbo",
-          "description": "Fast and cost-effective"
+          "description": "Fast and affordable fallback"
         }
       ]
     },

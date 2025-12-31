@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import os
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "OpenAI")
+private let log = Log(.system)
 
 class OpenAIProvider: LLMProvider {
     let id = "openai"
@@ -36,7 +36,7 @@ class OpenAIProvider: LLMProvider {
                 persistModels(fetched)
                 return fetched
             } catch {
-                logger.warning("Failed to fetch models from API: \(error.localizedDescription)")
+                log.warning("Failed to fetch models from API: \(error.localizedDescription)")
                 // Return persisted models if available
                 if let cached = loadPersistedModels() {
                     return cached
@@ -50,7 +50,7 @@ class OpenAIProvider: LLMProvider {
     func refreshModels() async throws -> [LLMModel] {
         let fetched = try await fetchModelsFromAPI()
         persistModels(fetched)
-        logger.info("Force refreshed \(fetched.count) models from OpenAI API")
+        log.info("Force refreshed \(fetched.count) models from OpenAI API")
         return fetched
     }
 
@@ -66,7 +66,7 @@ class OpenAIProvider: LLMProvider {
         if let data = try? JSONEncoder().encode(models) {
             UserDefaults.standard.set(data, forKey: modelsKey)
             UserDefaults.standard.set(Date(), forKey: lastFetchKey)
-            logger.info("Persisted \(models.count) models to UserDefaults")
+            log.info("Persisted \(models.count) models to UserDefaults")
         }
     }
 
@@ -90,7 +90,7 @@ class OpenAIProvider: LLMProvider {
         guard (200...299).contains(httpResponse.statusCode) else {
             // Try to extract error message from response
             let errorMessage = extractErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
-            logger.error("OpenAI API error: \(errorMessage)")
+            log.error("OpenAI API error: \(errorMessage)")
             throw LLMError.generationFailed("OpenAI: \(errorMessage)")
         }
 
@@ -137,7 +137,7 @@ class OpenAIProvider: LLMProvider {
             .sorted { $0.created > $1.created }
             .map { $0.model }
 
-        logger.info("Fetched \(sorted.count) chat models from OpenAI API")
+        log.info("Fetched \(sorted.count) chat models from OpenAI API")
         return sorted
     }
 
@@ -223,17 +223,23 @@ class OpenAIProvider: LLMProvider {
         model: String,
         options: GenerationOptions
     ) async throws -> String {
+        log.info("🔵 OpenAI generate called with model: \(model)")
+
         guard let apiKey = SettingsManager.shared.openaiApiKey,
               !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            log.error("❌ OpenAI API key not configured")
             throw LLMError.configurationError("OpenAI API key not configured")
         }
-        
+
+        let maskedKey = String(apiKey.prefix(8)) + "..." + String(apiKey.suffix(4))
+        log.info("🔑 Using API key: \(maskedKey)")
+
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         // Build messages array with optional system prompt
         var messages: [[String: String]] = []
         if let systemPrompt = options.systemPrompt {
@@ -248,20 +254,28 @@ class OpenAIProvider: LLMProvider {
             "max_tokens": options.maxTokens,
             "top_p": options.topP
         ]
-        
+
+        log.info("📤 Request body: model=\(model), messages=\(messages.count), temp=\(options.temperature)")
+
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
+
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
+            log.error("❌ Invalid response type from OpenAI")
             throw LLMError.generationFailed("Invalid response from OpenAI")
         }
 
+        log.info("📥 Response status: \(httpResponse.statusCode)")
+
         guard (200...299).contains(httpResponse.statusCode) else {
+            let responseBody = String(data: data, encoding: .utf8) ?? "unable to decode"
+            log.error("❌ OpenAI error response: \(responseBody)")
             let errorMessage = extractErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
-            logger.error("OpenAI generate error: \(errorMessage)")
             throw LLMError.generationFailed("OpenAI: \(errorMessage)")
         }
+
+        log.info("✅ OpenAI request successful")
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let choices = json?["choices"] as? [[String: Any]],
