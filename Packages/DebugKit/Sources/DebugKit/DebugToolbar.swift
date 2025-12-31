@@ -164,6 +164,34 @@ public enum DebugControl: Identifiable {
     }
 }
 
+// MARK: - Keyboard Monitor Manager
+
+/// Prevents duplicate keyboard monitors from being registered
+private final class KeyboardMonitorManager {
+    static let shared = KeyboardMonitorManager()
+    private var isMonitorRegistered = false
+    private var toggleCallback: (() -> Void)?
+
+    func registerIfNeeded(toggle: @escaping () -> Void) {
+        guard !isMonitorRegistered else {
+            // Update callback in case the view was recreated
+            toggleCallback = toggle
+            return
+        }
+
+        toggleCallback = toggle
+        isMonitorRegistered = true
+
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d" {
+                self?.toggleCallback?()
+                return nil // Consume the event
+            }
+            return event
+        }
+    }
+}
+
 // MARK: - Debug Toolbar
 
 public struct DebugToolbar<CustomContent: View>: View {
@@ -266,7 +294,7 @@ extension DebugToolbar {
 
             if isExpanded {
                 expandedPanel
-                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
+                    .transition(.opacity)
             }
 
             // For bottom positions, button comes last
@@ -279,14 +307,10 @@ extension DebugToolbar {
     }
 
     private func setupKeyboardShortcut() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "d" {
-                withAnimation(.easeOut(duration: 0.1)) {
-                    isHidden.toggle()
-                }
-                return nil // Consume the event
+        KeyboardMonitorManager.shared.registerIfNeeded {
+            withAnimation(.snappy(duration: 0.15)) {
+                isHidden.toggle()
             }
-            return event
         }
     }
 
@@ -294,8 +318,9 @@ extension DebugToolbar {
 
     private var toggleButton: some View {
         Button(action: {
-            // Single animation source - no duplicate withAnimation
-            isExpanded.toggle()
+            withAnimation(.snappy(duration: 0.15)) {
+                isExpanded.toggle()
+            }
         }) {
             // Isolate icon to its own render layer for smooth rotation
             Image(systemName: icon)
@@ -303,7 +328,6 @@ extension DebugToolbar {
                 .foregroundColor(isExpanded ? .orange : .accentColor)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 .drawingGroup() // Rasterize before animating
-                .animation(.snappy(duration: 0.15), value: isExpanded)
                 .frame(width: 36, height: 36)
                 .background(
                     Circle()
@@ -346,7 +370,7 @@ extension DebugToolbar {
                 .help("Move toolbar (⌘D to hide)")
 
                 Button(action: {
-                    withAnimation(.easeOut(duration: 0.1)) {
+                    withAnimation(.snappy(duration: 0.15)) {
                         isExpanded = false
                     }
                 }) {

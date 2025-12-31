@@ -41,28 +41,28 @@ final class DatabaseManager {
     /// Runs blocking SQLite operations on background thread to avoid blocking UI
     func initialize() async throws {
         let dbPath = Self.databaseURL.path
-        let dbName = Self.databaseURL.lastPathComponent
-
-        // Log path before any blocking operation
-        await MainActor.run { StartupLogger.shared.log("Database: \(dbName)") }
-        await MainActor.run { StartupLogger.shared.log("Path: ~/Library/.../Talkie/") }
 
         // Check if file exists
         let fileExists = FileManager.default.fileExists(atPath: dbPath)
-        await MainActor.run {
-            StartupLogger.shared.log(fileExists ? "Found existing database" : "Creating new database")
-        }
 
-        // Start a timeout warning task
-        let timeoutTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
-            if !Task.isCancelled {
-                StartupLogger.shared.log("⚠️ Database lock acquisition taking long...", isError: true)
-                StartupLogger.shared.log("Check for other Talkie processes", isError: true)
+        // Log concise status - less verbose for fresh installs
+        await MainActor.run {
+            if fileExists {
+                StartupLogger.shared.log("Loading local database...")
+            } else {
+                // Fresh install - don't alarm user, iCloud will sync separately
+                StartupLogger.shared.log("Setting up local storage...")
             }
         }
 
-        await MainActor.run { StartupLogger.shared.log("Acquiring database lock...") }
+        // Start a timeout warning task (only warn after 3 seconds)
+        let timeoutTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            if !Task.isCancelled {
+                StartupLogger.shared.log("⚠️ Database lock taking long...", isError: true)
+                StartupLogger.shared.log("Check for other Talkie processes", isError: true)
+            }
+        }
 
         // Run blocking SQLite operations on background thread
         // This prevents the main thread from freezing during file lock acquisition
@@ -89,11 +89,8 @@ final class DatabaseManager {
         }
 
         timeoutTask.cancel()
-        await MainActor.run { StartupLogger.shared.log("Database opened ✓") }
 
-        // Run migrations on background thread
-        await MainActor.run { StartupLogger.shared.log("Running migrations...") }
-
+        // Run migrations on background thread (silently - no UI logging)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             DispatchQueue.global(qos: .userInitiated).async { [self] in
                 do {
@@ -105,7 +102,8 @@ final class DatabaseManager {
             }
         }
 
-        await MainActor.run { StartupLogger.shared.log("Migrations complete ✓") }
+        // Single "ready" message - keep it simple
+        await MainActor.run { StartupLogger.shared.log("Local storage ready ✓") }
 
         // Thread-safe assignment and run pending callbacks
         lock.lock()

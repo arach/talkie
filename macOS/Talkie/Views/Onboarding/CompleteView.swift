@@ -180,11 +180,11 @@ struct CompleteView: View {
                         .foregroundColor(colors.textTertiary)
 
                     // Pill state transition: minimized → expanded
-                    HStack(spacing: Spacing.md) {
+                    HStack(alignment: .bottom, spacing: Spacing.md) {
                         // Minimized sliver
                         VStack(spacing: 4) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(TalkieTheme.textMuted.opacity(0.6))
+                                .fill(colors.textTertiary.opacity(0.6))
                                 .frame(width: 20, height: 2)
                             Text("idle")
                                 .font(.system(size: 8, design: .monospaced))
@@ -194,25 +194,26 @@ struct CompleteView: View {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 10))
                             .foregroundColor(colors.textTertiary)
+                            .padding(.bottom, 10)  // Align with captions
 
                         // Expanded REC state
                         VStack(spacing: 4) {
                             HStack(spacing: 4) {
                                 Circle()
-                                    .fill(TalkieTheme.textMuted)
+                                    .fill(colors.textSecondary)
                                     .frame(width: 6, height: 6)
                                 Text("REC")
                                     .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(TalkieTheme.textSecondary)
+                                    .foregroundColor(colors.textSecondary)
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(colors.surfaceCard)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(colors.border, lineWidth: 0.5)
                                     )
                             )
                             Text("hover")
@@ -428,23 +429,23 @@ private struct SimplePillDemo: View {
                 if isExpanded {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(Color.white)
+                            .fill(colors.textSecondary)
                             .frame(width: 6, height: 6)
 
                         Text("REC")
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(1)
-                            .foregroundColor(TalkieTheme.textTertiary)
+                            .foregroundColor(colors.textSecondary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(TalkieTheme.divider)
+                            .fill(colors.surfaceCard)
                     )
                 } else {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(TalkieTheme.textMuted)
+                        .fill(colors.textTertiary)
                         .frame(width: 24, height: 2)
                 }
             }

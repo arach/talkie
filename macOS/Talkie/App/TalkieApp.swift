@@ -102,7 +102,7 @@ struct TalkieApp: App {
     @FocusedValue(\.liveNavigation) var liveNavigation
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             MigrationGateView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environment(SettingsManager.shared)
@@ -113,9 +113,8 @@ struct TalkieApp: App {
                 .environment(RelativeTimeTicker.shared)
                 .frame(minWidth: 900, minHeight: 600)
                 .tint(SettingsManager.shared.accentColor.color)
-                .onOpenURL { url in
-                    handleDeepLink(url)
-                }
+                // NOTE: URL handling is done via Apple Events in AppDelegate.handleGetURLEvent
+                // Do NOT add .onOpenURL here - it causes SwiftUI to spawn new windows
                 .sheet(isPresented: Binding(
                     get: { OnboardingManager.shared.shouldShowOnboarding },
                     set: { OnboardingManager.shared.shouldShowOnboarding = $0 }
@@ -125,6 +124,7 @@ struct TalkieApp: App {
                         .environment(LiveSettings.shared)
                 }
         }
+        .handlesExternalEvents(matching: [])  // IMPORTANT: Empty set = never create new window for URLs
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
@@ -191,24 +191,6 @@ struct TalkieApp: App {
         window.makeKeyAndOrderFront(nil)
     }
 
-    // MARK: - Deep Link Handling (backup for SwiftUI)
-
-    private func handleDeepLink(_ url: URL) {
-        // Primary URL handling is done via Apple Events in AppDelegate
-        // This is a backup in case SwiftUI's onOpenURL fires
-        guard url.scheme == "talkie" else { return }
-
-        if url.host == "live" {
-            // Navigate to Live section
-            liveNavigation?.showLive()
-        } else if url.host == "interstitial",
-           let idString = url.pathComponents.dropFirst().first,
-           let id = Int64(idString) {
-            Task { @MainActor in
-                InterstitialManager.shared.show(dictationId: id)
-            }
-        }
-    }
 }
 
 // MARK: - Migration Gate View

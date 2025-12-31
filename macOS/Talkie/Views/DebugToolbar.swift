@@ -821,19 +821,24 @@ struct EngineProcessesDebugContent: View {
     }
 
     private func refreshProcesses() {
-        Task {
+        // Use Task.detached to avoid blocking main thread
+        // Regular Task { } inherits actor context, which would block UI
+        Task.detached(priority: .userInitiated) {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/bin/ps")
             task.arguments = ["-ax", "-o", "pid,comm"]
 
             let pipe = Pipe()
             task.standardOutput = pipe
+            task.standardError = FileHandle.nullDevice
 
             do {
                 try task.run()
+
+                // Read output before waiting to avoid pipe buffer deadlock
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 task.waitUntilExit()
 
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 if let output = String(data: data, encoding: .utf8) {
                     let lines = output.components(separatedBy: "\n")
                     var foundProcesses: [RunningProcess] = []
@@ -870,22 +875,30 @@ struct EngineProcessesDebugContent: View {
     }
 
     private func killProcess(_ process: RunningProcess) {
-        Task {
+        Task.detached(priority: .userInitiated) {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/bin/kill")
             task.arguments = ["-9", "\(process.pid)"]
+            task.standardOutput = FileHandle.nullDevice
+            task.standardError = FileHandle.nullDevice
 
             do {
                 try task.run()
                 task.waitUntilExit()
 
-                SystemEventManager.shared.logSync(.system, "Killed process", detail: "\(process.name) (PID: \(process.pid))")
+                await MainActor.run {
+                    SystemEventManager.shared.logSync(.system, "Killed process", detail: "\(process.name) (PID: \(process.pid))")
+                }
 
                 // Refresh after a short delay
                 try? await Task.sleep(for: .milliseconds(500))
-                refreshProcesses()
+                await MainActor.run {
+                    self.refreshProcesses()
+                }
             } catch {
-                SystemEventManager.shared.logSync(.error, "Failed to kill process", detail: "\(process.pid): \(error.localizedDescription)")
+                await MainActor.run {
+                    SystemEventManager.shared.logSync(.error, "Failed to kill process", detail: "\(process.pid): \(error.localizedDescription)")
+                }
             }
         }
     }

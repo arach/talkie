@@ -44,6 +44,48 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     // CLI command handler
     private let cliHandler = CLICommandHandler()
 
+    // MARK: - Window Restoration
+
+    /// Prevent macOS from restoring old windows on launch
+    /// This fixes the "blank windows" issue on fresh builds
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
+        return true  // Required for modern macOS, but we'll close stale windows
+    }
+
+    /// Close any windows restored from previous session that are blank/invalid
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Detect fresh build by checking if bundle version changed
+        let currentBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+        let lastBuild = UserDefaults.standard.string(forKey: "lastLaunchedBuild")
+
+        if lastBuild != currentBuild {
+            // Fresh build - clear window restoration state to prevent stale windows
+            logger.info("Fresh build detected (\(lastBuild ?? "none") → \(currentBuild)), clearing window state")
+            clearSavedWindowState()
+            UserDefaults.standard.set(currentBuild, forKey: "lastLaunchedBuild")
+        }
+
+        // Close any pre-existing windows from state restoration that are blank/invalid
+        for window in NSApp.windows where window.contentView == nil || window.contentViewController == nil {
+            window.close()
+        }
+    }
+
+    /// Clear macOS saved window state to prevent blank/duplicate windows
+    private func clearSavedWindowState() {
+        // Remove SwiftUI window state
+        if let bundleID = Bundle.main.bundleIdentifier {
+            let savedStateDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Saved Application State")
+                .appendingPathComponent("\(bundleID).savedState")
+
+            if let dir = savedStateDir, FileManager.default.fileExists(atPath: dir.path) {
+                try? FileManager.default.removeItem(at: dir)
+                logger.debug("Cleared saved window state")
+            }
+        }
+    }
+
     override init() {
         super.init()
         // Early theme parsing - set theme BEFORE views are created

@@ -36,6 +36,10 @@ struct AllMemos: View {
     @State private var showDeleteConfirmation = false
     @State private var memosToDelete: Set<UUID> = []
 
+    // Responsive layout: show inspector as sheet when narrow
+    @State private var showInspectorSheet = false
+    @State private var isCompactMode = false
+    private let compactWidthThreshold: CGFloat = 700  // Below this, use sheet instead of split
 
     // View mode: auto switches based on count, or user can force
     enum ViewMode: String, CaseIterable {
@@ -70,12 +74,38 @@ struct AllMemos: View {
 
     var body: some View {
         TalkieSection("AllMemos") {
-            HSplitView {
-                listPane
-                    .frame(minWidth: 300, idealWidth: 450)
+            GeometryReader { geometry in
+                let compact = geometry.size.width < compactWidthThreshold
 
-                inspectorContent
-                    .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
+                Group {
+                    if compact {
+                        // Compact mode: list only, inspector as sheet
+                        listPane
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        // Wide mode: split view with inspector
+                        HSplitView {
+                            listPane
+                                .frame(minWidth: 300, idealWidth: 450)
+
+                            inspectorContent
+                                .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
+                        }
+                    }
+                }
+                .onChange(of: compact) { _, newValue in
+                    isCompactMode = newValue
+                    // Close sheet when switching to wide mode
+                    if !newValue {
+                        showInspectorSheet = false
+                    }
+                }
+                .onAppear {
+                    isCompactMode = compact
+                }
+            }
+            .sheet(isPresented: $showInspectorSheet) {
+                inspectorSheetContent
             }
             .onChange(of: searchText) { _, newValue in
                 // Debounce search (500ms)
@@ -91,6 +121,8 @@ struct AllMemos: View {
                 // Load full VoiceMemo from CoreData when single selection changes
                 if newIDs.count == 1, let memoID = newIDs.first {
                     loadVoiceMemo(id: memoID)
+                    // In compact mode, auto-show inspector sheet
+                    // Note: We check this on tap, not here, to avoid sheet appearing on programmatic selection
                 } else {
                     selectedVoiceMemo = nil
                 }
@@ -160,6 +192,7 @@ struct AllMemos: View {
 
     private func handleSelection(memo: MemoModel, event: NSEvent?) {
         let id = memo.id
+        var shouldShowInspector = false
 
         if let event = event {
             if event.modifierFlags.contains(.command) {
@@ -181,13 +214,23 @@ struct AllMemos: View {
             } else {
                 // Regular click: Single selection
                 selectedMemoIDs = [id]
+                shouldShowInspector = true
             }
         } else {
             // No event (keyboard nav): Single selection
             selectedMemoIDs = [id]
+            shouldShowInspector = true
         }
 
         lastClickedID = id
+
+        // In compact mode, show inspector as sheet for single selection
+        if shouldShowInspector && isCompactMode && selectedMemoIDs.count == 1 {
+            // Small delay to let the memo load
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showInspectorSheet = true
+            }
+        }
     }
 
     // MARK: - Header
@@ -595,6 +638,26 @@ struct AllMemos: View {
                 viewModeToggle
             }
 
+            // Inspector button in compact mode (when single selection)
+            if isCompactMode && selectedMemoIDs.count == 1 && selectedVoiceMemo != nil {
+                Button {
+                    showInspectorSheet = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sidebar.right")
+                            .font(.system(size: 10))
+                        Text("Details")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.1))
+                    .cornerRadius(CornerRadius.xs)
+                }
+                .buttonStyle(.plain)
+            }
+
             // Bulk actions when multi-selected
             if selectedMemoIDs.count > 1 {
                 HStack(spacing: 8) {
@@ -801,6 +864,40 @@ struct AllMemos: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    // MARK: - Inspector Sheet (Compact Mode)
+
+    /// Inspector content presented as a sheet in compact/narrow layouts
+    @ViewBuilder
+    private var inspectorSheetContent: some View {
+        NavigationStack {
+            Group {
+                if let voiceMemo = selectedVoiceMemo {
+                    MemoDetailView(memo: voiceMemo)
+                        .id(voiceMemo.id)
+                } else {
+                    // Empty state - shouldn't happen but handle gracefully
+                    VStack(spacing: 16) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 40))
+                            .foregroundColor(.secondary.opacity(0.3))
+                        Text("No Memo Selected")
+                            .font(Theme.current.fontSMBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        showInspectorSheet = false
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 400, idealWidth: 500, minHeight: 500, idealHeight: 600)
     }
 
     // MARK: - Helpers
