@@ -193,6 +193,9 @@ public protocol QueuePersister: Sendable {
     /// Fetch jobs that are due for processing (scheduledAt <= now)
     func fetchDue(queueName: String) async throws -> [QueueJob]
 
+    /// Atomically fetch due jobs AND mark them as running (prevents duplicate processing)
+    func claimDue(queueName: String, limit: Int) async throws -> [QueueJob]
+
     /// Update job status
     func updateStatus(_ jobId: UUID, status: JobStatus, error: String?) async throws
 
@@ -279,6 +282,29 @@ public actor GRDBQueuePersister: QueuePersister {
                 .filter(QueueJob.Columns.scheduledAt <= Date())
                 .order(QueueJob.Columns.priority.desc, QueueJob.Columns.scheduledAt.asc)
                 .fetchAll(db)
+        }
+    }
+
+    public func claimDue(queueName: String, limit: Int = 10) async throws -> [QueueJob] {
+        try await dbPool.write { db in
+            // Fetch due jobs
+            var jobs = try QueueJob
+                .filter(QueueJob.Columns.queueName == queueName)
+                .filter([JobStatus.pending.rawValue, JobStatus.scheduled.rawValue].contains(QueueJob.Columns.status))
+                .filter(QueueJob.Columns.scheduledAt <= Date())
+                .order(QueueJob.Columns.priority.desc, QueueJob.Columns.scheduledAt.asc)
+                .limit(limit)
+                .fetchAll(db)
+
+            // Mark them as running atomically
+            let now = Date()
+            for i in jobs.indices {
+                jobs[i].status = .running
+                jobs[i].startedAt = now
+                try jobs[i].update(db)
+            }
+
+            return jobs
         }
     }
 
@@ -386,10 +412,47 @@ public actor DurableQueue<Payload: Codable & Sendable> {
     }
 
     /// Start processing with the given handler
-    public func start(handler: @escaping (Payload) async throws -> Void) {
+    public func start(handler: @escaping (Payload) async throws -> Void) async {
         self.handler = handler
+
+        // Recover stuck jobs from previous crash
+        await recoverStuckJobs()
+
         scheduleProcessing()
         log.info("[\(name)] Queue started")
+    }
+
+    /// Reset jobs stuck in 'running' state (crashed mid-process)
+    private func recoverStuckJobs() async {
+        do {
+            let stuckJobs = try await persister.fetch(queueName: name, statuses: [.running])
+            var recovered = 0
+            var dead = 0
+
+            for var job in stuckJobs {
+                job.attempt += 1
+                job.lastError = "Crashed while running"
+
+                if retryPolicy.delay(forAttempt: job.attempt) == nil {
+                    job.status = .dead
+                    job.completedAt = Date()
+                    dead += 1
+                    log.error("[\(job.shortId)] Dead after crash (exhausted \(job.attempt) attempts)")
+                } else {
+                    job.status = .pending
+                    recovered += 1
+                    log.warning("[\(job.shortId)] Recovered stuck job (attempt #\(job.attempt))")
+                }
+
+                try await persister.save(job)
+            }
+
+            if recovered > 0 || dead > 0 {
+                log.info("[\(name)] Stuck jobs: \(recovered) recovered, \(dead) dead")
+            }
+        } catch {
+            log.error("[\(name)] Failed to recover stuck jobs: \(error.localizedDescription)")
+        }
     }
 
     /// Stop processing
@@ -400,10 +463,16 @@ public actor DurableQueue<Payload: Codable & Sendable> {
         log.info("[\(name)] Queue stopped")
     }
 
-    /// Process all pending jobs and wait for completion
-    public func flush() async {
+    /// Process all pending jobs and wait for completion (with safety limit)
+    public func flush(maxIterations: Int = 100) async {
+        var iterations = 0
         while await hasPendingWork() {
             await processOnce()
+            iterations += 1
+            if iterations >= maxIterations {
+                log.warning("[\(name)] Flush hit max iterations (\(maxIterations)), stopping")
+                break
+            }
             try? await Task.sleep(for: .milliseconds(50))
         }
     }
@@ -454,13 +523,14 @@ public actor DurableQueue<Payload: Codable & Sendable> {
         defer { isProcessing = false }
 
         do {
-            let jobs = try await persister.fetchDue(queueName: name)
+            // Atomic claim: fetches AND marks as running in one transaction
+            let jobs = try await persister.claimDue(queueName: name, limit: 10)
 
             for job in jobs {
                 await processJob(job, handler: handler)
             }
         } catch {
-            log.error("[\(name)] Failed to fetch jobs: \(error.localizedDescription)")
+            log.error("[\(name)] Failed to claim jobs: \(error.localizedDescription)")
         }
     }
 
@@ -469,10 +539,7 @@ public actor DurableQueue<Payload: Codable & Sendable> {
         totalProcessed += 1
 
         do {
-            // Mark as running
-            try await persister.markStarted(job.id)
-
-            // Decode and execute
+            // Job is already marked as running by claimDue
             let payload = try job.decodePayload(as: Payload.self)
             try await handler(payload)
 

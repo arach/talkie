@@ -100,7 +100,12 @@ public actor Queue<Payload: Codable & Sendable> {
 
     /// Start processing with handler
     public func start(handler: @escaping (Payload) async throws -> Void) async {
-        try? await ensureInitialized()
+        do {
+            try await ensureInitialized()
+        } catch {
+            log.error("[\(name)] Failed to initialize: \(error.localizedDescription)")
+        }
+
         self.handler = handler
 
         // Recover stuck jobs (crashed while running)
@@ -121,15 +126,30 @@ public actor Queue<Payload: Codable & Sendable> {
     private func recoverStuckJobs(store: GRDBQueuePersister) async {
         do {
             let stuckJobs = try await store.fetch(queueName: name, statuses: [.running])
+            var recovered = 0
+            var dead = 0
+
             for var job in stuckJobs {
-                job.status = .pending
-                job.attempt += 1  // Count the failed attempt
-                job.lastError = "Recovered after crash (was stuck in running state)"
+                job.attempt += 1
+                job.lastError = "Crashed while running"
+
+                // Check if exhausted retries
+                if retryPolicy.delay(forAttempt: job.attempt) == nil {
+                    job.status = .dead
+                    job.completedAt = Date()
+                    dead += 1
+                    log.error("[\(job.shortId)] Dead after crash (exhausted \(job.attempt) attempts)")
+                } else {
+                    job.status = .pending
+                    recovered += 1
+                    log.warning("[\(job.shortId)] Recovered stuck job (attempt #\(job.attempt))")
+                }
+
                 try await store.save(job)
-                log.warning("[\(job.shortId)] Recovered stuck job (attempt #\(job.attempt))")
             }
-            if !stuckJobs.isEmpty {
-                log.info("[\(name)] Recovered \(stuckJobs.count) stuck job(s)")
+
+            if recovered > 0 || dead > 0 {
+                log.info("[\(name)] Stuck jobs: \(recovered) recovered, \(dead) dead")
             }
         } catch {
             log.error("[\(name)] Failed to recover stuck jobs: \(error.localizedDescription)")
@@ -160,10 +180,16 @@ public actor Queue<Payload: Codable & Sendable> {
         }
     }
 
-    /// Flush all pending jobs
-    public func flush() async {
+    /// Flush all pending jobs (with safety limit to prevent infinite loops)
+    public func flush(maxIterations: Int = 100) async {
+        var iterations = 0
         while (try? await counts().pending) ?? 0 > 0 {
             await processOnce()
+            iterations += 1
+            if iterations >= maxIterations {
+                log.warning("[\(name)] Flush hit max iterations (\(maxIterations)), stopping")
+                break
+            }
             try? await Task.sleep(for: .milliseconds(50))
         }
     }
@@ -192,12 +218,32 @@ public actor Queue<Payload: Codable & Sendable> {
         let jobs: [QueueJob]
 
         if durable, let store = durableStore {
-            jobs = (try? await store.fetchDue(queueName: name)) ?? []
+            // Atomic claim: fetches AND marks as running in one transaction
+            do {
+                jobs = try await store.claimDue(queueName: name, limit: 10)
+            } catch {
+                log.error("[\(name)] Failed to claim jobs: \(error.localizedDescription)")
+                return
+            }
         } else {
-            jobs = memoryStore.values
+            // Memory store: mark as running manually
+            var claimed: [QueueJob] = []
+            let ready = memoryStore.values
                 .filter { $0.isReady }
-                .map { $0.job }
-                .sorted { $0.priority > $1.priority || $0.createdAt < $1.createdAt }
+                .sorted {
+                    if $0.job.priority != $1.job.priority {
+                        return $0.job.priority > $1.job.priority
+                    }
+                    return $0.job.createdAt < $1.job.createdAt
+                }
+            for pending in ready {
+                var job = pending.job
+                job.status = .running
+                job.startedAt = Date()
+                memoryStore[job.id] = PendingJob(job: job, nextRetryAt: nil)
+                claimed.append(job)
+            }
+            jobs = claimed
         }
 
         for job in jobs {
@@ -210,16 +256,7 @@ public actor Queue<Payload: Codable & Sendable> {
         totalProcessed += 1
 
         do {
-            // Mark running (durable only)
-            if durable, let store = durableStore {
-                do {
-                    try await store.markStarted(job.id)
-                } catch {
-                    log.error("[\(job.shortId)] Failed to mark started: \(error.localizedDescription)")
-                }
-            }
-
-            // Execute
+            // Job is already marked as running by claimDue/processOnce
             let payload = try job.decodePayload(as: Payload.self)
             try await handler(payload)
 
