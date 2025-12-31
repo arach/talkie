@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 // MARK: - Service Health Card
 
@@ -328,4 +329,133 @@ struct EngineHealthCard: View {
     .padding()
     .frame(width: 500)
     .background(Color.black)
+}
+
+// MARK: - Token-Based Card (Linear Theme Demo)
+
+/// A card styled using the new TokenSystem - demonstrates Linear theme
+struct TokenStyledCard: View {
+    let icon: String
+    let title: String
+    let isHealthy: Bool
+    let statusText: String
+    let detailText: String?
+
+    @State private var isHovered = false
+
+    // Use tokens from current theme
+    private var tokens: any TalkieKit.SemanticTokens { TalkieKit.Tokens.current }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: TalkieKit.SpacingPrimitive.x3) {
+            // Header
+            HStack(spacing: TalkieKit.SpacingPrimitive.x3) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(statusColor)
+
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(tokens.fgPrimary)
+
+                Spacer()
+
+                // Status pill
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
+                    Text(statusText)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(statusColor)
+                }
+            }
+
+            // Detail
+            if let detailText = detailText {
+                Text(detailText)
+                    .font(.system(size: 11))
+                    .foregroundColor(tokens.fgSecondary)
+            }
+        }
+        .padding(tokens.card.padding)
+        .background(
+            RoundedRectangle(cornerRadius: tokens.card.radius)
+                .fill(isHovered ? tokens.card.backgroundHover : tokens.card.background)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: tokens.card.radius)
+                .strokeBorder(
+                    isHovered ? tokens.accent.opacity(0.3) : tokens.card.border,
+                    lineWidth: tokens.card.borderWidth
+                )
+        )
+        .tokenShadow(isHovered ? tokens.card.shadowHover : tokens.card.shadow)
+        .animation(tokens.animationFast, value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+
+    private var statusColor: Color {
+        isHealthy ? tokens.success : tokens.error
+    }
+}
+
+#Preview("Linear Theme (TokenSystem)") {
+    // Switch to Linear tokens for this preview
+    let _ = TalkieKit.Tokens.setTheme(TalkieKit.LinearTokens())
+
+    VStack(spacing: TalkieKit.SpacingPrimitive.x4) {
+        Text("Linear Theme - Glow Cards")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundColor(TalkieKit.Tokens.current.fgMuted)
+
+        TokenStyledCard(
+            icon: "waveform.circle.fill",
+            title: "Live Recording",
+            isHealthy: true,
+            statusText: "Ready",
+            detailText: "TalkieLive is running with glow effects and sharp corners."
+        )
+
+        TokenStyledCard(
+            icon: "cpu",
+            title: "AI Engine",
+            isHealthy: false,
+            statusText: "Offline",
+            detailText: "Hover to see the cyan glow effect characteristic of Linear theme."
+        )
+    }
+    .padding(TalkieKit.SpacingPrimitive.x5)
+    .frame(width: 400)
+    .background(TalkieKit.Tokens.current.bgCanvas)
+}
+
+#Preview("Warm Theme (TokenSystem)") {
+    // Switch to Warm tokens for this preview
+    let _ = TalkieKit.Tokens.setTheme(TalkieKit.WarmTokens())
+
+    VStack(spacing: TalkieKit.SpacingPrimitive.x4) {
+        Text("Warm Theme - Soft Cards")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundColor(TalkieKit.Tokens.current.fgMuted)
+
+        TokenStyledCard(
+            icon: "waveform.circle.fill",
+            title: "Live Recording",
+            isHealthy: true,
+            statusText: "Ready",
+            detailText: "Warm theme uses softer shadows and rounded corners."
+        )
+
+        TokenStyledCard(
+            icon: "cpu",
+            title: "AI Engine",
+            isHealthy: true,
+            statusText: "Ready",
+            detailText: "Orange accents and cozy brown tones."
+        )
+    }
+    .padding(TalkieKit.SpacingPrimitive.x5)
+    .frame(width: 400)
+    .background(TalkieKit.Tokens.current.bgCanvas)
 }
