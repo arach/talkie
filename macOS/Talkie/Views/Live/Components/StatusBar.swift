@@ -42,18 +42,9 @@ struct StatusBar: View {
     }
 
     #if DEBUG
-    // Git branch for debug display (cached at view init)
-    private var gitBranch: String? {
-        Self.cachedGitBranch
-    }
-
-    // Static cache - computed once at app launch
-    private static let cachedGitBranch: String? = {
-        // Use known project path for dev builds (currentDirectoryPath is often / when launched from Xcode)
-        let projectPath = "/Users/arach/dev/talkie-dev"
-        return readGitBranch(from: URL(fileURLWithPath: projectPath))
-            ?? readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
-    }()
+    // Git branch - lazily loaded after first render
+    @State private var gitBranch: String? = nil
+    @State private var didLoadGitBranch = false
 
     private static func readGitBranch(from directory: URL) -> String? {
         let fm = FileManager.default
@@ -323,6 +314,19 @@ struct StatusBar: View {
         .onAppear {
             liveState.startMonitoring()
             serviceMonitor.startMonitoring()
+
+            #if DEBUG
+            // Load git branch lazily (file I/O shouldn't block startup)
+            if !didLoadGitBranch {
+                didLoadGitBranch = true
+                Task.detached {
+                    let projectPath = "/Users/arach/dev/talkie-dev"
+                    let branch = Self.readGitBranch(from: URL(fileURLWithPath: projectPath))
+                        ?? Self.readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+                    await MainActor.run { gitBranch = branch }
+                }
+            }
+            #endif
 
             // Monitor Control key for DEV badge
             NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [self] event in
