@@ -183,6 +183,12 @@ struct TalkieNavigationViewNative: View {
             }
             .padding(.bottom, 40) // Clear the 32px StatusBar
         }
+        .overlay(alignment: .bottomLeading) {
+            DesignToolsOverlay {
+                EmptyView()
+            }
+            .padding(.bottom, 40)
+        }
         #endif
         // Note: NavigationSplitView provides its own sidebar toggle with hiddenTitleBar
         // Don't add a custom one or you'll get duplicates
