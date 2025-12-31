@@ -17,7 +17,11 @@ import TalkieKit
 
 struct TokenShowcaseView: View {
     @State private var selectedTheme: ThemeOption = .linear
+    @State private var showDeltas: Bool = true  // Show differences from defaults
     @Environment(\.dismiss) private var dismiss
+
+    // Reference tokens for comparison
+    private var defaultTokens: any SemanticTokens { MidnightTokens() }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,8 +33,8 @@ struct TokenShowcaseView: View {
             // Content
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
-                    // Theme Picker
-                    themePicker
+                    // Theme Picker + Delta Toggle
+                    controlsSection
 
                     // Component Previews
                     componentSection
@@ -41,7 +45,7 @@ struct TokenShowcaseView: View {
                 .padding(Spacing.lg)
             }
         }
-        .frame(width: 600, height: 700)
+        .frame(width: 650, height: 750)
         .background(currentTokens.bgCanvas)
     }
 
@@ -70,16 +74,62 @@ struct TokenShowcaseView: View {
         .background(currentTokens.bgSurface)
     }
 
-    // MARK: - Theme Picker
+    // MARK: - Controls Section
 
-    private var themePicker: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            sectionHeader("THEME")
+    private var controlsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            // Theme Picker
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                sectionHeader("THEME")
 
-            HStack(spacing: Spacing.sm) {
-                ForEach(ThemeOption.allCases, id: \.self) { theme in
-                    themeButton(theme)
+                HStack(spacing: Spacing.sm) {
+                    ForEach(ThemeOption.allCases, id: \.self) { theme in
+                        themeButton(theme)
+                    }
                 }
+            }
+
+            // Delta Toggle
+            HStack(spacing: Spacing.md) {
+                Toggle(isOn: $showDeltas) {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "arrow.left.arrow.right")
+                            .font(.system(size: 11))
+                        Text("Show differences from Midnight (default)")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(currentTokens.fgSecondary)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                Spacer()
+
+                if showDeltas && selectedTheme != .midnight {
+                    deltaLegend
+                }
+            }
+            .padding(.top, Spacing.xs)
+        }
+    }
+
+    private var deltaLegend: some View {
+        HStack(spacing: Spacing.md) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.green.opacity(0.6))
+                    .frame(width: 8, height: 8)
+                Text("Changed")
+                    .font(.system(size: 9))
+                    .foregroundColor(currentTokens.fgMuted)
+            }
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(currentTokens.fgMuted.opacity(0.3))
+                    .frame(width: 8, height: 8)
+                Text("Same as default")
+                    .font(.system(size: 9))
+                    .foregroundColor(currentTokens.fgMuted)
             }
         }
     }
@@ -287,17 +337,18 @@ struct TokenShowcaseView: View {
                     GridItem(.flexible()),
                     GridItem(.flexible())
                 ], spacing: Spacing.sm) {
-                    colorSwatch("bgCanvas", currentTokens.bgCanvas)
-                    colorSwatch("bgSurface", currentTokens.bgSurface)
-                    colorSwatch("bgElevated", currentTokens.bgElevated)
-                    colorSwatch("fgPrimary", currentTokens.fgPrimary)
-                    colorSwatch("fgSecondary", currentTokens.fgSecondary)
-                    colorSwatch("accent", currentTokens.accent)
+                    colorSwatch("bgCanvas", currentTokens.bgCanvas, default: defaultTokens.bgCanvas)
+                    colorSwatch("bgSurface", currentTokens.bgSurface, default: defaultTokens.bgSurface)
+                    colorSwatch("bgElevated", currentTokens.bgElevated, default: defaultTokens.bgElevated)
+                    colorSwatch("fgPrimary", currentTokens.fgPrimary, default: defaultTokens.fgPrimary)
+                    colorSwatch("fgSecondary", currentTokens.fgSecondary, default: defaultTokens.fgSecondary)
+                    colorSwatch("accent", currentTokens.accent, default: defaultTokens.accent)
                 }
             }
 
-            // Spacing & Radius
+            // Spacing, Radius, Component Tokens
             HStack(alignment: .top, spacing: Spacing.xl) {
+                // Spacing
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     sectionHeader("SPACING (8pt grid)")
 
@@ -310,27 +361,65 @@ struct TokenShowcaseView: View {
                     }
                 }
 
+                // Radius
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     sectionHeader("RADIUS")
 
                     VStack(alignment: .leading, spacing: 4) {
-                        radiusRow("button", currentTokens.radiusButton)
-                        radiusRow("card", currentTokens.radiusCard)
-                        radiusRow("modal", currentTokens.radiusModal)
+                        radiusRow("button", currentTokens.radiusButton, default: defaultTokens.radiusButton)
+                        radiusRow("card", currentTokens.radiusCard, default: defaultTokens.radiusCard)
+                        radiusRow("modal", currentTokens.radiusModal, default: defaultTokens.radiusModal)
                     }
                 }
 
+                // Component Deltas
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    sectionHeader("ANIMATION")
+                    sectionHeader("COMPONENTS")
 
                     VStack(alignment: .leading, spacing: 4) {
-                        animationRow("fast", "snappy" )
-                        animationRow("default", selectedTheme == .linear ? "snappy" : "smooth")
-                        animationRow("spring", selectedTheme == .warm ? "bouncy" : "smooth")
+                        componentDeltaRow("card.radius", Int(currentTokens.card.radius), default: Int(defaultTokens.card.radius))
+                        componentDeltaRow("card.padding", Int(currentTokens.card.padding), default: Int(defaultTokens.card.padding))
+                        componentDeltaRow("button.radius", Int(currentTokens.button.primaryRadius), default: Int(defaultTokens.button.primaryRadius))
+                        componentDeltaRow("table.rowHeight", Int(currentTokens.table.rowHeight), default: Int(defaultTokens.table.rowHeight))
                     }
                 }
             }
+
+            // Animation comparison
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                sectionHeader("ANIMATION STYLE")
+
+                HStack(spacing: Spacing.lg) {
+                    animationCompare("Linear", isSnappy: true, isActive: selectedTheme == .linear)
+                    animationCompare("Warm", isSnappy: false, isActive: selectedTheme == .warm)
+                    animationCompare("Default", isSnappy: false, isActive: selectedTheme == .midnight)
+                }
+            }
         }
+    }
+
+    private func animationCompare(_ name: String, isSnappy: Bool, isActive: Bool) -> some View {
+        VStack(spacing: 4) {
+            Text(name)
+                .font(.system(size: 10, weight: isActive ? .semibold : .regular))
+                .foregroundColor(isActive ? currentTokens.accent : currentTokens.fgMuted)
+
+            Text(isSnappy ? "Snappy" : "Smooth")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(currentTokens.fgSecondary)
+
+            if isActive {
+                Circle()
+                    .fill(currentTokens.accent)
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isActive ? currentTokens.accent.opacity(0.1) : Color.clear)
+        )
     }
 
     // MARK: - Helpers
@@ -346,20 +435,57 @@ struct TokenShowcaseView: View {
             .tracking(1)
     }
 
-    private func colorSwatch(_ name: String, _ color: Color) -> some View {
-        HStack(spacing: Spacing.xs) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(color)
-                .frame(width: 24, height: 24)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(currentTokens.borderDefault, lineWidth: 1)
-                )
+    private func colorSwatch(_ name: String, _ color: Color, default defaultColor: Color) -> some View {
+        let isDifferent = !colorsEqual(color, defaultColor)
 
-            Text(name)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(currentTokens.fgSecondary)
+        return HStack(spacing: Spacing.xs) {
+            ZStack {
+                // Show default color behind if different
+                if showDeltas && isDifferent {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(defaultColor)
+                        .frame(width: 24, height: 24)
+                        .offset(x: -4, y: 4)
+                        .opacity(0.5)
+                }
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(color)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(isDifferent && showDeltas ? Color.green : currentTokens.borderDefault, lineWidth: isDifferent && showDeltas ? 2 : 1)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(isDifferent && showDeltas ? Color.green : currentTokens.fgSecondary)
+
+                if showDeltas && isDifferent {
+                    Text("changed")
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundColor(Color.green.opacity(0.8))
+                }
+            }
         }
+        .frame(width: 100, alignment: .leading)
+    }
+
+    /// Simple color comparison (not perfect but good enough for debug)
+    private func colorsEqual(_ a: Color, _ b: Color) -> Bool {
+        // Compare by resolving to NSColor components
+        let nsA = NSColor(a)
+        let nsB = NSColor(b)
+        guard let rgbA = nsA.usingColorSpace(.deviceRGB),
+              let rgbB = nsB.usingColorSpace(.deviceRGB) else {
+            return false
+        }
+        let tolerance: CGFloat = 0.01
+        return abs(rgbA.redComponent - rgbB.redComponent) < tolerance &&
+               abs(rgbA.greenComponent - rgbB.greenComponent) < tolerance &&
+               abs(rgbA.blueComponent - rgbB.blueComponent) < tolerance
     }
 
     private func spacingRow(_ name: String, _ value: CGFloat) -> some View {
@@ -379,34 +505,83 @@ struct TokenShowcaseView: View {
         }
     }
 
-    private func radiusRow(_ name: String, _ value: CGFloat) -> some View {
-        HStack(spacing: Spacing.sm) {
+    private func radiusRow(_ name: String, _ value: CGFloat, default defaultValue: CGFloat) -> some View {
+        let isDifferent = abs(value - defaultValue) > 0.5
+
+        return HStack(spacing: Spacing.sm) {
             Text(name)
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(currentTokens.fgSecondary)
+                .foregroundColor(isDifferent && showDeltas ? Color.green : currentTokens.fgSecondary)
                 .frame(width: 40, alignment: .leading)
 
-            RoundedRectangle(cornerRadius: value)
-                .fill(currentTokens.accent.opacity(0.3))
-                .frame(width: 32, height: 20)
+            ZStack {
+                // Show default radius behind if different
+                if showDeltas && isDifferent {
+                    RoundedRectangle(cornerRadius: defaultValue)
+                        .stroke(currentTokens.fgMuted.opacity(0.3), lineWidth: 1)
+                        .frame(width: 32, height: 20)
+                }
 
-            Text("\(Int(value))pt")
+                RoundedRectangle(cornerRadius: value)
+                    .fill(currentTokens.accent.opacity(isDifferent && showDeltas ? 0.5 : 0.3))
+                    .frame(width: 32, height: 20)
+            }
+
+            if showDeltas && isDifferent {
+                HStack(spacing: 2) {
+                    Text("\(Int(defaultValue))")
+                        .strikethrough()
+                        .foregroundColor(currentTokens.fgMuted)
+                    Text("→")
+                        .foregroundColor(Color.green)
+                    Text("\(Int(value))")
+                        .foregroundColor(Color.green)
+                }
                 .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(currentTokens.fgMuted)
+            } else {
+                Text("\(Int(value))pt")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(currentTokens.fgMuted)
+            }
         }
     }
 
-    private func animationRow(_ name: String, _ style: String) -> some View {
-        HStack(spacing: Spacing.sm) {
-            Text(name)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(currentTokens.fgSecondary)
-                .frame(width: 50, alignment: .leading)
+    private func componentDeltaRow(_ name: String, _ value: Int, default defaultValue: Int) -> some View {
+        let isDifferent = value != defaultValue
+        let delta = value - defaultValue
 
-            Text(style)
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(currentTokens.accent)
+        return HStack(spacing: Spacing.sm) {
+            Text(name)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(isDifferent && showDeltas ? Color.green : currentTokens.fgSecondary)
+                .frame(width: 90, alignment: .leading)
+
+            if showDeltas && isDifferent {
+                HStack(spacing: 2) {
+                    Text("\(defaultValue)")
+                        .strikethrough()
+                        .foregroundColor(currentTokens.fgMuted)
+                    Text("→")
+                        .foregroundColor(Color.green)
+                    Text("\(value)")
+                        .foregroundColor(Color.green)
+
+                    Text("(\(delta > 0 ? "+" : "")\(delta))")
+                        .foregroundColor(delta < 0 ? Color.orange : Color.green)
+                }
+                .font(.system(size: 9, design: .monospaced))
+            } else {
+                Text("\(value)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(currentTokens.fgMuted)
+            }
         }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(isDifferent && showDeltas ? Color.green.opacity(0.1) : Color.clear)
+        )
     }
 }
 
