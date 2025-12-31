@@ -13,249 +13,148 @@ import TalkieKit
 
 #if DEBUG
 
-// MARK: - Token Diff (Introspection-based)
+// MARK: - Token Value (for displaying all tokens)
 
-/// A single difference between two token values
-struct TokenDelta: Identifiable {
+/// Represents a single token value with optional diff info
+struct TokenValue: Identifiable {
     let id = UUID()
-    let path: String           // e.g. "bgCanvas", "card.radius", "table.rowHeight"
-    let category: String       // e.g. "Colors", "Components", "Animation"
-    let defaultValue: String   // String representation of default
-    let currentValue: String   // String representation of current
-    let defaultPreview: AnyView?  // Optional visual preview
-    let currentPreview: AnyView?  // Optional visual preview
+    let path: String
+    let category: String
+    let value: String
+    let preview: AnyView?
+    let baselineValue: String?  // nil if same as current
+    let baselinePreview: AnyView?
+
+    var isDifferent: Bool { baselineValue != nil }
 }
 
-/// Compares two SemanticTokens using Mirror introspection
-struct TokenDiff {
-    let deltas: [TokenDelta]
+/// Introspects all token values from a SemanticTokens instance
+struct TokenIntrospector {
+    let values: [TokenValue]
+    let diffCount: Int
 
-    init(current: any SemanticTokens, baseline: any SemanticTokens) {
-        var diffs: [TokenDelta] = []
+    init(tokens: any SemanticTokens, baseline: any SemanticTokens) {
+        var allValues: [TokenValue] = []
 
-        let currentMirror = Mirror(reflecting: current)
+        let tokenMirror = Mirror(reflecting: tokens)
         let baselineMirror = Mirror(reflecting: baseline)
 
         // Build baseline lookup
-        var baselineValues: [String: Any] = [:]
+        var baselineMap: [String: Any] = [:]
         for child in baselineMirror.children {
             if let label = child.label {
-                baselineValues[label] = child.value
+                baselineMap[label] = child.value
             }
         }
 
-        // Compare each property
-        for child in currentMirror.children {
+        // Introspect all properties
+        for child in tokenMirror.children {
             guard let label = child.label else { continue }
-            let currentVal = child.value
-            let baselineVal = baselineValues[label]
+            let baseVal = baselineMap[label]
 
-            // Compare and add delta if different
-            if let delta = Self.compareValues(
+            let extracted = Self.extractValues(
                 path: label,
-                current: currentVal,
-                baseline: baselineVal
-            ) {
-                diffs.append(contentsOf: delta)
-            }
+                value: child.value,
+                baseline: baseVal
+            )
+            allValues.append(contentsOf: extracted)
         }
 
-        self.deltas = diffs.sorted { $0.category < $1.category || ($0.category == $1.category && $0.path < $1.path) }
+        self.values = allValues.sorted {
+            $0.category < $1.category || ($0.category == $1.category && $0.path < $1.path)
+        }
+        self.diffCount = allValues.filter { $0.isDifferent }.count
     }
 
-    private static func compareValues(path: String, current: Any, baseline: Any?) -> [TokenDelta]? {
-        guard let baseline = baseline else { return nil }
-
+    private static func extractValues(path: String, value: Any, baseline: Any?) -> [TokenValue] {
         // Handle Color
-        if let currColor = current as? Color, let baseColor = baseline as? Color {
-            if !colorsEqual(currColor, baseColor) {
-                return [TokenDelta(
-                    path: path,
-                    category: categoryFor(path),
-                    defaultValue: colorDescription(baseColor),
-                    currentValue: colorDescription(currColor),
-                    defaultPreview: AnyView(colorPreview(baseColor)),
-                    currentPreview: AnyView(colorPreview(currColor))
-                )]
-            }
+        if let color = value as? Color {
+            let baseColor = baseline as? Color
+            let isDiff = baseColor != nil && !colorsEqual(color, baseColor!)
+            return [TokenValue(
+                path: path,
+                category: categoryFor(path),
+                value: colorDescription(color),
+                preview: AnyView(colorPreview(color)),
+                baselineValue: isDiff ? colorDescription(baseColor!) : nil,
+                baselinePreview: isDiff ? AnyView(colorPreview(baseColor!)) : nil
+            )]
         }
 
         // Handle CGFloat
-        if let currFloat = current as? CGFloat, let baseFloat = baseline as? CGFloat {
-            if abs(currFloat - baseFloat) > 0.5 {
-                return [TokenDelta(
-                    path: path,
-                    category: categoryFor(path),
-                    defaultValue: "\(Int(baseFloat))",
-                    currentValue: "\(Int(currFloat))",
-                    defaultPreview: nil,
-                    currentPreview: nil
-                )]
-            }
+        if let num = value as? CGFloat {
+            let baseNum = baseline as? CGFloat
+            let isDiff = baseNum != nil && abs(num - baseNum!) > 0.01
+            return [TokenValue(
+                path: path,
+                category: categoryFor(path),
+                value: formatNumber(num),
+                preview: nil,
+                baselineValue: isDiff ? formatNumber(baseNum!) : nil,
+                baselinePreview: nil
+            )]
         }
 
-        // Handle Animation (compare by description since Animation isn't Equatable)
-        if current is Animation && baseline is Animation {
-            let currDesc = String(describing: current)
-            let baseDesc = String(describing: baseline)
-            if currDesc != baseDesc {
-                return [TokenDelta(
-                    path: path,
-                    category: "Animation",
-                    defaultValue: animationName(baseDesc),
-                    currentValue: animationName(currDesc),
-                    defaultPreview: nil,
-                    currentPreview: nil
-                )]
-            }
+        // Handle Animation
+        if value is Animation {
+            let currDesc = String(describing: value)
+            let baseDesc = baseline.map { String(describing: $0) }
+            let isDiff = baseDesc != nil && currDesc != baseDesc!
+            return [TokenValue(
+                path: path,
+                category: "Animation",
+                value: animationName(currDesc),
+                preview: nil,
+                baselineValue: isDiff ? animationName(baseDesc!) : nil,
+                baselinePreview: nil
+            )]
         }
 
         // Handle ShadowPrimitive
-        if let currShadow = current as? ShadowPrimitive, let baseShadow = baseline as? ShadowPrimitive {
-            if !shadowsEqual(currShadow, baseShadow) {
-                return [TokenDelta(
-                    path: path,
-                    category: "Shadows",
-                    defaultValue: shadowDescription(baseShadow),
-                    currentValue: shadowDescription(currShadow),
-                    defaultPreview: nil,
-                    currentPreview: nil
-                )]
+        if let shadow = value as? ShadowPrimitive {
+            let baseShadow = baseline as? ShadowPrimitive
+            let isDiff = baseShadow != nil && !shadowsEqual(shadow, baseShadow!)
+            return [TokenValue(
+                path: path,
+                category: "Shadows",
+                value: shadowDescription(shadow),
+                preview: nil,
+                baselineValue: isDiff ? shadowDescription(baseShadow!) : nil,
+                baselinePreview: nil
+            )]
+        }
+
+        // Handle nested structs (TableTokens, CardTokens, ButtonTokens, etc.)
+        let mirror = Mirror(reflecting: value)
+        if mirror.displayStyle == .struct && !mirror.children.isEmpty {
+            var nestedValues: [TokenValue] = []
+
+            // Build baseline lookup for nested struct
+            var nestedBaselineMap: [String: Any] = [:]
+            if let baselineVal = baseline {
+                let baseMirror = Mirror(reflecting: baselineVal)
+                for child in baseMirror.children {
+                    if let label = child.label {
+                        nestedBaselineMap[label] = child.value
+                    }
+                }
             }
+
+            for child in mirror.children {
+                guard let label = child.label else { continue }
+                let nestedPath = "\(path).\(label)"
+                let nestedBaseline = nestedBaselineMap[label]
+                nestedValues.append(contentsOf: extractValues(
+                    path: nestedPath,
+                    value: child.value,
+                    baseline: nestedBaseline
+                ))
+            }
+            return nestedValues
         }
 
-        // Handle any struct type by recursing with Mirror
-        // This catches TableTokens, CardTokens, ButtonTokens, and any future nested types
-        let currentMirror = Mirror(reflecting: current)
-        let baselineMirror = Mirror(reflecting: baseline)
-
-        // If it's a struct with children, recurse into it
-        if currentMirror.displayStyle == .struct && !currentMirror.children.isEmpty {
-            return compareNestedStruct(path: path, current: current, baseline: baseline)
-        }
-
-        return nil
+        return []
     }
-
-    /// Recursively compare nested structs using Mirror introspection
-    private static func compareNestedStruct(path: String, current: Any, baseline: Any) -> [TokenDelta]? {
-        var deltas: [TokenDelta] = []
-
-        let currentMirror = Mirror(reflecting: current)
-        let baselineMirror = Mirror(reflecting: baseline)
-
-        // Build baseline lookup for this nested struct
-        var baselineValues: [String: Any] = [:]
-        for child in baselineMirror.children {
-            if let label = child.label {
-                baselineValues[label] = child.value
-            }
-        }
-
-        // Compare each property in the nested struct
-        for child in currentMirror.children {
-            guard let label = child.label else { continue }
-            let nestedPath = "\(path).\(label)"
-            let currVal = child.value
-            guard let baseVal = baselineValues[label] else { continue }
-
-            // Handle Color
-            if let currColor = currVal as? Color, let baseColor = baseVal as? Color {
-                if !colorsEqual(currColor, baseColor) {
-                    deltas.append(TokenDelta(
-                        path: nestedPath,
-                        category: "Components",
-                        defaultValue: colorDescription(baseColor),
-                        currentValue: colorDescription(currColor),
-                        defaultPreview: AnyView(colorPreview(baseColor)),
-                        currentPreview: AnyView(colorPreview(currColor))
-                    ))
-                }
-                continue
-            }
-
-            // Handle CGFloat
-            if let currFloat = currVal as? CGFloat, let baseFloat = baseVal as? CGFloat {
-                if abs(currFloat - baseFloat) > 0.01 {
-                    deltas.append(TokenDelta(
-                        path: nestedPath,
-                        category: "Components",
-                        defaultValue: formatNumber(baseFloat),
-                        currentValue: formatNumber(currFloat),
-                        defaultPreview: nil,
-                        currentPreview: nil
-                    ))
-                }
-                continue
-            }
-
-            // Handle Double
-            if let currDouble = currVal as? Double, let baseDouble = baseVal as? Double {
-                if abs(currDouble - baseDouble) > 0.01 {
-                    deltas.append(TokenDelta(
-                        path: nestedPath,
-                        category: "Components",
-                        defaultValue: formatNumber(CGFloat(baseDouble)),
-                        currentValue: formatNumber(CGFloat(currDouble)),
-                        defaultPreview: nil,
-                        currentPreview: nil
-                    ))
-                }
-                continue
-            }
-
-            // Handle ShadowPrimitive
-            if let currShadow = currVal as? ShadowPrimitive, let baseShadow = baseVal as? ShadowPrimitive {
-                if !shadowsEqual(currShadow, baseShadow) {
-                    deltas.append(TokenDelta(
-                        path: nestedPath,
-                        category: "Components",
-                        defaultValue: shadowDescription(baseShadow),
-                        currentValue: shadowDescription(currShadow),
-                        defaultPreview: nil,
-                        currentPreview: nil
-                    ))
-                }
-                continue
-            }
-
-            // Handle Animation
-            if currVal is Animation && baseVal is Animation {
-                let currDesc = String(describing: currVal)
-                let baseDesc = String(describing: baseVal)
-                if currDesc != baseDesc {
-                    deltas.append(TokenDelta(
-                        path: nestedPath,
-                        category: "Components",
-                        defaultValue: animationName(baseDesc),
-                        currentValue: animationName(currDesc),
-                        defaultPreview: nil,
-                        currentPreview: nil
-                    ))
-                }
-                continue
-            }
-
-            // Recurse into nested structs
-            let nestedMirror = Mirror(reflecting: currVal)
-            if nestedMirror.displayStyle == .struct && !nestedMirror.children.isEmpty {
-                if let nestedDeltas = compareNestedStruct(path: nestedPath, current: currVal, baseline: baseVal) {
-                    deltas.append(contentsOf: nestedDeltas)
-                }
-            }
-        }
-
-        return deltas.isEmpty ? nil : deltas
-    }
-
-    private static func formatNumber(_ value: CGFloat) -> String {
-        if value == floor(value) {
-            return "\(Int(value))"
-        }
-        return String(format: "%.2f", value)
-    }
-
-    // MARK: - Helpers
 
     private static func categoryFor(_ path: String) -> String {
         if path.hasPrefix("bg") { return "Backgrounds" }
@@ -267,6 +166,7 @@ struct TokenDiff {
         if path.hasPrefix("animation") { return "Animation" }
         if path.hasPrefix("highlight") { return "Highlights" }
         if path.hasPrefix("success") || path.hasPrefix("warning") || path.hasPrefix("error") { return "Semantic" }
+        if path.contains(".") { return "Components" }
         return "Other"
     }
 
@@ -315,20 +215,27 @@ struct TokenDiff {
         if desc.contains("spring") { return "spring" }
         return "smooth"
     }
+
+    private static func formatNumber(_ value: CGFloat) -> String {
+        if value == floor(value) {
+            return "\(Int(value))"
+        }
+        return String(format: "%.2f", value)
+    }
 }
 
 // MARK: - Token Showcase View
 
 struct TokenShowcaseView: View {
-    @State private var selectedTheme: ThemeOption = .linear
-    @State private var showOnlyDeltas: Bool = true
+    @State private var selectedTheme: ThemeOption = .midnight
+    @State private var showOnlyDiffs: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     // Reference tokens for comparison
-    private var defaultTokens: any SemanticTokens { MidnightTokens() }
+    private var baselineTokens: any SemanticTokens { MidnightTokens() }
 
-    private var tokenDiff: TokenDiff {
-        TokenDiff(current: selectedTheme.tokens, baseline: defaultTokens)
+    private var introspector: TokenIntrospector {
+        TokenIntrospector(tokens: selectedTheme.tokens, baseline: baselineTokens)
     }
 
     var body: some View {
@@ -344,25 +251,16 @@ struct TokenShowcaseView: View {
                     // Theme Picker
                     themePicker
 
-                    // Delta summary
-                    if selectedTheme != .midnight {
-                        deltaSummary
-                    } else {
-                        Text("Midnight is the baseline theme - select another theme to see differences.")
-                            .font(.system(size: 11))
-                            .foregroundColor(currentTokens.fgMuted)
-                            .padding()
-                    }
+                    // Filter toggle + summary
+                    filterBar
 
-                    // Full diff list
-                    if selectedTheme != .midnight {
-                        diffList
-                    }
+                    // All tokens list
+                    tokensList
                 }
                 .padding(Spacing.lg)
             }
         }
-        .frame(width: 550, height: 600)
+        .frame(width: 600, height: 650)
         .background(currentTokens.bgCanvas)
     }
 
@@ -375,7 +273,7 @@ struct TokenShowcaseView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(currentTokens.fgPrimary)
 
-                Text("Compare design tokens across themes")
+                Text("All design tokens for \(selectedTheme.name)")
                     .font(.system(size: 11))
                     .foregroundColor(currentTokens.fgSecondary)
             }
@@ -395,7 +293,7 @@ struct TokenShowcaseView: View {
 
     private var themePicker: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("COMPARE THEME")
+            Text("SELECT THEME")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .foregroundColor(currentTokens.fgMuted)
                 .tracking(1)
@@ -408,61 +306,85 @@ struct TokenShowcaseView: View {
         }
     }
 
-    private var deltaSummary: some View {
-        let deltas = tokenDiff.deltas
-        let categories = Set(deltas.map { $0.category })
+    // MARK: - Filter Bar
 
-        return VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack {
-                Text("\(deltas.count) differences")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(currentTokens.fgPrimary)
+    private var filterBar: some View {
+        HStack {
+            // Token count
+            Text("\(introspector.values.count) tokens")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(currentTokens.fgPrimary)
 
-                Text("from Midnight baseline")
-                    .font(.system(size: 11))
+            if introspector.diffCount > 0 {
+                Text("•")
                     .foregroundColor(currentTokens.fgMuted)
 
-                Spacer()
+                Text("\(introspector.diffCount) differ from Midnight")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color.orange)
             }
 
-            // Category chips
-            HStack(spacing: Spacing.xs) {
-                ForEach(Array(categories).sorted(), id: \.self) { category in
-                    let count = deltas.filter { $0.category == category }.count
-                    Text("\(category): \(count)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(currentTokens.fgSecondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(currentTokens.bgElevated)
-                        )
+            Spacer()
+
+            // Filter toggle
+            if introspector.diffCount > 0 {
+                Button(action: { showOnlyDiffs.toggle() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: showOnlyDiffs ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 11))
+                        Text(showOnlyDiffs ? "Showing diffs only" : "Show all")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(showOnlyDiffs ? Color.orange : currentTokens.fgSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(showOnlyDiffs ? Color.orange.opacity(0.15) : currentTokens.bgElevated)
+                    )
                 }
+                .buttonStyle(.plain)
             }
         }
-        .padding(Spacing.md)
+        .padding(Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(currentTokens.bgSurface)
         )
     }
 
-    private var diffList: some View {
-        let deltas = tokenDiff.deltas
-        let grouped = Dictionary(grouping: deltas) { $0.category }
+    // MARK: - Tokens List
+
+    private var tokensList: some View {
+        let values = showOnlyDiffs
+            ? introspector.values.filter { $0.isDifferent }
+            : introspector.values
+        let grouped = Dictionary(grouping: values) { $0.category }
 
         return VStack(alignment: .leading, spacing: Spacing.lg) {
             ForEach(grouped.keys.sorted(), id: \.self) { category in
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text(category.uppercased())
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(currentTokens.fgMuted)
-                        .tracking(1)
+                    // Category header
+                    HStack {
+                        Text(category.uppercased())
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(currentTokens.fgMuted)
+                            .tracking(1)
 
+                        let diffCount = (grouped[category] ?? []).filter { $0.isDifferent }.count
+                        if diffCount > 0 && !showOnlyDiffs {
+                            Text("(\(diffCount) diff)")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(Color.orange)
+                        }
+
+                        Spacer()
+                    }
+
+                    // Token rows
                     VStack(spacing: 1) {
-                        ForEach(grouped[category] ?? []) { delta in
-                            deltaRow(delta)
+                        ForEach(grouped[category] ?? []) { token in
+                            tokenRow(token)
                         }
                     }
                     .background(
@@ -474,47 +396,51 @@ struct TokenShowcaseView: View {
         }
     }
 
-    private func deltaRow(_ delta: TokenDelta) -> some View {
+    private func tokenRow(_ token: TokenValue) -> some View {
         HStack(spacing: Spacing.sm) {
             // Property name
-            Text(delta.path)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(currentTokens.fgPrimary)
-                .frame(width: 140, alignment: .leading)
+            Text(token.path)
+                .font(.system(size: 10, weight: token.isDifferent ? .semibold : .regular, design: .monospaced))
+                .foregroundColor(token.isDifferent ? Color.orange : currentTokens.fgPrimary)
+                .frame(width: 150, alignment: .leading)
 
-            // Default value
+            // Preview + Value
             HStack(spacing: 4) {
-                if let preview = delta.defaultPreview {
+                if let preview = token.preview {
                     preview
                 }
-                Text(delta.defaultValue)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(currentTokens.fgMuted)
-                    .strikethrough()
-            }
-            .frame(width: 120, alignment: .leading)
-
-            // Arrow
-            Image(systemName: "arrow.right")
-                .font(.system(size: 8))
-                .foregroundColor(Color.green)
-
-            // Current value
-            HStack(spacing: 4) {
-                if let preview = delta.currentPreview {
-                    preview
-                }
-                Text(delta.currentValue)
+                Text(token.value)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.green)
+                    .foregroundColor(token.isDifferent ? currentTokens.fgPrimary : currentTokens.fgSecondary)
             }
-            .frame(width: 120, alignment: .leading)
+            .frame(width: 140, alignment: .leading)
+
+            // Diff indicator (if different)
+            if token.isDifferent, let baseValue = token.baselineValue {
+                HStack(spacing: 4) {
+                    Text("was")
+                        .font(.system(size: 8))
+                        .foregroundColor(currentTokens.fgMuted)
+
+                    if let basePreview = token.baselinePreview {
+                        basePreview
+                    }
+                    Text(baseValue)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(currentTokens.fgMuted)
+                        .strikethrough()
+                }
+            }
 
             Spacer()
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, 6)
-        .background(currentTokens.bgSurface)
+        .background(
+            token.isDifferent
+                ? Color.orange.opacity(0.08)
+                : Color.clear
+        )
     }
 
     private func themeButton(_ theme: ThemeOption) -> some View {
