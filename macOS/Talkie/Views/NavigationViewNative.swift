@@ -555,6 +555,41 @@ extension View {
                     }
                 }
             }
+            // Permission and service alerts
+            .onReceive(NotificationCenter.default.publisher(for: .showMicrophonePermissionRequired)) { _ in
+                let alert = NSAlert()
+                alert.messageText = "Microphone Access Required"
+                alert.informativeText = "Talkie needs microphone access to record audio. Please enable it in System Settings."
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "Open Settings")
+                alert.addButton(withTitle: "Cancel")
+
+                if alert.runModal() == .alertFirstButtonReturn {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showEngineRequiredToast)) { _ in
+                let alert = NSAlert()
+                alert.messageText = "Transcription Engine Required"
+                alert.informativeText = "TalkieEngine needs to be running to transcribe audio. Would you like to launch it now?"
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "Launch Engine")
+                alert.addButton(withTitle: "Cancel")
+
+                if alert.runModal() == .alertFirstButtonReturn {
+                    // Try to launch TalkieEngine
+                    if let engineURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "jdi.talkie.engine") {
+                        NSWorkspace.shared.openApplication(at: engineURL, configuration: .init(), completionHandler: nil)
+                    } else {
+                        // Try dev version
+                        if let devURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "jdi.talkie.engine.dev") {
+                            NSWorkspace.shared.openApplication(at: devURL, configuration: .init(), completionHandler: nil)
+                        }
+                    }
+                }
+            }
     }
 }
 

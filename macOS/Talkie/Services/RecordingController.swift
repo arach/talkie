@@ -35,6 +35,28 @@ final class RecordingController {
 
     /// Start recording
     func startRecording() {
+        // Check microphone permission first
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard micStatus == .authorized else {
+            // Permission not granted - request or show settings prompt
+            if micStatus == .notDetermined {
+                // First time - request permission
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    Task { @MainActor in
+                        if granted {
+                            self.startRecording() // Retry
+                        } else {
+                            NotificationCenter.default.post(name: .showMicrophonePermissionRequired, object: nil)
+                        }
+                    }
+                }
+            } else {
+                // Denied or restricted - show settings prompt
+                NotificationCenter.default.post(name: .showMicrophonePermissionRequired, object: nil)
+            }
+            return
+        }
+
         // Check if engine is available
         guard ServiceManager.shared.engine.state == .running else {
             // Show one-time toast: "TalkieEngine needed. [Launch Now] [Cancel]"
@@ -230,5 +252,6 @@ final class RecordingController {
 
 extension Notification.Name {
     static let showEngineRequiredToast = Notification.Name("showEngineRequiredToast")
+    static let showMicrophonePermissionRequired = Notification.Name("showMicrophonePermissionRequired")
     static let toggleRecording = Notification.Name("toggleRecording")
 }

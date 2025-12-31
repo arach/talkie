@@ -92,7 +92,7 @@ struct ModelInstallView: View {
 
                     // Helper text moved here - right below model selection
                     if selectedModel == .none {
-                        Text("Select a model, or skip to use cloud transcription only")
+                        Text("Select a model for on-device transcription, or skip to configure later")
                             .font(.system(size: 10))
                             .foregroundColor(colors.textTertiary.opacity(0.8))
                             .padding(.top, Spacing.xs)

@@ -425,18 +425,29 @@ final class OnboardingManager {
 
     func checkModelInstalled() async {
         // No model selected = nothing to check
-        guard !selectedModelType.isEmpty else {
+        guard let modelId = selectedModelId else {
             isModelDownloaded = false
             return
         }
 
-        // Check if the selected model is already downloaded
+        // First try to get status from engine (most accurate)
+        let engineClient = EngineClient.shared
+        engineClient.refreshStatus()
+
+        // Give it a moment to update
+        try? await Task.sleep(for: .milliseconds(200))
+
+        if let status = engineClient.status {
+            // Check if our selected model is in the downloaded list
+            isModelDownloaded = status.downloadedModels.contains(modelId)
+            return
+        }
+
+        // Fallback: Check local services if engine not available
         if selectedModelType == "parakeet" {
-            // Check Parakeet models
             let parakeetService = ParakeetService.shared
             isModelDownloaded = parakeetService.isModelDownloaded(.v2) || parakeetService.isModelDownloaded(.v3)
         } else {
-            // Check Whisper models
             let whisperService = WhisperService.shared
             isModelDownloaded = WhisperModel.allCases.contains { whisperService.isModelDownloaded($0) }
         }
@@ -444,22 +455,54 @@ final class OnboardingManager {
 
     func downloadModel() async {
         // No model selected = nothing to download
-        guard !selectedModelType.isEmpty else { return }
+        guard let modelId = selectedModelId else { return }
 
         isDownloadingModel = true
-        downloadStatus = "Downloading \(selectedModelDisplayName)..."
+        downloadProgress = 0
+        downloadStatus = "Connecting to engine..."
         errorMessage = nil
 
-        // Simulate download progress
-        // In production, this would connect to TalkieEngine's download API
-        for i in 0...100 {
-            downloadProgress = Double(i) / 100.0
-            downloadStatus = "Downloading: \(i)%"
-            try? await Task.sleep(for: .milliseconds(50))
+        // Ensure engine is connected first
+        let engineClient = EngineClient.shared
+        if !engineClient.isConnected {
+            downloadStatus = "Starting engine..."
+            // Give engine time to start if it was just launched
+            try? await Task.sleep(for: .seconds(2))
+
+            if !engineClient.isConnected {
+                errorMessage = "Could not connect to transcription engine"
+                isDownloadingModel = false
+                return
+            }
         }
 
-        isModelDownloaded = true
-        downloadStatus = "Model ready!"
+        downloadStatus = "Downloading \(selectedModelDisplayName)..."
+
+        // Start progress monitoring
+        let progressTask = Task {
+            while !Task.isCancelled && isDownloadingModel {
+                engineClient.refreshDownloadProgress()
+                if let progress = engineClient.downloadProgress {
+                    await MainActor.run {
+                        self.downloadProgress = progress.progress
+                        self.downloadStatus = "Downloading: \(progress.progressFormatted)"
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+
+        // Perform the actual download via XPC
+        do {
+            try await engineClient.downloadModel(modelId)
+            isModelDownloaded = true
+            downloadStatus = "Model ready!"
+        } catch {
+            errorMessage = "Download failed: \(error.localizedDescription)"
+            downloadStatus = "Download failed"
+        }
+
+        progressTask.cancel()
         isDownloadingModel = false
     }
 
@@ -562,7 +605,26 @@ final class OnboardingManager {
         if enableLiveMode {
             await updateCheck(.liveService, status: .inProgress("Starting..."))
             if isTalkieLiveRunning {
-                await updateCheck(.liveService, status: .complete)
+                // TalkieLive is running - verify it has microphone permission
+                await updateCheck(.liveService, status: .inProgress("Checking permissions..."))
+
+                // Give TalkieLive a moment to connect XPC
+                try? await Task.sleep(for: .milliseconds(500))
+
+                // Check TalkieLive's permissions via XPC
+                if let permissions = await ServiceManager.shared.live.checkPermissions() {
+                    if permissions.microphone {
+                        await updateCheck(.liveService, status: .complete)
+                    } else {
+                        // TalkieLive doesn't have mic permission - it will prompt when user tries to record
+                        // Mark as complete but note the permission status
+                        await updateCheck(.liveService, status: .complete)
+                        // Note: TalkieLive will request its own permission on first recording attempt
+                    }
+                } else {
+                    // Couldn't check permissions (XPC not connected yet) - proceed anyway
+                    await updateCheck(.liveService, status: .complete)
+                }
             } else {
                 // Try to launch Live
                 await launchServices()

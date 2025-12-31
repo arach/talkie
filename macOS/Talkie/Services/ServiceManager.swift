@@ -727,6 +727,22 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
         }
     }
 
+    // MARK: - Permission Check
+
+    /// Check TalkieLive's permissions via XPC
+    /// Returns (microphone, accessibility, screenRecording) or nil if not connected
+    public func checkPermissions() async -> (microphone: Bool, accessibility: Bool, screenRecording: Bool)? {
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { _ in }) else {
+            return nil
+        }
+
+        return await withCheckedContinuation { continuation in
+            service.getPermissions { mic, accessibility, screen in
+                continuation.resume(returning: (mic, accessibility, screen))
+            }
+        }
+    }
+
     // MARK: - Process Detection
 
     /// Refresh process ID by detecting running TalkieLive (backwards compatibility)
