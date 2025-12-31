@@ -94,9 +94,6 @@ final class DesignModeManager {
     /// Show element bounding boxes with dimensions on hover
     var showElementBounds: Bool = false
 
-    /// Show layout inspector (real view bounds via NSView hit testing)
-    var showLayoutInspector: Bool = false
-
     /// Pixel zoom magnification level (0 = disabled, 2 = 2x, 4 = 4x)
     var pixelZoomLevel: Int = 0
 

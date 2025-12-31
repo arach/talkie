@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E32EBC6B8CDC47F997F04EA5 /* LayoutInspectorOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD8F75CBB8734BF985BC6154 /* LayoutInspectorOverlay.swift */; };
 		E4B822BB26CA4614A529F629 /* TokenShowcase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D637515E114B9C9AE6BB2E /* TokenShowcase.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
@@ -251,7 +250,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		BD8F75CBB8734BF985BC6154 /* LayoutInspectorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutInspectorOverlay.swift; sourceTree = "<group>"; };
 		69D637515E114B9C9AE6BB2E /* TokenShowcase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenShowcase.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
@@ -686,7 +684,6 @@
 		6D67F82EC91560F5D7130E4C /* Tools */ = {
 			isa = PBXGroup;
 			children = (
-				BD8F75CBB8734BF985BC6154 /* LayoutInspectorOverlay.swift */,
 				79AA4AD56A1FE7BA063AE1FD /* CenterGuidesOverlay.swift */,
 				CB719C0CB9A5DA55142F6489 /* ColorPickerTool.swift */,
 				26B34A2CE1214094462A65D2 /* EdgeGuidesOverlay.swift */,
@@ -1180,7 +1177,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E32EBC6B8CDC47F997F04EA5 /* LayoutInspectorOverlay.swift in Sources */,
 				E4B822BB26CA4614A529F629 /* TokenShowcase.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,

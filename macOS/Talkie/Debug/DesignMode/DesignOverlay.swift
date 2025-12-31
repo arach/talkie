@@ -53,11 +53,6 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                         .allowsHitTesting(false)
                 }
 
-                // Layout Inspector (real view bounds via NSView hit testing)
-                if designMode.showLayoutInspector {
-                    LayoutInspectorOverlay()
-                }
-
                 // Floating toolbar button
                 VStack {
                     if overlayPosition.isTop {
@@ -240,12 +235,6 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                 icon: "viewfinder",
                 label: "Element Bounds",
                 isOn: $designMode.showElementBounds
-            )
-
-            toggleRow(
-                icon: "ruler",
-                label: "Layout Inspector",
-                isOn: $designMode.showLayoutInspector
             )
 
             // Pixel Zoom (multi-state)
