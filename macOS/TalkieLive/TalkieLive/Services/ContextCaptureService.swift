@@ -9,9 +9,9 @@
 import Foundation
 import AppKit
 import ApplicationServices
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "ContextCapture")
+private let log = Log(.system)
 
 // MARK: - Configuration
 
@@ -170,19 +170,19 @@ final class ContextCaptureService {
     @MainActor
     func getSelectedText(in targetApp: NSRunningApplication? = nil) -> String? {
         guard AXIsProcessTrusted() else {
-            logger.debug("getSelectedText: AX not trusted, returning nil")
+            log.debug("getSelectedText: AX not trusted, returning nil")
             return nil
         }
 
         let app: NSRunningApplication
         if let targetApp = targetApp {
             app = targetApp
-            logger.debug("getSelectedText: Checking target app \(app.localizedName ?? "unknown")")
+            log.debug("getSelectedText: Checking target app \(app.localizedName ?? "unknown")")
         } else if let frontApp = NSWorkspace.shared.frontmostApplication {
             app = frontApp
-            logger.debug("getSelectedText: Checking frontmost app \(app.localizedName ?? "unknown")")
+            log.debug("getSelectedText: Checking frontmost app \(app.localizedName ?? "unknown")")
         } else {
-            logger.debug("getSelectedText: No app to check")
+            log.debug("getSelectedText: No app to check")
             return nil
         }
 
@@ -212,11 +212,11 @@ final class ContextCaptureService {
         if AXUIElementCopyAttributeValue(focused, kAXSelectedTextAttribute as CFString, &selectedRef) == .success,
            let selected = selectedRef as? String,
            !selected.isEmpty {
-            logger.debug("getSelectedText: Found selection (\(selected.count) chars) in \(app.localizedName ?? "unknown")")
+            log.debug("getSelectedText: Found selection (\(selected.count) chars) in \(app.localizedName ?? "unknown")")
             return selected
         }
 
-        logger.debug("getSelectedText: No selection found in \(app.localizedName ?? "unknown")")
+        log.debug("getSelectedText: No selection found in \(app.localizedName ?? "unknown")")
         return nil
     }
 
@@ -234,7 +234,7 @@ final class ContextCaptureService {
             // Update the database record with enriched metadata
             await MainActor.run {
                 LiveDatabase.updateMetadata(id: utteranceId, metadata: merged)
-                logger.debug("Enriched context for utterance \(utteranceId)")
+                log.debug("Enriched context for utterance \(utteranceId)")
             }
         }
     }
@@ -245,7 +245,7 @@ final class ContextCaptureService {
         var metadata = DictationMetadata()
 
         guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-            logger.debug("No frontmost application")
+            log.debug("No frontmost application")
             return metadata
         }
 
@@ -268,7 +268,7 @@ final class ContextCaptureService {
 
         if !AXIsProcessTrusted() {
             if options.logFailures {
-                logger.error("Accessibility permission missing - context capture limited")
+                log.error("Accessibility permission missing - context capture limited")
             }
             return metadata
         }
@@ -307,7 +307,7 @@ final class ContextCaptureService {
             metadata.terminalWorkingDir = extractWorkingDirectory(from: title)
         }
 
-        logger.debug("Enriched context: \(metadata.activeAppName ?? "?") - \(metadata.activeWindowTitle ?? "no title")")
+        log.debug("Enriched context: \(metadata.activeAppName ?? "?") - \(metadata.activeWindowTitle ?? "no title")")
         return metadata
     }
 
@@ -323,7 +323,7 @@ final class ContextCaptureService {
                let first = windows.first {
                 windowRef = first
                 result = .success
-                logger.debug("Focused window missing; used first window as fallback")
+                log.debug("Focused window missing; used first window as fallback")
             }
         }
 

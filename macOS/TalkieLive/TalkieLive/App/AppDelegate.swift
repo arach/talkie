@@ -114,6 +114,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         floatingPill.show()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        // Clean up event monitors
+        if let monitor = controlKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            controlKeyMonitor = nil
+        }
+        #if DEBUG
+        if let monitor = glassToggleMonitor {
+            NSEvent.removeMonitor(monitor)
+            glassToggleMonitor = nil
+        }
+        #endif
+    }
+
     // MARK: - Status Bar
 
     private func setupStatusBar() {
