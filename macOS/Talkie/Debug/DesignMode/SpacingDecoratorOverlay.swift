@@ -2,8 +2,8 @@
 //  SpacingDecoratorOverlay.swift
 //  Talkie macOS
 //
-//  Spacing decorator - Shows spacing between sections and elements
-//  Automatically highlights padding and gaps when enabled
+//  Spacing decorator - Shows main layout section widths
+//  Useful for screenshots and documentation
 //
 //  IMPORTANT: This entire file is DEBUG-only. Nothing ships to production.
 //
@@ -12,202 +12,247 @@ import SwiftUI
 
 #if DEBUG
 
-/// Spacing decorator overlay that shows spacing between sections and elements
-/// Unlike SpacingInspectorTool (hover-based), this persistently displays all spacing
+/// Shows main layout section widths with visual annotations
+/// Designed for screenshot documentation
 struct SpacingDecoratorOverlay: View {
+    // Known layout constants (from NavigationViewNative)
+    private let sidebarWidth: CGFloat = 180
+    private let sidebarMinWidth: CGFloat = 160
+    private let contentMinWidth: CGFloat = 300
+
     var body: some View {
         GeometryReader { geometry in
+            let windowWidth = geometry.size.width
+            let windowHeight = geometry.size.height
+            let contentWidth = windowWidth - sidebarWidth - 1 // -1 for divider
+
             ZStack {
-                // Vertical spacing indicators (for VStack/section gaps)
-                verticalSpacingIndicators(in: geometry.size)
+                // === HORIZONTAL MEASUREMENTS ===
 
-                // Horizontal spacing indicators (for HStack/column gaps)
-                horizontalSpacingIndicators(in: geometry.size)
-
-                // Padding indicators (around content areas)
-                paddingIndicators(in: geometry.size)
-            }
-        }
-        .allowsHitTesting(false) // Don't block interactions
-    }
-
-    /// Show vertical spacing between sections
-    @ViewBuilder
-    private func verticalSpacingIndicators(in size: CGSize) -> some View {
-        // Common section gaps in the app (based on Spacing tokens)
-        let spacingValues: [CGFloat] = [
-            2,   // Spacing.xxs
-            4,   // Spacing.xs
-            8,   // Spacing.sm
-            12,  // Spacing.md
-            16,  // Spacing.lg
-            20,  // Spacing.xl
-            24   // Spacing.xxl
-        ]
-
-        // Sample vertical positions (in production, this would be derived from actual layout)
-        ForEach(Array(stride(from: 80, to: size.height - 80, by: 100)), id: \.self) { y in
-            let spacing: CGFloat = spacingValues.randomElement() ?? 8
-            spacingDimensionLine(
-                start: CGPoint(x: 20, y: y),
-                end: CGPoint(x: 20, y: y + spacing),
-                value: Int(spacing),
-                isVertical: true
-            )
-        }
-    }
-
-    /// Show horizontal spacing between columns
-    @ViewBuilder
-    private func horizontalSpacingIndicators(in size: CGSize) -> some View {
-        // Detect column boundaries (sidebar, content, detail)
-        // For NavigationView: sidebar (~180-220px), content (~300px), detail (remaining)
-
-        // Sample positions for column gaps
-        let columnPositions: [CGFloat] = [180, 480, 780] // Approx sidebar, content, detail boundaries
-
-        ForEach(columnPositions, id: \.self) { x in
-            if x < size.width {
-                spacingDimensionLine(
-                    start: CGPoint(x: x, y: size.height / 2),
-                    end: CGPoint(x: x + 1, y: size.height / 2), // 1px divider
-                    value: 0, // Dividers have 0 spacing (they're 1px)
-                    isVertical: false
+                // Sidebar width indicator (top)
+                widthIndicator(
+                    x: 0,
+                    width: sidebarWidth,
+                    y: 8,
+                    label: "Sidebar",
+                    sublabel: "\(Int(sidebarWidth))px",
+                    color: .cyan
                 )
-            }
-        }
-    }
 
-    /// Show padding around content areas
-    @ViewBuilder
-    private func paddingIndicators(in size: CGSize) -> some View {
-        // Common padding values (based on Spacing tokens)
-        let paddingAreas: [(CGRect, String)] = [
-            (CGRect(x: 8, y: 8, width: 160, height: 40), "SM"), // Sidebar header
-            (CGRect(x: 200, y: 16, width: 250, height: 60), "MD"), // Content header
-        ]
+                // Content width indicator (top)
+                widthIndicator(
+                    x: sidebarWidth + 1,
+                    width: contentWidth,
+                    y: 8,
+                    label: "Content",
+                    sublabel: "\(Int(contentWidth))px",
+                    color: .orange
+                )
 
-        ForEach(Array(paddingAreas.enumerated()), id: \.offset) { _, area in
-            paddingIndicator(rect: area.0, label: area.1)
-        }
-    }
+                // Total window width (bottom)
+                widthIndicator(
+                    x: 0,
+                    width: windowWidth,
+                    y: windowHeight - 24,
+                    label: "Window",
+                    sublabel: "\(Int(windowWidth)) × \(Int(windowHeight))",
+                    color: .purple
+                )
 
-    /// Spacing dimension line with label
-    @ViewBuilder
-    private func spacingDimensionLine(
-        start: CGPoint,
-        end: CGPoint,
-        value: Int,
-        isVertical: Bool
-    ) -> some View {
-        ZStack {
-            // Dimension line (dashed)
-            Path { path in
-                path.move(to: start)
-                path.addLine(to: end)
-            }
-            .stroke(Color.orange, style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
+                // === VERTICAL DIVIDER ===
 
-            // End caps
-            if isVertical {
+                // Sidebar/Content divider line
                 Rectangle()
-                    .fill(Color.orange)
-                    .frame(width: 16, height: 1)
-                    .position(start)
-                Rectangle()
-                    .fill(Color.orange)
-                    .frame(width: 16, height: 1)
-                    .position(end)
-            } else {
-                Rectangle()
-                    .fill(Color.orange)
-                    .frame(width: 1, height: 16)
-                    .position(start)
-                Rectangle()
-                    .fill(Color.orange)
-                    .frame(width: 1, height: 16)
-                    .position(end)
-            }
+                    .fill(Color.cyan.opacity(0.5))
+                    .frame(width: 2)
+                    .position(x: sidebarWidth, y: windowHeight / 2)
 
-            // Label (only show if spacing > 0)
-            if value > 0 {
-                Text("\(value)px")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 2)
+                // === MARGIN ANNOTATIONS ===
+
+                // Content area padding indicator
+                let contentPadding: CGFloat = 16  // Spacing.lg typically
+                marginIndicator(
+                    at: CGPoint(x: sidebarWidth + contentPadding, y: 60),
+                    size: contentPadding,
+                    direction: .left,
+                    label: "padding"
+                )
+
+                // === PROPORTIONS ===
+
+                // Ratio indicator
+                let sidebarRatio = Int((sidebarWidth / windowWidth) * 100)
+                let contentRatio = 100 - sidebarRatio
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("LAYOUT")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.5))
+
+                    HStack(spacing: 4) {
+                        Rectangle()
+                            .fill(Color.cyan)
+                            .frame(width: CGFloat(sidebarRatio), height: 4)
+                        Rectangle()
                             .fill(Color.orange)
-                            .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-                    )
-                    .position(
-                        x: isVertical ? start.x + 25 : (start.x + end.x) / 2,
-                        y: isVertical ? (start.y + end.y) / 2 : start.y - 15
-                    )
+                            .frame(width: CGFloat(contentRatio), height: 4)
+                    }
+                    .frame(width: 100)
+
+                    Text("\(sidebarRatio)% / \(contentRatio)%")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.black.opacity(0.85))
+                )
+                .position(x: windowWidth - 70, y: windowHeight - 60)
             }
         }
+        .allowsHitTesting(false)
     }
 
-    /// Padding indicator (outline around padded area)
+    // MARK: - Width Indicator
+
     @ViewBuilder
-    private func paddingIndicator(rect: CGRect, label: String) -> some View {
+    private func widthIndicator(
+        x: CGFloat,
+        width: CGFloat,
+        y: CGFloat,
+        label: String,
+        sublabel: String,
+        color: Color
+    ) -> some View {
+        let centerX = x + width / 2
+
         ZStack {
-            // Dashed outline
-            Rectangle()
-                .stroke(Color.cyan, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-                .frame(width: rect.width, height: rect.height)
-                .position(x: rect.midX, y: rect.midY)
+            // Horizontal line with end caps
+            Path { path in
+                path.move(to: CGPoint(x: x + 4, y: y))
+                path.addLine(to: CGPoint(x: x + width - 4, y: y))
+            }
+            .stroke(color.opacity(0.6), lineWidth: 1)
+
+            // Left cap
+            Path { path in
+                path.move(to: CGPoint(x: x + 4, y: y - 6))
+                path.addLine(to: CGPoint(x: x + 4, y: y + 6))
+            }
+            .stroke(color, lineWidth: 2)
+
+            // Right cap
+            Path { path in
+                path.move(to: CGPoint(x: x + width - 4, y: y - 6))
+                path.addLine(to: CGPoint(x: x + width - 4, y: y + 6))
+            }
+            .stroke(color, lineWidth: 2)
 
             // Label
-            Text("↔ \(label)")
+            VStack(spacing: 1) {
+                Text(label)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(color)
+                Text(sublabel)
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.black.opacity(0.85))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(color.opacity(0.4), lineWidth: 1)
+                    )
+            )
+            .position(x: centerX, y: y + 20)
+        }
+    }
+
+    // MARK: - Margin Indicator
+
+    enum MarginDirection {
+        case left, right, top, bottom
+    }
+
+    @ViewBuilder
+    private func marginIndicator(
+        at point: CGPoint,
+        size: CGFloat,
+        direction: MarginDirection,
+        label: String
+    ) -> some View {
+        let color = Color.green
+
+        ZStack {
+            // Arrow line
+            switch direction {
+            case .left:
+                Path { path in
+                    path.move(to: CGPoint(x: point.x - size, y: point.y))
+                    path.addLine(to: point)
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+
+                // Arrow head
+                Path { path in
+                    path.move(to: CGPoint(x: point.x - 6, y: point.y - 4))
+                    path.addLine(to: point)
+                    path.addLine(to: CGPoint(x: point.x - 6, y: point.y + 4))
+                }
+                .stroke(color, lineWidth: 1.5)
+
+            default:
+                EmptyView()
+            }
+
+            // Label
+            Text("\(Int(size))px")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .background(
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.cyan)
-                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(color)
                 )
-                .position(x: rect.minX - 20, y: rect.minY + 10)
+                .position(x: point.x - size / 2, y: point.y - 12)
         }
     }
 }
 
-#Preview("Spacing Decorator Overlay") {
+#Preview("Spacing Decorator") {
     ZStack {
-        // Sample layout
+        // Simulated app layout
         HStack(spacing: 0) {
             // Sidebar
             VStack {
-                Text("SIDEBAR")
+                Text("Sidebar")
                     .padding()
                 Spacer()
             }
             .frame(width: 180)
-            .background(Color.gray.opacity(0.1))
+            .background(Color.gray.opacity(0.15))
 
-            // Divider
-            Rectangle().fill(Color.gray).frame(width: 1)
+            Rectangle().fill(Color.gray.opacity(0.3)).frame(width: 1)
 
             // Content
-            VStack(spacing: 16) {
+            VStack {
                 Text("Content Area")
                     .padding()
-                Rectangle().fill(Color.blue.opacity(0.2))
-                    .frame(height: 100)
-                Rectangle().fill(Color.purple.opacity(0.2))
-                    .frame(height: 100)
+                Spacer()
             }
-            .padding()
             .frame(maxWidth: .infinity)
+            .background(Color.gray.opacity(0.05))
         }
 
-        // Overlay
         SpacingDecoratorOverlay()
     }
-    .frame(width: 800, height: 600)
+    .frame(width: 900, height: 600)
+    .background(Color(white: 0.1))
 }
 
 #endif

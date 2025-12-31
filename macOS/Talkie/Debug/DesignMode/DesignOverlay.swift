@@ -53,6 +53,11 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                         .allowsHitTesting(false)
                 }
 
+                // Spacing decorator (section widths)
+                if designMode.showSpacing {
+                    SpacingDecoratorOverlay()
+                }
+
                 // Floating toolbar button
                 VStack {
                     if overlayPosition.isTop {
