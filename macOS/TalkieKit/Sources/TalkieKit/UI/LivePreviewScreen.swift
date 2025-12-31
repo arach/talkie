@@ -123,58 +123,64 @@ public struct LivePreviewScreen: View {
         self._showOnAir = showOnAir
     }
 
-    // Adaptive premium background for the mock screen
-    private var screenBackground: Color {
-        Color(light: Color(white: 0.15), dark: Color(white: 0.08))
-    }
-
     public var body: some View {
         ZStack {
-            // Screen background - premium adaptive color
+            // Desktop wallpaper background
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(screenBackground)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(light: Color(red: 0.3, green: 0.35, blue: 0.45), dark: Color(red: 0.15, green: 0.18, blue: 0.25)),
+                            Color(light: Color(red: 0.25, green: 0.28, blue: 0.35), dark: Color(red: 0.08, green: 0.1, blue: 0.15)),
+                            Color(light: Color(red: 0.2, green: 0.22, blue: 0.28), dark: Color(red: 0.05, green: 0.06, blue: 0.1))
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .overlay(
-                    // Subtle inner gradient for depth
+                    // Subtle noise/texture effect
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
                         .fill(
-                            LinearGradient(
+                            RadialGradient(
                                 colors: [
-                                    Color.white.opacity(0.03),
-                                    Color.clear,
-                                    Color.black.opacity(0.1)
+                                    Color.white.opacity(0.05),
+                                    Color.clear
                                 ],
-                                startPoint: .top,
-                                endPoint: .bottom
+                                center: .topLeading,
+                                startRadius: 0,
+                                endRadius: 300
                             )
                         )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.15),
-                                    Color.white.opacity(0.05)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1
-                        )
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
 
-            // Content
+            // Content - position markers near edges
             VStack(spacing: 0) {
-                // Top area: HUD position markers + style preview
                 topArea
-
                 Spacer()
-
-                // Bottom area: Pill position markers + mini pill
                 bottomArea
             }
-            .padding(16)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 8)
+
+            // Hover hint - subtle, bottom right corner
+            if !isHovered {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text("Hover to preview")
+                            .font(.system(size: 8))
+                            .foregroundColor(.white.opacity(0.25))
+                            .padding(6)
+                    }
+                }
+            }
         }
         .frame(width: screenWidth, height: screenHeight)
         .onHover { hovering in
@@ -187,13 +193,8 @@ public struct LivePreviewScreen: View {
     // MARK: - Top Area (HUD)
 
     private var topArea: some View {
-        VStack(spacing: 6) {
-            Text("HUD POSITION")
-                .font(.system(size: 7, weight: .medium))
-                .foregroundColor(.white.opacity(0.3))
-                .tracking(0.5)
-
-            // Position dots row
+        VStack(spacing: 4) {
+            // Position dots row - tight to edges
             HStack {
                 PositionDot(
                     isSelected: hudPosition == .topLeft,
@@ -214,35 +215,25 @@ public struct LivePreviewScreen: View {
                     action: { hudPosition = .topRight }
                 )
             }
-            .padding(.horizontal, 12)
 
-            // HUD preview row with ON AIR badge
-            HStack(alignment: .top, spacing: 0) {
-                // ON AIR badge - left side
-                if showOnAir {
-                    OnAirBadge()
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                }
-
-                Spacer()
-
-                // HUD style preview - center
+            // HUD preview - centered
+            VStack(spacing: 3) {
                 if overlayStyle.showsTopOverlay {
                     HUDStylePreview(style: overlayStyle)
-                        .frame(width: 120, height: 28)
+                        .frame(width: 100, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.black)
+                        )
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
 
-                Spacer()
-
-                // Balance spacer (same width as ON AIR badge area)
-                if showOnAir {
-                    Color.clear
-                        .frame(width: 36, height: 1)
-                }
+                Text("HUD")
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundColor(.white.opacity(0.35))
+                    .tracking(0.5)
             }
-            .frame(height: 28)
-            .padding(.horizontal, 8)
+            .frame(height: 40)
         }
         .animation(.easeInOut(duration: 0.2), value: overlayStyle.showsTopOverlay)
         .animation(.easeInOut(duration: 0.2), value: showOnAir)
@@ -251,25 +242,35 @@ public struct LivePreviewScreen: View {
     // MARK: - Bottom Area (Pill)
 
     private var bottomArea: some View {
-        VStack(spacing: 6) {
-            HStack {
-                if pillPosition == .bottomLeft {
-                    AnimatedMiniPill(isRecording: isHovered)
-                    Spacer()
-                } else if pillPosition == .bottomCenter {
-                    Spacer()
-                    AnimatedMiniPill(isRecording: isHovered)
-                    Spacer()
-                } else if pillPosition == .bottomRight {
-                    Spacer()
-                    AnimatedMiniPill(isRecording: isHovered)
-                } else {
-                    Spacer()
-                }
-            }
-            .frame(height: 24)
-            .opacity(pillPosition != .topCenter ? 1 : 0)
+        VStack(spacing: 4) {
+            // Pill preview with label above
+            VStack(spacing: 3) {
+                Text("PILL")
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundColor(.white.opacity(0.35))
+                    .tracking(0.5)
 
+                HStack {
+                    if pillPosition == .bottomLeft {
+                        AnimatedMiniPill(isRecording: isHovered)
+                        Spacer()
+                    } else if pillPosition == .bottomCenter {
+                        Spacer()
+                        AnimatedMiniPill(isRecording: isHovered)
+                        Spacer()
+                    } else if pillPosition == .bottomRight {
+                        Spacer()
+                        AnimatedMiniPill(isRecording: isHovered)
+                    } else {
+                        Spacer()
+                    }
+                }
+                .frame(height: 24)
+                .opacity(pillPosition != .topCenter ? 1 : 0)
+            }
+            .frame(height: 40)
+
+            // Position dots row - tight to edges
             HStack {
                 PositionDot(
                     isSelected: pillPosition == .bottomLeft,
@@ -290,12 +291,6 @@ public struct LivePreviewScreen: View {
                     action: { pillPosition = .bottomRight }
                 )
             }
-            .padding(.horizontal, 12)
-
-            Text("PILL POSITION")
-                .font(.system(size: 7, weight: .medium))
-                .foregroundColor(.white.opacity(0.3))
-                .tracking(0.5)
         }
     }
 }
@@ -401,25 +396,25 @@ private struct AnimatedMiniPill: View {
     var body: some View {
         Group {
             if isRecording {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     Circle()
                         .fill(Color.red)
-                        .frame(width: 5, height: 5)
+                        .frame(width: 4, height: 4)
                         .overlay(
                             Circle()
                                 .fill(Color.red.opacity(0.3))
-                                .frame(width: 10, height: 10)
+                                .frame(width: 8, height: 8)
                         )
 
                     Text("0:03")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill(Color.black.opacity(0.7))
+                        .fill(Color.black)
                         .overlay(
                             Capsule()
                                 .stroke(Color.red.opacity(0.3), lineWidth: 0.5)
@@ -427,8 +422,8 @@ private struct AnimatedMiniPill: View {
                 )
             } else {
                 Capsule()
-                    .fill(Color.white.opacity(0.2))
-                    .frame(width: 24, height: 6)
+                    .fill(Color.white.opacity(0.25))
+                    .frame(width: 20, height: 5)
                     .overlay(
                         Capsule()
                             .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
