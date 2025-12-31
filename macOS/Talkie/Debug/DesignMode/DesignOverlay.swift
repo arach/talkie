@@ -273,6 +273,13 @@ struct DesignToolsOverlay<CustomContent: View>: View {
             Divider()
                 .background(Color.white.opacity(0.2))
 
+            // Token Showcase
+            TokenShowcaseButton()
+
+            Divider()
+                .background(Color.white.opacity(0.2))
+                .padding(.vertical, 4)
+
             // Quick actions
             HStack(spacing: 6) {
                 Button(action: { designMode.toggleAllDecorators() }) {
