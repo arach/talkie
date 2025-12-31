@@ -171,7 +171,6 @@ struct EmbeddedSettingsView: View {
         }
         .glassPanel()
         .ignoresSafeArea(.all, edges: .all)
-        .id("embedded-settings-\(settings.glassMode)")  // Force full view rebuild on glass mode change
         .onChange(of: initialSection) { _, newSection in
             if let section = newSection {
                 selectedSection = section
@@ -903,7 +902,6 @@ struct QuickSettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .glassPanel()
-        .id("quick-settings-\(settings.glassMode)")  // Force full view rebuild on glass mode change
     }
 }
 

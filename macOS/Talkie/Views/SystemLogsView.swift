@@ -324,18 +324,24 @@ class SystemEventManager {
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
-        // Load historical events from log file
-        loadHistoricalEvents()
+        StartupProfiler.shared.mark("singleton.SystemEventManager.start")
 
         setupObservers()
 
         // Initial boot event
         logSync(.system, "Console initialized", detail: "Talkie OS v1.0")
 
-        // Clean up old logs on launch
-        Task.detached {
+        // Defer log loading and cleanup to not block startup
+        Task.detached { [weak self] in
             LogFileManager.shared.cleanupOldLogs(keepDays: 7)
+
+            // Load historical events after startup
+            let historical = LogFileManager.shared.loadTodayEventsFrom(sources: nil, limit: 500)
+            await MainActor.run {
+                self?.events.append(contentsOf: historical)
+            }
         }
+        StartupProfiler.shared.mark("singleton.SystemEventManager.done")
     }
 
     private func loadHistoricalEvents(from sources: [SystemEventSource]? = nil) {

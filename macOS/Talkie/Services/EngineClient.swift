@@ -156,11 +156,12 @@ public final class EngineClient {
     }
 
     private init() {
+        StartupProfiler.shared.mark("singleton.EngineClient.start")
         xpcManager = XPCServiceManager<TalkieEngineProtocol>(
             serviceNameProvider: { env in env.engineXPCService },
             interfaceProvider: { NSXPCInterface(with: TalkieEngineProtocol.self) }
         )
-        logger.info("[EngineClient] Initialized")
+        StartupProfiler.shared.mark("singleton.EngineClient.done")
     }
 
     // MARK: - Connection

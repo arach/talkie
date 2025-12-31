@@ -100,6 +100,9 @@ private enum StartupTimer {
     }
 }
 
+// Force profiler to initialize early (captures process start time)
+private let _profilerInit: Void = { _ = StartupProfiler.shared }()
+
 @main
 struct TalkieApp: App {
     // Ensure early theme init runs before anything else
@@ -112,9 +115,9 @@ struct TalkieApp: App {
     // UI reads from GRDB (source of truth), CoreData just syncs to CloudKit
 
     init() {
-        StartupTimer.logMilestone("TalkieApp.init start")
+        StartupProfiler.shared.markEarly("app.init.start")
         // No CoreData init here - deferred to background
-        StartupTimer.logMilestone("TalkieApp.init end")
+        StartupProfiler.shared.markEarly("app.init.end")
     }
     // Remove @State from global singletons - they're already observable
     // Reference singletons directly via .shared instead
@@ -126,9 +129,7 @@ struct TalkieApp: App {
         // Log time to first body access (once)
         if !StartupTimer.bodyAccessed {
             StartupTimer.bodyAccessed = true
-            let elapsed = (CFAbsoluteTimeGetCurrent() - StartupTimer.appStart) * 1000
-            startupSignposter.emitEvent("TalkieApp.body")
-            startupLogger.info("⏱️ TalkieApp.body accessed: \(String(format: "%.0f", elapsed))ms from launch")
+            StartupProfiler.shared.markEarly("app.body.firstAccess")
         }
 
         return WindowGroup(id: "main") {
@@ -147,7 +148,9 @@ struct TalkieApp: App {
                 // Do NOT add .onOpenURL here - it causes SwiftUI to spawn new windows
                 .task {
                     // Background database initialization - non-blocking
+                    StartupProfiler.shared.mark("db.grdb.start")
                     await StartupCoordinator.shared.initializeDatabase()
+                    StartupProfiler.shared.mark("db.grdb.ready")
                 }
                 .sheet(isPresented: Binding(
                     get: { OnboardingManager.shared.shouldShowOnboarding },

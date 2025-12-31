@@ -126,6 +126,156 @@ extension LiveDatabase {
         }) ?? 0
     }
 
+    // MARK: - Stats Queries (for app_stats table)
+
+    /// Count dictations from today
+    static func countToday() -> Int {
+        let todayStart = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
+        return (try? shared.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM dictations WHERE createdAt >= ?",
+                arguments: [todayStart]
+            )
+        }) ?? 0
+    }
+
+    /// Count dictations from last 7 days
+    static func countWeek() -> Int {
+        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())?.timeIntervalSince1970 ?? 0
+        return (try? shared.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM dictations WHERE createdAt >= ?",
+                arguments: [weekAgo]
+            )
+        }) ?? 0
+    }
+
+    /// Sum of all word counts
+    static func totalWords() -> Int {
+        (try? shared.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COALESCE(SUM(wordCount), 0) FROM dictations"
+            )
+        }) ?? 0
+    }
+
+    /// Top apps by dictation count
+    static func topApps(limit: Int = 5) -> [(name: String, bundleID: String?, count: Int)] {
+        (try? shared.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT appName, appBundleID, COUNT(*) as cnt
+                    FROM dictations
+                    WHERE appName IS NOT NULL AND appName != ''
+                    GROUP BY appName
+                    ORDER BY cnt DESC
+                    LIMIT ?
+                    """,
+                arguments: [limit]
+            )
+            return rows.map { row in
+                (
+                    name: row["appName"] as String? ?? "",
+                    bundleID: row["appBundleID"] as String?,
+                    count: row["cnt"] as Int? ?? 0
+                )
+            }
+        }) ?? []
+    }
+
+    /// Activity data for contribution graph (fast GROUP BY, no record loading)
+    /// Returns counts per day for the last N days
+    static func activityByDay(days: Int = 91) -> [String: Int] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date())?.timeIntervalSince1970 ?? 0
+        log.debug("activityByDay: cutoff=\(cutoff), days=\(days)")
+
+        return (try? shared.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT date(createdAt, 'unixepoch', 'localtime') as day, COUNT(*) as cnt
+                    FROM dictations
+                    WHERE createdAt >= ?
+                    GROUP BY day
+                    """,
+                arguments: [cutoff]
+            )
+            log.debug("activityByDay: got \(rows.count) rows")
+            var result: [String: Int] = [:]
+            for row in rows {
+                // SQLite returns Int64 for COUNT(*), need explicit conversion
+                if let day = row["day"] as? String {
+                    let count: Int
+                    if let int64 = row["cnt"] as? Int64 {
+                        count = Int(int64)
+                    } else if let int = row["cnt"] as? Int {
+                        count = int
+                    } else {
+                        continue
+                    }
+                    result[day] = count
+                }
+            }
+            return result
+        }) ?? [:]
+    }
+
+    /// Calculate current streak (consecutive days with dictations)
+    static func calculateStreak() -> Int {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // Get distinct days with dictations (last 365 days max)
+        let yearAgo = calendar.date(byAdding: .day, value: -365, to: today)?.timeIntervalSince1970 ?? 0
+        let daysWithDictations: Set<Date> = (try? shared.read { db in
+            let timestamps = try Double.fetchAll(
+                db,
+                sql: "SELECT DISTINCT date(createdAt, 'unixepoch', 'localtime') as d FROM dictations WHERE createdAt >= ? ORDER BY d DESC",
+                arguments: [yearAgo]
+            )
+            // Actually we need the dates, let me query differently
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT DISTINCT date(createdAt, 'unixepoch', 'localtime') as day
+                    FROM dictations
+                    WHERE createdAt >= ?
+                    """,
+                arguments: [yearAgo]
+            )
+            var dates: Set<Date> = []
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            for row in rows {
+                if let dayStr = row["day"] as? String,
+                   let date = formatter.date(from: dayStr) {
+                    dates.insert(calendar.startOfDay(for: date))
+                }
+            }
+            return dates
+        }) ?? []
+
+        // Count consecutive days from today (or yesterday if no activity today)
+        var checkDate = today
+        if !daysWithDictations.contains(today) {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return 0 }
+            checkDate = yesterday
+        }
+
+        var streak = 0
+        while daysWithDictations.contains(checkDate) {
+            streak += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+            checkDate = prev
+            if streak > 365 { break }
+        }
+        return streak
+    }
+
     // prune() removed - TalkieLive owns writes
 
     /// Preview what would be pruned (count and oldest date) - read-only

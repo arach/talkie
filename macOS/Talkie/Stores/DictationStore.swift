@@ -7,9 +7,9 @@
 
 import Foundation
 import AppKit
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "DictationStore")
+private let logger = Log(.database)
 
 // MARK: - Dictation Metadata
 
@@ -318,7 +318,7 @@ final class DictationStore {
     private var lastSeenID: Int64 = 0
 
     private init() {
-        // Instant load from UserDefaults - no DB query
+        // Instant load from UserDefaults
         cachedCount = UserDefaults.standard.integer(forKey: "dictationCount")
     }
 
@@ -408,6 +408,11 @@ final class DictationStore {
 
     /// Refresh from database (incremental when possible)
     func refresh() {
+        let isFirstLoad = lastSeenID == 0
+        if isFirstLoad {
+            StartupProfiler.shared.mark("dictations.load.start")
+        }
+
         let liveDictations: [LiveDictation]
 
         // Incremental fetch: only get new dictations with ID > lastSeenID
@@ -424,6 +429,7 @@ final class DictationStore {
             // First load: only get recent dictations for fast initial render
             liveDictations = LiveDatabase.recent(limit: Self.initialLoadSize)
             logger.debug("Initial load: loaded \(liveDictations.count) recent dictations (limit: \(Self.initialLoadSize))")
+            StartupProfiler.shared.mark("dictations.load.fetched")
         }
 
         // Update high water mark to highest ID seen
@@ -490,6 +496,10 @@ final class DictationStore {
 
         // Sync cached count with database (handles adds, deletes, prunes)
         cachedCount = LiveDatabase.count()
+
+        if isFirstLoad {
+            StartupProfiler.shared.mark("dictations.load.done")
+        }
     }
 
     /// Build DictationMetadata from LiveDictation, including rich context from metadata dict

@@ -33,9 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // Event monitors (stored to allow cleanup if needed)
     private var controlKeyMonitor: Any?
-    #if DEBUG
-    private var glassToggleMonitor: Any?
-    #endif
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu bar app - keep running when windows are closed
@@ -120,12 +117,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSEvent.removeMonitor(monitor)
             controlKeyMonitor = nil
         }
-        #if DEBUG
-        if let monitor = glassToggleMonitor {
-            NSEvent.removeMonitor(monitor)
-            glassToggleMonitor = nil
-        }
-        #endif
     }
 
     // MARK: - Status Bar
@@ -146,25 +137,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.updateStatusBarBadge(controlPressed: event.modifierFlags.contains(.control))
                 return event
             }
-
-            #if DEBUG
-            // Monitor Command+G for glass mode toggle (Dev builds only)
-            // Note: Debug paste test (⌃⇧⌘P) uses global hotkey via HotKeyManager
-            glassToggleMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-                // Command+G toggles glass mode
-                if flags == .command && event.charactersIgnoringModifiers == "g" {
-                    LiveSettings.shared.glassMode.toggle()
-                    let isGlass = LiveSettings.shared.glassMode
-                    log.info("Glass mode toggled: \(isGlass ? "ON" : "OFF")")
-                    self?.showGlassModeToast(enabled: isGlass)
-                    return nil  // Consume the event
-                }
-
-                return event
-            }
-            #endif
         }
     }
 
@@ -226,14 +198,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(pillItem)
 
         menu.addItem(NSMenuItem.separator())
-
-        #if DEBUG
-        let glassItem = NSMenuItem(title: "Glass Mode", action: #selector(toggleGlassMode), keyEquivalent: "g")
-        glassItem.target = self
-        glassItem.state = LiveSettings.shared.glassMode ? .on : .off
-        menu.addItem(glassItem)
-        menu.addItem(NSMenuItem.separator())
-        #endif
 
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -640,14 +604,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     #if DEBUG
-    @objc private func toggleGlassMode(_ sender: NSMenuItem) {
-        LiveSettings.shared.glassMode.toggle()
-        sender.state = LiveSettings.shared.glassMode ? .on : .off
-        let isGlass = LiveSettings.shared.glassMode
-        log.info("Glass mode toggled: \(isGlass ? "ON" : "OFF")")
-        showGlassModeToast(enabled: isGlass)
-    }
-
     // MARK: - TextInserter Debug Test
 
     /// Debug function to test TextInserter paste in isolation (Command+Shift+P)
@@ -720,78 +676,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 window.orderOut(nil)
             }
         }
-    }
-
-    // MARK: - Glass Mode Toast
-
-    private var glassModeToastWindow: NSWindow?
-    private var toastDismissWorkItem: DispatchWorkItem?
-
-    private func showGlassModeToast(enabled: Bool) {
-        // Cancel any pending dismiss
-        toastDismissWorkItem?.cancel()
-
-        // Dismiss existing toast immediately
-        glassModeToastWindow?.orderOut(nil)
-        glassModeToastWindow = nil
-
-        // Create simple AppKit toast (no SwiftUI to avoid memory issues)
-        let text = enabled ? "✨ Glass Mode" : "◼︎ Legacy Mode"
-
-        let label = NSTextField(labelWithString: text)
-        label.font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .white
-        label.alignment = .center
-        label.sizeToFit()
-
-        let padding: CGFloat = 16
-        let width = label.frame.width + padding * 2
-        let height: CGFloat = 36
-
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
-        container.wantsLayer = true
-        container.layer?.cornerRadius = 10
-        container.layer?.backgroundColor = (enabled ? NSColor.systemBlue : NSColor(white: 0.2, alpha: 1)).withAlphaComponent(0.9).cgColor
-
-        label.frame = NSRect(x: padding, y: (height - label.frame.height) / 2, width: label.frame.width, height: label.frame.height)
-        container.addSubview(label)
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.level = .floating
-        window.contentView = container
-        window.hasShadow = true
-
-        // Center on screen
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            let x = screenFrame.midX - width / 2
-            let y = screenFrame.midY + 100
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-        }
-
-        window.orderFront(nil)
-        glassModeToastWindow = window
-
-        // Auto dismiss after 1.5 seconds
-        let dismissWork = DispatchWorkItem { [weak self] in
-            guard let window = self?.glassModeToastWindow else { return }
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.3
-                window.animator().alphaValue = 0
-            } completionHandler: { [weak self] in
-                self?.glassModeToastWindow?.orderOut(nil)
-                self?.glassModeToastWindow = nil
-            }
-        }
-        toastDismissWorkItem = dismissWork
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: dismissWork)
     }
     #endif
 

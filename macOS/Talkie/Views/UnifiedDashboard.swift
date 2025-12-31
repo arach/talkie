@@ -118,20 +118,37 @@ struct UnifiedDashboard: View {
         }
         .background(Theme.current.background)
         .task {
-            // Load stats and memos from GRDB
-            await memosVM.loadStats()
-            await memosVM.loadMemos()
+            StartupProfiler.shared.mark("home.task.start")
+            // Wait for database to be ready before loading stats
+            DatabaseManager.shared.afterInitialized { [memosVM] in
+                StartupProfiler.shared.mark("home.stats.start")
+                await memosVM.loadStats()
+                StartupProfiler.shared.mark("home.stats.done")
+                await memosVM.loadMemos()
+                StartupProfiler.shared.mark("home.memos.done")
+            }
             loadData()
+            StartupProfiler.shared.mark("home.task.done")
         }
         .onAppear {
+            StartupProfiler.shared.mark("home.onAppear")
             dictationStore.refresh()  // Load dictations from database
+            StartupProfiler.shared.mark("home.dictations.refreshed")
             isLiveRunning = liveState.isRunning
             serviceState = serviceMonitor.state
             pendingRetryCount = LiveDatabase.countNeedsRetry()
         }
-        .onChange(of: dictationStore.dictations.count) { _, _ in
+        .onChange(of: dictationStore.dictations.count) { oldCount, newCount in
             loadData()
             pendingRetryCount = LiveDatabase.countNeedsRetry()
+            // Mark ready when dictations are first populated
+            if oldCount == 0 && newCount > 0 {
+                StartupProfiler.shared.mark("home.dictations.rendered")
+                // Print summary after short delay to capture all milestones
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    StartupProfiler.shared.printSummary()
+                }
+            }
         }
         .onChange(of: memosVM.totalCount) { _, _ in
             loadData()
@@ -648,7 +665,6 @@ struct UnifiedDashboard: View {
         let today = calendar.startOfDay(for: Date())
         let weeksToShow = 13
 
-        // Use pre-aggregated heatmap data from GRDB, add dictations
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
 
@@ -661,11 +677,17 @@ struct UnifiedDashboard: View {
             }
         }
 
-        // Add dictation counts
-        for dictation in dictationStore.dictations {
-            let day = calendar.startOfDay(for: dictation.timestamp)
-            countByDay[day, default: 0] += 1
+        // Add dictation counts from SQL (fast GROUP BY)
+        let dictationActivity = LiveDatabase.activityByDay(days: 91)
+        print("buildActivityData: got \(dictationActivity.count) dictation days")
+        for (dateString, count) in dictationActivity {
+            if let date = dateFormatter.date(from: dateString) {
+                countByDay[calendar.startOfDay(for: date), default: 0] += count
+            } else {
+                print("buildActivityData: failed to parse date '\(dateString)'")
+            }
         }
+        print("buildActivityData: total \(countByDay.count) days with activity")
 
         let maxCount = max(countByDay.values.max() ?? 1, 1)
 
@@ -1245,6 +1267,47 @@ struct EmptyStateView: View {
             isHovered = hovering
         }
     }
+}
+
+// MARK: - Activity Level
+
+enum ActivityLevel: Int {
+    case none = 0
+    case low = 1
+    case medium = 2
+    case high = 3
+    case max = 4
+
+    var color: Color {
+        switch self {
+        case .none: return Color.gray.opacity(0.15)
+        case .low: return Color.green.opacity(0.3)
+        case .medium: return Color.green.opacity(0.5)
+        case .high: return Color.green.opacity(0.7)
+        case .max: return Color.green
+        }
+    }
+
+    static func from(count: Int, max: Int) -> ActivityLevel {
+        if count <= 0 { return .none }
+        if max <= 0 { return .none }
+        let ratio = Double(count) / Double(max)
+        switch ratio {
+        case 0..<0.25: return .low
+        case 0.25..<0.5: return .medium
+        case 0.5..<0.75: return .high
+        default: return .max
+        }
+    }
+}
+
+// MARK: - Day Activity
+
+struct DayActivity: Identifiable {
+    let id = UUID()
+    let date: Date
+    let count: Int
+    let level: ActivityLevel
 }
 
 // MARK: - Compact Action Button

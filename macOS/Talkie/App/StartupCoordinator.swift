@@ -24,6 +24,14 @@ final class StartupCoordinator {
     private var hasInitialized = false
     private var databaseInitialized = false
 
+    /// Set to true to skip async startup work (phases 3 & 4) for performance testing
+    /// This isolates the critical path: load app → load data → render
+    #if DEBUG
+    var skipAsyncStartup = true  // Enable for this branch to test pure render perf
+    #else
+    let skipAsyncStartup = false
+    #endif
+
     private init() {}
 
     // MARK: - Phase 1: Critical (before UI)
@@ -103,6 +111,12 @@ final class StartupCoordinator {
     /// Initialize non-critical services after UI is interactive
     /// This runs with a small delay to let UI settle
     func initializeDeferred() {
+        // Skip for performance testing (isolate critical path)
+        if skipAsyncStartup {
+            logger.info("⏱️ Startup[3]: SKIPPED (skipAsyncStartup=true)")
+            return
+        }
+
         Task { @MainActor in
             let startTime = CFAbsoluteTimeGetCurrent()
             let state = signposter.beginInterval("Phase 3: Deferred")
@@ -147,6 +161,12 @@ final class StartupCoordinator {
     /// Initialize background services that aren't immediately needed
     /// This runs with a larger delay
     func initializeBackground() {
+        // Skip for performance testing (isolate critical path)
+        if skipAsyncStartup {
+            logger.info("⏱️ Startup[4]: SKIPPED (skipAsyncStartup=true)")
+            return
+        }
+
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
 
