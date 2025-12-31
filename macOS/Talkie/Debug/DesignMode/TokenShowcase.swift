@@ -28,7 +28,7 @@ struct TokenValue: Identifiable {
     var isDifferent: Bool { baselineValue != nil }
 }
 
-/// Introspects all token values from a SemanticTokens instance
+/// Extracts all token values using direct property access (Mirror doesn't work with computed properties)
 struct TokenIntrospector {
     let values: [TokenValue]
     let diffCount: Int
@@ -36,29 +36,22 @@ struct TokenIntrospector {
     init(tokens: any SemanticTokens, baseline: any SemanticTokens) {
         var allValues: [TokenValue] = []
 
-        let tokenMirror = Mirror(reflecting: tokens)
-        let baselineMirror = Mirror(reflecting: baseline)
+        // Extract all color tokens
+        allValues.append(contentsOf: Self.extractColors(tokens: tokens, baseline: baseline))
 
-        // Build baseline lookup
-        var baselineMap: [String: Any] = [:]
-        for child in baselineMirror.children {
-            if let label = child.label {
-                baselineMap[label] = child.value
-            }
-        }
+        // Extract all numeric tokens
+        allValues.append(contentsOf: Self.extractNumbers(tokens: tokens, baseline: baseline))
 
-        // Introspect all properties
-        for child in tokenMirror.children {
-            guard let label = child.label else { continue }
-            let baseVal = baselineMap[label]
+        // Extract shadows
+        allValues.append(contentsOf: Self.extractShadows(tokens: tokens, baseline: baseline))
 
-            let extracted = Self.extractValues(
-                path: label,
-                value: child.value,
-                baseline: baseVal
-            )
-            allValues.append(contentsOf: extracted)
-        }
+        // Extract animations
+        allValues.append(contentsOf: Self.extractAnimations(tokens: tokens, baseline: baseline))
+
+        // Extract component tokens (table, card, button)
+        allValues.append(contentsOf: Self.extractTableTokens(tokens: tokens, baseline: baseline))
+        allValues.append(contentsOf: Self.extractCardTokens(tokens: tokens, baseline: baseline))
+        allValues.append(contentsOf: Self.extractButtonTokens(tokens: tokens, baseline: baseline))
 
         self.values = allValues.sorted {
             $0.category < $1.category || ($0.category == $1.category && $0.path < $1.path)
@@ -66,109 +59,229 @@ struct TokenIntrospector {
         self.diffCount = allValues.filter { $0.isDifferent }.count
     }
 
-    private static func extractValues(path: String, value: Any, baseline: Any?) -> [TokenValue] {
-        // Handle Color
-        if let color = value as? Color {
-            let baseColor = baseline as? Color
-            let isDiff = baseColor != nil && !colorsEqual(color, baseColor!)
-            return [TokenValue(
-                path: path,
-                category: categoryFor(path),
-                value: colorDescription(color),
-                preview: AnyView(colorPreview(color)),
-                baselineValue: isDiff ? colorDescription(baseColor!) : nil,
-                baselinePreview: isDiff ? AnyView(colorPreview(baseColor!)) : nil
-            )]
-        }
+    // MARK: - Color Extraction
 
-        // Handle CGFloat
-        if let num = value as? CGFloat {
-            let baseNum = baseline as? CGFloat
-            let isDiff = baseNum != nil && abs(num - baseNum!) > 0.01
-            return [TokenValue(
+    private static func extractColors(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
+        let colorProps: [(String, String, Color, Color)] = [
+            ("bgCanvas", "Backgrounds", tokens.bgCanvas, baseline.bgCanvas),
+            ("bgSurface", "Backgrounds", tokens.bgSurface, baseline.bgSurface),
+            ("bgElevated", "Backgrounds", tokens.bgElevated, baseline.bgElevated),
+            ("bgHover", "Backgrounds", tokens.bgHover, baseline.bgHover),
+            ("bgSelected", "Backgrounds", tokens.bgSelected, baseline.bgSelected),
+            ("fgPrimary", "Foregrounds", tokens.fgPrimary, baseline.fgPrimary),
+            ("fgSecondary", "Foregrounds", tokens.fgSecondary, baseline.fgSecondary),
+            ("fgMuted", "Foregrounds", tokens.fgMuted, baseline.fgMuted),
+            ("borderDefault", "Borders", tokens.borderDefault, baseline.borderDefault),
+            ("borderSubtle", "Borders", tokens.borderSubtle, baseline.borderSubtle),
+            ("borderFocused", "Borders", tokens.borderFocused, baseline.borderFocused),
+            ("accent", "Accent", tokens.accent, baseline.accent),
+            ("accentHover", "Accent", tokens.accentHover, baseline.accentHover),
+            ("accentSubtle", "Accent", tokens.accentSubtle, baseline.accentSubtle),
+            ("success", "Semantic", tokens.success, baseline.success),
+            ("warning", "Semantic", tokens.warning, baseline.warning),
+            ("error", "Semantic", tokens.error, baseline.error),
+            ("highlightHover", "Highlights", tokens.highlightHover, baseline.highlightHover),
+            ("highlightActive", "Highlights", tokens.highlightActive, baseline.highlightActive),
+            ("highlightFocus", "Highlights", tokens.highlightFocus, baseline.highlightFocus),
+        ]
+
+        return colorProps.map { (path, category, current, base) in
+            let isDiff = !colorsEqual(current, base)
+            return TokenValue(
                 path: path,
-                category: categoryFor(path),
-                value: formatNumber(num),
+                category: category,
+                value: colorDescription(current),
+                preview: AnyView(colorPreview(current)),
+                baselineValue: isDiff ? colorDescription(base) : nil,
+                baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil
+            )
+        }
+    }
+
+    // MARK: - Numeric Extraction
+
+    private static func extractNumbers(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
+        let numProps: [(String, String, CGFloat, CGFloat)] = [
+            ("radiusButton", "Radius", tokens.radiusButton, baseline.radiusButton),
+            ("radiusCard", "Radius", tokens.radiusCard, baseline.radiusCard),
+            ("radiusModal", "Radius", tokens.radiusModal, baseline.radiusModal),
+            ("radiusPill", "Radius", tokens.radiusPill, baseline.radiusPill),
+        ]
+
+        return numProps.map { (path, category, current, base) in
+            let isDiff = abs(current - base) > 0.5
+            return TokenValue(
+                path: path,
+                category: category,
+                value: formatNumber(current),
                 preview: nil,
-                baselineValue: isDiff ? formatNumber(baseNum!) : nil,
+                baselineValue: isDiff ? formatNumber(base) : nil,
                 baselinePreview: nil
-            )]
+            )
         }
+    }
 
-        // Handle Animation
-        if value is Animation {
-            let currDesc = String(describing: value)
-            let baseDesc = baseline.map { String(describing: $0) }
-            let isDiff = baseDesc != nil && currDesc != baseDesc!
-            return [TokenValue(
+    // MARK: - Shadow Extraction
+
+    private static func extractShadows(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
+        let shadowProps: [(String, ShadowPrimitive, ShadowPrimitive)] = [
+            ("shadowCard", tokens.shadowCard, baseline.shadowCard),
+            ("shadowPopover", tokens.shadowPopover, baseline.shadowPopover),
+            ("shadowHover", tokens.shadowHover, baseline.shadowHover),
+        ]
+
+        return shadowProps.map { (path, current, base) in
+            let isDiff = !shadowsEqual(current, base)
+            return TokenValue(
+                path: path,
+                category: "Shadows",
+                value: shadowDescription(current),
+                preview: nil,
+                baselineValue: isDiff ? shadowDescription(base) : nil,
+                baselinePreview: nil
+            )
+        }
+    }
+
+    // MARK: - Animation Extraction
+
+    private static func extractAnimations(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
+        let animProps: [(String, Animation, Animation)] = [
+            ("animationFast", tokens.animationFast, baseline.animationFast),
+            ("animationDefault", tokens.animationDefault, baseline.animationDefault),
+            ("animationSpring", tokens.animationSpring, baseline.animationSpring),
+        ]
+
+        return animProps.map { (path, current, base) in
+            let currDesc = String(describing: current)
+            let baseDesc = String(describing: base)
+            let isDiff = currDesc != baseDesc
+            return TokenValue(
                 path: path,
                 category: "Animation",
                 value: animationName(currDesc),
                 preview: nil,
-                baselineValue: isDiff ? animationName(baseDesc!) : nil,
+                baselineValue: isDiff ? animationName(baseDesc) : nil,
                 baselinePreview: nil
-            )]
+            )
         }
-
-        // Handle ShadowPrimitive
-        if let shadow = value as? ShadowPrimitive {
-            let baseShadow = baseline as? ShadowPrimitive
-            let isDiff = baseShadow != nil && !shadowsEqual(shadow, baseShadow!)
-            return [TokenValue(
-                path: path,
-                category: "Shadows",
-                value: shadowDescription(shadow),
-                preview: nil,
-                baselineValue: isDiff ? shadowDescription(baseShadow!) : nil,
-                baselinePreview: nil
-            )]
-        }
-
-        // Handle nested structs (TableTokens, CardTokens, ButtonTokens, etc.)
-        let mirror = Mirror(reflecting: value)
-        if mirror.displayStyle == .struct && !mirror.children.isEmpty {
-            var nestedValues: [TokenValue] = []
-
-            // Build baseline lookup for nested struct
-            var nestedBaselineMap: [String: Any] = [:]
-            if let baselineVal = baseline {
-                let baseMirror = Mirror(reflecting: baselineVal)
-                for child in baseMirror.children {
-                    if let label = child.label {
-                        nestedBaselineMap[label] = child.value
-                    }
-                }
-            }
-
-            for child in mirror.children {
-                guard let label = child.label else { continue }
-                let nestedPath = "\(path).\(label)"
-                let nestedBaseline = nestedBaselineMap[label]
-                nestedValues.append(contentsOf: extractValues(
-                    path: nestedPath,
-                    value: child.value,
-                    baseline: nestedBaseline
-                ))
-            }
-            return nestedValues
-        }
-
-        return []
     }
 
-    private static func categoryFor(_ path: String) -> String {
-        if path.hasPrefix("bg") { return "Backgrounds" }
-        if path.hasPrefix("fg") { return "Foregrounds" }
-        if path.hasPrefix("border") { return "Borders" }
-        if path.hasPrefix("accent") { return "Accent" }
-        if path.hasPrefix("shadow") { return "Shadows" }
-        if path.hasPrefix("radius") { return "Radius" }
-        if path.hasPrefix("animation") { return "Animation" }
-        if path.hasPrefix("highlight") { return "Highlights" }
-        if path.hasPrefix("success") || path.hasPrefix("warning") || path.hasPrefix("error") { return "Semantic" }
-        if path.contains(".") { return "Components" }
-        return "Other"
+    // MARK: - Table Token Extraction
+
+    private static func extractTableTokens(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
+        let t = tokens.table
+        let b = baseline.table
+        var values: [TokenValue] = []
+
+        // Numbers
+        if abs(t.rowHeight - b.rowHeight) > 0.5 {
+            values.append(TokenValue(path: "table.rowHeight", category: "Components", value: formatNumber(t.rowHeight), preview: nil, baselineValue: formatNumber(b.rowHeight), baselinePreview: nil))
+        } else {
+            values.append(TokenValue(path: "table.rowHeight", category: "Components", value: formatNumber(t.rowHeight), preview: nil, baselineValue: nil, baselinePreview: nil))
+        }
+        if abs(t.rowPadding - b.rowPadding) > 0.5 {
+            values.append(TokenValue(path: "table.rowPadding", category: "Components", value: formatNumber(t.rowPadding), preview: nil, baselineValue: formatNumber(b.rowPadding), baselinePreview: nil))
+        } else {
+            values.append(TokenValue(path: "table.rowPadding", category: "Components", value: formatNumber(t.rowPadding), preview: nil, baselineValue: nil, baselinePreview: nil))
+        }
+        if abs(t.rowSpacing - b.rowSpacing) > 0.5 {
+            values.append(TokenValue(path: "table.rowSpacing", category: "Components", value: formatNumber(t.rowSpacing), preview: nil, baselineValue: formatNumber(b.rowSpacing), baselinePreview: nil))
+        } else {
+            values.append(TokenValue(path: "table.rowSpacing", category: "Components", value: formatNumber(t.rowSpacing), preview: nil, baselineValue: nil, baselinePreview: nil))
+        }
+
+        // Colors
+        let colorProps: [(String, Color, Color)] = [
+            ("table.rowHover", t.rowHover, b.rowHover),
+            ("table.rowSelected", t.rowSelected, b.rowSelected),
+            ("table.rowAlt", t.rowAlt, b.rowAlt),
+            ("table.divider", t.divider, b.divider),
+        ]
+        for (path, curr, base) in colorProps {
+            let isDiff = !colorsEqual(curr, base)
+            values.append(TokenValue(path: path, category: "Components", value: colorDescription(curr), preview: AnyView(colorPreview(curr)), baselineValue: isDiff ? colorDescription(base) : nil, baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil))
+        }
+
+        return values
     }
+
+    // MARK: - Card Token Extraction
+
+    private static func extractCardTokens(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
+        let c = tokens.card
+        let b = baseline.card
+        var values: [TokenValue] = []
+
+        // Numbers
+        let numProps: [(String, CGFloat, CGFloat)] = [
+            ("card.radius", c.radius, b.radius),
+            ("card.padding", c.padding, b.padding),
+            ("card.borderWidth", c.borderWidth, b.borderWidth),
+        ]
+        for (path, curr, base) in numProps {
+            let isDiff = abs(curr - base) > 0.1
+            values.append(TokenValue(path: path, category: "Components", value: formatNumber(curr), preview: nil, baselineValue: isDiff ? formatNumber(base) : nil, baselinePreview: nil))
+        }
+
+        // Colors
+        let colorProps: [(String, Color, Color)] = [
+            ("card.background", c.background, b.background),
+            ("card.backgroundHover", c.backgroundHover, b.backgroundHover),
+            ("card.border", c.border, b.border),
+        ]
+        for (path, curr, base) in colorProps {
+            let isDiff = !colorsEqual(curr, base)
+            values.append(TokenValue(path: path, category: "Components", value: colorDescription(curr), preview: AnyView(colorPreview(curr)), baselineValue: isDiff ? colorDescription(base) : nil, baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil))
+        }
+
+        // Shadows
+        let isDiffShadow = !shadowsEqual(c.shadow, b.shadow)
+        values.append(TokenValue(path: "card.shadow", category: "Components", value: shadowDescription(c.shadow), preview: nil, baselineValue: isDiffShadow ? shadowDescription(b.shadow) : nil, baselinePreview: nil))
+
+        return values
+    }
+
+    // MARK: - Button Token Extraction
+
+    private static func extractButtonTokens(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
+        let btn = tokens.button
+        let b = baseline.button
+        var values: [TokenValue] = []
+
+        // Colors
+        let colorProps: [(String, Color, Color)] = [
+            ("button.primaryBg", btn.primaryBg, b.primaryBg),
+            ("button.primaryFg", btn.primaryFg, b.primaryFg),
+            ("button.primaryHover", btn.primaryHover, b.primaryHover),
+            ("button.secondaryBg", btn.secondaryBg, b.secondaryBg),
+            ("button.secondaryFg", btn.secondaryFg, b.secondaryFg),
+            ("button.secondaryBorder", btn.secondaryBorder, b.secondaryBorder),
+            ("button.secondaryHover", btn.secondaryHover, b.secondaryHover),
+        ]
+        for (path, curr, base) in colorProps {
+            let isDiff = !colorsEqual(curr, base)
+            values.append(TokenValue(path: path, category: "Components", value: colorDescription(curr), preview: AnyView(colorPreview(curr)), baselineValue: isDiff ? colorDescription(base) : nil, baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil))
+        }
+
+        // Numbers
+        let numProps: [(String, CGFloat, CGFloat)] = [
+            ("button.primaryRadius", btn.primaryRadius, b.primaryRadius),
+            ("button.heightSm", btn.heightSm, b.heightSm),
+            ("button.heightMd", btn.heightMd, b.heightMd),
+            ("button.heightLg", btn.heightLg, b.heightLg),
+            ("button.paddingH", btn.paddingH, b.paddingH),
+            ("button.pressScale", btn.pressScale, b.pressScale),
+        ]
+        for (path, curr, base) in numProps {
+            let isDiff = abs(curr - base) > 0.01
+            values.append(TokenValue(path: path, category: "Components", value: formatNumber(curr), preview: nil, baselineValue: isDiff ? formatNumber(base) : nil, baselinePreview: nil))
+        }
+
+        return values
+    }
+
+    // MARK: - Helpers
 
     private static func colorsEqual(_ a: Color, _ b: Color) -> Bool {
         let nsA = NSColor(a)
