@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		461BECBB584E428C90EC628C /* MigrationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E796CCF5E6CA4B0C91E0797F /* MigrationManager.swift */; };
 		00EBB818C60D4CF7A777D71A /* StartupLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
@@ -246,6 +247,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E796CCF5E6CA4B0C91E0797F /* MigrationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationManager.swift; sourceTree = "<group>"; };
 		5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupLogger.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
@@ -583,6 +585,7 @@
 		45E7D6C1EFE19F9517B5BEA1 /* Migration */ = {
 			isa = PBXGroup;
 			children = (
+				E796CCF5E6CA4B0C91E0797F /* MigrationManager.swift */,
 				6E290B0FBD0158D68EC8450F /* MigrationView.swift */,
 			);
 			path = Migration;
@@ -1157,6 +1160,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				461BECBB584E428C90EC628C /* MigrationManager.swift in Sources */,
 				00EBB818C60D4CF7A777D71A /* StartupLogger.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,

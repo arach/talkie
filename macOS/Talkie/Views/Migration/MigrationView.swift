@@ -20,6 +20,7 @@ struct MigrationView: View {
     @State private var successCount = 0
     @State private var failedCount = 0
     @State private var errors: [Error] = []
+    @State private var coreDataCount = 0
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -27,43 +28,62 @@ struct MigrationView: View {
             VStack(spacing: Spacing.sm) {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 48))
-                    .foregroundColor(.accentColor)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.accentColor, .accentColor.opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
 
                 Text("Database Migration")
                     .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(Theme.current.foreground)
 
                 Text("Migrate your memos to the new high-performance database")
                     .font(.system(size: 13))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
                     .multilineTextAlignment(.center)
+
+                if coreDataCount > 0 {
+                    Text("\(coreDataCount) memo\(coreDataCount == 1 ? "" : "s") to migrate")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.accentColor)
+                        .padding(.top, 4)
+                }
             }
 
             Divider()
+                .background(Theme.current.border)
 
             if !migrationComplete {
                 // Pre-migration info
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    InfoRow(
-                        icon: "checkmark.circle",
+                    MigrationInfoRow(
+                        icon: "checkmark.shield",
                         title: "Safe Migration",
                         description: "Your original data will be preserved during migration"
                     )
 
-                    InfoRow(
+                    MigrationInfoRow(
                         icon: "bolt.fill",
                         title: "Performance Boost",
                         description: "New database is 10-20x faster with proper indexing"
                     )
 
-                    InfoRow(
+                    MigrationInfoRow(
                         icon: "doc.on.doc",
                         title: "All Data Included",
                         description: "Memos, transcripts, workflows, and audio files"
                     )
                 }
                 .padding(Spacing.md)
-                .background(TalkieTheme.surfaceCard)
+                .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.md)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .strokeBorder(Theme.current.border.opacity(0.5), lineWidth: 1)
+                )
 
                 Spacer()
 
@@ -71,10 +91,12 @@ struct MigrationView: View {
                 if isMigrating {
                     VStack(spacing: Spacing.sm) {
                         ProgressView()
+                            .scaleEffect(1.2)
                         Text("Migrating your memos...")
                             .font(.system(size: 13))
-                            .foregroundColor(TalkieTheme.textMuted)
+                            .foregroundColor(Theme.current.foregroundSecondary)
                     }
+                    .frame(height: 60)
                 } else {
                     Button(action: startMigration) {
                         Text("Start Migration")
@@ -86,6 +108,13 @@ struct MigrationView: View {
                             .cornerRadius(CornerRadius.md)
                     }
                     .buttonStyle(.plain)
+
+                    Button("Skip for Now") {
+                        dismissMigration()
+                    }
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .padding(.top, 4)
                 }
 
             } else {
@@ -99,10 +128,11 @@ struct MigrationView: View {
 
                         Text("Migration Complete!")
                             .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Theme.current.foreground)
 
                         Text("Successfully migrated \(successCount) memos")
                             .font(.system(size: 13))
-                            .foregroundColor(TalkieTheme.textSecondary)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                     } else {
                         // Partial success
@@ -112,13 +142,14 @@ struct MigrationView: View {
 
                         Text("Migration Completed with Warnings")
                             .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Theme.current.foreground)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("✅ Success: \(successCount) memos")
+                            Label("\(successCount) migrated", systemImage: "checkmark.circle.fill")
                                 .font(.system(size: 13))
                                 .foregroundColor(.green)
 
-                            Text("⚠️ Failed: \(failedCount) memos")
+                            Label("\(failedCount) failed", systemImage: "exclamationmark.triangle.fill")
                                 .font(.system(size: 13))
                                 .foregroundColor(.orange)
                         }
@@ -129,13 +160,13 @@ struct MigrationView: View {
                                     ForEach(0..<min(errors.count, 5), id: \.self) { index in
                                         Text("• \(errors[index].localizedDescription)")
                                             .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(TalkieTheme.textMuted)
+                                            .foregroundColor(Theme.current.foregroundSecondary)
                                     }
                                 }
                             }
                             .frame(maxHeight: 100)
                             .padding(Spacing.sm)
-                            .background(TalkieTheme.surfaceCard)
+                            .background(Theme.current.surface1)
                             .cornerRadius(CornerRadius.sm)
                         }
                     }
@@ -143,7 +174,6 @@ struct MigrationView: View {
                     Spacer()
 
                     Button("Continue to App") {
-                        // TODO: Navigate to main app view
                         dismissMigration()
                     }
                     .font(.system(size: 14, weight: .semibold))
@@ -158,7 +188,21 @@ struct MigrationView: View {
         }
         .padding(Spacing.xl)
         .frame(width: 500, height: 600)
-        .background(MidnightSurface.content)
+        .background(Theme.current.surfaceBase)
+        .onAppear {
+            countCoreDataMemos()
+        }
+    }
+
+    private func countCoreDataMemos() {
+        let fetchRequest = NSFetchRequest<NSNumber>(entityName: "VoiceMemo")
+        fetchRequest.resultType = .countResultType
+        do {
+            let results = try coreDataContext.fetch(fetchRequest)
+            coreDataCount = results.first?.intValue ?? 0
+        } catch {
+            coreDataCount = 0
+        }
     }
 
     // MARK: - Actions
@@ -194,9 +238,9 @@ struct MigrationView: View {
     }
 }
 
-// MARK: - Info Row
+// MARK: - Migration Info Row
 
-struct InfoRow: View {
+private struct MigrationInfoRow: View {
     let icon: String
     let title: String
     let description: String
@@ -211,10 +255,11 @@ struct InfoRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.current.foreground)
 
                 Text(description)
                     .font(.system(size: 12))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(Theme.current.foregroundSecondary)
             }
         }
     }

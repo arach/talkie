@@ -180,7 +180,7 @@ struct CompleteView: View {
                         .foregroundColor(colors.textTertiary)
 
                     // Pill state transition: minimized → expanded
-                    HStack(alignment: .bottom, spacing: Spacing.md) {
+                    HStack(spacing: Spacing.md) {
                         // Minimized sliver
                         VStack(spacing: 4) {
                             RoundedRectangle(cornerRadius: 2)
@@ -194,7 +194,6 @@ struct CompleteView: View {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 10))
                             .foregroundColor(colors.textTertiary)
-                            .padding(.bottom, 10)  // Align with captions
 
                         // Expanded REC state
                         VStack(spacing: 4) {
@@ -210,7 +209,7 @@ struct CompleteView: View {
                             .padding(.vertical, 5)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(colors.surfaceCard)
+                                    .fill(colors.border.opacity(0.3))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(colors.border, lineWidth: 0.5)
@@ -429,19 +428,19 @@ private struct SimplePillDemo: View {
                 if isExpanded {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(colors.textSecondary)
+                            .fill(colors.textPrimary)
                             .frame(width: 6, height: 6)
 
                         Text("REC")
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(1)
-                            .foregroundColor(colors.textSecondary)
+                            .foregroundColor(colors.textTertiary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(colors.surfaceCard)
+                            .fill(colors.border.opacity(0.5))
                     )
                 } else {
                     RoundedRectangle(cornerRadius: 1)
@@ -492,16 +491,30 @@ private struct CelebrationView: View {
     }
 }
 
-#Preview("Core Mode") {
+#Preview("Core Mode - Dark") {
     CompleteView(onComplete: {})
         .frame(width: 680, height: 520)
         .preferredColorScheme(.dark)
 }
 
-#Preview("Live Mode") {
+#Preview("Core Mode - Light") {
+    CompleteView(onComplete: {})
+        .frame(width: 680, height: 520)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Live Mode - Dark") {
     let manager = OnboardingManager.shared
     manager.enableLiveMode = true
     return CompleteView(onComplete: {})
         .frame(width: 680, height: 520)
         .preferredColorScheme(.dark)
+}
+
+#Preview("Live Mode - Light") {
+    let manager = OnboardingManager.shared
+    manager.enableLiveMode = true
+    return CompleteView(onComplete: {})
+        .frame(width: 680, height: 520)
+        .preferredColorScheme(.light)
 }

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import CoreData
 import os
 
 private let signposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
@@ -220,12 +221,6 @@ struct MigrationGateView: View {
                 // Show migration UI
                 MigrationView()
                     .environment(\.managedObjectContext, coreDataContext)
-                    .onDisappear {
-                        // After migration completes, reload the view
-                        checkComplete = false
-                        Self.hasStartedInit = false  // Allow re-init after migration
-                        checkMigrationStatus()
-                    }
             } else {
                 // Show main app
                 // Database initialization and CloudKit sync are handled by StartupCoordinator
@@ -238,10 +233,12 @@ struct MigrationGateView: View {
             checkMigrationStatus()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MigrationCompleted"))) { _ in
-            print("📢 [MigrationGate] Received migration completed notification, refreshing...")
-            checkComplete = false
-            Self.hasStartedInit = false  // Allow re-init after migration
-            checkMigrationStatus()
+            print("📢 [MigrationGate] Received migration completed notification, transitioning to app...")
+            // Migration is complete - go directly to main app
+            // No need to re-run initialization, just update state
+            showStartupView = false
+            needsMigration = false
+            checkComplete = true
         }
     }
 
@@ -268,7 +265,21 @@ struct MigrationGateView: View {
 
             // Check migration status
             signposter.emitEvent("Check Migration")
-            let migrationComplete = UserDefaults.standard.bool(forKey: "grdb_migration_complete")
+            var migrationComplete = UserDefaults.standard.bool(forKey: "grdb_migration_complete")
+
+            // Fresh install detection: if Core Data is empty, skip migration entirely
+            // CloudKit sync will populate GRDB from the cloud
+            if !migrationComplete {
+                let coreDataCount = countCoreDataMemos()
+                if coreDataCount == 0 {
+                    // Fresh install - no local data to migrate
+                    // Mark migration as complete so CloudKit sync can handle it
+                    UserDefaults.standard.set(true, forKey: "grdb_migration_complete")
+                    migrationComplete = true
+                    print("[App] Fresh install detected - skipping migration, CloudKit will sync")
+                }
+            }
+
             needsMigration = !migrationComplete
             checkComplete = true
 
@@ -278,6 +289,19 @@ struct MigrationGateView: View {
             print("[App] GRDB \(dbStatus) | \(migrationStatus)")
 
             signposter.endInterval("UI First Render", uiState)
+        }
+    }
+
+    /// Quick count of Core Data memos to detect fresh install
+    private func countCoreDataMemos() -> Int {
+        let fetchRequest = NSFetchRequest<NSNumber>(entityName: "VoiceMemo")
+        fetchRequest.resultType = .countResultType
+        do {
+            let results = try coreDataContext.fetch(fetchRequest)
+            return results.first?.intValue ?? 0
+        } catch {
+            print("[App] Failed to count Core Data memos: \(error)")
+            return 0
         }
     }
 }

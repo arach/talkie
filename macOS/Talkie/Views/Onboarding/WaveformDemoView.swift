@@ -12,12 +12,13 @@ import SwiftUI
 
 struct WaveformDemoView: View {
     let levels: [CGFloat]
+    let colors: OnboardingColors
 
     var body: some View {
         HStack(spacing: 1) {
             ForEach(0..<levels.count, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 0.5)
-                    .fill(Color.white.opacity(0.35 + Double(levels[i]) * 0.4))
+                    .fill(colors.textPrimary.opacity(0.35 + Double(levels[i]) * 0.4))
                     .frame(width: 1.5, height: max(2, 10 * levels[i]))
             }
         }
@@ -25,10 +26,10 @@ struct WaveformDemoView: View {
         .padding(.vertical, 3)
         .background(
             Capsule()
-                .fill(TalkieTheme.textTertiary)
+                .fill(colors.border.opacity(0.3))
                 .overlay(
                     Capsule()
-                        .stroke(TalkieTheme.divider, lineWidth: 0.5)
+                        .stroke(colors.border, lineWidth: 0.5)
                 )
         )
     }

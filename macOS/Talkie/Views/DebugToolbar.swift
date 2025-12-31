@@ -295,12 +295,26 @@ struct ListViewDebugContent: View {
             // 5. Audio Testing
             AudioPaddingTestDebugContent()
 
-            // 5. Danger zone (platform-wide destructive utils)
+            // 5. Data Management
+            DebugSection(title: "DATA") {
+                VStack(spacing: 4) {
+                    DebugActionButton(icon: "arrow.triangle.2.circlepath", label: "Show Migration") {
+                        MigrationManager.shared.showMigration()
+                    }
+                }
+            }
+
+            // 6. Danger zone (platform-wide destructive utils)
             DebugSection(title: "RESET") {
                 VStack(spacing: 4) {
                     DebugActionButton(icon: "arrow.counterclockwise", label: "Onboarding", destructive: true) {
                         confirmationMessage = "Reset onboarding state?"
                         confirmationAction = { resetOnboarding() }
+                        showConfirmation = true
+                    }
+                    DebugActionButton(icon: "arrow.counterclockwise", label: "Migration Flag", destructive: true) {
+                        confirmationMessage = "Reset migration flag? App will check for migration on next launch."
+                        confirmationAction = { resetMigrationFlag() }
                         showConfirmation = true
                     }
                     DebugActionButton(icon: "trash", label: "UserDefaults", destructive: true) {
@@ -382,6 +396,11 @@ struct ListViewDebugContent: View {
             UserDefaults.standard.synchronize()
             SystemEventManager.shared.logSync(.system, "UserDefaults cleared")
         }
+    }
+
+    private func resetMigrationFlag() {
+        UserDefaults.standard.removeObject(forKey: "grdb_migration_complete")
+        SystemEventManager.shared.logSync(.system, "Migration flag reset - will check on next launch")
     }
 
     private func sendTestNotification() {

@@ -69,25 +69,25 @@ struct PillDemoAnimation: View {
 
     var body: some View {
         ZStack {
-            // Screen mockup background
+            // Screen mockup background - uses adaptive colors
             RoundedRectangle(cornerRadius: 10)
                 .fill(
                     LinearGradient(
-                        colors: [TalkieTheme.textTertiary, TalkieTheme.textSecondary],
+                        colors: [colors.surfaceCard, colors.background],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(TalkieTheme.divider, lineWidth: 1)
+                        .stroke(colors.border, lineWidth: 1)
                 )
                 .clipped()  // Clip content to viewport
 
             // Waveform overlay at top during recording (clipped to viewport)
             if showWaveform {
                 VStack {
-                    WaveformDemoView(levels: waveformLevels)
+                    WaveformDemoView(levels: waveformLevels, colors: colors)
                         .padding(.top, 10)  // More room from top edge
                     Spacer()
                 }
@@ -100,7 +100,7 @@ struct PillDemoAnimation: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        KeyboardShortcutView()
+                        KeyboardShortcutView(colors: colors)
                             .padding(.trailing, 8)
                             .padding(.bottom, 25)
                     }
@@ -121,12 +121,12 @@ struct PillDemoAnimation: View {
                                     .scaleEffect(pulseScale)
                                 Text(formatTime(recordingTime))
                                     .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.8))
+                                    .foregroundColor(colors.textPrimary.opacity(0.9))
                             } else if isProcessing {
                                 HStack(spacing: 2) {
                                     ForEach(0..<3) { i in
                                         Circle()
-                                            .fill(Color.white.opacity(i < dotsCount ? 0.8 : 0.2))
+                                            .fill(colors.textPrimary.opacity(i < dotsCount ? 0.8 : 0.2))
                                             .frame(width: 3, height: 3)
                                     }
                                 }
@@ -138,12 +138,12 @@ struct PillDemoAnimation: View {
                                     .frame(width: 40)  // Fixed width to match timer
                             } else {
                                 Circle()
-                                    .fill(Color.white)
+                                    .fill(colors.textPrimary)
                                     .frame(width: 6, height: 6)
                                 Text("REC")
                                     .font(.system(size: 9, weight: .semibold))
                                     .tracking(1)
-                                    .foregroundColor(TalkieTheme.textTertiary)
+                                    .foregroundColor(colors.textTertiary)
                             }
                         }
                         .frame(height: 18)  // Fixed height to prevent jumping
@@ -151,10 +151,10 @@ struct PillDemoAnimation: View {
                         .padding(.vertical, 5)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(isRecordingExpanded ? Color.red.opacity(0.2) : TalkieTheme.divider)
+                                .fill(isRecordingExpanded ? Color.red.opacity(0.2) : colors.border.opacity(0.5))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 4)
-                                        .stroke(isRecordingExpanded ? Color.red.opacity(0.3) : TalkieTheme.surfaceCard, lineWidth: 0.5)
+                                        .stroke(isRecordingExpanded ? Color.red.opacity(0.3) : colors.border, lineWidth: 0.5)
                                 )
                         )
                         .transition(.scale.combined(with: .opacity))
@@ -165,7 +165,7 @@ struct PillDemoAnimation: View {
                             .transition(.scale.combined(with: .opacity))
                     } else {
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(TalkieTheme.textMuted)
+                            .fill(colors.textTertiary)
                             .frame(width: 24, height: 2)
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -177,15 +177,15 @@ struct PillDemoAnimation: View {
             ZStack {
                 // Click ripple effect (expanding circle that fades)
                 Circle()
-                    .stroke(Color.white, lineWidth: 1.5)
+                    .stroke(colors.textPrimary, lineWidth: 1.5)
                     .frame(width: 16, height: 16)
                     .scaleEffect(clickRippleScale)
                     .opacity(clickRippleOpacity)
 
                 Image(systemName: "cursorarrow")
                     .font(.system(size: 16))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 2, x: 1, y: 1)
+                    .foregroundColor(colors.textPrimary)
+                    .shadow(color: colors.background.opacity(0.8), radius: 2, x: 1, y: 1)
             }
             .opacity(cursorOpacity)
             .offset(x: cursorOffsetX, y: cursorOffsetY)

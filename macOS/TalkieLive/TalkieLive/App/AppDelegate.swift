@@ -502,6 +502,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     nonisolated func menuWillOpen(_ menu: NSMenu) {
         Task { @MainActor in
             self.updateRecentMenu()
+            self.updatePermissionsMenuItem()
+        }
+    }
+
+    private func updatePermissionsMenuItem() {
+        guard let menu = statusItem.menu,
+              let permissionsItem = menu.items.first(where: { $0.action == #selector(showPermissions) }) else {
+            return
+        }
+
+        // Refresh permission state and update menu item
+        PermissionManager.shared.refreshAll()
+        if PermissionManager.shared.allRequiredGranted {
+            permissionsItem.title = "Permissions..."
+        } else {
+            permissionsItem.title = "⚠️ Permissions..."
         }
     }
 

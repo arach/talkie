@@ -39,7 +39,7 @@ struct LiveModePitchView: View {
                         }
 
                     // Keyboard shortcut display
-                    KeyboardShortcutView()
+                    KeyboardShortcutView(colors: colors)
                         .padding(.top, Spacing.xs)
                 }
             },

@@ -92,6 +92,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         Self.parseAndSetThemeEarly()
     }
 
+    // MARK: - Window Lifecycle
+
+    /// Prevent macOS from creating untitled windows on launch
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        return false
+    }
+
+    /// Handle dock click - show existing window instead of creating new one
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            // No visible windows - show the main window
+            if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
+        return true
+    }
+
     /// Parse --theme argument early and set UserDefaults before SettingsManager initializes
     private static func parseAndSetThemeEarly() {
         let args = ProcessInfo.processInfo.arguments
