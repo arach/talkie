@@ -124,76 +124,135 @@ struct TokenDiff {
             }
         }
 
-        // Handle TableTokens (recurse into nested struct)
-        if let currTable = current as? TableTokens, let baseTable = baseline as? TableTokens {
-            return compareTableTokens(currTable, baseTable)
-        }
+        // Handle any struct type by recursing with Mirror
+        // This catches TableTokens, CardTokens, ButtonTokens, and any future nested types
+        let currentMirror = Mirror(reflecting: current)
+        let baselineMirror = Mirror(reflecting: baseline)
 
-        // Handle CardTokens
-        if let currCard = current as? CardTokens, let baseCard = baseline as? CardTokens {
-            return compareCardTokens(currCard, baseCard)
-        }
-
-        // Handle ButtonTokens
-        if let currBtn = current as? ButtonTokens, let baseBtn = baseline as? ButtonTokens {
-            return compareButtonTokens(currBtn, baseBtn)
+        // If it's a struct with children, recurse into it
+        if currentMirror.displayStyle == .struct && !currentMirror.children.isEmpty {
+            return compareNestedStruct(path: path, current: current, baseline: baseline)
         }
 
         return nil
     }
 
-    private static func compareTableTokens(_ curr: TableTokens, _ base: TableTokens) -> [TokenDelta]? {
+    /// Recursively compare nested structs using Mirror introspection
+    private static func compareNestedStruct(path: String, current: Any, baseline: Any) -> [TokenDelta]? {
         var deltas: [TokenDelta] = []
 
-        if abs(curr.rowHeight - base.rowHeight) > 0.5 {
-            deltas.append(TokenDelta(path: "table.rowHeight", category: "Components", defaultValue: "\(Int(base.rowHeight))", currentValue: "\(Int(curr.rowHeight))", defaultPreview: nil, currentPreview: nil))
+        let currentMirror = Mirror(reflecting: current)
+        let baselineMirror = Mirror(reflecting: baseline)
+
+        // Build baseline lookup for this nested struct
+        var baselineValues: [String: Any] = [:]
+        for child in baselineMirror.children {
+            if let label = child.label {
+                baselineValues[label] = child.value
+            }
         }
-        if abs(curr.rowPadding - base.rowPadding) > 0.5 {
-            deltas.append(TokenDelta(path: "table.rowPadding", category: "Components", defaultValue: "\(Int(base.rowPadding))", currentValue: "\(Int(curr.rowPadding))", defaultPreview: nil, currentPreview: nil))
-        }
-        if !colorsEqual(curr.rowHover, base.rowHover) {
-            deltas.append(TokenDelta(path: "table.rowHover", category: "Components", defaultValue: "color", currentValue: "color", defaultPreview: AnyView(colorPreview(base.rowHover)), currentPreview: AnyView(colorPreview(curr.rowHover))))
-        }
-        if !colorsEqual(curr.divider, base.divider) {
-            deltas.append(TokenDelta(path: "table.divider", category: "Components", defaultValue: "color", currentValue: "color", defaultPreview: AnyView(colorPreview(base.divider)), currentPreview: AnyView(colorPreview(curr.divider))))
+
+        // Compare each property in the nested struct
+        for child in currentMirror.children {
+            guard let label = child.label else { continue }
+            let nestedPath = "\(path).\(label)"
+            let currVal = child.value
+            guard let baseVal = baselineValues[label] else { continue }
+
+            // Handle Color
+            if let currColor = currVal as? Color, let baseColor = baseVal as? Color {
+                if !colorsEqual(currColor, baseColor) {
+                    deltas.append(TokenDelta(
+                        path: nestedPath,
+                        category: "Components",
+                        defaultValue: colorDescription(baseColor),
+                        currentValue: colorDescription(currColor),
+                        defaultPreview: AnyView(colorPreview(baseColor)),
+                        currentPreview: AnyView(colorPreview(currColor))
+                    ))
+                }
+                continue
+            }
+
+            // Handle CGFloat
+            if let currFloat = currVal as? CGFloat, let baseFloat = baseVal as? CGFloat {
+                if abs(currFloat - baseFloat) > 0.01 {
+                    deltas.append(TokenDelta(
+                        path: nestedPath,
+                        category: "Components",
+                        defaultValue: formatNumber(baseFloat),
+                        currentValue: formatNumber(currFloat),
+                        defaultPreview: nil,
+                        currentPreview: nil
+                    ))
+                }
+                continue
+            }
+
+            // Handle Double
+            if let currDouble = currVal as? Double, let baseDouble = baseVal as? Double {
+                if abs(currDouble - baseDouble) > 0.01 {
+                    deltas.append(TokenDelta(
+                        path: nestedPath,
+                        category: "Components",
+                        defaultValue: formatNumber(CGFloat(baseDouble)),
+                        currentValue: formatNumber(CGFloat(currDouble)),
+                        defaultPreview: nil,
+                        currentPreview: nil
+                    ))
+                }
+                continue
+            }
+
+            // Handle ShadowPrimitive
+            if let currShadow = currVal as? ShadowPrimitive, let baseShadow = baseVal as? ShadowPrimitive {
+                if !shadowsEqual(currShadow, baseShadow) {
+                    deltas.append(TokenDelta(
+                        path: nestedPath,
+                        category: "Components",
+                        defaultValue: shadowDescription(baseShadow),
+                        currentValue: shadowDescription(currShadow),
+                        defaultPreview: nil,
+                        currentPreview: nil
+                    ))
+                }
+                continue
+            }
+
+            // Handle Animation
+            if currVal is Animation && baseVal is Animation {
+                let currDesc = String(describing: currVal)
+                let baseDesc = String(describing: baseVal)
+                if currDesc != baseDesc {
+                    deltas.append(TokenDelta(
+                        path: nestedPath,
+                        category: "Components",
+                        defaultValue: animationName(baseDesc),
+                        currentValue: animationName(currDesc),
+                        defaultPreview: nil,
+                        currentPreview: nil
+                    ))
+                }
+                continue
+            }
+
+            // Recurse into nested structs
+            let nestedMirror = Mirror(reflecting: currVal)
+            if nestedMirror.displayStyle == .struct && !nestedMirror.children.isEmpty {
+                if let nestedDeltas = compareNestedStruct(path: nestedPath, current: currVal, baseline: baseVal) {
+                    deltas.append(contentsOf: nestedDeltas)
+                }
+            }
         }
 
         return deltas.isEmpty ? nil : deltas
     }
 
-    private static func compareCardTokens(_ curr: CardTokens, _ base: CardTokens) -> [TokenDelta]? {
-        var deltas: [TokenDelta] = []
-
-        if abs(curr.radius - base.radius) > 0.5 {
-            deltas.append(TokenDelta(path: "card.radius", category: "Components", defaultValue: "\(Int(base.radius))", currentValue: "\(Int(curr.radius))", defaultPreview: nil, currentPreview: nil))
+    private static func formatNumber(_ value: CGFloat) -> String {
+        if value == floor(value) {
+            return "\(Int(value))"
         }
-        if abs(curr.padding - base.padding) > 0.5 {
-            deltas.append(TokenDelta(path: "card.padding", category: "Components", defaultValue: "\(Int(base.padding))", currentValue: "\(Int(curr.padding))", defaultPreview: nil, currentPreview: nil))
-        }
-        if abs(curr.borderWidth - base.borderWidth) > 0.1 {
-            deltas.append(TokenDelta(path: "card.borderWidth", category: "Components", defaultValue: "\(base.borderWidth)", currentValue: "\(curr.borderWidth)", defaultPreview: nil, currentPreview: nil))
-        }
-        if !shadowsEqual(curr.shadow, base.shadow) {
-            deltas.append(TokenDelta(path: "card.shadow", category: "Components", defaultValue: shadowDescription(base.shadow), currentValue: shadowDescription(curr.shadow), defaultPreview: nil, currentPreview: nil))
-        }
-
-        return deltas.isEmpty ? nil : deltas
-    }
-
-    private static func compareButtonTokens(_ curr: ButtonTokens, _ base: ButtonTokens) -> [TokenDelta]? {
-        var deltas: [TokenDelta] = []
-
-        if abs(curr.primaryRadius - base.primaryRadius) > 0.5 {
-            deltas.append(TokenDelta(path: "button.primaryRadius", category: "Components", defaultValue: "\(Int(base.primaryRadius))", currentValue: "\(Int(curr.primaryRadius))", defaultPreview: nil, currentPreview: nil))
-        }
-        if abs(curr.heightMd - base.heightMd) > 0.5 {
-            deltas.append(TokenDelta(path: "button.heightMd", category: "Components", defaultValue: "\(Int(base.heightMd))", currentValue: "\(Int(curr.heightMd))", defaultPreview: nil, currentPreview: nil))
-        }
-        if abs(curr.pressScale - base.pressScale) > 0.01 {
-            deltas.append(TokenDelta(path: "button.pressScale", category: "Components", defaultValue: String(format: "%.2f", base.pressScale), currentValue: String(format: "%.2f", curr.pressScale), defaultPreview: nil, currentPreview: nil))
-        }
-
-        return deltas.isEmpty ? nil : deltas
+        return String(format: "%.2f", value)
     }
 
     // MARK: - Helpers
