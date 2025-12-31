@@ -312,9 +312,26 @@ public final class EngineClient: ObservableObject {
                 self?.connectedMode = mode
             } else {
                 self?.connectionState = .error
+
+                // Show helpful message for developers in debug builds
+                #if DEBUG
+                self?.printDevConnectionHelp(attemptedMode: mode)
+                #endif
             }
         }
     }
+
+    #if DEBUG
+    /// Log helpful connection troubleshooting for developers
+    private func printDevConnectionHelp(attemptedMode: EngineServiceMode) {
+        // Log structured info for Console.app / log stream
+        log.warning("DEV MODE: Engine connection failed",
+                   detail: "Attempted: \(attemptedMode.rawValue). Debug TalkieEngine may not be running. Try: Build & run TalkieEngine in Xcode, or pkill -f '/Applications/TalkieEngine.app' then start debug engine.")
+
+        // Show ephemeral dev toast overlay
+        DevToastController.shared.showEngineNotRunning(service: attemptedMode.rawValue)
+    }
+    #endif
 
     /// Attempt to connect to a specific mode
     private func tryConnect(to mode: EngineServiceMode, completion: @escaping (Bool) -> Void) {

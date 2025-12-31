@@ -13,343 +13,16 @@ import TalkieKit
 
 #if DEBUG
 
-// MARK: - Token Value (for displaying all tokens)
-
-/// Represents a single token value with optional diff info
-struct TokenValue: Identifiable {
-    let id = UUID()
-    let path: String
-    let category: String
-    let value: String
-    let preview: AnyView?
-    let baselineValue: String?  // nil if same as current
-    let baselinePreview: AnyView?
-
-    var isDifferent: Bool { baselineValue != nil }
-}
-
-/// Extracts all token values using direct property access (Mirror doesn't work with computed properties)
-struct TokenIntrospector {
-    let values: [TokenValue]
-    let diffCount: Int
-
-    init(tokens: any SemanticTokens, baseline: any SemanticTokens) {
-        var allValues: [TokenValue] = []
-
-        // Extract all color tokens
-        allValues.append(contentsOf: Self.extractColors(tokens: tokens, baseline: baseline))
-
-        // Extract all numeric tokens
-        allValues.append(contentsOf: Self.extractNumbers(tokens: tokens, baseline: baseline))
-
-        // Extract shadows
-        allValues.append(contentsOf: Self.extractShadows(tokens: tokens, baseline: baseline))
-
-        // Extract animations
-        allValues.append(contentsOf: Self.extractAnimations(tokens: tokens, baseline: baseline))
-
-        // Extract component tokens (table, card, button)
-        allValues.append(contentsOf: Self.extractTableTokens(tokens: tokens, baseline: baseline))
-        allValues.append(contentsOf: Self.extractCardTokens(tokens: tokens, baseline: baseline))
-        allValues.append(contentsOf: Self.extractButtonTokens(tokens: tokens, baseline: baseline))
-
-        self.values = allValues.sorted {
-            $0.category < $1.category || ($0.category == $1.category && $0.path < $1.path)
-        }
-        self.diffCount = allValues.filter { $0.isDifferent }.count
-    }
-
-    // MARK: - Color Extraction
-
-    private static func extractColors(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
-        let colorProps: [(String, String, Color, Color)] = [
-            ("bgCanvas", "Backgrounds", tokens.bgCanvas, baseline.bgCanvas),
-            ("bgSurface", "Backgrounds", tokens.bgSurface, baseline.bgSurface),
-            ("bgElevated", "Backgrounds", tokens.bgElevated, baseline.bgElevated),
-            ("bgHover", "Backgrounds", tokens.bgHover, baseline.bgHover),
-            ("bgSelected", "Backgrounds", tokens.bgSelected, baseline.bgSelected),
-            ("fgPrimary", "Foregrounds", tokens.fgPrimary, baseline.fgPrimary),
-            ("fgSecondary", "Foregrounds", tokens.fgSecondary, baseline.fgSecondary),
-            ("fgMuted", "Foregrounds", tokens.fgMuted, baseline.fgMuted),
-            ("borderDefault", "Borders", tokens.borderDefault, baseline.borderDefault),
-            ("borderSubtle", "Borders", tokens.borderSubtle, baseline.borderSubtle),
-            ("borderFocused", "Borders", tokens.borderFocused, baseline.borderFocused),
-            ("accent", "Accent", tokens.accent, baseline.accent),
-            ("accentHover", "Accent", tokens.accentHover, baseline.accentHover),
-            ("accentSubtle", "Accent", tokens.accentSubtle, baseline.accentSubtle),
-            ("success", "Semantic", tokens.success, baseline.success),
-            ("warning", "Semantic", tokens.warning, baseline.warning),
-            ("error", "Semantic", tokens.error, baseline.error),
-            ("highlightHover", "Highlights", tokens.highlightHover, baseline.highlightHover),
-            ("highlightActive", "Highlights", tokens.highlightActive, baseline.highlightActive),
-            ("highlightFocus", "Highlights", tokens.highlightFocus, baseline.highlightFocus),
-        ]
-
-        return colorProps.map { (path, category, current, base) in
-            let isDiff = !colorsEqual(current, base)
-            return TokenValue(
-                path: path,
-                category: category,
-                value: colorDescription(current),
-                preview: AnyView(colorPreview(current)),
-                baselineValue: isDiff ? colorDescription(base) : nil,
-                baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil
-            )
-        }
-    }
-
-    // MARK: - Numeric Extraction
-
-    private static func extractNumbers(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
-        let numProps: [(String, String, CGFloat, CGFloat)] = [
-            ("radiusButton", "Radius", tokens.radiusButton, baseline.radiusButton),
-            ("radiusCard", "Radius", tokens.radiusCard, baseline.radiusCard),
-            ("radiusModal", "Radius", tokens.radiusModal, baseline.radiusModal),
-            ("radiusPill", "Radius", tokens.radiusPill, baseline.radiusPill),
-        ]
-
-        return numProps.map { (path, category, current, base) in
-            let isDiff = abs(current - base) > 0.5
-            return TokenValue(
-                path: path,
-                category: category,
-                value: formatNumber(current),
-                preview: nil,
-                baselineValue: isDiff ? formatNumber(base) : nil,
-                baselinePreview: nil
-            )
-        }
-    }
-
-    // MARK: - Shadow Extraction
-
-    private static func extractShadows(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
-        let shadowProps: [(String, ShadowPrimitive, ShadowPrimitive)] = [
-            ("shadowCard", tokens.shadowCard, baseline.shadowCard),
-            ("shadowPopover", tokens.shadowPopover, baseline.shadowPopover),
-            ("shadowHover", tokens.shadowHover, baseline.shadowHover),
-        ]
-
-        return shadowProps.map { (path, current, base) in
-            let isDiff = !shadowsEqual(current, base)
-            return TokenValue(
-                path: path,
-                category: "Shadows",
-                value: shadowDescription(current),
-                preview: nil,
-                baselineValue: isDiff ? shadowDescription(base) : nil,
-                baselinePreview: nil
-            )
-        }
-    }
-
-    // MARK: - Animation Extraction
-
-    private static func extractAnimations(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
-        let animProps: [(String, Animation, Animation)] = [
-            ("animationFast", tokens.animationFast, baseline.animationFast),
-            ("animationDefault", tokens.animationDefault, baseline.animationDefault),
-            ("animationSpring", tokens.animationSpring, baseline.animationSpring),
-        ]
-
-        return animProps.map { (path, current, base) in
-            let currDesc = String(describing: current)
-            let baseDesc = String(describing: base)
-            let isDiff = currDesc != baseDesc
-            return TokenValue(
-                path: path,
-                category: "Animation",
-                value: animationName(currDesc),
-                preview: nil,
-                baselineValue: isDiff ? animationName(baseDesc) : nil,
-                baselinePreview: nil
-            )
-        }
-    }
-
-    // MARK: - Table Token Extraction
-
-    private static func extractTableTokens(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
-        let t = tokens.table
-        let b = baseline.table
-        var values: [TokenValue] = []
-
-        // Numbers
-        if abs(t.rowHeight - b.rowHeight) > 0.5 {
-            values.append(TokenValue(path: "table.rowHeight", category: "Components", value: formatNumber(t.rowHeight), preview: nil, baselineValue: formatNumber(b.rowHeight), baselinePreview: nil))
-        } else {
-            values.append(TokenValue(path: "table.rowHeight", category: "Components", value: formatNumber(t.rowHeight), preview: nil, baselineValue: nil, baselinePreview: nil))
-        }
-        if abs(t.rowPadding - b.rowPadding) > 0.5 {
-            values.append(TokenValue(path: "table.rowPadding", category: "Components", value: formatNumber(t.rowPadding), preview: nil, baselineValue: formatNumber(b.rowPadding), baselinePreview: nil))
-        } else {
-            values.append(TokenValue(path: "table.rowPadding", category: "Components", value: formatNumber(t.rowPadding), preview: nil, baselineValue: nil, baselinePreview: nil))
-        }
-        if abs(t.rowSpacing - b.rowSpacing) > 0.5 {
-            values.append(TokenValue(path: "table.rowSpacing", category: "Components", value: formatNumber(t.rowSpacing), preview: nil, baselineValue: formatNumber(b.rowSpacing), baselinePreview: nil))
-        } else {
-            values.append(TokenValue(path: "table.rowSpacing", category: "Components", value: formatNumber(t.rowSpacing), preview: nil, baselineValue: nil, baselinePreview: nil))
-        }
-
-        // Colors
-        let colorProps: [(String, Color, Color)] = [
-            ("table.rowHover", t.rowHover, b.rowHover),
-            ("table.rowSelected", t.rowSelected, b.rowSelected),
-            ("table.rowAlt", t.rowAlt, b.rowAlt),
-            ("table.divider", t.divider, b.divider),
-        ]
-        for (path, curr, base) in colorProps {
-            let isDiff = !colorsEqual(curr, base)
-            values.append(TokenValue(path: path, category: "Components", value: colorDescription(curr), preview: AnyView(colorPreview(curr)), baselineValue: isDiff ? colorDescription(base) : nil, baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil))
-        }
-
-        return values
-    }
-
-    // MARK: - Card Token Extraction
-
-    private static func extractCardTokens(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
-        let c = tokens.card
-        let b = baseline.card
-        var values: [TokenValue] = []
-
-        // Numbers
-        let numProps: [(String, CGFloat, CGFloat)] = [
-            ("card.radius", c.radius, b.radius),
-            ("card.padding", c.padding, b.padding),
-            ("card.borderWidth", c.borderWidth, b.borderWidth),
-        ]
-        for (path, curr, base) in numProps {
-            let isDiff = abs(curr - base) > 0.1
-            values.append(TokenValue(path: path, category: "Components", value: formatNumber(curr), preview: nil, baselineValue: isDiff ? formatNumber(base) : nil, baselinePreview: nil))
-        }
-
-        // Colors
-        let colorProps: [(String, Color, Color)] = [
-            ("card.background", c.background, b.background),
-            ("card.backgroundHover", c.backgroundHover, b.backgroundHover),
-            ("card.border", c.border, b.border),
-        ]
-        for (path, curr, base) in colorProps {
-            let isDiff = !colorsEqual(curr, base)
-            values.append(TokenValue(path: path, category: "Components", value: colorDescription(curr), preview: AnyView(colorPreview(curr)), baselineValue: isDiff ? colorDescription(base) : nil, baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil))
-        }
-
-        // Shadows
-        let isDiffShadow = !shadowsEqual(c.shadow, b.shadow)
-        values.append(TokenValue(path: "card.shadow", category: "Components", value: shadowDescription(c.shadow), preview: nil, baselineValue: isDiffShadow ? shadowDescription(b.shadow) : nil, baselinePreview: nil))
-
-        return values
-    }
-
-    // MARK: - Button Token Extraction
-
-    private static func extractButtonTokens(tokens: any SemanticTokens, baseline: any SemanticTokens) -> [TokenValue] {
-        let btn = tokens.button
-        let b = baseline.button
-        var values: [TokenValue] = []
-
-        // Colors
-        let colorProps: [(String, Color, Color)] = [
-            ("button.primaryBg", btn.primaryBg, b.primaryBg),
-            ("button.primaryFg", btn.primaryFg, b.primaryFg),
-            ("button.primaryHover", btn.primaryHover, b.primaryHover),
-            ("button.secondaryBg", btn.secondaryBg, b.secondaryBg),
-            ("button.secondaryFg", btn.secondaryFg, b.secondaryFg),
-            ("button.secondaryBorder", btn.secondaryBorder, b.secondaryBorder),
-            ("button.secondaryHover", btn.secondaryHover, b.secondaryHover),
-        ]
-        for (path, curr, base) in colorProps {
-            let isDiff = !colorsEqual(curr, base)
-            values.append(TokenValue(path: path, category: "Components", value: colorDescription(curr), preview: AnyView(colorPreview(curr)), baselineValue: isDiff ? colorDescription(base) : nil, baselinePreview: isDiff ? AnyView(colorPreview(base)) : nil))
-        }
-
-        // Numbers
-        let numProps: [(String, CGFloat, CGFloat)] = [
-            ("button.primaryRadius", btn.primaryRadius, b.primaryRadius),
-            ("button.heightSm", btn.heightSm, b.heightSm),
-            ("button.heightMd", btn.heightMd, b.heightMd),
-            ("button.heightLg", btn.heightLg, b.heightLg),
-            ("button.paddingH", btn.paddingH, b.paddingH),
-            ("button.pressScale", btn.pressScale, b.pressScale),
-        ]
-        for (path, curr, base) in numProps {
-            let isDiff = abs(curr - base) > 0.01
-            values.append(TokenValue(path: path, category: "Components", value: formatNumber(curr), preview: nil, baselineValue: isDiff ? formatNumber(base) : nil, baselinePreview: nil))
-        }
-
-        return values
-    }
-
-    // MARK: - Helpers
-
-    private static func colorsEqual(_ a: Color, _ b: Color) -> Bool {
-        let nsA = NSColor(a)
-        let nsB = NSColor(b)
-        guard let rgbA = nsA.usingColorSpace(.deviceRGB),
-              let rgbB = nsB.usingColorSpace(.deviceRGB) else { return false }
-        let tolerance: CGFloat = 0.02
-        return abs(rgbA.redComponent - rgbB.redComponent) < tolerance &&
-               abs(rgbA.greenComponent - rgbB.greenComponent) < tolerance &&
-               abs(rgbA.blueComponent - rgbB.blueComponent) < tolerance &&
-               abs(rgbA.alphaComponent - rgbB.alphaComponent) < tolerance
-    }
-
-    private static func shadowsEqual(_ a: ShadowPrimitive, _ b: ShadowPrimitive) -> Bool {
-        return a.radius == b.radius && a.x == b.x && a.y == b.y && colorsEqual(a.color, b.color)
-    }
-
-    private static func colorDescription(_ color: Color) -> String {
-        let ns = NSColor(color)
-        guard let rgb = ns.usingColorSpace(.deviceRGB) else { return "?" }
-        if rgb.alphaComponent < 1.0 {
-            return String(format: "rgba(%.0f,%.0f,%.0f,%.1f)", rgb.redComponent*255, rgb.greenComponent*255, rgb.blueComponent*255, rgb.alphaComponent)
-        }
-        return String(format: "#%02X%02X%02X", Int(rgb.redComponent*255), Int(rgb.greenComponent*255), Int(rgb.blueComponent*255))
-    }
-
-    private static func colorPreview(_ color: Color) -> some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(color)
-            .frame(width: 16, height: 16)
-            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5))
-    }
-
-    private static func shadowDescription(_ shadow: ShadowPrimitive) -> String {
-        if shadow.radius == 0 { return "none" }
-        if shadow.y == 0 && shadow.x == 0 {
-            return "glow r:\(Int(shadow.radius))"
-        }
-        return "drop r:\(Int(shadow.radius)) y:\(Int(shadow.y))"
-    }
-
-    private static func animationName(_ desc: String) -> String {
-        if desc.contains("0.15") || desc.contains("snappy") { return "snappy" }
-        if desc.contains("spring") { return "spring" }
-        return "smooth"
-    }
-
-    private static func formatNumber(_ value: CGFloat) -> String {
-        if value == floor(value) {
-            return "\(Int(value))"
-        }
-        return String(format: "%.2f", value)
-    }
-}
-
 // MARK: - Token Showcase View
 
 struct TokenShowcaseView: View {
-    @State private var selectedTheme: ThemeOption = .midnight
-    @State private var showOnlyDiffs: Bool = false
+    @State private var selectedTheme: ThemeOption = .linear
+    @State private var showDeltas: Bool = true  // Show differences from defaults
+    @State private var colorScheme: ColorScheme = .dark  // Light/dark mode toggle
     @Environment(\.dismiss) private var dismiss
 
-    // Reference tokens for comparison
-    private var baselineTokens: any SemanticTokens { MidnightTokens() }
-
-    private var introspector: TokenIntrospector {
-        TokenIntrospector(tokens: selectedTheme.tokens, baseline: baselineTokens)
-    }
+    // Reference tokens for comparison (uses current colorScheme)
+    private var defaultTokens: any SemanticTokens { MidnightTokens(colorScheme) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -360,20 +33,20 @@ struct TokenShowcaseView: View {
 
             // Content
             ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    // Theme Picker
-                    themePicker
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    // Theme Picker + Delta Toggle
+                    controlsSection
 
-                    // Filter toggle + summary
-                    filterBar
+                    // Component Previews
+                    componentSection
 
-                    // All tokens list
-                    tokensList
+                    // Token Values
+                    tokenValuesSection
                 }
                 .padding(Spacing.lg)
             }
         }
-        .frame(width: 600, height: 650)
+        .frame(width: 650, height: 750)
         .background(currentTokens.bgCanvas)
     }
 
@@ -386,7 +59,7 @@ struct TokenShowcaseView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(currentTokens.fgPrimary)
 
-                Text("All design tokens for \(selectedTheme.name)")
+                Text("Compare design tokens across themes")
                     .font(.system(size: 11))
                     .foregroundColor(currentTokens.fgSecondary)
             }
@@ -402,162 +75,120 @@ struct TokenShowcaseView: View {
         .background(currentTokens.bgSurface)
     }
 
-    // MARK: - Theme Picker
+    // MARK: - Controls Section
 
-    private var themePicker: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("SELECT THEME")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(currentTokens.fgMuted)
-                .tracking(1)
+    private var controlsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            // Top row: Theme Picker + Color Scheme Toggle
+            HStack(alignment: .top, spacing: Spacing.xl) {
+                // Theme Picker
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    sectionHeader("THEME")
 
-            HStack(spacing: Spacing.sm) {
-                ForEach(ThemeOption.allCases, id: \.self) { theme in
-                    themeButton(theme)
+                    HStack(spacing: Spacing.sm) {
+                        ForEach(ThemeOption.allCases, id: \.self) { theme in
+                            themeButton(theme)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Color Scheme Toggle
+                VStack(alignment: .trailing, spacing: Spacing.sm) {
+                    sectionHeader("APPEARANCE")
+
+                    HStack(spacing: Spacing.sm) {
+                        colorSchemeButton(.light)
+                        colorSchemeButton(.dark)
+                    }
+
+                    // Adaptive indicator
+                    if !selectedTheme.isAdaptive {
+                        Text("Theme is always dark")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(currentTokens.warning)
+                    }
                 }
             }
-        }
-    }
 
-    // MARK: - Filter Bar
-
-    private var filterBar: some View {
-        HStack {
-            // Token count
-            Text("\(introspector.values.count) tokens")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(currentTokens.fgPrimary)
-
-            if introspector.diffCount > 0 {
-                Text("•")
-                    .foregroundColor(currentTokens.fgMuted)
-
-                Text("\(introspector.diffCount) differ from Midnight")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color.orange)
-            }
-
-            Spacer()
-
-            // Filter toggle
-            if introspector.diffCount > 0 {
-                Button(action: { showOnlyDiffs.toggle() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: showOnlyDiffs ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+            // Delta Toggle
+            HStack(spacing: Spacing.md) {
+                Toggle(isOn: $showDeltas) {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "arrow.left.arrow.right")
                             .font(.system(size: 11))
-                        Text(showOnlyDiffs ? "Showing diffs only" : "Show all")
-                            .font(.system(size: 10, weight: .medium))
+                        Text("Show differences from Midnight (default)")
+                            .font(.system(size: 11))
                     }
-                    .foregroundColor(showOnlyDiffs ? Color.orange : currentTokens.fgSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(showOnlyDiffs ? Color.orange.opacity(0.15) : currentTokens.bgElevated)
-                    )
+                    .foregroundColor(currentTokens.fgSecondary)
                 }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(currentTokens.bgSurface)
-        )
-    }
+                .toggleStyle(.switch)
+                .controlSize(.small)
 
-    // MARK: - Tokens List
+                Spacer()
 
-    private var tokensList: some View {
-        let values = showOnlyDiffs
-            ? introspector.values.filter { $0.isDifferent }
-            : introspector.values
-        let grouped = Dictionary(grouping: values) { $0.category }
-
-        return VStack(alignment: .leading, spacing: Spacing.lg) {
-            ForEach(grouped.keys.sorted(), id: \.self) { category in
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    // Category header
-                    HStack {
-                        Text(category.uppercased())
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(currentTokens.fgMuted)
-                            .tracking(1)
-
-                        let diffCount = (grouped[category] ?? []).filter { $0.isDifferent }.count
-                        if diffCount > 0 && !showOnlyDiffs {
-                            Text("(\(diffCount) diff)")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(Color.orange)
-                        }
-
-                        Spacer()
-                    }
-
-                    // Token rows
-                    VStack(spacing: 1) {
-                        ForEach(grouped[category] ?? []) { token in
-                            tokenRow(token)
-                        }
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(currentTokens.bgSurface)
-                    )
+                if showDeltas && selectedTheme != .midnight {
+                    deltaLegend
                 }
             }
+            .padding(.top, Spacing.xs)
         }
     }
 
-    private func tokenRow(_ token: TokenValue) -> some View {
-        HStack(spacing: Spacing.sm) {
-            // Property name
-            Text(token.path)
-                .font(.system(size: 10, weight: token.isDifferent ? .semibold : .regular, design: .monospaced))
-                .foregroundColor(token.isDifferent ? Color.orange : currentTokens.fgPrimary)
-                .frame(width: 150, alignment: .leading)
+    private func colorSchemeButton(_ scheme: ColorScheme) -> some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                colorScheme = scheme
+            }
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: scheme == .dark ? "moon.fill" : "sun.max.fill")
+                    .font(.system(size: 14))
 
-            // Preview + Value
+                Text(scheme == .dark ? "Dark" : "Light")
+                    .font(.system(size: 9, weight: colorScheme == scheme ? .semibold : .regular))
+            }
+            .foregroundColor(colorScheme == scheme ? currentTokens.accent : currentTokens.fgSecondary)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(colorScheme == scheme ? currentTokens.accent.opacity(0.15) : currentTokens.bgElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(colorScheme == scheme ? currentTokens.accent : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var deltaLegend: some View {
+        HStack(spacing: Spacing.md) {
             HStack(spacing: 4) {
-                if let preview = token.preview {
-                    preview
-                }
-                Text(token.value)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(token.isDifferent ? currentTokens.fgPrimary : currentTokens.fgSecondary)
+                Circle()
+                    .fill(Color.green.opacity(0.6))
+                    .frame(width: 8, height: 8)
+                Text("Changed")
+                    .font(.system(size: 9))
+                    .foregroundColor(currentTokens.fgMuted)
             }
-            .frame(width: 140, alignment: .leading)
-
-            // Diff indicator (if different)
-            if token.isDifferent, let baseValue = token.baselineValue {
-                HStack(spacing: 4) {
-                    Text("was")
-                        .font(.system(size: 8))
-                        .foregroundColor(currentTokens.fgMuted)
-
-                    if let basePreview = token.baselinePreview {
-                        basePreview
-                    }
-                    Text(baseValue)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(currentTokens.fgMuted)
-                        .strikethrough()
-                }
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(currentTokens.fgMuted.opacity(0.3))
+                    .frame(width: 8, height: 8)
+                Text("Same as default")
+                    .font(.system(size: 9))
+                    .foregroundColor(currentTokens.fgMuted)
             }
-
-            Spacer()
         }
-        .padding(.horizontal, Spacing.sm)
-        .padding(.vertical, 6)
-        .background(
-            token.isDifferent
-                ? Color.orange.opacity(0.08)
-                : Color.clear
-        )
     }
 
     private func themeButton(_ theme: ThemeOption) -> some View {
-        Button(action: {
+        let themeTokens = theme.tokens(for: colorScheme)
+
+        return Button(action: {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedTheme = theme
             }
@@ -566,16 +197,25 @@ struct TokenShowcaseView: View {
                 // Color preview circles
                 HStack(spacing: 2) {
                     Circle()
-                        .fill(theme.tokens.bgCanvas)
+                        .fill(themeTokens.bgCanvas)
                         .frame(width: 12, height: 12)
                     Circle()
-                        .fill(theme.tokens.accent)
+                        .fill(themeTokens.accent)
                         .frame(width: 12, height: 12)
                 }
 
-                Text(theme.name)
-                    .font(.system(size: 10, weight: selectedTheme == theme ? .semibold : .regular))
-                    .foregroundColor(selectedTheme == theme ? currentTokens.accent : currentTokens.fgSecondary)
+                HStack(spacing: 2) {
+                    Text(theme.name)
+                        .font(.system(size: 10, weight: selectedTheme == theme ? .semibold : .regular))
+                        .foregroundColor(selectedTheme == theme ? currentTokens.accent : currentTokens.fgSecondary)
+
+                    // Dark-only indicator
+                    if !theme.isAdaptive {
+                        Image(systemName: "moon.fill")
+                            .font(.system(size: 7))
+                            .foregroundColor(currentTokens.fgMuted)
+                    }
+                }
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
@@ -591,10 +231,419 @@ struct TokenShowcaseView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Component Section
+
+    private var componentSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            // Cards
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                sectionHeader("CARDS")
+
+                HStack(spacing: Spacing.md) {
+                    cardPreview(preset: "default", tokens: currentTokens.card)
+                    cardPreview(preset: "glow", tokens: CardTokens.glow())
+                    cardPreview(preset: "soft", tokens: CardTokens.soft(for: colorScheme))
+                }
+            }
+
+            // Buttons
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                sectionHeader("BUTTONS")
+
+                HStack(spacing: Spacing.md) {
+                    buttonPreview(preset: "default", tokens: currentTokens.button)
+                    buttonPreview(preset: "pill", tokens: ButtonTokens.pill(for: colorScheme))
+                    buttonPreview(preset: "sharp", tokens: ButtonTokens.sharp)
+                    buttonPreview(preset: "warm", tokens: ButtonTokens.warm(for: colorScheme))
+                }
+            }
+
+            // Table Rows
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                sectionHeader("TABLE ROWS")
+
+                tablePreview()
+            }
+        }
+    }
+
+    // MARK: - Card Preview
+
+    private func cardPreview(preset: String, tokens: CardTokens) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            // Card
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.xs) {
+                    Circle()
+                        .fill(currentTokens.accent)
+                        .frame(width: 8, height: 8)
+                    Text("Card Title")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(currentTokens.fgPrimary)
+                }
+
+                Text("Detail text here")
+                    .font(.system(size: 9))
+                    .foregroundColor(currentTokens.fgSecondary)
+            }
+            .padding(tokens.padding)
+            .background(
+                RoundedRectangle(cornerRadius: tokens.radius)
+                    .fill(tokens.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: tokens.radius)
+                    .strokeBorder(tokens.border, lineWidth: tokens.borderWidth)
+            )
+            .tokenShadow(tokens.shadow)
+
+            // Label
+            Text(".\(preset)")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(currentTokens.fgMuted)
+        }
+        .frame(width: 140)
+    }
+
+    // MARK: - Button Preview
+
+    private func buttonPreview(preset: String, tokens: ButtonTokens) -> some View {
+        VStack(spacing: Spacing.xs) {
+            // Button
+            Text("Button")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(tokens.primaryFg)
+                .padding(.horizontal, tokens.paddingH)
+                .frame(height: tokens.heightMd)
+                .background(
+                    RoundedRectangle(cornerRadius: tokens.primaryRadius)
+                        .fill(tokens.primaryBg)
+                )
+
+            // Label
+            Text(".\(preset)")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(currentTokens.fgMuted)
+        }
+    }
+
+    // MARK: - Table Preview
+
+    private func tablePreview() -> some View {
+        let tableTokens = currentTokens.table
+        let defaultTokens = TableTokens.default(for: colorScheme)
+
+        return VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Row Height")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(currentTokens.fgSecondary)
+                Spacer()
+                Text("\(Int(tableTokens.rowHeight))px")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(currentTokens.accent)
+                Text("(default: \(Int(defaultTokens.rowHeight))px)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(currentTokens.fgMuted)
+            }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
+            .background(currentTokens.bgElevated)
+
+            // Sample rows
+            ForEach(0..<3, id: \.self) { index in
+                HStack {
+                    Circle()
+                        .fill(index == 1 ? currentTokens.accent : currentTokens.fgMuted)
+                        .frame(width: 6, height: 6)
+
+                    Text("Sample row \(index + 1)")
+                        .font(.system(size: 11))
+                        .foregroundColor(currentTokens.fgPrimary)
+
+                    Spacer()
+
+                    Text("value")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(currentTokens.fgSecondary)
+                }
+                .padding(.horizontal, Spacing.sm)
+                .frame(height: tableTokens.rowHeight)
+                .background(
+                    index == 1 ? tableTokens.rowHover : Color.clear
+                )
+            }
+
+            Divider()
+                .background(tableTokens.divider)
+        }
+        .background(currentTokens.bgSurface)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(currentTokens.borderDefault, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Token Values Section
+
+    private var tokenValuesSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            // Colors
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                sectionHeader("COLORS")
+
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: Spacing.sm) {
+                    colorSwatch("bgCanvas", currentTokens.bgCanvas, default: defaultTokens.bgCanvas)
+                    colorSwatch("bgSurface", currentTokens.bgSurface, default: defaultTokens.bgSurface)
+                    colorSwatch("bgElevated", currentTokens.bgElevated, default: defaultTokens.bgElevated)
+                    colorSwatch("fgPrimary", currentTokens.fgPrimary, default: defaultTokens.fgPrimary)
+                    colorSwatch("fgSecondary", currentTokens.fgSecondary, default: defaultTokens.fgSecondary)
+                    colorSwatch("accent", currentTokens.accent, default: defaultTokens.accent)
+                }
+            }
+
+            // Spacing, Radius, Component Tokens
+            HStack(alignment: .top, spacing: Spacing.xl) {
+                // Spacing
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    sectionHeader("SPACING (8pt grid)")
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        spacingRow("xs", SpacingPrimitive.x1)
+                        spacingRow("sm", SpacingPrimitive.x2)
+                        spacingRow("md", SpacingPrimitive.x3)
+                        spacingRow("lg", SpacingPrimitive.x4)
+                        spacingRow("xl", SpacingPrimitive.x6)
+                    }
+                }
+
+                // Radius
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    sectionHeader("RADIUS")
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        radiusRow("button", currentTokens.radiusButton, default: defaultTokens.radiusButton)
+                        radiusRow("card", currentTokens.radiusCard, default: defaultTokens.radiusCard)
+                        radiusRow("modal", currentTokens.radiusModal, default: defaultTokens.radiusModal)
+                    }
+                }
+
+                // Component Deltas
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    sectionHeader("COMPONENTS")
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        componentDeltaRow("card.radius", Int(currentTokens.card.radius), default: Int(defaultTokens.card.radius))
+                        componentDeltaRow("card.padding", Int(currentTokens.card.padding), default: Int(defaultTokens.card.padding))
+                        componentDeltaRow("button.radius", Int(currentTokens.button.primaryRadius), default: Int(defaultTokens.button.primaryRadius))
+                        componentDeltaRow("table.rowHeight", Int(currentTokens.table.rowHeight), default: Int(defaultTokens.table.rowHeight))
+                    }
+                }
+            }
+
+            // Animation comparison
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                sectionHeader("ANIMATION STYLE")
+
+                HStack(spacing: Spacing.lg) {
+                    animationCompare("Linear", isSnappy: true, isActive: selectedTheme == .linear)
+                    animationCompare("Warm", isSnappy: false, isActive: selectedTheme == .warm)
+                    animationCompare("Default", isSnappy: false, isActive: selectedTheme == .midnight)
+                }
+            }
+        }
+    }
+
+    private func animationCompare(_ name: String, isSnappy: Bool, isActive: Bool) -> some View {
+        VStack(spacing: 4) {
+            Text(name)
+                .font(.system(size: 10, weight: isActive ? .semibold : .regular))
+                .foregroundColor(isActive ? currentTokens.accent : currentTokens.fgMuted)
+
+            Text(isSnappy ? "Snappy" : "Smooth")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(currentTokens.fgSecondary)
+
+            if isActive {
+                Circle()
+                    .fill(currentTokens.accent)
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isActive ? currentTokens.accent.opacity(0.1) : Color.clear)
+        )
+    }
+
     // MARK: - Helpers
 
     private var currentTokens: any SemanticTokens {
-        selectedTheme.tokens
+        selectedTheme.tokens(for: colorScheme)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundColor(currentTokens.fgMuted)
+            .tracking(1)
+    }
+
+    private func colorSwatch(_ name: String, _ color: Color, default defaultColor: Color) -> some View {
+        let isDifferent = !colorsEqual(color, defaultColor)
+
+        return HStack(spacing: Spacing.xs) {
+            ZStack {
+                // Show default color behind if different
+                if showDeltas && isDifferent {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(defaultColor)
+                        .frame(width: 24, height: 24)
+                        .offset(x: -4, y: 4)
+                        .opacity(0.5)
+                }
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(color)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(isDifferent && showDeltas ? Color.green : currentTokens.borderDefault, lineWidth: isDifferent && showDeltas ? 2 : 1)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(isDifferent && showDeltas ? Color.green : currentTokens.fgSecondary)
+
+                if showDeltas && isDifferent {
+                    Text("changed")
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundColor(Color.green.opacity(0.8))
+                }
+            }
+        }
+        .frame(width: 100, alignment: .leading)
+    }
+
+    /// Simple color comparison (not perfect but good enough for debug)
+    private func colorsEqual(_ a: Color, _ b: Color) -> Bool {
+        // Compare by resolving to NSColor components
+        let nsA = NSColor(a)
+        let nsB = NSColor(b)
+        guard let rgbA = nsA.usingColorSpace(.deviceRGB),
+              let rgbB = nsB.usingColorSpace(.deviceRGB) else {
+            return false
+        }
+        let tolerance: CGFloat = 0.01
+        return abs(rgbA.redComponent - rgbB.redComponent) < tolerance &&
+               abs(rgbA.greenComponent - rgbB.greenComponent) < tolerance &&
+               abs(rgbA.blueComponent - rgbB.blueComponent) < tolerance
+    }
+
+    private func spacingRow(_ name: String, _ value: CGFloat) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Text(name)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(currentTokens.fgSecondary)
+                .frame(width: 24, alignment: .leading)
+
+            Rectangle()
+                .fill(currentTokens.accent.opacity(0.5))
+                .frame(width: value, height: 12)
+
+            Text("\(Int(value))pt")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(currentTokens.fgMuted)
+        }
+    }
+
+    private func radiusRow(_ name: String, _ value: CGFloat, default defaultValue: CGFloat) -> some View {
+        let isDifferent = abs(value - defaultValue) > 0.5
+
+        return HStack(spacing: Spacing.sm) {
+            Text(name)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(isDifferent && showDeltas ? Color.green : currentTokens.fgSecondary)
+                .frame(width: 40, alignment: .leading)
+
+            ZStack {
+                // Show default radius behind if different
+                if showDeltas && isDifferent {
+                    RoundedRectangle(cornerRadius: defaultValue)
+                        .stroke(currentTokens.fgMuted.opacity(0.3), lineWidth: 1)
+                        .frame(width: 32, height: 20)
+                }
+
+                RoundedRectangle(cornerRadius: value)
+                    .fill(currentTokens.accent.opacity(isDifferent && showDeltas ? 0.5 : 0.3))
+                    .frame(width: 32, height: 20)
+            }
+
+            if showDeltas && isDifferent {
+                HStack(spacing: 2) {
+                    Text("\(Int(defaultValue))")
+                        .strikethrough()
+                        .foregroundColor(currentTokens.fgMuted)
+                    Text("→")
+                        .foregroundColor(Color.green)
+                    Text("\(Int(value))")
+                        .foregroundColor(Color.green)
+                }
+                .font(.system(size: 9, design: .monospaced))
+            } else {
+                Text("\(Int(value))pt")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(currentTokens.fgMuted)
+            }
+        }
+    }
+
+    private func componentDeltaRow(_ name: String, _ value: Int, default defaultValue: Int) -> some View {
+        let isDifferent = value != defaultValue
+        let delta = value - defaultValue
+
+        return HStack(spacing: Spacing.sm) {
+            Text(name)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(isDifferent && showDeltas ? Color.green : currentTokens.fgSecondary)
+                .frame(width: 90, alignment: .leading)
+
+            if showDeltas && isDifferent {
+                HStack(spacing: 2) {
+                    Text("\(defaultValue)")
+                        .strikethrough()
+                        .foregroundColor(currentTokens.fgMuted)
+                    Text("→")
+                        .foregroundColor(Color.green)
+                    Text("\(value)")
+                        .foregroundColor(Color.green)
+
+                    Text("(\(delta > 0 ? "+" : "")\(delta))")
+                        .foregroundColor(delta < 0 ? Color.orange : Color.green)
+                }
+                .font(.system(size: 9, design: .monospaced))
+            } else {
+                Text("\(value)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(currentTokens.fgMuted)
+            }
+        }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(isDifferent && showDeltas ? Color.green.opacity(0.1) : Color.clear)
+        )
     }
 }
 
@@ -612,14 +661,17 @@ enum ThemeOption: String, CaseIterable {
         rawValue.capitalized
     }
 
-    var tokens: any SemanticTokens {
+    /// All themes now fully support light/dark mode
+    var isAdaptive: Bool { true }
+
+    func tokens(for scheme: ColorScheme) -> any SemanticTokens {
         switch self {
-        case .midnight: return MidnightTokens()
-        case .linear: return LinearTokens()
-        case .warm: return WarmTokens()
-        case .terminal: return TerminalTokens()
-        case .minimal: return MinimalTokens()
-        case .classic: return ClassicTokens()
+        case .midnight: return MidnightTokens(scheme)
+        case .linear: return LinearTokens(scheme)
+        case .warm: return WarmTokens(scheme)
+        case .terminal: return TerminalTokens(scheme)
+        case .minimal: return MinimalTokens(scheme)
+        case .classic: return ClassicTokens(scheme)
         }
     }
 }

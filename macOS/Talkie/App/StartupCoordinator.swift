@@ -24,6 +24,11 @@ final class StartupCoordinator {
     private var hasInitialized = false
     private var databaseInitialized = false
 
+    /// Check if running in CLI debug mode (skip CloudKit in that case)
+    private var isDebugCLIMode: Bool {
+        ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--debug=") })
+    }
+
     private init() {}
 
     // MARK: - Phase 1: Critical (before UI)
@@ -115,8 +120,11 @@ final class StartupCoordinator {
             requestNotificationPermissions()
 
             // CloudKit can wait - not needed for local UI
-            signposter.emitEvent("CloudKit")
-            setupCloudKitSubscription()
+            // Skip in CLI debug mode to avoid CKContainer crash
+            if !isDebugCLIMode {
+                signposter.emitEvent("CloudKit")
+                setupCloudKitSubscription()
+            }
 
             // Remote notifications (fire-and-forget - callback handled by AppDelegate)
             signposter.emitEvent("Remote Notifications")

@@ -402,7 +402,7 @@ struct TokenStyledCard: View {
 
 #Preview("Linear Theme (TokenSystem)") {
     // Switch to Linear tokens for this preview
-    let _ = TalkieKit.Tokens.setTheme(TalkieKit.LinearTokens())
+    let _ = TalkieKit.Tokens.setTheme(named: "linear", scheme: .dark)
 
     VStack(spacing: TalkieKit.SpacingPrimitive.x4) {
         Text("Linear Theme - Glow Cards")
@@ -432,7 +432,7 @@ struct TokenStyledCard: View {
 
 #Preview("Warm Theme (TokenSystem)") {
     // Switch to Warm tokens for this preview
-    let _ = TalkieKit.Tokens.setTheme(TalkieKit.WarmTokens())
+    let _ = TalkieKit.Tokens.setTheme(named: "warm", scheme: .dark)
 
     VStack(spacing: TalkieKit.SpacingPrimitive.x4) {
         Text("Warm Theme - Soft Cards")

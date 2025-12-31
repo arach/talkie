@@ -824,8 +824,15 @@ enum TalkieTheme {
     static let secondaryBackground = Color(NSColor.controlBackgroundColor)
     static let tertiaryBackground = Color(NSColor.underPageBackgroundColor)
 
+    private static var isDarkMode: Bool {
+        NSApp.effectiveAppearance.name == .darkAqua ||
+        NSApp.effectiveAppearance.name == .vibrantDark ||
+        NSApp.effectiveAppearance.name == .accessibilityHighContrastDarkAqua ||
+        NSApp.effectiveAppearance.name == .accessibilityHighContrastVibrantDark
+    }
+
     private static func currentPalette() -> ThemeColorPalette {
-        return ThemeColorPalette.midnight()
+        return isDarkMode ? ThemeColorPalette.midnight() : ThemeColorPalette.midnightLight()
     }
 
     static var surface: Color { currentPalette().surface }
@@ -889,6 +896,42 @@ struct ThemeColorPalette {
             divider: Color.white.opacity(0.08),
             hover: Color.white.opacity(0.06),
             accent: Color(red: 0.0, green: 0.83, blue: 1.0) // Linear cyan
+        )
+    }
+
+    /// Midnight light mode palette - light background with dark text
+    static func midnightLight() -> ThemeColorPalette {
+        ThemeColorPalette(
+            surface: Color(white: 0.98),
+            surfaceElevated: Color.white,
+            surfaceCard: Color.white,
+            textPrimary: Color(white: 0.1),
+            textSecondary: Color(white: 0.35),
+            textTertiary: Color(white: 0.5),
+            textMuted: Color(white: 0.6),
+            border: Color.black.opacity(0.1),
+            borderSubtle: Color.black.opacity(0.06),
+            divider: Color.black.opacity(0.1),
+            hover: Color.black.opacity(0.05),
+            accent: Color(red: 0.0, green: 0.6, blue: 0.8) // Darker cyan for light mode
+        )
+    }
+
+    /// Linear light mode palette - clean white with subtle borders
+    static func linearLight() -> ThemeColorPalette {
+        ThemeColorPalette(
+            surface: Color.white,
+            surfaceElevated: Color.white,
+            surfaceCard: Color(white: 0.98),
+            textPrimary: Color.black,
+            textSecondary: Color(white: 0.4),
+            textTertiary: Color(white: 0.55),
+            textMuted: Color(white: 0.65),
+            border: Color.black.opacity(0.1),
+            borderSubtle: Color.black.opacity(0.06),
+            divider: Color.black.opacity(0.08),
+            hover: Color.black.opacity(0.04),
+            accent: Color(red: 0.0, green: 0.5, blue: 0.7) // Darker linear cyan
         )
     }
 }

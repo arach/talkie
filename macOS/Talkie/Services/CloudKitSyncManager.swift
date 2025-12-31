@@ -23,8 +23,24 @@ private let log = Log(.sync)
 class CloudKitSyncManager {
     static let shared = CloudKitSyncManager()
 
-    private let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
-    private let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
+    // Deferred initialization - created on first sync to avoid crash in CLI debug mode
+    private var _container: CKContainer?
+    private var _zoneID: CKRecordZone.ID?
+
+    private var container: CKContainer {
+        if _container == nil {
+            _container = CKContainer(identifier: "iCloud.com.jdi.talkie")
+        }
+        return _container!
+    }
+
+    private var zoneID: CKRecordZone.ID {
+        if _zoneID == nil {
+            _zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
+        }
+        return _zoneID!
+    }
+
     private var viewContext: NSManagedObjectContext?
 
     // Server change token - persisted to UserDefaults

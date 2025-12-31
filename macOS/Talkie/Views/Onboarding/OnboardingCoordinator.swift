@@ -651,11 +651,31 @@ final class OnboardingManager {
 
     /// Check if the engine is actually responsive (not just running)
     private func checkEngineResponsive() async -> Bool {
-        // If engine is running, try to verify it's responsive via EngineClient
+        // If engine process is not running, can't be responsive
         guard isTalkieEngineRunning else { return false }
 
-        // Use EngineClient to ping - if connected, engine is responsive
-        return EngineClient.shared.isConnected
+        let engineClient = EngineClient.shared
+
+        // If already connected, we're good
+        if engineClient.isConnected {
+            return true
+        }
+
+        // Not connected - trigger a reconnection attempt
+        engineClient.connect()
+
+        // Wait for connection to be established (up to 3 seconds)
+        var attempts = 0
+        while attempts < 30 {
+            if engineClient.isConnected {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+            attempts += 1
+        }
+
+        // Connection timed out
+        return false
     }
 
     // MARK: - LLM Configuration

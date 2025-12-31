@@ -248,9 +248,18 @@ struct PersistenceController {
         startupSignposter.endInterval("CoreData.createContainer", containerState)
         logger.info("⏱️ CoreData.createContainer: \(String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - startTime) * 1000))ms")
 
+        // Check for CLI debug mode - skip CloudKit to avoid CKContainer crash
+        let isDebugCLI = ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--debug=") })
+
         if inMemory {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
             logger.info("Persistence: in-memory store")
+        } else if isDebugCLI {
+            // CLI debug mode: disable CloudKit to avoid CKContainer crash
+            if let description = container.persistentStoreDescriptions.first {
+                description.cloudKitContainerOptions = nil
+            }
+            logger.info("Persistence: CloudKit disabled for CLI debug mode")
         } else {
             // Phase 2: Configure CloudKit options
             let configState = startupSignposter.beginInterval("CoreData.configureCloudKit")
@@ -312,8 +321,11 @@ struct PersistenceController {
         let viewContext = container.viewContext
         let persistentContainer = container
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            CloudKitSyncManager.shared.configure(with: viewContext)
-            CloudKitSyncManager.shared.syncNow()
+            // Skip CloudKit in CLI debug mode (isDebugCLI computed above)
+            if !isDebugCLI {
+                CloudKitSyncManager.shared.configure(with: viewContext)
+                CloudKitSyncManager.shared.syncNow()
+            }
 
             // Initialize TalkieData - runs startup inventory and bridge sync if needed
             TalkieData.shared.configure(with: viewContext)
@@ -347,6 +359,11 @@ struct PersistenceController {
     }
 
     private static func checkiCloudStatus() {
+        // Skip CloudKit in CLI debug mode
+        guard !ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--debug=") }) else {
+            return
+        }
+
         let container = CKContainer(identifier: "iCloud.com.jdi.talkie")
 
         container.accountStatus { status, error in

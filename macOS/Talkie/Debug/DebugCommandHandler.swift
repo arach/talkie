@@ -81,8 +81,12 @@ class DebugCommandHandler {
     }
 
     private func captureSettingsScreenshots(args: [String]) async {
+        // Parse flags: --compact for content-only, default is full window
+        let compact = args.contains("--compact")
+        let filteredArgs = args.filter { !$0.hasPrefix("--") }
+
         let outputDir: URL
-        if let path = args.first {
+        if let path = filteredArgs.first {
             outputDir = URL(fileURLWithPath: path)
         } else {
             let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
@@ -91,8 +95,9 @@ class DebugCommandHandler {
                 .appendingPathComponent("settings-screenshots-\(timestamp)")
         }
 
-        print("📸 Capturing settings pages to: \(outputDir.path)")
-        let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
+        let mode = compact ? "compact (content only)" : "full window"
+        print("📸 Capturing settings pages to: \(outputDir.path) [\(mode)]")
+        let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir, fullWindow: !compact)
         print("✅ Captured \(results.count) pages")
         exit(0)
     }
@@ -158,9 +163,11 @@ class DebugCommandHandler {
               Generate a storyboard image of all settings pages
               Default: ~/Desktop/settings-storyboard-<timestamp>.png
 
-          settings-screenshots [output-dir]
+          settings-screenshots [output-dir] [--compact]
               Capture individual screenshots of each settings page
-              Default: ~/Desktop/settings-screenshots-<timestamp>/
+              Default: full window with native nav sidebar
+              --compact: Content only (excludes native nav sidebar, smaller files)
+              Default output: ~/Desktop/settings-screenshots-<timestamp>/
 
           design-audit
               Run design system audit with reports and screenshots

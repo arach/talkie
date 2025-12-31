@@ -110,120 +110,281 @@ public enum TalkieTheme {
 }
 
 public struct ThemeColorPalette {
-    let surface: Color
-    let surfaceElevated: Color
-    let surfaceCard: Color
-    let textPrimary: Color
-    let textSecondary: Color
-    let textTertiary: Color
-    let textMuted: Color
-    let border: Color
-    let divider: Color
-    let hover: Color
-    let accent: Color
+    public let surface: Color
+    public let surfaceElevated: Color
+    public let surfaceCard: Color
+    public let textPrimary: Color
+    public let textSecondary: Color
+    public let textTertiary: Color
+    public let textMuted: Color
+    public let border: Color
+    public let divider: Color
+    public let hover: Color
+    public let accent: Color
 
-    /// Midnight/TalkiePro - Deep black, high contrast, cyan accent
-    static func midnight() -> ThemeColorPalette {
-        ThemeColorPalette(
-            surface: Color(NSColor(red: 0.02, green: 0.02, blue: 0.03, alpha: 1.0)),
-            surfaceElevated: Color(NSColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1.0)),
-            surfaceCard: Color(NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1.0)),
-            textPrimary: Color.white,
-            textSecondary: Color.white.opacity(0.7),
-            textTertiary: Color.white.opacity(0.5),
-            textMuted: Color.white.opacity(0.3),
-            border: Color.white.opacity(0.1),
-            divider: Color.white.opacity(0.1),
-            hover: Color.white.opacity(0.05),
-            accent: Color.cyan
-        )
+    public init(
+        surface: Color,
+        surfaceElevated: Color,
+        surfaceCard: Color,
+        textPrimary: Color,
+        textSecondary: Color,
+        textTertiary: Color,
+        textMuted: Color,
+        border: Color,
+        divider: Color,
+        hover: Color,
+        accent: Color
+    ) {
+        self.surface = surface
+        self.surfaceElevated = surfaceElevated
+        self.surfaceCard = surfaceCard
+        self.textPrimary = textPrimary
+        self.textSecondary = textSecondary
+        self.textTertiary = textTertiary
+        self.textMuted = textMuted
+        self.border = border
+        self.divider = divider
+        self.hover = hover
+        self.accent = accent
     }
 
-    /// Terminal - Green on black, retro terminal aesthetic
-    static func terminal() -> ThemeColorPalette {
+    // MARK: - Adaptive Themes (support light/dark mode)
+
+    /// Midnight/TalkiePro - Deep black in dark, clean white in light
+    public static func midnight(for scheme: ColorScheme = .dark) -> ThemeColorPalette {
+        if scheme == .dark {
+            return ThemeColorPalette(
+                surface: Color(NSColor(red: 0.02, green: 0.02, blue: 0.03, alpha: 1.0)),
+                surfaceElevated: Color(NSColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1.0)),
+                surfaceCard: Color(NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1.0)),
+                textPrimary: Color.white,
+                textSecondary: Color.white.opacity(0.7),
+                textTertiary: Color.white.opacity(0.5),
+                textMuted: Color.white.opacity(0.3),
+                border: Color.white.opacity(0.1),
+                divider: Color.white.opacity(0.1),
+                hover: Color.white.opacity(0.05),
+                accent: Color.cyan
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color(white: 0.98),
+                surfaceElevated: Color.white,
+                surfaceCard: Color.white,
+                textPrimary: Color(white: 0.1),
+                textSecondary: Color(white: 0.4),
+                textTertiary: Color(white: 0.55),
+                textMuted: Color(white: 0.7),
+                border: Color.black.opacity(0.1),
+                divider: Color.black.opacity(0.08),
+                hover: Color.black.opacity(0.04),
+                accent: Color(red: 0.0, green: 0.6, blue: 0.8)  // Darker cyan for light mode
+            )
+        }
+    }
+
+    /// Warm - Cozy brown/orange tones (adapts to light mode)
+    public static func warm(for scheme: ColorScheme = .dark) -> ThemeColorPalette {
+        if scheme == .dark {
+            let warmAccent = Color(red: 1.0, green: 0.6, blue: 0.2)
+            return ThemeColorPalette(
+                surface: Color(NSColor(red: 0.08, green: 0.06, blue: 0.04, alpha: 1.0)),
+                surfaceElevated: Color(NSColor(red: 0.12, green: 0.09, blue: 0.06, alpha: 1.0)),
+                surfaceCard: Color(NSColor(red: 0.14, green: 0.11, blue: 0.08, alpha: 1.0)),
+                textPrimary: Color(red: 1.0, green: 0.95, blue: 0.9),
+                textSecondary: Color(red: 0.85, green: 0.75, blue: 0.65),
+                textTertiary: Color(red: 0.7, green: 0.6, blue: 0.5),
+                textMuted: Color(red: 0.5, green: 0.4, blue: 0.35),
+                border: Color(red: 0.25, green: 0.2, blue: 0.15),
+                divider: Color(red: 0.18, green: 0.14, blue: 0.1),
+                hover: Color(red: 0.16, green: 0.12, blue: 0.08),
+                accent: warmAccent
+            )
+        } else {
+            let warmAccentLight = Color(red: 0.9, green: 0.5, blue: 0.1)
+            return ThemeColorPalette(
+                surface: Color(red: 1.0, green: 0.98, blue: 0.95),
+                surfaceElevated: Color(red: 0.99, green: 0.97, blue: 0.94),
+                surfaceCard: Color.white,
+                textPrimary: Color(red: 0.2, green: 0.15, blue: 0.1),
+                textSecondary: Color(red: 0.45, green: 0.38, blue: 0.3),
+                textTertiary: Color(red: 0.55, green: 0.48, blue: 0.4),
+                textMuted: Color(red: 0.7, green: 0.63, blue: 0.55),
+                border: Color(red: 0.85, green: 0.78, blue: 0.68),
+                divider: Color(red: 0.9, green: 0.85, blue: 0.78),
+                hover: Color(red: 0.95, green: 0.9, blue: 0.82),
+                accent: warmAccentLight
+            )
+        }
+    }
+
+    /// Minimal - Clean and subtle (adapts to light mode)
+    public static func minimal(for scheme: ColorScheme = .dark) -> ThemeColorPalette {
+        if scheme == .dark {
+            return ThemeColorPalette(
+                surface: Color(white: 0.08),
+                surfaceElevated: Color(white: 0.11),
+                surfaceCard: Color(white: 0.13),
+                textPrimary: Color(white: 0.9),
+                textSecondary: Color(white: 0.6),
+                textTertiary: Color(white: 0.45),
+                textMuted: Color(white: 0.3),
+                border: Color(white: 0.18),
+                divider: Color(white: 0.12),
+                hover: Color(white: 0.14),
+                accent: Color(white: 0.6)
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color(white: 0.96),
+                surfaceElevated: Color(white: 0.99),
+                surfaceCard: Color.white,
+                textPrimary: Color(white: 0.15),
+                textSecondary: Color(white: 0.45),
+                textTertiary: Color(white: 0.55),
+                textMuted: Color(white: 0.7),
+                border: Color(white: 0.85),
+                divider: Color(white: 0.9),
+                hover: Color(white: 0.92),
+                accent: Color(white: 0.45)
+            )
+        }
+    }
+
+    /// Classic - Gray tones, blue accent (adapts to light mode)
+    public static func classic(for scheme: ColorScheme = .dark) -> ThemeColorPalette {
+        if scheme == .dark {
+            return ThemeColorPalette(
+                surface: Color(white: 0.12),
+                surfaceElevated: Color(white: 0.15),
+                surfaceCard: Color(white: 0.17),
+                textPrimary: Color.white,
+                textSecondary: Color(white: 0.7),
+                textTertiary: Color(white: 0.5),
+                textMuted: Color(white: 0.35),
+                border: Color(white: 0.2),
+                divider: Color(white: 0.15),
+                hover: Color(white: 0.18),
+                accent: Color.blue
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color(white: 0.94),
+                surfaceElevated: Color(white: 0.98),
+                surfaceCard: Color.white,
+                textPrimary: Color(white: 0.1),
+                textSecondary: Color(white: 0.4),
+                textTertiary: Color(white: 0.55),
+                textMuted: Color(white: 0.7),
+                border: Color(white: 0.82),
+                divider: Color(white: 0.88),
+                hover: Color(white: 0.9),
+                accent: Color(red: 0.0, green: 0.4, blue: 0.9)  // Darker blue for light mode
+            )
+        }
+    }
+
+    // MARK: - Tech Themes (adapt to light/dark)
+
+    /// Terminal - Green terminal aesthetic (adapts to light/dark)
+    public static func terminal(for scheme: ColorScheme = .dark) -> ThemeColorPalette {
         let terminalGreen = Color(red: 0.2, green: 0.9, blue: 0.4)
+        let darkGreen = Color(red: 0.1, green: 0.5, blue: 0.25)
         let dimGreen = Color(red: 0.15, green: 0.6, blue: 0.3)
-        return ThemeColorPalette(
-            surface: Color(NSColor(red: 0.02, green: 0.03, blue: 0.02, alpha: 1.0)),
-            surfaceElevated: Color(NSColor(red: 0.04, green: 0.06, blue: 0.04, alpha: 1.0)),
-            surfaceCard: Color(NSColor(red: 0.06, green: 0.08, blue: 0.06, alpha: 1.0)),
-            textPrimary: terminalGreen,
-            textSecondary: dimGreen,
-            textTertiary: dimGreen.opacity(0.7),
-            textMuted: dimGreen.opacity(0.5),
-            border: terminalGreen.opacity(0.2),
-            divider: terminalGreen.opacity(0.1),
-            hover: terminalGreen.opacity(0.08),
-            accent: terminalGreen
-        )
+
+        if scheme == .dark {
+            return ThemeColorPalette(
+                surface: Color(NSColor(red: 0.02, green: 0.03, blue: 0.02, alpha: 1.0)),
+                surfaceElevated: Color(NSColor(red: 0.04, green: 0.06, blue: 0.04, alpha: 1.0)),
+                surfaceCard: Color(NSColor(red: 0.06, green: 0.08, blue: 0.06, alpha: 1.0)),
+                textPrimary: terminalGreen,
+                textSecondary: dimGreen,
+                textTertiary: dimGreen.opacity(0.7),
+                textMuted: dimGreen.opacity(0.5),
+                border: terminalGreen.opacity(0.2),
+                divider: terminalGreen.opacity(0.1),
+                hover: terminalGreen.opacity(0.08),
+                accent: terminalGreen
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color(red: 0.95, green: 0.99, blue: 0.95),
+                surfaceElevated: Color(red: 0.96, green: 0.99, blue: 0.96),
+                surfaceCard: Color.white,
+                textPrimary: darkGreen,
+                textSecondary: Color(red: 0.2, green: 0.5, blue: 0.3),
+                textTertiary: Color(red: 0.3, green: 0.55, blue: 0.38),
+                textMuted: Color(red: 0.5, green: 0.65, blue: 0.55),
+                border: darkGreen.opacity(0.2),
+                divider: darkGreen.opacity(0.1),
+                hover: darkGreen.opacity(0.05),
+                accent: darkGreen
+            )
+        }
     }
 
-    /// Linear - True black, minimal, Vercel-inspired
-    static func linear() -> ThemeColorPalette {
-        ThemeColorPalette(
-            surface: Color.black,
-            surfaceElevated: Color(white: 0.06),
-            surfaceCard: Color(white: 0.08),
-            textPrimary: Color.white,
-            textSecondary: Color(white: 0.7),
-            textTertiary: Color(white: 0.5),
-            textMuted: Color(white: 0.35),
-            border: Color(white: 0.12),
-            divider: Color(white: 0.08),
-            hover: Color(white: 0.10),
-            accent: Color.cyan
-        )
+    /// Linear - Sharp, minimal, Vercel-inspired (adapts to light/dark)
+    public static func linear(for scheme: ColorScheme = .dark) -> ThemeColorPalette {
+        if scheme == .dark {
+            return ThemeColorPalette(
+                surface: Color.black,
+                surfaceElevated: Color(white: 0.06),
+                surfaceCard: Color(white: 0.08),
+                textPrimary: Color.white,
+                textSecondary: Color(white: 0.7),
+                textTertiary: Color(white: 0.5),
+                textMuted: Color(white: 0.35),
+                border: Color(white: 0.12),
+                divider: Color(white: 0.08),
+                hover: Color(white: 0.10),
+                accent: Color.cyan
+            )
+        } else {
+            return ThemeColorPalette(
+                surface: Color.white,
+                surfaceElevated: Color(white: 0.99),
+                surfaceCard: Color.white,
+                textPrimary: Color.black,
+                textSecondary: Color(white: 0.35),
+                textTertiary: Color(white: 0.5),
+                textMuted: Color(white: 0.65),
+                border: Color(white: 0.88),
+                divider: Color(white: 0.92),
+                hover: Color(white: 0.96),
+                accent: Color(red: 0.0, green: 0.5, blue: 0.7)  // Darker cyan for light
+            )
+        }
     }
 
-    /// Warm - Cozy brown/orange tones
-    static func warm() -> ThemeColorPalette {
-        let warmAccent = Color(red: 1.0, green: 0.6, blue: 0.2)
-        return ThemeColorPalette(
-            surface: Color(NSColor(red: 0.08, green: 0.06, blue: 0.04, alpha: 1.0)),
-            surfaceElevated: Color(NSColor(red: 0.12, green: 0.09, blue: 0.06, alpha: 1.0)),
-            surfaceCard: Color(NSColor(red: 0.14, green: 0.11, blue: 0.08, alpha: 1.0)),
-            textPrimary: Color(red: 1.0, green: 0.95, blue: 0.9),
-            textSecondary: Color(red: 0.85, green: 0.75, blue: 0.65),
-            textTertiary: Color(red: 0.7, green: 0.6, blue: 0.5),
-            textMuted: Color(red: 0.5, green: 0.4, blue: 0.35),
-            border: Color(red: 0.25, green: 0.2, blue: 0.15),
-            divider: Color(red: 0.18, green: 0.14, blue: 0.1),
-            hover: Color(red: 0.16, green: 0.12, blue: 0.08),
-            accent: warmAccent
-        )
+    // MARK: - Legacy (no colorScheme parameter for backward compatibility)
+
+    /// @available(*, deprecated, message: "Use midnight(for:) instead")
+    public static func midnight() -> ThemeColorPalette {
+        midnight(for: .dark)
     }
 
-    /// Minimal - Clean and subtle, gray accent
-    static func minimal() -> ThemeColorPalette {
-        ThemeColorPalette(
-            surface: Color(white: 0.08),
-            surfaceElevated: Color(white: 0.11),
-            surfaceCard: Color(white: 0.13),
-            textPrimary: Color(white: 0.9),
-            textSecondary: Color(white: 0.6),
-            textTertiary: Color(white: 0.45),
-            textMuted: Color(white: 0.3),
-            border: Color(white: 0.18),
-            divider: Color(white: 0.12),
-            hover: Color(white: 0.14),
-            accent: Color(white: 0.6)
-        )
+    /// @available(*, deprecated, message: "Use terminal(for:) instead")
+    public static func terminal() -> ThemeColorPalette {
+        terminal(for: .dark)
     }
 
-    /// Classic - Dark gray, blue accent
-    static func classic() -> ThemeColorPalette {
-        ThemeColorPalette(
-            surface: Color(white: 0.12),
-            surfaceElevated: Color(white: 0.15),
-            surfaceCard: Color(white: 0.17),
-            textPrimary: Color.white,
-            textSecondary: Color(white: 0.7),
-            textTertiary: Color(white: 0.5),
-            textMuted: Color(white: 0.35),
-            border: Color(white: 0.2),
-            divider: Color(white: 0.15),
-            hover: Color(white: 0.18),
-            accent: Color.blue
-        )
+    /// @available(*, deprecated, message: "Use linear(for:) instead")
+    public static func linear() -> ThemeColorPalette {
+        linear(for: .dark)
+    }
+
+    /// @available(*, deprecated, message: "Use warm(for:) instead")
+    public static func warm() -> ThemeColorPalette {
+        warm(for: .dark)
+    }
+
+    /// @available(*, deprecated, message: "Use minimal(for:) instead")
+    public static func minimal() -> ThemeColorPalette {
+        minimal(for: .dark)
+    }
+
+    /// @available(*, deprecated, message: "Use classic(for:) instead")
+    public static func classic() -> ThemeColorPalette {
+        classic(for: .dark)
     }
 }

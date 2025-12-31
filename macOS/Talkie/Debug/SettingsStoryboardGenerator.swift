@@ -254,8 +254,7 @@ class SettingsStoryboardGenerator {
             // Resize window for this capture
             window.setContentSize(size.size)
             window.contentView = NSHostingView(rootView: view)
-            window.makeKeyAndOrderFront(nil)
-            window.center()
+            window.orderBack(nil)
 
             // Wait for window to resize and render
             try? await Task.sleep(for: .milliseconds(600))
@@ -299,9 +298,9 @@ class SettingsStoryboardGenerator {
         let view = createView(for: page)
         NSLog("[captureSinglePage] View created, setting as content...")
         window.contentView = NSHostingView(rootView: view)
-        NSLog("[captureSinglePage] Content set, showing window...")
-        window.makeKeyAndOrderFront(nil)
-        NSLog("[captureSinglePage] Window shown, waiting for render...")
+        NSLog("[captureSinglePage] Content set, ordering window...")
+        window.orderBack(nil)
+        NSLog("[captureSinglePage] Window ordered, waiting for render...")
 
         // Wait for window to render fully
         try? await Task.sleep(for: .milliseconds(600))
@@ -333,7 +332,7 @@ class SettingsStoryboardGenerator {
         return result
     }
 
-    func captureAllPages(to directory: URL) async -> [SettingsPage: URL] {
+    func captureAllPages(to directory: URL, fullWindow: Bool = true) async -> [SettingsPage: URL] {
         var results: [SettingsPage: URL] = [:]
 
         // Create directory if needed
@@ -345,8 +344,11 @@ class SettingsStoryboardGenerator {
         }
 
         // Fallback: render isolated views
-        print("⚠️ No real settings window found, using isolated views...")
-        let window = createRenderWindow()
+        let mode = fullWindow ? "full (3-column)" : "compact (2-column)"
+        print("⚠️ No real settings window found, using isolated views [\(mode)]...")
+        let windowSize = fullWindow ? CGSize(width: 1200, height: 800) : CGSize(width: 900, height: 700)
+        print("📐 Window size: \(Int(windowSize.width))x\(Int(windowSize.height))")
+        let window = createRenderWindow(size: windowSize)
 
         for page in SettingsPage.allCases {
             print("📸 Capturing \(page.title)...")
@@ -354,9 +356,10 @@ class SettingsStoryboardGenerator {
             // Set window title to match current page
             window.title = "Settings — \(page.title)"
 
-            let view = createView(for: page)
+            let view = fullWindow ? createFullWindowView(for: page) : createView(for: page)
             window.contentView = NSHostingView(rootView: view)
-            window.makeKeyAndOrderFront(nil)
+            // Order window without bringing to front (it's positioned off-screen anyway)
+            window.orderBack(nil)
 
             // Wait for window to render fully
             try? await Task.sleep(for: .milliseconds(600))
@@ -498,7 +501,7 @@ class SettingsStoryboardGenerator {
 
             let view = withOverlay ? createViewWithOverlay(for: page) : createView(for: page)
             window.contentView = NSHostingView(rootView: view)
-            window.makeKeyAndOrderFront(nil)
+            window.orderBack(nil)
 
             try? await Task.sleep(for: .milliseconds(300))
 
@@ -707,8 +710,8 @@ class SettingsStoryboardGenerator {
         window.title = "Talkie Settings"
         window.isOpaque = true
         window.backgroundColor = NSColor(white: 0.1, alpha: 1.0)
-        window.level = .floating
-        window.center()
+        // Position off-screen so user doesn't see it during capture
+        window.setFrameOrigin(NSPoint(x: -10000, y: -10000))
         return window
     }
 
@@ -753,15 +756,43 @@ class SettingsStoryboardGenerator {
     }
 
     private func createView(for page: SettingsPage) -> AnyView {
-        // Use SettingsView for now - shows 2-column settings layout
-        // TODO: Add 3-column capture with full navigation
+        // Compact view: 2-column settings layout (sidebar + content only)
         let section = page.settingsSection
 
+        // Must include all environment objects that views may need
+        // This matches TalkieApp.body environments
         let view = SettingsView(initialSection: section)
             .frame(width: 900, height: 700)
             .environment(SettingsManager.shared)
-            .environment(LiveSettings.shared)
             .environment(EngineClient.shared)
+            .environment(LiveSettings.shared)
+            .environment(CloudKitSyncManager.shared)
+            .environment(SystemEventManager.shared)
+            .environment(RelativeTimeTicker.shared)
+
+        return AnyView(view)
+    }
+
+    /// Create full window view with native NavigationSplitView (3-column layout)
+    private func createFullWindowView(for page: SettingsPage) -> AnyView {
+        let section = page.settingsSection
+
+        // Use the full app navigation with settings selected
+        // Match TalkieApp.body exactly - use minWidth/minHeight to let content size naturally
+        // NOTE: Do NOT provide managedObjectContext - TalkieApp doesn't provide it
+        // and accessing PersistenceController in CLI mode before stores are loaded causes crashes
+        let view = TalkieNavigationViewNative(
+            initialSection: .settings,
+            initialSettingsSection: section
+        )
+        .environment(SettingsManager.shared)
+        .environment(EngineClient.shared)
+        .environment(LiveSettings.shared)
+        .environment(CloudKitSyncManager.shared)
+        .environment(SystemEventManager.shared)
+        .environment(RelativeTimeTicker.shared)
+        .frame(minWidth: 900, minHeight: 600)
+        .tint(SettingsManager.shared.accentColor.color)
 
         return AnyView(view)
     }
