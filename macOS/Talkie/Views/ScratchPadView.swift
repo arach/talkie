@@ -496,6 +496,32 @@ struct ScratchPadView: View {
                 }
                 .buttonStyle(.plain)
 
+                // Replay command button
+                Button(action: {
+                    showHistory = false
+                    Task { await polishState.replayCommand(snapshot) }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10))
+                        Text("Replay")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(Theme.current.foreground)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Theme.current.surface2)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                    .stroke(settings.resolvedAccentColor.opacity(0.5), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("Re-run this command on current text")
+
                 Spacer()
 
                 Button(action: {

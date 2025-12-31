@@ -164,6 +164,12 @@ final class TextPolishState {
         viewState = .editing
     }
 
+    /// Replay a command from history on the current text
+    func replayCommand(_ snapshot: EditSnapshot) async {
+        previewingSnapshot = nil
+        await polish(instruction: snapshot.instruction)
+    }
+
     func clearHistory() {
         editHistory.removeAll()
         previewingSnapshot = nil
