@@ -32,10 +32,8 @@ final class StartupProfiler {
         return _milestones
     }
 
-    /// Track if we've printed the summary
-    private var hasPrintedSummary = false
-
-    private let logger = Logger(subsystem: "jdi.talkie.performance", category: "StartupProfiler")
+    /// Track if we've printed the summary (protected by lock)
+    private var _hasPrintedSummary = false
 
     private init() {}
 
@@ -57,17 +55,23 @@ final class StartupProfiler {
         mark(name)
     }
 
-    /// Print full timeline summary
+    /// Print full timeline summary (thread-safe)
     func printSummary() {
-        guard !hasPrintedSummary else { return }
-        hasPrintedSummary = true
+        lock.lock()
+        guard !_hasPrintedSummary else {
+            lock.unlock()
+            return
+        }
+        _hasPrintedSummary = true
+        let snapshotMilestones = _milestones
+        lock.unlock()
 
         NSLog("\n" + String(repeating: "=", count: 60))
         NSLog("STARTUP TIMELINE")
         NSLog(String(repeating: "=", count: 60))
 
         var lastTime = processStart
-        for (name, time, elapsed) in milestones {
+        for (name, time, elapsed) in snapshotMilestones {
             let delta = (time - lastTime) * 1000
             let deltaStr = delta > 0.5 ? String(format: "+%.1fms", delta) : ""
             let paddedName = name.padding(toLength: 40, withPad: " ", startingAt: 0)
@@ -75,18 +79,18 @@ final class StartupProfiler {
             lastTime = time
         }
 
-        if let last = milestones.last {
+        if let last = snapshotMilestones.last {
             NSLog(String(repeating: "-", count: 60))
             NSLog(String(format: "%7.1fms  TOTAL TIME TO READY", last.elapsed))
         }
         NSLog(String(repeating: "=", count: 60) + "\n")
     }
 
-    /// Reset for fresh measurement
+    /// Reset for fresh measurement (thread-safe)
     func reset() {
         lock.lock()
         _milestones.removeAll()
+        _hasPrintedSummary = false
         lock.unlock()
-        hasPrintedSummary = false
     }
 }

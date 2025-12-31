@@ -136,11 +136,19 @@ struct UnifiedDashboard: View {
             StartupProfiler.shared.mark("home.dictations.refreshed")
             isLiveRunning = liveState.isRunning
             serviceState = serviceMonitor.state
-            pendingRetryCount = LiveDatabase.countNeedsRetry()
+            // Async DB call to avoid blocking main thread
+            Task.detached {
+                let count = LiveDatabase.countNeedsRetry()
+                await MainActor.run { pendingRetryCount = count }
+            }
         }
         .onChange(of: dictationStore.dictations.count) { oldCount, newCount in
             loadData()
-            pendingRetryCount = LiveDatabase.countNeedsRetry()
+            // Async DB call to avoid blocking main thread
+            Task.detached {
+                let count = LiveDatabase.countNeedsRetry()
+                await MainActor.run { pendingRetryCount = count }
+            }
             // Mark ready when dictations are first populated
             if oldCount == 0 && newCount > 0 {
                 StartupProfiler.shared.mark("home.dictations.rendered")
@@ -154,10 +162,14 @@ struct UnifiedDashboard: View {
             loadData()
         }
         .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
-            // Refresh pending count periodically in case cleared elsewhere
-            let newCount = LiveDatabase.countNeedsRetry()
-            if newCount != pendingRetryCount {
-                pendingRetryCount = newCount
+            // Refresh pending count periodically (async to avoid blocking main thread)
+            Task.detached {
+                let newCount = LiveDatabase.countNeedsRetry()
+                await MainActor.run {
+                    if newCount != pendingRetryCount {
+                        pendingRetryCount = newCount
+                    }
+                }
             }
         }
     }

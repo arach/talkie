@@ -35,6 +35,7 @@ struct StatusBar: View {
     @State private var showPID = false
     @State private var pidCopied = false
     @State private var controlPressed = false
+    @State private var eventMonitor: Any?
 
     // App version for display
     private var appVersion: String {
@@ -328,14 +329,27 @@ struct StatusBar: View {
             }
             #endif
 
-            // Monitor Control key for DEV badge
-            NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [self] event in
-                let isControlPressed = event.modifierFlags.contains(.control)
-                if controlPressed != isControlPressed {
-                    controlPressed = isControlPressed
+            // Monitor Control key for DEV badge (store to remove on disappear)
+            if eventMonitor == nil {
+                eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
+                    let isControlPressed = event.modifierFlags.contains(.control)
+                    DispatchQueue.main.async {
+                        if self.controlPressed != isControlPressed {
+                            self.controlPressed = isControlPressed
+                        }
+                    }
+                    return event
                 }
-                return event
             }
+        }
+        .onDisappear {
+            // Clean up event monitor to prevent memory leak
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                eventMonitor = nil
+            }
+            successTimer?.invalidate()
+            successTimer = nil
         }
     }
 
