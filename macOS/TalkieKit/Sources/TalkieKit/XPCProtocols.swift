@@ -40,6 +40,17 @@ public var kTalkieEngineXPCServiceName: String {
     /// - Parameters:
     ///   - reply: Callback with microphone granted, accessibility granted, screen recording granted
     func getPermissions(reply: @escaping (_ microphone: Bool, _ accessibility: Bool, _ screenRecording: Bool) -> Void)
+
+    /// Insert text into the target application
+    ///
+    /// Uses direct Accessibility API insertion when possible (no clipboard pollution),
+    /// falls back to clipboard + simulated Cmd+V paste if direct insertion fails.
+    ///
+    /// - Parameters:
+    ///   - text: The text to insert
+    ///   - bundleID: Bundle identifier of the target app (nil = frontmost app)
+    ///   - reply: Callback with success status
+    func pasteText(_ text: String, toAppWithBundleID bundleID: String?, reply: @escaping (_ success: Bool) -> Void)
 }
 
 /// Protocol for Talkie to receive callbacks from TalkieLive (Live → Talkie events)

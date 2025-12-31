@@ -18,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let pttHotKeyManager = HotKeyManager(signature: "\(sig)PT", hotkeyID: 3)  // Push-to-talk
     private let queuePickerHotKeyManager = HotKeyManager(signature: "\(sig)QP", hotkeyID: 2)  // Queue picker
     private let pasteLastHotKeyManager = HotKeyManager(signature: "\(sig)PL", hotkeyID: 4)  // Paste last
+    #if DEBUG
+    private let debugPasteHotKeyManager = HotKeyManager(signature: "\(sig)DP", hotkeyID: 5)  // Debug paste test
+    #endif
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -132,15 +135,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             #if DEBUG
             // Monitor Command+G for glass mode toggle (Dev builds only)
+            // Note: Debug paste test (⌃⇧⌘P) uses global hotkey via HotKeyManager
             glassToggleMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
                 // Command+G toggles glass mode
-                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "g" {
+                if flags == .command && event.charactersIgnoringModifiers == "g" {
                     LiveSettings.shared.glassMode.toggle()
                     let isGlass = LiveSettings.shared.glassMode
                     log.info("Glass mode toggled: \(isGlass ? "ON" : "OFF")")
                     self?.showGlassModeToast(enabled: isGlass)
                     return nil  // Consume the event
                 }
+
                 return event
             }
             #endif
@@ -345,6 +352,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.showQueuePicker()
         }
 
+        #if DEBUG
+        // Register debug paste test hotkey: ⌃⌘T (Control + Command + T)
+        // keyCode 17 = T key
+        debugPasteHotKeyManager.registerHotKey(
+            modifiers: UInt32(cmdKey | controlKey),
+            keyCode: 17
+        ) { [weak self] in
+            Task { @MainActor in
+                self?.testTextInserterPaste()
+            }
+        }
+        log.debug("Debug paste hotkey registered: ⌃⌘T")
+        #endif
+
         // Listen for hotkey changes (from settings UI in this process)
         NotificationCenter.default.addObserver(
             self,
@@ -507,15 +528,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
 
-            // Copy to clipboard
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(last.text, forType: .string)
+            // Use TextInserter for robust paste (also leaves text in clipboard as fallback)
+            let success = await TextInserter.shared.insert(last.text, intoAppWithBundleID: nil)
 
-            // Simulate paste (Cmd+V)
-            simulatePaste()
-
-            log.info("Pasted last dictation: \(last.text.prefix(30))...")
+            if success {
+                log.info("Pasted last dictation: \(last.text.prefix(30))...")
+            } else {
+                // Fallback: ensure it's at least in clipboard
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(last.text, forType: .string)
+                log.warning("Paste failed - copied to clipboard instead")
+            }
         }
     }
 
@@ -596,19 +620,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func simulatePaste() {
-        // Use CGEvent to simulate Cmd+V
-        let source = CGEventSource(stateID: .hidSystemState)
-
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) // V key
-        keyDown?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
-
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        keyUp?.flags = .maskCommand
-        keyUp?.post(tap: .cghidEventTap)
-    }
-
     @objc private func toggleFloatingPill(_ sender: NSMenuItem) {
         floatingPill.toggle()
         sender.state = floatingPill.isVisible ? .on : .off
@@ -621,6 +632,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let isGlass = LiveSettings.shared.glassMode
         log.info("Glass mode toggled: \(isGlass ? "ON" : "OFF")")
         showGlassModeToast(enabled: isGlass)
+    }
+
+    // MARK: - TextInserter Debug Test
+
+    /// Debug function to test TextInserter paste in isolation (Command+Shift+P)
+    private func testTextInserterPaste() {
+        let testText = "[TextInserter test: \(Date().formatted(date: .omitted, time: .standard))]"
+        log.info("🧪 Testing TextInserter with: \(testText)")
+
+        Task { @MainActor in
+            let success = await TextInserter.shared.insert(testText, intoAppWithBundleID: nil, replaceSelection: false)
+
+            if success {
+                log.info("✅ TextInserter test PASSED - text should be inserted")
+                showTextInserterToast(success: true, message: "Insert succeeded")
+            } else {
+                log.error("❌ TextInserter test FAILED - check if target has focus")
+                showTextInserterToast(success: false, message: "Insert failed")
+            }
+        }
+    }
+
+    private func showTextInserterToast(success: Bool, message: String) {
+        let emoji = success ? "✅" : "❌"
+        let text = "\(emoji) \(message)"
+
+        let label = NSTextField(labelWithString: text)
+        label.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        label.textColor = .white
+        label.alignment = .center
+        label.sizeToFit()
+
+        let padding: CGFloat = 16
+        let width = label.frame.width + padding * 2
+        let height: CGFloat = 36
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 10
+        container.layer?.backgroundColor = (success ? NSColor.systemGreen : NSColor.systemRed).withAlphaComponent(0.9).cgColor
+
+        label.frame = NSRect(x: padding, y: (height - label.frame.height) / 2, width: label.frame.width, height: label.frame.height)
+        container.addSubview(label)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.level = .floating
+        window.contentView = container
+        window.hasShadow = true
+
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let x = screenFrame.midX - width / 2
+            let y = screenFrame.midY + 100
+            window.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+
+        window.orderFront(nil)
+
+        // Auto dismiss after 2 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                window.animator().alphaValue = 0
+            } completionHandler: {
+                window.orderOut(nil)
+            }
+        }
     }
 
     // MARK: - Glass Mode Toast

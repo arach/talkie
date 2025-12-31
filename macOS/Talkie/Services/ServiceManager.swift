@@ -673,6 +673,31 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
         }
     }
 
+    /// Paste text via TalkieLive (uses robust AX insertion with clipboard fallback)
+    /// - Parameters:
+    ///   - text: The text to insert
+    ///   - bundleID: Target app bundle ID (nil = frontmost app)
+    ///   - completion: Called with success status
+    public func pasteText(_ text: String, toAppWithBundleID bundleID: String?, completion: @escaping (Bool) -> Void) {
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            logger.error("[Live] Paste error: \(error.localizedDescription)")
+            completion(false)
+        }) else {
+            logger.warning("[Live] Cannot paste - not connected to TalkieLive")
+            completion(false)
+            return
+        }
+
+        service.pasteText(text, toAppWithBundleID: bundleID) { success in
+            if success {
+                logger.info("[Live] Paste succeeded")
+            } else {
+                logger.warning("[Live] Paste failed")
+            }
+            completion(success)
+        }
+    }
+
     // MARK: - XPC Monitoring
 
     /// Start monitoring TalkieLive XPC connection (backwards compatibility)

@@ -310,15 +310,19 @@ final class InterstitialManager {
     }
 
     func pasteAndDismiss() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(editedText, forType: .string)
+        let text = editedText
+        logger.info("Pasting text via TalkieLive: \(text.count) chars")
         dismiss()
 
-        // Simulate paste after panel dismisses
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            self.simulatePaste()
+        // Route paste through TalkieLive (has accessibility permissions)
+        ServiceManager.shared.live.pasteText(text, toAppWithBundleID: nil) { success in
+            if !success {
+                // Fallback: copy to clipboard so user can paste manually
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                logger.warning("TalkieLive paste failed - copied to clipboard")
+            }
         }
-        logger.info("Pasting text: \(self.editedText.count) chars")
     }
 
     /// Replace original selection in source app with edited text (Command+Enter)
@@ -329,53 +333,19 @@ final class InterstitialManager {
             return
         }
 
-        // Copy edited text to clipboard
-        let textToReplace = editedText
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(textToReplace, forType: .string)
-
-        logger.info("Replacing selection in \(bundleID) with \(textToReplace.count) chars")
-
-        // Dismiss the panel first
+        let text = editedText
+        logger.info("Replacing selection in \(bundleID) with \(text.count) chars")
         dismiss()
 
-        // Activate the source app and paste
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            // Find and activate the source app
-            if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
-                app.activate(options: [.activateIgnoringOtherApps])
-
-                // Wait for app activation, then paste
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    self.simulatePaste()
-                }
-            } else {
-                logger.warning("Source app not found: \(bundleID)")
+        // Route paste through TalkieLive (handles app activation and paste robustly)
+        ServiceManager.shared.live.pasteText(text, toAppWithBundleID: bundleID) { success in
+            if !success {
+                // Fallback: copy to clipboard so user can paste manually
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                logger.warning("TalkieLive paste failed - copied to clipboard")
             }
         }
-    }
-
-    private func simulatePaste() {
-        let source = CGEventSource(stateID: .combinedSessionState)
-
-        // Cmd down
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
-        cmdDown?.flags = .maskCommand
-        cmdDown?.post(tap: .cghidEventTap)
-
-        // V down
-        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-        vDown?.flags = .maskCommand
-        vDown?.post(tap: .cghidEventTap)
-
-        // V up
-        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        vUp?.flags = .maskCommand
-        vUp?.post(tap: .cghidEventTap)
-
-        // Cmd up
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
-        cmdUp?.post(tap: .cghidEventTap)
     }
 
     func openInDestination(_ target: QuickOpenTarget) {

@@ -198,6 +198,15 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
         }
     }
 
+    nonisolated func pasteText(_ text: String, toAppWithBundleID bundleID: String?, reply: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            NSLog("[TalkieLiveXPC] Paste request: \(text.count) chars to \(bundleID ?? "frontmost")")
+            let success = await TextInserter.shared.insert(text, intoAppWithBundleID: bundleID)
+            NSLog("[TalkieLiveXPC] Paste result: \(success ? "success" : "failed")")
+            reply(success)
+        }
+    }
+
     private func checkScreenRecordingPermission() -> Bool {
         // Screen recording permission check - try to get window info
         guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
