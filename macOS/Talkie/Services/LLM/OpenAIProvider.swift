@@ -247,13 +247,22 @@ class OpenAIProvider: LLMProvider {
         }
         messages.append(["role": "user", "content": prompt])
 
-        let body: [String: Any] = [
+        // GPT-5.x and o-series have different parameter requirements
+        let isNewModel = model.hasPrefix("gpt-5") || model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("o4")
+
+        var body: [String: Any] = [
             "model": model,
-            "messages": messages,
-            "temperature": options.temperature,
-            "max_tokens": options.maxTokens,
-            "top_p": options.topP
+            "messages": messages
         ]
+
+        // GPT-5.x doesn't support temperature/top_p, older models do
+        if !isNewModel {
+            body["temperature"] = options.temperature
+            body["top_p"] = options.topP
+            body["max_tokens"] = options.maxTokens
+        } else {
+            body["max_completion_tokens"] = options.maxTokens
+        }
 
         log.info("📤 Request body: model=\(model), messages=\(messages.count), temp=\(options.temperature)")
 
@@ -314,13 +323,21 @@ class OpenAIProvider: LLMProvider {
                     }
                     messages.append(["role": "user", "content": prompt])
 
-                    let body: [String: Any] = [
+                    // GPT-5.x and o-series have different parameter requirements
+                    let isNewModel = model.hasPrefix("gpt-5") || model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("o4")
+
+                    var body: [String: Any] = [
                         "model": model,
                         "messages": messages,
-                        "temperature": options.temperature,
-                        "max_tokens": options.maxTokens,
                         "stream": true
                     ]
+
+                    if !isNewModel {
+                        body["temperature"] = options.temperature
+                        body["max_tokens"] = options.maxTokens
+                    } else {
+                        body["max_completion_tokens"] = options.maxTokens
+                    }
                     
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
                     
