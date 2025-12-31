@@ -123,16 +123,46 @@ public struct LivePreviewScreen: View {
         self._showOnAir = showOnAir
     }
 
+    // Adaptive premium background for the mock screen
+    private var screenBackground: Color {
+        Color(light: Color(white: 0.15), dark: Color(white: 0.08))
+    }
+
     public var body: some View {
         ZStack {
-            // Screen background
+            // Screen background - premium adaptive color
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(Color.black.opacity(0.9))
+                .fill(screenBackground)
+                .overlay(
+                    // Subtle inner gradient for depth
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.03),
+                                    Color.clear,
+                                    Color.black.opacity(0.1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .stroke(TalkieTheme.border, lineWidth: 1)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.15),
+                                    Color.white.opacity(0.05)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
                 )
-                .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
 
             // Content
             VStack(spacing: 0) {
@@ -145,19 +175,6 @@ public struct LivePreviewScreen: View {
                 bottomArea
             }
             .padding(16)
-
-            // ON AIR indicator
-            if showOnAir {
-                VStack {
-                    HStack {
-                        OnAirBadge()
-                            .padding(.top, 36)
-                            .padding(.leading, 20)
-                        Spacer()
-                    }
-                    Spacer()
-                }
-            }
         }
         .frame(width: screenWidth, height: screenHeight)
         .onHover { hovering in
@@ -176,7 +193,8 @@ public struct LivePreviewScreen: View {
                 .foregroundColor(.white.opacity(0.3))
                 .tracking(0.5)
 
-            HStack(alignment: .top) {
+            // Position dots row
+            HStack {
                 PositionDot(
                     isSelected: hudPosition == .topLeft,
                     action: { hudPosition = .topLeft }
@@ -184,18 +202,10 @@ public struct LivePreviewScreen: View {
 
                 Spacer()
 
-                VStack(spacing: 4) {
-                    PositionDot(
-                        isSelected: hudPosition == .topCenter,
-                        action: { hudPosition = .topCenter }
-                    )
-
-                    if overlayStyle.showsTopOverlay {
-                        HUDStylePreview(style: overlayStyle)
-                            .frame(width: 120, height: 28)
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    }
-                }
+                PositionDot(
+                    isSelected: hudPosition == .topCenter,
+                    action: { hudPosition = .topCenter }
+                )
 
                 Spacer()
 
@@ -205,8 +215,37 @@ public struct LivePreviewScreen: View {
                 )
             }
             .padding(.horizontal, 12)
+
+            // HUD preview row with ON AIR badge
+            HStack(alignment: .top, spacing: 0) {
+                // ON AIR badge - left side
+                if showOnAir {
+                    OnAirBadge()
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                }
+
+                Spacer()
+
+                // HUD style preview - center
+                if overlayStyle.showsTopOverlay {
+                    HUDStylePreview(style: overlayStyle)
+                        .frame(width: 120, height: 28)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+
+                Spacer()
+
+                // Balance spacer (same width as ON AIR badge area)
+                if showOnAir {
+                    Color.clear
+                        .frame(width: 36, height: 1)
+                }
+            }
+            .frame(height: 28)
+            .padding(.horizontal, 8)
         }
         .animation(.easeInOut(duration: 0.2), value: overlayStyle.showsTopOverlay)
+        .animation(.easeInOut(duration: 0.2), value: showOnAir)
     }
 
     // MARK: - Bottom Area (Pill)
@@ -407,45 +446,42 @@ private struct OnAirBadge: View {
 
     var body: some View {
         Text("ON AIR")
-            .font(.system(size: 6, weight: .bold, design: .rounded))
-            .tracking(0.8)
+            .font(.system(size: 7, weight: .heavy, design: .rounded))
+            .tracking(1.0)
             .foregroundColor(.white)
-            .shadow(color: .red.opacity(0.8), radius: 2)
-            .shadow(color: .red.opacity(0.5), radius: 4)
-            .padding(.horizontal, 5)
+            .shadow(color: .red, radius: 3)
+            .shadow(color: .red.opacity(0.8), radius: 6)
+            .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(
                 ZStack {
+                    // Outer glow
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.red.opacity(0.3), Color.orange.opacity(0.2)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .blur(radius: 4)
-                        .opacity(0.6 + glowPhase * 0.4)
+                        .fill(Color.red.opacity(0.4))
+                        .blur(radius: 6)
+                        .opacity(0.7 + glowPhase * 0.3)
 
+                    // Inner fill
                     RoundedRectangle(cornerRadius: 3)
                         .fill(
                             LinearGradient(
-                                colors: [Color.red.opacity(0.15), Color.red.opacity(0.25)],
+                                colors: [Color.red.opacity(0.25), Color.red.opacity(0.4)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
 
+                    // Bright border
                     RoundedRectangle(cornerRadius: 3)
                         .strokeBorder(
                             LinearGradient(
-                                colors: [Color.red, Color.orange],
+                                colors: [Color.red, Color.orange.opacity(0.8)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1
+                            lineWidth: 1.5
                         )
-                        .shadow(color: .red.opacity(0.5), radius: 2)
+                        .shadow(color: .red.opacity(0.8), radius: 3)
                 }
             )
             .onAppear {
