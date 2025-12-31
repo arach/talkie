@@ -231,41 +231,72 @@ struct PermissionsSettingsSection: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack {
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(TalkieTheme.accent)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: Spacing.md) {
+                // Icon in a subtle glass container
+                ZStack {
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(Color.accentColor.opacity(0.12))
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .strokeBorder(Color.accentColor.opacity(0.2), lineWidth: 0.5)
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.accentColor)
+                }
+                .frame(width: 36, height: 36)
 
-                Text("PERMISSION CENTER")
-                    .font(.techLabel)
-                    .tracking(Tracking.wide)
-                    .foregroundColor(TalkieTheme.textPrimary)
+                // Title and subtitle stacked
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: Spacing.sm) {
+                        Text("PERMISSIONS")
+                            .font(.system(size: 13, weight: .semibold))
+                            .tracking(Tracking.normal)
+                            .foregroundColor(TalkieTheme.textPrimary)
+
+                        Spacer()
+
+                        Button(action: {
+                            isRefreshing = true
+                            permissionManager.refreshAll()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                isRefreshing = false
+                            }
+                        }) {
+                            if isRefreshing {
+                                BrailleSpinner()
+                                    .font(.system(size: 12, weight: .medium))
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(TalkieTheme.textSecondary)
+                    }
+
+                    Text("Grant required permissions for TalkieLive to function.")
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textTertiary)
+                }
 
                 Spacer()
-
-                Button(action: {
-                    isRefreshing = true
-                    permissionManager.refreshAll()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                        isRefreshing = false
-                    }
-                }) {
-                    if isRefreshing {
-                        BrailleSpinner()
-                            .font(.system(size: 12, weight: .medium))
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(TalkieTheme.textSecondary)
             }
 
-            Text("TalkieLive requires certain permissions to function. Grant them below.")
-                .font(.system(size: 12))
-                .foregroundColor(TalkieTheme.textSecondary)
+            // Subtle separator line
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.08),
+                            Color.white.opacity(0.02),
+                            Color.clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 1)
+                .padding(.top, Spacing.md)
         }
     }
 
@@ -297,8 +328,25 @@ struct PermissionsSettingsSection: View {
             Spacer()
         }
         .padding(Spacing.md)
-        .background(TalkieTheme.surfaceElevated)
-        .cornerRadius(CornerRadius.md)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(Color.white.opacity(0.04))
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.06),
+                                Color.white.opacity(0.02)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+            }
+        )
     }
 
     // MARK: - Troubleshooting
@@ -306,8 +354,8 @@ struct PermissionsSettingsSection: View {
     private var troubleshootingSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Text("TROUBLESHOOTING")
-                .font(.techLabelSmall)
-                .tracking(Tracking.wide)
+                .font(.system(size: 10, weight: .bold))
+                .tracking(Tracking.normal)
                 .foregroundColor(TalkieTheme.textTertiary)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -319,6 +367,7 @@ struct PermissionsSettingsSection: View {
                 if let bundleID = Bundle.main.bundleIdentifier,
                    bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
                     Divider()
+                        .background(Color.white.opacity(0.08))
                         .padding(.vertical, Spacing.xs)
 
                     HStack(alignment: .top, spacing: Spacing.sm) {
@@ -341,8 +390,25 @@ struct PermissionsSettingsSection: View {
                 }
             }
             .padding(Spacing.md)
-            .background(TalkieTheme.surfaceElevated)
-            .cornerRadius(CornerRadius.md)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .fill(Color.white.opacity(0.04))
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.06),
+                                    Color.white.opacity(0.02)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
+            )
         }
     }
 
@@ -383,6 +449,9 @@ struct PermissionSettingsRow: View {
     let permission: PermissionType
     let status: PermissionStatus
     let onRequest: () -> Void
+
+    @State private var isHovered = false
+    @State private var isButtonHovered = false
 
     var body: some View {
         HStack(spacing: Spacing.md) {
@@ -435,21 +504,26 @@ struct PermissionSettingsRow: View {
 
             Spacer()
 
-            // Action button
+            // Action button - glass style with hover
             Button(action: onRequest) {
                 Text("Open Settings")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TalkieTheme.textSecondary)
+                    .foregroundColor(isButtonHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, 6)
+                    .glassHover(
+                        isHovered: isButtonHovered,
+                        cornerRadius: CornerRadius.xs,
+                        baseOpacity: 0.04,
+                        hoverOpacity: 0.15
+                    )
             }
             .buttonStyle(.plain)
+            .onHover { isButtonHovered = $0 }
         }
         .padding(Spacing.md)
-        .background(TalkieTheme.surface)
-        .cornerRadius(CornerRadius.md)
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .strokeBorder(TalkieTheme.divider, lineWidth: 0.5)
-        )
+        .glassHover(isHovered: isHovered, cornerRadius: CornerRadius.md)
+        .onHover { isHovered = $0 }
     }
 }
 

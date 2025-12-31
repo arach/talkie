@@ -125,37 +125,60 @@ public struct LivePreviewScreen: View {
 
     public var body: some View {
         ZStack {
-            // Screen background
+            // Desktop wallpaper background
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .fill(Color.black.opacity(0.9))
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(light: Color(red: 0.3, green: 0.35, blue: 0.45), dark: Color(red: 0.15, green: 0.18, blue: 0.25)),
+                            Color(light: Color(red: 0.25, green: 0.28, blue: 0.35), dark: Color(red: 0.08, green: 0.1, blue: 0.15)),
+                            Color(light: Color(red: 0.2, green: 0.22, blue: 0.28), dark: Color(red: 0.05, green: 0.06, blue: 0.1))
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    // Subtle noise/texture effect
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.white.opacity(0.05),
+                                    Color.clear
+                                ],
+                                center: .topLeading,
+                                startRadius: 0,
+                                endRadius: 300
+                            )
+                        )
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .stroke(TalkieTheme.border, lineWidth: 1)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
 
-            // Content
+            // Content - position markers near edges
             VStack(spacing: 0) {
-                // Top area: HUD position markers + style preview
                 topArea
-
                 Spacer()
-
-                // Bottom area: Pill position markers + mini pill
                 bottomArea
             }
-            .padding(16)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 8)
 
-            // ON AIR indicator
-            if showOnAir {
+            // Hover hint - subtle, bottom right corner
+            if !isHovered {
                 VStack {
-                    HStack {
-                        OnAirBadge()
-                            .padding(.top, 36)
-                            .padding(.leading, 20)
-                        Spacer()
-                    }
                     Spacer()
+                    HStack {
+                        Spacer()
+                        Text("Hover to preview")
+                            .font(.system(size: 8))
+                            .foregroundColor(.white.opacity(0.25))
+                            .padding(6)
+                    }
                 }
             }
         }
@@ -170,13 +193,9 @@ public struct LivePreviewScreen: View {
     // MARK: - Top Area (HUD)
 
     private var topArea: some View {
-        VStack(spacing: 6) {
-            Text("HUD POSITION")
-                .font(.system(size: 7, weight: .medium))
-                .foregroundColor(.white.opacity(0.3))
-                .tracking(0.5)
-
-            HStack(alignment: .top) {
+        VStack(spacing: 4) {
+            // Position dots row - tight to edges
+            HStack {
                 PositionDot(
                     isSelected: hudPosition == .topLeft,
                     action: { hudPosition = .topLeft }
@@ -184,18 +203,10 @@ public struct LivePreviewScreen: View {
 
                 Spacer()
 
-                VStack(spacing: 4) {
-                    PositionDot(
-                        isSelected: hudPosition == .topCenter,
-                        action: { hudPosition = .topCenter }
-                    )
-
-                    if overlayStyle.showsTopOverlay {
-                        HUDStylePreview(style: overlayStyle)
-                            .frame(width: 120, height: 28)
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    }
-                }
+                PositionDot(
+                    isSelected: hudPosition == .topCenter,
+                    action: { hudPosition = .topCenter }
+                )
 
                 Spacer()
 
@@ -204,33 +215,62 @@ public struct LivePreviewScreen: View {
                     action: { hudPosition = .topRight }
                 )
             }
-            .padding(.horizontal, 12)
+
+            // HUD preview - centered
+            VStack(spacing: 3) {
+                if overlayStyle.showsTopOverlay {
+                    HUDStylePreview(style: overlayStyle)
+                        .frame(width: 100, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.black)
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+
+                Text("HUD")
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundColor(.white.opacity(0.35))
+                    .tracking(0.5)
+            }
+            .frame(height: 40)
         }
         .animation(.easeInOut(duration: 0.2), value: overlayStyle.showsTopOverlay)
+        .animation(.easeInOut(duration: 0.2), value: showOnAir)
     }
 
     // MARK: - Bottom Area (Pill)
 
     private var bottomArea: some View {
-        VStack(spacing: 6) {
-            HStack {
-                if pillPosition == .bottomLeft {
-                    AnimatedMiniPill(isRecording: isHovered)
-                    Spacer()
-                } else if pillPosition == .bottomCenter {
-                    Spacer()
-                    AnimatedMiniPill(isRecording: isHovered)
-                    Spacer()
-                } else if pillPosition == .bottomRight {
-                    Spacer()
-                    AnimatedMiniPill(isRecording: isHovered)
-                } else {
-                    Spacer()
-                }
-            }
-            .frame(height: 24)
-            .opacity(pillPosition != .topCenter ? 1 : 0)
+        VStack(spacing: 4) {
+            // Pill preview with label above
+            VStack(spacing: 3) {
+                Text("PILL")
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundColor(.white.opacity(0.35))
+                    .tracking(0.5)
 
+                HStack {
+                    if pillPosition == .bottomLeft {
+                        AnimatedMiniPill(isRecording: isHovered)
+                        Spacer()
+                    } else if pillPosition == .bottomCenter {
+                        Spacer()
+                        AnimatedMiniPill(isRecording: isHovered)
+                        Spacer()
+                    } else if pillPosition == .bottomRight {
+                        Spacer()
+                        AnimatedMiniPill(isRecording: isHovered)
+                    } else {
+                        Spacer()
+                    }
+                }
+                .frame(height: 24)
+                .opacity(pillPosition != .topCenter ? 1 : 0)
+            }
+            .frame(height: 40)
+
+            // Position dots row - tight to edges
             HStack {
                 PositionDot(
                     isSelected: pillPosition == .bottomLeft,
@@ -251,12 +291,6 @@ public struct LivePreviewScreen: View {
                     action: { pillPosition = .bottomRight }
                 )
             }
-            .padding(.horizontal, 12)
-
-            Text("PILL POSITION")
-                .font(.system(size: 7, weight: .medium))
-                .foregroundColor(.white.opacity(0.3))
-                .tracking(0.5)
         }
     }
 }
@@ -362,25 +396,25 @@ private struct AnimatedMiniPill: View {
     var body: some View {
         Group {
             if isRecording {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     Circle()
                         .fill(Color.red)
-                        .frame(width: 5, height: 5)
+                        .frame(width: 4, height: 4)
                         .overlay(
                             Circle()
                                 .fill(Color.red.opacity(0.3))
-                                .frame(width: 10, height: 10)
+                                .frame(width: 8, height: 8)
                         )
 
                     Text("0:03")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill(Color.black.opacity(0.7))
+                        .fill(Color.black)
                         .overlay(
                             Capsule()
                                 .stroke(Color.red.opacity(0.3), lineWidth: 0.5)
@@ -388,8 +422,8 @@ private struct AnimatedMiniPill: View {
                 )
             } else {
                 Capsule()
-                    .fill(Color.white.opacity(0.2))
-                    .frame(width: 24, height: 6)
+                    .fill(Color.white.opacity(0.25))
+                    .frame(width: 20, height: 5)
                     .overlay(
                         Capsule()
                             .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
@@ -407,45 +441,42 @@ private struct OnAirBadge: View {
 
     var body: some View {
         Text("ON AIR")
-            .font(.system(size: 6, weight: .bold, design: .rounded))
-            .tracking(0.8)
+            .font(.system(size: 7, weight: .heavy, design: .rounded))
+            .tracking(1.0)
             .foregroundColor(.white)
-            .shadow(color: .red.opacity(0.8), radius: 2)
-            .shadow(color: .red.opacity(0.5), radius: 4)
-            .padding(.horizontal, 5)
+            .shadow(color: .red, radius: 3)
+            .shadow(color: .red.opacity(0.8), radius: 6)
+            .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(
                 ZStack {
+                    // Outer glow
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.red.opacity(0.3), Color.orange.opacity(0.2)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .blur(radius: 4)
-                        .opacity(0.6 + glowPhase * 0.4)
+                        .fill(Color.red.opacity(0.4))
+                        .blur(radius: 6)
+                        .opacity(0.7 + glowPhase * 0.3)
 
+                    // Inner fill
                     RoundedRectangle(cornerRadius: 3)
                         .fill(
                             LinearGradient(
-                                colors: [Color.red.opacity(0.15), Color.red.opacity(0.25)],
+                                colors: [Color.red.opacity(0.25), Color.red.opacity(0.4)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
 
+                    // Bright border
                     RoundedRectangle(cornerRadius: 3)
                         .strokeBorder(
                             LinearGradient(
-                                colors: [Color.red, Color.orange],
+                                colors: [Color.red, Color.orange.opacity(0.8)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1
+                            lineWidth: 1.5
                         )
-                        .shadow(color: .red.opacity(0.5), radius: 2)
+                        .shadow(color: .red.opacity(0.8), radius: 3)
                 }
             )
             .onAppear {

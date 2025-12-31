@@ -156,43 +156,23 @@ final class QueuePickerController {
             return
         }
 
-        // Copy to clipboard
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(item.text, forType: .string)
+        let text = item.text
 
         // Mark as pasted in database
         LiveDatabase.markPasted(id: id)
 
         dismiss()
 
-        // Simulate Cmd+V to paste into frontmost app
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.simulatePaste()
+        // Use TextInserter for robust paste
+        Task { @MainActor in
+            let success = await TextInserter.shared.insert(text, intoAppWithBundleID: nil)
+            if !success {
+                // Fallback: copy to clipboard
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+            }
         }
-    }
-
-    private func simulatePaste() {
-        let source = CGEventSource(stateID: .combinedSessionState)
-
-        // Cmd down
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
-        cmdDown?.flags = .maskCommand
-        cmdDown?.post(tap: .cghidEventTap)
-
-        // V down
-        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-        vDown?.flags = .maskCommand
-        vDown?.post(tap: .cghidEventTap)
-
-        // V up
-        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        vUp?.flags = .maskCommand
-        vUp?.post(tap: .cghidEventTap)
-
-        // Cmd up
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
-        cmdUp?.post(tap: .cghidEventTap)
     }
 }
 

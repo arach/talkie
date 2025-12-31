@@ -1,1 +1,0 @@
-We don't wanna lose the asset stuff, but we don't wanna necessarily worry about committing them or whatever.

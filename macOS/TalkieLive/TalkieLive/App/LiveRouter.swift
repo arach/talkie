@@ -8,9 +8,9 @@
 import AppKit
 import ApplicationServices  // For AXIsProcessTrusted
 import Carbon.HIToolbox
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "LiveRouter")
+private let log = Log(.system)
 
 enum RoutingMode: String, CaseIterable {
     case clipboardOnly = "clipboardOnly"  // Copy to clipboard only
@@ -41,29 +41,27 @@ struct TranscriptRouter: LiveRouter {
         guard !cleaned.isEmpty,
               !cleaned.hasPrefix("["),
               cleaned != "(silence)" else {
-            logger.info("Skipping noise: \(transcript)")
+            log.info("Skipping noise: \(transcript)")
             return
         }
 
         // Validate: Ensure valid UTF-8 and reasonable length
         guard cleaned.utf8.count < 1_000_000,  // 1MB limit
               cleaned.canBeConverted(to: .utf8) else {
-            logger.error("Invalid text - cannot copy to clipboard")
+            log.error("Invalid text - cannot copy to clipboard")
             return
         }
 
-        // Copy to clipboard on main queue (NSPasteboard requirement)
-        let success = await MainActor.run {
-            copyToClipboard(cleaned)
-        }
-
-        guard success else {
-            logger.error("Clipboard copy failed")
+        // Copy to clipboard (required for both modes)
+        let copySuccess = copyToClipboard(cleaned)
+        guard copySuccess else {
+            log.error("Clipboard copy failed")
             return
         }
 
-        // Paste if enabled
         if mode == .paste {
+            // Legacy paste: clipboard + simulated Cmd+V (proven reliable)
+            // TODO: Switch to TextInserter.shared.insert() once tested
             simulatePaste()
 
             // Optionally press Enter after paste (for chat apps, terminals)
@@ -82,25 +80,21 @@ struct TranscriptRouter: LiveRouter {
             return false
         }
 
-        logger.info("Copied: \(text.prefix(50))...")
+        log.info("Copied: \(text.prefix(50))...")
         return true
     }
 
     private func simulatePaste() {
-        // Check Accessibility permission first
-        let hasAccessibility = AXIsProcessTrusted()
-        if !hasAccessibility {
-            logger.error("❌ Accessibility permission NOT granted - cannot paste")
-            logger.error("   Grant Accessibility permission to TalkieLive in System Settings")
+        guard AXIsProcessTrusted() else {
+            log.error("Accessibility permission NOT granted - cannot paste")
             return
         }
 
         guard let src = CGEventSource(stateID: .combinedSessionState) else {
-            logger.error("❌ Failed to create CGEventSource - cannot paste")
+            log.error("Failed to create CGEventSource - cannot paste")
             return
         }
 
-        // Post all events as a batch
         let events: [(UInt16, Bool)] = [
             (0x37, true),   // ⌘ down
             (0x09, true),   // V down
@@ -114,17 +108,15 @@ struct TranscriptRouter: LiveRouter {
                 evt.flags = down && key == 0x09 ? .maskCommand : []
                 evt.post(tap: .cghidEventTap)
                 eventsPosted += 1
-            } else {
-                logger.warning("Failed to create CGEvent for key=\(key) down=\(down)")
             }
         }
 
-        logger.info("Pasted (\(eventsPosted)/4 events posted)")
+        log.info("Pasted (\(eventsPosted)/4 events posted)")
     }
 
     private func simulateEnter() {
         guard let src = CGEventSource(stateID: .combinedSessionState) else {
-            logger.error("❌ Failed to create CGEventSource - cannot send Enter")
+            log.error("Failed to create CGEventSource - cannot send Enter")
             return
         }
 
@@ -143,6 +135,6 @@ struct TranscriptRouter: LiveRouter {
             }
         }
 
-        logger.info("Sent Enter key")
+        log.info("Sent Enter key")
     }
 }

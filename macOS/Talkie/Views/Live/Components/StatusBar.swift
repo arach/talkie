@@ -49,7 +49,10 @@ struct StatusBar: View {
 
     // Static cache - computed once at app launch
     private static let cachedGitBranch: String? = {
-        readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        // Use known project path for dev builds (currentDirectoryPath is often / when launched from Xcode)
+        let projectPath = "/Users/arach/dev/talkie-dev"
+        return readGitBranch(from: URL(fileURLWithPath: projectPath))
+            ?? readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
     }()
 
     private static func readGitBranch(from directory: URL) -> String? {
@@ -243,16 +246,21 @@ struct StatusBar: View {
                             .foregroundColor(TalkieTheme.textMuted)
 
                         #if DEBUG
+                        // PID always visible in debug
+                        Text("PID \(ProcessInfo.processInfo.processIdentifier)")
+                            .font(Theme.current.fontXSMedium)
+                            .foregroundColor(TalkieTheme.textMuted)
+
                         // Git branch indicator
                         if let branch = gitBranch {
                             Text(branch)
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(TalkieTheme.textMuted)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
+                                .font(Theme.current.fontXSMedium)
+                                .foregroundColor(TalkieTheme.accent)
+                                .padding(.horizontal, Spacing.xs)
+                                .padding(.vertical, Spacing.xxs)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(TalkieTheme.surfaceCard)
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                        .fill(TalkieTheme.hover)
                                 )
                         }
 

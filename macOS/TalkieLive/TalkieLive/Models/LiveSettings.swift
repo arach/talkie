@@ -418,6 +418,11 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Glass mode enabled (macOS 26 style glass effects)
+    @Published var glassMode: Bool {
+        didSet { save() }
+    }
+
     /// Which context (start or end app) is primary for utterances
     @Published var primaryContextSource: PrimaryContextSource {
         didSet { save() }
@@ -438,6 +443,11 @@ final class LiveSettings: ObservableObject {
 
     /// Press Enter/Return after pasting (useful for chat apps, terminals)
     @Published var pressEnterAfterPaste: Bool {
+        didSet { save() }
+    }
+
+    /// Auto-open scratchpad when text is selected at recording start
+    @Published var autoScratchpadOnSelection: Bool = false {
         didSet { save() }
     }
 
@@ -576,6 +586,9 @@ final class LiveSettings: ObservableObject {
             self.accentColor = .system
         }
 
+        // Load glass mode (default: true for macOS 26 style)
+        self.glassMode = store.object(forKey: LiveSettingsKey.glassMode) as? Bool ?? true
+
         // Load primary context source (default: start app)
         if let rawValue = store.string(forKey: LiveSettingsKey.primaryContextSource),
            let source = PrimaryContextSource(rawValue: rawValue) {
@@ -595,6 +608,7 @@ final class LiveSettings: ObservableObject {
         // Load return to origin setting (default: false)
         self.returnToOriginAfterPaste = store.bool(forKey: LiveSettingsKey.returnToOriginAfterPaste)
         self.pressEnterAfterPaste = store.bool(forKey: LiveSettingsKey.pressEnterAfterPaste)
+        self.autoScratchpadOnSelection = store.bool(forKey: LiveSettingsKey.autoScratchpadOnSelection)
 
         // Apply TTL to store
         DictationStore.shared.ttlHours = dictationTTLHours
@@ -630,10 +644,12 @@ final class LiveSettings: ObservableObject {
         store.set(visualTheme.rawValue, forKey: LiveSettingsKey.visualTheme)
         store.set(fontSize.rawValue, forKey: LiveSettingsKey.fontSize)
         store.set(accentColor.rawValue, forKey: LiveSettingsKey.accentColor)
+        store.set(glassMode, forKey: LiveSettingsKey.glassMode)
         store.set(primaryContextSource.rawValue, forKey: LiveSettingsKey.primaryContextSource)
         store.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
         store.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)
         store.set(pressEnterAfterPaste, forKey: LiveSettingsKey.pressEnterAfterPaste)
+        store.set(autoScratchpadOnSelection, forKey: LiveSettingsKey.autoScratchpadOnSelection)
     }
 
     // MARK: - Appearance Application
