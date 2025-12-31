@@ -13,6 +13,50 @@ import os
 private let startupLogger = Logger(subsystem: "jdi.talkie.performance", category: "Startup")
 private let startupSignposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
 
+// MARK: - CLI Section Override
+
+/// Parse --section= argument or audit-screen target for initial view
+private func parseInitialSection() -> NavigationSection? {
+    let args = ProcessInfo.processInfo.arguments
+
+    // Check for explicit --section= argument
+    for arg in args {
+        if arg.hasPrefix("--section=") {
+            let sectionName = String(arg.dropFirst("--section=".count))
+            return sectionFromName(sectionName)
+        }
+    }
+
+    // Check for audit-screen target to infer section
+    if let debugIdx = args.firstIndex(where: { $0.hasPrefix("--debug=audit-screen") }) {
+        // Look for the screen target in the next argument
+        let nextIdx = debugIdx + 1
+        if nextIdx < args.count {
+            let target = args[nextIdx]
+            if target.hasPrefix("memos") { return .allMemos }
+            if target.hasPrefix("home") { return .home }
+            if target.hasPrefix("dictation") || target.hasPrefix("live") { return .stats }
+            if target.hasPrefix("workflow") { return .workflows }
+        }
+    }
+
+    return nil
+}
+
+private func sectionFromName(_ name: String) -> NavigationSection? {
+    switch name {
+    case "home": return .home
+    case "memos", "allMemos": return .allMemos
+    case "dictations", "live", "stats": return .stats
+    case "scratchpad": return .scratchPad
+    case "workflows": return .workflows
+    case "models": return .models
+    case "logs", "console": return .logs
+    case "activity": return .activityLog
+    default: return nil
+    }
+}
+
 // MARK: - Sidebar Toggle Action
 
 struct SidebarToggleAction {
@@ -134,7 +178,7 @@ struct TalkieApp: App {
         return WindowGroup(id: "main") {
             // Show UI immediately - GRDB is source of truth
             // CoreData + CloudKit sync layer initializes in background
-            TalkieNavigationViewNative()
+            TalkieNavigationViewNative(initialSection: parseInitialSection() ?? .home)
                 .environment(SettingsManager.shared)
                 .environment(EngineClient.shared)
                 .environment(LiveSettings.shared)

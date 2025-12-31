@@ -24,13 +24,13 @@ enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
     case scratchPad     // Quick text editing with voice dictation and AI polish
     case allMemos       // All Memos view (GRDB-based with pagination and filters)
-    case liveDashboard  // Live home/insights view
+    case stats          // Stats/insights view
     case liveRecent     // Live utterance list
     case liveSettings   // Live settings (now visible in sidebar)
     case aiResults
     case workflows
     case activityLog
-    case systemConsole
+    case logs           // System logs view
     case pendingActions
     case talkieService  // Accessible via engine icon click, not in sidebar
     case talkieLiveMonitor  // Accessible via live icon click, not in sidebar
@@ -94,13 +94,13 @@ struct TalkieNavigationViewNative: View {
         case .home: return "Home"
         case .scratchPad: return "ScratchPad"
         case .allMemos: return "AllMemos"
-        case .liveDashboard: return "LiveDashboard"
+        case .stats: return "Stats"
         case .liveRecent: return "LiveRecent"
         case .liveSettings: return "LiveSettings"
         case .aiResults: return "AIResults"
         case .workflows: return "Workflows"
         case .activityLog: return "ActivityLog"
-        case .systemConsole: return "SystemLogs"
+        case .logs: return "Logs"
         case .pendingActions: return "PendingActions"
         case .talkieService: return "TalkieService"
         case .talkieLiveMonitor: return "TalkieLiveMonitor"
@@ -218,7 +218,7 @@ struct TalkieNavigationViewNative: View {
     private var usesTwoColumns: Bool {
         switch selectedSection {
         case .home, .scratchPad, .models, .allowedCommands, .aiResults, .allMemos,
-             .liveDashboard, .liveRecent, .liveSettings, .systemConsole,
+             .stats, .liveRecent, .liveSettings, .logs,
              .pendingActions:
             return true
         #if DEBUG
@@ -369,7 +369,7 @@ struct TalkieNavigationViewNative: View {
 
             // Tools
             Section(settings.uiAllCaps ? "TOOLS" : "Tools") {
-                SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Stats", icon: "waveform.path.ecg")
+                SidebarRow(section: .stats, selectedSection: $selectedSection, title: "Stats", icon: "waveform.path.ecg")
 
                 SidebarRow(section: .scratchPad, selectedSection: $selectedSection, title: "Scratch Pad", icon: "note.text")
 
@@ -377,7 +377,7 @@ struct TalkieNavigationViewNative: View {
 
                 SidebarRow(section: .models, selectedSection: $selectedSection, title: "Models", icon: "brain")
 
-                SidebarRow(section: .systemConsole, selectedSection: $selectedSection, title: "Logs", icon: "terminal")
+                SidebarRow(section: .logs, selectedSection: $selectedSection, title: "Logs", icon: "terminal")
             }
 
             #if DEBUG
@@ -446,20 +446,20 @@ struct TalkieNavigationViewNative: View {
                         .wrapInTalkieSection("AIResults")
                 case .allMemos:
                     AllMemos()
-                case .liveDashboard:
+                case .stats:
                     HomeView(
                         onSelectDictation: { _ in selectedSection = .liveRecent },
                         onSelectApp: { _, _ in selectedSection = .liveRecent }
                     )
-                    .wrapInTalkieSection("LiveDashboard")
+                    .wrapInTalkieSection("Stats")
                 case .liveRecent:
                     DictationListView()
                         .wrapInTalkieSection("LiveRecent")
                 case .liveSettings:
                     LiveSettingsView()
-                case .systemConsole:
+                case .logs:
                     SystemLogsView(onClose: { selectedSection = previousSection ?? .home })
-                        .wrapInTalkieSection("SystemLogs")
+                        .wrapInTalkieSection("Logs")
                 case .pendingActions:
                     PendingActionsView()
                         .wrapInTalkieSection("PendingActions")
@@ -527,7 +527,7 @@ extension View {
                 selectedSection.wrappedValue = .workflows
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToLive)) { _ in
-                selectedSection.wrappedValue = .liveDashboard
+                selectedSection.wrappedValue = .stats
             }
             .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToLiveRecent"))) { _ in
                 selectedSection.wrappedValue = .liveRecent

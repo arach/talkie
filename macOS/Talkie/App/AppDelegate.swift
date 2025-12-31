@@ -113,6 +113,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// Parse --theme argument early and set UserDefaults before SettingsManager initializes
     private static func parseAndSetThemeEarly() {
         let args = ProcessInfo.processInfo.arguments
+
+        // Skip onboarding in CLI debug mode
+        let isDebugMode = args.contains(where: { $0.hasPrefix("--debug=") })
+        if isDebugMode {
+            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+            UserDefaults.standard.synchronize()
+        }
+
         for arg in args {
             if arg.hasPrefix("--theme=") {
                 let themeName = String(arg.dropFirst("--theme=".count))
@@ -215,10 +223,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         cliHandler.register(
             "settings-screenshots",
-            description: "Capture individual screenshots of each settings page to a directory"
+            description: "Capture individual screenshots of each settings page to a directory (--compact for 2-column only)"
         ) { args in
+            // Parse flags: --compact for content-only (2-column), default is full window (3-column)
+            let compact = args.contains("--compact")
+            let filteredArgs = args.filter { !$0.hasPrefix("--") }
+
             let outputDir: URL
-            if let path = args.first {
+            if let path = filteredArgs.first {
                 outputDir = URL(fileURLWithPath: path)
             } else {
                 let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
@@ -227,8 +239,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     .appendingPathComponent("settings-screenshots-\(timestamp)")
             }
 
-            print("📸 Capturing settings pages to: \(outputDir.path)")
-            let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir)
+            let mode = compact ? "compact (2-column)" : "full (3-column)"
+            print("📸 Capturing settings pages to: \(outputDir.path) [\(mode)]")
+            let results = await SettingsStoryboardGenerator.shared.captureAllPages(to: outputDir, fullWindow: !compact)
             print("✅ Captured \(results.count) pages")
             exit(0)
         }
@@ -327,12 +340,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         cliHandler.register(
             "audit",
-            description: "Run full design audit on all screens (outputs HTML + Markdown reports)"
+            description: "Run full design audit on all screens. Usage: --debug=audit [--output=<path>]"
         ) { args in
-            // Fixed location: ~/Desktop/talkie-audit/
-            let baseDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Desktop")
-                .appendingPathComponent("talkie-audit")
+            // Parse optional output path
+            var outputPath: String?
+            for arg in args {
+                if arg.hasPrefix("--output=") {
+                    outputPath = String(arg.dropFirst("--output=".count))
+                }
+            }
+
+            let baseDir: URL
+            if let outputPath = outputPath {
+                baseDir = URL(fileURLWithPath: outputPath)
+            } else {
+                baseDir = URL(fileURLWithPath: "/tmp/talkie-audit")
+            }
             try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
 
             // Each audit gets a numbered folder
@@ -365,7 +388,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             await Self.generateAuditIndex(at: baseDir)
 
             print("\n✅ Audit complete!")
-            print("   📂 ~/Desktop/talkie-audit/")
+            print("   📂 \(baseDir.path)")
             print("   🌐 index.html - lists all audits")
 
             // Open report
@@ -405,17 +428,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         cliHandler.register(
             "audit-screen",
-            description: "Audit a specific screen with screenshot capture. Usage: --debug=audit-screen <screen-id> [--theme=<theme>]"
+            description: "Audit a specific screen with screenshot capture. Usage: --debug=audit-screen <screen-id> [--output=<path>] [--theme=<theme>]"
         ) { args in
             NSLog("[audit-screen] Handler started")
 
             // Parse arguments
             var screenId: String?
             var themeName: String?
+            var outputPath: String?
 
             for arg in args {
                 if arg.hasPrefix("--theme=") {
                     themeName = String(arg.dropFirst("--theme=".count))
+                } else if arg.hasPrefix("--output=") {
+                    outputPath = String(arg.dropFirst("--output=".count))
                 } else if !arg.hasPrefix("--") {
                     screenId = arg
                 }
@@ -477,9 +503,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
             }
 
-            let baseDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Desktop")
-                .appendingPathComponent("talkie-audit")
+            let baseDir: URL
+            if let outputPath = outputPath {
+                baseDir = URL(fileURLWithPath: outputPath)
+            } else {
+                baseDir = URL(fileURLWithPath: "/tmp/talkie-audit")
+            }
             try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
             NSLog("[audit-screen] baseDir: %@", baseDir.path)
 
@@ -512,42 +541,134 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
                 NSLog("[audit-screen] Done capturing screenshots")
             } else if screen.section == .home {
-                // Capture home dashboard from main window
-                NSLog("[audit-screen] Capturing home screen: %@", screen.rawValue)
+                // Capture the REAL app window with actual data - no isolated views or gimmicks
+                NSLog("[audit-screen] Capturing real home screen: %@", screen.rawValue)
 
+                // Navigate to home section
                 await MainActor.run {
-                    // Navigate to home
-                    NotificationCenter.default.post(name: .init("NavigateToHome"), object: nil)
+                    NotificationCenter.default.post(name: .init("NavigateToSection"), object: NavigationSection.home)
                 }
 
-                // Wait for navigation
-                try? await Task.sleep(for: .milliseconds(500))
+                // Find and capture the main window (user will have window in focus)
+                let url = await MainActor.run { () -> URL? in
+                    NSApp.setActivationPolicy(.regular)
+                    NSApp.activate(ignoringOtherApps: true)
+
+                    guard let mainWindow = NSApp.windows.first(where: {
+                        $0.isVisible && $0.title.contains("Talkie") && !$0.title.contains("Settings")
+                    }) else {
+                        NSLog("[audit-screen] No main window found")
+                        return nil
+                    }
+
+                    mainWindow.makeKeyAndOrderFront(nil)
+
+                    // Brief pause to let window render
+                    RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.3))
+
+                    // Capture the screen region where the window is
+                    let filename = "\(screen.rawValue).png"
+                    let fileURL = screenshotDir.appendingPathComponent(filename)
+                    let windowFrame = mainWindow.frame
+
+                    // Convert to CG coordinates (flip Y)
+                    guard let mainScreen = NSScreen.main else {
+                        NSLog("[audit-screen] No main screen")
+                        return nil
+                    }
+                    let screenHeight = mainScreen.frame.height
+                    let captureRect = CGRect(
+                        x: windowFrame.origin.x,
+                        y: screenHeight - windowFrame.origin.y - windowFrame.height,
+                        width: windowFrame.width,
+                        height: windowFrame.height
+                    )
+
+                    guard let cgImage = CGWindowListCreateImage(captureRect, .optionOnScreenOnly, kCGNullWindowID, []) else {
+                        NSLog("[audit-screen] Failed to capture screen region")
+                        return nil
+                    }
+
+                    let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+
+                    guard let tiffData = image.tiffRepresentation,
+                          let bitmapImage = NSBitmapImageRep(data: tiffData),
+                          let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+                        return nil
+                    }
+
+                    // filename/fileURL already defined above for screencapture
+                    try? pngData.write(to: fileURL)
+                    return fileURL
+                }
+
+                if let url = url {
+                    screenshotPaths.append(url.lastPathComponent)
+                    print("  ✅ Captured: \(url.lastPathComponent)")
+                } else {
+                    print("  ⚠️ No main window to capture - app may need to be running")
+                }
+            } else if screen.section == .memos {
+                // Capture the memos view
+                NSLog("[audit-screen] Capturing memos screen: %@", screen.rawValue)
+                // Note: The app is launched with --section=memos to show the correct view
+
+                // Wait for view to load data (async task in MemosView)
+                try? await Task.sleep(for: .milliseconds(1500))
 
                 // Find and capture the main window
-                if let mainWindow = await MainActor.run(body: {
-                    NSApp.windows.first { $0.title.contains("Talkie") && !$0.title.contains("Settings") }
-                }) {
-                    await MainActor.run {
-                        mainWindow.makeKeyAndOrderFront(nil)
-                    }
-                    try? await Task.sleep(for: .milliseconds(200))
+                let url = await MainActor.run { () -> URL? in
+                    NSApp.setActivationPolicy(.regular)
+                    NSApp.activate(ignoringOtherApps: true)
 
-                    // Capture using CGWindowListCreateImage
-                    let windowNumber = await MainActor.run(body: { CGWindowID(mainWindow.windowNumber) })
-                    if let cgImage = CGWindowListCreateImage(.null, .optionIncludingWindow, windowNumber, [.boundsIgnoreFraming]) {
-                        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                        if let tiffData = image.tiffRepresentation,
-                           let bitmapImage = NSBitmapImageRep(data: tiffData),
-                           let pngData = bitmapImage.representation(using: .png, properties: [:]) {
-                            let filename = "\(screen.rawValue).png"
-                            let fileURL = screenshotDir.appendingPathComponent(filename)
-                            try? pngData.write(to: fileURL)
-                            screenshotPaths.append(filename)
-                            print("  ✅ Captured: \(filename)")
-                        }
+                    guard let mainWindow = NSApp.windows.first(where: {
+                        $0.isVisible && $0.title.contains("Talkie") && !$0.title.contains("Settings")
+                    }) else {
+                        NSLog("[audit-screen] No main window found")
+                        return nil
                     }
+
+                    mainWindow.makeKeyAndOrderFront(nil)
+                    RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.5))
+
+                    let filename = "\(screen.rawValue).png"
+                    let fileURL = screenshotDir.appendingPathComponent(filename)
+                    let windowFrame = mainWindow.frame
+
+                    guard let mainScreen = NSScreen.main else {
+                        NSLog("[audit-screen] No main screen")
+                        return nil
+                    }
+                    let screenHeight = mainScreen.frame.height
+                    let captureRect = CGRect(
+                        x: windowFrame.origin.x,
+                        y: screenHeight - windowFrame.origin.y - windowFrame.height,
+                        width: windowFrame.width,
+                        height: windowFrame.height
+                    )
+
+                    guard let cgImage = CGWindowListCreateImage(captureRect, .optionOnScreenOnly, kCGNullWindowID, []) else {
+                        NSLog("[audit-screen] Failed to capture screen region")
+                        return nil
+                    }
+
+                    let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+
+                    guard let tiffData = image.tiffRepresentation,
+                          let bitmapImage = NSBitmapImageRep(data: tiffData),
+                          let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+                        return nil
+                    }
+
+                    try? pngData.write(to: fileURL)
+                    return fileURL
+                }
+
+                if let url = url {
+                    screenshotPaths.append(url.lastPathComponent)
+                    print("  ✅ Captured: \(url.lastPathComponent)")
                 } else {
-                    print("  ⚠️ No main window found")
+                    print("  ⚠️ No main window to capture - app may need to be running")
                 }
             } else {
                 print("⚠️ Screenshot capture not yet implemented for \(screen.section.rawValue) screens")
