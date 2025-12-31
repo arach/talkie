@@ -4,6 +4,10 @@
    <Group
       location = "group:macOS"
       name = "macOS">
+      <FileSystemSynchronizedGroup
+         location = "group:Logs"
+         name = "Logs">
+      </FileSystemSynchronizedGroup>
       <FileRef
          location = "group:Talkie/Talkie.xcodeproj">
       </FileRef>

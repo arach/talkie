@@ -589,6 +589,9 @@ class WorkflowExecutor {
         do {
             try context.save()
             logger.info("✅ Synced to Core Data (will sync to CloudKit): \(workflow.name)")
+
+            // Fire and forget - queue handles CloudKit push in background
+            SyncQueue.shared.workflowCompleted(runId: runId, memoId: memoId)
         } catch {
             logger.error("❌ Failed to sync to Core Data: \(error.localizedDescription)")
         }

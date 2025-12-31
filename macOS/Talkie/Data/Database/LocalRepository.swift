@@ -333,6 +333,30 @@ actor LocalRepository: MemoRepository {
         }
     }
 
+    func allWorkflowRuns() async throws -> [WorkflowRunModel] {
+        try await instrumentRepositoryRead("allWorkflowRuns") {
+            let db = try await dbManager.database()
+
+            return try await db.read { db in
+                try WorkflowRunModel
+                    .order(WorkflowRunModel.Columns.runDate.desc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    func deleteWorkflowRun(id: UUID) async throws {
+        try await instrumentRepositoryWrite("deleteWorkflowRun") {
+            let db = try await dbManager.database()
+
+            _ = try await db.write { db in
+                try WorkflowRunModel
+                    .filter(WorkflowRunModel.Columns.id == id.uuidString)
+                    .deleteAll(db)
+            }
+        }
+    }
+
     func saveTranscriptVersion(_ version: TranscriptVersionModel) async throws {
         try await instrumentRepositoryWrite("saveTranscriptVersion") {
             let db = try await dbManager.database()

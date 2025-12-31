@@ -208,6 +208,18 @@ extension MemoModel {
         audioFilePath != nil
     }
 
+    /// Current transcript (alias for transcription, for compatibility with VoiceMemo API)
+    var currentTranscript: String? {
+        transcription
+    }
+
+    /// Load audio data from file (lazy, for playback)
+    var audioData: Data? {
+        guard let path = audioFilePath else { return nil }
+        let url = AudioStorage.url(for: path)
+        return try? Data(contentsOf: url)
+    }
+
     /// Is processing any AI action
     var isProcessing: Bool {
         isTranscribing || isProcessingSummary || isProcessingTasks || isProcessingReminders
@@ -338,6 +350,20 @@ extension MemoModel {
 
 // MARK: - Source Conformances
 extension MemoModel.Source: Sendable {}
+
+// MARK: - MemoSource Interop
+extension MemoModel.Source {
+    /// Convert to legacy MemoSource type for compatibility with existing UI components
+    var asMemoSource: MemoSource {
+        switch self {
+        case .iPhone(let name): return .iPhone(deviceName: name)
+        case .watch(let name): return .watch(deviceName: name)
+        case .mac(let name): return .mac(deviceName: name)
+        case .live: return .live
+        case .unknown: return .unknown
+        }
+    }
+}
 
 
 extension MemoModel {

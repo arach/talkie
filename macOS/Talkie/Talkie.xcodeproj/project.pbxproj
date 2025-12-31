@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8568EEB9B188479AA8530268 /* Queue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D34E87850C4675B05B7232 /* Queue.swift */; };
+		9FE1E494000741BEBAB6DCEF /* DurableQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFA3BB63270F4480A37677BF /* DurableQueue.swift */; };
+		C7DC7C8B88674AA0B6422305 /* SyncQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 342E065617D74B6E9BB2708A /* SyncQueue.swift */; };
 		461BECBB584E428C90EC628C /* MigrationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E796CCF5E6CA4B0C91E0797F /* MigrationManager.swift */; };
 		00EBB818C60D4CF7A777D71A /* StartupLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
@@ -200,7 +203,6 @@
 		C89399B8782D46A45D154007 /* MemoModel+CloudKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC79DE3B14EB93E17085F2 /* MemoModel+CloudKit.swift */; };
 		C92FBA5D14EAC5682D04C9FC /* RepositoryInstrumentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCE4AD8B979F9F2297EAE2B /* RepositoryInstrumentation.swift */; };
 		CA38C7C6CFE0057E73773A3B /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9708CCDB1D7CDC7020DB265C /* SettingsManager.swift */; };
-		CB12A13CA5ECEE19E50A05A2 /* MemoTableViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */; };
 		CCF05568545775736E13D4A9 /* WorkflowEventModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4E06B48CDFCD50E92F9976 /* WorkflowEventModel.swift */; };
 		CE3E9EFEDFC1391AF65FAAE6 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = 888B917F1D14A6981B3952DF /* MLX */; };
 		CE3F4A35B8DABF8AB3A9CC7C /* settings-09-database.png in Resources */ = {isa = PBXBuildFile; fileRef = 8CCE1AC561193B68954CA8DC /* settings-09-database.png */; };
@@ -247,6 +249,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		54D34E87850C4675B05B7232 /* Queue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Queue.swift; sourceTree = "<group>"; };
+		CFA3BB63270F4480A37677BF /* DurableQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DurableQueue.swift; sourceTree = "<group>"; };
+		342E065617D74B6E9BB2708A /* SyncQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncQueue.swift; sourceTree = "<group>"; };
 		E796CCF5E6CA4B0C91E0797F /* MigrationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationManager.swift; sourceTree = "<group>"; };
 		5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupLogger.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
@@ -401,7 +406,6 @@
 		A0DB12E53E73DFD4E74AA50B /* TranscriptVersionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptVersionModel.swift; sourceTree = "<group>"; };
 		A46AE7F2005FAA07226D7758 /* LocalRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepository.swift; sourceTree = "<group>"; };
 		A4B9380B7A13427DBF036844 /* StartupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupCoordinator.swift; sourceTree = "<group>"; };
-		A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoTableViews.swift; sourceTree = "<group>"; };
 		A64BF792ECAB5F2F70A7A085 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProvider.swift; sourceTree = "<group>"; };
 		A78F94141613FC6D134749DD /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		A816E4DC73211BC123CDF0D1 /* ContextCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextCaptureService.swift; sourceTree = "<group>"; };
@@ -501,6 +505,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9A88BE828DAF4F20853DEEA5 /* DurableQueue */ = {
+			isa = PBXGroup;
+			children = (
+				54D34E87850C4675B05B7232 /* Queue.swift */,
+				CFA3BB63270F4480A37677BF /* DurableQueue.swift */,
+			);
+			path = DurableQueue;
+			sourceTree = "<group>";
+		};
 		07EC6608E6DA26A94F36034F /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -952,7 +965,6 @@
 			isa = PBXGroup;
 			children = (
 				F881EF4D4C68E90E9D8F73C5 /* AllMemos.swift */,
-				A4C5375ED11B7D1C5B5FBDC3 /* MemoTableViews.swift */,
 			);
 			path = Memos;
 			sourceTree = "<group>";
@@ -1007,6 +1019,8 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				9A88BE828DAF4F20853DEEA5 /* DurableQueue */,
+				342E065617D74B6E9BB2708A /* SyncQueue.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
 				96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */,
 				E30DDF9CB041E54430249019 /* AppleSpeechService.swift */,
@@ -1160,6 +1174,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8568EEB9B188479AA8530268 /* Queue.swift in Sources */,
+				9FE1E494000741BEBAB6DCEF /* DurableQueue.swift in Sources */,
+				C7DC7C8B88674AA0B6422305 /* SyncQueue.swift in Sources */,
 				461BECBB584E428C90EC628C /* MigrationManager.swift in Sources */,
 				00EBB818C60D4CF7A777D71A /* StartupLogger.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,

@@ -70,6 +70,9 @@ protocol MemoRepository: Actor {
     /// Save workflow run
     func saveWorkflowRun(_ run: WorkflowRunModel) async throws
 
+    /// Delete workflow run
+    func deleteWorkflowRun(id: UUID) async throws
+
     // MARK: - Aggregations (for dashboard stats)
 
     /// Count memos created today

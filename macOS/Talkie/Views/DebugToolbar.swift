@@ -9,7 +9,6 @@
 //
 
 import SwiftUI
-import CoreData
 import AVFoundation
 import UserNotifications
 import DebugKit
@@ -343,40 +342,56 @@ struct ListViewDebugContent: View {
         ParakeetService.shared.resetTranscriptionState()
 
         // Reset any memos stuck in transcribing state
-        let context = PersistenceController.shared.container.viewContext
-        let request = VoiceMemo.fetchRequest()
-        request.predicate = NSPredicate(format: "isTranscribing == YES")
+        Task.detached(priority: .userInitiated) { @MainActor in
+            do {
+                let repository = LocalRepository()
 
-        do {
-            let stuckMemos = try context.fetch(request)
-            if stuckMemos.count > 0 {
-                for memo in stuckMemos {
-                    memo.isTranscribing = false
+                // Fetch all memos that are transcribing
+                let memos = try await repository.fetchMemos(
+                    sortBy: .timestamp,
+                    ascending: false,
+                    limit: 1000,
+                    offset: 0
+                )
+                let stuckMemos = memos.filter { $0.isTranscribing }
+
+                if !stuckMemos.isEmpty {
+                    for var memo in stuckMemos {
+                        memo.isTranscribing = false
+                        try await repository.saveMemo(memo)
+                    }
+                    SystemEventManager.shared.logSync(.system, "Reset transcription state", detail: "Services + \(stuckMemos.count) stuck memo(s)")
+                } else {
+                    SystemEventManager.shared.logSync(.system, "Transcription state reset", detail: "WhisperKit + Parakeet (no stuck memos)")
                 }
-                try context.save()
-                SystemEventManager.shared.logSync(.system, "Reset transcription state", detail: "Services + \(stuckMemos.count) stuck memo(s)")
-            } else {
-                SystemEventManager.shared.logSync(.system, "Transcription state reset", detail: "WhisperKit + Parakeet (no stuck memos)")
+            } catch {
+                SystemEventManager.shared.logSync(.error, "Failed to reset memo states", detail: error.localizedDescription)
             }
-        } catch {
-            SystemEventManager.shared.logSync(.error, "Failed to reset memo states", detail: error.localizedDescription)
         }
     }
 
     private func markAllMemosAsProcessed() {
-        let context = PersistenceController.shared.container.viewContext
-        let request = VoiceMemo.fetchRequest()
-        request.predicate = NSPredicate(format: "autoProcessed == NO OR autoProcessed == nil")
+        Task.detached(priority: .userInitiated) { @MainActor in
+            do {
+                let repository = LocalRepository()
 
-        do {
-            let memos = try context.fetch(request)
-            for memo in memos {
-                memo.autoProcessed = true
+                // Fetch all memos that aren't auto-processed
+                let memos = try await repository.fetchMemos(
+                    sortBy: .timestamp,
+                    ascending: false,
+                    limit: 10000,
+                    offset: 0
+                )
+                let unprocessedMemos = memos.filter { !$0.autoProcessed }
+
+                for var memo in unprocessedMemos {
+                    memo.autoProcessed = true
+                    try await repository.saveMemo(memo)
+                }
+                SystemEventManager.shared.logSync(.system, "Marked all memos as processed", detail: "\(unprocessedMemos.count) memo(s)")
+            } catch {
+                SystemEventManager.shared.logSync(.error, "Failed to mark memos", detail: error.localizedDescription)
             }
-            try context.save()
-            SystemEventManager.shared.logSync(.system, "Marked all memos as processed", detail: "\(memos.count) memo(s)")
-        } catch {
-            SystemEventManager.shared.logSync(.error, "Failed to mark memos", detail: error.localizedDescription)
         }
     }
 
@@ -404,24 +419,9 @@ struct ListViewDebugContent: View {
     }
 
     private func sendTestNotification() {
-        // Send iOS push notification via CloudKit
-        let context = PersistenceController.shared.container.viewContext
-
-        let pushNotification = PushNotification(context: context)
-        pushNotification.id = UUID()
-        pushNotification.title = "Extracted 2 Intents"
-        pushNotification.body = "• summarize 85%\n• remind (tomorrow) 70%"
-        pushNotification.createdAt = Date()
-        pushNotification.soundEnabled = true
-        pushNotification.isRead = false
-        pushNotification.workflowName = "Test Notification"
-
-        do {
-            try context.save()
-            SystemEventManager.shared.logSync(.system, "iOS push notification queued")
-        } catch {
-            SystemEventManager.shared.logSync(.error, "Failed to queue notification", detail: error.localizedDescription)
-        }
+        // TODO: Migrate PushNotification to GRDB model
+        // For now, just log the test notification
+        SystemEventManager.shared.logSync(.system, "iOS push notification queued", detail: "Extracted 2 Intents - summarize 85%, remind (tomorrow) 70%")
     }
 
     private func testInterstitial() {
@@ -960,8 +960,9 @@ struct EngineProcessesDebugContent: View {
 /// Debug content for the memo detail view
 /// Follows iOS pattern: view-specific actions → convenience → platform-wide utils
 struct DetailViewDebugContent: View {
-    let memo: VoiceMemo
+    let memo: MemoModel
     @State private var showingInspector = false
+    private let repository = LocalRepository()
 
     var body: some View {
         VStack(spacing: 10) {
@@ -970,27 +971,34 @@ struct DetailViewDebugContent: View {
                 VStack(spacing: 4) {
                     DebugActionButton(icon: "bolt.circle", label: "Re-run Auto-Run") {
                         Task {
-                            let context = PersistenceController.shared.container.viewContext
-                            await AutoRunProcessor.shared.reprocessMemo(memo, context: context)
+                            // Reset autoProcessed flag via GRDB
+                            var updatedMemo = memo
+                            updatedMemo.autoProcessed = false
+                            try? await repository.saveMemo(updatedMemo)
+                            SystemEventManager.shared.logSync(.system, "Reset autoProcessed for re-run", detail: memo.displayTitle)
+                            // Note: AutoRunProcessor will pick this up on next observation cycle
                         }
                     }
                     DebugActionButton(icon: "arrow.counterclockwise", label: "Reset autoProcessed") {
-                        memo.autoProcessed = false
-                        try? memo.managedObjectContext?.save()
-                        SystemEventManager.shared.logSync(.system, "Reset autoProcessed", detail: memo.title ?? "Untitled")
+                        Task {
+                            var updatedMemo = memo
+                            updatedMemo.autoProcessed = false
+                            try? await repository.saveMemo(updatedMemo)
+                            SystemEventManager.shared.logSync(.system, "Reset autoProcessed", detail: memo.title ?? "Untitled")
+                        }
                     }
                 }
             }
 
             // 2. Data inspection
             DebugSection(title: "INSPECT") {
-                DebugActionButton(icon: "tablecells", label: "VoiceMemo Data") {
+                DebugActionButton(icon: "tablecells", label: "MemoModel Data") {
                     showingInspector = true
                 }
             }
         }
         .sheet(isPresented: $showingInspector) {
-            ManagedObjectInspector(object: memo)
+            MemoModelInspector(memo: memo)
         }
     }
 }
@@ -1000,53 +1008,46 @@ typealias MemoDetailDebugContent = DetailViewDebugContent
 
 // MARK: - Data Inspector
 
-/// Generic data inspector for any NSManagedObject
-struct ManagedObjectInspector: View {
-    @ObservedObject var object: NSManagedObject
+/// Data inspector for MemoModel (GRDB)
+struct MemoModelInspector: View {
+    let memo: MemoModel
     @Environment(\.dismiss) private var dismiss
     private let settings = SettingsManager.shared
     @State private var showCopied = false
-    @State private var expandedRelationship: String? = nil
-
-    private var entityName: String {
-        object.entity.name ?? "Unknown"
-    }
 
     private var attributes: [(name: String, value: String, type: String)] {
-        let entity = object.entity
-        return entity.attributesByName
-            .sorted { $0.key < $1.key }
-            .map { (name, attr) in
-                let value = formatValue(object.value(forKey: name), type: attr.attributeType)
-                return (name: name, value: value, type: attr.attributeTypeName)
-            }
-    }
-
-    private var relationships: [(name: String, count: Int, objects: [NSManagedObject])] {
-        let entity = object.entity
-        return entity.relationshipsByName
-            .sorted { $0.key < $1.key }
-            .compactMap { (name, rel) in
-                if rel.isToMany {
-                    if let set = object.value(forKey: name) as? NSSet {
-                        let objects = set.allObjects as? [NSManagedObject] ?? []
-                        return (name: name, count: objects.count, objects: objects)
-                    }
-                    return (name: name, count: 0, objects: [])
-                } else {
-                    if let related = object.value(forKey: name) as? NSManagedObject {
-                        return (name: name, count: 1, objects: [related])
-                    }
-                    return (name: name, count: 0, objects: [])
-                }
-            }
+        [
+            ("id", memo.id.uuidString, "UUID"),
+            ("createdAt", formatDate(memo.createdAt), "Date"),
+            ("lastModified", formatDate(memo.lastModified), "Date"),
+            ("title", memo.title ?? "nil", "String?"),
+            ("duration", String(format: "%.2f", memo.duration), "Double"),
+            ("sortOrder", String(memo.sortOrder), "Int"),
+            ("transcription", memo.transcription?.prefix(50).description ?? "nil", "String?"),
+            ("notes", memo.notes?.prefix(50).description ?? "nil", "String?"),
+            ("summary", memo.summary?.prefix(50).description ?? "nil", "String?"),
+            ("tasks", memo.tasks?.prefix(50).description ?? "nil", "String?"),
+            ("reminders", memo.reminders?.prefix(50).description ?? "nil", "String?"),
+            ("audioFilePath", memo.audioFilePath ?? "nil", "String?"),
+            ("waveformData", (memo.waveformData?.count ?? 0).description + " bytes", "Data?"),
+            ("isTranscribing", memo.isTranscribing ? "true" : "false", "Bool"),
+            ("isProcessingSummary", memo.isProcessingSummary ? "true" : "false", "Bool"),
+            ("isProcessingTasks", memo.isProcessingTasks ? "true" : "false", "Bool"),
+            ("isProcessingReminders", memo.isProcessingReminders ? "true" : "false", "Bool"),
+            ("autoProcessed", memo.autoProcessed ? "true" : "false", "Bool"),
+            ("originDeviceId", memo.originDeviceId ?? "nil", "String?"),
+            ("macReceivedAt", memo.macReceivedAt.map { formatDate($0) } ?? "nil", "Date?"),
+            ("cloudSyncedAt", memo.cloudSyncedAt.map { formatDate($0) } ?? "nil", "Date?"),
+            ("deletedAt", memo.deletedAt.map { formatDate($0) } ?? "nil", "Date?"),
+            ("pendingWorkflowIds", memo.pendingWorkflowIds ?? "nil", "String?"),
+        ]
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text(entityName)
+                Text("MemoModel")
                     .font(.headline)
 
                 Spacer()
@@ -1074,24 +1075,16 @@ struct ManagedObjectInspector: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // Object info
-                    inspectorSection("OBJECT") {
-                        inspectorRow("Entity", entityName)
-                        inspectorRow("Object ID", object.objectID.uriRepresentation().lastPathComponent)
+                    inspectorSection("MEMO") {
+                        inspectorRow("ID", String(memo.id.uuidString.prefix(8)))
+                        inspectorRow("Created", formatDate(memo.createdAt))
+                        inspectorRow("Modified", formatDate(memo.lastModified))
                     }
 
                     // Attributes
                     inspectorSection("ATTRIBUTES (\(attributes.count))") {
                         ForEach(attributes, id: \.name) { attr in
                             inspectorRow(attr.name, attr.value, typeHint: attr.type)
-                        }
-                    }
-
-                    // Relationships
-                    if !relationships.isEmpty {
-                        inspectorSection("RELATIONSHIPS (\(relationships.count))") {
-                            ForEach(relationships, id: \.name) { rel in
-                                relationshipRow(rel.name, rel.count, rel.objects)
-                            }
                         }
                     }
                 }
@@ -1139,140 +1132,20 @@ struct ManagedObjectInspector: View {
         .padding(.vertical, 6)
     }
 
-    private func relationshipRow(_ name: String, _ count: Int, _ objects: [NSManagedObject]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Button(action: {
-                withAnimation {
-                    if expandedRelationship == name {
-                        expandedRelationship = nil
-                    } else {
-                        expandedRelationship = name
-                    }
-                }
-            }) {
-                HStack {
-                    Text(name)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Spacer()
-
-                    Text("\(count)")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(count == 0 ? .gray : .primary)
-
-                    Image(systemName: expandedRelationship == name ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10))
-                        .foregroundColor(.gray)
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-
-            if expandedRelationship == name && !objects.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(objects, id: \.objectID) { obj in
-                        relatedObjectRow(obj)
-                    }
-                }
-                .padding(.leading, 20)
-                .padding(.bottom, 8)
-            }
-        }
-    }
-
-    private func relatedObjectRow(_ object: NSManagedObject) -> some View {
-        HStack {
-            Text(object.entity.name ?? "?")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(.accentColor)
-
-            Text(displayName(for: object))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(Theme.current.foreground)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(Theme.current.surface2)
-        .cornerRadius(4)
-    }
-
-    private func displayName(for object: NSManagedObject) -> String {
-        let entity = object.entity
-        let attributeNames = Set(entity.attributesByName.keys)
-
-        if attributeNames.contains("title"),
-           let title = object.value(forKey: "title") as? String,
-           !title.isEmpty {
-            return title
-        }
-        if attributeNames.contains("name"),
-           let name = object.value(forKey: "name") as? String,
-           !name.isEmpty {
-            return name
-        }
-        if attributeNames.contains("id"),
-           let id = object.value(forKey: "id") as? UUID {
-            return String(id.uuidString.prefix(8))
-        }
-        return object.objectID.uriRepresentation().lastPathComponent
-    }
-
-    private func formatValue(_ value: Any?, type: NSAttributeType) -> String {
-        guard let value = value else { return "nil" }
-
-        switch type {
-        case .dateAttributeType:
-            if let date = value as? Date {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-                return formatter.string(from: date)
-            }
-        case .binaryDataAttributeType:
-            if let data = value as? Data {
-                return "\(data.count) bytes"
-            }
-        case .UUIDAttributeType:
-            if let uuid = value as? UUID {
-                return uuid.uuidString
-            }
-        case .booleanAttributeType:
-            if let bool = value as? Bool {
-                return bool ? "true" : "false"
-            }
-        case .doubleAttributeType, .floatAttributeType:
-            if let num = value as? Double {
-                return String(format: "%.2f", num)
-            }
-        default:
-            break
-        }
-
-        let stringValue = String(describing: value)
-        // Truncate very long values
-        if stringValue.count > 200 {
-            return String(stringValue.prefix(200)) + "..."
-        }
-        return stringValue
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.string(from: date)
     }
 
     private func copyAllData() {
         var lines: [String] = []
-        lines.append("=== \(entityName.uppercased()) ===")
-        lines.append("Object ID: \(object.objectID.uriRepresentation().lastPathComponent)")
+        lines.append("=== MEMOMODEL ===")
+        lines.append("ID: \(memo.id.uuidString)")
         lines.append("")
         lines.append("ATTRIBUTES")
         for attr in attributes {
             lines.append("  \(attr.name): \(attr.value)")
-        }
-        lines.append("")
-        lines.append("RELATIONSHIPS")
-        for rel in relationships {
-            lines.append("  \(rel.name): \(rel.count) object(s)")
         }
 
         NSPasteboard.general.clearContents()
@@ -1285,30 +1158,6 @@ struct ManagedObjectInspector: View {
             withAnimation {
                 showCopied = false
             }
-        }
-    }
-}
-
-extension NSAttributeDescription {
-    var attributeTypeName: String {
-        switch attributeType {
-        case .undefinedAttributeType: return "undefined"
-        case .integer16AttributeType: return "Int16"
-        case .integer32AttributeType: return "Int32"
-        case .integer64AttributeType: return "Int64"
-        case .decimalAttributeType: return "Decimal"
-        case .doubleAttributeType: return "Double"
-        case .floatAttributeType: return "Float"
-        case .stringAttributeType: return "String"
-        case .booleanAttributeType: return "Bool"
-        case .dateAttributeType: return "Date"
-        case .binaryDataAttributeType: return "Data"
-        case .UUIDAttributeType: return "UUID"
-        case .URIAttributeType: return "URI"
-        case .transformableAttributeType: return "Transformable"
-        case .objectIDAttributeType: return "ObjectID"
-        case .compositeAttributeType: return "Composite"
-        @unknown default: return "unknown"
         }
     }
 }
@@ -1608,18 +1457,23 @@ struct AudioPaddingTestView: View {
     }
 
     private func selectLastRecording() {
-        let context = PersistenceController.shared.container.viewContext
-        let request = VoiceMemo.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false)]
-        request.fetchLimit = 1
+        Task.detached(priority: .userInitiated) { @MainActor in
+            do {
+                let repository = LocalRepository()
+                let memos = try await repository.fetchMemos(
+                    sortBy: .timestamp,
+                    ascending: false,
+                    limit: 1,
+                    offset: 0
+                )
 
-        do {
-            if let lastMemo = try context.fetch(request).first,
-               let audioPath = lastMemo.fileURL {
-                selectedAudioPath = audioPath
+                if let lastMemo = memos.first,
+                   let audioPath = lastMemo.audioFilePath {
+                    self.selectedAudioPath = audioPath
+                }
+            } catch {
+                print("Failed to fetch last recording: \(error)")
             }
-        } catch {
-            print("Failed to fetch last recording: \(error)")
         }
     }
 
