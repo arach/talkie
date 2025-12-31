@@ -127,50 +127,65 @@ struct HomeView: View {
     }
 
     private func loadActivityData() {
-        let utterances = store.utterances
-        logger.info("📈 loadActivityData - processing \(utterances.count) utterances")
-        let calendar = Calendar.current
+        logger.info("📈 loadActivityData - using denormalized stats")
 
-        // Calculate unique days with activity
-        var uniqueDays = Set<Date>()
-        var earliestDate: Date?
-        for u in utterances {
-            let day = calendar.startOfDay(for: u.timestamp)
-            uniqueDays.insert(day)
-            if earliestDate == nil || day < earliestDate! {
-                earliestDate = day
-            }
-        }
+        // Fast path: Use denormalized stats (O(days) instead of O(dictations))
+        let aggregated = LiveDatabase.fetchAggregatedStats()
 
-        // Calculate stats
+        // Build HomeStats from aggregated data
         stats = HomeStats(
-            totalRecordings: utterances.count,
-            totalWords: utterances.map { $0.wordCount }.reduce(0, +),
-            totalDuration: utterances.compactMap { $0.durationSeconds }.reduce(0, +),
-            todayCount: utterances.filter { calendar.isDateInToday($0.timestamp) }.count,
-            weekCount: utterances.filter {
-                guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) else { return false }
-                return $0.timestamp >= weekAgo
-            }.count,
-            streak: calculateStreak(utterances),
-            topApps: calculateTopApps(utterances),
-            insight: generateInsight(utterances),
-            daysWithActivity: uniqueDays.count,
-            firstActivityDate: earliestDate
+            totalRecordings: aggregated.totalDictations,
+            totalWords: aggregated.totalWords,
+            totalDuration: aggregated.totalDurationSeconds,
+            todayCount: aggregated.todayCount,
+            weekCount: aggregated.weekCount,
+            streak: aggregated.streak,
+            topApps: aggregated.topApps.map { ($0.name, $0.bundleID, $0.count) },
+            insight: generateInsightFromStats(aggregated),
+            daysWithActivity: aggregated.daysWithActivity,
+            firstActivityDate: nil  // TODO: Store in daily_stats if needed
         )
 
-        // Build activity data for full year (allows switching between views)
-        activityData = buildActivityData(from: utterances, weeks: 52)
+        // Build activity grid from daily stats (already O(365) max)
+        activityData = buildActivityDataFromStats(aggregated.dailyActivity)
+
+        logger.info("📈 loadActivityData - loaded \(aggregated.totalDictations) dictations, \(aggregated.daysWithActivity) active days")
     }
 
-    private func generateInsight(_ utterances: [Utterance]) -> Insight? {
-        guard !utterances.isEmpty else { return nil }
+    /// Generate insight from aggregated stats (no iteration over utterances)
+    private func generateInsightFromStats(_ stats: LiveDatabase.AggregatedStats) -> Insight? {
+        guard stats.totalDictations > 0 else { return nil }
 
-        let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        let recentUtterances = utterances.filter { $0.timestamp >= weekAgo }
+        // Streak-based insights (already computed)
+        if stats.streak >= 7 {
+            return Insight(
+                iconName: "flame.fill",
+                iconColor: .orange,
+                message: "\(stats.streak) day streak!",
+                detail: "You're on fire! Using voice to get things done is a superpower."
+            )
+        }
 
-        guard !recentUtterances.isEmpty else {
+        if stats.streak >= 3 {
+            return Insight(
+                iconName: "bolt.fill",
+                iconColor: .yellow,
+                message: "Building momentum!",
+                detail: "\(stats.streak) days in a row. You're making this a habit!"
+            )
+        }
+
+        // Activity-based insights
+        if stats.todayCount >= 10 {
+            return Insight(
+                iconName: "arrow.up.right",
+                iconColor: .green,
+                message: "Productive day!",
+                detail: "You've driven \(stats.todayCount) actions today. Impressive!"
+            )
+        }
+
+        if stats.weekCount == 0 {
             return Insight(
                 iconName: "hand.wave",
                 iconColor: .green,
@@ -179,217 +194,34 @@ struct HomeView: View {
             )
         }
 
-        // Categorize apps
-        let devApps = Set(["Xcode", "VS Code", "Visual Studio Code", "Cursor", "Terminal", "iTerm", "Warp", "GitHub Desktop", "Tower", "Sublime Text", "IntelliJ IDEA", "PyCharm", "WebStorm"])
-        let socialApps = Set(["Messages", "Slack", "Discord", "Telegram", "WhatsApp", "FaceTime", "Zoom", "Teams", "Microsoft Teams"])
-        let creativeApps = Set(["Figma", "Sketch", "Photoshop", "Illustrator", "Final Cut Pro", "Logic Pro", "GarageBand", "Premiere Pro", "After Effects", "Blender"])
-        let writingApps = Set(["Notion", "Notes", "Bear", "Obsidian", "Ulysses", "iA Writer", "Pages", "Word", "Google Docs"])
-        let browserApps = Set(["Safari", "Chrome", "Arc", "Firefox", "Brave", "Edge"])
-
-        var devCount = 0
-        var socialCount = 0
-        var creativeCount = 0
-        var writingCount = 0
-        var browserCount = 0
-
-        for u in recentUtterances {
-            if let app = u.metadata.activeAppName {
-                if devApps.contains(app) { devCount += 1 }
-                else if socialApps.contains(app) { socialCount += 1 }
-                else if creativeApps.contains(app) { creativeCount += 1 }
-                else if writingApps.contains(app) { writingCount += 1 }
-                else if browserApps.contains(app) { browserCount += 1 }
-            }
-        }
-
-        let totalCategorized = devCount + socialCount + creativeCount + writingCount + browserCount
-
-        // Generate encouraging insight based on dominant activity
-        if devCount > 0 && devCount >= totalCategorized / 2 {
-            return Insight(
-                iconName: "laptopcomputer",
-                iconColor: .purple,
-                message: "In the zone!",
-                detail: "You've been doing great dev work this week. Keep building!"
-            )
-        }
-
-        if socialCount > 0 && socialCount >= totalCategorized / 2 {
-            return Insight(
-                iconName: "bubble.left.and.bubble.right",
-                iconColor: .blue,
-                message: "Staying connected!",
-                detail: "Great week for collaboration and catching up with people."
-            )
-        }
-
-        if creativeCount > 0 && creativeCount >= totalCategorized / 2 {
-            return Insight(
-                iconName: "paintbrush",
-                iconColor: .pink,
-                message: "Creative flow!",
-                detail: "You've been in creative mode. Love to see it!"
-            )
-        }
-
-        if writingCount > 0 && writingCount >= totalCategorized / 2 {
-            return Insight(
-                iconName: "pencil.line",
-                iconColor: .indigo,
-                message: "Writing mode!",
-                detail: "You've been getting a lot done in writing apps. Keep it up!"
-            )
-        }
-
-        if browserCount > 0 && browserCount >= totalCategorized / 2 {
-            return Insight(
-                iconName: "magnifyingglass",
-                iconColor: .teal,
-                message: "Research mode!",
-                detail: "Doing your homework and exploring. Curiosity is a superpower!"
-            )
-        }
-
-        // Streak-based insights
-        let streak = calculateStreak(utterances)
-        if streak >= 7 {
-            return Insight(
-                iconName: "flame.fill",
-                iconColor: .orange,
-                message: "\(streak) day streak!",
-                detail: "You're on fire! Using voice to get things done is a superpower."
-            )
-        }
-
-        if streak >= 3 {
-            return Insight(
-                iconName: "bolt.fill",
-                iconColor: .yellow,
-                message: "Building momentum!",
-                detail: "\(streak) days in a row. You're making this a habit!"
-            )
-        }
-
-        // Time-based insights
-        let hour = calendar.component(.hour, from: Date())
-        let todayCount = recentUtterances.filter { calendar.isDateInToday($0.timestamp) }.count
-
-        // "Productive morning" - before noon with good activity
-        if hour < 12 && todayCount >= 8 {
-            return Insight(
-                iconName: "sun.max.fill",
-                iconColor: .orange,
-                message: "Productive morning!",
-                detail: "\(todayCount) actions already and it's not even noon."
-            )
-        }
-
-        // Volume-based insights (afternoon/evening)
-        if todayCount >= 10 {
-            return Insight(
-                iconName: "arrow.up.right",
-                iconColor: .green,
-                message: "Productive day!",
-                detail: "You've driven \(todayCount) actions today. Impressive!"
-            )
-        }
-
-        // Default encouraging message
+        // Default insight
         return Insight(
             iconName: "sparkles",
-            iconColor: .cyan,
+            iconColor: .purple,
             message: "Keep going!",
-            detail: "\(recentUtterances.count) actions this week. You're getting things done!"
+            detail: "\(stats.totalDictations) dictations and counting."
         )
     }
 
-    private func calculateTopApps(_ utterances: [Utterance]) -> [(name: String, bundleID: String?, count: Int)] {
-        // Track both counts and bundle IDs
-        var appData: [String: (bundleID: String?, count: Int)] = [:]
+    /// Build activity grid from daily stats (no iteration over utterances)
+    private func buildActivityDataFromStats(_ dailyStats: [(date: String, count: Int)]) -> [DayActivity] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone.current
 
-        for u in utterances {
-            if let appName = u.metadata.activeAppName, !appName.isEmpty {
-                let existing = appData[appName]
-                let bundleID = existing?.bundleID ?? u.metadata.activeAppBundleID
-                let count = (existing?.count ?? 0) + 1
-                appData[appName] = (bundleID, count)
-            }
+        // Find max count for level calculation
+        let maxCount = dailyStats.map(\.count).max() ?? 1
+
+        return dailyStats.compactMap { stat in
+            guard let date = dateFormatter.date(from: stat.date) else { return nil }
+            return DayActivity(
+                date: date,
+                count: stat.count,
+                level: ActivityLevel.from(count: stat.count, max: maxCount)
+            )
         }
-
-        return appData
-            .sorted { $0.value.count > $1.value.count }
-            .prefix(5)
-            .map { (name: $0.key, bundleID: $0.value.bundleID, count: $0.value.count) }
     }
 
-    private func calculateStreak(_ utterances: [Utterance]) -> Int {
-        let calendar = Calendar.current
-        var streak = 0
-        var checkDate = calendar.startOfDay(for: Date())
-
-        // Group by day
-        var byDay: [Date: [Utterance]] = [:]
-        for u in utterances {
-            let day = calendar.startOfDay(for: u.timestamp)
-            byDay[day, default: []].append(u)
-        }
-
-        // Count consecutive days
-        while byDay[checkDate] != nil {
-            streak += 1
-            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
-            checkDate = previousDay
-        }
-
-        return streak
-    }
-
-    private func buildActivityData(from utterances: [Utterance], weeks: Int) -> [DayActivity] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-
-        // Group utterances by day
-        var byDay: [Date: [Utterance]] = [:]
-        for u in utterances {
-            let day = calendar.startOfDay(for: u.timestamp)
-            byDay[day, default: []].append(u)
-        }
-
-        // Find max count for normalization (minimum 1 to avoid division by zero)
-        let maxCount = max(byDay.values.map { $0.count }.max() ?? 1, 1)
-
-        // GitHub style: weeks as columns, days as rows (Sun-Sat)
-        // Current day should be at bottom-right
-        // We need to go back to find the start of the grid
-
-        // Get current weekday (1 = Sunday, 7 = Saturday in gregorian)
-        let currentWeekday = calendar.component(.weekday, from: today)
-
-        // Calculate how many days back to go for full weeks + partial current week
-        // We want `weeks` complete columns plus the current partial week
-        let daysInCurrentWeek = currentWeekday // Days from Sunday to today (inclusive)
-        let totalDays = (weeks - 1) * 7 + daysInCurrentWeek
-
-        // Start date
-        guard let startDate = calendar.date(byAdding: .day, value: -(totalDays - 1), to: today) else {
-            return []
-        }
-
-        // Build array for each day from start to today
-        var data: [DayActivity] = []
-        var currentDate = startDate
-
-        while currentDate <= today {
-            let count = byDay[currentDate]?.count ?? 0
-            let level = ActivityLevel.from(count: count, max: maxCount)
-            data.append(DayActivity(date: currentDate, count: count, level: level))
-
-            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
-            currentDate = nextDate
-        }
-
-        return data
-    }
 }
 
 // MARK: - Data Models

@@ -2,7 +2,34 @@
 
 `macOS/TalkieEngine/` - XPC transcription service
 
+**Total LOC**: ~4,000 lines across 8 files
+
 Isolated XPC service process hosting WhisperKit and FluidAudio (Parakeet) for transcription.
+
+---
+
+## Complexity Hotspots
+
+| File | Lines | Risk |
+|------|-------|------|
+| `Views/EngineStatusView.swift` | 1,714 | 🟡 MEDIUM |
+| `EngineService.swift` | 999 | 🟠 HIGH |
+| `AppDelegate.swift` | 478 | 🟢 OK |
+| `EngineProtocol.swift` | 316 | 🟢 OK |
+
+### EngineService.swift (999 lines) - Consider Split
+
+**Current State**: Single file handling Whisper + Parakeet + downloads + queueing.
+
+**Recommended Split**:
+```
+Services/
+├── EngineService.swift         # Coordinator (~300 lines)
+├── WhisperModelManager.swift   # Whisper-specific (~200 lines)
+├── ParakeetModelManager.swift  # Parakeet-specific (~200 lines)
+├── TranscriptionQueue.swift    # Task queueing (~150 lines)
+└── ModelDownloader.swift       # Download orchestration (~150 lines)
+```
 
 ---
 

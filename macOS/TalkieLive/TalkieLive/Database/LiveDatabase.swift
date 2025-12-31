@@ -164,6 +164,52 @@ enum LiveDatabase {
                 log.info("[LiveDatabase] Renamed table: utterances → dictations")
             }
 
+            // v5: Denormalized daily stats for O(1) HomeView queries
+            migrator.registerMigration("v5_daily_stats") { db in
+                // Daily aggregates - one row per day
+                try db.create(table: "daily_stats") { t in
+                    t.column("date", .text).primaryKey()  // "2024-12-31" format
+                    t.column("dictationCount", .integer).notNull().defaults(to: 0)
+                    t.column("wordCount", .integer).notNull().defaults(to: 0)
+                    t.column("durationSeconds", .double).notNull().defaults(to: 0)
+                }
+
+                // Per-app daily stats for top apps calculation
+                try db.create(table: "daily_app_stats") { t in
+                    t.column("date", .text).notNull()
+                    t.column("appBundleID", .text).notNull()
+                    t.column("appName", .text)
+                    t.column("count", .integer).notNull().defaults(to: 0)
+                    t.primaryKey(["date", "appBundleID"])
+                }
+
+                // Backfill from existing dictations (use localtime to match runtime DateFormatter)
+                try db.execute(sql: """
+                    INSERT INTO daily_stats (date, dictationCount, wordCount, durationSeconds)
+                    SELECT
+                        date(createdAt, 'unixepoch', 'localtime') as date,
+                        COUNT(*) as dictationCount,
+                        COALESCE(SUM(wordCount), 0) as wordCount,
+                        COALESCE(SUM(durationSeconds), 0) as durationSeconds
+                    FROM dictations
+                    GROUP BY date(createdAt, 'unixepoch', 'localtime')
+                """)
+
+                try db.execute(sql: """
+                    INSERT INTO daily_app_stats (date, appBundleID, appName, count)
+                    SELECT
+                        date(createdAt, 'unixepoch', 'localtime') as date,
+                        appBundleID,
+                        appName,
+                        COUNT(*) as count
+                    FROM dictations
+                    WHERE appBundleID IS NOT NULL
+                    GROUP BY date(createdAt, 'unixepoch', 'localtime'), appBundleID
+                """)
+
+                log.info("[LiveDatabase] Created daily_stats tables with backfill")
+            }
+
             try migrator.migrate(dbQueue)
 
             return dbQueue
@@ -222,7 +268,7 @@ extension LiveDatabase {
     @discardableResult
     static func store(_ utterance: LiveDictation) -> Int64? {
         do {
-            return try shared.write { db -> Int64? in
+            let insertedId = try shared.write { db -> Int64? in
                 let mutable = utterance
                 try mutable.insert(db)
                 // Use lastInsertedRowID as fallback if didInsert didn't populate id
@@ -230,6 +276,13 @@ extension LiveDatabase {
                 log.debug( "Stored dictation", detail: "ID: \(insertedId)")
                 return insertedId
             }
+
+            // Async update denormalized stats (fire-and-forget)
+            Task.detached(priority: .utility) {
+                updateDailyStats(for: utterance, increment: true)
+            }
+
+            return insertedId
         } catch {
             log.error( "Store failed", error: error)
             return nil
@@ -327,12 +380,20 @@ extension LiveDatabase {
         try? shared.write { db in
             _ = try LiveDictation.deleteOne(db, id: id)
         }
+
+        // Async update denormalized stats (fire-and-forget)
+        Task.detached(priority: .utility) {
+            updateDailyStats(for: utterance, increment: false)
+        }
     }
 
     static func deleteAll() {
         AudioStorage.deleteAll()
         try? shared.write { db in
             _ = try LiveDictation.deleteAll(db)
+            // Clear denormalized stats too
+            try db.execute(sql: "DELETE FROM daily_stats")
+            try db.execute(sql: "DELETE FROM daily_app_stats")
         }
     }
 
@@ -539,6 +600,221 @@ extension LiveDatabase {
                 sql: "UPDATE dictations SET transcriptionStatus = ?, transcriptionError = ? WHERE id = ?",
                 arguments: [TranscriptionStatus.failed.rawValue, error, id]
             )
+        }
+    }
+}
+
+// MARK: - Denormalized Stats
+
+extension LiveDatabase {
+    /// Date formatter for daily stats keys (yyyy-MM-dd)
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone.current
+        return f
+    }()
+
+    /// Update daily stats after insert/delete (called async)
+    static func updateDailyStats(for dictation: LiveDictation, increment: Bool) {
+        let date = dateFormatter.string(from: dictation.createdAt)
+        let delta = increment ? 1 : -1
+        let wordDelta = (dictation.wordCount ?? 0) * delta
+        let durationDelta = (dictation.durationSeconds ?? 0) * Double(delta)
+
+        do {
+            try shared.write { db in
+                // Update daily_stats with UPSERT
+                try db.execute(
+                    sql: """
+                        INSERT INTO daily_stats (date, dictationCount, wordCount, durationSeconds)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(date) DO UPDATE SET
+                            dictationCount = MAX(0, dictationCount + ?),
+                            wordCount = MAX(0, wordCount + ?),
+                            durationSeconds = MAX(0, durationSeconds + ?)
+                        """,
+                    arguments: [
+                        date,
+                        max(0, delta), max(0, wordDelta), max(0, durationDelta),  // INSERT values
+                        delta, wordDelta, durationDelta  // UPDATE deltas
+                    ]
+                )
+
+                // Update daily_app_stats if we have app info
+                if let bundleID = dictation.appBundleID {
+                    try db.execute(
+                        sql: """
+                            INSERT INTO daily_app_stats (date, appBundleID, appName, count)
+                            VALUES (?, ?, ?, ?)
+                            ON CONFLICT(date, appBundleID) DO UPDATE SET
+                                count = MAX(0, count + ?),
+                                appName = COALESCE(?, appName)
+                            """,
+                        arguments: [
+                            date, bundleID, dictation.appName, max(0, delta),  // INSERT
+                            delta, dictation.appName  // UPDATE
+                        ]
+                    )
+                }
+            }
+        } catch {
+            log.error("[LiveDatabase] updateDailyStats error: \(error)")
+        }
+    }
+
+    /// Aggregated stats from denormalized tables (O(days) instead of O(dictations))
+    struct AggregatedStats {
+        var totalDictations: Int = 0
+        var totalWords: Int = 0
+        var totalDurationSeconds: Double = 0
+        var todayCount: Int = 0
+        var weekCount: Int = 0
+        var daysWithActivity: Int = 0
+        var streak: Int = 0
+        var topApps: [(name: String, bundleID: String, count: Int)] = []
+        var dailyActivity: [(date: String, count: Int)] = []
+    }
+
+    /// Fetch aggregated stats using SQL (fast O(days) queries)
+    static func fetchAggregatedStats() -> AggregatedStats {
+        var stats = AggregatedStats()
+
+        do {
+            try shared.read { db in
+                let today = dateFormatter.string(from: Date())
+                let weekAgo = dateFormatter.string(from: Date().addingTimeInterval(-7 * 24 * 60 * 60))
+                let yearAgo = dateFormatter.string(from: Date().addingTimeInterval(-365 * 24 * 60 * 60))
+
+                // Total stats (all time)
+                if let row = try Row.fetchOne(db, sql: """
+                    SELECT
+                        COALESCE(SUM(dictationCount), 0) as total,
+                        COALESCE(SUM(wordCount), 0) as words,
+                        COALESCE(SUM(durationSeconds), 0) as duration,
+                        COUNT(*) as daysActive
+                    FROM daily_stats
+                    WHERE dictationCount > 0
+                    """) {
+                    stats.totalDictations = row["total"]
+                    stats.totalWords = row["words"]
+                    stats.totalDurationSeconds = row["duration"]
+                    stats.daysWithActivity = row["daysActive"]
+                }
+
+                // Today's count
+                if let row = try Row.fetchOne(db, sql: """
+                    SELECT COALESCE(dictationCount, 0) as count FROM daily_stats WHERE date = ?
+                    """, arguments: [today]) {
+                    stats.todayCount = row["count"]
+                }
+
+                // Week count
+                if let row = try Row.fetchOne(db, sql: """
+                    SELECT COALESCE(SUM(dictationCount), 0) as count FROM daily_stats WHERE date >= ?
+                    """, arguments: [weekAgo]) {
+                    stats.weekCount = row["count"]
+                }
+
+                // Streak calculation (walk backwards from today)
+                let activeDates = try String.fetchAll(db, sql: """
+                    SELECT date FROM daily_stats
+                    WHERE dictationCount > 0 AND date <= ?
+                    ORDER BY date DESC
+                    """, arguments: [today])
+
+                stats.streak = calculateStreakFromDates(activeDates, today: today)
+
+                // Top apps (all time)
+                let appRows = try Row.fetchAll(db, sql: """
+                    SELECT appName, appBundleID, SUM(count) as total
+                    FROM daily_app_stats
+                    GROUP BY appBundleID
+                    ORDER BY total DESC
+                    LIMIT 10
+                    """)
+                stats.topApps = appRows.map { row in
+                    (name: row["appName"] ?? row["appBundleID"] ?? "Unknown",
+                     bundleID: row["appBundleID"] ?? "",
+                     count: row["total"])
+                }
+
+                // Daily activity for grid (last year)
+                let activityRows = try Row.fetchAll(db, sql: """
+                    SELECT date, dictationCount FROM daily_stats
+                    WHERE date >= ?
+                    ORDER BY date
+                    """, arguments: [yearAgo])
+                stats.dailyActivity = activityRows.map { row in
+                    (date: row["date"] ?? "", count: row["dictationCount"] ?? 0)
+                }
+            }
+        } catch {
+            log.error("[LiveDatabase] fetchAggregatedStats error: \(error)")
+        }
+
+        return stats
+    }
+
+    /// Calculate streak from sorted date strings (descending)
+    private static func calculateStreakFromDates(_ dates: [String], today: String) -> Int {
+        guard !dates.isEmpty else { return 0 }
+
+        var streak = 0
+        var expectedDate = today
+
+        for date in dates {
+            if date == expectedDate {
+                streak += 1
+                // Calculate previous day
+                if let d = dateFormatter.date(from: date) {
+                    expectedDate = dateFormatter.string(from: d.addingTimeInterval(-24 * 60 * 60))
+                }
+            } else if date < expectedDate {
+                // Gap found - streak broken
+                break
+            }
+        }
+
+        return streak
+    }
+
+    /// Rebuild all stats from source data (for periodic consistency check)
+    static func rebuildDailyStats() {
+        do {
+            try shared.write { db in
+                // Clear existing stats
+                try db.execute(sql: "DELETE FROM daily_stats")
+                try db.execute(sql: "DELETE FROM daily_app_stats")
+
+                // Rebuild from dictations (use localtime to match runtime DateFormatter)
+                try db.execute(sql: """
+                    INSERT INTO daily_stats (date, dictationCount, wordCount, durationSeconds)
+                    SELECT
+                        date(createdAt, 'unixepoch', 'localtime') as date,
+                        COUNT(*) as dictationCount,
+                        COALESCE(SUM(wordCount), 0) as wordCount,
+                        COALESCE(SUM(durationSeconds), 0) as durationSeconds
+                    FROM dictations
+                    GROUP BY date(createdAt, 'unixepoch', 'localtime')
+                """)
+
+                try db.execute(sql: """
+                    INSERT INTO daily_app_stats (date, appBundleID, appName, count)
+                    SELECT
+                        date(createdAt, 'unixepoch', 'localtime') as date,
+                        appBundleID,
+                        appName,
+                        COUNT(*) as count
+                    FROM dictations
+                    WHERE appBundleID IS NOT NULL
+                    GROUP BY date(createdAt, 'unixepoch', 'localtime'), appBundleID
+                """)
+
+                log.info("[LiveDatabase] Rebuilt daily stats tables")
+            }
+        } catch {
+            log.error("[LiveDatabase] rebuildDailyStats error: \(error)")
         }
     }
 }

@@ -26,6 +26,9 @@ final class InterstitialManager {
     private var panel: NSPanel?
     private var localEventMonitor: Any?
 
+    // Note: No deinit needed - this is a singleton (static let shared) so it's never deallocated.
+    // Event monitor cleanup happens in dismiss() which is always called before the panel closes.
+
     var isVisible: Bool = false
     var currentDictationId: Int64?
     var editedText: String = ""
@@ -327,20 +330,35 @@ final class InterstitialManager {
 
     /// Replace original selection in source app with edited text (Command+Enter)
     /// This activates the source app and pastes to replace the selection
+    ///
+    /// Note: If the selection in the source app has changed since recording started
+    /// (user clicked elsewhere, app cleared selection, etc.), the text will be pasted
+    /// at the current cursor position instead. This is expected behavior.
     func replaceSelectionAndDismiss() {
         guard let bundleID = sourceAppBundleID else {
             logger.warning("replaceSelectionAndDismiss: No source app bundle ID")
             return
         }
 
+        // Safety check: verify source app is still running
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first != nil else {
+            logger.warning("Source app no longer running: \(bundleID) - copying to clipboard")
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(editedText, forType: .string)
+            dismiss()
+            return
+        }
+
         let text = editedText
-        logger.info("Replacing selection in \(bundleID) with \(text.count) chars")
+        let originalSelection = originalSelectedText
+        logger.info("Replacing selection in \(bundleID): \(text.count) chars (original selection: \(originalSelection?.count ?? 0) chars)")
         dismiss()
 
         // Route paste through TalkieLive (handles app activation and paste robustly)
+        // Note: Pastes at current cursor/selection - if selection changed, that's OK
         ServiceManager.shared.live.pasteText(text, toAppWithBundleID: bundleID) { success in
             if !success {
-                // Fallback: copy to clipboard so user can paste manually
+                // Fallback: copy to clipboard so user can paste manually (silent - no notification)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
                 logger.warning("TalkieLive paste failed - copied to clipboard")
