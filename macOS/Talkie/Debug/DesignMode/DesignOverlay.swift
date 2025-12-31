@@ -53,35 +53,10 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                         .allowsHitTesting(false)
                 }
 
-                // Spacing decorator (shows spacing between sections and elements)
-                // TODO: Re-enable once SpacingDecoratorOverlay is added to Xcode project
-                // if designMode.showSpacing {
-                //     SpacingDecoratorOverlay()
-                // }
-
-                // Advanced layout tools (independent overlays)
-                // TODO: Fix Swift compilation issue - tools not visible to DesignOverlay
-                // if designMode.showCenterGuides {
-                //     CenterGuidesOverlay()
-                // }
-
-                // if designMode.showEdgeGuides {
-                //     EdgeGuidesOverlay()
-                // }
-
-                // if designMode.showElementBounds {
-                //     ElementBoundsOverlay()
-                // }
-
-                // if designMode.pixelZoomLevel > 0 {
-                //     PixelZoomOverlay(zoomLevel: designMode.pixelZoomLevel)
-                // }
-
-                // Active tool overlay
-                // TODO: Fix tool visibility issue
-                // if let activeTool = designMode.activeTool {
-                //     toolOverlay(for: activeTool)
-                // }
+                // Layout Inspector (real view bounds via NSView hit testing)
+                if designMode.showLayoutInspector {
+                    LayoutInspectorOverlay()
+                }
 
                 // Floating toolbar button
                 VStack {
@@ -265,6 +240,12 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                 icon: "viewfinder",
                 label: "Element Bounds",
                 isOn: $designMode.showElementBounds
+            )
+
+            toggleRow(
+                icon: "ruler",
+                label: "Layout Inspector",
+                isOn: $designMode.showLayoutInspector
             )
 
             // Pixel Zoom (multi-state)
