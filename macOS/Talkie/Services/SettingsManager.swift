@@ -12,6 +12,7 @@ import SwiftUI
 import AppKit
 import os
 import Observation
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Settings")
 
@@ -367,6 +368,7 @@ class SettingsManager {
     private let contentFontSizeKey = "contentFontSize"
     private let currentThemeKey = "currentTheme"
     private let uiAllCapsKey = "uiAllCaps"
+    private let enableGlassEffectsKey = "enableGlassEffects"
 
     /// The currently active theme preset
     var currentTheme: ThemePreset? {
@@ -446,6 +448,18 @@ class SettingsManager {
     /// Resolved accent color for UI elements (toggles, buttons, etc.)
     var resolvedAccentColor: Color {
         accentColor.color ?? .accentColor
+    }
+
+    /// Whether glass effects are enabled (requires restart to take effect)
+    var enableGlassEffects: Bool {
+        didSet {
+            UserDefaults.standard.set(enableGlassEffects, forKey: enableGlassEffectsKey)
+        }
+    }
+
+    /// Check if glass setting differs from current runtime (needs restart)
+    var glassEffectsNeedsRestart: Bool {
+        enableGlassEffects != GlassConfig.enableGlassEffects
     }
 
     /// Font style for UI chrome: labels, headers, buttons, badges, navigation
@@ -1343,6 +1357,14 @@ class SettingsManager {
             self.accentColor = color
         } else {
             self.accentColor = .system
+        }
+
+        // Load glass effects setting (defaults to true, respects system reduce transparency)
+        if UserDefaults.standard.object(forKey: enableGlassEffectsKey) != nil {
+            self.enableGlassEffects = UserDefaults.standard.bool(forKey: enableGlassEffectsKey)
+        } else {
+            // Default: enabled unless system has reduce transparency on
+            self.enableGlassEffects = !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
         }
 
         // Load UI font style (with migration from old fontStyle key)

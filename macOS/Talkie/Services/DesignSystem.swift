@@ -669,6 +669,27 @@ extension SettingsPageContainer where Header == EmptyView {
     }
 }
 
+// MARK: - Settings Section Card
+
+/// A reusable card style for settings sections with Liquid Glass effect
+struct SettingsSectionCard: ViewModifier {
+    var padding: CGFloat = Spacing.lg
+    var cornerRadius: CGFloat = CornerRadius.sm
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .liquidGlassCard(cornerRadius: cornerRadius)
+    }
+}
+
+extension View {
+    /// Apply settings section card styling with Liquid Glass
+    func settingsSectionCard(padding: CGFloat = Spacing.lg, cornerRadius: CGFloat = CornerRadius.sm) -> some View {
+        modifier(SettingsSectionCard(padding: padding, cornerRadius: cornerRadius))
+    }
+}
+
 // MARK: - Cached Theme
 
 /// Pre-computed theme values for performance.

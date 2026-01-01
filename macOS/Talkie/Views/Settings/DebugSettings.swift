@@ -8,6 +8,7 @@
 import SwiftUI
 import os
 import CloudKit
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
@@ -80,9 +81,54 @@ struct DebugInfoView: View {
                     debugRow(label: "Last Sync", value: SyncStatusManager.shared.lastSyncAgo, icon: "arrow.triangle.2.circlepath")
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
+
+            // MARK: - Rendering
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.purple)
+                        .frame(width: 3, height: 14)
+
+                    Text("RENDERING")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Spacer()
+
+                    if settingsManager.glassEffectsNeedsRestart {
+                        Text("RESTART REQUIRED")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, Spacing.xs)
+                            .padding(.vertical, Spacing.xxs)
+                            .background(Color.orange.opacity(0.2))
+                            .cornerRadius(CornerRadius.xs)
+                    }
+                }
+
+                Toggle(isOn: $settings.enableGlassEffects) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Glass Effects")
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foreground)
+                        Text("Liquid glass backgrounds with blur and depth. Disable for better performance on older Macs.")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(settingsManager.resolvedAccentColor)
+
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "info.circle")
+                        .font(Theme.current.fontXS)
+                    Text("Current: \(GlassConfig.enableGlassEffects ? "Enabled" : "Disabled"). Changes require app restart.")
+                        .font(Theme.current.fontXS)
+                }
+                .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - iCloud Status
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -103,9 +149,7 @@ struct DebugInfoView: View {
                     debugRow(label: "Container", value: "iCloud.com.jdi.talkie", icon: "externaldrive.connected.to.line.below")
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Sync Status
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -154,9 +198,7 @@ struct DebugInfoView: View {
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Onboarding
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -200,9 +242,7 @@ struct DebugInfoView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Configuration (JSON)
             SettingsJSONExportView()
@@ -348,9 +388,7 @@ struct SettingsJSONExportView: View {
                     .strokeBorder(Theme.current.divider, lineWidth: 1)
             )
         }
-        .padding(Spacing.md)
-        .background(Theme.current.surface2)
-        .cornerRadius(CornerRadius.sm)
+        .settingsSectionCard(padding: Spacing.md)
         .onAppear {
             refreshJSON()
         }

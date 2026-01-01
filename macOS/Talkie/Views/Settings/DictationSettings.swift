@@ -370,9 +370,7 @@ struct DictationOutputSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Behavior Section
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -397,9 +395,7 @@ struct DictationOutputSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Scratchpad Section
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -444,9 +440,7 @@ struct DictationOutputSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Context Preference Section
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -489,9 +483,7 @@ struct DictationOutputSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
         }
         .onAppear {
             logger.debug("DictationOutputSettingsView appeared")

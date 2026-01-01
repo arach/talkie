@@ -100,9 +100,7 @@ struct DatabaseSettingsView: View {
                     .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Memo Retention
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -144,9 +142,7 @@ struct DatabaseSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Cleanup Actions
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -245,9 +241,7 @@ struct DatabaseSettingsView: View {
                     .cornerRadius(CornerRadius.xs)
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
         }
         .onAppear {
             logger.debug("DatabaseSettingsView appeared")
@@ -389,9 +383,7 @@ struct CloudSettingsView: View {
                         featureRow(icon: "iphone.and.arrow.forward", text: "Seamless iPhone integration")
                     }
                 }
-                .padding(Spacing.md)
-                .background(Theme.current.surface2)
-                .cornerRadius(CornerRadius.sm)
+                .settingsSectionCard(padding: Spacing.md)
             }
         }
     }

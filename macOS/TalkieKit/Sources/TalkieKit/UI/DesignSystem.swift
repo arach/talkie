@@ -313,3 +313,425 @@ public extension View {
         modifier(GlassHoverExternalModifier(isHovered: isHovered, isSelected: isSelected, cornerRadius: cornerRadius, baseOpacity: baseOpacity, hoverOpacity: hoverOpacity, selectedOpacity: selectedOpacity, accentColor: accentColor))
     }
 }
+
+// MARK: - Liquid Glass (iOS 26 / macOS 26)
+
+/// Global glass configuration - set at app launch
+public enum GlassConfig {
+    /// Whether to use glass effects (set at launch based on user preference or system capability)
+    public static var enableGlassEffects: Bool = true
+
+    /// Auto-detect if glass should be disabled (call at app launch)
+    /// Checks system reduce transparency setting
+    public static func configureFromSystem() {
+        #if os(macOS)
+        enableGlassEffects = !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+        #endif
+    }
+}
+
+/// Glass depth intensity for fallback effects
+public enum GlassDepth {
+    case subtle
+    case standard
+    case prominent
+
+    var highlightOpacity: Double {
+        switch self {
+        case .subtle: return 0.08
+        case .standard: return 0.12
+        case .prominent: return 0.18
+        }
+    }
+
+    var borderOpacity: Double {
+        switch self {
+        case .subtle: return 0.12
+        case .standard: return 0.18
+        case .prominent: return 0.25
+        }
+    }
+
+    var shadowRadius: CGFloat {
+        switch self {
+        case .subtle: return 6
+        case .standard: return 10
+        case .prominent: return 14
+        }
+    }
+
+    var shadowOpacity: Double {
+        switch self {
+        case .subtle: return 0.12
+        case .standard: return 0.18
+        case .prominent: return 0.25
+        }
+    }
+}
+
+/// Liquid Glass card modifier - uses native .glassEffect() on macOS 26+, falls back to material
+public struct LiquidGlassCardModifier: ViewModifier {
+    var cornerRadius: CGFloat
+    var tint: Color?
+    var isInteractive: Bool
+    var depth: GlassDepth
+
+    public init(cornerRadius: CGFloat = CornerRadius.md, tint: Color? = nil, isInteractive: Bool = false, depth: GlassDepth = .standard) {
+        self.cornerRadius = cornerRadius
+        self.tint = tint
+        self.isInteractive = isInteractive
+        self.depth = depth
+    }
+
+    @ViewBuilder
+    public func body(content: Content) -> some View {
+        if !GlassConfig.enableGlassEffects {
+            // Simple mode - minimal overhead for older machines or reduced transparency
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(Color(white: 0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        )
+                )
+        } else if #available(macOS 26.0, *) {
+            let glass: Glass = {
+                var g: Glass = .regular
+                if let tint = tint {
+                    g = g.tint(tint)
+                }
+                if isInteractive {
+                    g = g.interactive()
+                }
+                return g
+            }()
+            content
+                .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            // Enhanced fallback with depth effects
+            // Use drawingGroup() to flatten layers into single GPU texture for better scroll performance
+            content
+                .background(
+                    ZStack {
+                        // Base material
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(.ultraThinMaterial)
+
+                        // Tint overlay
+                        if let tint = tint {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(tint.opacity(0.15))
+                        }
+
+                        // Combined glass overlay - merge inner glow + convex into single gradient
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(depth.highlightOpacity * 1.5),
+                                        Color.white.opacity(depth.highlightOpacity * 0.3),
+                                        Color.black.opacity(0.04)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                        // Combined border + highlight stroke
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(depth.borderOpacity * 1.5),
+                                        Color.white.opacity(depth.borderOpacity * 0.3)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+                    .drawingGroup() // Flatten to single texture for GPU efficiency
+                    .shadow(color: .black.opacity(depth.shadowOpacity), radius: depth.shadowRadius, y: depth.shadowRadius / 2)
+                )
+        }
+    }
+}
+
+/// Liquid Glass pill/capsule modifier
+public struct LiquidGlassPillModifier: ViewModifier {
+    var tint: Color?
+    var isInteractive: Bool
+    var depth: GlassDepth
+
+    public init(tint: Color? = nil, isInteractive: Bool = true, depth: GlassDepth = .standard) {
+        self.tint = tint
+        self.isInteractive = isInteractive
+        self.depth = depth
+    }
+
+    @ViewBuilder
+    public func body(content: Content) -> some View {
+        if !GlassConfig.enableGlassEffects {
+            // Simple mode - minimal overhead
+            content
+                .background(
+                    Capsule()
+                        .fill(Color(white: 0.12))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                        )
+                )
+        } else if #available(macOS 26.0, *) {
+            let glass: Glass = {
+                var g: Glass = .regular
+                if let tint = tint {
+                    g = g.tint(tint)
+                }
+                if isInteractive {
+                    g = g.interactive()
+                }
+                return g
+            }()
+            content
+                .glassEffect(glass, in: .capsule)
+        } else {
+            // Enhanced fallback with depth effects
+            // Use drawingGroup() to flatten layers into single GPU texture
+            content
+                .background(
+                    ZStack {
+                        // Base material
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+
+                        // Tint overlay
+                        if let tint = tint {
+                            Capsule()
+                                .fill(tint.opacity(0.15))
+                        }
+
+                        // Combined glass overlay
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(depth.highlightOpacity * 1.5),
+                                        Color.white.opacity(depth.highlightOpacity * 0.3),
+                                        Color.black.opacity(0.04)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                        // Combined border
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(depth.borderOpacity * 1.5),
+                                        Color.white.opacity(depth.borderOpacity * 0.3)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+                    .drawingGroup() // Flatten to single texture
+                    .shadow(color: .black.opacity(depth.shadowOpacity), radius: depth.shadowRadius, y: depth.shadowRadius / 2)
+                )
+        }
+    }
+}
+
+/// Liquid Glass container for morphing effects between glass views
+@available(macOS 26.0, *)
+public struct LiquidGlassContainer<Content: View>: View {
+    let spacing: CGFloat
+    let content: Content
+
+    public init(spacing: CGFloat = 20, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
+        self.content = content()
+    }
+
+    public var body: some View {
+        GlassEffectContainer(spacing: spacing) {
+            content
+        }
+    }
+}
+
+public extension View {
+    /// Apply Liquid Glass card effect (macOS 26+) with fallback
+    func liquidGlassCard(cornerRadius: CGFloat = CornerRadius.md, tint: Color? = nil, isInteractive: Bool = false, depth: GlassDepth = .standard) -> some View {
+        modifier(LiquidGlassCardModifier(cornerRadius: cornerRadius, tint: tint, isInteractive: isInteractive, depth: depth))
+    }
+
+    /// Apply Liquid Glass pill/capsule effect (macOS 26+) with fallback
+    func liquidGlassPill(tint: Color? = nil, isInteractive: Bool = true, depth: GlassDepth = .standard) -> some View {
+        modifier(LiquidGlassPillModifier(tint: tint, isInteractive: isInteractive, depth: depth))
+    }
+
+    /// Apply Liquid Glass effect with custom shape (macOS 26+ only, no-op on older)
+    @ViewBuilder
+    func liquidGlass<S: Shape>(in shape: S, tint: Color? = nil, isInteractive: Bool = false) -> some View {
+        if #available(macOS 26.0, *) {
+            let glass: Glass = {
+                var g: Glass = .regular
+                if let tint = tint {
+                    g = g.tint(tint)
+                }
+                if isInteractive {
+                    g = g.interactive()
+                }
+                return g
+            }()
+            self.glassEffect(glass, in: shape)
+        } else {
+            self.background(shape.fill(.ultraThinMaterial))
+        }
+    }
+}
+
+// MARK: - Liquid Glass Button Styles
+
+/// Glass button style for macOS 26+
+@available(macOS 26.0, *)
+public struct LiquidGlassButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .buttonStyle(.glass)
+    }
+}
+
+/// Prominent glass button style for macOS 26+
+@available(macOS 26.0, *)
+public struct LiquidGlassProminentButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .buttonStyle(.glassProminent)
+    }
+}
+
+/// Cross-platform glass button style with fallback
+public struct AdaptiveGlassButtonStyle: ButtonStyle {
+    var isProminent: Bool
+    var tint: Color?
+
+    public init(prominent: Bool = false, tint: Color? = nil) {
+        self.isProminent = prominent
+        self.tint = tint
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        if #available(macOS 26.0, *) {
+            let glass: Glass = {
+                var g: Glass = .regular.interactive()
+                if let tint = tint {
+                    g = g.tint(tint)
+                }
+                return g
+            }()
+            if isProminent {
+                configuration.label
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .glassEffect(glass, in: .capsule)
+                    .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                    .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+            } else {
+                configuration.label
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .glassEffect(glass, in: .rect(cornerRadius: CornerRadius.sm))
+                    .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                    .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+            }
+        } else {
+            // Enhanced fallback with depth effects
+            configuration.label
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .background(
+                    Group {
+                        if isProminent {
+                            ZStack {
+                                Capsule().fill(.ultraThinMaterial)
+                                if let tint = tint {
+                                    Capsule().fill(tint.opacity(0.2))
+                                }
+                                Capsule().fill(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.15), Color.white.opacity(0.02)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                Capsule().stroke(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.25), Color.white.opacity(0.08)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 0.5
+                                )
+                            }
+                            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                        } else {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: CornerRadius.sm).fill(.ultraThinMaterial)
+                                if let tint = tint {
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm).fill(tint.opacity(0.2))
+                                }
+                                RoundedRectangle(cornerRadius: CornerRadius.sm).fill(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.15), Color.white.opacity(0.02)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                RoundedRectangle(cornerRadius: CornerRadius.sm).stroke(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.25), Color.white.opacity(0.08)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 0.5
+                                )
+                            }
+                            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                        }
+                    }
+                )
+                .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+        }
+    }
+}
+
+public extension ButtonStyle where Self == AdaptiveGlassButtonStyle {
+    static var adaptiveGlass: AdaptiveGlassButtonStyle { AdaptiveGlassButtonStyle() }
+    static var adaptiveGlassProminent: AdaptiveGlassButtonStyle { AdaptiveGlassButtonStyle(prominent: true) }
+
+    static func adaptiveGlass(tint: Color) -> AdaptiveGlassButtonStyle {
+        AdaptiveGlassButtonStyle(prominent: false, tint: tint)
+    }
+
+    static func adaptiveGlassProminent(tint: Color) -> AdaptiveGlassButtonStyle {
+        AdaptiveGlassButtonStyle(prominent: true, tint: tint)
+    }
+}

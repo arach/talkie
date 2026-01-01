@@ -83,9 +83,7 @@ struct AppearanceSettingsView: View {
                 }
             }
         }
-        .padding(Spacing.lg)
-        .background(Theme.current.surface2)
-        .cornerRadius(CornerRadius.sm)
+        .settingsSectionCard()
     }
 
     private var previewSection: some View {
@@ -187,9 +185,7 @@ struct AppearanceSettingsView: View {
                     .stroke(Theme.current.divider, lineWidth: 0.5)
             )
         }
-        .padding(Spacing.lg)
-        .background(Theme.current.surface2)
-        .cornerRadius(CornerRadius.sm)
+        .settingsSectionCard()
     }
 
     private var themesAndAccentSection: some View {
@@ -277,9 +273,7 @@ struct AppearanceSettingsView: View {
                 }
             }
         }
-        .padding(Spacing.lg)
-        .background(Theme.current.surface2)
-        .cornerRadius(CornerRadius.sm)
+        .settingsSectionCard()
     }
 
     private var typographySection: some View {
@@ -442,9 +436,7 @@ struct AppearanceSettingsView: View {
                 }
             }
         }
-        .padding(Spacing.lg)
-        .background(Theme.current.surface2)
-        .cornerRadius(CornerRadius.sm)
+        .settingsSectionCard()
     }
 
     private var accentColorNote: some View {
@@ -457,7 +449,6 @@ struct AppearanceSettingsView: View {
                 .foregroundColor(Theme.current.foregroundSecondary)
         }
         .padding(Spacing.sm)
-        .background(settingsManager.resolvedAccentColor.opacity(Opacity.light))
-        .cornerRadius(Spacing.xs)
+        .liquidGlassCard(cornerRadius: Spacing.xs, tint: settingsManager.resolvedAccentColor.opacity(Opacity.light))
     }
 }

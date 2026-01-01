@@ -91,9 +91,7 @@ struct MemosSettingsView: View {
                     .cornerRadius(8)
                 }
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
 
             // MARK: - Transcription Display
             VStack(alignment: .leading, spacing: 12) {
@@ -161,9 +159,7 @@ struct MemosSettingsView: View {
                     .cornerRadius(8)
                 }
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
 
             // MARK: - List Behavior
             VStack(alignment: .leading, spacing: 12) {
@@ -231,9 +227,7 @@ struct MemosSettingsView: View {
                     .cornerRadius(8)
                 }
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
         }
     }
 }
