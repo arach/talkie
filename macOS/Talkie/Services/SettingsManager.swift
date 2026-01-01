@@ -1466,11 +1466,14 @@ class SettingsManager {
     }
 
     private func performLoadSettings() {
-        // Load API keys from Keychain (secure storage)
-        let geminiFromKeychain = keychain.retrieve(for: KeychainManager.Key.geminiApiKey) ?? ""
-        let openaiFromKeychain = keychain.retrieve(for: KeychainManager.Key.openaiApiKey)
-        let anthropicFromKeychain = keychain.retrieve(for: KeychainManager.Key.anthropicApiKey)
-        let groqFromKeychain = keychain.retrieve(for: KeychainManager.Key.groqApiKey)
+        // Migrate API keys from Keychain to new encrypted store (one-time)
+        apiKeys.migrateFromKeychain()
+
+        // Load API keys from encrypted store
+        let geminiKey = apiKeys.get(.gemini) ?? ""
+        let openaiKey = apiKeys.get(.openai)
+        let anthropicKey = apiKeys.get(.anthropic)
+        let groqKey = apiKeys.get(.groq)
 
         // Load non-sensitive settings from Core Data
         let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
@@ -1481,86 +1484,63 @@ class SettingsManager {
                 let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
                 let liveModelId = settings.liveTranscriptionModelId ?? "whisper:openai_whisper-small"
 
-                // Check if we need to migrate API keys from Core Data to Keychain
-                let hasCoreDataKeys = (settings.geminiApiKey != nil && !settings.geminiApiKey!.isEmpty) ||
-                                      (settings.openaiApiKey != nil && !settings.openaiApiKey!.isEmpty) ||
-                                      (settings.anthropicApiKey != nil && !settings.anthropicApiKey!.isEmpty) ||
-                                      (settings.groqApiKey != nil && !settings.groqApiKey!.isEmpty)
+                // Migrate API keys from Core Data if present (legacy)
+                if let cdGemini = settings.geminiApiKey, !cdGemini.isEmpty, geminiKey.isEmpty {
+                    apiKeys.set(cdGemini, for: .gemini)
+                }
+                if let cdOpenai = settings.openaiApiKey, !cdOpenai.isEmpty, openaiKey == nil {
+                    apiKeys.set(cdOpenai, for: .openai)
+                }
+                if let cdAnthropic = settings.anthropicApiKey, !cdAnthropic.isEmpty, anthropicKey == nil {
+                    apiKeys.set(cdAnthropic, for: .anthropic)
+                }
+                if let cdGroq = settings.groqApiKey, !cdGroq.isEmpty, groqKey == nil {
+                    apiKeys.set(cdGroq, for: .groq)
+                }
+                // Clear Core Data keys after migration
+                clearApiKeysFromCoreData()
 
-                if hasCoreDataKeys {
-                    // Migrate from Core Data to Keychain
-                    _ = keychain.migrateFromCoreData(
-                        geminiKey: settings.geminiApiKey,
-                        openaiKey: settings.openaiApiKey,
-                        anthropicKey: settings.anthropicApiKey,
-                        groqKey: settings.groqApiKey
-                    ) { [weak self] in
-                        // Clear API keys from Core Data after migration
-                        self?.clearApiKeysFromCoreData()
-                    }
-
-                    // Use migrated values
-                    let gemini = keychain.retrieve(for: KeychainManager.Key.geminiApiKey) ?? ""
-                    let openai = keychain.retrieve(for: KeychainManager.Key.openaiApiKey)
-                    let anthropic = keychain.retrieve(for: KeychainManager.Key.anthropicApiKey)
-                    let groq = keychain.retrieve(for: KeychainManager.Key.groqApiKey)
-
-                    DispatchQueue.main.async {
-                        self._geminiApiKey = gemini
-                        self._openaiApiKey = openai
-                        self._anthropicApiKey = anthropic
-                        self._groqApiKey = groq
-                        self._selectedModel = model
-                        self._liveTranscriptionModelId = liveModelId
-                    }
-                } else {
-                    // Use Keychain values directly
-                    DispatchQueue.main.async {
-                        self._geminiApiKey = geminiFromKeychain
-                        self._openaiApiKey = openaiFromKeychain
-                        self._anthropicApiKey = anthropicFromKeychain
-                        self._groqApiKey = groqFromKeychain
-                        self._selectedModel = model
-                        self._liveTranscriptionModelId = liveModelId
-                    }
+                DispatchQueue.main.async {
+                    self._geminiApiKey = self.apiKeys.get(.gemini) ?? ""
+                    self._openaiApiKey = self.apiKeys.get(.openai)
+                    self._anthropicApiKey = self.apiKeys.get(.anthropic)
+                    self._groqApiKey = self.apiKeys.get(.groq)
+                    self._selectedModel = model
+                    self._liveTranscriptionModelId = liveModelId
                 }
             } else {
                 logger.info("No settings found in Core Data, creating defaults")
                 createDefaultSettings()
 
-                // Still load from Keychain if available
                 DispatchQueue.main.async {
-                    self._geminiApiKey = geminiFromKeychain
-                    self._openaiApiKey = openaiFromKeychain
-                    self._anthropicApiKey = anthropicFromKeychain
-                    self._groqApiKey = groqFromKeychain
+                    self._geminiApiKey = geminiKey
+                    self._openaiApiKey = openaiKey
+                    self._anthropicApiKey = anthropicKey
+                    self._groqApiKey = groqKey
                 }
             }
 
             // Migrate transcription model from LiveSettings if needed
-            // This runs once to migrate from the old UserDefaults key
             if let legacyModelId = UserDefaults.standard.string(forKey: "selectedModelId") {
                 logger.info("Migrating transcription model from LiveSettings: \(legacyModelId)")
                 DispatchQueue.main.async {
                     self._liveTranscriptionModelId = legacyModelId
                 }
-                // Clear old key (AppStorage auto-saves)
                 UserDefaults.standard.removeObject(forKey: "selectedModelId")
             }
         } catch {
             logger.error("Failed to load settings: \(error.localizedDescription)")
 
-            // Fall back to Keychain values on error
             DispatchQueue.main.async {
-                self._geminiApiKey = geminiFromKeychain
-                self._openaiApiKey = openaiFromKeychain
-                self._anthropicApiKey = anthropicFromKeychain
-                self._groqApiKey = groqFromKeychain
+                self._geminiApiKey = geminiKey
+                self._openaiApiKey = openaiKey
+                self._anthropicApiKey = anthropicKey
+                self._groqApiKey = groqKey
             }
         }
     }
 
-    /// Clear API keys from Core Data after migration to Keychain
+    /// Clear API keys from Core Data after migration to encrypted store
     private func clearApiKeysFromCoreData() {
         let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
 

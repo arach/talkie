@@ -233,7 +233,7 @@ final class APIKeyStore {
             }
 
             try combined.write(to: fileURL, options: [.atomic, .completeFileProtection])
-            logger.debug("Saved \(cache.count) API keys")
+            logger.debug("Saved \(self.cache.count) API keys")
         } catch {
             logger.error("Failed to save API keys: \(error.localizedDescription)")
         }
