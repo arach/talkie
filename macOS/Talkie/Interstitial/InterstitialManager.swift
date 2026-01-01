@@ -26,12 +26,20 @@ final class InterstitialManager {
     private var panel: NSPanel?
     private var localEventMonitor: Any?
 
+    // Note: No deinit needed - this is a singleton (static let shared) so it's never deallocated.
+    // Event monitor cleanup happens in dismiss() which is always called before the panel closes.
+
     var isVisible: Bool = false
     var currentDictationId: Int64?
     var editedText: String = ""
     var isPolishing: Bool = false
     var polishError: String?
     private(set) var originalText: String = ""
+
+    // Selection replacement context (for Command+Enter)
+    private(set) var originalSelectedText: String?  // Text that was selected when auto-scratchpad triggered
+    private(set) var sourceAppBundleID: String?     // Bundle ID of the app where recording started
+    var hasSelectionContext: Bool { originalSelectedText != nil && sourceAppBundleID != nil }
 
     // View state (editing vs reviewing diff)
     var viewState: InterstitialViewState = .editing
@@ -177,6 +185,15 @@ final class InterstitialManager {
         originalText = dictation.text
         editedText = dictation.text
 
+        // Read selection replacement context from metadata (for Command+Enter)
+        originalSelectedText = dictation.metadata?["originalSelectedText"]
+        sourceAppBundleID = dictation.metadata?["sourceAppBundleID"]
+        if hasSelectionContext {
+            let selectionCount = self.originalSelectedText?.count ?? 0
+            let appID = self.sourceAppBundleID ?? "?"
+            logger.info("Selection context: \(selectionCount) chars from \(appID)")
+        }
+
         logger.info("Showing interstitial for dictation \(dictationId): \"\(dictation.text.prefix(40))...\"")
 
         createAndShowPanel()
@@ -233,12 +250,24 @@ final class InterstitialManager {
     }
 
     private func setupEventMonitors() {
-        // Local monitor for Escape key to dismiss
+        // Local monitor for keyboard shortcuts
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            if event.keyCode == 53 { // Escape
-                self?.dismiss()
+            guard let self = self else { return event }
+
+            // Escape to dismiss
+            if event.keyCode == 53 {
+                self.dismiss()
                 return nil
             }
+
+            // Command+Enter to replace selection and return to source app
+            if event.keyCode == 36 && event.modifierFlags.contains(.command) {
+                if self.hasSelectionContext {
+                    self.replaceSelectionAndDismiss()
+                    return nil
+                }
+            }
+
             return event
         }
     }
@@ -260,6 +289,8 @@ final class InterstitialManager {
         isPolishing = false
         polishError = nil
         voiceInstruction = nil
+        originalSelectedText = nil
+        sourceAppBundleID = nil
         clearHistory()  // Clear in-memory history on dismiss
 
         logger.info("Interstitial dismissed")
@@ -282,38 +313,57 @@ final class InterstitialManager {
     }
 
     func pasteAndDismiss() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(editedText, forType: .string)
+        let text = editedText
+        logger.info("Pasting text via TalkieLive: \(text.count) chars")
         dismiss()
 
-        // Simulate paste after panel dismisses
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            self.simulatePaste()
+        // Route paste through TalkieLive (has accessibility permissions)
+        ServiceManager.shared.live.pasteText(text, toAppWithBundleID: nil) { success in
+            if !success {
+                // Fallback: copy to clipboard so user can paste manually
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                logger.warning("TalkieLive paste failed - copied to clipboard")
+            }
         }
-        logger.info("Pasting text: \(self.editedText.count) chars")
     }
 
-    private func simulatePaste() {
-        let source = CGEventSource(stateID: .combinedSessionState)
+    /// Replace original selection in source app with edited text (Command+Enter)
+    /// This activates the source app and pastes to replace the selection
+    ///
+    /// Note: If the selection in the source app has changed since recording started
+    /// (user clicked elsewhere, app cleared selection, etc.), the text will be pasted
+    /// at the current cursor position instead. This is expected behavior.
+    func replaceSelectionAndDismiss() {
+        guard let bundleID = sourceAppBundleID else {
+            logger.warning("replaceSelectionAndDismiss: No source app bundle ID")
+            return
+        }
 
-        // Cmd down
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
-        cmdDown?.flags = .maskCommand
-        cmdDown?.post(tap: .cghidEventTap)
+        // Safety check: verify source app is still running
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first != nil else {
+            logger.warning("Source app no longer running: \(bundleID) - copying to clipboard")
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(editedText, forType: .string)
+            dismiss()
+            return
+        }
 
-        // V down
-        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-        vDown?.flags = .maskCommand
-        vDown?.post(tap: .cghidEventTap)
+        let text = editedText
+        let originalSelection = originalSelectedText
+        logger.info("Replacing selection in \(bundleID): \(text.count) chars (original selection: \(originalSelection?.count ?? 0) chars)")
+        dismiss()
 
-        // V up
-        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        vUp?.flags = .maskCommand
-        vUp?.post(tap: .cghidEventTap)
-
-        // Cmd up
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
-        cmdUp?.post(tap: .cghidEventTap)
+        // Route paste through TalkieLive (handles app activation and paste robustly)
+        // Note: Pastes at current cursor/selection - if selection changed, that's OK
+        ServiceManager.shared.live.pasteText(text, toAppWithBundleID: bundleID) { success in
+            if !success {
+                // Fallback: copy to clipboard so user can paste manually (silent - no notification)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                logger.warning("TalkieLive paste failed - copied to clipboard")
+            }
+        }
     }
 
     func openInDestination(_ target: QuickOpenTarget) {

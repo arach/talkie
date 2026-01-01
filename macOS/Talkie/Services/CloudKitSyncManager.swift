@@ -80,8 +80,10 @@ class CloudKitSyncManager {
     }()
 
     private init() {
+        StartupProfiler.shared.mark("singleton.CloudKitSyncManager.start")
         // Don't load sync history here - database isn't initialized yet
         // loadSyncHistory() is called in configure() when database is ready
+        StartupProfiler.shared.mark("singleton.CloudKitSyncManager.done")
     }
 
     deinit {

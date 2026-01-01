@@ -41,6 +41,7 @@ public enum LiveSettingsKey {
     public static let pressEnterAfterPaste = "pressEnterAfterPaste"
     public static let primaryContextSource = "primaryContextSource"
     public static let contextCaptureDetail = "contextCaptureDetail"
+    public static let autoScratchpadOnSelection = "autoScratchpadOnSelection"
 
     // MARK: Storage
     public static let utteranceTTLHours = "utteranceTTLHours"
@@ -66,6 +67,7 @@ public enum LiveSettingsKey {
     public static let visualTheme = "visualTheme"
     public static let fontSize = "fontSize"
     public static let accentColor = "accentColor"
+    // glassMode removed - now a launch arg (--glass-mode)
 
     // MARK: Dictionary & Text Processing
     public static let dictionaryEnabled = "dictionaryEnabled"

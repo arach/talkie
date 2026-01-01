@@ -109,14 +109,40 @@ Central URL routing infrastructure.
 
 ## Core Services
 
-### SettingsManager.swift (1732 lines)
-App preferences.
+### SettingsManager.swift (1732 lines) 🔴 HIGH PRIORITY
 
-**Discussion:**
-- **Issue:** Very large file, likely doing too much
-- Manages all app preferences via @AppStorage
-- Theme colors, hotkeys, LLM settings, audio settings
-- Should consider splitting by concern
+App preferences - **needs refactoring**.
+
+**Issue:** Monolithic god object managing 1700+ settings across all domains.
+
+**Current Domains Mixed Together:**
+- Appearance (theme, colors, fonts)
+- Audio (device, levels, feedback sounds)
+- Transcription models (Whisper, Parakeet)
+- LLM configuration (providers, API keys)
+- Workflow settings (auto-run, defaults)
+- Integration settings (Quick Open targets)
+- Debug/dev settings (feature flags)
+- UI state (sidebar width, window positions)
+
+**Recommended Split:**
+```
+Settings/
+├── SettingsManager.swift       # Coordinator (~200 lines)
+├── AppearanceSettings.swift    # Theme, colors, fonts (~300 lines)
+├── AudioSettings.swift         # Device, levels, sounds (~250 lines)
+├── ModelSettings.swift         # STT + LLM models (~300 lines)
+├── IntegrationSettings.swift   # Quick Open, external apps (~200 lines)
+├── WorkflowSettings.swift      # Auto-run, defaults (~200 lines)
+├── DebugSettings.swift         # Feature flags, dev mode (~150 lines)
+└── SettingsMigration.swift     # Version upgrades (~150 lines)
+```
+
+**Benefits of Split:**
+- Faster compilation (smaller files)
+- Easier testing (isolated domains)
+- Clearer ownership (team assignments)
+- Reduced merge conflicts
 
 ---
 

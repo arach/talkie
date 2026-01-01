@@ -88,9 +88,14 @@ public struct LivePill: View {
     // Optional identifier for logging (e.g., "statusbar", "floating")
     var identifier: String? = nil
 
+    // Capture intent for display (e.g., "Paste", "Scratchpad", "Scratchpad (selection)")
+    // When not "Paste", shows an indicator during recording
+    var captureIntent: String = "Paste"
+
     // Optional callbacks
     var onTap: (() -> Void)? = nil
     var onQueueTap: (() -> Void)? = nil  // Tapping the queue badge specifically
+    var onShiftToggle: (() -> Void)? = nil  // Shift pressed while hovering during recording
 
     // MARK: - State
 
@@ -113,8 +118,10 @@ public struct LivePill: View {
         audioLevel: Float = 0,
         forceExpanded: Bool = false,
         identifier: String? = nil,
+        captureIntent: String = "Paste",
         onTap: (() -> Void)? = nil,
-        onQueueTap: (() -> Void)? = nil
+        onQueueTap: (() -> Void)? = nil,
+        onShiftToggle: (() -> Void)? = nil
     ) {
         self.state = state
         self.isWarmingUp = isWarmingUp
@@ -127,8 +134,10 @@ public struct LivePill: View {
         self.audioLevel = audioLevel
         self.forceExpanded = forceExpanded
         self.identifier = identifier
+        self.captureIntent = captureIntent
         self.onTap = onTap
         self.onQueueTap = onQueueTap
+        self.onShiftToggle = onShiftToggle
     }
 
     // MARK: - Derived State
@@ -155,7 +164,9 @@ public struct LivePill: View {
             if micDeviceName == nil {
                 return .offline
             }
-            return .listening(interstitialHint: isHovered && isShiftHeld)
+            // Show scratchpad hint if: 1) captureIntent is scratchpad-related, or 2) hover+shift
+            let showScratchpadHint = captureIntent != "Paste" || (isHovered && isShiftHeld)
+            return .listening(interstitialHint: showScratchpadHint)
 
         case .transcribing:
             // Actively transcribing: Only warn if engine is disconnected (active problem)
@@ -223,16 +234,25 @@ public struct LivePill: View {
     // MARK: - Sliver Content (Collapsed)
 
     private var sliverContent: some View {
-        HStack(spacing: 4) {
-            // Warning indicator for offline only
-            if case .offline = visualState {
-                Circle()
-                    .fill(SemanticColor.warning)
-                    .frame(width: 4, height: 4)
+        VStack(spacing: 2) {
+            // Subtle scratchpad indicator when active (even without hover)
+            if case .listening = visualState, captureIntent != "Paste" {
+                Image(systemName: captureIntent.contains("selection") ? "text.cursor" : "sparkles")
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundColor(captureIntent.contains("selection") ? .cyan.opacity(0.7) : .purple.opacity(0.7))
             }
 
-            // Main sliver bar with optional pulse
-            sliverBar
+            HStack(spacing: 4) {
+                // Warning indicator for offline only
+                if case .offline = visualState {
+                    Circle()
+                        .fill(SemanticColor.warning)
+                        .frame(width: 4, height: 4)
+                }
+
+                // Main sliver bar with optional pulse
+                sliverBar
+            }
         }
         .frame(height: 18)
         .padding(.horizontal, 6)
@@ -373,12 +393,19 @@ public struct LivePill: View {
         case .listening(let interstitialHint):
             if interstitialHint {
                 HStack(spacing: 4) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                    Text("→ Edit")
+                    // Show appropriate icon based on intent
+                    if captureIntent.contains("selection") {
+                        Image(systemName: "text.cursor")
+                            .font(.system(size: 10))
+                    } else {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                    }
+                    // Show "→ Edit" for selection-based, "→ Scratchpad" for shift-triggered
+                    Text(captureIntent.contains("selection") ? "→ Edit" : "→ Scratchpad")
                         .font(.system(size: 10, weight: .medium))
                 }
-                .foregroundColor(.purple)
+                .foregroundColor(captureIntent.contains("selection") ? .cyan : .purple)
             } else {
                 HStack(spacing: 4) {
                     // IMPROVEMENT #3: Fixed-width timer
@@ -435,26 +462,65 @@ public struct LivePill: View {
         }
     }
 
-    // MARK: - Background
+    // MARK: - Background (Glassy Style)
 
     private var pillBackground: some View {
-        RoundedRectangle(cornerRadius: 6)
+        RoundedRectangle(cornerRadius: 8)
             .fill(.ultraThinMaterial)
+            // Inner glow - gives depth inside the glass
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.white.opacity(0.08),
+                                Color.clear
+                            ],
+                            center: .top,
+                            startRadius: 0,
+                            endRadius: 40
+                        )
+                    )
+            )
+            // Convex glass gradient - subtle curvature illusion
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.12),
+                                Color.white.opacity(0.02),
+                                Color.black.opacity(0.05)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            )
+            // State-colored border
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
                     .stroke(visualState.borderColor, lineWidth: 0.5)
             )
+            // Top edge highlight - light catching the glass
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 8)
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.15), Color.clear],
+                            colors: [
+                                Color.white.opacity(0.4),
+                                Color.white.opacity(0.15),
+                                Color.clear
+                            ],
                             startPoint: .top,
                             endPoint: .center
                         ),
-                        lineWidth: 0.5
+                        lineWidth: 1
                     )
             )
+            // Soft outer glow
+            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+            .shadow(color: Color.white.opacity(0.05), radius: 1, x: 0, y: -1)
     }
 
     // MARK: - Helpers
@@ -495,7 +561,13 @@ public struct LivePill: View {
             let newCommand = event.modifierFlags.contains(.command)
 
             // Only update if changed (prevents unnecessary SwiftUI updates)
-            if newShift != isShiftHeld { isShiftHeld = newShift }
+            if newShift != isShiftHeld {
+                isShiftHeld = newShift
+                // Fire callback when Shift is pressed (not released) during recording
+                if newShift && state == .listening {
+                    onShiftToggle?()
+                }
+            }
             if newCommand != isCommandHeld { isCommandHeld = newCommand }
 
             return event

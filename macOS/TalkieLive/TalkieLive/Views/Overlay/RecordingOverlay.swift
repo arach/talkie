@@ -268,9 +268,20 @@ final class RecordingOverlayController: ObservableObject {
                 return nil  // Consume event
             }
 
-            // Detect Shift or Shift+S → Scratchpad
+            // Detect Shift or Shift+S → Toggle Scratchpad
+            // If auto-scratchpad is active (from selection), Shift cancels it
+            // Otherwise, Shift enables scratchpad mode
             if isShiftHeld && (key == "s" || key == "") {
-                controller.setInterstitialIntent()
+                if controller.isAutoScratchpad {
+                    // Auto-scratchpad is on → Shift cancels it
+                    controller.clearIntent()
+                } else if controller.captureIntent == "Paste" {
+                    // Normal paste mode → Shift enables scratchpad
+                    controller.setInterstitialIntent()
+                } else {
+                    // Already in scratchpad mode (manually set) → Shift cancels
+                    controller.clearIntent()
+                }
                 self.captureIntent = controller.captureIntent
                 return nil  // Consume event
             }

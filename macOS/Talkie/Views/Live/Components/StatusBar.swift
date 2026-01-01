@@ -35,6 +35,7 @@ struct StatusBar: View {
     @State private var showPID = false
     @State private var pidCopied = false
     @State private var controlPressed = false
+    @State private var eventMonitor: Any?
 
     // App version for display
     private var appVersion: String {
@@ -42,15 +43,9 @@ struct StatusBar: View {
     }
 
     #if DEBUG
-    // Git branch for debug display (cached at view init)
-    private var gitBranch: String? {
-        Self.cachedGitBranch
-    }
-
-    // Static cache - computed once at app launch
-    private static let cachedGitBranch: String? = {
-        readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
-    }()
+    // Git branch - lazily loaded after first render
+    @State private var gitBranch: String? = nil
+    @State private var didLoadGitBranch = false
 
     private static func readGitBranch(from directory: URL) -> String? {
         let fm = FileManager.default
@@ -243,16 +238,21 @@ struct StatusBar: View {
                             .foregroundColor(TalkieTheme.textMuted)
 
                         #if DEBUG
+                        // PID always visible in debug
+                        Text("PID \(ProcessInfo.processInfo.processIdentifier)")
+                            .font(Theme.current.fontXSMedium)
+                            .foregroundColor(TalkieTheme.textMuted)
+
                         // Git branch indicator
                         if let branch = gitBranch {
                             Text(branch)
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(TalkieTheme.textMuted)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
+                                .font(Theme.current.fontXSMedium)
+                                .foregroundColor(TalkieTheme.accent)
+                                .padding(.horizontal, Spacing.xs)
+                                .padding(.vertical, Spacing.xxs)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(TalkieTheme.surfaceCard)
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                        .fill(TalkieTheme.hover)
                                 )
                         }
 
@@ -316,14 +316,40 @@ struct StatusBar: View {
             liveState.startMonitoring()
             serviceMonitor.startMonitoring()
 
-            // Monitor Control key for DEV badge
-            NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [self] event in
-                let isControlPressed = event.modifierFlags.contains(.control)
-                if controlPressed != isControlPressed {
-                    controlPressed = isControlPressed
+            #if DEBUG
+            // Load git branch lazily (file I/O shouldn't block startup)
+            if !didLoadGitBranch {
+                didLoadGitBranch = true
+                Task.detached {
+                    let projectPath = "/Users/arach/dev/talkie-dev"
+                    let branch = Self.readGitBranch(from: URL(fileURLWithPath: projectPath))
+                        ?? Self.readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+                    await MainActor.run { gitBranch = branch }
                 }
-                return event
             }
+            #endif
+
+            // Monitor Control key for DEV badge (store to remove on disappear)
+            if eventMonitor == nil {
+                eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
+                    let isControlPressed = event.modifierFlags.contains(.control)
+                    DispatchQueue.main.async {
+                        if self.controlPressed != isControlPressed {
+                            self.controlPressed = isControlPressed
+                        }
+                    }
+                    return event
+                }
+            }
+        }
+        .onDisappear {
+            // Clean up event monitor to prevent memory leak
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                eventMonitor = nil
+            }
+            successTimer?.invalidate()
+            successTimer = nil
         }
     }
 

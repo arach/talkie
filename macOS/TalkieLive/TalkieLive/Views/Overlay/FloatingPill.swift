@@ -98,6 +98,9 @@ final class FloatingPillController: ObservableObject {
     @Published var isWrongEngineBuild: Bool = false
     @Published var pendingQueueCount: Int = 0
 
+    // Capture intent (for showing scratchpad indicator on pill)
+    @Published var captureIntent: String = "Paste"
+
     // Track last published proximity to avoid redundant updates
     private var lastPublishedProximity: CGFloat = 0
     private var lastProximityUpdate: Date = .distantPast
@@ -581,6 +584,28 @@ final class FloatingPillController: ObservableObject {
             NSLog("[FloatingPill] Triggered retry of pending transcriptions")
         }
     }
+
+    /// Toggle scratchpad mode when Shift is pressed on hover
+    /// Called via LivePill's onShiftToggle callback
+    func handleShiftToggle() {
+        guard state == .listening else { return }
+        guard let controller = liveController else {
+            pillLogger.warning("handleShiftToggle: no liveController reference")
+            return
+        }
+
+        // Toggle based on current state
+        if controller.captureIntent == "Paste" {
+            controller.setInterstitialIntent()
+        } else {
+            controller.clearIntent()
+        }
+        captureIntent = controller.captureIntent
+        pillLogger.debug("Shift toggle: intent now \(self.captureIntent)")
+    }
+
+    // Reference to LiveController (set by AppDelegate)
+    weak var liveController: LiveController?
 }
 
 // MARK: - Floating Pill View (expands when cursor approaches)
@@ -668,6 +693,7 @@ struct FloatingPillView: View {
                 audioLevel: controller.audioLevel,
                 forceExpanded: isExpanded,
                 identifier: "floating",
+                captureIntent: controller.captureIntent,
                 onTap: {
                     // Visual feedback - quick scale down/up
                     provideTapFeedback()
@@ -678,6 +704,10 @@ struct FloatingPillView: View {
                     // Tap on queue badge - retry or clear (Option+click)
                     provideTapFeedback()
                     controller.handleQueueTap()
+                },
+                onShiftToggle: {
+                    // Toggle scratchpad mode when Shift is pressed while hovering
+                    controller.handleShiftToggle()
                 }
             )
             .scaleEffect(tapFeedbackScale)

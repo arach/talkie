@@ -1329,6 +1329,7 @@ class SettingsManager {
     private var isInitialized = false
 
     private init() {
+        StartupProfiler.shared.mark("singleton.SettingsManager.start")
         // Initialize appearance settings from UserDefaults
         if let modeString = UserDefaults.standard.string(forKey: appearanceModeKey),
            let mode = AppearanceMode(rawValue: modeString) {
@@ -1449,6 +1450,7 @@ class SettingsManager {
         applyAppearanceMode()
 
         // Defer Core Data access until first use
+        StartupProfiler.shared.mark("singleton.SettingsManager.done")
     }
 
     private func ensureInitialized() {

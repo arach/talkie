@@ -9,9 +9,9 @@
 import Foundation
 import AppKit
 import ApplicationServices
-import os.log
+import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.live", category: "ContextCapture")
+private let log = Log(.system)
 
 // MARK: - Configuration
 
@@ -155,6 +155,71 @@ final class ContextCaptureService {
         return captureBaselineInternal()
     }
 
+    /// Fast check for selected text (for auto-scratchpad feature)
+    /// Returns true if the specified app (or frontmost app) has text currently selected
+    /// This is a lightweight check (~10-50ms) that doesn't capture full context
+    /// - Parameter targetApp: Optional app to check. If nil, checks frontmost app.
+    @MainActor
+    func hasSelectedText(in targetApp: NSRunningApplication? = nil) -> Bool {
+        return getSelectedText(in: targetApp) != nil
+    }
+
+    /// Capture the currently selected text from the specified app (or frontmost app)
+    /// Returns nil if no text is selected or accessibility is not available
+    /// - Parameter targetApp: Optional app to check. If nil, checks frontmost app.
+    @MainActor
+    func getSelectedText(in targetApp: NSRunningApplication? = nil) -> String? {
+        guard AXIsProcessTrusted() else {
+            log.debug("getSelectedText: AX not trusted, returning nil")
+            return nil
+        }
+
+        let app: NSRunningApplication
+        if let targetApp = targetApp {
+            app = targetApp
+            log.debug("getSelectedText: Checking target app \(app.localizedName ?? "unknown")")
+        } else if let frontApp = NSWorkspace.shared.frontmostApplication {
+            app = frontApp
+            log.debug("getSelectedText: Checking frontmost app \(app.localizedName ?? "unknown")")
+        } else {
+            log.debug("getSelectedText: No app to check")
+            return nil
+        }
+
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+
+        // Get focused element
+        var focusedRef: CFTypeRef?
+        var result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+
+        // Fallback: ask focused window for focused element
+        if result != .success {
+            var windowRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
+               let window = windowRef {
+                result = AXUIElementCopyAttributeValue(window as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+            }
+        }
+
+        guard result == .success, let focusedRef else {
+            return nil
+        }
+
+        let focused = focusedRef as! AXUIElement
+
+        // Check for selected text
+        var selectedRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(focused, kAXSelectedTextAttribute as CFString, &selectedRef) == .success,
+           let selected = selectedRef as? String,
+           !selected.isEmpty {
+            log.debug("getSelectedText: Found selection (\(selected.count) chars) in \(app.localizedName ?? "unknown")")
+            return selected
+        }
+
+        log.debug("getSelectedText: No selection found in \(app.localizedName ?? "unknown")")
+        return nil
+    }
+
     /// Schedule background enrichment that updates the DB record after paste
     /// Fire-and-forget: runs in background and updates the record when complete
     func scheduleEnrichment(utteranceId: Int64, baseline: DictationMetadata) {
@@ -169,7 +234,7 @@ final class ContextCaptureService {
             // Update the database record with enriched metadata
             await MainActor.run {
                 LiveDatabase.updateMetadata(id: utteranceId, metadata: merged)
-                logger.debug("Enriched context for utterance \(utteranceId)")
+                log.debug("Enriched context for utterance \(utteranceId)")
             }
         }
     }
@@ -180,7 +245,7 @@ final class ContextCaptureService {
         var metadata = DictationMetadata()
 
         guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-            logger.debug("No frontmost application")
+            log.debug("No frontmost application")
             return metadata
         }
 
@@ -203,7 +268,7 @@ final class ContextCaptureService {
 
         if !AXIsProcessTrusted() {
             if options.logFailures {
-                logger.error("Accessibility permission missing - context capture limited")
+                log.error("Accessibility permission missing - context capture limited")
             }
             return metadata
         }
@@ -242,7 +307,7 @@ final class ContextCaptureService {
             metadata.terminalWorkingDir = extractWorkingDirectory(from: title)
         }
 
-        logger.debug("Enriched context: \(metadata.activeAppName ?? "?") - \(metadata.activeWindowTitle ?? "no title")")
+        log.debug("Enriched context: \(metadata.activeAppName ?? "?") - \(metadata.activeWindowTitle ?? "no title")")
         return metadata
     }
 
@@ -258,7 +323,7 @@ final class ContextCaptureService {
                let first = windows.first {
                 windowRef = first
                 result = .success
-                logger.debug("Focused window missing; used first window as fallback")
+                log.debug("Focused window missing; used first window as fallback")
             }
         }
 

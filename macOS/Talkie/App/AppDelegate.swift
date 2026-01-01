@@ -128,6 +128,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        StartupProfiler.shared.markEarly("appDelegate.didFinishLaunching")
         let launchState = signposter.beginInterval("App Launch")
 
         // CRITICAL: Check for debug mode SYNCHRONOUSLY before initialization
@@ -161,7 +162,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Debug mode needs this for MainActor to work properly
 
         // Phase 1: Critical - Only what's needed before UI renders
+        StartupProfiler.shared.markEarly("phase1.critical.start")
         StartupCoordinator.shared.initializeCritical()
+        StartupProfiler.shared.markEarly("phase1.critical.done")
 
         // Set notification delegate to show notifications while app is in foreground
         signposter.emitEvent("Notification Delegate")
@@ -174,6 +177,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Phase 4: Background - Helper apps, XPC connections (lowest priority)
         // These run with 1s delay after UI is responsive
         StartupCoordinator.shared.initializeBackground()
+
+        StartupProfiler.shared.markEarly("appDelegate.didFinishLaunching.done")
 
         // Register URL handler for Apple Events
         signposter.emitEvent("URL Handler")

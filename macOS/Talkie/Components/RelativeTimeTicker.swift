@@ -19,11 +19,13 @@ final class RelativeTimeTicker {
     @ObservationIgnored private var timer: Timer?
 
     private init() {
+        StartupProfiler.shared.mark("singleton.RelativeTimeTicker.start")
         timer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.now = Date()
             }
         }
+        StartupProfiler.shared.mark("singleton.RelativeTimeTicker.done")
     }
 
     deinit {
