@@ -1060,7 +1060,7 @@ struct Design {
     static var foregroundSecondary: Color { Color.secondary }
     static var foregroundMuted: Color { Color.secondary.opacity(0.7) }
 
-    static var divider: Color { Color(NSColor.separatorColor) }
+    static var divider: Color { MidnightSurface.divider }
     static var accent: Color { Color.accentColor }
 }
 

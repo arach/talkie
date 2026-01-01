@@ -709,7 +709,8 @@ class SettingsStoryboardGenerator {
         )
         window.title = "Talkie Settings"
         window.isOpaque = true
-        window.backgroundColor = NSColor(white: 0.1, alpha: 1.0)
+        // Match MidnightSurface.content for dark theme consistency
+        window.backgroundColor = NSColor(red: 0.02, green: 0.02, blue: 0.03, alpha: 1.0)
         // Position off-screen so user doesn't see it during capture
         window.setFrameOrigin(NSPoint(x: -10000, y: -10000))
         return window

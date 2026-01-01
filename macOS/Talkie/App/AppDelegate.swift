@@ -223,10 +223,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         cliHandler.register(
             "settings-screenshots",
-            description: "Capture individual screenshots of each settings page to a directory (--compact for 2-column only)"
+            description: "Capture individual screenshots of each settings page to a directory (--compact for 2-column only, --appearance=dark/light)"
         ) { args in
             // Parse flags: --compact for content-only (2-column), default is full window (3-column)
             let compact = args.contains("--compact")
+
+            // Parse appearance mode
+            if let appearanceArg = args.first(where: { $0.hasPrefix("--appearance=") }) {
+                let mode = String(appearanceArg.dropFirst("--appearance=".count)).lowercased()
+                await MainActor.run {
+                    switch mode {
+                    case "dark":
+                        NSApp.appearance = NSAppearance(named: .darkAqua)
+                        SettingsManager.shared.appearanceMode = .dark
+                        print("🌙 Appearance set to: Dark")
+                    case "light":
+                        NSApp.appearance = NSAppearance(named: .aqua)
+                        SettingsManager.shared.appearanceMode = .light
+                        print("☀️ Appearance set to: Light")
+                    default:
+                        break
+                    }
+                    Theme.invalidate()
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+
             let filteredArgs = args.filter { !$0.hasPrefix("--") }
 
             let outputDir: URL
@@ -436,15 +458,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             var screenId: String?
             var themeName: String?
             var outputPath: String?
+            var appearanceMode: String?
 
             for arg in args {
                 if arg.hasPrefix("--theme=") {
                     themeName = String(arg.dropFirst("--theme=".count))
                 } else if arg.hasPrefix("--output=") {
                     outputPath = String(arg.dropFirst("--output=".count))
+                } else if arg.hasPrefix("--appearance=") {
+                    appearanceMode = String(arg.dropFirst("--appearance=".count))
                 } else if !arg.hasPrefix("--") {
                     screenId = arg
                 }
+            }
+
+            // Set appearance mode if specified (dark/light)
+            if let appearanceMode = appearanceMode {
+                await MainActor.run {
+                    switch appearanceMode.lowercased() {
+                    case "dark":
+                        NSApp.appearance = NSAppearance(named: .darkAqua)
+                        SettingsManager.shared.appearanceMode = .dark
+                        print("🌙 Appearance set to: Dark")
+                    case "light":
+                        NSApp.appearance = NSAppearance(named: .aqua)
+                        SettingsManager.shared.appearanceMode = .light
+                        print("☀️ Appearance set to: Light")
+                    default:
+                        print("⚠️ Unknown appearance: \(appearanceMode). Use 'dark' or 'light'")
+                    }
+                    Theme.invalidate()
+                }
+                try? await Task.sleep(for: .milliseconds(100))
             }
 
             guard let screenId = screenId else {

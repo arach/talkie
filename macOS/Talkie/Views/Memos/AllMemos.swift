@@ -855,7 +855,7 @@ struct AllMemos: View {
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
 
             Rectangle()
-                .fill(Color(nsColor: .separatorColor))
+                .fill(TalkieTheme.divider)
                 .frame(height: 0.5)
 
             // Content

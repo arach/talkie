@@ -722,7 +722,8 @@ class SettingsManager {
         if isClassicTheme {
             return isDarkMode ? Color(white: 0.25) : Color(white: 0.85)
         }
-        return Color(NSColor.separatorColor)
+        // Talkie Pro (default) - subtle but visible divider
+        return isDarkMode ? Color(white: 0.15) : Color(white: 0.82)
     }
 
     // MARK: - Content Font Tokens

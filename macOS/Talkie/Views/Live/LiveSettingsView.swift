@@ -1133,17 +1133,17 @@ private struct LiveSettingsSidebarResizer: View {
     var body: some View {
         // Native macOS split view style: 1px divider with expanded hit area
         ZStack {
-            // Visible 1px divider line
+            // Background to prevent window color bleeding through
             Rectangle()
-                .fill(Color(nsColor: .separatorColor))
-                .frame(width: 1)
-
-            // Invisible expanded hit area for easier grabbing (8px wide)
-            Rectangle()
-                .fill(Color.clear)
+                .fill(Theme.current.background)
                 .frame(width: 8)
-                .contentShape(Rectangle())
+
+            // Visible 1px divider line - use theme color for consistency
+            Rectangle()
+                .fill(TalkieTheme.divider)
+                .frame(width: 1)
         }
+        .contentShape(Rectangle())
         .onHover { hovering in
             isHovering = hovering
             if hovering {
