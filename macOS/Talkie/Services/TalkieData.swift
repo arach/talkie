@@ -179,38 +179,36 @@ class TalkieData {
         guard !ids.isEmpty else { return }
 
         let repository = LocalRepository()
-        var syncedCount = 0
-        var errorCount = 0
 
-        await context.perform {
-            // Fetch only the specific missing memos by UUID
+        // Fetch memos on Core Data context
+        let memoModels: [MemoModel] = await context.perform {
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "id IN %@", ids)
 
             do {
                 let missingMemos = try context.fetch(fetchRequest)
                 log.info("🎯 [TalkieData] Found \(missingMemos.count) of \(ids.count) missing memos in CoreData")
-
-                for cdMemo in missingMemos {
-                    Task {
-                        do {
-                            let memoModel = CloudKitSyncManager.shared.convertToMemoModel(cdMemo)
-                            try await repository.saveMemo(memoModel)
-                            syncedCount += 1
-                            log.info("✅ [TalkieData] Synced: '\(cdMemo.title ?? "Untitled")'")
-                        } catch {
-                            errorCount += 1
-                            log.error("❌ [TalkieData] Failed to sync memo: \(error.localizedDescription)")
-                        }
-                    }
-                }
+                return missingMemos.map { CloudKitSyncManager.shared.convertToMemoModel($0) }
             } catch {
                 log.error("❌ [TalkieData] Failed to fetch missing memos: \(error.localizedDescription)")
+                return []
             }
         }
 
-        // Wait for async tasks to complete
-        try? await Task.sleep(for: .seconds(1))
+        // Sync each memo sequentially (safe for Swift 6)
+        var syncedCount = 0
+        var errorCount = 0
+        for memoModel in memoModels {
+            do {
+                try await repository.saveMemo(memoModel)
+                syncedCount += 1
+                log.info("✅ [TalkieData] Synced: '\(memoModel.title)'")
+            } catch {
+                errorCount += 1
+                log.error("❌ [TalkieData] Failed to sync memo: \(error.localizedDescription)")
+            }
+        }
+
         log.info("🎯 [TalkieData] Targeted sync: \(syncedCount) synced, \(errorCount) errors")
     }
 

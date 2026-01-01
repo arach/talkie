@@ -149,7 +149,7 @@ struct TalkieApp: App {
                 .task {
                     // Background database initialization - non-blocking
                     StartupProfiler.shared.mark("db.grdb.start")
-                    await StartupCoordinator.shared.initializeDatabase()
+                    _ = await StartupCoordinator.shared.initializeDatabase()
                     StartupProfiler.shared.mark("db.grdb.ready")
                 }
                 .sheet(isPresented: Binding(
