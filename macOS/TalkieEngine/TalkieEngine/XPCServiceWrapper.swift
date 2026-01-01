@@ -88,4 +88,30 @@ final class XPCServiceWrapper: NSObject, TalkieEngineProtocol {
         AppLogger.shared.info(.xpc, "setDictionaryEnabled called: \(enabled)")
         engine.setDictionaryEnabled(enabled, reply: reply)
     }
+
+    // MARK: - Text-to-Speech
+
+    func synthesize(text: String, voiceId: String, reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.xpc, "synthesize called: \(text.prefix(30))... voice:\(voiceId)")
+        engine.synthesize(text: text, voiceId: voiceId, reply: reply)
+    }
+
+    func preloadTTSVoice(_ voiceId: String, reply: @escaping (String?) -> Void) {
+        AppLogger.shared.info(.xpc, "preloadTTSVoice called: \(voiceId)")
+        engine.preloadTTSVoice(voiceId, reply: reply)
+    }
+
+    func getAvailableTTSVoices(reply: @escaping (Data?) -> Void) {
+        AppLogger.shared.info(.xpc, "getAvailableTTSVoices called")
+        engine.getAvailableTTSVoices(reply: reply)
+    }
+
+    func unloadTTS(reply: @escaping (Bool) -> Void) {
+        AppLogger.shared.info(.xpc, "unloadTTS called")
+        engine.unloadTTS(reply: reply)
+    }
+
+    func getTTSStatus(reply: @escaping (Bool, Double) -> Void) {
+        engine.getTTSStatus(reply: reply)
+    }
 }

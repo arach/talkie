@@ -524,4 +524,141 @@ public final class EngineClient {
             }
         }
     }
+
+    // MARK: - Text-to-Speech
+
+    /// Synthesize text to speech and return path to audio file
+    /// - Parameters:
+    ///   - text: Text to synthesize
+    ///   - voiceId: Voice identifier (e.g., "kokoro:default")
+    /// - Returns: Path to generated WAV audio file
+    public func synthesize(text: String, voiceId: String = "kokoro:default") async throws -> String {
+        guard await ensureConnected() else {
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
+        }
+
+        logger.info("[EngineClient] Synthesizing TTS: \(text.prefix(30))...")
+
+        let timeoutSeconds: Double = 60
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var hasResumed = false
+            let lock = NSLock()
+
+            func resumeOnce(with result: Result<String, Error>) {
+                lock.lock()
+                defer { lock.unlock() }
+                guard !hasResumed else { return }
+                hasResumed = true
+
+                switch result {
+                case .success(let value):
+                    continuation.resume(returning: value)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            guard let proxy = xpcManager.remoteObjectProxy(errorHandler: { error in
+                logger.error("[EngineClient] TTS XPC error: \(error.localizedDescription)")
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -4,
+                                                  userInfo: [NSLocalizedDescriptionKey: "XPC failed: \(error.localizedDescription)"])))
+            }) else {
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -1,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Engine proxy not available"])))
+                return
+            }
+
+            let timeoutWork = DispatchWorkItem {
+                logger.error("[EngineClient] TTS timeout after \(Int(timeoutSeconds))s")
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -5,
+                                                  userInfo: [NSLocalizedDescriptionKey: "TTS timeout after \(Int(timeoutSeconds))s"])))
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
+
+            proxy.synthesize(text: text, voiceId: voiceId) { audioPath, error in
+                timeoutWork.cancel()
+
+                if let error = error {
+                    logger.error("[EngineClient] TTS error: \(error)")
+                    resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -2,
+                                                      userInfo: [NSLocalizedDescriptionKey: error])))
+                } else if let audioPath = audioPath {
+                    logger.info("[EngineClient] TTS complete: \(audioPath)")
+                    resumeOnce(with: .success(audioPath))
+                } else {
+                    resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -3,
+                                                      userInfo: [NSLocalizedDescriptionKey: "No audio path returned"])))
+                }
+            }
+        }
+    }
+
+    /// Preload a TTS voice for faster synthesis
+    public func preloadTTSVoice(_ voiceId: String = "kokoro:default") async throws {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
+        }
+
+        logger.info("[EngineClient] Preloading TTS voice: \(voiceId)")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            proxy.preloadTTSVoice(voiceId) { error in
+                if let error = error {
+                    logger.error("[EngineClient] TTS preload error: \(error)")
+                    continuation.resume(throwing: NSError(domain: "EngineClient", code: -6,
+                                                          userInfo: [NSLocalizedDescriptionKey: error]))
+                } else {
+                    logger.info("[EngineClient] TTS voice preloaded")
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// Get available TTS voices
+    public func getAvailableTTSVoices() async -> [TTSVoiceInfo] {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            return []
+        }
+
+        return await withCheckedContinuation { continuation in
+            proxy.getAvailableTTSVoices { voicesJSON in
+                if let data = voicesJSON,
+                   let voices = try? JSONDecoder().decode([TTSVoiceInfo].self, from: data) {
+                    continuation.resume(returning: voices)
+                } else {
+                    continuation.resume(returning: [])
+                }
+            }
+        }
+    }
+
+    /// Unload TTS model to free memory (auto-reloads on next synthesis)
+    public func unloadTTS() async -> Bool {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            proxy.unloadTTS { success in
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
+    /// Get TTS status
+    public func getTTSStatus() async -> (isLoaded: Bool, idleSeconds: Double) {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            return (false, -1)
+        }
+
+        return await withCheckedContinuation { continuation in
+            proxy.getTTSStatus { isLoaded, idleSeconds in
+                continuation.resume(returning: (isLoaded, idleSeconds))
+            }
+        }
+    }
 }

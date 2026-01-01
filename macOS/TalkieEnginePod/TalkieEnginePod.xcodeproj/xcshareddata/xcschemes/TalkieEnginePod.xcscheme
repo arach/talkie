@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
-               BuildableName = "TalkieEngine.app"
-               BlueprintName = "TalkieEngine"
-               ReferencedContainer = "container:TalkieEngine.xcodeproj">
+               BlueprintIdentifier = "9D5BC8BE84F4AB8C22491664"
+               BuildableName = "TalkieEnginePod"
+               BlueprintName = "TalkieEnginePod"
+               ReferencedContainer = "container:TalkieEnginePod.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
-            BuildableName = "TalkieEngine.app"
-            BlueprintName = "TalkieEngine"
-            ReferencedContainer = "container:TalkieEngine.xcodeproj">
+            BlueprintIdentifier = "9D5BC8BE84F4AB8C22491664"
+            BuildableName = "TalkieEnginePod"
+            BlueprintName = "TalkieEnginePod"
+            ReferencedContainer = "container:TalkieEnginePod.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -55,13 +55,17 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
-            BuildableName = "TalkieEngine.app"
-            BlueprintName = "TalkieEngine"
-            ReferencedContainer = "container:TalkieEngine.xcodeproj">
+            BlueprintIdentifier = "9D5BC8BE84F4AB8C22491664"
+            BuildableName = "TalkieEnginePod"
+            BlueprintName = "TalkieEnginePod"
+            ReferencedContainer = "container:TalkieEnginePod.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
+         <CommandLineArgument
+            argument = "tts"
+            isEnabled = "YES">
+         </CommandLineArgument>
       </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
@@ -74,10 +78,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "69D76C993AFA8FB20AC2458D"
-            BuildableName = "TalkieEngine.app"
-            BlueprintName = "TalkieEngine"
-            ReferencedContainer = "container:TalkieEngine.xcodeproj">
+            BlueprintIdentifier = "9D5BC8BE84F4AB8C22491664"
+            BuildableName = "TalkieEnginePod"
+            BlueprintName = "TalkieEnginePod"
+            ReferencedContainer = "container:TalkieEnginePod.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -649,12 +649,14 @@ enum EngineTab: String, CaseIterable {
     case console = "Console"
     case models = "Models"
     case performance = "Performance"
+    case speech = "Speech"
 
     var icon: String {
         switch self {
         case .console: return "terminal"
         case .models: return "square.stack.3d.up"
         case .performance: return "gauge.with.dots.needle.bottom.50percent"
+        case .speech: return "waveform.and.person.filled"
         }
     }
 }
@@ -668,6 +670,13 @@ struct EngineStatusView: View {
     @State private var searchQuery = ""
     @State private var autoScroll = true
     @State private var expandedMetricId: UUID? = nil  // For performance drill-down
+
+    // Speech tab state
+    @State private var ttsModelLoaded = false
+    @State private var ttsIsLoading = false
+    @State private var ttsIsSynthesizing = false
+    @State private var ttsCustomText = ""
+    @State private var ttsLastSynthesisTime: Double? = nil
 
     private let accentGreen = Color(red: 0.4, green: 0.8, blue: 0.4)
     private let bgColor = Color(red: 0.08, green: 0.08, blue: 0.1)
@@ -819,6 +828,8 @@ struct EngineStatusView: View {
                 modelsContent
             case .performance:
                 performanceContent
+            case .speech:
+                speechContent
             }
 
             // Status bar
@@ -1636,6 +1647,252 @@ struct EngineStatusView: View {
         }
     }
 
+    // MARK: - Speech Content
+
+    private var speechContent: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // Model Controls Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("TTS MODEL")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+
+                    HStack(spacing: 12) {
+                        // Status indicator
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(ttsModelLoaded ? accentGreen : .gray)
+                                .frame(width: 10, height: 10)
+                            Text(ttsModelLoaded ? "Kokoro Loaded" : "Not Loaded")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(ttsModelLoaded ? accentGreen : .gray)
+                        }
+
+                        Spacer()
+
+                        // Load button
+                        Button(action: loadTTSModel) {
+                            HStack(spacing: 6) {
+                                if ttsIsLoading {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                        .frame(width: 12, height: 12)
+                                } else {
+                                    Image(systemName: "arrow.down.circle")
+                                        .font(.system(size: 12))
+                                }
+                                Text(ttsIsLoading ? "Loading..." : "Load Model")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(accentGreen.opacity(ttsModelLoaded ? 0.2 : 0.8))
+                            .foregroundColor(ttsModelLoaded ? accentGreen : .black)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(ttsIsLoading || ttsModelLoaded)
+
+                        // Release button
+                        Button(action: releaseTTSModel) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "xmark.circle")
+                                    .font(.system(size: 12))
+                                Text("Release Model")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(ttsModelLoaded ? 0.8 : 0.2))
+                            .foregroundColor(ttsModelLoaded ? .white : .gray)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!ttsModelLoaded || ttsIsSynthesizing)
+                    }
+                }
+                .padding(12)
+                .background(surfaceColor)
+                .cornerRadius(8)
+
+                // Sample Calls Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("SAMPLE CALLS")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+
+                    HStack(spacing: 12) {
+                        // Short text
+                        ttsSampleButton(
+                            label: "Short",
+                            text: "Hello!",
+                            icon: "text.bubble"
+                        )
+
+                        // Medium text
+                        ttsSampleButton(
+                            label: "Medium",
+                            text: "Welcome to Talkie. I can help you transcribe and speak.",
+                            icon: "text.bubble.fill"
+                        )
+
+                        // Long text
+                        ttsSampleButton(
+                            label: "Long",
+                            text: "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is commonly used for font testing and speech synthesis evaluation.",
+                            icon: "doc.text"
+                        )
+                    }
+
+                    // Last synthesis time
+                    if let time = ttsLastSynthesisTime {
+                        Text("Last synthesis: \(String(format: "%.2f", time))s")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(12)
+                .background(surfaceColor)
+                .cornerRadius(8)
+
+                // Custom Text Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("CUSTOM TEXT")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+
+                    HStack(spacing: 12) {
+                        TextField("Enter text to speak...", text: $ttsCustomText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .padding(8)
+                            .background(bgColor)
+                            .cornerRadius(6)
+                            .foregroundColor(.white)
+
+                        Button(action: { synthesizeText(ttsCustomText) }) {
+                            HStack(spacing: 6) {
+                                if ttsIsSynthesizing {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                        .frame(width: 12, height: 12)
+                                } else {
+                                    Image(systemName: "speaker.wave.2.fill")
+                                        .font(.system(size: 12))
+                                }
+                                Text(ttsIsSynthesizing ? "Speaking..." : "Speak")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(accentGreen.opacity(0.8))
+                            .foregroundColor(.black)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(ttsCustomText.isEmpty || ttsIsSynthesizing || !ttsModelLoaded)
+                    }
+                }
+                .padding(12)
+                .background(surfaceColor)
+                .cornerRadius(8)
+
+                Spacer()
+            }
+            .padding(12)
+        }
+        .background(bgColor)
+        .onAppear {
+            refreshTTSStatus()
+        }
+    }
+
+    private func ttsSampleButton(label: String, text: String, icon: String) -> some View {
+        Button(action: { synthesizeText(text) }) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                Text("\(text.count) chars")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.gray)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(ttsModelLoaded ? accentGreen.opacity(0.15) : surfaceColor.opacity(0.5))
+            .foregroundColor(ttsModelLoaded ? accentGreen : .gray)
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+        .disabled(!ttsModelLoaded || ttsIsSynthesizing)
+    }
+
+    private func loadTTSModel() {
+        ttsIsLoading = true
+        statusManager.log(.info, "TTS", "Loading Kokoro model...")
+
+        Task {
+            let startTime = Date()
+            // Trigger model load by synthesizing empty or minimal text
+            do {
+                _ = try await TTSService.shared.synthesize(text: ".", voiceId: "default")
+                let elapsed = Date().timeIntervalSince(startTime)
+                await MainActor.run {
+                    ttsIsLoading = false
+                    ttsModelLoaded = true
+                    statusManager.log(.info, "TTS", "Kokoro ready in \(String(format: "%.1f", elapsed))s")
+                }
+            } catch {
+                await MainActor.run {
+                    ttsIsLoading = false
+                    statusManager.log(.error, "TTS", "Failed to load: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func releaseTTSModel() {
+        statusManager.log(.info, "TTS", "Unloading model (idle)")
+        TTSService.shared.unloadModel()
+        ttsModelLoaded = false
+        statusManager.log(.info, "TTS", "Model unloaded")
+    }
+
+    private func synthesizeText(_ text: String) {
+        guard !text.isEmpty else { return }
+        ttsIsSynthesizing = true
+        statusManager.log(.info, "TTS", "Synthesizing \(text.count) chars...")
+
+        Task {
+            let startTime = Date()
+            do {
+                let outputURL = try await TTSService.shared.synthesize(text: text, voiceId: "default")
+                let elapsed = Date().timeIntervalSince(startTime)
+
+                await MainActor.run {
+                    ttsIsSynthesizing = false
+                    ttsModelLoaded = true  // Model is definitely loaded after synthesis
+                    ttsLastSynthesisTime = elapsed
+                    statusManager.log(.info, "TTS", "Synthesized in \(String(format: "%.2f", elapsed))s (\(text.count) chars)")
+
+                    // Play the audio
+                    NSSound(contentsOf: outputURL, byReference: true)?.play()
+                }
+            } catch {
+                await MainActor.run {
+                    ttsIsSynthesizing = false
+                    statusManager.log(.error, "TTS", "Synthesis failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func refreshTTSStatus() {
+        ttsModelLoaded = TTSService.shared.isLoaded
+    }
+
     // MARK: - Status Bar
 
     private var statusBar: some View {
@@ -1664,6 +1921,10 @@ struct EngineStatusView: View {
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(.gray)
                 }
+            case .speech:
+                Text(ttsModelLoaded ? "Kokoro TTS loaded" : "TTS not loaded")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.gray)
             }
 
             Spacer()

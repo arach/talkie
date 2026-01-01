@@ -1032,6 +1032,75 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             }
         }
     }
+
+    // MARK: - Text-to-Speech
+
+    nonisolated func synthesize(text: String, voiceId: String, reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.system, "[XPC] synthesize called: \(text.prefix(30))...")
+        Task { @MainActor in
+            await self.doSynthesize(text: text, voiceId: voiceId, reply: reply)
+        }
+    }
+
+    private func doSynthesize(text: String, voiceId: String, reply: @escaping (String?, String?) -> Void) async {
+        guard !isShuttingDown else {
+            EngineStatusManager.shared.log(.warning, "TTS", "Rejected - engine is shutting down")
+            reply(nil, "Engine is shutting down")
+            return
+        }
+
+        do {
+            let outputURL = try await TTSService.shared.synthesize(text: text, voiceId: voiceId)
+            reply(outputURL.path, nil)
+        } catch {
+            AppLogger.shared.error(.system, "TTS synthesis failed", detail: error.localizedDescription)
+            reply(nil, error.localizedDescription)
+        }
+    }
+
+    nonisolated func preloadTTSVoice(_ voiceId: String, reply: @escaping (String?) -> Void) {
+        AppLogger.shared.info(.system, "[XPC] preloadTTSVoice called: \(voiceId)")
+        Task { @MainActor in
+            do {
+                try await TTSService.shared.preloadModel(voiceId: voiceId)
+                reply(nil)
+            } catch {
+                AppLogger.shared.error(.system, "TTS preload failed", detail: error.localizedDescription)
+                reply(error.localizedDescription)
+            }
+        }
+    }
+
+    nonisolated func getAvailableTTSVoices(reply: @escaping (Data?) -> Void) {
+        AppLogger.shared.info(.system, "[XPC] getAvailableTTSVoices called")
+        Task { @MainActor in
+            let voices = TTSService.shared.getAvailableVoices()
+            do {
+                let data = try JSONEncoder().encode(voices)
+                reply(data)
+            } catch {
+                AppLogger.shared.error(.system, "Failed to encode TTS voices", detail: error.localizedDescription)
+                reply(nil)
+            }
+        }
+    }
+
+    nonisolated func unloadTTS(reply: @escaping (Bool) -> Void) {
+        AppLogger.shared.info(.system, "[XPC] unloadTTS called")
+        Task { @MainActor in
+            TTSService.shared.unloadModel()
+            reply(true)
+        }
+    }
+
+    nonisolated func getTTSStatus(reply: @escaping (Bool, Double) -> Void) {
+        Task { @MainActor in
+            let isLoaded = TTSService.shared.isLoaded
+            // TTSService tracks lastUsedTime internally, we expose isLoaded status
+            // Idle time could be computed but we just return 0 if loaded, -1 if not
+            reply(isLoaded, isLoaded ? 0 : -1)
+        }
+    }
 }
 
 // MARK: - Engine Errors

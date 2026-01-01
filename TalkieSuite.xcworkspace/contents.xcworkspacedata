@@ -17,6 +17,9 @@
       <FileRef
          location = "group:TalkieEngine/TalkieEngine.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:TalkieEnginePod/TalkieEnginePod.xcodeproj">
+      </FileRef>
    </Group>
    <Group
       location = "group:iOS"

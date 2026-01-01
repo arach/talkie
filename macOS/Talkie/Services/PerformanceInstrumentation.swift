@@ -158,6 +158,7 @@ enum OperationCategory: String, CaseIterable {
     case llm = "LLM"
     case inference = "Inference"
     case engine = "Engine"
+    case tts = "TTS"
     case processing = "Processing"
     case other = "Other"
 
@@ -168,6 +169,7 @@ enum OperationCategory: String, CaseIterable {
         case .llm: return .purple
         case .inference: return .pink
         case .engine: return .blue
+        case .tts: return .mint
         case .processing: return .green
         case .other: return .gray
         }
@@ -242,7 +244,7 @@ struct PerformanceAction: Identifiable {
         var parts: [String] = []
 
         // Show in priority order
-        for category in [OperationCategory.llm, .inference, .network, .database, .engine, .processing] {
+        for category in [OperationCategory.llm, .tts, .inference, .network, .database, .engine, .processing] {
             if let ops = groups[category], !ops.isEmpty {
                 let totalTime = ops.compactMap { $0.duration }.reduce(0, +)
                 let count = ops.count
@@ -432,6 +434,7 @@ final class PerformanceMonitor {
         case "LLM": return .llm
         case "Inference": return .inference
         case "Engine": return .engine
+        case "TTS": return .tts
         case "Task", "Processing": return .processing
         default: return .other
         }
@@ -739,7 +742,7 @@ private struct MonitorContentView: View {
                 Button("All Categories") {
                     filterCategory = nil
                 }
-                ForEach([OperationCategory.database, .network, .llm, .inference, .engine, .processing], id: \.self) { category in
+                ForEach([OperationCategory.database, .network, .llm, .inference, .engine, .tts, .processing], id: \.self) { category in
                     Button(category.rawValue.capitalized) {
                         filterCategory = category
                     }
@@ -1229,6 +1232,7 @@ private struct MonitorContentView: View {
         case .llm: return .purple
         case .inference: return .pink
         case .engine: return .cyan
+        case .tts: return .mint
         case .processing: return .green
         case .other: return .gray
         }
