@@ -81,6 +81,21 @@ public enum EngineConnectionState: String {
 }
 
 /// Model info from TalkieEngine
+/// Model status for UI display (combines catalog + engine state)
+public struct ModelStatusInfo {
+    public let isDownloaded: Bool
+    public let isLoaded: Bool
+    public let isDownloading: Bool
+    public let downloadProgress: Double
+
+    public static let unknown = ModelStatusInfo(
+        isDownloaded: false,
+        isLoaded: false,
+        isDownloading: false,
+        downloadProgress: 0
+    )
+}
+
 public struct EngineModelInfo: Codable, Sendable, Identifiable {
     public let id: String
     public let family: String
@@ -243,10 +258,12 @@ public final class EngineClient {
     ///   - audioData: Audio data to transcribe
     ///   - modelId: Model to use (default: small whisper)
     ///   - priority: Task priority - `.high` for real-time, `.medium` for interactive, `.low` for batch (default: .medium)
+    ///   - postProcess: Optional post-processing to apply (default: .none = raw transcription)
     public func transcribe(
         audioData: Data,
         modelId: String = "whisper:openai_whisper-small",
-        priority: TranscriptionPriority = .medium
+        priority: TranscriptionPriority = .medium,
+        postProcess: PostProcessOption = .none
     ) async throws -> String {
         guard await ensureConnected() else {
             throw NSError(domain: "EngineClient", code: -1,
@@ -264,7 +281,7 @@ public final class EngineClient {
             Task.detached { try? FileManager.default.removeItem(atPath: audioPath) }
         }
 
-        return try await transcribe(audioPath: audioPath, modelId: modelId, priority: priority)
+        return try await transcribe(audioPath: audioPath, modelId: modelId, priority: priority, postProcess: postProcess)
     }
 
     /// Transcribe audio file
@@ -272,10 +289,12 @@ public final class EngineClient {
     ///   - audioPath: Path to audio file
     ///   - modelId: Model to use (default: small whisper)
     ///   - priority: Task priority - `.high` for real-time (Live), `.medium` for interactive, `.low` for batch (default: .medium)
+    ///   - postProcess: Optional post-processing to apply (default: .none = raw transcription)
     public func transcribe(
         audioPath: String,
         modelId: String = "whisper:openai_whisper-small",
-        priority: TranscriptionPriority = .medium
+        priority: TranscriptionPriority = .medium,
+        postProcess: PostProcessOption = .none
     ) async throws -> String {
         guard await ensureConnected() else {
             throw NSError(domain: "EngineClient", code: -1,
@@ -325,7 +344,7 @@ public final class EngineClient {
             DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
 
             // Make XPC call
-            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, priority: priority) { [weak self] transcript, error in
+            proxy.transcribe(audioPath: audioPath, modelId: modelId, externalRefId: nil, priority: priority, postProcess: postProcess) { [weak self] transcript, error in
                 // Cancel timeout since we got a response
                 timeoutWork.cancel()
 
@@ -473,6 +492,212 @@ public final class EngineClient {
                         transcribing: status.isTranscribing
                     )
                 }
+            }
+        }
+    }
+
+    /// Get model status for a given model ID (combines engine state with download progress)
+    public func modelStatus(for modelId: String) -> ModelStatusInfo {
+        // Check if currently downloading this model
+        if let progress = downloadProgress, progress.modelId == modelId {
+            return ModelStatusInfo(
+                isDownloaded: false,
+                isLoaded: false,
+                isDownloading: progress.isDownloading,
+                downloadProgress: progress.progress
+            )
+        }
+
+        // Check engine status for downloaded/loaded state
+        let isDownloaded = status?.downloadedModels.contains(modelId) ?? false
+        let isLoaded = status?.loadedModelId == modelId
+
+        return ModelStatusInfo(
+            isDownloaded: isDownloaded || isLoaded,  // Loaded implies downloaded
+            isLoaded: isLoaded,
+            isDownloading: false,
+            downloadProgress: 0
+        )
+    }
+
+    // MARK: - Dictionary
+
+    /// Update the dictionary for text post-processing
+    /// Talkie pushes content, Engine persists to its own file
+    public func updateDictionary(_ entries: [DictionaryEntry]) async throws {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
+        }
+
+        let entriesJSON = try JSONEncoder().encode(entries)
+        logger.info("[EngineClient] Updating dictionary with \(entries.count) entries")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            proxy.updateDictionary(entriesJSON: entriesJSON) { error in
+                if let error = error {
+                    logger.error("[EngineClient] Dictionary update error: \(error)")
+                    continuation.resume(throwing: NSError(domain: "EngineClient", code: -6,
+                                                          userInfo: [NSLocalizedDescriptionKey: error]))
+                } else {
+                    logger.info("[EngineClient] Dictionary updated")
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// Enable or disable dictionary processing in Engine
+    /// Engine persists this setting and loads dictionary on startup if enabled
+    public func setDictionaryEnabled(_ enabled: Bool) async {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            logger.warning("[EngineClient] Cannot set dictionary enabled - not connected")
+            return
+        }
+
+        logger.info("[EngineClient] Setting dictionary enabled: \(enabled)")
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            proxy.setDictionaryEnabled(enabled) {
+                logger.info("[EngineClient] Dictionary \(enabled ? "enabled" : "disabled")")
+                continuation.resume()
+            }
+        }
+    }
+
+    // MARK: - Text-to-Speech
+
+    /// Synthesize text to speech and return path to audio file
+    /// - Parameters:
+    ///   - text: Text to synthesize
+    ///   - voiceId: Voice identifier (e.g., "kokoro:default")
+    /// - Returns: Path to generated WAV audio file
+    public func synthesize(text: String, voiceId: String = "kokoro:default") async throws -> String {
+        guard await ensureConnected() else {
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
+        }
+
+        logger.info("[EngineClient] Synthesizing TTS: \(text.prefix(30))...")
+
+        let timeoutSeconds: Double = 60
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var hasResumed = false
+            let lock = NSLock()
+
+            func resumeOnce(with result: Result<String, Error>) {
+                lock.lock()
+                defer { lock.unlock() }
+                guard !hasResumed else { return }
+                hasResumed = true
+
+                switch result {
+                case .success(let value):
+                    continuation.resume(returning: value)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            guard let proxy = xpcManager.remoteObjectProxy(errorHandler: { error in
+                logger.error("[EngineClient] TTS XPC error: \(error.localizedDescription)")
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -4,
+                                                  userInfo: [NSLocalizedDescriptionKey: "XPC failed: \(error.localizedDescription)"])))
+            }) else {
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -1,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Engine proxy not available"])))
+                return
+            }
+
+            let timeoutWork = DispatchWorkItem {
+                logger.error("[EngineClient] TTS timeout after \(Int(timeoutSeconds))s")
+                resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -5,
+                                                  userInfo: [NSLocalizedDescriptionKey: "TTS timeout after \(Int(timeoutSeconds))s"])))
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWork)
+
+            proxy.synthesize(text: text, voiceId: voiceId) { audioPath, error in
+                timeoutWork.cancel()
+
+                if let error = error {
+                    logger.error("[EngineClient] TTS error: \(error)")
+                    resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -2,
+                                                      userInfo: [NSLocalizedDescriptionKey: error])))
+                } else if let audioPath = audioPath {
+                    logger.info("[EngineClient] TTS complete: \(audioPath)")
+                    resumeOnce(with: .success(audioPath))
+                } else {
+                    resumeOnce(with: .failure(NSError(domain: "EngineClient", code: -3,
+                                                      userInfo: [NSLocalizedDescriptionKey: "No audio path returned"])))
+                }
+            }
+        }
+    }
+
+    /// Preload a TTS voice for faster synthesis
+    public func preloadTTSVoice(_ voiceId: String = "kokoro:default") async throws {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            throw NSError(domain: "EngineClient", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Engine not connected"])
+        }
+
+        logger.info("[EngineClient] Preloading TTS voice: \(voiceId)")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            proxy.preloadTTSVoice(voiceId) { error in
+                if let error = error {
+                    logger.error("[EngineClient] TTS preload error: \(error)")
+                    continuation.resume(throwing: NSError(domain: "EngineClient", code: -6,
+                                                          userInfo: [NSLocalizedDescriptionKey: error]))
+                } else {
+                    logger.info("[EngineClient] TTS voice preloaded")
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// Get available TTS voices
+    public func getAvailableTTSVoices() async -> [TTSVoiceInfo] {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            return []
+        }
+
+        return await withCheckedContinuation { continuation in
+            proxy.getAvailableTTSVoices { voicesJSON in
+                if let data = voicesJSON,
+                   let voices = try? JSONDecoder().decode([TTSVoiceInfo].self, from: data) {
+                    continuation.resume(returning: voices)
+                } else {
+                    continuation.resume(returning: [])
+                }
+            }
+        }
+    }
+
+    /// Unload TTS model to free memory (auto-reloads on next synthesis)
+    public func unloadTTS() async -> Bool {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            proxy.unloadTTS { success in
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
+    /// Get TTS status
+    public func getTTSStatus() async -> (isLoaded: Bool, idleSeconds: Double) {
+        guard let proxy = xpcManager.remoteObjectProxy() else {
+            return (false, -1)
+        }
+
+        return await withCheckedContinuation { continuation in
+            proxy.getTTSStatus { isLoaded, idleSeconds in
+                continuation.resume(returning: (isLoaded, idleSeconds))
             }
         }
     }

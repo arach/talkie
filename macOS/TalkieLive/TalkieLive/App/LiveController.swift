@@ -1006,6 +1006,7 @@ final class LiveController: ObservableObject {
 
             } else {
                 // Normal flow: paste immediately
+                // Note: Dictionary processing now happens in TalkieEngine
                 let routingMode = settings.routingMode == .paste ? "Paste" : "Clipboard"
                 AppLogger.shared.log(.system, "Routing transcript", detail: "\(routingMode) mode")
 
@@ -1048,6 +1049,7 @@ final class LiveController: ObservableObject {
                 }
 
                 // Store in GRDB with pasteTimestamp = now (already pasted)
+                // Note: Engine now applies dictionary replacements before returning
                 logTiming("Creating LiveDictation")
                 let utterance = LiveDictation(
                     text: result.text,

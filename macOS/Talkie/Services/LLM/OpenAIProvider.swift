@@ -268,6 +268,7 @@ class OpenAIProvider: LLMProvider {
                     
                     continuation.finish()
                 } catch {
+                    logger.error("OpenAI streaming failed: \(error.localizedDescription)")
                     continuation.finish(throwing: error)
                 }
             }

@@ -68,4 +68,6 @@ targets:
     dependencies:
       - package: WhisperKit
       - package: FluidAudio
+      - package: FluidAudio
+        product: FluidAudioTTS
       - package: TalkieKit

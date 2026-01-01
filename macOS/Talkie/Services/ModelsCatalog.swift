@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 // MARK: - MLX Local Models Catalog
 
@@ -209,6 +210,121 @@ enum ParakeetModelCatalog {
 
     static func metadata(for model: ParakeetModel) -> ParakeetModelMetadata? {
         metadata.first { $0.model == model }
+    }
+}
+
+// MARK: - TTS Voice Catalog
+
+enum TTSVoiceProvider: String, CaseIterable {
+    case kokoro = "kokoro"
+
+    var displayName: String {
+        switch self {
+        case .kokoro: return "Kokoro"
+        }
+    }
+
+    var color: SwiftUI.Color {
+        switch self {
+        case .kokoro: return .purple
+        }
+    }
+
+    var badge: String {
+        switch self {
+        case .kokoro: return "KKR"
+        }
+    }
+}
+
+struct TTSVoiceMetadata {
+    let id: String              // Full ID like "kokoro:af_bella"
+    let provider: TTSVoiceProvider
+    let voiceId: String         // Short ID like "af_bella"
+    let displayName: String
+    let description: String
+    let language: String
+    let gender: String          // "Female", "Male", "Neutral"
+    let style: String           // "Conversational", "Narrative", "Expressive"
+    let sizeMB: Int
+    let sampleRate: Int         // Hz
+    let isDefault: Bool
+
+    // Links - at least one should be provided
+    var infoURL: URL? { TTSVoiceCatalog.demoURL }  // All Kokoro voices share demo
+}
+
+enum TTSVoiceCatalog {
+    static let repoURL = URL(string: "https://github.com/hexgrad/kokoro")!
+    static let paperURL = URL(string: "https://arxiv.org/abs/2410.07787")!
+    static let demoURL = URL(string: "https://huggingface.co/spaces/hexgrad/Kokoro-TTS")!
+
+    /// Kokoro voice styles - these map to the actual voice IDs
+    static let voices: [TTSVoiceMetadata] = [
+        TTSVoiceMetadata(
+            id: "kokoro:af_bella",
+            provider: TTSVoiceProvider.kokoro,
+            voiceId: "af_bella",
+            displayName: "Bella",
+            description: "Warm and natural conversational voice",
+            language: "en-US",
+            gender: "Female",
+            style: "Conversational",
+            sizeMB: 800,  // Shared model
+            sampleRate: 24000,
+            isDefault: true
+        ),
+        TTSVoiceMetadata(
+            id: "kokoro:af_nicole",
+            provider: TTSVoiceProvider.kokoro,
+            voiceId: "af_nicole",
+            displayName: "Nicole",
+            description: "Professional narration voice",
+            language: "en-US",
+            gender: "Female",
+            style: "Narrative",
+            sizeMB: 800,
+            sampleRate: 24000,
+            isDefault: false
+        ),
+        TTSVoiceMetadata(
+            id: "kokoro:am_adam",
+            provider: TTSVoiceProvider.kokoro,
+            voiceId: "am_adam",
+            displayName: "Adam",
+            description: "Clear and articulate male voice",
+            language: "en-US",
+            gender: "Male",
+            style: "Conversational",
+            sizeMB: 800,
+            sampleRate: 24000,
+            isDefault: false
+        ),
+        TTSVoiceMetadata(
+            id: "kokoro:am_michael",
+            provider: TTSVoiceProvider.kokoro,
+            voiceId: "am_michael",
+            displayName: "Michael",
+            description: "Deep and expressive storytelling voice",
+            language: "en-US",
+            gender: "Male",
+            style: "Expressive",
+            sizeMB: 800,
+            sampleRate: 24000,
+            isDefault: false
+        )
+    ]
+
+    static var defaultVoice: TTSVoiceMetadata {
+        voices.first { $0.isDefault } ?? voices[0]
+    }
+
+    static func voice(byId id: String) -> TTSVoiceMetadata? {
+        voices.first { $0.id == id }
+    }
+
+    static func voices(for provider: TTSVoiceProvider) -> [TTSVoiceMetadata] {
+        voices.filter { $0.provider == provider }
     }
 }
 

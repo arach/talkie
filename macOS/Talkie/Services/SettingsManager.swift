@@ -1224,14 +1224,17 @@ class SettingsManager {
     // Transcription model settings (consolidated from LiveSettings)
     private var _liveTranscriptionModelId: String = "whisper:openai_whisper-small"
 
-    private let keychain = KeychainManager.shared
+    // TTS voice settings
+    private var _selectedTTSVoiceId: String = "kokoro:default"
+
+    private let apiKeys = APIKeyStore.shared
 
     // Public accessors that ensure initialization
     var geminiApiKey: String {
         get { ensureInitialized(); return _geminiApiKey }
         set {
             _geminiApiKey = newValue
-            _ = keychain.save(newValue, for: KeychainManager.Key.geminiApiKey)
+            apiKeys.set(newValue.isEmpty ? nil : newValue, for: .gemini)
         }
     }
 
@@ -1239,11 +1242,7 @@ class SettingsManager {
         get { ensureInitialized(); return _openaiApiKey }
         set {
             _openaiApiKey = newValue
-            if let value = newValue {
-                _ = keychain.save(value, for: KeychainManager.Key.openaiApiKey)
-            } else {
-                keychain.delete(KeychainManager.Key.openaiApiKey)
-            }
+            apiKeys.set(newValue, for: .openai)
         }
     }
 
@@ -1251,11 +1250,7 @@ class SettingsManager {
         get { ensureInitialized(); return _anthropicApiKey }
         set {
             _anthropicApiKey = newValue
-            if let value = newValue {
-                _ = keychain.save(value, for: KeychainManager.Key.anthropicApiKey)
-            } else {
-                keychain.delete(KeychainManager.Key.anthropicApiKey)
-            }
+            apiKeys.set(newValue, for: .anthropic)
         }
     }
 
@@ -1263,40 +1258,48 @@ class SettingsManager {
         get { ensureInitialized(); return _groqApiKey }
         set {
             _groqApiKey = newValue
-            if let value = newValue {
-                _ = keychain.save(value, for: KeychainManager.Key.groqApiKey)
-            } else {
-                keychain.delete(KeychainManager.Key.groqApiKey)
-            }
+            apiKeys.set(newValue, for: .groq)
         }
     }
 
-    // MARK: - API Key Existence Checks (no password prompt)
+    var elevenLabsApiKey: String? {
+        get { apiKeys.get(.elevenLabs) }
+        set { apiKeys.set(newValue, for: .elevenLabs) }
+    }
 
-    /// Check if API keys exist without fetching them (avoids password prompt)
+    // MARK: - API Key Checks
+
     func hasOpenAIKey() -> Bool {
-        keychain.exists(.openaiApiKey)
+        apiKeys.hasKey(for: .openai)
     }
 
     func hasAnthropicKey() -> Bool {
-        keychain.exists(.anthropicApiKey)
+        apiKeys.hasKey(for: .anthropic)
     }
 
     func hasGroqKey() -> Bool {
-        keychain.exists(.groqApiKey)
+        apiKeys.hasKey(for: .groq)
     }
 
-    /// Fetch API key on demand (only when explicitly needed for edit/reveal)
+    func hasElevenLabsKey() -> Bool {
+        apiKeys.hasKey(for: .elevenLabs)
+    }
+
+    /// Fetch API key (now instant, no keychain prompt)
     func fetchOpenAIKey() -> String? {
-        keychain.retrieve(for: .openaiApiKey)
+        apiKeys.get(.openai)
     }
 
     func fetchAnthropicKey() -> String? {
-        keychain.retrieve(for: .anthropicApiKey)
+        apiKeys.get(.anthropic)
     }
 
     func fetchGroqKey() -> String? {
-        keychain.retrieve(for: .groqApiKey)
+        apiKeys.get(.groq)
+    }
+
+    func fetchElevenLabsKey() -> String? {
+        apiKeys.get(.elevenLabs)
     }
 
     var selectedModel: String {
@@ -1308,6 +1311,15 @@ class SettingsManager {
     var liveTranscriptionModelId: String {
         get { ensureInitialized(); return _liveTranscriptionModelId }
         set { _liveTranscriptionModelId = newValue; saveSettings() }
+    }
+
+    // TTS voice for text-to-speech synthesis
+    var selectedTTSVoiceId: String {
+        get { ensureInitialized(); return _selectedTTSVoiceId }
+        set {
+            _selectedTTSVoiceId = newValue
+            UserDefaults.standard.set(newValue, forKey: "selectedTTSVoiceId")
+        }
     }
 
     private var context: NSManagedObjectContext {
@@ -1428,6 +1440,12 @@ class SettingsManager {
             self.playbackVolume = 1.0
         }
 
+        // Initialize TTS voice
+        // Default: kokoro:default (local Kokoro voice)
+        if let savedVoiceId = UserDefaults.standard.string(forKey: "selectedTTSVoiceId") {
+            self._selectedTTSVoiceId = savedVoiceId
+        }
+
         // Apply appearance mode on launch
         applyAppearanceMode()
 
@@ -1448,11 +1466,14 @@ class SettingsManager {
     }
 
     private func performLoadSettings() {
-        // Load API keys from Keychain (secure storage)
-        let geminiFromKeychain = keychain.retrieve(for: KeychainManager.Key.geminiApiKey) ?? ""
-        let openaiFromKeychain = keychain.retrieve(for: KeychainManager.Key.openaiApiKey)
-        let anthropicFromKeychain = keychain.retrieve(for: KeychainManager.Key.anthropicApiKey)
-        let groqFromKeychain = keychain.retrieve(for: KeychainManager.Key.groqApiKey)
+        // Migrate API keys from Keychain to new encrypted store (one-time)
+        apiKeys.migrateFromKeychain()
+
+        // Load API keys from encrypted store
+        let geminiKey = apiKeys.get(.gemini) ?? ""
+        let openaiKey = apiKeys.get(.openai)
+        let anthropicKey = apiKeys.get(.anthropic)
+        let groqKey = apiKeys.get(.groq)
 
         // Load non-sensitive settings from Core Data
         let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
@@ -1463,86 +1484,63 @@ class SettingsManager {
                 let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
                 let liveModelId = settings.liveTranscriptionModelId ?? "whisper:openai_whisper-small"
 
-                // Check if we need to migrate API keys from Core Data to Keychain
-                let hasCoreDataKeys = (settings.geminiApiKey != nil && !settings.geminiApiKey!.isEmpty) ||
-                                      (settings.openaiApiKey != nil && !settings.openaiApiKey!.isEmpty) ||
-                                      (settings.anthropicApiKey != nil && !settings.anthropicApiKey!.isEmpty) ||
-                                      (settings.groqApiKey != nil && !settings.groqApiKey!.isEmpty)
+                // Migrate API keys from Core Data if present (legacy)
+                if let cdGemini = settings.geminiApiKey, !cdGemini.isEmpty, geminiKey.isEmpty {
+                    apiKeys.set(cdGemini, for: .gemini)
+                }
+                if let cdOpenai = settings.openaiApiKey, !cdOpenai.isEmpty, openaiKey == nil {
+                    apiKeys.set(cdOpenai, for: .openai)
+                }
+                if let cdAnthropic = settings.anthropicApiKey, !cdAnthropic.isEmpty, anthropicKey == nil {
+                    apiKeys.set(cdAnthropic, for: .anthropic)
+                }
+                if let cdGroq = settings.groqApiKey, !cdGroq.isEmpty, groqKey == nil {
+                    apiKeys.set(cdGroq, for: .groq)
+                }
+                // Clear Core Data keys after migration
+                clearApiKeysFromCoreData()
 
-                if hasCoreDataKeys {
-                    // Migrate from Core Data to Keychain
-                    _ = keychain.migrateFromCoreData(
-                        geminiKey: settings.geminiApiKey,
-                        openaiKey: settings.openaiApiKey,
-                        anthropicKey: settings.anthropicApiKey,
-                        groqKey: settings.groqApiKey
-                    ) { [weak self] in
-                        // Clear API keys from Core Data after migration
-                        self?.clearApiKeysFromCoreData()
-                    }
-
-                    // Use migrated values
-                    let gemini = keychain.retrieve(for: KeychainManager.Key.geminiApiKey) ?? ""
-                    let openai = keychain.retrieve(for: KeychainManager.Key.openaiApiKey)
-                    let anthropic = keychain.retrieve(for: KeychainManager.Key.anthropicApiKey)
-                    let groq = keychain.retrieve(for: KeychainManager.Key.groqApiKey)
-
-                    DispatchQueue.main.async {
-                        self._geminiApiKey = gemini
-                        self._openaiApiKey = openai
-                        self._anthropicApiKey = anthropic
-                        self._groqApiKey = groq
-                        self._selectedModel = model
-                        self._liveTranscriptionModelId = liveModelId
-                    }
-                } else {
-                    // Use Keychain values directly
-                    DispatchQueue.main.async {
-                        self._geminiApiKey = geminiFromKeychain
-                        self._openaiApiKey = openaiFromKeychain
-                        self._anthropicApiKey = anthropicFromKeychain
-                        self._groqApiKey = groqFromKeychain
-                        self._selectedModel = model
-                        self._liveTranscriptionModelId = liveModelId
-                    }
+                DispatchQueue.main.async {
+                    self._geminiApiKey = self.apiKeys.get(.gemini) ?? ""
+                    self._openaiApiKey = self.apiKeys.get(.openai)
+                    self._anthropicApiKey = self.apiKeys.get(.anthropic)
+                    self._groqApiKey = self.apiKeys.get(.groq)
+                    self._selectedModel = model
+                    self._liveTranscriptionModelId = liveModelId
                 }
             } else {
                 logger.info("No settings found in Core Data, creating defaults")
                 createDefaultSettings()
 
-                // Still load from Keychain if available
                 DispatchQueue.main.async {
-                    self._geminiApiKey = geminiFromKeychain
-                    self._openaiApiKey = openaiFromKeychain
-                    self._anthropicApiKey = anthropicFromKeychain
-                    self._groqApiKey = groqFromKeychain
+                    self._geminiApiKey = geminiKey
+                    self._openaiApiKey = openaiKey
+                    self._anthropicApiKey = anthropicKey
+                    self._groqApiKey = groqKey
                 }
             }
 
             // Migrate transcription model from LiveSettings if needed
-            // This runs once to migrate from the old UserDefaults key
             if let legacyModelId = UserDefaults.standard.string(forKey: "selectedModelId") {
                 logger.info("Migrating transcription model from LiveSettings: \(legacyModelId)")
                 DispatchQueue.main.async {
                     self._liveTranscriptionModelId = legacyModelId
                 }
-                // Clear old key (AppStorage auto-saves)
                 UserDefaults.standard.removeObject(forKey: "selectedModelId")
             }
         } catch {
             logger.error("Failed to load settings: \(error.localizedDescription)")
 
-            // Fall back to Keychain values on error
             DispatchQueue.main.async {
-                self._geminiApiKey = geminiFromKeychain
-                self._openaiApiKey = openaiFromKeychain
-                self._anthropicApiKey = anthropicFromKeychain
-                self._groqApiKey = groqFromKeychain
+                self._geminiApiKey = geminiKey
+                self._openaiApiKey = openaiKey
+                self._anthropicApiKey = anthropicKey
+                self._groqApiKey = groqKey
             }
         }
     }
 
-    /// Clear API keys from Core Data after migration to Keychain
+    /// Clear API keys from Core Data after migration to encrypted store
     private func clearApiKeysFromCoreData() {
         let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
 

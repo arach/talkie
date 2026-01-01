@@ -26,8 +26,8 @@ final class LocalSwiftBackend: ExecutionBackend {
     // MARK: - Initialization
 
     @MainActor
-    init(executor: WorkflowExecutor = .shared) {
-        self.executor = executor
+    init(executor: WorkflowExecutor? = nil) {
+        self.executor = executor ?? .shared
     }
 
     // MARK: - ExecutionBackend Protocol

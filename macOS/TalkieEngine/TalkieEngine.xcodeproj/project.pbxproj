@@ -7,17 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01306C6A37A0B4610F2D3B64 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47A405AC76859296760FD6A8 /* TalkieKit */; };
 		04FA816DA64246EDAD5A6356 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 930497E959A78E2E572D7F9B /* WhisperKit */; };
 		12DD200A43D294C5523EE021 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB26F22F9D507243DB479766 /* AppDelegate.swift */; };
 		1E8ACC6E34F3FE16FF2D9F95 /* EngineListenerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */; };
-		2119A2337BC58ADD91CF1729 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47A405AC76859296760FD6A8 /* TalkieKit */; };
+		2119A2337BC58ADD91CF1729 /* FluidAudioTTS in Frameworks */ = {isa = PBXBuildFile; productRef = 01B4BF33120D9CC1756BA947 /* FluidAudioTTS */; };
 		22DFC96B3C270049F4000C39 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E3464C72C240A7FFD4A74 /* Log.swift */; };
 		2EE2C5A649FB1DE1A536887B /* XPCServiceWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */; };
+		325E32F230A002BBBF2159DC /* PodManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F6D2AA45F502398FB9DBA30 /* PodManager.swift */; };
 		5BCD674D514E3D3F8B67D35D /* EngineStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA001B38FC283CCB38519E75 /* EngineStatusView.swift */; };
+		601A9B4FE89323FF4E375B63 /* TextPostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF035B4A299C9EAA53C8E134 /* TextPostProcessor.swift */; };
 		944FD700E91ADF4B5DF57D27 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9A5A884A559C70D9E9BCD9 /* FluidAudio */; };
 		B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309C8ED6550F5436C180F21E /* main.swift */; };
 		D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3345200BF5B8343E77A15413 /* EngineService.swift */; };
 		D92C5024D36DB3573FEDADC7 /* EngineProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */; };
+		D9BEBD4592DD1F6D6088E0FC /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6DEE7B6AE1823F19B4D950 /* TTSService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,9 +33,12 @@
 		36F7AC1B86BDE8432BC75569 /* TalkieKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TalkieKit; path = ../TalkieKit; sourceTree = SOURCE_ROOT; };
 		4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineProtocol.swift; sourceTree = "<group>"; };
 		8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineListenerDelegate.swift; sourceTree = "<group>"; };
+		8F6D2AA45F502398FB9DBA30 /* PodManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PodManager.swift; sourceTree = "<group>"; };
 		A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPCServiceWrapper.swift; sourceTree = "<group>"; };
 		BA001B38FC283CCB38519E75 /* EngineStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineStatusView.swift; sourceTree = "<group>"; };
 		BB26F22F9D507243DB479766 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		BF035B4A299C9EAA53C8E134 /* TextPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextPostProcessor.swift; sourceTree = "<group>"; };
+		BF6DEE7B6AE1823F19B4D950 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
 		D04B99055A71871474300365 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -42,28 +49,12 @@
 			files = (
 				04FA816DA64246EDAD5A6356 /* WhisperKit in Frameworks */,
 				944FD700E91ADF4B5DF57D27 /* FluidAudio in Frameworks */,
-				2119A2337BC58ADD91CF1729 /* TalkieKit in Frameworks */,
+				2119A2337BC58ADD91CF1729 /* FluidAudioTTS in Frameworks */,
+				01306C6A37A0B4610F2D3B64 /* TalkieKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		A1B2C3D4E5F60718293A4B5C /* Install to Debug Path */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Install to Debug Path";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Only run for Debug builds\nif [ \"$CONFIGURATION\" = \"Debug\" ]; then\n    DEST=\"$HOME/Library/Developer/Talkie/Debug\"\n    mkdir -p \"$DEST\"\n    \n    # Remove old and copy new\n    rm -rf \"$DEST/TalkieEngine.app\"\n    cp -R \"$BUILT_PRODUCTS_DIR/TalkieEngine.app\" \"$DEST/\"\n    \n    echo \"Installed TalkieEngine to $DEST\"\nfi\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXGroup section */
 		76572ACDD8635BEDB04EA761 /* Views */ = {
@@ -109,7 +100,10 @@
 				D04B99055A71871474300365 /* Info.plist */,
 				2F4E3464C72C240A7FFD4A74 /* Log.swift */,
 				309C8ED6550F5436C180F21E /* main.swift */,
+				8F6D2AA45F502398FB9DBA30 /* PodManager.swift */,
 				071A5BB5F9E02D438B1F4900 /* TalkieEngine.entitlements */,
+				BF035B4A299C9EAA53C8E134 /* TextPostProcessor.swift */,
+				BF6DEE7B6AE1823F19B4D950 /* TTSService.swift */,
 				A32042DE87712D7836A7B605 /* XPCServiceWrapper.swift */,
 				76572ACDD8635BEDB04EA761 /* Views */,
 			);
@@ -125,7 +119,6 @@
 			buildPhases = (
 				82150A47A9A7BBA9732F261D /* Sources */,
 				8241F25777B3728534E76120 /* Frameworks */,
-				A1B2C3D4E5F60718293A4B5C /* Install to Debug Path */,
 			);
 			buildRules = (
 			);
@@ -135,6 +128,7 @@
 			packageProductDependencies = (
 				930497E959A78E2E572D7F9B /* WhisperKit */,
 				4F9A5A884A559C70D9E9BCD9 /* FluidAudio */,
+				01B4BF33120D9CC1756BA947 /* FluidAudioTTS */,
 				47A405AC76859296760FD6A8 /* TalkieKit */,
 			);
 			productName = TalkieEngine;
@@ -191,6 +185,9 @@
 				D2F7B069AE1767DFCB0165C1 /* EngineService.swift in Sources */,
 				5BCD674D514E3D3F8B67D35D /* EngineStatusView.swift in Sources */,
 				22DFC96B3C270049F4000C39 /* Log.swift in Sources */,
+				325E32F230A002BBBF2159DC /* PodManager.swift in Sources */,
+				D9BEBD4592DD1F6D6088E0FC /* TTSService.swift in Sources */,
+				601A9B4FE89323FF4E375B63 /* TextPostProcessor.swift in Sources */,
 				2EE2C5A649FB1DE1A536887B /* XPCServiceWrapper.swift in Sources */,
 				B57C1F8EAA23DE31DDEDF4D2 /* main.swift in Sources */,
 			);
@@ -337,7 +334,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.engine.dev;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "TalkieEngine DEV";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -397,7 +394,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = jdi.talkie.engine.staging;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "TalkieEngine STG";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -495,6 +492,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		01B4BF33120D9CC1756BA947 /* FluidAudioTTS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1E266B590A061516AA843D2 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudioTTS;
+		};
 		47A405AC76859296760FD6A8 /* TalkieKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TalkieKit;

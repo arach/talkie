@@ -81,7 +81,7 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // AI MODELS
-                    SettingsSidebarSection(title: "AI MODELS", isActive: selectedSection == .aiProviders || selectedSection == .transcriptionModels || selectedSection == .llmModels) {
+                    SettingsSidebarSection(title: "AI MODELS", isActive: selectedSection == .aiProviders || selectedSection == .transcriptionModels || selectedSection == .ttsVoices || selectedSection == .llmModels) {
                         SettingsSidebarItem(
                             icon: "key",
                             title: "PROVIDERS & KEYS",
@@ -95,6 +95,13 @@ struct SettingsSidebarColumn: View {
                             isSelected: selectedSection == .transcriptionModels
                         ) {
                             selectedSection = .transcriptionModels
+                        }
+                        SettingsSidebarItem(
+                            icon: "speaker.wave.2",
+                            title: "VOICES",
+                            isSelected: selectedSection == .ttsVoices
+                        ) {
+                            selectedSection = .ttsVoices
                         }
                         SettingsSidebarItem(
                             icon: "brain",
@@ -196,6 +203,8 @@ struct SettingsContentColumn: View {
             DictationCaptureSettingsView()
         case .dictationOutput:
             DictationOutputSettingsView()
+        case .dictionary:
+            DictionarySettingsView()
 
         // ACTIONS
         case .quickActions:
@@ -212,6 +221,8 @@ struct SettingsContentColumn: View {
             APISettingsView()
         case .transcriptionModels:
             TranscriptionModelsSettingsView()
+        case .ttsVoices:
+            TTSVoicesSettingsView()
         case .llmModels:
             ModelLibraryView()
 

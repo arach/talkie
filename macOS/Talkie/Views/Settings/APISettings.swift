@@ -27,7 +27,7 @@ struct APISettingsView: View {
             SettingsPageHeader(
                 icon: "key",
                 title: "API KEYS",
-                subtitle: "Manage API keys for cloud AI providers. Keys are stored securely in the macOS Keychain."
+                subtitle: "Manage API keys for cloud AI providers"
             )
         } content: {
             // MARK: - Provider API Keys
@@ -48,14 +48,15 @@ struct APISettingsView: View {
                         settingsManager.hasOpenAIKey(),
                         settingsManager.hasAnthropicKey(),
                         settingsManager.hasValidApiKey,
-                        settingsManager.hasGroqKey()
+                        settingsManager.hasGroqKey(),
+                        settingsManager.hasElevenLabsKey()
                     ].filter { $0 }.count
 
                     HStack(spacing: Spacing.xxs) {
                         Circle()
                             .fill(configuredCount > 0 ? Color.green : Color.orange)
                             .frame(width: 6, height: 6)
-                        Text("\(configuredCount)/4 CONFIGURED")
+                        Text("\(configuredCount)/5 CONFIGURED")
                             .font(.techLabelSmall)
                             .foregroundColor(configuredCount > 0 ? .green : .orange)
                     }
@@ -270,80 +271,65 @@ struct APISettingsView: View {
                             fetchedKeys["groq"] = nil
                         }
                     )
+
+                    APIKeyRow(
+                        provider: "ElevenLabs",
+                        icon: "speaker.wave.3",
+                        placeholder: "sk_...",
+                        helpURL: "https://elevenlabs.io/app/settings/api-keys",
+                        isConfigured: settingsManager.hasElevenLabsKey(),
+                        currentKey: fetchedKeys["elevenlabs"],
+                        isEditing: editingProvider == "elevenlabs",
+                        isRevealed: revealedKeys.contains("elevenlabs"),
+                        editingKey: $editingKeyInput,
+                        onEdit: {
+                            if let key = settingsManager.fetchElevenLabsKey() {
+                                fetchedKeys["elevenlabs"] = key
+                                editingKeyInput = key
+                            }
+                            editingProvider = "elevenlabs"
+                        },
+                        onSave: {
+                            settingsManager.elevenLabsApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
+                            settingsManager.saveSettings()
+                            fetchedKeys["elevenlabs"] = editingKeyInput.isEmpty ? nil : editingKeyInput
+                            editingProvider = nil
+                            editingKeyInput = ""
+                        },
+                        onCancel: {
+                            editingProvider = nil
+                            editingKeyInput = ""
+                        },
+                        onReveal: {
+                            if revealedKeys.contains("elevenlabs") {
+                                revealedKeys.remove("elevenlabs")
+                                fetchedKeys["elevenlabs"] = nil
+                            } else {
+                                if let key = settingsManager.fetchElevenLabsKey() {
+                                    fetchedKeys["elevenlabs"] = key
+                                }
+                                revealedKeys.insert("elevenlabs")
+                            }
+                        },
+                        onDelete: {
+                            settingsManager.elevenLabsApiKey = nil
+                            settingsManager.saveSettings()
+                            fetchedKeys["elevenlabs"] = nil
+                        }
+                    )
                 }
             }
             .padding(Spacing.md)
             .background(Theme.current.surface2)
             .cornerRadius(CornerRadius.sm)
 
-            // MARK: - LLM Cost Tier Section
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.purple)
-                        .frame(width: 3, height: 14)
-
-                    Text("LLM COST TIER")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Spacer()
-
-                    // Current tier badge
-                    Text(settingsManager.llmCostTier.displayName.uppercased())
-                        .font(.techLabelSmall)
-                        .foregroundColor(tierColor(settingsManager.llmCostTier))
-                        .padding(.horizontal, Spacing.xs)
-                        .padding(.vertical, Spacing.xxs)
-                        .background(tierColor(settingsManager.llmCostTier).opacity(Opacity.medium))
-                        .cornerRadius(CornerRadius.xs)
-                }
-
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Controls the default model quality for workflow LLM steps.")
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-
-                    Picker("Cost Tier", selection: $settings.llmCostTier) {
-                        ForEach(LLMCostTier.allCases, id: \.self) { tier in
-                            Text(tier.displayName).tag(tier)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-
-                    // Tier description card
-                    HStack(spacing: Spacing.sm) {
-                        Image(systemName: tierIcon(settingsManager.llmCostTier))
-                            .font(Theme.current.fontHeadline)
-                            .foregroundColor(tierColor(settingsManager.llmCostTier))
-                            .frame(width: 24)
-
-                        VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text(settingsManager.llmCostTier.displayName)
-                                .font(Theme.current.fontSMMedium)
-                            Text(tierDescription(settingsManager.llmCostTier))
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                        }
-                    }
-                    .padding(Spacing.sm)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.sm)
-                }
-            }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
-
-            // MARK: - Keychain Info
+            // MARK: - Security Info
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "lock.shield")
                     .font(Theme.current.fontXS)
                     .foregroundColor(.green)
 
-                Text("API keys are encrypted and stored in the macOS Keychain for maximum security.")
+                Text("API keys are encrypted using AES-GCM and stored locally on this device.")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
@@ -351,32 +337,27 @@ struct APISettingsView: View {
             .background(Color.green.opacity(Opacity.light))
             .cornerRadius(CornerRadius.sm)
         }
-    }
-
-    private func tierIcon(_ tier: LLMCostTier) -> String {
-        switch tier {
-        case .budget: return "leaf"
-        case .balanced: return "scale.3d"
-        case .capable: return "sparkles"
+        .onAppear {
+            prefetchConfiguredKeys()
         }
     }
 
-    private func tierColor(_ tier: LLMCostTier) -> Color {
-        switch tier {
-        case .budget: return .green
-        case .balanced: return .orange
-        case .capable: return .purple
+    /// Pre-fetch keys for configured providers so UI shows them immediately
+    private func prefetchConfiguredKeys() {
+        if settingsManager.hasOpenAIKey(), fetchedKeys["openai"] == nil {
+            fetchedKeys["openai"] = settingsManager.fetchOpenAIKey()
         }
-    }
-
-    private func tierDescription(_ tier: LLMCostTier) -> String {
-        switch tier {
-        case .budget:
-            return "Uses Groq (free) or Gemini Flash. Fastest, lowest cost."
-        case .balanced:
-            return "Uses Gemini 2.0 Flash or GPT-4o-mini. Good balance of quality and cost."
-        case .capable:
-            return "Uses Claude Sonnet or GPT-4o. Best quality for complex reasoning."
+        if settingsManager.hasAnthropicKey(), fetchedKeys["anthropic"] == nil {
+            fetchedKeys["anthropic"] = settingsManager.fetchAnthropicKey()
+        }
+        if settingsManager.hasValidApiKey, fetchedKeys["gemini"] == nil {
+            fetchedKeys["gemini"] = settingsManager.geminiApiKey.isEmpty ? nil : settingsManager.geminiApiKey
+        }
+        if settingsManager.hasGroqKey(), fetchedKeys["groq"] == nil {
+            fetchedKeys["groq"] = settingsManager.fetchGroqKey()
+        }
+        if settingsManager.hasElevenLabsKey(), fetchedKeys["elevenlabs"] == nil {
+            fetchedKeys["elevenlabs"] = settingsManager.fetchElevenLabsKey()
         }
     }
 

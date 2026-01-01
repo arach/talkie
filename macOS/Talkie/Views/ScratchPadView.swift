@@ -7,6 +7,9 @@
 //
 
 import SwiftUI
+import TalkieKit
+
+private let log = Log(.ui)
 
 struct ScratchPadView: View {
     @Environment(SettingsManager.self) private var settings
@@ -523,19 +526,49 @@ struct ScratchPadView: View {
         }
     }
 
+    /// Models to show in the quick picker - curated list of the most useful options
+    private static let recommendedModels: Set<String> = [
+        // OpenAI - flagship + budget
+        "gpt-5-2",
+        "gpt-5-2-pro",
+        "gpt-4o",
+        "gpt-4o-mini",
+        // Anthropic
+        "claude-sonnet-4-20250514",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-haiku-20240307",
+        // Google
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+        // Groq (fast)
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
+    ]
+
+    private func filteredModels(for providerId: String) -> [LLMModel] {
+        LLMProviderRegistry.shared.allModels
+            .filter { $0.provider == providerId }
+            .filter { Self.recommendedModels.contains($0.id) }
+            .sorted { $0.displayName < $1.displayName }
+    }
+
     private var modelPicker: some View {
         Menu {
             ForEach(LLMProviderRegistry.shared.providers, id: \.id) { provider in
-                Menu(provider.name) {
-                    ForEach(LLMProviderRegistry.shared.allModels.filter { $0.provider == provider.id }, id: \.id) { model in
-                        Button(action: {
-                            polishState.providerId = provider.id
-                            polishState.modelId = model.id
-                        }) {
-                            HStack {
-                                Text(model.displayName)
-                                if polishState.modelId == model.id {
-                                    Image(systemName: "checkmark")
+                let models = filteredModels(for: provider.id)
+                if !models.isEmpty {
+                    Menu(provider.name) {
+                        ForEach(models, id: \.id) { model in
+                            Button(action: {
+                                polishState.providerId = provider.id
+                                polishState.modelId = model.id
+                            }) {
+                                HStack {
+                                    Text(model.displayName)
+                                    if polishState.modelId == model.id {
+                                        Image(systemName: "checkmark")
+                                    }
                                 }
                             }
                         }
@@ -834,6 +867,7 @@ struct ScratchPadView: View {
                 }
             }
         } catch {
+            log.error("Dictation start failed: \(error)")
             polishState.polishError = error.localizedDescription
         }
     }
@@ -859,6 +893,7 @@ struct ScratchPadView: View {
                 try? await Task.sleep(for: .milliseconds(800))
                 dictationPillState = .idle
             } catch {
+                log.error("Dictation transcribe failed: \(error)")
                 polishState.polishError = error.localizedDescription
                 dictationPillState = .idle
             }
@@ -882,6 +917,7 @@ struct ScratchPadView: View {
             try EphemeralTranscriber.shared.startCapture()
             isRecordingInstruction = true
         } catch {
+            log.error("Voice prompt capture failed: \(error)")
             polishState.polishError = error.localizedDescription
         }
     }
@@ -900,6 +936,7 @@ struct ScratchPadView: View {
                 await polishState.polish(instruction: instruction)
             }
         } catch {
+            log.error("Voice prompt transcribe failed: \(error)")
             isTranscribingInstruction = false
             polishState.polishError = error.localizedDescription
         }
@@ -950,6 +987,7 @@ struct ScratchPadView: View {
                     polishState.clearHistory()
                 }
             } catch {
+                log.error("Memo save failed: \(error)")
                 await MainActor.run {
                     polishState.polishError = "Failed to save: \(error.localizedDescription)"
                 }

@@ -21,6 +21,14 @@ struct DevControlPanelView: View {
     @State private var auditor = ExternalDataAuditor()
     @State private var showingAuditResults = false
 
+    // TTS Test
+    @State private var ttsTestText = "Hello! Talkie can now speak."
+    @State private var isSynthesizing = false
+    @State private var ttsIsLoaded = false
+    @State private var isUnloadingTTS = false
+    @State private var engineMemoryMB: Double = 0
+    @State private var memoryBeforeTTS: Double? = nil
+
     struct LogEntry: Identifiable {
         let id = UUID()
         let timestamp: Date
@@ -76,6 +84,11 @@ struct DevControlPanelView: View {
 
                 // Quick Actions
                 quickActionsSection
+
+                Divider()
+
+                // TTS Test
+                ttsTestSection
 
                 Divider()
 
@@ -402,6 +415,248 @@ struct DevControlPanelView: View {
                         stopAutoRefresh()
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - TTS Test
+
+    private var ttsTestSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack {
+                Text("TTS TEST")
+                    .font(.techLabel)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Spacer()
+
+                // Engine memory display
+                HStack(spacing: Spacing.sm) {
+                    // Memory indicator
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "memorychip")
+                            .font(.caption2)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                        Text("Engine: \(String(format: "%.0f", engineMemoryMB)) MB")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                        if let before = memoryBeforeTTS, ttsIsLoaded {
+                            let delta = engineMemoryMB - before
+                            Text("(+\(String(format: "%.0f", delta)))")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(delta > 50 ? .orange : .green)
+                        }
+                    }
+
+                    Divider()
+                        .frame(height: 12)
+
+                    // TTS Status indicator
+                    HStack(spacing: Spacing.xs) {
+                        Circle()
+                            .fill(ttsIsLoaded ? Color.green : Color.gray)
+                            .frame(width: 8, height: 8)
+                        Text(ttsIsLoaded ? "TTS Loaded" : "TTS Unloaded")
+                            .font(.caption2)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                }
+            }
+
+            VStack(spacing: Spacing.xs) {
+                // Text input
+                TextField("Text to speak...", text: $ttsTestText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.labelSmall)
+
+                // Speak button
+                HStack {
+                    Button {
+                        testTTS()
+                    } label: {
+                        HStack(spacing: Spacing.xs) {
+                            if isSynthesizing {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .font(.labelSmall)
+                            }
+                            Text(isSynthesizing ? "Synthesizing..." : "Speak")
+                                .font(.labelSmall)
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isSynthesizing || ttsTestText.isEmpty)
+
+                    // Unload TTS button
+                    Button {
+                        unloadTTS()
+                    } label: {
+                        HStack(spacing: Spacing.xs) {
+                            if isUnloadingTTS {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Image(systemName: "memorychip")
+                                    .font(.labelSmall)
+                            }
+                            Text(isUnloadingTTS ? "Unloading..." : "Unload Model")
+                                .font(.labelSmall)
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!ttsIsLoaded || isUnloadingTTS)
+
+                    Spacer()
+
+                    Text("OS manages memory via compression")
+                        .font(.caption2)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
+            }
+        }
+        .onAppear {
+            refreshTTSStatus()
+            refreshEngineMemory()
+            // Start memory polling
+            startMemoryPolling()
+        }
+    }
+
+    private func refreshTTSStatus() {
+        Task {
+            let (isLoaded, _) = await engineClient.getTTSStatus()
+            await MainActor.run {
+                ttsIsLoaded = isLoaded
+            }
+        }
+    }
+
+    private func refreshEngineMemory() {
+        // Get Engine PID from status
+        guard let status = engineClient.status, let pid = status.pid, pid > 0 else { return }
+
+        // Get memory via shell
+        Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/ps")
+            process.arguments = ["-o", "rss=", "-p", "\(pid)"]
+
+            let pipe = Pipe()
+            process.standardOutput = pipe
+
+            try? process.run()
+            process.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8),
+               let rss = Double(output.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                let mb = rss / 1024.0
+                await MainActor.run {
+                    engineMemoryMB = mb
+                }
+            }
+        }
+    }
+
+    private func startMemoryPolling() {
+        // Poll memory every 2 seconds while this view is visible
+        Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                refreshEngineMemory()
+            }
+        }
+    }
+
+    private func unloadTTS() {
+        isUnloadingTTS = true
+        let memoryBefore = engineMemoryMB
+        addLog("TTS: Unloading model (current: \(String(format: "%.0f", memoryBefore)) MB)...", level: .info)
+
+        Task {
+            let success = await engineClient.unloadTTS()
+
+            // Wait for memory to settle
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            refreshEngineMemory()
+
+            // Wait a bit more for the refresh
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            await MainActor.run {
+                isUnloadingTTS = false
+                if success {
+                    ttsIsLoaded = false
+                    let memoryAfter = engineMemoryMB
+                    let freed = memoryBefore - memoryAfter
+                    addLog("TTS: Unloaded! \(String(format: "%.0f", memoryBefore)) → \(String(format: "%.0f", memoryAfter)) MB (freed \(String(format: "%.0f", freed)) MB)", level: .success)
+                    memoryBeforeTTS = nil
+                } else {
+                    addLog("TTS: Failed to unload model", level: .error)
+                }
+            }
+        }
+    }
+
+    private func testTTS() {
+        guard !ttsTestText.isEmpty else { return }
+        isSynthesizing = true
+        addLog("TTS: Synthesizing '\(ttsTestText.prefix(30))...'", level: .info)
+
+        // Capture memory before TTS load (if not already loaded)
+        if !ttsIsLoaded {
+            memoryBeforeTTS = engineMemoryMB
+            addLog("TTS: Memory before load: \(String(format: "%.0f", engineMemoryMB)) MB", level: .info)
+        }
+
+        // Track in PerformanceMonitor
+        PerformanceMonitor.shared.startAction(type: "TTS", name: "Synthesize", context: "Kokoro")
+
+        Task {
+            let startTime = Date()
+            do {
+                let audioPath = try await engineClient.synthesize(
+                    text: ttsTestText,
+                    voiceId: "kokoro:default"
+                )
+                let elapsed = Date().timeIntervalSince(startTime)
+
+                // Track TTS operation timing
+                await MainActor.run {
+                    PerformanceMonitor.shared.addOperation(category: .tts, name: "Kokoro synthesis", duration: elapsed)
+                    PerformanceMonitor.shared.completeAction()
+                }
+
+                addLog("TTS: Synthesized in \(String(format: "%.2f", elapsed))s → \(URL(fileURLWithPath: audioPath).lastPathComponent)", level: .success)
+
+                // Play the audio
+                AudioPlaybackManager.shared.play(url: URL(fileURLWithPath: audioPath), id: "tts-test")
+                addLog("TTS: Playing audio...", level: .success)
+
+                // Refresh status and memory (model is now loaded)
+                refreshTTSStatus()
+
+                // Wait a moment for memory to settle, then refresh
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                refreshEngineMemory()
+
+            } catch {
+                await MainActor.run {
+                    PerformanceMonitor.shared.recordError(error.localizedDescription)
+                }
+                addLog("TTS Error: \(error.localizedDescription)", level: .error)
+            }
+
+            await MainActor.run {
+                isSynthesizing = false
             }
         }
     }

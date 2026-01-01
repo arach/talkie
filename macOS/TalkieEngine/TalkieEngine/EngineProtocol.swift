@@ -2,43 +2,13 @@
 //  EngineProtocol.swift
 //  TalkieEngine
 //
-//  XPC protocol for multi-model transcription service (Whisper + Parakeet)
+//  Engine-local helper types. Core protocol is in TalkieKit/XPCProtocols.swift.
 //
 
 import Foundation
+import TalkieKit
 
-/// Task priority levels for transcription (XPC-compatible)
-@objc public enum TranscriptionPriority: Int {
-    case background = 0    // Lowest - maintenance, cleanup
-    case utility = 1       // Long-running tasks
-    case low = 2          // Deferrable work
-    case medium = 3       // Default - balanced priority
-    case userInitiated = 4 // User-facing, should complete quickly
-    case high = 5         // Highest - real-time, interactive (Live dictations)
-
-    /// Convert to Swift TaskPriority
-    public var taskPriority: TaskPriority {
-        switch self {
-        case .background: return .background
-        case .utility: return .utility
-        case .low: return .low
-        case .medium: return .medium
-        case .userInitiated: return .userInitiated
-        case .high: return .high
-        }
-    }
-
-    public var displayName: String {
-        switch self {
-        case .background: return "Background"
-        case .utility: return "Utility"
-        case .low: return "Low"
-        case .medium: return "Medium"
-        case .userInitiated: return "User Initiated"
-        case .high: return "High (Real-time)"
-        }
-    }
-}
+// TranscriptionPriority is defined in TalkieKit/XPCProtocols.swift
 
 /// Mach service names for XPC connection (matches TalkieEnvironment)
 public enum EngineServiceMode: String, CaseIterable {
@@ -110,77 +80,8 @@ public enum ModelFamily: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// XPC protocol for TalkieEngine transcription service
-@objc public protocol TalkieEngineProtocol {
-
-    /// Transcribe audio file to text with priority control
-    ///
-    /// Priority Guidelines:
-    /// - `.high` - Real-time dictation (TalkieLive) - user is waiting
-    /// - `.medium` - Interactive features (scratch pad) - user-facing but can wait
-    /// - `.low` - Batch/async operations - user isn't waiting
-    ///
-    /// - Parameters:
-    ///   - audioPath: Path to audio file (m4a, wav, etc.) - client owns the file
-    ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
-    ///   - externalRefId: Optional trace ID for cross-app correlation
-    ///   - priority: Task priority for scheduling
-    ///   - reply: Callback with transcript or error message
-    func transcribe(
-        audioPath: String,
-        modelId: String,
-        externalRefId: String?,
-        priority: TranscriptionPriority,
-        reply: @escaping (_ transcript: String?, _ error: String?) -> Void
-    )
-
-    /// Preload a model into memory for fast transcription
-    /// - Parameters:
-    ///   - modelId: Model identifier with family prefix (e.g., "whisper:openai_whisper-small")
-    ///   - reply: Callback with error message if failed
-    func preloadModel(
-        _ modelId: String,
-        reply: @escaping (_ error: String?) -> Void
-    )
-
-    /// Unload current model from memory
-    /// - Parameters:
-    ///   - family: Optional family to unload (nil = unload all)
-    func unloadModel(reply: @escaping () -> Void)
-
-    /// Get current engine status
-    func getStatus(reply: @escaping (_ statusJSON: Data?) -> Void)
-
-    /// Check if engine is alive (for connection testing)
-    func ping(reply: @escaping (_ pong: Bool) -> Void)
-
-    /// Request graceful shutdown (honor system - finish current work, then exit)
-    /// - Parameters:
-    ///   - waitForCompletion: If true, wait for current transcription to finish before exiting
-    ///   - reply: Callback confirming shutdown was accepted
-    func requestShutdown(waitForCompletion: Bool, reply: @escaping (_ accepted: Bool) -> Void)
-
-    // MARK: - Model Download Management
-
-    /// Download a model by ID
-    /// - Parameters:
-    ///   - modelId: Model identifier with family prefix (e.g., "whisper:openai_whisper-small")
-    ///   - reply: Callback with error message if failed (nil on success)
-    func downloadModel(
-        _ modelId: String,
-        reply: @escaping (_ error: String?) -> Void
-    )
-
-    /// Get current download progress
-    /// - Parameter reply: Callback with progress JSON (nil if no download active)
-    func getDownloadProgress(reply: @escaping (_ progressJSON: Data?) -> Void)
-
-    /// Cancel any ongoing download
-    func cancelDownload(reply: @escaping () -> Void)
-
-    /// Get list of available models (not necessarily downloaded)
-    func getAvailableModels(reply: @escaping (_ modelsJSON: Data?) -> Void)
-}
+// Note: TalkieEngineProtocol is now defined in TalkieKit/XPCProtocols.swift
+// This file only contains Engine-local helper types
 
 /// Engine status (Codable for JSON serialization over XPC)
 public struct EngineStatus: Codable, Sendable {

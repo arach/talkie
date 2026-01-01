@@ -67,6 +67,20 @@ public var kTalkieEngineXPCServiceName: String {
 
 // MARK: - TalkieEngine XPC Protocol
 
+/// Post-processing options for transcription
+/// Transcription is pure by default - processing is opt-in
+@objc public enum PostProcessOption: Int, Sendable {
+    case none = 0        // Raw transcription only (default)
+    case dictionary = 1  // Apply dictionary replacements
+
+    public var displayName: String {
+        switch self {
+        case .none: return "None"
+        case .dictionary: return "Dictionary"
+        }
+    }
+}
+
 /// Task priority for transcription requests
 @objc public enum TranscriptionPriority: Int, Sendable {
     case background = 0       // Lowest - maintenance, cleanup
@@ -102,7 +116,10 @@ public var kTalkieEngineXPCServiceName: String {
 
 /// Protocol for TalkieEngine's XPC service (Talkie/Live → Engine)
 @objc public protocol TalkieEngineProtocol {
-    /// Transcribe audio file to text with priority control
+    /// Transcribe audio file to text
+    ///
+    /// Transcription is pure by default - just audio to text.
+    /// Use `postProcess` to opt-in to additional processing steps.
     ///
     /// Priority Guidelines:
     /// - `.high` - Real-time dictation (TalkieLive) - user is waiting
@@ -114,12 +131,14 @@ public var kTalkieEngineXPCServiceName: String {
     ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
     ///   - externalRefId: Optional trace ID for cross-app correlation
     ///   - priority: Task priority for scheduling
+    ///   - postProcess: Optional processing to apply (default: .none = raw transcription)
     ///   - reply: Callback with transcript or error
     func transcribe(
         audioPath: String,
         modelId: String,
         externalRefId: String?,
         priority: TranscriptionPriority,
+        postProcess: PostProcessOption,
         reply: @escaping (_ transcript: String?, _ error: String?) -> Void
     )
 
@@ -155,6 +174,114 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Get list of available models (returns JSON-encoded [ModelInfo])
     func getAvailableModels(reply: @escaping (_ modelsJSON: Data?) -> Void)
+
+    /// Update the dictionary for text post-processing
+    /// Talkie pushes content, Engine persists to its own file
+    /// - Parameters:
+    ///   - entriesJSON: JSON-encoded [DictionaryEntry]
+    ///   - reply: Callback with error message if failed
+    func updateDictionary(
+        entriesJSON: Data,
+        reply: @escaping (_ error: String?) -> Void
+    )
+
+    /// Enable or disable dictionary processing
+    /// Engine persists this setting and loads dictionary on startup if enabled
+    /// - Parameters:
+    ///   - enabled: Whether dictionary should be active
+    ///   - reply: Callback when done
+    func setDictionaryEnabled(
+        _ enabled: Bool,
+        reply: @escaping () -> Void
+    )
+
+    // MARK: - Text-to-Speech
+
+    /// Synthesize text to speech audio
+    ///
+    /// Generates audio file from text using the specified TTS provider.
+    /// Returns path to generated WAV file in temporary directory.
+    ///
+    /// - Parameters:
+    ///   - text: Text to synthesize
+    ///   - voiceId: Voice identifier (provider-specific, e.g., "kokoro:default")
+    ///   - reply: Callback with audio file path or error
+    func synthesize(
+        text: String,
+        voiceId: String,
+        reply: @escaping (_ audioPath: String?, _ error: String?) -> Void
+    )
+
+    /// Preload a TTS voice into memory for faster synthesis
+    func preloadTTSVoice(
+        _ voiceId: String,
+        reply: @escaping (_ error: String?) -> Void
+    )
+
+    /// Get available TTS voices (returns JSON-encoded [TTSVoiceInfo])
+    func getAvailableTTSVoices(reply: @escaping (_ voicesJSON: Data?) -> Void)
+
+    /// Unload TTS model to free memory (auto-reloads on next synthesis)
+    func unloadTTS(reply: @escaping (_ success: Bool) -> Void)
+
+    /// Get TTS status (loaded, idle time since last use)
+    func getTTSStatus(reply: @escaping (_ isLoaded: Bool, _ idleSeconds: Double) -> Void)
+}
+
+// MARK: - TTS Types
+
+/// TTS provider families
+public enum TTSProvider: String, Codable, Sendable, CaseIterable {
+    case kokoro = "kokoro"       // FluidAudio Kokoro (local)
+    case elevenLabs = "elevenlabs" // ElevenLabs API (cloud)
+    case system = "system"       // AVSpeechSynthesizer (fallback)
+
+    public var displayName: String {
+        switch self {
+        case .kokoro: return "Kokoro"
+        case .elevenLabs: return "ElevenLabs"
+        case .system: return "System"
+        }
+    }
+
+    public var isLocal: Bool {
+        switch self {
+        case .kokoro, .system: return true
+        case .elevenLabs: return false
+        }
+    }
+}
+
+/// TTS voice metadata (Codable for JSON serialization over XPC)
+public struct TTSVoiceInfo: Codable, Sendable, Identifiable {
+    public let id: String              // Full ID including provider (e.g., "kokoro:default")
+    public let provider: String        // Provider name ("kokoro", "elevenlabs", "system")
+    public let voiceId: String         // Voice ID without provider prefix
+    public let displayName: String
+    public let description: String
+    public let language: String        // e.g., "en-US"
+    public let isDownloaded: Bool
+    public let isLoaded: Bool
+
+    public init(
+        id: String,
+        provider: String,
+        voiceId: String,
+        displayName: String,
+        description: String,
+        language: String,
+        isDownloaded: Bool,
+        isLoaded: Bool
+    ) {
+        self.id = id
+        self.provider = provider
+        self.voiceId = voiceId
+        self.displayName = displayName
+        self.description = description
+        self.language = language
+        self.isDownloaded = isDownloaded
+        self.isLoaded = isLoaded
+    }
 }
 
 // Note: LiveState enum is defined in UI/LiveState.swift

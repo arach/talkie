@@ -2,171 +2,262 @@
 //  TranscriptionModelsSettingsView.swift
 //  Talkie
 //
-//  Transcription model settings - grouped by family with compact cards
+//  Transcription model settings - uses static catalog with Engine status overlay
 //
 
 import SwiftUI
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TranscriptionModelsSettings")
 
 struct TranscriptionModelsSettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager
     @Environment(EngineClient.self) private var engineClient
-    @Environment(LiveSettings.self) private var liveSettings
 
-    @State private var showingDeleteConfirmation: (Bool, ModelInfo?) = (false, nil)
-
-    // Group models by family
-    private var whisperModels: [ModelInfo] {
-        engineClient.availableModels.filter { $0.family.lowercased() == "whisper" }
-    }
-
-    private var parakeetModels: [ModelInfo] {
-        engineClient.availableModels.filter { $0.family.lowercased() == "parakeet" }
-    }
+    @State private var showingDeleteConfirmation: (Bool, String?) = (false, nil)
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                // Header
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("LIVE / SETTINGS / TRANSCRIPTION")
-                        .font(Theme.current.fontXSMedium)
-                        .foregroundColor(Theme.current.foregroundMuted)
-
-                    Text("TRANSCRIPTION MODELS")
-                        .font(Theme.current.fontHeadlineBold)
-                        .foregroundColor(Theme.current.foreground)
-
-                    Text("Select a model for speech-to-text. Larger models are more accurate but slower.")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .lineLimit(2)
-                }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.top, Spacing.md)
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "waveform",
+                title: "TRANSCRIPTION MODELS",
+                subtitle: "Select a model for speech-to-text"
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                // Parakeet Models Section (recommended, show first)
+                parakeetSection
 
                 // Whisper Models Section
-                if !whisperModels.isEmpty {
-                    modelFamilySection(
-                        title: "WHISPER",
-                        subtitle: "OpenAI's speech recognition models",
-                        models: whisperModels
-                    )
-                }
-
-                // Parakeet Models Section
-                if !parakeetModels.isEmpty {
-                    modelFamilySection(
-                        title: "PARAKEET",
-                        subtitle: "NVIDIA's multilingual models",
-                        models: parakeetModels
-                    )
-                }
-
-                Spacer(minLength: 40)
+                whisperSection
             }
         }
-        .background(Theme.current.background)
         .onAppear {
             engineClient.refreshStatus()
         }
-        .alert(isPresented: Binding(
+        .alert("Delete Model?", isPresented: Binding(
             get: { showingDeleteConfirmation.0 },
             set: { if !$0 { showingDeleteConfirmation = (false, nil) } }
         )) {
-            Alert(
-                title: Text("Delete Model?"),
-                message: Text("This will remove \(showingDeleteConfirmation.1?.displayName ?? "this model") from your system. You can download it again later."),
-                primaryButton: .destructive(Text("Delete")) {
-                    if let model = showingDeleteConfirmation.1 {
-                        deleteModel(model)
-                    }
-                },
-                secondaryButton: .cancel()
-            )
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                if let modelId = showingDeleteConfirmation.1 {
+                    deleteModel(modelId)
+                }
+            }
+        } message: {
+            Text("This will remove the model from your system. You can download it again later.")
         }
     }
 
-    // MARK: - Model Family Section
+    // MARK: - Parakeet Section
 
-    private func modelFamilySection(title: String, subtitle: String, models: [ModelInfo]) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Section header with family-specific colors
-            HStack(spacing: Spacing.sm) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(title == "WHISPER" ? Color.orange : Color.cyan)
-                    .frame(width: 3, height: 14)
+    private var parakeetSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            // Section header with links
+            sectionHeader(
+                title: "PARAKEET",
+                subtitle: "NVIDIA's real-time streaming ASR",
+                color: .cyan,
+                repoURL: ParakeetModelCatalog.repoURL,
+                paperURL: ParakeetModelCatalog.paperURL
+            )
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(Theme.current.fontSMBold)
-                        .foregroundColor(Theme.current.foreground)
-                    Text(subtitle)
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundMuted)
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, Spacing.lg)
-
-            // Model cards grid - 2 columns matching Models sidebar style
+            // Model cards grid
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: Spacing.sm),
-                GridItem(.flexible(), spacing: Spacing.sm)
-            ], spacing: Spacing.sm) {
-                ForEach(models) { model in
-                    STTModelCard(
-                        modelInfo: model,
-                        downloadProgress: engineClient.downloadProgress,
-                        isSelected: settingsManager.liveTranscriptionModelId == model.id,
-                        onSelect: { selectModel(model) },
-                        onDownload: { downloadModel(model) },
-                        onDelete: { showingDeleteConfirmation = (true, model) },
-                        onCancel: { Task { await engineClient.cancelDownload() } }
-                    )
+                GridItem(.flexible(), spacing: 12),
+                GridItem(.flexible(), spacing: 12)
+            ], spacing: 12) {
+                ForEach(ParakeetModelCatalog.metadata, id: \.model) { meta in
+                    parakeetCard(for: meta)
                 }
             }
-            .padding(.horizontal, Spacing.lg)
         }
+    }
+
+    private func parakeetCard(for meta: ParakeetModelMetadata) -> some View {
+        let modelId = "parakeet:\(meta.model.rawValue)"
+        let isSelected = settingsManager.liveTranscriptionModelId == modelId
+        let status = engineClient.modelStatus(for: modelId)
+
+        var card = STTModelCard(
+            name: "Parakeet \(meta.displayName)",
+            family: .parakeet,
+            size: formatSize(meta.sizeMB),
+            speedTier: .realtime,
+            languageInfo: meta.languagesBadge,
+            isDownloaded: status.isDownloaded,
+            isDownloading: status.isDownloading,
+            downloadProgress: status.downloadProgress,
+            onDownload: { downloadModel(modelId) },
+            onDelete: { showingDeleteConfirmation = (true, modelId) }
+        )
+        card.isSelected = isSelected
+        card.isLoaded = status.isLoaded
+        card.onSelect = { selectModel(modelId) }
+        card.onCancel = { Task { await engineClient.cancelDownload() } }
+        return card
+    }
+
+    // MARK: - Whisper Section
+
+    private var whisperSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            // Section header with links
+            sectionHeader(
+                title: "WHISPER",
+                subtitle: "OpenAI's multilingual speech recognition",
+                color: .orange,
+                repoURL: WhisperModelCatalog.repoURL,
+                paperURL: WhisperModelCatalog.paperURL
+            )
+
+            // Model cards grid
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 12),
+                GridItem(.flexible(), spacing: 12)
+            ], spacing: 12) {
+                ForEach(WhisperModelCatalog.metadata, id: \.model) { meta in
+                    whisperCard(for: meta)
+                }
+            }
+        }
+    }
+
+    private func whisperCard(for meta: WhisperModelMetadata) -> some View {
+        let modelId = "whisper:\(meta.model.rawValue)"
+        let isSelected = settingsManager.liveTranscriptionModelId == modelId
+        let status = engineClient.modelStatus(for: modelId)
+
+        let speedTier: STTModelCard.SpeedTier = {
+            switch meta.model {
+            case .tiny: return .realtime
+            case .base: return .fast
+            case .small: return .balanced
+            case .distilLargeV3: return .accurate
+            }
+        }()
+
+        var card = STTModelCard(
+            name: "Whisper \(meta.displayName)",
+            family: .whisper,
+            size: formatSize(meta.sizeMB),
+            speedTier: speedTier,
+            languageInfo: "99+",
+            isDownloaded: status.isDownloaded,
+            isDownloading: status.isDownloading,
+            downloadProgress: status.downloadProgress,
+            onDownload: { downloadModel(modelId) },
+            onDelete: { showingDeleteConfirmation = (true, modelId) }
+        )
+        card.isSelected = isSelected
+        card.isLoaded = status.isLoaded
+        card.onSelect = { selectModel(modelId) }
+        card.onCancel = { Task { await engineClient.cancelDownload() } }
+        return card
+    }
+
+    // MARK: - Section Header
+
+    private func sectionHeader(
+        title: String,
+        subtitle: String,
+        color: Color,
+        repoURL: URL?,
+        paperURL: URL?
+    ) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Rectangle()
+                .fill(color)
+                .frame(width: 3, height: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
+
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(Theme.current.foreground)
+
+            Text("•")
+                .foregroundColor(Theme.current.foregroundMuted)
+
+            Text(subtitle)
+                .font(.system(size: 10))
+                .foregroundColor(Theme.current.foregroundMuted)
+
+            Spacer()
+
+            // Links
+            if let repoURL {
+                Link(destination: repoURL) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "link")
+                            .font(.system(size: 9))
+                        Text("Repo")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(Theme.current.foregroundMuted)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let paperURL {
+                Link(destination: paperURL) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 9))
+                        Text("Paper")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(Theme.current.foregroundMuted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func formatSize(_ mb: Int) -> String {
+        if mb >= 1000 {
+            return String(format: "%.1f GB", Double(mb) / 1000.0)
+        }
+        return "\(mb) MB"
     }
 
     // MARK: - Actions
 
-    private func selectModel(_ model: ModelInfo) {
-        settingsManager.liveTranscriptionModelId = model.id
+    private func selectModel(_ modelId: String) {
+        settingsManager.liveTranscriptionModelId = modelId
 
         Task {
             do {
-                try await engineClient.preloadModel(model.id)
-                logger.info("Successfully preloaded model: \(model.id)")
+                try await engineClient.preloadModel(modelId)
+                logger.info("Successfully preloaded model: \(modelId)")
             } catch {
-                logger.error("Failed to preload model \(model.id): \(error.localizedDescription)")
+                logger.error("Failed to preload model \(modelId): \(error.localizedDescription)")
             }
         }
     }
 
-    private func downloadModel(_ model: ModelInfo) {
-        logger.info("Downloading model: \(model.id)")
+    private func downloadModel(_ modelId: String) {
+        logger.info("Downloading model: \(modelId)")
         Task {
             do {
-                try await engineClient.downloadModel(model.id)
-                logger.info("Successfully downloaded model: \(model.id)")
+                try await engineClient.downloadModel(modelId)
+                logger.info("Successfully downloaded model: \(modelId)")
             } catch {
-                logger.error("Failed to download model \(model.id): \(error.localizedDescription)")
+                logger.error("Failed to download model \(modelId): \(error.localizedDescription)")
             }
         }
     }
 
-    private func deleteModel(_ model: ModelInfo) {
-        logger.info("Deleting model: \(model.id)")
+    private func deleteModel(_ modelId: String) {
+        logger.info("Deleting model: \(modelId)")
         // TODO: Implement model deletion via EngineClient
     }
 }
 
 #Preview {
     TranscriptionModelsSettingsView()
-        .frame(width: 900, height: 700)
+        .frame(width: 600, height: 500)
 }

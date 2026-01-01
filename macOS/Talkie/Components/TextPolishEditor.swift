@@ -7,6 +7,9 @@
 //
 
 import SwiftUI
+import TalkieKit
+
+private let log = Log(.workflow)
 
 // MARK: - View State
 
@@ -243,6 +246,7 @@ final class TextPolishState {
             viewState = .reviewing
 
         } catch {
+            log.error("Polish failed: \(error)")
             polishError = error.localizedDescription
             prePolishText = ""
         }

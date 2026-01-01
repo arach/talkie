@@ -1,0 +1,56 @@
+name: TalkieEnginePod
+options:
+  bundleIdPrefix: jdi.talkie
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+
+configs:
+  Debug: debug
+  Release: release
+
+schemes:
+  TalkieEnginePod:
+    build:
+      targets:
+        TalkieEnginePod: all
+    run:
+      config: Debug
+      commandLineArguments:
+        tts: true
+    archive:
+      config: Release
+
+settings:
+  base:
+    ARCHS: arm64  # Apple Silicon only - MLX requires it
+    DEVELOPMENT_TEAM: 2U83JFPW66
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio.git
+    version: 0.7.11
+
+targets:
+  TalkieEnginePod:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Capabilities
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "5.9"
+        PRODUCT_NAME: TalkieEnginePod
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: ""
+        # Find frameworks next to executable and in TalkieEngine.app
+        LD_RUNPATH_SEARCH_PATHS:
+          - "@executable_path"
+          - "@executable_path/../Frameworks"
+          - "@executable_path/TalkieEngine.app/Contents/Frameworks"
+    dependencies:
+      - package: FluidAudio
+        product: FluidAudioTTS

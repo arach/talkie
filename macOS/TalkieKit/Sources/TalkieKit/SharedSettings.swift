@@ -69,6 +69,10 @@ public enum LiveSettingsKey {
     public static let accentColor = "accentColor"
     // glassMode removed - now a launch arg (--glass-mode)
 
+    // MARK: Dictionary & Text Processing
+    public static let dictionaryEnabled = "dictionaryEnabled"
+    public static let fillerRemovalEnabled = "fillerRemovalEnabled"
+
     // MARK: Legacy
     public static let legacyTheme = "theme"
 }

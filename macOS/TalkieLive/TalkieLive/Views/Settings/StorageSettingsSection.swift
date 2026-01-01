@@ -17,7 +17,8 @@ struct StorageSettingsSection: View {
     @State private var isRefreshing = false
     @State private var showDeleteConfirmation = false
 
-    private let ttlOptions = [1, 6, 12, 24, 48, 72, 168] // hours, 168 = 1 week
+    // hours: 0 = forever, 168 = 1 week, 720 = 1 month, 2160 = 3 months, 8760 = 1 year
+    private let ttlOptions = [0, 24, 48, 168, 720, 2160, 8760]
 
     var body: some View {
         SettingsPageContainer {
@@ -188,9 +189,11 @@ struct StorageSettingsSection: View {
                         .frame(width: 120)
                     }
 
-                    Text("Older dictations will be automatically deleted.")
+                    Text(settings.dictationTTLHours <= 0
+                         ? "Dictations will be kept indefinitely."
+                         : "Older dictations will be automatically deleted.")
                         .font(.system(size: 10))
-                        .foregroundColor(TalkieTheme.textTertiary)
+                        .foregroundColor(settings.dictationTTLHours <= 0 ? .green : TalkieTheme.textTertiary)
                 }
             }
 
@@ -289,10 +292,18 @@ struct StorageSettingsSection: View {
     }
 
     private func formatTTL(_ hours: Int) -> String {
-        if hours < 24 {
+        if hours <= 0 {
+            return "Forever"
+        } else if hours < 24 {
             return "\(hours) hour\(hours == 1 ? "" : "s")"
         } else if hours == 168 {
             return "1 week"
+        } else if hours == 720 {
+            return "1 month"
+        } else if hours == 2160 {
+            return "3 months"
+        } else if hours == 8760 {
+            return "1 year"
         } else {
             let days = hours / 24
             return "\(days) day\(days == 1 ? "" : "s")"
