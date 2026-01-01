@@ -246,7 +246,6 @@
 		F1F4BF4F6B3EA5511CDB6FA3 /* ServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0A0D85EEE68961138E2F87 /* ServiceManager.swift */; };
 		F2EBBAEC7AD974A5D2B45683 /* ExecutionBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75EDCF1634C7AEDAAB6BCA80 /* ExecutionBackend.swift */; };
 		F5E211E428DBB72A464C2879 /* CloudProviderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9019DB15700738177DC54D19 /* CloudProviderViews.swift */; };
-		F6BFDC154AB63EDF4BAE8443 /* LiveSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC4F78FDA2905958A76DC5B /* LiveSettingsView.swift */; };
 		F77778250A6DF9E362D791AB /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A30135F45CCB9C7E39A057 /* TextDiff.swift */; };
 		F7CBF0D92694E99DA9851784 /* XPCServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B4590EE33C2B05AD9B3FF7 /* XPCServiceManager.swift */; };
 		F855291DD8FD8EE8C8CA4B14 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B0EA751EF7354C75F29F3F /* DatabaseManager.swift */; };
@@ -332,7 +331,6 @@
 		499C191C937A588B1FC14A1B /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
 		4AACC22A4D152DCBFB30FE56 /* SettingsColumns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsColumns.swift; sourceTree = "<group>"; };
 		4AB3F77AA2B23FD9AF76A698 /* WFKIT_USAGE_EXAMPLES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = WFKIT_USAGE_EXAMPLES.md; sourceTree = "<group>"; };
-		4AC4F78FDA2905958A76DC5B /* LiveSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSettingsView.swift; sourceTree = "<group>"; };
 		4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunModel.swift; sourceTree = "<group>"; };
 		4DE6D960ECC5B682EB15EE43 /* TranscriptVersionModel+CloudKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TranscriptVersionModel+CloudKit.swift"; sourceTree = "<group>"; };
 		4F4992B45B1A31E2B8AF4B8A /* OverlayStylePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayStylePreviews.swift; sourceTree = "<group>"; };
@@ -780,7 +778,6 @@
 				142040CCF534A9338AEAA0B0 /* DictationListView.swift */,
 				59CF938061D1386424841288 /* DictationOnboardingView.swift */,
 				5D8DAE62024FE459C3BCE83E /* LiveHistoryView.swift.disabled */,
-				4AC4F78FDA2905958A76DC5B /* LiveSettingsView.swift */,
 				BC487E1F9D18A9F41776E5CC /* Components */,
 				E078E59BDC5964EB628CA8F1 /* History */,
 				509C2154D78AF33F667FF527 /* Navigation */,
@@ -1286,7 +1283,6 @@
 				95F6DCD0EACC9CE3AAD5FE4E /* LivePreviewScreen.swift in Sources */,
 				0B916894FDA800E76F5DDF6C /* LiveRoutes.swift in Sources */,
 				2D1F9B3A48532EC9F2755288 /* LiveSettingsSummary.swift in Sources */,
-				F6BFDC154AB63EDF4BAE8443 /* LiveSettingsView.swift in Sources */,
 				EF17116EE8A7F3830BAFD377 /* LiveSidebarComponents.swift in Sources */,
 				4DFC1D0D69DDD70AEE5E475B /* LocalFilesSettings.swift in Sources */,
 				30430A72D303E7196DB74F0A /* LocalSwiftBackend.swift in Sources */,

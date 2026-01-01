@@ -823,8 +823,8 @@ struct HistoryView: View {
     }
 
     private var settingsContentView: some View {
-        // Note: This HistoryView is legacy - use LiveSettingsView in NavigationView instead
-        Text("Settings moved to main Live Settings section")
+        // Note: Settings are now in main Settings → Dictation section
+        Text("Settings moved to main Settings → Dictation")
             .font(Design.fontBody)
             .foregroundColor(Theme.current.foregroundSecondary)
     }

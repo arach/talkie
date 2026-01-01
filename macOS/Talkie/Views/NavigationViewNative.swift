@@ -26,7 +26,6 @@ enum NavigationSection: Hashable {
     case allMemos       // All Memos view (GRDB-based with pagination and filters)
     case liveDashboard  // Live home/insights view
     case liveRecent     // Live utterance list
-    case liveSettings   // Live settings (now visible in sidebar)
     case aiResults
     case workflows
     case activityLog
@@ -96,7 +95,6 @@ struct TalkieNavigationViewNative: View {
         case .allMemos: return "AllMemos"
         case .liveDashboard: return "LiveDashboard"
         case .liveRecent: return "LiveRecent"
-        case .liveSettings: return "LiveSettings"
         case .aiResults: return "AIResults"
         case .workflows: return "Workflows"
         case .activityLog: return "ActivityLog"
@@ -207,6 +205,7 @@ struct TalkieNavigationViewNative: View {
         .setupNotificationObservers(
             selectedSection: $selectedSection,
             previousSection: $previousSection,
+            settingsSection: $selectedSettingsSection,
             memoCount: memosVM.totalCount
         )
         .onAppear {
@@ -219,8 +218,7 @@ struct TalkieNavigationViewNative: View {
     private var usesTwoColumns: Bool {
         switch selectedSection {
         case .home, .scratchPad, .models, .allowedCommands, .aiResults, .allMemos,
-             .liveDashboard, .liveRecent, .liveSettings, .systemConsole,
-             .pendingActions:
+             .liveDashboard, .liveRecent, .systemConsole, .pendingActions:
             return true
         #if DEBUG
         case .designHome, .designAudit, .designComponents:
@@ -455,8 +453,6 @@ struct TalkieNavigationViewNative: View {
                 case .liveRecent:
                     DictationListView()
                         .wrapInTalkieSection("LiveRecent")
-                case .liveSettings:
-                    LiveSettingsView()
                 case .systemConsole:
                     SystemLogsView(onClose: { selectedSection = previousSection ?? .home })
                         .wrapInTalkieSection("SystemLogs")
@@ -515,6 +511,7 @@ extension View {
     func setupNotificationObservers(
         selectedSection: Binding<NavigationSection?>,
         previousSection: Binding<NavigationSection?>,
+        settingsSection: Binding<SettingsSection>,
         memoCount: Int
     ) -> some View {
         self
@@ -536,7 +533,9 @@ extension View {
                 selectedSection.wrappedValue = .settings
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToLiveSettings)) { _ in
-                selectedSection.wrappedValue = .liveSettings
+                // Redirect Live Settings to main Settings → Dictation section
+                selectedSection.wrappedValue = .settings
+                settingsSection.wrappedValue = .dictationCapture
             }
             .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToAllMemos"))) { _ in
                 selectedSection.wrappedValue = .allMemos

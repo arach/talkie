@@ -35,7 +35,6 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
 
     // Live
     case liveMain = "live-main"
-    case liveSettings = "live-settings"
     case liveHistory = "live-history"
 
     // Memos
@@ -87,7 +86,6 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
         case .settingsPermissions: return "Permissions"
         case .settingsDebug: return "Debug Info"
         case .liveMain: return "Live Main"
-        case .liveSettings: return "Live Settings"
         case .liveHistory: return "Live History"
         case .memosAllMemos: return "All Memos"
         case .memoDetail: return "Memo Detail"
@@ -116,7 +114,7 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
              .settingsAIProviders, .settingsTranscription, .settingsLLM,
              .settingsDatabase, .settingsFiles, .settingsPermissions, .settingsDebug:
             return .settings
-        case .liveMain, .liveSettings, .liveHistory:
+        case .liveMain, .liveHistory:
             return .live
         case .memosAllMemos, .memoDetail, .memoEditor:
             return .memos
@@ -172,7 +170,6 @@ enum AppScreen: String, CaseIterable, Identifiable, Codable {
         case .settingsPermissions: return ["Views/Settings/PermissionsSettings.swift"]
         case .settingsDebug: return ["Views/Settings/DebugSettings.swift"]
         case .liveMain: return ["Views/Live/DictationListView.swift"]
-        case .liveSettings: return ["Views/Live/LiveSettingsView.swift", "Views/Live/Components/LivePreviewScreen.swift"]
         case .liveHistory: return ["Views/Live/History/HistoryView.swift"]
         case .memosAllMemos: return ["Views/Memos/AllMemos.swift"]
         case .memoDetail: return ["Views/MemoDetail/MemoDetailView.swift", "Views/MemoDetail/MemoDetailComponents.swift"]
@@ -849,7 +846,6 @@ class DesignAuditor {
 
         // Live
         case .liveMain: return "live"
-        case .liveSettings: return "live/settings"
         case .liveHistory: return "live/history"
 
         // Memos
