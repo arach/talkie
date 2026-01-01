@@ -2,11 +2,12 @@
 //  TranscriptionModelsSettingsView.swift
 //  Talkie
 //
-//  Transcription model settings - grouped by family with compact cards
+//  Transcription model settings - grouped by family with unified ModelCard
 //
 
 import SwiftUI
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "TranscriptionModelsSettings")
 
@@ -27,31 +28,20 @@ struct TranscriptionModelsSettingsView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        SettingsPageContainer {
+            SettingsPageHeader(
+                icon: "waveform",
+                title: "TRANSCRIPTION MODELS",
+                subtitle: "Select a model for speech-to-text"
+            )
+        } content: {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                // Header
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("LIVE / SETTINGS / TRANSCRIPTION")
-                        .font(Theme.current.fontXSMedium)
-                        .foregroundColor(Theme.current.foregroundMuted)
-
-                    Text("TRANSCRIPTION MODELS")
-                        .font(Theme.current.fontHeadlineBold)
-                        .foregroundColor(Theme.current.foreground)
-
-                    Text("Select a model for speech-to-text. Larger models are more accurate but slower.")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .lineLimit(2)
-                }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.top, Spacing.md)
-
                 // Whisper Models Section
                 if !whisperModels.isEmpty {
                     modelFamilySection(
                         title: "WHISPER",
                         subtitle: "OpenAI's speech recognition models",
+                        provider: .whisper,
                         models: whisperModels
                     )
                 }
@@ -60,17 +50,21 @@ struct TranscriptionModelsSettingsView: View {
                 if !parakeetModels.isEmpty {
                     modelFamilySection(
                         title: "PARAKEET",
-                        subtitle: "NVIDIA's multilingual models",
+                        subtitle: "NVIDIA's real-time models",
+                        provider: .parakeet,
                         models: parakeetModels
                     )
                 }
 
-                Spacer(minLength: 40)
+                // Empty state
+                if engineClient.availableModels.isEmpty {
+                    emptyState
+                }
             }
         }
-        .background(Theme.current.background)
         .onAppear {
             engineClient.refreshStatus()
+            Task { await engineClient.fetchAvailableModels() }
         }
         .alert(isPresented: Binding(
             get: { showingDeleteConfirmation.0 },
@@ -89,48 +83,137 @@ struct TranscriptionModelsSettingsView: View {
         }
     }
 
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "waveform.badge.exclamationmark")
+                .font(.system(size: 32))
+                .foregroundColor(Theme.current.foregroundMuted)
+            Text("No models available")
+                .font(Theme.current.fontBodyMedium)
+                .foregroundColor(Theme.current.foregroundSecondary)
+            Text("Connect to TalkieEngine to see available models")
+                .font(Theme.current.fontSM)
+                .foregroundColor(Theme.current.foregroundMuted)
+        }
+        .frame(maxWidth: .infinity, minHeight: 200)
+    }
+
     // MARK: - Model Family Section
 
-    private func modelFamilySection(title: String, subtitle: String, models: [ModelInfo]) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Section header with family-specific colors
+    private func modelFamilySection(
+        title: String,
+        subtitle: String,
+        provider: ModelProvider,
+        models: [ModelInfo]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            // Section header
             HStack(spacing: Spacing.sm) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(title == "WHISPER" ? Color.orange : Color.cyan)
-                    .frame(width: 3, height: 14)
+                Rectangle()
+                    .fill(ModelAccentColor.color(for: provider))
+                    .frame(width: 3, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(Theme.current.fontSMBold)
-                        .foregroundColor(Theme.current.foreground)
-                    Text(subtitle)
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundMuted)
-                }
+                Text(title)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(Theme.current.foreground)
+
+                Text("•")
+                    .foregroundColor(Theme.current.foregroundMuted)
+
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundMuted)
 
                 Spacer()
             }
-            .padding(.horizontal, Spacing.lg)
 
-            // Model cards grid - 2 columns matching Models sidebar style
+            // Model cards grid - 2 columns
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: Spacing.sm),
-                GridItem(.flexible(), spacing: Spacing.sm)
-            ], spacing: Spacing.sm) {
+                GridItem(.flexible(), spacing: 12),
+                GridItem(.flexible(), spacing: 12)
+            ], spacing: 12) {
                 ForEach(models) { model in
-                    STTModelCard(
-                        modelInfo: model,
-                        downloadProgress: engineClient.downloadProgress,
-                        isSelected: settingsManager.liveTranscriptionModelId == model.id,
-                        onSelect: { selectModel(model) },
-                        onDownload: { downloadModel(model) },
-                        onDelete: { showingDeleteConfirmation = (true, model) },
-                        onCancel: { Task { await engineClient.cancelDownload() } }
-                    )
+                    modelCard(for: model, provider: provider)
                 }
             }
-            .padding(.horizontal, Spacing.lg)
         }
+    }
+
+    // MARK: - Model Card
+
+    private func modelCard(for model: ModelInfo, provider: ModelProvider) -> some View {
+        let isSelected = settingsManager.liveTranscriptionModelId == model.id
+        let state = computeState(for: model)
+        let speedTier = inferSpeedTier(from: model)
+        let languageInfo = inferLanguageInfo(from: model)
+
+        return ModelCard(
+            name: model.displayName,
+            provider: provider,
+            state: state,
+            isSelected: isSelected,
+            downloadProgress: engineClient.downloadProgress?.modelId == model.id
+                ? engineClient.downloadProgress?.progress
+                : nil,
+            onSelect: { selectModel(model) },
+            onDownload: { downloadModel(model) },
+            onDelete: { showingDeleteConfirmation = (true, model) },
+            onCancel: { Task { await engineClient.cancelDownload() } }
+        ) {
+            STTModelCardDetail(
+                sizeDescription: model.sizeDescription,
+                speedTier: speedTier,
+                languageInfo: languageInfo
+            )
+        }
+    }
+
+    // MARK: - State Computation
+
+    private func computeState(for model: ModelInfo) -> ModelState {
+        // Check if currently downloading
+        if let progress = engineClient.downloadProgress,
+           progress.modelId == model.id,
+           progress.isDownloading {
+            return .downloading(progress: progress.progress)
+        }
+
+        if model.isLoaded {
+            return .loaded
+        } else if model.isDownloaded {
+            return .downloaded
+        } else {
+            return .notDownloaded
+        }
+    }
+
+    private func inferSpeedTier(from model: ModelInfo) -> STTSpeedTier {
+        let id = model.modelId.lowercased()
+
+        if model.family.lowercased() == "parakeet" {
+            return .realtime  // All Parakeet models are real-time
+        }
+
+        // Whisper tiers based on model size
+        if id.contains("tiny") { return .realtime }
+        if id.contains("base") { return .fast }
+        if id.contains("small") { return .balanced }
+        if id.contains("large") || id.contains("distil") { return .accurate }
+
+        return .balanced  // Default
+    }
+
+    private func inferLanguageInfo(from model: ModelInfo) -> String {
+        if model.family.lowercased() == "parakeet" {
+            let id = model.modelId.lowercased()
+            if id.contains("v2") { return "EN" }
+            if id.contains("v3") { return "25" }
+            return "EN"
+        }
+        return "99+"  // Whisper supports 99+ languages
     }
 
     // MARK: - Actions
@@ -168,5 +251,5 @@ struct TranscriptionModelsSettingsView: View {
 
 #Preview {
     TranscriptionModelsSettingsView()
-        .frame(width: 900, height: 700)
+        .frame(width: 600, height: 500)
 }

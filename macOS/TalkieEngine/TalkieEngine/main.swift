@@ -10,6 +10,10 @@ import os
 import Darwin
 import TalkieKit
 
+// Set process name visible in Activity Monitor
+@_silgen_name("setprogname")
+func setprogname(_ name: UnsafePointer<CChar>)
+
 private let log = Log(.system)
 
 
@@ -234,6 +238,18 @@ autoreleasepool {
         log.info("Running as PRODUCTION", detail: "XPC: \(activeServiceName)", critical: true)
     }
 
+    // Set friendly process name for Activity Monitor
+    let processName: String
+    switch activeMode {
+    case .dev:
+        processName = "TalkieEngine DEV"
+    case .staging:
+        processName = "TalkieEngine STG"
+    case .production:
+        processName = "TalkieEngine"
+    }
+    processName.withCString { setprogname($0) }
+
     // No ensureSingleInstance() - debug and dev can coexist!
 
     // We're on the main thread here, so @MainActor types can be created
@@ -271,3 +287,4 @@ autoreleasepool {
 
     _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
 }
+	

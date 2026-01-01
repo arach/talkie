@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0E5DFF0FB4C0437BACAEF540 /* TTSVoicesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */; };
+		23C639705C344D83848AA472 /* ModelStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B53A0ADB07B452F836811A0 /* ModelStatusBadge.swift */; };
+		09ABF1B0667B40879BC154F4 /* ModelCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7877A206844543A5985D0714 /* ModelCard.swift */; };
+		EA50351CFCB748A186F05E2D /* DownloadProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CD2E95EF4A44BD09A4E78B4 /* DownloadProgressView.swift */; };
 		9C7CBB837F4D4F649B75C868 /* DictionarySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */; };
 		215B671D25C84CC792ECD7BA /* DictionaryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */; };
 		8568EEB9B188479AA8530268 /* Queue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D34E87850C4675B05B7232 /* Queue.swift */; };
@@ -251,6 +255,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSVoicesSettingsView.swift; sourceTree = "<group>"; };
+		3B53A0ADB07B452F836811A0 /* ModelStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStatusBadge.swift; sourceTree = "<group>"; };
+		7877A206844543A5985D0714 /* ModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCard.swift; sourceTree = "<group>"; };
+		8CD2E95EF4A44BD09A4E78B4 /* DownloadProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadProgressView.swift; sourceTree = "<group>"; };
 		5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySettings.swift; sourceTree = "<group>"; };
 		33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryManager.swift; sourceTree = "<group>"; };
 		54D34E87850C4675B05B7232 /* Queue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Queue.swift; sourceTree = "<group>"; };
@@ -802,6 +810,7 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */,
 				5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
@@ -892,6 +901,9 @@
 		BA3B8C877A78851E0E5DA184 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				3B53A0ADB07B452F836811A0 /* ModelStatusBadge.swift */,
+				7877A206844543A5985D0714 /* ModelCard.swift */,
+				8CD2E95EF4A44BD09A4E78B4 /* DownloadProgressView.swift */,
 				85BD343AFFEE244146750E16 /* FormControls.swift */,
 				0548E348F68DC718F12DC401 /* OnAirIndicator.swift */,
 				D288BDB498C7462158DA3BD8 /* RelativeTimeLabel.swift */,
@@ -1180,6 +1192,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0E5DFF0FB4C0437BACAEF540 /* TTSVoicesSettingsView.swift in Sources */,
+				23C639705C344D83848AA472 /* ModelStatusBadge.swift in Sources */,
+				09ABF1B0667B40879BC154F4 /* ModelCard.swift in Sources */,
+				EA50351CFCB748A186F05E2D /* DownloadProgressView.swift in Sources */,
 				9C7CBB837F4D4F649B75C868 /* DictionarySettings.swift in Sources */,
 				215B671D25C84CC792ECD7BA /* DictionaryManager.swift in Sources */,
 				8568EEB9B188479AA8530268 /* Queue.swift in Sources */,

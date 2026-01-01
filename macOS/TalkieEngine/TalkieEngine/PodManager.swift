@@ -236,26 +236,40 @@ final class PodManager {
     }
 
     private func readPodOutput(pod: PodInstance) async {
-        var buffer = Data()
+        // Run blocking I/O on a background thread to avoid freezing the main thread
+        // availableData is synchronous and would block the main actor otherwise
+        let stdout = pod.stdout
 
-        while !Task.isCancelled && pod.process.isRunning {
-            let chunk = pod.stdout.availableData
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                var buffer = Data()
 
-            if chunk.isEmpty {
-                // EOF
-                break
-            }
+                while !Task.isCancelled && pod.process.isRunning {
+                    let chunk = stdout.availableData
 
-            buffer.append(chunk)
+                    if chunk.isEmpty {
+                        // EOF
+                        break
+                    }
 
-            // Process complete lines
-            while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
-                let lineData = buffer[..<newlineIndex]
-                buffer = buffer[(newlineIndex + 1)...]
+                    buffer.append(chunk)
 
-                guard !lineData.isEmpty else { continue }
+                    // Process complete lines
+                    while let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                        let lineData = buffer[..<newlineIndex]
+                        buffer = buffer[(newlineIndex + 1)...]
 
-                await processLine(Data(lineData), pod: pod)
+                        guard !lineData.isEmpty else { continue }
+
+                        // Process on main actor
+                        let data = Data(lineData)
+                        Task { @MainActor in
+                            await self.processLine(data, pod: pod)
+                        }
+                    }
+                }
+
+                continuation.resume()
             }
         }
     }

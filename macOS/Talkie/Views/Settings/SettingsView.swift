@@ -25,6 +25,7 @@ enum SettingsSection: String, Hashable {
     // AI MODELS
     case aiProviders         // API Keys & Providers
     case transcriptionModels // Transcription (STT) model selection
+    case ttsVoices           // Text-to-Speech voice selection
     case llmModels           // AI/LLM model selection
 
     // STORAGE
@@ -54,6 +55,7 @@ enum SettingsSection: String, Hashable {
         case "automations", "auto-run", "autorun": return .automations
         case "ai-providers", "providers", "api": return .aiProviders
         case "transcription", "transcription-models": return .transcriptionModels
+        case "tts", "tts-voices", "voices": return .ttsVoices
         case "llm", "llm-models": return .llmModels
         case "database", "db": return .database
         case "files": return .files
@@ -78,6 +80,7 @@ enum SettingsSection: String, Hashable {
         case .automations: return "automations"
         case .aiProviders: return "ai-providers"
         case .transcriptionModels: return "transcription"
+        case .ttsVoices: return "tts"
         case .llmModels: return "llm"
         case .database: return "database"
         case .files: return "files"
@@ -192,7 +195,7 @@ struct SettingsView: View {
                         }
 
                         // AI MODELS
-                        SettingsSidebarSection(title: "AI MODELS", isActive: selectedSection == .aiProviders || selectedSection == .transcriptionModels || selectedSection == .llmModels) {
+                        SettingsSidebarSection(title: "AI MODELS", isActive: selectedSection == .aiProviders || selectedSection == .transcriptionModels || selectedSection == .ttsVoices || selectedSection == .llmModels) {
                             SettingsSidebarItem(
                                 icon: "key",
                                 title: "PROVIDERS & KEYS",
@@ -206,6 +209,13 @@ struct SettingsView: View {
                                 isSelected: selectedSection == .transcriptionModels
                             ) {
                                 selectedSection = .transcriptionModels
+                            }
+                            SettingsSidebarItem(
+                                icon: "speaker.wave.2",
+                                title: "VOICES",
+                                isSelected: selectedSection == .ttsVoices
+                            ) {
+                                selectedSection = .ttsVoices
                             }
                             SettingsSidebarItem(
                                 icon: "brain",
@@ -344,6 +354,8 @@ struct SettingsView: View {
             APISettingsView()
         case .transcriptionModels:
             TranscriptionModelsSettingsView()
+        case .ttsVoices:
+            TTSVoicesSettingsView()
         case .llmModels:
             ModelLibraryView()
 

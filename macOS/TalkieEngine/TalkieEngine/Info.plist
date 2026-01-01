@@ -35,6 +35,10 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>TalkieEngine is a background transcription service that processes audio files using on-device AI models (Whisper and Parakeet).</string>
+	<key>LSApplicationCategoryType</key>
+	<string></string>
+	<key>CFBundleDisplayName</key>
+	<string>Talkie Engine</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

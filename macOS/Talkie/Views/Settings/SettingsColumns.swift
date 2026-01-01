@@ -214,6 +214,8 @@ struct SettingsContentColumn: View {
             APISettingsView()
         case .transcriptionModels:
             TranscriptionModelsSettingsView()
+        case .ttsVoices:
+            TTSVoicesSettingsView()
         case .llmModels:
             ModelLibraryView()
 

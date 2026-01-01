@@ -1224,6 +1224,9 @@ class SettingsManager {
     // Transcription model settings (consolidated from LiveSettings)
     private var _liveTranscriptionModelId: String = "whisper:openai_whisper-small"
 
+    // TTS voice settings
+    private var _selectedTTSVoiceId: String = "kokoro:default"
+
     private let keychain = KeychainManager.shared
 
     // Public accessors that ensure initialization
@@ -1308,6 +1311,15 @@ class SettingsManager {
     var liveTranscriptionModelId: String {
         get { ensureInitialized(); return _liveTranscriptionModelId }
         set { _liveTranscriptionModelId = newValue; saveSettings() }
+    }
+
+    // TTS voice for text-to-speech synthesis
+    var selectedTTSVoiceId: String {
+        get { ensureInitialized(); return _selectedTTSVoiceId }
+        set {
+            _selectedTTSVoiceId = newValue
+            UserDefaults.standard.set(newValue, forKey: "selectedTTSVoiceId")
+        }
     }
 
     private var context: NSManagedObjectContext {
@@ -1425,6 +1437,12 @@ class SettingsManager {
             self.playbackVolume = savedVolume
         } else {
             self.playbackVolume = 1.0
+        }
+
+        // Initialize TTS voice
+        // Default: kokoro:default (local Kokoro voice)
+        if let savedVoiceId = UserDefaults.standard.string(forKey: "selectedTTSVoiceId") {
+            self._selectedTTSVoiceId = savedVoiceId
         }
 
         // Apply appearance mode on launch
