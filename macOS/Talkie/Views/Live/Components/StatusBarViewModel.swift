@@ -48,19 +48,19 @@ final class StatusBarViewModel {
 
     @MainActor
     init(
-        liveMonitor: LiveServiceState = ServiceManager.shared.live,
-        engineClient: EngineClient = .shared,
-        syncManager: CloudKitSyncManager = .shared,
-        eventManager: SystemEventManager = .shared,
-        audioDevices: AudioDeviceManager = .shared,
-        liveSettings: LiveSettings = .shared
+        liveMonitor: LiveServiceState? = nil,
+        engineClient: EngineClient? = nil,
+        syncManager: CloudKitSyncManager? = nil,
+        eventManager: SystemEventManager? = nil,
+        audioDevices: AudioDeviceManager? = nil,
+        liveSettings: LiveSettings? = nil
     ) {
-        self.liveMonitor = liveMonitor
-        self.engineClient = engineClient
-        self.syncManager = syncManager
-        self.eventManager = eventManager
-        self.audioDevices = audioDevices
-        self.liveSettings = liveSettings
+        self.liveMonitor = liveMonitor ?? ServiceManager.shared.live
+        self.engineClient = engineClient ?? .shared
+        self.syncManager = syncManager ?? .shared
+        self.eventManager = eventManager ?? .shared
+        self.audioDevices = audioDevices ?? .shared
+        self.liveSettings = liveSettings ?? .shared
 
         refresh()
         observe()

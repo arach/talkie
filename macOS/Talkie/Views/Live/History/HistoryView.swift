@@ -73,7 +73,6 @@ struct HistoryView: View {
 
     @State private var selectedSection: LiveNavigationSection? = .home
     @State private var selectedDictationIDs: Set<Dictation.ID> = []  // Multi-select support
-    @State private var settingsSection: LiveSettingsSection? = nil  // Deep link to specific settings section
     @State private var searchText = ""
     @State private var isSidebarCollapsed: Bool = false
     @State private var isChevronHovered: Bool = false
@@ -153,14 +152,15 @@ struct HistoryView: View {
                 self.selectedSection = .history
             }
             .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
+                // Settings now consolidated in main app Settings → Dictation
                 self.selectedSection = .settings
             }
             .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsAudio)) { _ in
-                self.settingsSection = LiveSettingsSection.audio
+                // Settings now consolidated in main app Settings → Dictation
                 self.selectedSection = .settings
             }
             .onReceive(NotificationCenter.default.publisher(for: .switchToSettingsEngine)) { _ in
-                self.settingsSection = LiveSettingsSection.transcription
+                // Settings now consolidated in main app Settings → Dictation
                 self.selectedSection = .settings
             }
             // TODO: Re-enable once .selectDictation notification is added

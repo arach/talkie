@@ -15,7 +15,7 @@ final class DatabaseManager {
     static let shared = DatabaseManager()
 
     private var dbQueue: DatabaseQueue?
-    nonisolated(unsafe) private let lock = NSLock()
+    private let lock = NSLock()
 
     /// Callbacks waiting for initialization
     private var pendingCallbacks: [@Sendable () async -> Void] = []
