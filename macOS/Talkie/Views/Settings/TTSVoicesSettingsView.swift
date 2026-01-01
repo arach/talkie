@@ -3,7 +3,7 @@
 //  Talkie
 //
 //  Settings view for Text-to-Speech voice selection.
-//  Manages local (Kokoro) and cloud (ElevenLabs) TTS voices.
+//  Uses static catalog with Engine status overlay.
 //
 
 import SwiftUI
@@ -13,22 +13,13 @@ struct TTSVoicesSettingsView: View {
     @State private var settings = SettingsManager.shared
     @State private var engineClient = EngineClient.shared
 
-    // Voice data
-    @State private var voices: [TTSVoiceInfo] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
-
-    // TTS status
+    // TTS status from engine
     @State private var ttsIsLoaded = false
     @State private var ttsIdleSeconds: Double = -1
-    @State private var ttsMemoryMB: Int = 800  // Default estimate
-
-    // Preview
-    @State private var isPreviewPlaying = false
-    @State private var previewVoiceId: String?
+    @State private var ttsMemoryMB: Int = 800
 
     // Confirmation
-    @State private var voiceToDelete: TTSVoiceInfo?
+    @State private var voiceToDelete: String?
     @State private var showDeleteConfirmation = false
 
     // Timer for status polling
@@ -42,81 +33,29 @@ struct TTSVoicesSettingsView: View {
                 subtitle: "Select voice for speech synthesis"
             )
         } content: {
-            if isLoading {
-                loadingView
-            } else if let error = errorMessage {
-                errorView(error)
-            } else {
-                voiceList
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                // Memory status banner (when loaded)
+                if ttsIsLoaded {
+                    memoryStatusBanner
+                }
+
+                // Kokoro voices section
+                kokoroSection
             }
         }
         .onAppear {
-            loadVoices()
             startStatusPolling()
         }
         .onDisappear {
             stopStatusPolling()
         }
-        .alert("Delete Voice", isPresented: $showDeleteConfirmation) {
+        .alert("Unload Voice?", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                if let voice = voiceToDelete {
-                    deleteVoice(voice)
-                }
+            Button("Unload", role: .destructive) {
+                unloadTTS()
             }
         } message: {
-            if let voice = voiceToDelete {
-                Text("Are you sure you want to remove \(voice.displayName)? You can re-download it later.")
-            }
-        }
-    }
-
-    // MARK: - Loading View
-
-    private var loadingView: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text("Loading voices...")
-                .font(.system(size: 11))
-                .foregroundColor(Theme.current.foregroundSecondary)
-        }
-        .frame(maxWidth: .infinity, minHeight: 200)
-    }
-
-    // MARK: - Error View
-
-    private func errorView(_ error: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 24))
-                .foregroundColor(.orange)
-            Text("Failed to load voices")
-                .font(.system(size: 13, weight: .medium))
-            Text(error)
-                .font(.system(size: 11))
-                .foregroundColor(Theme.current.foregroundSecondary)
-            Button("Retry") {
-                loadVoices()
-            }
-            .buttonStyle(.bordered)
-        }
-        .frame(maxWidth: .infinity, minHeight: 200)
-    }
-
-    // MARK: - Voice List
-
-    private var voiceList: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            // Memory status banner (when loaded)
-            if ttsIsLoaded {
-                memoryStatusBanner
-            }
-
-            // Local voices section (Kokoro)
-            localVoicesSection
-
-            // Cloud voices section (future: ElevenLabs)
-            // cloudVoicesSection
+            Text("This will unload the TTS model from memory, freeing ~800MB. The model will reload when you next use text-to-speech.")
         }
     }
 
@@ -164,122 +103,108 @@ struct TTSVoicesSettingsView: View {
         )
     }
 
-    // MARK: - Local Voices Section
+    // MARK: - Kokoro Section
 
-    private var localVoicesSection: some View {
+    private var kokoroSection: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            // Section header
-            HStack(spacing: 8) {
-                Rectangle()
-                    .fill(Color.purple)
-                    .frame(width: 3, height: 16)
-                    .clipShape(RoundedRectangle(cornerRadius: 1))
-
-                Text("LOCAL VOICES")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Theme.current.foreground)
-
-                LocalCloudBadge(isLocal: true)
-
-                Spacer()
-
-                Text("On-device synthesis")
-                    .font(.system(size: 9))
-                    .foregroundColor(Theme.current.foregroundMuted)
-            }
+            // Section header with links
+            sectionHeader(
+                title: "KOKORO",
+                subtitle: "Fast on-device neural TTS",
+                color: TTSVoiceProvider.kokoro.color,
+                repoURL: TTSVoiceCatalog.repoURL,
+                demoURL: TTSVoiceCatalog.demoURL
+            )
 
             // Voice cards grid
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: 12),
                 GridItem(.flexible(), spacing: 12)
             ], spacing: 12) {
-                ForEach(localVoices, id: \.id) { voice in
+                ForEach(TTSVoiceCatalog.voices, id: \.id) { voice in
                     voiceCard(for: voice)
                 }
             }
         }
     }
 
-    // MARK: - Voice Card
+    // MARK: - Section Header
 
-    private func voiceCard(for voice: TTSVoiceInfo) -> some View {
-        let isSelected = settings.selectedTTSVoiceId == voice.id
-        let state = computeState(for: voice)
+    private func sectionHeader(
+        title: String,
+        subtitle: String,
+        color: Color,
+        repoURL: URL?,
+        demoURL: URL?
+    ) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Rectangle()
+                .fill(color)
+                .frame(width: 3, height: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
 
-        return ModelCard(
-            name: voice.displayName,
-            provider: .kokoro,
-            state: state,
-            isSelected: isSelected,
-            onSelect: { selectVoice(voice) },
-            onDownload: { downloadVoice(voice) },
-            onDelete: { confirmDelete(voice) },
-            onCancel: {},
-            onUnload: ttsIsLoaded && !isSelected ? unloadTTS : nil
-        ) {
-            TTSVoiceCardDetail(
-                language: voice.language,
-                memoryMB: ttsIsLoaded ? ttsMemoryMB : nil,
-                isLocal: true
-            )
-        }
-    }
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(Theme.current.foreground)
 
-    // MARK: - Computed Properties
+            Text("•")
+                .foregroundColor(Theme.current.foregroundMuted)
 
-    private var localVoices: [TTSVoiceInfo] {
-        voices.filter { $0.provider == "kokoro" }
-    }
+            Text(subtitle)
+                .font(.system(size: 10))
+                .foregroundColor(Theme.current.foregroundMuted)
 
-    private var cloudVoices: [TTSVoiceInfo] {
-        voices.filter { $0.provider == "elevenlabs" }
-    }
+            LocalCloudBadge(isLocal: true)
 
-    private func computeState(for voice: TTSVoiceInfo) -> ModelState {
-        // For Kokoro, it's "loaded" when the TTS engine is loaded and this voice is selected
-        let isSelected = settings.selectedTTSVoiceId == voice.id
-        if isSelected && ttsIsLoaded {
-            return .loaded
-        } else if voice.isDownloaded {
-            return .downloaded
-        } else {
-            return .notDownloaded
-        }
-    }
+            Spacer()
 
-    // MARK: - Actions
-
-    private func loadVoices() {
-        isLoading = true
-        errorMessage = nil
-
-        Task {
-            let fetchedVoices = await engineClient.getAvailableTTSVoices()
-            await MainActor.run {
-                voices = fetchedVoices
-                isLoading = false
-
-                // If no voices returned, it might mean engine isn't connected
-                if voices.isEmpty {
-                    // Add a default Kokoro voice for display purposes
-                    voices = [
-                        TTSVoiceInfo(
-                            id: "kokoro:default",
-                            provider: "kokoro",
-                            voiceId: "default",
-                            displayName: "Kokoro",
-                            description: "High-quality neural TTS voice",
-                            language: "en-US",
-                            isDownloaded: true,
-                            isLoaded: ttsIsLoaded
-                        )
-                    ]
+            // Links
+            if let repoURL {
+                Link(destination: repoURL) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "link")
+                            .font(.system(size: 9))
+                        Text("Repo")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(Theme.current.foregroundMuted)
                 }
+                .buttonStyle(.plain)
+            }
+
+            if let demoURL {
+                Link(destination: demoURL) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "play.circle")
+                            .font(.system(size: 9))
+                        Text("Demo")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(Theme.current.foregroundMuted)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private func selectVoice(_ voice: TTSVoiceInfo) {
+    // MARK: - Voice Card
+
+    private func voiceCard(for voice: TTSVoiceMetadata) -> some View {
+        let isSelected = settings.selectedTTSVoiceId == voice.id
+        let isLoaded = isSelected && ttsIsLoaded
+
+        return TTSVoiceCard(
+            voice: voice,
+            isSelected: isSelected,
+            isLoaded: isLoaded,
+            onSelect: { selectVoice(voice) },
+            onUnload: isLoaded ? { showDeleteConfirmation = true } : nil
+        )
+    }
+
+    // MARK: - Actions
+
+    private func selectVoice(_ voice: TTSVoiceMetadata) {
         settings.selectedTTSVoiceId = voice.id
 
         // Preload the voice if not already loaded
@@ -295,25 +220,6 @@ struct TTSVoicesSettingsView: View {
         }
     }
 
-    private func downloadVoice(_ voice: TTSVoiceInfo) {
-        // For Kokoro, download is handled automatically during preload
-        selectVoice(voice)
-    }
-
-    private func confirmDelete(_ voice: TTSVoiceInfo) {
-        voiceToDelete = voice
-        showDeleteConfirmation = true
-    }
-
-    private func deleteVoice(_ voice: TTSVoiceInfo) {
-        // For Kokoro, "delete" means unload from memory
-        // The model files are part of the engine bundle
-        if ttsIsLoaded {
-            unloadTTS()
-        }
-        voiceToDelete = nil
-    }
-
     private func unloadTTS() {
         Task {
             let success = await engineClient.unloadTTS()
@@ -322,29 +228,6 @@ struct TTSVoicesSettingsView: View {
                     ttsIsLoaded = false
                     ttsIdleSeconds = -1
                 }
-            }
-        }
-    }
-
-    private func previewVoice(_ voice: TTSVoiceInfo) {
-        guard !isPreviewPlaying else { return }
-
-        isPreviewPlaying = true
-        previewVoiceId = voice.id
-
-        Task {
-            do {
-                let sampleText = "Hello! I'm \(voice.displayName), your text-to-speech assistant."
-                let audioPath = try await engineClient.synthesize(text: sampleText, voiceId: voice.id)
-                // TODO: Play audio from audioPath
-                print("Preview audio at: \(audioPath)")
-            } catch {
-                print("Preview failed: \(error)")
-            }
-
-            await MainActor.run {
-                isPreviewPlaying = false
-                previewVoiceId = nil
             }
         }
     }
@@ -380,6 +263,182 @@ struct TTSVoicesSettingsView: View {
         if seconds < 60 { return "\(Int(seconds))s" }
         if seconds < 3600 { return "\(Int(seconds / 60))m" }
         return "\(Int(seconds / 3600))h"
+    }
+}
+
+// MARK: - TTS Voice Card
+
+struct TTSVoiceCard: View {
+    let voice: TTSVoiceMetadata
+    let isSelected: Bool
+    let isLoaded: Bool
+    let onSelect: () -> Void
+    var onUnload: (() -> Void)?
+
+    private let settings = SettingsManager.shared
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Top accent bar
+            Rectangle()
+                .fill(voice.provider.color.opacity(isSelected ? 1.0 : 0.3))
+                .frame(height: 3)
+
+            VStack(alignment: .leading, spacing: 8) {
+                // Header: Badge + Status
+                HStack {
+                    // Provider badge
+                    Text(voice.provider.badge)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(voice.provider.color)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(voice.provider.color.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                    // Gender badge
+                    Text(voice.gender.prefix(1).uppercased())
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(Theme.current.foregroundMuted)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Theme.current.foregroundMuted.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                    Spacer()
+
+                    // Status badge
+                    if isLoaded {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(settings.midnightStatusActive)
+                                .frame(width: 5, height: 5)
+                                .shadow(color: settings.midnightStatusActive.opacity(0.5), radius: 3)
+                            Text("LOADED")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundColor(settings.midnightStatusActive)
+                        }
+                    } else if isSelected {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(settings.midnightStatusReady)
+                                .frame(width: 5, height: 5)
+                            Text("SELECTED")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundColor(settings.midnightStatusReady)
+                        }
+                    }
+                }
+
+                // Voice name
+                Text(voice.displayName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(settings.midnightTextPrimary)
+                    .lineLimit(1)
+
+                // Description
+                Text(voice.description)
+                    .font(.system(size: 10))
+                    .foregroundColor(settings.midnightTextSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Specs row
+                HStack(spacing: 12) {
+                    // Style
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("STYLE")
+                            .font(.system(size: 7, weight: .medium, design: .monospaced))
+                            .foregroundColor(settings.midnightTextTertiary)
+                        Text(voice.style)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(settings.midnightTextSecondary)
+                    }
+
+                    Spacer()
+
+                    // Language
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("LANG")
+                            .font(.system(size: 7, weight: .medium, design: .monospaced))
+                            .foregroundColor(settings.midnightTextTertiary)
+                        Text(voice.language)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(settings.midnightTextSecondary)
+                    }
+                }
+
+                Spacer(minLength: 4)
+
+                // Action button
+                actionButton
+            }
+            .padding(10)
+        }
+        .frame(height: 150)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(borderColor, lineWidth: 1)
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private var cardBackground: Color {
+        isHovered ? settings.midnightSurfaceHover : settings.midnightSurface
+    }
+
+    private var borderColor: Color {
+        if isSelected {
+            return voice.provider.color.opacity(0.6)
+        }
+        if isLoaded {
+            return settings.midnightStatusActive.opacity(0.4)
+        }
+        if isHovered {
+            return settings.midnightBorderActive
+        }
+        return settings.midnightBorder
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        HStack(spacing: 8) {
+            if !isSelected {
+                Button(action: onSelect) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 9))
+                        Text("Select")
+                            .font(.system(size: 9, weight: .medium))
+                    }
+                    .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+
+            if let onUnload {
+                Button(action: onUnload) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.system(size: 9))
+                        Text("Unload")
+                            .font(.system(size: 9, weight: .medium))
+                    }
+                    .foregroundColor(.orange)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

@@ -345,6 +345,12 @@ extension LiveDatabase {
     }
 
     static func prune(olderThanHours hours: Int) {
+        // Skip pruning if hours <= 0 (means "keep forever")
+        guard hours > 0 else {
+            log.info("[LiveDatabase] Prune skipped - retention set to forever")
+            return
+        }
+
         let cutoff = Date().addingTimeInterval(-Double(hours) * 60 * 60)
         let cutoffTS = cutoff.timeIntervalSince1970
 

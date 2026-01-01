@@ -1227,14 +1227,14 @@ class SettingsManager {
     // TTS voice settings
     private var _selectedTTSVoiceId: String = "kokoro:default"
 
-    private let keychain = KeychainManager.shared
+    private let apiKeys = APIKeyStore.shared
 
     // Public accessors that ensure initialization
     var geminiApiKey: String {
         get { ensureInitialized(); return _geminiApiKey }
         set {
             _geminiApiKey = newValue
-            _ = keychain.save(newValue, for: KeychainManager.Key.geminiApiKey)
+            apiKeys.set(newValue.isEmpty ? nil : newValue, for: .gemini)
         }
     }
 
@@ -1242,11 +1242,7 @@ class SettingsManager {
         get { ensureInitialized(); return _openaiApiKey }
         set {
             _openaiApiKey = newValue
-            if let value = newValue {
-                _ = keychain.save(value, for: KeychainManager.Key.openaiApiKey)
-            } else {
-                keychain.delete(KeychainManager.Key.openaiApiKey)
-            }
+            apiKeys.set(newValue, for: .openai)
         }
     }
 
@@ -1254,11 +1250,7 @@ class SettingsManager {
         get { ensureInitialized(); return _anthropicApiKey }
         set {
             _anthropicApiKey = newValue
-            if let value = newValue {
-                _ = keychain.save(value, for: KeychainManager.Key.anthropicApiKey)
-            } else {
-                keychain.delete(KeychainManager.Key.anthropicApiKey)
-            }
+            apiKeys.set(newValue, for: .anthropic)
         }
     }
 
@@ -1266,40 +1258,48 @@ class SettingsManager {
         get { ensureInitialized(); return _groqApiKey }
         set {
             _groqApiKey = newValue
-            if let value = newValue {
-                _ = keychain.save(value, for: KeychainManager.Key.groqApiKey)
-            } else {
-                keychain.delete(KeychainManager.Key.groqApiKey)
-            }
+            apiKeys.set(newValue, for: .groq)
         }
     }
 
-    // MARK: - API Key Existence Checks (no password prompt)
+    var elevenLabsApiKey: String? {
+        get { apiKeys.get(.elevenLabs) }
+        set { apiKeys.set(newValue, for: .elevenLabs) }
+    }
 
-    /// Check if API keys exist without fetching them (avoids password prompt)
+    // MARK: - API Key Checks
+
     func hasOpenAIKey() -> Bool {
-        keychain.exists(.openaiApiKey)
+        apiKeys.hasKey(for: .openai)
     }
 
     func hasAnthropicKey() -> Bool {
-        keychain.exists(.anthropicApiKey)
+        apiKeys.hasKey(for: .anthropic)
     }
 
     func hasGroqKey() -> Bool {
-        keychain.exists(.groqApiKey)
+        apiKeys.hasKey(for: .groq)
     }
 
-    /// Fetch API key on demand (only when explicitly needed for edit/reveal)
+    func hasElevenLabsKey() -> Bool {
+        apiKeys.hasKey(for: .elevenLabs)
+    }
+
+    /// Fetch API key (now instant, no keychain prompt)
     func fetchOpenAIKey() -> String? {
-        keychain.retrieve(for: .openaiApiKey)
+        apiKeys.get(.openai)
     }
 
     func fetchAnthropicKey() -> String? {
-        keychain.retrieve(for: .anthropicApiKey)
+        apiKeys.get(.anthropic)
     }
 
     func fetchGroqKey() -> String? {
-        keychain.retrieve(for: .groqApiKey)
+        apiKeys.get(.groq)
+    }
+
+    func fetchElevenLabsKey() -> String? {
+        apiKeys.get(.elevenLabs)
     }
 
     var selectedModel: String {

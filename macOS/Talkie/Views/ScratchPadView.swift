@@ -7,6 +7,9 @@
 //
 
 import SwiftUI
+import TalkieKit
+
+private let log = Log(.ui)
 
 struct ScratchPadView: View {
     @Environment(SettingsManager.self) private var settings
@@ -834,6 +837,7 @@ struct ScratchPadView: View {
                 }
             }
         } catch {
+            log.error("Dictation start failed: \(error)")
             polishState.polishError = error.localizedDescription
         }
     }
@@ -859,6 +863,7 @@ struct ScratchPadView: View {
                 try? await Task.sleep(for: .milliseconds(800))
                 dictationPillState = .idle
             } catch {
+                log.error("Dictation transcribe failed: \(error)")
                 polishState.polishError = error.localizedDescription
                 dictationPillState = .idle
             }
@@ -882,6 +887,7 @@ struct ScratchPadView: View {
             try EphemeralTranscriber.shared.startCapture()
             isRecordingInstruction = true
         } catch {
+            log.error("Voice prompt capture failed: \(error)")
             polishState.polishError = error.localizedDescription
         }
     }
@@ -900,6 +906,7 @@ struct ScratchPadView: View {
                 await polishState.polish(instruction: instruction)
             }
         } catch {
+            log.error("Voice prompt transcribe failed: \(error)")
             isTranscribingInstruction = false
             polishState.polishError = error.localizedDescription
         }
@@ -950,6 +957,7 @@ struct ScratchPadView: View {
                     polishState.clearHistory()
                 }
             } catch {
+                log.error("Memo save failed: \(error)")
                 await MainActor.run {
                     polishState.polishError = "Failed to save: \(error.localizedDescription)"
                 }

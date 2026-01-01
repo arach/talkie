@@ -401,7 +401,7 @@ struct SettingsSidebarSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(isActive ? Theme.current.foregroundSecondary : Theme.current.foregroundMuted)
+                .foregroundColor(isActive ? Theme.current.foregroundSecondary : Theme.current.foregroundSecondary.opacity(0.6))
                 .padding(.leading, 6)
                 .padding(.bottom, 2)
 
@@ -420,20 +420,35 @@ struct SettingsSidebarItem: View {
 
     @State private var isHovered = false
 
+    // Accent color matching native sidebar navigation
+    private var accentColor: Color {
+        SettingsManager.shared.accentColor.color ?? Color.accentColor
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 9))
-                .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundMuted)
-                .frame(width: 14)
+        HStack(spacing: 0) {
+            // Left accent bar (matches native SidebarRow)
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(isSelected ? accentColor : Color.clear)
+                .frame(width: 3)
+                .padding(.vertical, 2)
+                .animation(.easeOut(duration: 0.15), value: isSelected)
 
-            Text(title)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 9))
+                    .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
+                    .frame(width: 14)
 
-            Spacer(minLength: 0)
+                Text(title)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary.opacity(0.85))
+
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 5)
+            .padding(.trailing, 8)
         }
-        .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(

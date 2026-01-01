@@ -81,6 +81,21 @@ public enum EngineConnectionState: String {
 }
 
 /// Model info from TalkieEngine
+/// Model status for UI display (combines catalog + engine state)
+public struct ModelStatusInfo {
+    public let isDownloaded: Bool
+    public let isLoaded: Bool
+    public let isDownloading: Bool
+    public let downloadProgress: Double
+
+    public static let unknown = ModelStatusInfo(
+        isDownloaded: false,
+        isLoaded: false,
+        isDownloading: false,
+        downloadProgress: 0
+    )
+}
+
 public struct EngineModelInfo: Codable, Sendable, Identifiable {
     public let id: String
     public let family: String
@@ -479,6 +494,30 @@ public final class EngineClient {
                 }
             }
         }
+    }
+
+    /// Get model status for a given model ID (combines engine state with download progress)
+    public func modelStatus(for modelId: String) -> ModelStatusInfo {
+        // Check if currently downloading this model
+        if let progress = downloadProgress, progress.modelId == modelId {
+            return ModelStatusInfo(
+                isDownloaded: false,
+                isLoaded: false,
+                isDownloading: progress.isDownloading,
+                downloadProgress: progress.progress
+            )
+        }
+
+        // Check engine status for downloaded/loaded state
+        let isDownloaded = status?.downloadedModels.contains(modelId) ?? false
+        let isLoaded = status?.loadedModelId == modelId
+
+        return ModelStatusInfo(
+            isDownloaded: isDownloaded || isLoaded,  // Loaded implies downloaded
+            isLoaded: isLoaded,
+            isDownloading: false,
+            downloadProgress: 0
+        )
     }
 
     // MARK: - Dictionary

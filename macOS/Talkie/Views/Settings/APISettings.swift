@@ -351,6 +351,25 @@ struct APISettingsView: View {
             .background(Color.green.opacity(Opacity.light))
             .cornerRadius(CornerRadius.sm)
         }
+        .onAppear {
+            prefetchConfiguredKeys()
+        }
+    }
+
+    /// Pre-fetch keys for configured providers so UI shows them immediately
+    private func prefetchConfiguredKeys() {
+        if settingsManager.hasOpenAIKey(), fetchedKeys["openai"] == nil {
+            fetchedKeys["openai"] = settingsManager.fetchOpenAIKey()
+        }
+        if settingsManager.hasAnthropicKey(), fetchedKeys["anthropic"] == nil {
+            fetchedKeys["anthropic"] = settingsManager.fetchAnthropicKey()
+        }
+        if settingsManager.hasValidApiKey, fetchedKeys["gemini"] == nil {
+            fetchedKeys["gemini"] = settingsManager.geminiApiKey.isEmpty ? nil : settingsManager.geminiApiKey
+        }
+        if settingsManager.hasGroqKey(), fetchedKeys["groq"] == nil {
+            fetchedKeys["groq"] = settingsManager.fetchGroqKey()
+        }
     }
 
     private func tierIcon(_ tier: LLMCostTier) -> String {

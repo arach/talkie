@@ -34,7 +34,7 @@ struct DatabaseSettingsView: View {
                 // Section header with accent bar
                 HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.purple)
+                        .fill(live.utteranceTTLHours <= 0 ? Color.green : Color.purple)
                         .frame(width: 3, height: 14)
 
                     Text("DICTATION RETENTION")
@@ -43,17 +43,29 @@ struct DatabaseSettingsView: View {
 
                     Spacer()
 
-                    Text("AUTO-DELETE")
-                        .font(.techLabelSmall)
-                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
+                    if live.utteranceTTLHours <= 0 {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: "infinity")
+                                .font(Theme.current.fontXS)
+                            Text("PERMANENT")
+                                .font(.techLabelSmall)
+                        }
+                        .foregroundColor(.green.opacity(Opacity.prominent))
+                    } else {
+                        Text("AUTO-DELETE")
+                            .font(.techLabelSmall)
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text("Dictations older than the specified time will be automatically deleted to save space.")
+                    Text(live.utteranceTTLHours <= 0
+                         ? "Dictations will be kept indefinitely. Manually delete what you no longer need."
+                         : "Dictations older than the specified time will be automatically deleted to save space.")
                         .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                        .foregroundColor(live.utteranceTTLHours <= 0 ? .green.opacity(Opacity.prominent) : Theme.current.foregroundSecondary.opacity(Opacity.prominent))
 
-                    // Retention slider
+                    // Retention presets
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("Keep for")
@@ -64,28 +76,19 @@ struct DatabaseSettingsView: View {
 
                             Text(formatRetention(hours: live.utteranceTTLHours))
                                 .font(Theme.current.fontSMMedium)
-                                .foregroundColor(Theme.current.foreground)
+                                .foregroundColor(live.utteranceTTLHours <= 0 ? .green : Theme.current.foreground)
                         }
 
-                        Stepper(
-                            value: $live.utteranceTTLHours,
-                            in: 24...720,
-                            step: 24
-                        ) {
-                            EmptyView()
-                        }
-                        .labelsHidden()
-
-                        // Quick presets
+                        // Quick presets: Forever, 1 week, 1 month, 3 months, 1 year
                         HStack(spacing: Spacing.sm) {
-                            ForEach([24, 48, 168, 336, 720], id: \.self) { hours in
+                            ForEach([0, 168, 720, 2160, 8760], id: \.self) { hours in
                                 Button(action: { live.utteranceTTLHours = hours }) {
                                     Text(formatRetentionShort(hours: hours))
                                         .font(.labelSmall)
                                         .foregroundColor(live.utteranceTTLHours == hours ? .white : Theme.current.foregroundSecondary)
                                         .padding(.horizontal, Spacing.sm)
                                         .padding(.vertical, 4)
-                                        .background(live.utteranceTTLHours == hours ? Color.purple : Theme.current.surface2)
+                                        .background(live.utteranceTTLHours == hours ? (hours == 0 ? Color.green : Color.purple) : Theme.current.surface2)
                                         .cornerRadius(CornerRadius.xs)
                                 }
                                 .buttonStyle(.plain)
@@ -252,8 +255,18 @@ struct DatabaseSettingsView: View {
     }
 
     private func formatRetention(hours: Int) -> String {
-        if hours < 24 {
+        if hours <= 0 {
+            return "Forever"
+        } else if hours < 24 {
             return "\(hours) hours"
+        } else if hours == 168 {
+            return "1 week"
+        } else if hours == 720 {
+            return "1 month"
+        } else if hours == 2160 {
+            return "3 months"
+        } else if hours == 8760 {
+            return "1 year"
         } else {
             let days = hours / 24
             return days == 1 ? "1 day" : "\(days) days"
@@ -261,7 +274,17 @@ struct DatabaseSettingsView: View {
     }
 
     private func formatRetentionShort(hours: Int) -> String {
-        if hours < 24 {
+        if hours <= 0 {
+            return "∞"
+        } else if hours == 168 {
+            return "1w"
+        } else if hours == 720 {
+            return "1mo"
+        } else if hours == 2160 {
+            return "3mo"
+        } else if hours == 8760 {
+            return "1yr"
+        } else if hours < 24 {
             return "\(hours)h"
         } else if hours < 168 {
             return "\(hours / 24)d"
