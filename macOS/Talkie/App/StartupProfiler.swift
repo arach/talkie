@@ -93,4 +93,26 @@ final class StartupProfiler {
         _hasPrintedSummary = false
         lock.unlock()
     }
+
+    /// Log a compact one-liner snapshot of launch performance
+    /// Suitable for production builds - outputs to system log and user-facing StartupLogger
+    func logSnapshot() {
+        lock.lock()
+        let snapshot = _milestones
+        lock.unlock()
+
+        // Find key phase milestones
+        let dataReady = snapshot.first { $0.name == "db.grdb.ready" }?.elapsed ?? 0
+        let uiPresented = snapshot.first { $0.name == "home.dictations.rendered" }?.elapsed ?? 0
+        let ready = snapshot.last?.elapsed ?? 0
+
+        // System log: "🚀 Launch: data 45ms → ui 299ms → ready 347ms"
+        let summary = String(format: "🚀 Launch: data %.0fms → ui %.0fms → ready %.0fms", dataReady, uiPresented, ready)
+        NSLog("%@", summary)
+
+        // User-facing log (StartupLogger feeds the Logs viewer)
+        Task { @MainActor in
+            StartupLogger.shared.log(String(format: "Ready in %.0fms (data %.0fms, ui %.0fms)", ready, dataReady, uiPresented))
+        }
+    }
 }

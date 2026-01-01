@@ -152,9 +152,12 @@ struct UnifiedDashboard: View {
             // Mark ready when dictations are first populated
             if oldCount == 0 && newCount > 0 {
                 StartupProfiler.shared.mark("home.dictations.rendered")
-                // Print summary after short delay to capture all milestones
+                // Log performance snapshot after short delay to capture all milestones
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    StartupProfiler.shared.logSnapshot()
+                    #if DEBUG
                     StartupProfiler.shared.printSummary()
+                    #endif
                 }
             }
         }
