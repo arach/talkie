@@ -318,11 +318,19 @@ struct StatusBar: View {
 
             #if DEBUG
             // Load git branch lazily (file I/O shouldn't block startup)
+            // Use compile-time path to find the repo that was actually built
             if !didLoadGitBranch {
                 didLoadGitBranch = true
                 Task.detached {
-                    let projectPath = "/Users/arach/dev/talkie-dev"
-                    let branch = Self.readGitBranch(from: URL(fileURLWithPath: projectPath))
+                    // #filePath gives us the source file path at compile time
+                    let sourceFile = URL(fileURLWithPath: #filePath)
+                    let projectPath = sourceFile
+                        .deletingLastPathComponent() // Components
+                        .deletingLastPathComponent() // Live
+                        .deletingLastPathComponent() // Views
+                        .deletingLastPathComponent() // Talkie
+                        .deletingLastPathComponent() // macOS
+                    let branch = Self.readGitBranch(from: projectPath)
                         ?? Self.readGitBranch(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
                     await MainActor.run { gitBranch = branch }
                 }
