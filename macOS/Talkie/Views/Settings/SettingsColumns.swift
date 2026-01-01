@@ -81,7 +81,7 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // AI MODELS
-                    SettingsSidebarSection(title: "AI MODELS", isActive: selectedSection == .aiProviders || selectedSection == .transcriptionModels || selectedSection == .llmModels) {
+                    SettingsSidebarSection(title: "AI MODELS", isActive: selectedSection == .aiProviders || selectedSection == .transcriptionModels || selectedSection == .ttsVoices || selectedSection == .llmModels) {
                         SettingsSidebarItem(
                             icon: "key",
                             title: "PROVIDERS & KEYS",
@@ -95,6 +95,13 @@ struct SettingsSidebarColumn: View {
                             isSelected: selectedSection == .transcriptionModels
                         ) {
                             selectedSection = .transcriptionModels
+                        }
+                        SettingsSidebarItem(
+                            icon: "speaker.wave.2",
+                            title: "VOICES",
+                            isSelected: selectedSection == .ttsVoices
+                        ) {
+                            selectedSection = .ttsVoices
                         }
                         SettingsSidebarItem(
                             icon: "brain",
