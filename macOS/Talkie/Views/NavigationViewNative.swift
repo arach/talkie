@@ -120,7 +120,11 @@ struct TalkieNavigationViewNative: View {
     private static let sidebarWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (160, 200, 280)
     private static let contentColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (180, 220, 320)
 
+    // Track if body has been accessed (for profiling)
+    @State private var didLogBodyAccess = false
+
     var body: some View {
+        let _ = { if !didLogBodyAccess { StartupProfiler.shared.mark("nav.body.start"); DispatchQueue.main.async { didLogBodyAccess = true } } }()
         VStack(spacing: 0) {
             Group {
                 if usesTwoColumns {
@@ -205,6 +209,9 @@ struct TalkieNavigationViewNative: View {
             previousSection: $previousSection,
             memoCount: memosVM.totalCount
         )
+        .onAppear {
+            StartupProfiler.shared.mark("nav.onAppear")
+        }
     }
 
     // MARK: - Column Logic
@@ -441,11 +448,10 @@ struct TalkieNavigationViewNative: View {
                 case .allMemos:
                     AllMemos()
                 case .liveDashboard:
-                    HomeView(
-                        onSelectDictation: { _ in selectedSection = .liveRecent },
-                        onSelectApp: { _, _ in selectedSection = .liveRecent }
+                    DictationStatsView(
+                        onSelectDictation: { _ in selectedSection = .liveRecent }
                     )
-                    .wrapInTalkieSection("LiveDashboard")
+                    .wrapInTalkieSection("Stats")
                 case .liveRecent:
                     DictationListView()
                         .wrapInTalkieSection("LiveRecent")

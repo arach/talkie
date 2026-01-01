@@ -661,17 +661,15 @@ struct HistoryView: View {
     private var fullWidthContentView: some View {
         switch selectedSection {
         case .home:
-            HomeView(
+            DictationStatsView(
                 onSelectDictation: { dictation in
                     // Navigate to history and select this dictation
                     selectedSection = .history
-                    selectedDictationIDs = [dictation.id]
-                },
-                onSelectApp: { appName, _ in
-                    // Navigate to history filtered by this app
-                    appFilter = appName
-                    selectedSection = .history
-                    selectedDictationIDs = []
+                    if let dictation = dictation {
+                        selectedDictationIDs = [dictation.id]
+                    } else {
+                        selectedDictationIDs = []
+                    }
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)

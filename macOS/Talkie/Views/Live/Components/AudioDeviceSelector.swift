@@ -91,6 +91,8 @@ struct AudioDeviceSelector: View {
         }
         .animation(.easeInOut(duration: 0.2), value: liveState.isRunning)
         .onAppear {
+            // Initialize CoreAudio on first use (deferred from startup)
+            audioDevices.ensureInitialized()
             logger.debug("AudioDeviceSelector appeared, device count: \(audioDevices.inputDevices.count)")
         }
     }

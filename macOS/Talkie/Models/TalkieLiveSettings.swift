@@ -438,6 +438,7 @@ final class LiveSettings {
     // MARK: - Init
 
     private init() {
+        StartupProfiler.shared.mark("singleton.LiveSettings.start")
         // Use TalkieSharedSettings directly (can't use storage computed property before self is initialized)
         let store = TalkieSharedSettings
 
@@ -503,6 +504,7 @@ final class LiveSettings {
 
         // Apply TTL to store
         DictationStore.shared.ttlHours = utteranceTTLHours
+        StartupProfiler.shared.mark("singleton.LiveSettings.done")
     }
 
     // MARK: - Persistence

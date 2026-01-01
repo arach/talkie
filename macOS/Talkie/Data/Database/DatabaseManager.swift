@@ -507,7 +507,122 @@ final class DatabaseManager {
             print("✅ Soft delete migration complete!")
         }
 
+        // Migration v5: App stats table (single row, fast reads for Home/Stats views)
+        migrator.registerMigration("v5_app_stats") { db in
+            try db.create(table: "app_stats") { t in
+                t.column("id", .integer).primaryKey()
+                t.column("dictations_today", .integer).notNull().defaults(to: 0)
+                t.column("dictations_week", .integer).notNull().defaults(to: 0)
+                t.column("dictations_total", .integer).notNull().defaults(to: 0)
+                t.column("words_total", .integer).notNull().defaults(to: 0)
+                t.column("streak_days", .integer).notNull().defaults(to: 0)
+                t.column("top_apps_json", .text)
+                t.column("last_updated", .datetime)
+            }
+
+            // Insert default row so first load works (OR IGNORE if already exists)
+            try db.execute(sql: "INSERT OR IGNORE INTO app_stats (id) VALUES (1)")
+        }
+
         return migrator
+    }
+
+    // MARK: - App Stats
+
+    /// App stats for fast UI rendering (single row)
+    struct AppStats {
+        var dictationsToday: Int = 0
+        var dictationsWeek: Int = 0
+        var dictationsTotal: Int = 0
+        var wordsTotal: Int = 0
+        var streakDays: Int = 0
+        var topApps: [(name: String, bundleID: String?, count: Int)] = []
+        var lastUpdated: Date?
+    }
+
+    /// Fetch app stats (fast - single row read)
+    func fetchAppStats() throws -> AppStats {
+        let db = try database()
+        return try db.read { db in
+            let row = try Row.fetchOne(db, sql: "SELECT * FROM app_stats WHERE id = 1")
+            var stats = AppStats()
+            if let row = row {
+                stats.dictationsToday = row["dictations_today"] ?? 0
+                stats.dictationsWeek = row["dictations_week"] ?? 0
+                stats.dictationsTotal = row["dictations_total"] ?? 0
+                stats.wordsTotal = row["words_total"] ?? 0
+                stats.streakDays = row["streak_days"] ?? 0
+                stats.lastUpdated = row["last_updated"]
+
+                // Decode top apps JSON
+                if let json: String = row["top_apps_json"],
+                   let data = json.data(using: .utf8),
+                   let decoded = try? JSONDecoder().decode([[String: String]].self, from: data) {
+                    stats.topApps = decoded.compactMap { dict in
+                        guard let name = dict["name"], let countStr = dict["count"], let count = Int(countStr) else { return nil }
+                        return (name: name, bundleID: dict["bundleID"], count: count)
+                    }
+                }
+            }
+            return stats
+        }
+    }
+
+    /// Update app stats from dictations array
+    func updateAppStats(
+        dictationsToday: Int,
+        dictationsWeek: Int,
+        dictationsTotal: Int,
+        wordsTotal: Int,
+        streakDays: Int,
+        topApps: [(name: String, bundleID: String?, count: Int)]
+    ) throws {
+        let db = try database()
+
+        // Encode top apps to JSON
+        let topAppsData = topApps.map { ["name": $0.name, "bundleID": $0.bundleID ?? "", "count": String($0.count)] }
+        let topAppsJSON = (try? JSONEncoder().encode(topAppsData)).flatMap { String(data: $0, encoding: .utf8) }
+
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE app_stats SET
+                        dictations_today = ?,
+                        dictations_week = ?,
+                        dictations_total = ?,
+                        words_total = ?,
+                        streak_days = ?,
+                        top_apps_json = ?,
+                        last_updated = ?
+                    WHERE id = 1
+                    """,
+                arguments: [
+                    dictationsToday,
+                    dictationsWeek,
+                    dictationsTotal,
+                    wordsTotal,
+                    streakDays,
+                    topAppsJSON,
+                    Date()
+                ]
+            )
+        }
+    }
+
+    /// Increment today, week, and total counts by 1 (cheap, for real-time updates)
+    func incrementDictationCounts() throws {
+        let db = try database()
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE app_stats SET
+                        dictations_today = dictations_today + 1,
+                        dictations_week = dictations_week + 1,
+                        dictations_total = dictations_total + 1
+                    WHERE id = 1
+                    """
+            )
+        }
     }
 }
 

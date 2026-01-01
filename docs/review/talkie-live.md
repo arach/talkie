@@ -2,7 +2,38 @@
 
 `macOS/TalkieLive/` - Background helper for live dictation
 
+**Total LOC**: ~28,000 lines across 40+ files
+
 Runs as login item, handles always-on dictation with hotkey activation.
+
+---
+
+## Critical Hotspots
+
+| File | Lines | Risk |
+|------|-------|------|
+| `Views/Settings/SettingsView.swift` | 4,274 | 🔴 CRITICAL |
+| `Debug/DebugKit.swift` | 4,099 | 🟡 MEDIUM (debug) |
+| `Views/OnboardingView.swift` | 2,263 | 🟠 HIGH |
+| `Views/HomeView.swift` | 1,846 | 🟠 HIGH |
+| `App/LiveController.swift` | 1,195 | 🟠 HIGH |
+| `App/AppDelegate.swift` | 960 | 🟡 MEDIUM |
+
+### SettingsView.swift (4,274 lines) - NEEDS SPLIT
+
+**Current State**: All settings UI in one massive view.
+
+**Recommended Split**:
+```
+Views/Settings/
+├── SettingsView.swift          # Navigation (~300 lines)
+├── HotkeySettingsTab.swift     # Hotkey recording (~500 lines)
+├── AudioSettingsTab.swift      # Device selection (~400 lines)
+├── AppearanceSettingsTab.swift # Theme, overlay (~400 lines)
+├── PermissionsSettingsTab.swift # Permission requests (~500 lines)
+├── AdvancedSettingsTab.swift   # Debug, advanced (~400 lines)
+└── SettingsComponents.swift    # Shared components (~400 lines)
+```
 
 ---
 

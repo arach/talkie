@@ -222,7 +222,7 @@ extension LiveDatabase {
     @discardableResult
     static func store(_ utterance: LiveDictation) -> Int64? {
         do {
-            return try shared.write { db -> Int64? in
+            let insertedId = try shared.write { db -> Int64? in
                 let mutable = utterance
                 try mutable.insert(db)
                 // Use lastInsertedRowID as fallback if didInsert didn't populate id
@@ -230,6 +230,8 @@ extension LiveDatabase {
                 log.debug( "Stored dictation", detail: "ID: \(insertedId)")
                 return insertedId
             }
+
+            return insertedId
         } catch {
             log.error( "Store failed", error: error)
             return nil
@@ -542,3 +544,6 @@ extension LiveDatabase {
         }
     }
 }
+
+// Note: Talkie (main app) owns app_stats and updates on dictation notifications
+// TalkieLive just stores dictations - no stats computation needed

@@ -183,7 +183,8 @@ public final class ServiceManager {
     private var statusTimer: Timer?
 
     private init() {
-        logger.info("[ServiceManager] Initialized")
+        StartupProfiler.shared.mark("singleton.ServiceManager.start")
+        StartupProfiler.shared.mark("singleton.ServiceManager.done")
     }
 
     // MARK: - Lifecycle Actions
@@ -814,7 +815,6 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
     nonisolated public func dictationWasAdded() {
         DispatchQueue.main.async {
             DictationStore.shared.refresh()
-            logger.info("[Live] Dictation added, refreshed store")
         }
     }
 

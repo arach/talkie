@@ -418,9 +418,10 @@ final class LiveSettings: ObservableObject {
         didSet { save() }
     }
 
-    /// Glass mode enabled (macOS 26 style glass effects)
-    @Published var glassMode: Bool {
-        didSet { save() }
+    /// Glass mode enabled via launch argument: --glass-mode
+    /// Not a runtime toggle - set at startup only (simpler, no view rebuild issues)
+    var glassMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("--glass-mode")
     }
 
     /// Which context (start or end app) is primary for utterances
@@ -586,8 +587,7 @@ final class LiveSettings: ObservableObject {
             self.accentColor = .system
         }
 
-        // Load glass mode (default: true for macOS 26 style)
-        self.glassMode = store.object(forKey: LiveSettingsKey.glassMode) as? Bool ?? true
+        // Note: glassMode is now a computed property checking launch arg --glass-mode
 
         // Load primary context source (default: start app)
         if let rawValue = store.string(forKey: LiveSettingsKey.primaryContextSource),
@@ -644,7 +644,7 @@ final class LiveSettings: ObservableObject {
         store.set(visualTheme.rawValue, forKey: LiveSettingsKey.visualTheme)
         store.set(fontSize.rawValue, forKey: LiveSettingsKey.fontSize)
         store.set(accentColor.rawValue, forKey: LiveSettingsKey.accentColor)
-        store.set(glassMode, forKey: LiveSettingsKey.glassMode)
+        // glassMode is now a launch arg, not persisted
         store.set(primaryContextSource.rawValue, forKey: LiveSettingsKey.primaryContextSource)
         store.set(contextCaptureDetail.rawValue, forKey: LiveSettingsKey.contextCaptureDetail)
         store.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)

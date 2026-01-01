@@ -36,10 +36,21 @@ final class AudioDeviceManager {
     private(set) var inputDevices: [AudioInputDevice] = []
     private(set) var defaultDeviceID: AudioDeviceID = 0
 
+    private var isInitialized = false
+
     private init() {
-        refreshDevices()
+        StartupProfiler.shared.mark("singleton.AudioDeviceManager.start")
+        // CoreAudio initialization is deferred until first actual use
+        // This avoids ~100ms system init cost during startup
+        StartupProfiler.shared.mark("singleton.AudioDeviceManager.done")
+    }
+
+    /// Ensures CoreAudio is initialized (call before accessing devices)
+    func ensureInitialized() {
+        guard !isInitialized else { return }
+        isInitialized = true
         setupDeviceChangeListener()
-        logger.info("AudioDeviceManager initialized")
+        refreshDevices()
     }
 
     func refreshDevices() {

@@ -31,11 +31,12 @@ struct LLMConfig: Codable {
 
     /// Shared config instance loaded from bundle
     static let shared: LLMConfig = {
+        StartupProfiler.shared.mark("singleton.LLMConfig.start")
         // Try with subdirectory first (Resources/Resources/LLMConfig.json)
         if let url = Bundle.main.url(forResource: "LLMConfig", withExtension: "json", subdirectory: "Resources"),
            let data = try? Data(contentsOf: url),
            let config = try? JSONDecoder().decode(LLMConfig.self, from: data) {
-            logger.debug("✓ Loaded LLMConfig.json from Resources subdirectory")
+            StartupProfiler.shared.mark("singleton.LLMConfig.done")
             return config
         }
 
@@ -43,11 +44,12 @@ struct LLMConfig: Codable {
         if let url = Bundle.main.url(forResource: "LLMConfig", withExtension: "json"),
            let data = try? Data(contentsOf: url),
            let config = try? JSONDecoder().decode(LLMConfig.self, from: data) {
-            logger.debug("✓ Loaded LLMConfig.json from root Resources")
+            StartupProfiler.shared.mark("singleton.LLMConfig.done")
             return config
         }
 
         logger.warning("⚠️ Failed to load LLMConfig.json from bundle, using empty config")
+        StartupProfiler.shared.mark("singleton.LLMConfig.done")
         return LLMConfig(providers: [:], preferredProviderOrder: [])
     }()
 

@@ -67,7 +67,7 @@ public enum LiveSettingsKey {
     public static let visualTheme = "visualTheme"
     public static let fontSize = "fontSize"
     public static let accentColor = "accentColor"
-    public static let glassMode = "glassMode"
+    // glassMode removed - now a launch arg (--glass-mode)
 
     // MARK: Legacy
     public static let legacyTheme = "theme"
