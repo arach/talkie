@@ -389,40 +389,74 @@ public enum GlassDepth {
     case standard
     /// Strong presence - maximum depth. Use for hero elements, modals, floating actions.
     case prominent
+    /// EXTREME - Push it to the limit! Maximum blur, glow, and depth. Use for Liquid Glass theme.
+    case extreme
 
     /// Top-edge highlight intensity (simulates light reflection on glass)
-    var highlightOpacity: Double {
+    public var highlightOpacity: Double {
         switch self {
         case .subtle: return 0.08    // Barely visible, ~8% white
         case .standard: return 0.12  // Noticeable but not distracting
         case .prominent: return 0.18 // Strong reflection, draws attention
+        case .extreme: return 0.30   // MAXIMUM REFLECTION
         }
     }
 
     /// Edge border intensity (defines shape against varied backgrounds)
-    var borderOpacity: Double {
+    public var borderOpacity: Double {
         switch self {
         case .subtle: return 0.12    // Soft edge
         case .standard: return 0.18  // Clear definition
         case .prominent: return 0.25 // Strong delineation
+        case .extreme: return 0.40   // STRONG EDGE GLOW
         }
     }
 
     /// Drop shadow blur radius in points
-    var shadowRadius: CGFloat {
+    public var shadowRadius: CGFloat {
         switch self {
         case .subtle: return 6       // Tight, close to surface
         case .standard: return 10    // Moderate elevation
         case .prominent: return 14   // Floating appearance
+        case .extreme: return 24     // DRAMATIC FLOATING
         }
     }
 
     /// Drop shadow opacity (grounding effect)
-    var shadowOpacity: Double {
+    public var shadowOpacity: Double {
         switch self {
         case .subtle: return 0.12    // Light grounding
         case .standard: return 0.18  // Clear elevation
         case .prominent: return 0.25 // Strong depth
+        case .extreme: return 0.35   // DRAMATIC DEPTH
+        }
+    }
+
+    /// Inner glow radius for extreme mode
+    public var innerGlowRadius: CGFloat {
+        switch self {
+        case .subtle, .standard, .prominent: return 0
+        case .extreme: return 8
+        }
+    }
+
+    /// Material blur amount
+    public var materialBlur: CGFloat {
+        switch self {
+        case .subtle: return 20
+        case .standard: return 30
+        case .prominent: return 40
+        case .extreme: return 60
+        }
+    }
+
+    /// Hover scale effect
+    public var hoverScale: CGFloat {
+        switch self {
+        case .subtle: return 1.005
+        case .standard: return 1.01
+        case .prominent: return 1.02
+        case .extreme: return 1.03
         }
     }
 }
@@ -473,14 +507,27 @@ public struct LiquidGlassCardModifier: ViewModifier {
             content
                 .background(
                     ZStack {
-                        // Base material
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(.ultraThinMaterial)
+                        // Base material - use stronger blur for extreme mode
+                        if depth == .extreme {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(.regularMaterial)
+                        } else {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(.ultraThinMaterial)
+                        }
 
-                        // Tint overlay
+                        // Tint overlay - stronger for extreme
                         if let tint = tint {
                             RoundedRectangle(cornerRadius: cornerRadius)
-                                .fill(tint.opacity(0.15))
+                                .fill(tint.opacity(depth == .extreme ? 0.25 : 0.15))
+                        }
+
+                        // Inner glow for extreme mode
+                        if depth == .extreme {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                                .blur(radius: depth.innerGlowRadius)
+                                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                         }
 
                         // Combined glass overlay - merge inner glow + convex into single gradient
@@ -490,14 +537,14 @@ public struct LiquidGlassCardModifier: ViewModifier {
                                     colors: [
                                         Color.white.opacity(depth.highlightOpacity * 1.5),
                                         Color.white.opacity(depth.highlightOpacity * 0.3),
-                                        Color.black.opacity(0.04)
+                                        Color.black.opacity(depth == .extreme ? 0.08 : 0.04)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
 
-                        // Combined border + highlight stroke
+                        // Combined border + highlight stroke - thicker for extreme
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .stroke(
                                 LinearGradient(
@@ -508,7 +555,7 @@ public struct LiquidGlassCardModifier: ViewModifier {
                                     startPoint: .top,
                                     endPoint: .bottom
                                 ),
-                                lineWidth: 0.5
+                                lineWidth: depth == .extreme ? 1.0 : 0.5
                             )
                     }
                     .drawingGroup() // Flatten to single texture for GPU efficiency

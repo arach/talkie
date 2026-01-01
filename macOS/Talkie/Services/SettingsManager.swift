@@ -223,6 +223,7 @@ enum ThemePreset: String, CaseIterable {
     case minimal = "minimal"
     case classic = "classic"
     case warm = "warm"
+    case liquidGlass = "liquidGlass"
 
     var displayName: String {
         switch self {
@@ -232,6 +233,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return "Minimal"
         case .classic: return "Classic"
         case .warm: return "Warm"
+        case .liquidGlass: return "Liquid Glass"
         }
     }
 
@@ -243,6 +245,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return "Clean and subtle, adapts to system"
         case .classic: return "Comfortable defaults with blue accents"
         case .warm: return "Cozy dark mode with orange tones"
+        case .liquidGlass: return "EXPERIMENTAL: Maximum glass effects"
         }
     }
 
@@ -254,6 +257,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return "circle"
         case .classic: return "star"
         case .warm: return "flame"
+        case .liquidGlass: return "drop.fill"
         }
     }
 
@@ -277,6 +281,9 @@ enum ThemePreset: String, CaseIterable {
         case .warm:
             // fg: white*0.9 = 0.9
             return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
+        case .liquidGlass:
+            // Deep dark with cyan/blue glow
+            return (Color(white: 0.05), Color.white, Color.cyan)
         }
     }
 
@@ -289,6 +296,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return .system  // Respects system light/dark
         case .classic: return .dark
         case .warm: return .dark
+        case .liquidGlass: return .dark  // Glass looks best on dark
         }
     }
 
@@ -301,6 +309,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return .system       // Clean system font
         case .classic: return .system
         case .warm: return .system
+        case .liquidGlass: return .system   // Clean for glass
         }
     }
 
@@ -313,6 +322,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return .system       // Clean system font for content
         case .classic: return .system       // Standard system font
         case .warm: return .monospace       // Monospace content for warm theme
+        case .liquidGlass: return .system   // Clean for glass
         }
     }
 
@@ -324,6 +334,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return .gray
         case .classic: return .blue
         case .warm: return .orange
+        case .liquidGlass: return .blue     // Cyan/blue for glass glow
         }
     }
 
@@ -336,6 +347,7 @@ enum ThemePreset: String, CaseIterable {
         case .minimal: return .medium
         case .classic: return .medium
         case .warm: return .medium
+        case .liquidGlass: return .medium
         }
     }
 
@@ -343,7 +355,16 @@ enum ThemePreset: String, CaseIterable {
     var usesTrueBlack: Bool {
         switch self {
         case .linear, .terminal: return true
+        case .liquidGlass: return true      // True black makes glass pop
         default: return false
+        }
+    }
+
+    /// Glass depth level for this theme
+    var glassDepth: GlassDepth {
+        switch self {
+        case .liquidGlass: return .extreme
+        default: return .standard
         }
     }
 }
@@ -410,6 +431,16 @@ class SettingsManager {
     /// Check if warm theme is active
     var isWarmTheme: Bool {
         currentTheme == .warm
+    }
+
+    /// Check if liquid glass theme is active
+    var isLiquidGlassTheme: Bool {
+        currentTheme == .liquidGlass
+    }
+
+    /// Current glass depth based on theme (extreme for Liquid Glass, standard otherwise)
+    var currentGlassDepth: GlassDepth {
+        currentTheme?.glassDepth ?? .standard
     }
 
     /// Check if classic theme is active
