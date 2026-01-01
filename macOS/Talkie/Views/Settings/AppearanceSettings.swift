@@ -179,9 +179,9 @@ struct AppearanceSettingsView: View {
                 }
                 .background(Theme.current.backgroundSecondary)
             }
-            .cornerRadius(Spacing.xs)
+            .cornerRadius(CornerRadius.xs)
             .overlay(
-                RoundedRectangle(cornerRadius: Spacing.xs)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .stroke(Theme.current.divider, lineWidth: 0.5)
             )
         }
@@ -449,6 +449,6 @@ struct AppearanceSettingsView: View {
                 .foregroundColor(Theme.current.foregroundSecondary)
         }
         .padding(Spacing.sm)
-        .liquidGlassCard(cornerRadius: Spacing.xs, tint: settingsManager.resolvedAccentColor.opacity(Opacity.light))
+        .liquidGlassCard(cornerRadius: CornerRadius.xs, tint: settingsManager.resolvedAccentColor.opacity(Opacity.light))
     }
 }

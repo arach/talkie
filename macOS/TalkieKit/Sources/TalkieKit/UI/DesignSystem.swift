@@ -321,50 +321,108 @@ public enum GlassConfig {
     /// Whether to use glass effects (set at launch based on user preference or system capability)
     public static var enableGlassEffects: Bool = true
 
+    /// Debug: Force a specific render path for testing. Set via launch argument.
+    /// - `--force-glass-native`: Force native .glassEffect() path (requires macOS 26+)
+    /// - `--force-glass-fallback`: Force enhanced fallback path (pre-macOS 26 simulation)
+    /// - `--force-glass-simple`: Force simple solid fill path (performance mode)
+    public enum DebugRenderMode {
+        case automatic  // Normal behavior based on OS and settings
+        case native     // Force native .glassEffect() - no-op if < macOS 26
+        case fallback   // Force pre-macOS 26 fallback rendering
+        case simple     // Force simple solid fill (perf mode)
+    }
+
+    /// Current debug render mode. Check launch args at startup.
+    public static var debugRenderMode: DebugRenderMode = .automatic
+
     /// Auto-detect if glass should be disabled (call at app launch)
     /// Checks system reduce transparency setting
     public static func configureFromSystem() {
         #if os(macOS)
         enableGlassEffects = !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
         #endif
+
+        // Check for debug launch arguments
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--force-glass-native") {
+            debugRenderMode = .native
+        } else if args.contains("--force-glass-fallback") {
+            debugRenderMode = .fallback
+        } else if args.contains("--force-glass-simple") {
+            debugRenderMode = .simple
+        }
+    }
+
+    /// Returns true if we should use native glass (macOS 26+ and not forcing fallback)
+    @available(macOS 26.0, *)
+    public static var shouldUseNativeGlass: Bool {
+        switch debugRenderMode {
+        case .automatic: return enableGlassEffects
+        case .native: return true
+        case .fallback, .simple: return false
+        }
+    }
+
+    /// Returns true if we should use simple mode (disabled or forcing simple)
+    public static var shouldUseSimpleMode: Bool {
+        switch debugRenderMode {
+        case .automatic: return !enableGlassEffects
+        case .simple: return true
+        case .native, .fallback: return false
+        }
     }
 }
 
-/// Glass depth intensity for fallback effects
+/// Glass depth intensity for fallback effects on pre-macOS 26
+///
+/// Values derived from Apple's Liquid Glass design language (WWDC25):
+/// - Highlight opacity: top-edge light reflection (8-18% white)
+/// - Border opacity: edge definition against backgrounds (12-25% white gradient)
+/// - Shadow radius: depth perception (6-14pt blur)
+/// - Shadow opacity: grounding on surface (12-25% black)
+///
+/// Reference: "Meet Liquid Glass" WWDC25-269, "Build a SwiftUI app with the new design" WWDC25-323
 public enum GlassDepth {
+    /// Light touch - minimal visual weight. Use for dense UI, lists, secondary surfaces.
     case subtle
+    /// Default - balanced depth. Use for cards, panels, primary content containers.
     case standard
+    /// Strong presence - maximum depth. Use for hero elements, modals, floating actions.
     case prominent
 
+    /// Top-edge highlight intensity (simulates light reflection on glass)
     var highlightOpacity: Double {
         switch self {
-        case .subtle: return 0.08
-        case .standard: return 0.12
-        case .prominent: return 0.18
+        case .subtle: return 0.08    // Barely visible, ~8% white
+        case .standard: return 0.12  // Noticeable but not distracting
+        case .prominent: return 0.18 // Strong reflection, draws attention
         }
     }
 
+    /// Edge border intensity (defines shape against varied backgrounds)
     var borderOpacity: Double {
         switch self {
-        case .subtle: return 0.12
-        case .standard: return 0.18
-        case .prominent: return 0.25
+        case .subtle: return 0.12    // Soft edge
+        case .standard: return 0.18  // Clear definition
+        case .prominent: return 0.25 // Strong delineation
         }
     }
 
+    /// Drop shadow blur radius in points
     var shadowRadius: CGFloat {
         switch self {
-        case .subtle: return 6
-        case .standard: return 10
-        case .prominent: return 14
+        case .subtle: return 6       // Tight, close to surface
+        case .standard: return 10    // Moderate elevation
+        case .prominent: return 14   // Floating appearance
         }
     }
 
+    /// Drop shadow opacity (grounding effect)
     var shadowOpacity: Double {
         switch self {
-        case .subtle: return 0.12
-        case .standard: return 0.18
-        case .prominent: return 0.25
+        case .subtle: return 0.12    // Light grounding
+        case .standard: return 0.18  // Clear elevation
+        case .prominent: return 0.25 // Strong depth
         }
     }
 }
@@ -385,7 +443,7 @@ public struct LiquidGlassCardModifier: ViewModifier {
 
     @ViewBuilder
     public func body(content: Content) -> some View {
-        if !GlassConfig.enableGlassEffects {
+        if GlassConfig.shouldUseSimpleMode {
             // Simple mode - minimal overhead for older machines or reduced transparency
             content
                 .background(
@@ -396,7 +454,7 @@ public struct LiquidGlassCardModifier: ViewModifier {
                                 .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                         )
                 )
-        } else if #available(macOS 26.0, *) {
+        } else if #available(macOS 26.0, *), GlassConfig.shouldUseNativeGlass {
             let glass: Glass = {
                 var g: Glass = .regular
                 if let tint = tint {
@@ -474,7 +532,7 @@ public struct LiquidGlassPillModifier: ViewModifier {
 
     @ViewBuilder
     public func body(content: Content) -> some View {
-        if !GlassConfig.enableGlassEffects {
+        if GlassConfig.shouldUseSimpleMode {
             // Simple mode - minimal overhead
             content
                 .background(
@@ -485,7 +543,7 @@ public struct LiquidGlassPillModifier: ViewModifier {
                                 .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                         )
                 )
-        } else if #available(macOS 26.0, *) {
+        } else if #available(macOS 26.0, *), GlassConfig.shouldUseNativeGlass {
             let glass: Glass = {
                 var g: Glass = .regular
                 if let tint = tint {
@@ -638,7 +696,7 @@ public struct AdaptiveGlassButtonStyle: ButtonStyle {
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), GlassConfig.shouldUseNativeGlass {
             let glass: Glass = {
                 var g: Glass = .regular.interactive()
                 if let tint = tint {
