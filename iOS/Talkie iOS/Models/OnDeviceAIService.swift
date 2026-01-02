@@ -33,9 +33,18 @@ class OnDeviceAIService: ObservableObject {
     func checkAvailability() async {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            let availability = LanguageModelSession.availability
-            isAvailable = availability == .available
-            AppLogger.ai.info("On-device AI availability: \(String(describing: availability))")
+            let availability = SystemLanguageModel.default.availability
+            switch availability {
+            case .available:
+                isAvailable = true
+                AppLogger.ai.info("On-device AI: Available")
+            case .unavailable(let reason):
+                isAvailable = false
+                AppLogger.ai.info("On-device AI unavailable: \(reason)")
+            @unknown default:
+                isAvailable = false
+                AppLogger.ai.info("On-device AI: Unknown availability status")
+            }
         } else {
             isAvailable = false
             AppLogger.ai.info("On-device AI: Requires iOS 26+")
