@@ -27,7 +27,8 @@ struct DesignToolsOverlay<CustomContent: View>: View {
     let designInfo: () -> [String: String]
     let customContent: CustomContent
 
-    @State private var designMode = DesignModeManager.shared
+    // Use @Bindable for @Observable types when bindings are needed
+    @Bindable private var designMode = DesignModeManager.shared
     @State private var isExpanded = false
     @State private var overlayPosition: DesignOverlayPosition = .bottomTrailing
 
