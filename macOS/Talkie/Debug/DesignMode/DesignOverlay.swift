@@ -15,6 +15,7 @@
 
 import SwiftUI
 import DebugKit
+import TalkieKit
 
 #if DEBUG
 
@@ -272,6 +273,13 @@ struct DesignToolsOverlay<CustomContent: View>: View {
 
             Divider()
                 .background(Color.white.opacity(0.2))
+                .padding(.vertical, 4)
+
+            // Section: Liquid Glass Tuning
+            liquidGlassSection
+
+            Divider()
+                .background(Color.white.opacity(0.2))
 
             // Quick actions
             HStack(spacing: 6) {
@@ -432,6 +440,214 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                 .background(
                     RoundedRectangle(cornerRadius: 4)
                         .fill(designMode.pixelZoomLevel == level ? Color.cyan : Color.white.opacity(0.15))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Liquid Glass Tuning Section
+
+    /// Sync DesignModeManager values to TalkieKit's GlassTuning
+    private func syncGlassTuning() {
+        let tuning = GlassTuning.shared
+        tuning.isEnabled = designMode.glassOverrideEnabled
+        tuning.materialOpacity = designMode.glassMaterialOpacity
+        tuning.blurMultiplier = designMode.glassBlurMultiplier
+        tuning.highlightOpacity = designMode.glassHighlightOpacity
+        tuning.borderOpacity = designMode.glassBorderOpacity
+        tuning.innerGlowRadius = designMode.glassInnerGlowRadius
+        tuning.tintIntensity = designMode.glassTintIntensity
+    }
+
+    @ViewBuilder
+    private var liquidGlassSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Section header with enable toggle
+            HStack {
+                Image(systemName: "drop.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(designMode.glassOverrideEnabled ? .cyan : .white.opacity(0.5))
+
+                Text("Liquid Glass")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+
+                Spacer()
+
+                // Enable toggle
+                Button(action: {
+                    designMode.glassOverrideEnabled.toggle()
+                    syncGlassTuning()
+                }) {
+                    Text(designMode.glassOverrideEnabled ? "ON" : "OFF")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(designMode.glassOverrideEnabled ? .black : .white.opacity(0.6))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(designMode.glassOverrideEnabled ? Color.cyan : Color.white.opacity(0.15))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if designMode.glassOverrideEnabled {
+                // Transparency slider
+                glassSlider(
+                    label: "Transparency",
+                    value: Binding(
+                        get: { 1.0 - designMode.glassMaterialOpacity },
+                        set: { designMode.glassMaterialOpacity = 1.0 - $0 }
+                    ),
+                    range: 0...1,
+                    format: "%.0f%%",
+                    multiplier: 100
+                )
+
+                // Blur slider
+                glassSlider(
+                    label: "Blur",
+                    value: $designMode.glassBlurMultiplier,
+                    range: 0...3,
+                    format: "%.1fx",
+                    multiplier: 1
+                )
+
+                // Highlight opacity slider
+                glassSlider(
+                    label: "Highlight",
+                    value: $designMode.glassHighlightOpacity,
+                    range: 0...1,
+                    format: "%.0f%%",
+                    multiplier: 100
+                )
+
+                // Border glow slider
+                glassSlider(
+                    label: "Border Glow",
+                    value: $designMode.glassBorderOpacity,
+                    range: 0...1,
+                    format: "%.0f%%",
+                    multiplier: 100
+                )
+
+                // Inner glow slider
+                glassSlider(
+                    label: "Inner Glow",
+                    value: Binding(
+                        get: { Double(designMode.glassInnerGlowRadius) },
+                        set: { designMode.glassInnerGlowRadius = CGFloat($0) }
+                    ),
+                    range: 0...20,
+                    format: "%.0fpt",
+                    multiplier: 1
+                )
+
+                // Tint intensity slider
+                glassSlider(
+                    label: "Tint",
+                    value: $designMode.glassTintIntensity,
+                    range: 0...1,
+                    format: "%.0f%%",
+                    multiplier: 100
+                )
+
+                // Preset buttons
+                HStack(spacing: 4) {
+                    glassPresetButton(label: "Subtle") {
+                        designMode.applySubtleGlass()
+                        syncGlassTuning()
+                    }
+                    glassPresetButton(label: "Default") {
+                        designMode.resetGlassTuning()
+                        syncGlassTuning()
+                    }
+                    glassPresetButton(label: "MAX") {
+                        designMode.applyMaxGlass()
+                        syncGlassTuning()
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        // Sync to GlassTuning whenever any value changes
+        .onChange(of: designMode.glassMaterialOpacity) { _, _ in syncGlassTuning() }
+        .onChange(of: designMode.glassBlurMultiplier) { _, _ in syncGlassTuning() }
+        .onChange(of: designMode.glassHighlightOpacity) { _, _ in syncGlassTuning() }
+        .onChange(of: designMode.glassBorderOpacity) { _, _ in syncGlassTuning() }
+        .onChange(of: designMode.glassInnerGlowRadius) { _, _ in syncGlassTuning() }
+        .onChange(of: designMode.glassTintIntensity) { _, _ in syncGlassTuning() }
+    }
+
+    @ViewBuilder
+    private func glassSlider(
+        label: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        format: String,
+        multiplier: Double
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.7))
+
+                Spacer()
+
+                Text(String(format: format, value.wrappedValue * multiplier))
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(.cyan)
+                    .frame(width: 40, alignment: .trailing)
+            }
+
+            // Custom slider track
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    // Track background
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.15))
+                        .frame(height: 4)
+
+                    // Filled portion
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.cyan)
+                        .frame(
+                            width: geo.size.width * CGFloat((value.wrappedValue - range.lowerBound) / (range.upperBound - range.lowerBound)),
+                            height: 4
+                        )
+
+                    // Thumb
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: .black.opacity(0.3), radius: 2)
+                        .offset(x: geo.size.width * CGFloat((value.wrappedValue - range.lowerBound) / (range.upperBound - range.lowerBound)) - 5)
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { gesture in
+                            let percent = max(0, min(1, gesture.location.x / geo.size.width))
+                            value.wrappedValue = range.lowerBound + (range.upperBound - range.lowerBound) * Double(percent)
+                        }
+                )
+            }
+            .frame(height: 10)
+        }
+    }
+
+    @ViewBuilder
+    private func glassPresetButton(label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.1))
                 )
         }
         .buttonStyle(.plain)

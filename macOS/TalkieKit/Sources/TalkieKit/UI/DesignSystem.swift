@@ -461,6 +461,62 @@ public enum GlassDepth {
     }
 }
 
+// MARK: - Glass Tuning (DEBUG)
+
+/// Live glass tuning values - set from DesignModeManager in Talkie (DEBUG only)
+/// When enabled, these values override the GlassDepth presets for real-time experimentation.
+public final class GlassTuning {
+    public static let shared = GlassTuning()
+
+    /// Whether tuning overrides are active
+    public var isEnabled: Bool = false
+
+    /// Material opacity (0.0 = fully transparent, 1.0 = opaque)
+    public var materialOpacity: Double = 0.7
+
+    /// Blur intensity multiplier (0.5 = half blur, 2.0 = double blur)
+    public var blurMultiplier: Double = 1.0
+
+    /// Highlight/reflection opacity at top edge (0.0 - 1.0)
+    public var highlightOpacity: Double = 0.30
+
+    /// Border glow opacity (0.0 - 1.0)
+    public var borderOpacity: Double = 0.40
+
+    /// Inner glow radius
+    public var innerGlowRadius: CGFloat = 8.0
+
+    /// Tint color intensity (0.0 = no tint, 1.0 = full tint)
+    public var tintIntensity: Double = 0.25
+
+    private init() {}
+
+    /// Get effective highlight opacity (tuned or from depth preset)
+    public func effectiveHighlightOpacity(for depth: GlassDepth) -> Double {
+        isEnabled ? highlightOpacity : depth.highlightOpacity
+    }
+
+    /// Get effective border opacity (tuned or from depth preset)
+    public func effectiveBorderOpacity(for depth: GlassDepth) -> Double {
+        isEnabled ? borderOpacity : depth.borderOpacity
+    }
+
+    /// Get effective inner glow radius (tuned or from depth preset)
+    public func effectiveInnerGlowRadius(for depth: GlassDepth) -> CGFloat {
+        isEnabled ? innerGlowRadius : depth.innerGlowRadius
+    }
+
+    /// Get effective tint intensity
+    public func effectiveTintIntensity() -> Double {
+        isEnabled ? tintIntensity : 0.15
+    }
+
+    /// Whether to use regular material (more blur) vs ultra thin
+    public var useStrongerMaterial: Bool {
+        isEnabled ? blurMultiplier > 1.0 : false
+    }
+}
+
 /// Liquid Glass card modifier - uses native .glassEffect() on macOS 26+, falls back to material
 public struct LiquidGlassCardModifier: ViewModifier {
     var cornerRadius: CGFloat
@@ -504,29 +560,39 @@ public struct LiquidGlassCardModifier: ViewModifier {
         } else {
             // Enhanced fallback with depth effects
             // Use drawingGroup() to flatten layers into single GPU texture for better scroll performance
+            let tuning = GlassTuning.shared
+            let effectiveHighlight = tuning.effectiveHighlightOpacity(for: depth)
+            let effectiveBorder = tuning.effectiveBorderOpacity(for: depth)
+            let effectiveInnerGlow = tuning.effectiveInnerGlowRadius(for: depth)
+            let effectiveTint = tuning.effectiveTintIntensity()
+            let useStrongMaterial = tuning.isEnabled ? tuning.useStrongerMaterial : (depth == .extreme)
+            let hasInnerGlow = tuning.isEnabled ? effectiveInnerGlow > 0 : (depth == .extreme)
+
             content
                 .background(
                     ZStack {
-                        // Base material - use stronger blur for extreme mode
-                        if depth == .extreme {
+                        // Base material - use stronger blur when tuning or extreme mode
+                        if useStrongMaterial {
                             RoundedRectangle(cornerRadius: cornerRadius)
                                 .fill(.regularMaterial)
+                                .opacity(tuning.isEnabled ? tuning.materialOpacity : 1.0)
                         } else {
                             RoundedRectangle(cornerRadius: cornerRadius)
                                 .fill(.ultraThinMaterial)
+                                .opacity(tuning.isEnabled ? tuning.materialOpacity : 1.0)
                         }
 
-                        // Tint overlay - stronger for extreme
+                        // Tint overlay - uses tuned intensity
                         if let tint = tint {
                             RoundedRectangle(cornerRadius: cornerRadius)
-                                .fill(tint.opacity(depth == .extreme ? 0.25 : 0.15))
+                                .fill(tint.opacity(effectiveTint))
                         }
 
-                        // Inner glow for extreme mode
-                        if depth == .extreme {
+                        // Inner glow for extreme mode or when tuned
+                        if hasInnerGlow {
                             RoundedRectangle(cornerRadius: cornerRadius)
                                 .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                                .blur(radius: depth.innerGlowRadius)
+                                .blur(radius: effectiveInnerGlow)
                                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                         }
 
@@ -535,27 +601,27 @@ public struct LiquidGlassCardModifier: ViewModifier {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(depth.highlightOpacity * 1.5),
-                                        Color.white.opacity(depth.highlightOpacity * 0.3),
-                                        Color.black.opacity(depth == .extreme ? 0.08 : 0.04)
+                                        Color.white.opacity(effectiveHighlight * 1.5),
+                                        Color.white.opacity(effectiveHighlight * 0.3),
+                                        Color.black.opacity(effectiveHighlight > 0.2 ? 0.08 : 0.04)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
 
-                        // Combined border + highlight stroke - thicker for extreme
+                        // Combined border + highlight stroke - thicker when more intense
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(depth.borderOpacity * 1.5),
-                                        Color.white.opacity(depth.borderOpacity * 0.3)
+                                        Color.white.opacity(effectiveBorder * 1.5),
+                                        Color.white.opacity(effectiveBorder * 0.3)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 ),
-                                lineWidth: depth == .extreme ? 1.0 : 0.5
+                                lineWidth: effectiveBorder > 0.3 ? 1.0 : 0.5
                             )
                     }
                     .drawingGroup() // Flatten to single texture for GPU efficiency
@@ -606,17 +672,30 @@ public struct LiquidGlassPillModifier: ViewModifier {
         } else {
             // Enhanced fallback with depth effects
             // Use drawingGroup() to flatten layers into single GPU texture
+            let tuning = GlassTuning.shared
+            let effectiveHighlight = tuning.effectiveHighlightOpacity(for: depth)
+            let effectiveBorder = tuning.effectiveBorderOpacity(for: depth)
+            let effectiveTint = tuning.effectiveTintIntensity()
+            let useStrongMaterial = tuning.isEnabled ? tuning.useStrongerMaterial : (depth == .extreme)
+
             content
                 .background(
                     ZStack {
                         // Base material
-                        Capsule()
-                            .fill(.ultraThinMaterial)
+                        if useStrongMaterial {
+                            Capsule()
+                                .fill(.regularMaterial)
+                                .opacity(tuning.isEnabled ? tuning.materialOpacity : 1.0)
+                        } else {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .opacity(tuning.isEnabled ? tuning.materialOpacity : 1.0)
+                        }
 
                         // Tint overlay
                         if let tint = tint {
                             Capsule()
-                                .fill(tint.opacity(0.15))
+                                .fill(tint.opacity(effectiveTint))
                         }
 
                         // Combined glass overlay
@@ -624,8 +703,8 @@ public struct LiquidGlassPillModifier: ViewModifier {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(depth.highlightOpacity * 1.5),
-                                        Color.white.opacity(depth.highlightOpacity * 0.3),
+                                        Color.white.opacity(effectiveHighlight * 1.5),
+                                        Color.white.opacity(effectiveHighlight * 0.3),
                                         Color.black.opacity(0.04)
                                     ],
                                     startPoint: .top,
@@ -638,13 +717,13 @@ public struct LiquidGlassPillModifier: ViewModifier {
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(depth.borderOpacity * 1.5),
-                                        Color.white.opacity(depth.borderOpacity * 0.3)
+                                        Color.white.opacity(effectiveBorder * 1.5),
+                                        Color.white.opacity(effectiveBorder * 0.3)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 ),
-                                lineWidth: 0.5
+                                lineWidth: effectiveBorder > 0.3 ? 1.0 : 0.5
                             )
                     }
                     .drawingGroup() // Flatten to single texture
