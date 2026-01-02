@@ -524,6 +524,46 @@ final class DatabaseManager {
             try db.execute(sql: "INSERT OR IGNORE INTO app_stats (id) VALUES (1)")
         }
 
+        // Migration v6: Workflow preferences (file-based storage)
+        // This table stores user preferences for workflows (pins, order, enabled)
+        // The workflow definitions themselves are stored as JSON files
+        migrator.registerMigration("v6_workflow_preferences") { db in
+            print("📦 Creating workflow_preferences table...")
+
+            try db.create(table: "workflow_preferences") { t in
+                // Primary key is the workflow ID (from JSON file)
+                t.column("workflowId", .text).primaryKey()
+
+                // User preferences (not stored in JSON files)
+                t.column("isEnabled", .boolean).notNull().defaults(to: true)
+                t.column("isPinned", .boolean).notNull().defaults(to: false)
+                t.column("autoRun", .boolean).notNull().defaults(to: false)
+                t.column("autoRunOrder", .integer).notNull().defaults(to: 0)
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+
+                // Timestamps
+                t.column("createdAt", .datetime).notNull()
+                t.column("updatedAt", .datetime).notNull()
+            }
+
+            // Index for sorting
+            try db.create(index: "idx_workflow_prefs_sort",
+                         on: "workflow_preferences",
+                         columns: ["sortOrder"])
+
+            // Index for pinned workflows
+            try db.create(index: "idx_workflow_prefs_pinned",
+                         on: "workflow_preferences",
+                         columns: ["isPinned"])
+
+            // Index for auto-run order
+            try db.create(index: "idx_workflow_prefs_autorun",
+                         on: "workflow_preferences",
+                         columns: ["autoRun", "autoRunOrder"])
+
+            print("✅ Workflow preferences table created!")
+        }
+
         return migrator
     }
 
