@@ -608,7 +608,7 @@ public final class ServiceManager {
 
         if path.contains(".dev.app") || path.contains("/Debug/") || path.contains("DerivedData") {
             return .dev
-        } else if path.contains(".staging.app") {
+        } else if path.contains(".staging.app") || path.contains("/Staging/") {
             return .staging
         }
         return .production
